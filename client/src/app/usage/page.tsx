@@ -24,7 +24,7 @@ function UsageContent() {
   const [daily, setDaily] = useState<DailyUsage[]>([]);
   const [total, setTotal] = useState<UsageTotal | null>(null);
   const [showAllRows, setShowAllRows] = useState(false);
-  const LEDGER_DEFAULT_ROWS = 4;
+  const LEDGER_DEFAULT_ROWS = 8;
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
@@ -47,6 +47,11 @@ function UsageContent() {
   const totalTokens = total ? total.totalInput + total.totalOutput : 0;
   const inputRatio = totalTokens > 0 ? ((total!.totalInput / totalTokens) * 100).toFixed(1) : '0';
   const outputRatio = totalTokens > 0 ? ((total!.totalOutput / totalTokens) * 100).toFixed(1) : '0';
+
+  // Claude Sonnet 4 pricing: Input $3/M, Output $15/M
+  const estimatedCost = total
+    ? (total.totalInput / 1_000_000) * 3 + (total.totalOutput / 1_000_000) * 15
+    : 0;
 
   // Chart data: always show at least 7 days, fill missing days with 0
   const CHART_MIN_DAYS = 7;
@@ -106,25 +111,28 @@ function UsageContent() {
           <div className="grid grid-cols-12 gap-6 mb-10">
 
             {/* Left: Overview Card */}
-            <div className="col-span-12 lg:col-span-4 bg-surface-container p-8 relative overflow-hidden flex flex-col justify-between min-h-[260px]">
+            <div className="col-span-12 lg:col-span-4 bg-surface-container p-8 relative overflow-hidden flex flex-col justify-between">
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-10 -mt-10 blur-3xl" />
               <div>
-                <span className="text-xs uppercase tracking-[0.2em] text-primary font-bold mb-4 block">總覽</span>
+                <span className="text-xs uppercase tracking-[0.2em] text-primary font-bold mb-3 block">總覽</span>
                 <h3 className="text-on-surface-variant text-sm mb-1">累計 Token 用量</h3>
                 <div className="text-5xl font-bold text-on-surface font-headline">{totalTokens.toLocaleString()}</div>
+                <p className="text-sm text-on-surface-variant mt-2">
+                  預估費用 <span className="text-primary font-bold font-headline text-lg">${estimatedCost.toFixed(4)}</span> <span className="text-[10px] uppercase tracking-wider">USD</span>
+                </p>
               </div>
-              <div className="grid grid-cols-3 gap-4 mt-6">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <p className="text-[10px] text-on-surface-variant uppercase tracking-wider mb-1">生成次數</p>
-                  <p className="text-xl font-headline font-bold text-primary">{total?.totalInvocations ?? 0}</p>
+                  <p className="text-xs text-on-surface-variant uppercase tracking-wider mb-1">生成次數</p>
+                  <p className="text-2xl font-headline font-bold text-primary">{total?.totalInvocations ?? 0}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-on-surface-variant uppercase tracking-wider mb-1">輸入</p>
-                  <p className="text-xl font-headline font-bold text-tertiary">{total?.totalInput.toLocaleString() ?? 0}</p>
+                  <p className="text-xs text-on-surface-variant uppercase tracking-wider mb-1">輸入</p>
+                  <p className="text-2xl font-headline font-bold text-tertiary">{total?.totalInput.toLocaleString() ?? 0}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-on-surface-variant uppercase tracking-wider mb-1">輸出</p>
-                  <p className="text-xl font-headline font-bold text-secondary">{total?.totalOutput.toLocaleString() ?? 0}</p>
+                  <p className="text-xs text-on-surface-variant uppercase tracking-wider mb-1">輸出</p>
+                  <p className="text-2xl font-headline font-bold text-secondary">{total?.totalOutput.toLocaleString() ?? 0}</p>
                 </div>
               </div>
             </div>
@@ -225,7 +233,7 @@ function UsageContent() {
                   活動摘要
                 </h4>
                 <div className="space-y-4">
-                  {daily.slice(0, 5).map(day => (
+                  {daily.slice(0, 3).map(day => (
                     <div key={day.date} className="flex justify-between items-center bg-surface-container-low p-3 hover:bg-surface-container-high transition-colors">
                       <div>
                         <p className="text-xs font-bold text-on-surface">{day.date}</p>
