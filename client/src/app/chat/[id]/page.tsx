@@ -124,6 +124,8 @@ function ChatContent() {
     if (!isLoading && !user) router.replace('/login');
   }, [user, isLoading, router]);
 
+  const [conversationLoaded, setConversationLoaded] = useState(false);
+
   // Load conversation
   useEffect(() => {
     if (!token || !conversationId) return;
@@ -135,9 +137,13 @@ function ChatContent() {
         setTitle(data.title);
         setSkillId(data.skill_id || '');
         setMessages(data.messages || []);
+        setConversationLoaded(true);
       })
       .catch(() => router.replace('/dashboard'));
   }, [token, conversationId, router]);
+
+  // Auto-send pending message from dashboard smart input
+  const pendingHandled = useRef(false);
 
   // Load files
   useEffect(() => {
@@ -176,11 +182,12 @@ function ChatContent() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [streaming]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sendMessage = useCallback(async () => {
-    if (!input.trim() || streaming || !token) return;
+  const sendMessage = useCallback(async (directMessage?: string) => {
+    const messageToSend = directMessage || input.trim();
+    if (!messageToSend || streaming || !token) return;
 
-    const userMessage = input.trim();
-    setInput('');
+    const userMessage = messageToSend;
+    if (!directMessage) setInput('');
     setMessages(prev => [...prev, {
       id: `temp-${Date.now()}`,
       role: 'user',
@@ -358,6 +365,18 @@ function ChatContent() {
       abortRef.current = null;
     }
   }, [input, streaming, token, conversationId, skillId]);
+
+  // Auto-send pending message from dashboard smart input
+  useEffect(() => {
+    if (!conversationLoaded || !token || pendingHandled.current || streaming) return;
+    const key = `pending_message_${conversationId}`;
+    const pending = sessionStorage.getItem(key);
+    if (pending) {
+      sessionStorage.removeItem(key);
+      pendingHandled.current = true;
+      sendMessage(pending);
+    }
+  }, [conversationLoaded, token, conversationId, streaming, sendMessage]);
 
   function handleAbort() {
     abortRef.current?.abort();
@@ -661,7 +680,7 @@ function ChatContent() {
             {streaming ? (
               <button className="btn-danger" onClick={handleAbort}>Stop</button>
             ) : (
-              <button className="btn-primary" onClick={sendMessage} disabled={!input.trim()}>Send</button>
+              <button className="btn-primary" onClick={() => sendMessage()} disabled={!input.trim()}>Send</button>
             )}
           </div>
         </div>

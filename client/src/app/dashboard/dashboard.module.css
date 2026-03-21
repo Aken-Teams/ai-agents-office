@@ -21,6 +21,70 @@
   color: var(--text);
 }
 
+/* Smart input box */
+.smartBox {
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+}
+
+.smartTitle {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+.smartHint {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.smartInputRow {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.smartInput {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-family: inherit;
+  resize: none;
+  transition: border-color 0.2s;
+  line-height: 1.5;
+}
+.smartInput:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.smartButton {
+  padding: 12px 28px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+.smartButton:hover:not(:disabled) {
+  background: var(--primary-hover, #4338ca);
+}
+.smartButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .skillGrid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

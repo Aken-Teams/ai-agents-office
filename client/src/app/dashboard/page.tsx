@@ -20,8 +20,7 @@ interface UsageTotal {
   totalInvocations: number;
 }
 
-const SKILLS = [
-  { id: '', label: 'Smart', icon: '\u{1F9E0}', color: '#8b5cf6' },
+const DOC_TYPES = [
   { id: 'pptx-gen', label: 'PowerPoint', icon: '\u{1F4CA}', color: '#f59e0b' },
   { id: 'docx-gen', label: 'Word', icon: '\u{1F4DD}', color: '#3b82f6' },
   { id: 'xlsx-gen', label: 'Excel', icon: '\u{1F4C8}', color: '#10b981' },
@@ -33,6 +32,8 @@ function DashboardContent() {
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [usage, setUsage] = useState<UsageTotal | null>(null);
+  const [smartInput, setSmartInput] = useState('');
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -58,20 +59,36 @@ function DashboardContent() {
       .catch(console.error);
   }, [token]);
 
-  async function createConversation(skillId: string) {
-    if (!token) return;
-    const skill = SKILLS.find(s => s.id === skillId);
-    const title = skillId ? `New ${skill?.label || ''} Document` : 'New Smart Document';
-    const res = await fetch('/api/conversations', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ title, skillId: skillId || undefined }),
-    });
-    const conv = await res.json();
-    router.push(`/chat/${conv.id}`);
+  async function createConversation(skillId?: string, initialMessage?: string) {
+    if (!token || creating) return;
+    setCreating(true);
+    try {
+      const docType = DOC_TYPES.find(s => s.id === skillId);
+      const title = skillId
+        ? `New ${docType?.label || ''} Document`
+        : (initialMessage || 'New Conversation').substring(0, 60);
+      const res = await fetch('/api/conversations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ title, skillId: skillId || undefined }),
+      });
+      const conv = await res.json();
+      // If there's an initial message, store it in sessionStorage for the chat page to pick up
+      if (initialMessage) {
+        sessionStorage.setItem(`pending_message_${conv.id}`, initialMessage);
+      }
+      router.push(`/chat/${conv.id}`);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleSmartSubmit() {
+    if (!smartInput.trim()) return;
+    await createConversation(undefined, smartInput.trim());
   }
 
   if (isLoading || !user) return null;
@@ -82,19 +99,51 @@ function DashboardContent() {
       <div className={styles.container}>
         <h2 className={styles.greeting}>Welcome back, {user.displayName || user.email}</h2>
 
-        {/* Quick Start */}
+        {/* Smart Input — describe anything, AI figures out the rest */}
         <section className={styles.section}>
-          <h3>Create New Document</h3>
-          <div className={styles.skillGrid}>
-            {SKILLS.map(skill => (
+          <div className={styles.smartBox}>
+            <h3 className={styles.smartTitle}>What do you need?</h3>
+            <p className={styles.smartHint}>Describe your request and AI will create the right document for you</p>
+            <div className={styles.smartInputRow}>
+              <textarea
+                className={styles.smartInput}
+                value={smartInput}
+                onChange={e => setSmartInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSmartSubmit();
+                  }
+                }}
+                placeholder="e.g. Make a 10-slide presentation about AI trends in 2025..."
+                rows={2}
+                disabled={creating}
+              />
               <button
-                key={skill.id}
-                className={styles.skillCard}
-                onClick={() => createConversation(skill.id)}
-                style={{ borderColor: skill.color }}
+                className={styles.smartButton}
+                onClick={handleSmartSubmit}
+                disabled={!smartInput.trim() || creating}
               >
-                <span className={styles.skillIcon} style={{ background: skill.color }}>{skill.icon}</span>
-                <span className={styles.skillLabel}>{skill.label}</span>
+                {creating ? '...' : 'Go'}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* Quick Create — pick a specific document type */}
+        <section className={styles.section}>
+          <h3>Quick Create</h3>
+          <div className={styles.skillGrid}>
+            {DOC_TYPES.map(doc => (
+              <button
+                key={doc.id}
+                className={styles.skillCard}
+                onClick={() => createConversation(doc.id)}
+                style={{ borderColor: doc.color }}
+                disabled={creating}
+              >
+                <span className={styles.skillIcon} style={{ background: doc.color }}>{doc.icon}</span>
+                <span className={styles.skillLabel}>{doc.label}</span>
               </button>
             ))}
           </div>
