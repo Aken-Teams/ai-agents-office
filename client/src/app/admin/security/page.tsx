@@ -248,7 +248,7 @@ export default function AdminSecurity() {
                   const actor = entry.actor_name || entry.actor?.split('@')[0] || '';
                   return (
                     <div key={entry.event_id} className="flex gap-2 py-1">
-                      <span className="text-outline shrink-0">[{new Date(entry.created_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}]</span>
+                      <span className="text-outline shrink-0">[{new Date(entry.created_at.endsWith('Z') ? entry.created_at : entry.created_at + 'Z').toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}]</span>
                       <span className={`${meta.color} shrink-0`}>[{meta.label}]</span>
                       <span className="text-on-surface-variant">
                         <span className="text-on-surface">{actor}</span>
