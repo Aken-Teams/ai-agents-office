@@ -139,6 +139,11 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
     db.prepare('UPDATE conversations SET session_id = ? WHERE id = ?').run(sessionId, conversationId);
   }
 
+  // Keepalive to prevent proxy/connection timeout during long AI processing
+  const keepaliveTimer = setInterval(() => {
+    try { res.write(': keepalive\n\n'); } catch { /* connection closed */ }
+  }, 10000);
+
   /**
    * Start Claude CLI with the given session parameters.
    * If isResume=true and it fails, auto-retries with a fresh session + chat history.
@@ -171,27 +176,32 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
     let hasRetried = false;
 
     emitter.on('event', (event: SSEEvent) => {
-      // Auto-retry: if resume fails, create fresh session with history
-      if (event.type === 'error' && isResume && !hasRetried) {
+      // If retry was already triggered, suppress all remaining events from failed process
+      if (hasRetried) {
+        return;
+      }
+
+      // Auto-retry: if resume fails, start fresh session immediately
+      if (event.type === 'error' && isResume) {
         const errStr = String(event.data || '');
         if (errStr.includes('Session') || errStr.includes('exit') || errStr.includes('code 1')) {
           hasRetried = true;
           console.log(`[Generate] Resume failed for ${conversationId}, retrying with fresh session + history`);
           const freshId = uuidv4();
           db.prepare('UPDATE conversations SET session_id = ? WHERE id = ?').run(freshId, conversationId);
-          return; // Don't forward this error
+          startClaude(freshId, false);
+          return;
         }
       }
 
-      // When the failed process exits, start fresh
-      if (event.type === 'done' && isResume && hasRetried) {
-        const row = db.prepare('SELECT session_id FROM conversations WHERE id = ?').get(conversationId) as { session_id: string } | undefined;
-        startClaude(row?.session_id || uuidv4(), false);
+      // Forward event to client
+      try {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      } catch (err) {
+        console.error(`[Generate] SSE write failed for ${conversationId}:`, err);
+        clearInterval(keepaliveTimer);
         return;
       }
-
-      // Forward event to client
-      res.write(`data: ${JSON.stringify(event)}\n\n`);
 
       if (event.type === 'text') {
         assistantText += event.data as string;
@@ -212,6 +222,7 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
       }
 
       if (event.type === 'done') {
+        clearInterval(keepaliveTimer);
         activeGenerations.delete(conversationId);
 
         // Save assistant message
@@ -238,15 +249,17 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
         const newFiles = registerNewFiles(userId, conversationId, sandboxPath, existingFiles);
 
         if (newFiles.length > 0) {
-          res.write(`data: ${JSON.stringify({
-            type: 'file_generated',
-            data: newFiles.map(f => ({
-              id: f.id,
-              filename: f.filename,
-              file_type: f.file_type,
-              file_size: f.file_size,
-            })),
-          })}\n\n`);
+          try {
+            res.write(`data: ${JSON.stringify({
+              type: 'file_generated',
+              data: newFiles.map(f => ({
+                id: f.id,
+                filename: f.filename,
+                file_type: f.file_type,
+                file_size: f.file_size,
+              })),
+            })}\n\n`);
+          } catch { /* connection closed */ }
         }
 
         res.end();
@@ -258,6 +271,7 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
 
   // Handle client disconnect
   res.on('close', () => {
+    clearInterval(keepaliveTimer);
     const abortFn = activeGenerations.get(conversationId);
     if (abortFn) {
       activeGenerations.delete(conversationId);

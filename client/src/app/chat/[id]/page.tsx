@@ -360,7 +360,7 @@ function ChatContent() {
             )}
 
             {/* Streaming text preview */}
-            {streamText && (
+            {streamText && streamText.trim() && (
               <div className={`${styles.message} ${styles.assistant} ${styles.streaming}`}>
                 <div className={styles.messageRole}>AI Assistant</div>
                 <div className={styles.messageContent}>
