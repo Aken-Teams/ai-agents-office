@@ -226,10 +226,12 @@
 .processingPanel {
   align-self: flex-start;
   max-width: 85%;
+  min-width: 240px;
   background: #fafbff;
   border: 1px solid #e0e7ff;
   border-radius: var(--radius-lg);
   overflow: hidden;
+  margin-bottom: 4px;
 }
 
 .processingHeader {
@@ -452,9 +454,10 @@
   padding: 12px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
-  text-decoration: none;
   color: var(--text);
   transition: all 0.2s;
+  cursor: pointer;
+  user-select: none;
 }
 .fileItem:hover {
   background: var(--bg);

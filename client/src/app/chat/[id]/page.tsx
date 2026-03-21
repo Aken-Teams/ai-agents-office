@@ -115,7 +115,7 @@ function ChatContent() {
   // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamText, thinkingText, tools]);
+  }, [messages, streamText, thinkingText, tools, streaming]);
 
   // Elapsed time timer
   useEffect(() => {
@@ -258,6 +258,26 @@ function ChatContent() {
     return icons[type] || '\uD83D\uDCCE';
   }
 
+  async function handleDownload(fileId: string, filename: string) {
+    try {
+      const res = await fetch(`/api/files/${fileId}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download error:', err);
+    }
+  }
+
   function formatElapsed(s: number): string {
     if (s < 60) return `${s}s`;
     return `${Math.floor(s / 60)}m ${s % 60}s`;
@@ -311,21 +331,34 @@ function ChatContent() {
 
                 {/* Task steps (Claude-Code style todo list) */}
                 <div className={styles.taskList}>
-                  {/* Waiting for response */}
-                  <div className={`${styles.taskItem} ${isWaiting ? styles.taskActive : styles.taskDone}`}>
-                    <span className={isWaiting ? styles.taskSpinner : styles.taskCheck} />
-                    <span>{isWaiting ? 'Connecting to AI...' : 'Connected'}</span>
+                  {/* Step 1: Connected — always done */}
+                  <div className={`${styles.taskItem} ${styles.taskDone}`}>
+                    <span className={styles.taskCheck} />
+                    <span className={styles.taskLabel}>Connected</span>
                   </div>
 
-                  {/* Thinking step */}
-                  {thinkingText && (
+                  {/* Step 2: Time-based progress while waiting for AI */}
+                  {isWaiting && (
                     <div className={`${styles.taskItem} ${styles.taskActive}`}>
                       <span className={styles.taskSpinner} />
-                      <span>Analyzing request...</span>
+                      <span className={styles.taskLabel}>
+                        {elapsed < 3 ? 'Loading conversation context...'
+                          : elapsed < 8 ? 'Analyzing your request...'
+                          : elapsed < 15 ? 'Generating response...'
+                          : 'Still working... (complex request)'}
+                      </span>
                     </div>
                   )}
 
-                  {/* Tool steps */}
+                  {/* Thinking step (from actual Claude thinking events) */}
+                  {thinkingText && (
+                    <div className={`${styles.taskItem} ${styles.taskActive}`}>
+                      <span className={styles.taskSpinner} />
+                      <span className={styles.taskLabel}>Deep thinking...</span>
+                    </div>
+                  )}
+
+                  {/* Tool steps (from actual tool_activity events) */}
                   {tools.map((tool, i) => {
                     const info = getToolInfo(tool.tool);
                     const detail = parseToolInput(tool.tool, tool.input);
@@ -340,11 +373,11 @@ function ChatContent() {
                     );
                   })}
 
-                  {/* Generating response step */}
+                  {/* Writing response step */}
                   {streamText && (
                     <div className={`${styles.taskItem} ${styles.taskActive}`}>
                       <span className={styles.taskSpinner} />
-                      <span>Generating response...</span>
+                      <span className={styles.taskLabel}>Writing response...</span>
                     </div>
                   )}
                 </div>
@@ -404,11 +437,12 @@ function ChatContent() {
           ) : (
             <div className={styles.fileList}>
               {files.map(file => (
-                <a
+                <div
                   key={file.id}
-                  href={`/api/files/${file.id}/download`}
                   className={styles.fileItem}
-                  download
+                  onClick={() => handleDownload(file.id, file.filename)}
+                  role="button"
+                  tabIndex={0}
                 >
                   <span className={styles.fileIcon}>{getFileIcon(file.file_type)}</span>
                   <div className={styles.fileInfo}>
@@ -418,7 +452,7 @@ function ChatContent() {
                     </span>
                   </div>
                   <span className={styles.downloadIcon}>&#x2B07;</span>
-                </a>
+                </div>
               ))}
             </div>
           )}

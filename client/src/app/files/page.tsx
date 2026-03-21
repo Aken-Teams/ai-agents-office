@@ -43,6 +43,26 @@ function FilesContent() {
     setFiles(prev => prev.filter(f => f.id !== id));
   }
 
+  async function handleDownload(fileId: string, filename: string) {
+    try {
+      const res = await fetch(`/api/files/${fileId}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download error:', err);
+    }
+  }
+
   function formatSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -97,14 +117,13 @@ function FilesContent() {
                   <td>{formatSize(file.file_size)}</td>
                   <td>{new Date(file.created_at).toLocaleDateString('zh-TW')}</td>
                   <td className={styles.actions}>
-                    <a
-                      href={`/api/files/${file.id}/download`}
+                    <button
                       className="btn-primary"
-                      style={{ padding: '6px 12px', fontSize: '12px', display: 'inline-block' }}
-                      download
+                      style={{ padding: '6px 12px', fontSize: '12px' }}
+                      onClick={() => handleDownload(file.id, file.filename)}
                     >
                       Download
-                    </a>
+                    </button>
                     <button
                       className="btn-danger"
                       style={{ padding: '6px 12px', fontSize: '12px' }}
