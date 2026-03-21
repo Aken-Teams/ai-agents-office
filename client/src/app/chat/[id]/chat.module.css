@@ -316,9 +316,20 @@
   opacity: 0.6;
 }
 
-.taskFailed {
-  color: #dc2626;
-  background: #fef2f2;
+.taskWarning {
+  color: #b45309;
+  background: #fffbeb;
+}
+
+.taskWarningIcon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
 }
 
 /* Task spinner (in-progress) */

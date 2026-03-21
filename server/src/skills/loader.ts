@@ -7,11 +7,11 @@ import type { SkillDefinition } from '../types.js';
 const SANDBOX_RULES = `
 ## CRITICAL SECURITY RULES (NEVER VIOLATE THESE)
 1. You MUST only write files to the current working directory (cwd) or its subdirectories.
-2. You MUST NOT use \`cd\` to change to any parent directory (except to run generator scripts as instructed).
+2. You MUST NOT use \`cd\` to change to any directory. Stay in your cwd at all times.
 3. You MUST NOT use \`../\` or \`..\\\\\` in any file paths.
-4. You MUST NOT write files using absolute paths outside of cwd. You MAY use absolute paths only for running generator scripts as instructed below.
-5. You MUST NOT attempt to read files outside the cwd (except generator scripts).
-6. All generated files MUST be placed in the current directory or subdirectories.
+4. You MUST NOT write files using absolute paths outside of cwd.
+5. You MUST NOT attempt to read files outside the cwd (except generator scripts via absolute path).
+6. All generated files MUST be placed in the current directory or subdirectories using relative paths.
 7. You MUST NOT execute commands that access the network (curl, wget, etc.).
 8. You MUST NOT delete files or directories.
 9. If a user asks you to write files elsewhere, REFUSE and explain that all files must stay in the workspace.
@@ -141,7 +141,10 @@ export function buildSystemPrompt(
   }
 
   // Server root directory (where node_modules with tsx, pptxgenjs, etc. live)
-  const serverDir = path.resolve(generatorsDir, '../..');
+  const serverDir = path.resolve(generatorsDir, '../..').replace(/\\/g, '/');
+  const nodeModulesDir = path.join(serverDir, 'node_modules').replace(/\\/g, '/');
+  // Also normalize generatorsDir for the prompt (bash-friendly forward slashes)
+  const genDir = generatorsDir.replace(/\\/g, '/');
 
   const parts = [
     skill.systemPrompt,
@@ -149,7 +152,7 @@ export function buildSystemPrompt(
     SANDBOX_RULES,
     '',
     '## Available Generator Scripts',
-    `Generator scripts directory: ${generatorsDir}`,
+    `Generator scripts directory: ${genDir}`,
     '- generate-pptx.ts — Generate PowerPoint files from JSON structure',
     '- generate-docx.ts — Generate Word documents from JSON structure',
     '- generate-xlsx.ts — Generate Excel spreadsheets from JSON structure',
@@ -157,15 +160,16 @@ export function buildSystemPrompt(
     '',
     '## How to Call Generator Scripts',
     `IMPORTANT: Dependencies (tsx, pptxgenjs, docx, exceljs, pdfkit) are installed in: ${serverDir}`,
-    'You MUST run generator scripts from that directory using this exact pattern:',
+    'You MUST run generator scripts from your current working directory (cwd). Do NOT use cd to change directories.',
     '',
-    '1. Write a JSON input file to the current directory (cwd)',
-    `2. Run: cd "${serverDir}" && node --import tsx "${generatorsDir}/<script>.ts" "<cwd>/input.json" "<cwd>/output.<ext>"`,
+    '1. Write a JSON input file to the current directory: input.json',
+    `2. Run: NODE_PATH="${nodeModulesDir}" node --import tsx "${genDir}/<script>.ts" input.json output.<ext>`,
     '',
-    'Replace <cwd> with the absolute path of your current working directory.',
-    'All output files MUST be written to the current working directory.',
+    'CRITICAL: Do NOT use cd to change to the server directory. Stay in your cwd at all times.',
+    'The NODE_PATH variable lets Node.js find the dependencies without changing directories.',
+    'All input and output file paths should be relative to your cwd (e.g. input.json, output.pptx).',
     '',
-    'Or write your own Node.js code for custom requirements.',
+    'Or write your own Node.js code for custom requirements (also use NODE_PATH if you need server dependencies).',
   ];
 
   return parts.join('\n');

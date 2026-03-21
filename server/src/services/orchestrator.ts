@@ -14,7 +14,7 @@ const ORCHESTRATION_TIMEOUT_MS = 900_000; // 15 minutes total orchestration limi
 const SKILL_TIMEOUT: Record<string, number> = {
   router:    120_000,   // 2 min — just analyze and delegate
   research:  180_000,   // 3 min — web search
-  planner:   120_000,   // 2 min — text planning
+  planner:   300_000,   // 5 min — text planning (complex outlines need time)
   reviewer:  120_000,   // 2 min — text review
   'pptx-gen': 600_000,  // 10 min — write code + run node to generate PPT
   'docx-gen': 480_000,  // 8 min — write code + run node to generate Word

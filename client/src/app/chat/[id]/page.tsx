@@ -599,24 +599,24 @@ function ChatContent() {
                           key={task.taskId}
                           className={`${styles.taskItem} ${
                             task.status === 'completed' ? styles.taskDone
-                            : task.status === 'failed' ? styles.taskFailed
+                            : task.status === 'failed' ? styles.taskWarning
                             : styles.taskActive
                           }`}
                         >
                           <span className={
                             task.status === 'completed' ? styles.taskCheck
-                            : task.status === 'failed' ? styles.taskFailed
+                            : task.status === 'failed' ? styles.taskWarningIcon
                             : styles.taskSpinner
                           } />
                           <span className={styles.taskIcon}>
-                            {task.status === 'failed' ? '\u274C' : '\uD83E\uDD16'}
+                            {task.status === 'failed' ? '\u26A0\uFE0F' : '\uD83E\uDD16'}
                           </span>
                           <span className={styles.taskLabel}>
                             {SKILL_LABELS[task.skillId] || task.skillId}
                           </span>
                           <span className={styles.taskDetail}>
                             {task.status === 'failed'
-                              ? (task.error || 'Failed').substring(0, 50)
+                              ? (task.error || 'Timed out').substring(0, 50)
                               : task.description.substring(0, 60)}
                           </span>
                         </div>
