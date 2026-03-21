@@ -8,6 +8,10 @@ import { AuthProvider, useAuth } from '../../components/AuthProvider';
 import Navbar from '../../components/Navbar';
 import styles from './chat.module.css';
 
+// Direct connection to Express for SSE streaming.
+// Next.js rewrites proxy buffers the entire response, preventing real-time updates.
+const SSE_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -161,7 +165,9 @@ function ChatContent() {
     abortRef.current = controller;
 
     try {
-      const res = await fetch(`/api/generate/${conversationId}`, {
+      // Connect directly to Express for real-time SSE streaming
+      // (Next.js rewrite proxy buffers the entire response)
+      const res = await fetch(`${SSE_BASE}/api/generate/${conversationId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -259,7 +265,7 @@ function ChatContent() {
 
   function handleAbort() {
     abortRef.current?.abort();
-    fetch(`/api/generate/${conversationId}/abort`, {
+    fetch(`${SSE_BASE}/api/generate/${conversationId}/abort`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     }).catch(() => {});
