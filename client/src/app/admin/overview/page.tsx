@@ -195,7 +195,7 @@ export default function AdminOverview() {
                     const barHeight = Math.max(pct, 4);
                     return (
                       <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full group/bar">
-                        <span className="text-[9px] text-on-surface-variant opacity-0 group-hover/bar:opacity-100 transition-opacity font-mono">
+                        <span className="text-xs text-on-surface-variant opacity-0 group-hover/bar:opacity-100 transition-opacity font-mono font-bold">
                           {formatTokens(total)}
                         </span>
                         <div className="flex-1 w-full flex items-end">
@@ -204,7 +204,7 @@ export default function AdminOverview() {
                             <div className="absolute inset-0 bg-tertiary/50" style={{ bottom: `${inputPct}%` }} />
                           </div>
                         </div>
-                        <span className="text-[8px] text-outline truncate w-full text-center">
+                        <span className="text-[10px] text-outline truncate w-full text-center">
                           {v.date.split(' ')[0]?.slice(5) || v.date.slice(5)}
                         </span>
                       </div>

@@ -62,7 +62,7 @@ export default function AdminTokens() {
   const [ledgerTotal, setLedgerTotal] = useState(0);
   const [ledgerPage, setLedgerPage] = useState(1);
   const [ledgerTotalPages, setLedgerTotalPages] = useState(1);
-  const [period, setPeriod] = useState<'24h' | '7d' | '30d'>('7d');
+  const [period, setPeriod] = useState<'7d' | '30d'>('7d');
 
   useEffect(() => {
     if (!token) return;
@@ -85,7 +85,7 @@ export default function AdminTokens() {
 
   const fetchLedger = useCallback(() => {
     if (!token) return;
-    fetch(`/api/admin/tokens/ledger?page=${ledgerPage}&limit=15`, {
+    fetch(`/api/admin/tokens/ledger?page=${ledgerPage}&limit=10`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
@@ -122,7 +122,7 @@ export default function AdminTokens() {
         {/* Summary Cards */}
         <div className="grid grid-cols-4 gap-6">
           <div className="bg-surface-container p-6 rounded-lg col-span-1">
-            <p className="text-[10px] uppercase tracking-widest text-on-surface-variant mb-2">總 Token 用量</p>
+            <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">總 Token 用量</p>
             <span className="text-3xl font-headline font-black text-on-surface">
               {summary ? formatTokens(summary.totalInput + summary.totalOutput) : '—'}
             </span>
@@ -131,21 +131,21 @@ export default function AdminTokens() {
             </p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg col-span-1">
-            <p className="text-[10px] uppercase tracking-widest text-on-surface-variant mb-2">預估費用</p>
+            <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">預估費用 (USD)</p>
             <span className="text-3xl font-headline font-black text-primary">
               ${summary?.estimatedCost.toFixed(4) ?? '0'}
             </span>
             <p className="text-xs text-on-surface-variant mt-2 font-mono">Claude Sonnet 4 定價</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg col-span-1">
-            <p className="text-[10px] uppercase tracking-widest text-on-surface-variant mb-2">總調用次數</p>
+            <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">總調用次數</p>
             <span className="text-3xl font-headline font-black text-on-surface">
               {summary?.totalInvocations ?? 0}
             </span>
             <p className="text-xs text-on-surface-variant mt-2 font-mono">API 調用</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg col-span-1">
-            <p className="text-[10px] uppercase tracking-widest text-on-surface-variant mb-2">計費狀態</p>
+            <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">計費狀態</p>
             <div className="flex items-center gap-2">
               <span className="text-3xl font-headline font-black text-success">啟用中</span>
             </div>
@@ -163,7 +163,7 @@ export default function AdminTokens() {
                 <span className="text-xs font-bold uppercase tracking-widest">Token 消耗速度</span>
               </div>
               <div className="flex gap-1">
-                {(['24h', '7d', '30d'] as const).map(p => (
+                {(['7d', '30d'] as const).map(p => (
                   <button
                     key={p}
                     onClick={() => setPeriod(p)}
@@ -186,13 +186,16 @@ export default function AdminTokens() {
                   {chart.map((v, i) => {
                     const total = v.total_input + v.total_output;
                     const pct = (total / maxChart) * 100;
+                    const barHeight = Math.max(pct, 4);
                     return (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-1 group/bar">
-                        <span className="text-[9px] text-on-surface-variant opacity-0 group-hover/bar:opacity-100 transition-opacity font-mono">
+                      <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full group/bar">
+                        <span className="text-xs text-on-surface-variant opacity-0 group-hover/bar:opacity-100 transition-opacity font-mono font-bold">
                           {formatTokens(total)}
                         </span>
-                        <div className="w-full bg-primary/60 rounded-t transition-all" style={{ height: `${Math.max(pct, 2)}%` }} />
-                        <span className="text-[8px] text-outline truncate w-full text-center">
+                        <div className="flex-1 w-full flex items-end">
+                          <div className="w-full bg-primary/60 rounded-t transition-all" style={{ height: `${barHeight}%` }} />
+                        </div>
+                        <span className="text-[10px] text-outline truncate w-full text-center">
                           {v.date.split(' ')[0]?.slice(5) || v.date.slice(5)}
                         </span>
                       </div>
@@ -249,13 +252,13 @@ export default function AdminTokens() {
                 <th className="py-3 px-6 font-bold">文件 / 動作</th>
                 <th className="py-3 px-6 font-bold">用戶</th>
                 <th className="py-3 px-6 font-bold text-right">Tokens</th>
-                <th className="py-3 px-6 font-bold text-right">費用</th>
+                <th className="py-3 px-6 font-bold text-right">費用 (USD)</th>
                 <th className="py-3 px-6 font-bold text-right">時間</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/10">
               {ledger.map(entry => {
-                const cost = (entry.input_tokens / 1_000_000) * 3 + (entry.output_tokens / 1_000_000) * 15;
+                const cost = (entry.input_tokens / 1_000_000) * 3 + (entry.output_tokens / 1_000_000) * 10;
                 return (
                   <tr key={entry.id} className="hover:bg-surface-container-high/50 transition-colors">
                     <td className="py-3 px-6 text-xs text-primary font-mono">{entry.id.slice(0, 8)}</td>
@@ -285,7 +288,7 @@ export default function AdminTokens() {
           {ledgerTotalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-4 border-t border-outline-variant/10">
               <span className="text-xs text-on-surface-variant">
-                第 {(ledgerPage - 1) * 15 + 1}-{Math.min(ledgerPage * 15, ledgerTotal)} 筆，共 {ledgerTotal} 筆
+                第 {(ledgerPage - 1) * 10 + 1}-{Math.min(ledgerPage * 10, ledgerTotal)} 筆，共 {ledgerTotal} 筆
               </span>
               <div className="flex gap-1">
                 <button
