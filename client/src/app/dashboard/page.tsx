@@ -20,14 +20,14 @@ interface UsageTotal {
 }
 
 const DOC_TYPES = [
-  { id: 'pptx-gen', label: '簡報', desc: '投影片製作', icon: 'slideshow', colorClass: 'text-warning' },
+  { id: 'pptx-gen', label: '簡報', desc: '投影片製作', icon: 'present_to_all', colorClass: 'text-warning' },
   { id: 'docx-gen', label: '文件', desc: '文書撰寫', icon: 'description', colorClass: 'text-tertiary' },
   { id: 'xlsx-gen', label: '試算表', desc: '數據分析', icon: 'table_chart', colorClass: 'text-success' },
   { id: 'pdf-gen', label: 'PDF', desc: '文件輸出', icon: 'picture_as_pdf', colorClass: 'text-error' },
 ];
 
 const SKILL_ICONS: Record<string, string> = {
-  'pptx-gen': 'slideshow',
+  'pptx-gen': 'present_to_all',
   'docx-gen': 'description',
   'xlsx-gen': 'table_chart',
   'pdf-gen': 'picture_as_pdf',

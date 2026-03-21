@@ -52,7 +52,7 @@ const SKILL_LABELS: Record<string, string> = {
 };
 
 const SKILL_ICONS: Record<string, string> = {
-  'pptx-gen': 'slideshow',
+  'pptx-gen': 'present_to_all',
   'docx-gen': 'description',
   'xlsx-gen': 'table_chart',
   'pdf-gen': 'picture_as_pdf',
@@ -104,7 +104,7 @@ function getFileIcon(type: string): string {
   const icons: Record<string, string> = {
     docx: 'description', doc: 'description',
     xlsx: 'table_chart', xls: 'table_chart',
-    pptx: 'slideshow', ppt: 'slideshow',
+    pptx: 'present_to_all', ppt: 'present_to_all',
     pdf: 'picture_as_pdf',
   };
   return icons[type] || 'attach_file';
