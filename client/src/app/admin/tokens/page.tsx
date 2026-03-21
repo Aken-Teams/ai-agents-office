@@ -123,7 +123,7 @@ export default function AdminTokens() {
         {/* Summary Cards */}
         <div className="grid grid-cols-4 gap-6">
           <div className="bg-surface-container p-6 rounded-lg col-span-1 group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-8 -right-6 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '180px' }}>token</span>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>token</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">總 Token 用量</p>
             <span className="text-3xl font-headline font-black text-on-surface">
               {summary ? formatTokens(summary.totalInput + summary.totalOutput) : '—'}
@@ -133,7 +133,7 @@ export default function AdminTokens() {
             </p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg col-span-1 group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-8 -right-6 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '180px' }}>attach_money</span>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>attach_money</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">預估費用 (USD)</p>
             <span className="text-3xl font-headline font-black text-primary">
               ${summary?.estimatedCost.toFixed(4) ?? '0'}
@@ -141,7 +141,7 @@ export default function AdminTokens() {
             <p className="text-xs text-on-surface-variant mt-2 font-mono">Claude Sonnet 4 定價</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg col-span-1 group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-8 -right-6 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '180px' }}>api</span>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>api</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">總調用次數</p>
             <span className="text-3xl font-headline font-black text-on-surface">
               {summary?.totalInvocations ?? 0}
@@ -149,7 +149,7 @@ export default function AdminTokens() {
             <p className="text-xs text-on-surface-variant mt-2 font-mono">API 調用</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg col-span-1 group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-8 -right-6 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '180px' }}>check_circle</span>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>check_circle</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">計費狀態</p>
             <div className="flex items-center gap-2">
               <span className="text-3xl font-headline font-black text-success">啟用中</span>

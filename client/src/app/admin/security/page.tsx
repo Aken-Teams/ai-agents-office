@@ -127,25 +127,25 @@ export default function AdminSecurity() {
         {/* Stats Row */}
         <div className="grid grid-cols-4 gap-6">
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-12 -right-8 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '180px' }}>receipt_long</span>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>receipt_long</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">審計記錄</p>
             <span className="text-3xl font-headline font-black text-on-surface">{stats?.totalAuditEntries ?? 0}</span>
             <p className="text-xs text-on-surface-variant mt-2 font-mono">Admin 操作記錄</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-12 -right-8 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '180px' }}>person_off</span>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>person_off</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">已停用帳號</p>
             <span className="text-3xl font-headline font-black text-error">{stats?.suspendedUsers ?? 0}</span>
             <p className="text-xs text-on-surface-variant mt-2 font-mono">共 {stats?.totalUsers ?? 0} 個用戶</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-12 -right-8 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '180px' }}>schedule</span>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>schedule</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">系統運行時間</p>
             <span className="text-3xl font-headline font-black text-on-surface">{stats ? formatUptime(stats.systemUptime) : '—'}</span>
             <p className="text-xs text-on-surface-variant mt-2 font-mono">自上次啟動</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-12 -right-8 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '180px' }}>description</span>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>description</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">已生成檔案</p>
             <span className="text-3xl font-headline font-black text-primary">{stats?.totalFiles ?? 0}</span>
             <p className="text-xs text-on-surface-variant mt-2 font-mono">跨 {stats?.totalConversations ?? 0} 個對話</p>
@@ -248,7 +248,7 @@ export default function AdminSecurity() {
                   const actor = entry.actor_name || entry.actor?.split('@')[0] || '';
                   return (
                     <div key={entry.event_id} className="flex gap-2 py-1">
-                      <span className="text-outline shrink-0">[{new Date(entry.created_at).toLocaleString('zh-TW')}]</span>
+                      <span className="text-outline shrink-0">[{new Date(entry.created_at).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}]</span>
                       <span className={`${meta.color} shrink-0`}>[{meta.label}]</span>
                       <span className="text-on-surface-variant">
                         <span className="text-on-surface">{actor}</span>
