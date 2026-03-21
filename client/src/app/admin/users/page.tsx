@@ -51,7 +51,7 @@ export default function AdminUsers() {
   const [selectedUser, setSelectedUser] = useState<UserDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const limit = 15;
+  const limit = 10;
 
   const fetchUsers = useCallback(() => {
     if (!token) return;
@@ -143,15 +143,25 @@ export default function AdminUsers() {
                 onChange={e => setSearch(e.target.value)}
               />
             </form>
-            <select
-              className="bg-surface-container-highest border-none text-sm text-on-surface py-2.5 px-4 rounded cursor-pointer focus:ring-1 focus:ring-primary/40"
-              value={statusFilter}
-              onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
-            >
-              <option value="">全部狀態</option>
-              <option value="active">啟用</option>
-              <option value="suspended">已停用</option>
-            </select>
+            <div className="flex rounded overflow-hidden border border-outline-variant/15">
+              {[
+                { value: '', label: '全部' },
+                { value: 'active', label: '啟用' },
+                { value: 'suspended', label: '停用' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => { setStatusFilter(opt.value); setPage(1); }}
+                  className={`px-4 py-2 text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors ${
+                    statusFilter === opt.value
+                      ? 'bg-primary/15 text-primary'
+                      : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Table */}
@@ -159,8 +169,7 @@ export default function AdminUsers() {
             <table className="w-full">
               <thead className="sticky top-0 bg-surface-container-lowest">
                 <tr className="text-left text-[10px] uppercase tracking-widest text-on-surface-variant">
-                  <th className="py-3 px-4 font-bold">用戶身份</th>
-                  <th className="py-3 px-4 font-bold">Email</th>
+                  <th className="py-3 px-4 font-bold">用戶</th>
                   <th className="py-3 px-4 font-bold">註冊日期</th>
                   <th className="py-3 px-4 font-bold">狀態</th>
                   <th className="py-3 px-4 font-bold text-right">Tokens</th>
@@ -176,13 +185,15 @@ export default function AdminUsers() {
                   >
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-xs font-bold text-primary">
+                        <div className="w-8 h-8 rounded bg-primary/15 flex items-center justify-center text-xs font-bold text-primary shrink-0">
                           {(user.display_name || user.email)[0].toUpperCase()}
                         </div>
-                        <span className="text-[10px] text-on-surface-variant font-mono">{user.id.slice(0, 8)}</span>
+                        <div className="min-w-0">
+                          <p className="text-sm text-on-surface font-medium truncate">{user.display_name || user.email.split('@')[0]}</p>
+                          <p className="text-[10px] text-on-surface-variant font-mono truncate">{user.email}</p>
+                        </div>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-sm text-on-surface">{user.email}</td>
                     <td className="py-3 px-4 text-xs text-on-surface-variant font-mono">
                       {new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                     </td>
@@ -201,7 +212,7 @@ export default function AdminUsers() {
                 ))}
                 {users.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-on-surface-variant">未找到用戶</td>
+                    <td colSpan={5} className="py-12 text-center text-on-surface-variant">未找到用戶</td>
                   </tr>
                 )}
               </tbody>
@@ -249,38 +260,47 @@ export default function AdminUsers() {
 
         {/* User Detail Sidebar */}
         {selectedUser && (
-          <div className="w-80 bg-surface-container-low border-l border-outline-variant/10 flex flex-col overflow-y-auto">
-            {/* Header */}
-            <div className="p-6 border-b border-outline-variant/10">
-              <div className="flex items-center justify-between mb-4">
-                <div className="w-12 h-12 rounded bg-surface-container-highest flex items-center justify-center text-lg font-bold text-primary">
-                  {(selectedUser.display_name || selectedUser.email)[0].toUpperCase()}
-                </div>
-                <button
-                  onClick={() => setSelectedUser(null)}
-                  className="w-8 h-8 flex items-center justify-center rounded hover:bg-surface-container-high transition-colors bg-transparent cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
-                </button>
-              </div>
-              <h3 className="text-sm font-bold text-on-surface">{selectedUser.display_name || selectedUser.email}</h3>
-              <p className="text-xs text-on-surface-variant font-mono mt-1">{selectedUser.id.slice(0, 8)}</p>
-              <p className="text-xs text-on-surface-variant mt-1">{selectedUser.email}</p>
+          <div className="w-[340px] bg-surface-container-low border-l border-outline-variant/10 flex flex-col overflow-y-auto">
+            {/* Close */}
+            <div className="flex justify-end p-3 pb-0">
+              <button
+                onClick={() => setSelectedUser(null)}
+                className="w-8 h-8 flex items-center justify-center rounded hover:bg-surface-container-high transition-colors bg-transparent cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
+              </button>
+            </div>
 
-              <div className="flex items-center gap-2 mt-3">
-                <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded ${
-                  selectedUser.status === 'active' ? 'bg-success/15 text-success' : 'bg-error/15 text-error'
-                }`}>
-                  {selectedUser.status}
-                </span>
-                <span className="text-[10px] text-on-surface-variant">
-                  註冊於 {new Date(selectedUser.created_at).toLocaleDateString('zh-TW')}
-                </span>
+            {/* Profile Card */}
+            <div className="px-6 pb-5">
+              <div className="bg-surface-container rounded-lg p-5 border border-outline-variant/10">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-12 h-12 rounded-lg bg-primary/15 flex items-center justify-center text-lg font-black text-primary shrink-0">
+                    {(selectedUser.display_name || selectedUser.email).slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-on-surface truncate">{selectedUser.display_name || selectedUser.email.split('@')[0]}</h3>
+                    <p className="text-[10px] text-on-surface-variant font-mono mt-0.5">ID: {selectedUser.id.slice(0, 8)}</p>
+                    <p className="text-[11px] text-on-surface-variant font-mono mt-0.5 truncate">{selectedUser.email}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-surface-container-high rounded p-2.5">
+                    <p className="text-[9px] uppercase tracking-wider text-on-surface-variant font-bold">狀態</p>
+                    <p className={`text-sm font-black mt-0.5 ${selectedUser.status === 'active' ? 'text-success' : 'text-error'}`}>
+                      {selectedUser.status === 'active' ? 'Active' : 'Suspended'}
+                    </p>
+                  </div>
+                  <div className="bg-surface-container-high rounded p-2.5">
+                    <p className="text-[9px] uppercase tracking-wider text-on-surface-variant font-bold">註冊日期</p>
+                    <p className="text-sm font-bold text-on-surface mt-0.5">{new Date(selectedUser.created_at).toLocaleDateString('zh-TW')}</p>
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Token Stats */}
-            <div className="p-6 border-b border-outline-variant/10">
+            <div className="px-6 pb-5 border-t border-outline-variant/25 pt-5">
               <h4 className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-3">Token 用量</h4>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-surface-container p-3 rounded">
@@ -296,17 +316,17 @@ export default function AdminUsers() {
             </div>
 
             {/* Recent Files */}
-            <div className="p-6 border-b border-outline-variant/10">
+            <div className="px-6 pb-5 border-t border-outline-variant/25 pt-5">
               <h4 className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-3">最近檔案</h4>
               {selectedUser.recentFiles.length === 0 ? (
                 <p className="text-xs text-on-surface-variant">尚無檔案</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {selectedUser.recentFiles.map(f => (
-                    <div key={f.id} className="flex items-center gap-2 text-xs">
-                      <span className="material-symbols-outlined text-sm text-on-surface-variant">draft</span>
+                    <div key={f.id} className="flex items-center gap-2 text-xs p-2 rounded hover:bg-surface-container/50 transition-colors">
+                      <span className="material-symbols-outlined text-sm text-on-surface-variant shrink-0">draft</span>
                       <span className="flex-1 text-on-surface truncate">{f.filename}</span>
-                      <span className="text-[10px] text-on-surface-variant">{formatFileSize(f.file_size)}</span>
+                      <span className="text-[10px] text-on-surface-variant shrink-0">{formatFileSize(f.file_size)}</span>
                     </div>
                   ))}
                 </div>
@@ -314,7 +334,7 @@ export default function AdminUsers() {
             </div>
 
             {/* Admin Controls */}
-            <div className="p-6 space-y-2">
+            <div className="px-6 pb-6 mt-auto border-t border-outline-variant/25 pt-5">
               <h4 className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-3">管理操作</h4>
               {selectedUser.status === 'active' ? (
                 <button
