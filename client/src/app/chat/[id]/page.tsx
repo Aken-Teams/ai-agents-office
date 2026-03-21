@@ -6,7 +6,6 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AuthProvider, useAuth } from '../../components/AuthProvider';
 import Navbar from '../../components/Navbar';
-import styles from './chat.module.css';
 
 // Direct connection to Express for SSE streaming.
 // Next.js rewrites proxy buffers the entire response, preventing real-time updates.
@@ -52,6 +51,13 @@ const SKILL_LABELS: Record<string, string> = {
   'router': 'Router',
 };
 
+const SKILL_ICONS: Record<string, string> = {
+  'pptx-gen': 'slideshow',
+  'docx-gen': 'description',
+  'xlsx-gen': 'table_chart',
+  'pdf-gen': 'picture_as_pdf',
+};
+
 /** Parse tool_use input JSON into a friendly one-liner */
 function parseToolInput(tool: string, rawInput?: string): string {
   if (!rawInput) return '';
@@ -59,13 +65,11 @@ function parseToolInput(tool: string, rawInput?: string): string {
     const input = JSON.parse(rawInput);
     if (tool === 'Write' || tool === 'Read') {
       const fp = input.file_path || input.path || '';
-      // Show just the filename
       const parts = fp.replace(/\\/g, '/').split('/');
       return parts[parts.length - 1] || fp;
     }
     if (tool === 'Bash') {
       const cmd = input.command || '';
-      // Truncate long commands
       return cmd.length > 60 ? cmd.substring(0, 60) + '...' : cmd;
     }
     return rawInput.length > 60 ? rawInput.substring(0, 60) + '...' : rawInput;
@@ -74,27 +78,36 @@ function parseToolInput(tool: string, rawInput?: string): string {
   }
 }
 
-/** Get tool icon and label */
+/** Get tool icon (material symbol name) and label */
 function getToolInfo(tool: string): { icon: string; label: string } {
-  // Handle agent-prefixed tools (e.g. "pptx-gen:Bash")
   if (tool.includes(':')) {
     const [agentId, baseTool] = tool.split(':');
     const agentLabel = SKILL_LABELS[agentId] || agentId;
     const baseInfo = getToolInfo(baseTool);
     return { icon: baseInfo.icon, label: `${agentLabel}: ${baseInfo.label}` };
   }
-  if (tool === 'Router') return { icon: '\uD83E\uDDE0', label: 'Router analyzing' };
-  if (tool.startsWith('Bash')) return { icon: '\u25B6', label: 'Running command' };
-  if (tool === 'Write') return { icon: '\u270E', label: 'Writing file' };
-  if (tool === 'Read') return { icon: '\uD83D\uDCC4', label: 'Reading file' };
-  if (tool === 'Edit') return { icon: '\u270F\uFE0F', label: 'Editing file' };
-  if (tool === 'Glob') return { icon: '\uD83D\uDCC2', label: 'Finding files' };
-  if (tool === 'Grep') return { icon: '\uD83D\uDD0E', label: 'Searching code' };
-  if (tool === 'WebSearch') return { icon: '\uD83D\uDD0D', label: 'Searching web' };
-  if (tool === 'WebFetch') return { icon: '\uD83C\uDF10', label: 'Fetching URL' };
-  if (tool === 'TodoWrite') return { icon: '\uD83D\uDCDD', label: 'Updating tasks' };
-  if (tool === 'tool_result') return { icon: '\u2705', label: 'Tool completed' };
-  return { icon: '\u2699', label: `Using ${tool}` };
+  if (tool === 'Router') return { icon: 'psychology', label: 'Router 分析中' };
+  if (tool.startsWith('Bash')) return { icon: 'terminal', label: '執行指令' };
+  if (tool === 'Write') return { icon: 'edit_document', label: '寫入檔案' };
+  if (tool === 'Read') return { icon: 'description', label: '讀取檔案' };
+  if (tool === 'Edit') return { icon: 'edit', label: '編輯檔案' };
+  if (tool === 'Glob') return { icon: 'folder_open', label: '搜尋檔案' };
+  if (tool === 'Grep') return { icon: 'search', label: '搜尋程式碼' };
+  if (tool === 'WebSearch') return { icon: 'travel_explore', label: '網路搜尋' };
+  if (tool === 'WebFetch') return { icon: 'language', label: '擷取網頁' };
+  if (tool === 'TodoWrite') return { icon: 'checklist', label: '更新任務' };
+  if (tool === 'tool_result') return { icon: 'check_circle', label: '工具完成' };
+  return { icon: 'settings', label: `使用 ${tool}` };
+}
+
+function getFileIcon(type: string): string {
+  const icons: Record<string, string> = {
+    docx: 'description', doc: 'description',
+    xlsx: 'table_chart', xls: 'table_chart',
+    pptx: 'slideshow', ppt: 'slideshow',
+    pdf: 'picture_as_pdf',
+  };
+  return icons[type] || 'attach_file';
 }
 
 function ChatContent() {
@@ -142,7 +155,6 @@ function ChatContent() {
       .catch(() => router.replace('/dashboard'));
   }, [token, conversationId, router]);
 
-  // Auto-send pending message from dashboard smart input
   const pendingHandled = useRef(false);
 
   // Load files
@@ -156,7 +168,7 @@ function ChatContent() {
       .catch(console.error);
   }, [token, conversationId]);
 
-  // Auto-scroll — use scrollTo for reliability (scrollIntoView can misfire before layout)
+  // Auto-scroll
   useEffect(() => {
     setTimeout(() => {
       const el = messagesEndRef.current?.parentElement;
@@ -173,8 +185,6 @@ function ChatContent() {
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = null;
-      // Auto-collapse processing panel when streaming ends
-      // so the response message is immediately visible
       if (tools.length > 0) {
         setPanelCollapsed(true);
       }
@@ -207,8 +217,6 @@ function ChatContent() {
     abortRef.current = controller;
 
     try {
-      // Connect directly to Express for real-time SSE streaming
-      // (Next.js rewrite proxy buffers the entire response)
       const res = await fetch(`${SSE_BASE}/api/generate/${conversationId}`, {
         method: 'POST',
         headers: {
@@ -249,11 +257,9 @@ function ChatContent() {
             if (event.type === 'tool_activity') {
               const activity = event.data as ToolActivity;
               setTools(prev => {
-                // Mark all running tools as completed
                 if (activity.tool === '_mark_completed') {
                   return prev.map(t => t.status !== 'completed' ? { ...t, status: 'completed' } : t);
                 }
-                // Skip tool_result entries without id (redundant)
                 if (activity.tool === 'tool_result' && !activity.id) return prev;
                 const existing = prev.findIndex(t => t.id === activity.id);
                 if (existing >= 0) {
@@ -274,7 +280,6 @@ function ChatContent() {
               const newFiles = event.data as GeneratedFile[];
               setFiles(prev => [...prev, ...newFiles]);
             }
-            // Multi-agent orchestration events
             if (event.type === 'task_dispatched') {
               const task = event.data as { taskId: string; skillId: string; description: string };
               setAgentTasks(prev => [...prev, {
@@ -298,7 +303,6 @@ function ChatContent() {
             }
             if (event.type === 'agent_stream') {
               const agentData = event.data as { taskId: string; skillId: string; type: string; content: unknown };
-              // Track agent tool activity under the task
               if (agentData.type === 'tool_activity') {
                 const activity = agentData.content as ToolActivity;
                 setTools(prev => {
@@ -315,7 +319,6 @@ function ChatContent() {
                   return [...prev, { ...activity, tool: `${agentData.skillId}:${activity.tool}` }];
                 });
               }
-              // Agent text streaming (update running status)
               if (agentData.type === 'text') {
                 setAgentTasks(prev => prev.map(t =>
                   t.taskId === agentData.taskId && t.status === 'dispatched'
@@ -325,7 +328,6 @@ function ChatContent() {
               }
             }
             if (event.type === 'agent_status') {
-              // Router thinking indicator
               const status = event.data as { agent: string; status: string };
               if (status.agent === 'router' && status.status === 'thinking') {
                 setTools(prev => [...prev, {
@@ -351,7 +353,6 @@ function ChatContent() {
               }
               setStreamText('');
               setThinkingText('');
-              // Keep tools visible (don't clear) so user can see what was done
             }
           } catch { /* skip parse errors */ }
         }
@@ -392,16 +393,6 @@ function ChatContent() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  function getFileIcon(type: string): string {
-    const icons: Record<string, string> = {
-      docx: '\uD83D\uDCDD', doc: '\uD83D\uDCDD',
-      xlsx: '\uD83D\uDCCA', xls: '\uD83D\uDCCA',
-      pptx: '\uD83D\uDCCA', ppt: '\uD83D\uDCCA',
-      pdf: '\uD83D\uDCC4',
-    };
-    return icons[type] || '\uD83D\uDCCE';
-  }
-
   async function handleDownload(fileId: string, filename: string) {
     try {
       const res = await fetch(`/api/files/${fileId}/download`, {
@@ -431,10 +422,8 @@ function ChatContent() {
 
   const isWaiting = streaming && !streamText && !thinkingText && tools.length === 0;
   const hasActivity = streaming && (tools.length > 0 || thinkingText || isWaiting);
-  // Show completed panel after streaming ends (with usage info)
   const showCompletedPanel = !streaming && tools.length > 0 && lastUsage;
 
-  // Extract source URLs from AI response for display
   const extractSources = (text: string): { title: string; url: string }[] => {
     const urlRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
     const sources: { title: string; url: string }[] = [];
@@ -450,131 +439,161 @@ function ChatContent() {
     return sources;
   };
 
-  // Count completed and total tools for collapsed summary
   const completedTools = tools.filter(t => t.status === 'completed').length;
   const webSearchTools = tools.filter(t => t.tool === 'WebSearch' || t.tool === 'WebFetch');
 
   return (
-    <div className={styles.page}>
+    <div className="h-screen bg-surface-container-lowest overflow-hidden">
       <Navbar />
-      <div className={styles.container}>
-        {/* Messages */}
-        <div className={styles.messages}>
-          <div className={styles.titleBar}>
-            <h2>{title}</h2>
-            {skillId && <span className={styles.skillBadge}>{skillId}</span>}
-            {streaming && (
-              <span className={styles.elapsedBadge}>{formatElapsed(elapsed)}</span>
-            )}
-          </div>
 
-          <div className={styles.messageList}>
+      <div className="ml-64 h-screen flex overflow-hidden">
+        {/* === Central Chat Area === */}
+        <section className="flex flex-col flex-1 min-h-0">
+          {/* Title Bar */}
+          <header className="flex items-center gap-4 px-8 h-14 bg-surface/80 backdrop-blur-xl shrink-0 border-b border-outline-variant/10">
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="text-on-surface-variant hover:text-on-surface transition-colors bg-transparent cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-sm">arrow_back</span>
+            </button>
+            <h2 className="text-sm font-headline font-bold text-on-surface truncate">{title}</h2>
+            {skillId && (
+              <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded font-bold tracking-wider uppercase shrink-0">
+                {skillId.replace('-gen', '')}
+              </span>
+            )}
+            {streaming && (
+              <span className="ml-auto text-xs px-2 py-0.5 bg-surface-container-high text-primary rounded font-mono shrink-0">
+                {formatElapsed(elapsed)}
+              </span>
+            )}
+          </header>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto px-8 py-8 space-y-8">
             {messages.map(msg => {
               const sources = msg.role === 'assistant' ? extractSources(msg.content) : [];
               return (
-                <div key={msg.id} className={`${styles.message} ${styles[msg.role]}`}>
-                  <div className={styles.messageRole}>
-                    {msg.role === 'user' ? 'You' : 'AI Assistant'}
-                  </div>
-                  <div className={styles.messageContent}>
-                    {msg.role === 'assistant' ? (
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : 'flex gap-4'}>
+                  {msg.role === 'assistant' && (
+                    <div className="w-9 h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
+                      <span className="material-symbols-outlined text-primary text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
+                    </div>
+                  )}
+                  <div className={
+                    msg.role === 'user'
+                      ? 'max-w-[70%] bg-surface-container px-5 py-4 rounded-xl rounded-tr-sm text-on-surface shadow-lg'
+                      : 'max-w-[85%]'
+                  }>
+                    {msg.role === 'user' ? (
+                      <>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                        <span className="block mt-2 text-xs text-outline">
+                          {new Date(msg.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </>
                     ) : (
-                      msg.content
+                      <div className="bg-surface-container-low px-5 py-4 rounded-xl rounded-tl-sm border border-outline-variant/10">
+                        <div className="chat-markdown text-sm leading-relaxed text-on-surface-variant">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                        </div>
+                        {sources.length > 0 && (
+                          <details className="mt-3 border-t border-outline-variant/10 pt-2">
+                            <summary className="text-xs text-primary cursor-pointer font-bold uppercase tracking-wider">
+                              來源 ({sources.length})
+                            </summary>
+                            <div className="flex flex-col gap-1.5 mt-2">
+                              {sources.map((src, i) => (
+                                <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-2 px-3 py-2 bg-surface-container rounded text-xs hover:bg-surface-container-high transition-colors no-underline">
+                                  <span className="material-symbols-outlined text-primary text-sm">link</span>
+                                  <span className="text-on-surface truncate flex-1">{src.title}</span>
+                                  <span className="text-outline text-xs shrink-0">{new URL(src.url).hostname}</span>
+                                </a>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+                      </div>
                     )}
                   </div>
-                  {/* Source references */}
-                  {sources.length > 0 && (
-                    <details className={styles.sourcesSection}>
-                      <summary className={styles.sourcesSummary}>
-                        Sources ({sources.length})
-                      </summary>
-                      <div className={styles.sourcesList}>
-                        {sources.map((src, i) => (
-                          <a key={i} href={src.url} target="_blank" rel="noopener noreferrer" className={styles.sourceLink}>
-                            <span className={styles.sourceFavicon}>&#x1F517;</span>
-                            <span className={styles.sourceTitle}>{src.title}</span>
-                            <span className={styles.sourceUrl}>{new URL(src.url).hostname}</span>
-                          </a>
-                        ))}
-                      </div>
-                    </details>
-                  )}
                 </div>
               );
             })}
 
-            {/* === Streaming text preview (ABOVE processing panel so response stays visible) === */}
+            {/* Streaming text preview */}
             {streamText && streamText.trim() && (
-              <div className={`${styles.message} ${styles.assistant} ${styles.streaming}`}>
-                <div className={styles.messageRole}>AI Assistant</div>
-                <div className={styles.messageContent}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamText}</ReactMarkdown>
-                  <span className={styles.cursor} />
+              <div className="flex gap-4">
+                <div className="w-9 h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
+                  <span className="material-symbols-outlined text-primary text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
+                </div>
+                <div className="max-w-[85%]">
+                  <div className="bg-surface-container-low px-5 py-4 rounded-xl rounded-tl-sm border border-primary/20 border-dashed">
+                    <div className="chat-markdown text-sm leading-relaxed text-on-surface-variant">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamText}</ReactMarkdown>
+                      <span className="inline-block w-0.5 h-4 bg-primary ml-0.5 align-text-bottom animate-pulse" />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* === Processing Panel (below response — user can scroll down to see details) === */}
+            {/* Processing Panel */}
             {(hasActivity || showCompletedPanel) && (
-              <div className={styles.processingPanel}>
+              <div className="bg-surface-container-low rounded-lg border-l-2 border-primary/40 max-w-[85%] overflow-hidden">
                 <div
-                  className={styles.processingHeader}
+                  className="flex items-center gap-3 px-4 py-3 bg-surface-container cursor-pointer select-none hover:bg-surface-container-high transition-colors"
                   onClick={() => setPanelCollapsed(c => !c)}
                   role="button"
                   tabIndex={0}
                 >
-                  <span className={styles.processingIcon}>
-                    {streaming
-                      ? <span className={styles.pulsingDot} />
-                      : <span className={styles.taskCheck} style={{ width: 8, height: 8 }} />
-                    }
-                  </span>
-                  <span className={styles.processingTitle}>
-                    {streaming ? 'AI Processing' : 'Completed'}
+                  {streaming
+                    ? <span className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
+                    : <span className="material-symbols-outlined text-sm text-green-400">check_circle</span>
+                  }
+                  <span className="text-xs font-headline font-bold text-on-surface uppercase tracking-wider flex-1">
+                    {streaming ? 'AI 處理中' : '已完成'}
                     {panelCollapsed && tools.length > 0 && (
-                      <span className={styles.toolCountBadge}>
-                        {completedTools}/{tools.length} tools
-                        {webSearchTools.length > 0 && ` \u00B7 ${webSearchTools.length} web`}
+                      <span className="font-normal text-on-surface-variant ml-2">
+                        {completedTools}/{tools.length} 工具
+                        {webSearchTools.length > 0 && ` · ${webSearchTools.length} 搜尋`}
                       </span>
                     )}
                   </span>
-                  <span className={styles.processingTime}>
-                    {formatElapsed(elapsed)}
-                  </span>
-                  <span className={`${styles.collapseChevron} ${panelCollapsed ? styles.chevronCollapsed : ''}`}>
-                    &#x25BC;
+                  <span className="text-xs font-mono text-primary">{formatElapsed(elapsed)}</span>
+                  <span className={`material-symbols-outlined text-sm text-on-surface-variant transition-transform ${panelCollapsed ? '-rotate-90' : ''}`}>
+                    expand_more
                   </span>
                 </div>
 
                 {!panelCollapsed && (
                   <>
-                    {/* Task steps */}
-                    <div className={styles.taskList}>
-                      {/* Connected step */}
-                      <div className={`${styles.taskItem} ${styles.taskDone}`}>
-                        <span className={styles.taskCheck} />
-                        <span className={styles.taskLabel}>Connected</span>
+                    <div className="px-4 py-2 space-y-1 font-mono text-xs">
+                      {/* Connected */}
+                      <div className="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant">
+                        <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
+                        <span>已連線</span>
                       </div>
 
-                      {/* Time-based progress while waiting */}
+                      {/* Waiting */}
                       {isWaiting && (
-                        <div className={`${styles.taskItem} ${styles.taskActive}`}>
-                          <span className={styles.taskSpinner} />
-                          <span className={styles.taskLabel}>
-                            {elapsed < 3 ? 'Loading conversation context...'
-                              : elapsed < 8 ? 'Analyzing your request...'
-                              : elapsed < 15 ? 'Generating response...'
-                              : 'Still working... (complex request)'}
+                        <div className="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant bg-surface-container/50 rounded">
+                          <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
+                          <span>
+                            {elapsed < 3 ? '載入對話...'
+                              : elapsed < 8 ? '分析需求...'
+                              : elapsed < 15 ? '生成回應...'
+                              : '處理中... (複雜任務)'}
                           </span>
                         </div>
                       )}
 
-                      {/* Thinking step */}
+                      {/* Thinking */}
                       {thinkingText && (
-                        <div className={`${styles.taskItem} ${styles.taskActive}`}>
-                          <span className={styles.taskSpinner} />
-                          <span className={styles.taskLabel}>Deep thinking...</span>
+                        <div className="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant bg-surface-container/50 rounded">
+                          <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
+                          <span>深度思考中...</span>
                         </div>
                       )}
 
@@ -584,37 +603,41 @@ function ChatContent() {
                         const detail = parseToolInput(tool.tool, tool.input);
                         const isDone = tool.status === 'completed';
                         return (
-                          <div key={tool.id || i} className={`${styles.taskItem} ${isDone ? styles.taskDone : styles.taskActive}`}>
-                            <span className={isDone ? styles.taskCheck : styles.taskSpinner} />
-                            <span className={styles.taskIcon}>{info.icon}</span>
-                            <span className={styles.taskLabel}>{info.label}</span>
-                            {detail && <span className={styles.taskDetail}>{detail}</span>}
+                          <div key={tool.id || i} className={`flex items-center gap-2 px-2 py-1.5 rounded ${isDone ? 'text-outline' : 'text-on-surface-variant bg-surface-container/50'}`}>
+                            {isDone
+                              ? <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
+                              : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
+                            }
+                            <span className="material-symbols-outlined text-xs">{info.icon}</span>
+                            <span className={isDone ? 'line-through opacity-60' : ''}>{info.label}</span>
+                            {detail && (
+                              <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-xs truncate max-w-[200px]">
+                                {detail}
+                              </span>
+                            )}
                           </div>
                         );
                       })}
 
-                      {/* Agent tasks (multi-agent mode) */}
+                      {/* Agent tasks */}
                       {agentTasks.map(task => (
                         <div
                           key={task.taskId}
-                          className={`${styles.taskItem} ${
-                            task.status === 'completed' ? styles.taskDone
-                            : task.status === 'failed' ? styles.taskWarning
-                            : styles.taskActive
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded ${
+                            task.status === 'completed' ? 'text-outline'
+                            : task.status === 'failed' ? 'text-warning bg-warning/5'
+                            : 'text-on-surface-variant bg-surface-container/50'
                           }`}
                         >
-                          <span className={
-                            task.status === 'completed' ? styles.taskCheck
-                            : task.status === 'failed' ? styles.taskWarningIcon
-                            : styles.taskSpinner
-                          } />
-                          <span className={styles.taskIcon}>
-                            {task.status === 'failed' ? '\u26A0\uFE0F' : '\uD83E\uDD16'}
-                          </span>
-                          <span className={styles.taskLabel}>
-                            {SKILL_LABELS[task.skillId] || task.skillId}
-                          </span>
-                          <span className={styles.taskDetail}>
+                          {task.status === 'completed'
+                            ? <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
+                            : task.status === 'failed'
+                            ? <span className="material-symbols-outlined text-warning text-sm">warning</span>
+                            : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
+                          }
+                          <span className="material-symbols-outlined text-xs">smart_toy</span>
+                          <span>{SKILL_LABELS[task.skillId] || task.skillId}</span>
+                          <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-xs truncate max-w-[200px]">
                             {task.status === 'failed'
                               ? (task.error || 'Timed out').substring(0, 50)
                               : task.description.substring(0, 60)}
@@ -622,36 +645,44 @@ function ChatContent() {
                         </div>
                       ))}
 
-                      {/* Writing response step */}
+                      {/* Writing response */}
                       {streaming && streamText && (
-                        <div className={`${styles.taskItem} ${styles.taskActive}`}>
-                          <span className={styles.taskSpinner} />
-                          <span className={styles.taskLabel}>Writing response...</span>
+                        <div className="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant bg-surface-container/50 rounded">
+                          <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
+                          <span>撰寫回應中...</span>
                         </div>
                       )}
 
-                      {/* Response complete step */}
+                      {/* Response complete */}
                       {!streaming && tools.length > 0 && (
-                        <div className={`${styles.taskItem} ${styles.taskDone}`}>
-                          <span className={styles.taskCheck} />
-                          <span className={styles.taskLabel}>Response complete</span>
+                        <div className="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant">
+                          <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
+                          <span>回應完成</span>
                         </div>
                       )}
                     </div>
 
-                    {/* Token usage summary (shown after completion) */}
+                    {/* Token usage */}
                     {lastUsage && !streaming && (
-                      <div className={styles.usageSummary}>
+                      <div className="flex items-center justify-between px-4 py-2 border-t border-outline-variant/10 text-xs text-outline">
                         <span>Tokens: {lastUsage.inputTokens.toLocaleString()} in / {lastUsage.outputTokens.toLocaleString()} out</span>
-                        {lastUsage.model && <span className={styles.modelBadge}>{lastUsage.model.split('-').slice(0, 2).join('-')}</span>}
+                        {lastUsage.model && (
+                          <span className="px-2 py-0.5 bg-primary/10 text-primary rounded text-xs">
+                            {lastUsage.model.split('-').slice(0, 2).join('-')}
+                          </span>
+                        )}
                       </div>
                     )}
 
-                    {/* Extended thinking (collapsible) */}
+                    {/* Extended thinking */}
                     {thinkingText && (
-                      <details className={styles.thinkingDetails}>
-                        <summary className={styles.thinkingSummary}>View AI thinking</summary>
-                        <div className={styles.thinkingContent}>{thinkingText}</div>
+                      <details className="mx-4 mb-3 border-t border-outline-variant/10">
+                        <summary className="text-xs text-primary cursor-pointer py-2 font-bold uppercase tracking-wider">
+                          查看 AI 思考過程
+                        </summary>
+                        <div className="text-xs text-on-surface-variant leading-relaxed whitespace-pre-wrap max-h-36 overflow-y-auto pb-2">
+                          {thinkingText}
+                        </div>
                       </details>
                     )}
                   </>
@@ -662,57 +693,135 @@ function ChatContent() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input */}
-          <div className={styles.inputBar}>
-            <textarea
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage();
-                }
-              }}
-              placeholder="Describe what document you want to create..."
-              rows={2}
-              disabled={streaming}
-            />
-            {streaming ? (
-              <button className="btn-danger" onClick={handleAbort}>Stop</button>
-            ) : (
-              <button className="btn-primary" onClick={() => sendMessage()} disabled={!input.trim()}>Send</button>
-            )}
+          {/* Input Area */}
+          <div className="p-6 pt-0">
+            <div className="bg-surface-container rounded-lg border border-outline-variant/20 focus-within:border-primary/40 transition-all p-2">
+              <div className="flex items-center gap-3 px-2 py-1">
+                <textarea
+                  className="bg-transparent border-none focus:ring-0 text-sm flex-1 text-on-surface placeholder:text-outline/50 font-body resize-none min-h-[40px] max-h-[120px]"
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                  placeholder="輸入你的指令..."
+                  rows={1}
+                  disabled={streaming}
+                />
+                {streaming ? (
+                  <button
+                    className="bg-error/20 text-error font-headline font-bold text-xs uppercase px-5 py-2.5 rounded tracking-widest hover:bg-error/30 active:scale-95 transition-all cursor-pointer"
+                    onClick={handleAbort}
+                  >
+                    停止
+                  </button>
+                ) : (
+                  <button
+                    className="cyber-gradient text-on-primary font-headline font-bold text-xs uppercase px-5 py-2.5 rounded tracking-widest shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    onClick={() => sendMessage()}
+                    disabled={!input.trim()}
+                  >
+                    發送
+                  </button>
+                )}
+              </div>
+            </div>
+            {/* Input footer info */}
+            <div className="mt-2 flex justify-between items-center px-2">
+              <div className="flex gap-4">
+                <span className="text-xs text-outline uppercase tracking-widest">
+                  {skillId ? `技能: ${SKILL_LABELS[skillId] || skillId}` : 'AI 自動判斷'}
+                </span>
+              </div>
+              {lastUsage && (
+                <div className="text-xs font-mono text-on-secondary-container/60 bg-surface-container-low px-3 py-1 rounded-full">
+                  Session: <span className="text-primary">{((lastUsage.inputTokens + lastUsage.outputTokens) / 1000).toFixed(1)}k Tokens</span>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        </section>
 
-        {/* Sidebar: Generated Files */}
-        <div className={styles.sidebar}>
-          <h3>Generated Files</h3>
-          {files.length === 0 ? (
-            <p className={styles.noFiles}>No files generated yet. Ask the AI to create a document!</p>
-          ) : (
-            <div className={styles.fileList}>
-              {files.map(file => (
-                <div
-                  key={file.id}
-                  className={styles.fileItem}
-                  onClick={() => handleDownload(file.id, file.filename)}
-                  role="button"
-                  tabIndex={0}
-                >
-                  <span className={styles.fileIcon}>{getFileIcon(file.file_type)}</span>
-                  <div className={styles.fileInfo}>
-                    <span className={styles.fileName}>{file.filename}</span>
-                    <span className={styles.fileMeta}>
-                      {file.file_type.toUpperCase()} &middot; {formatSize(file.file_size)}
+        {/* === Right Sidebar === */}
+        <aside className="w-72 bg-surface-container-low border-l border-outline-variant/10 overflow-y-auto p-5 hidden lg:flex flex-col gap-6 shrink-0">
+          {/* System Status */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-headline font-bold text-outline tracking-widest uppercase">系統狀態</h4>
+            <div className="bg-surface-container-highest p-4 rounded-sm border-l-2 border-primary">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="material-symbols-outlined text-primary text-sm">security</span>
+                <span className="text-xs font-headline font-bold text-on-surface uppercase tracking-tight">沙盒隔離模式</span>
+              </div>
+              <p className="text-xs text-on-surface-variant leading-relaxed">
+                所有執行操作皆在隔離環境中運行，確保系統安全。
+              </p>
+            </div>
+          </div>
+
+          {/* Generated Files */}
+          <div className="space-y-3 flex-1">
+            <h4 className="text-xs font-headline font-bold text-outline tracking-widest uppercase">
+              生成的檔案
+            </h4>
+            {files.length === 0 ? (
+              <p className="text-xs text-on-surface-variant text-center py-6 leading-relaxed">
+                尚未生成任何檔案。<br />向 AI 描述需求即可開始。
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {files.map(file => (
+                  <div
+                    key={file.id}
+                    className="flex items-center justify-between p-3 hover:bg-surface-container rounded-lg group cursor-pointer transition-colors border border-transparent hover:border-primary/20"
+                    onClick={() => handleDownload(file.id, file.filename)}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="material-symbols-outlined text-primary text-lg">
+                        {getFileIcon(file.file_type)}
+                      </span>
+                      <div className="min-w-0">
+                        <span className="text-xs text-on-surface font-medium block truncate">{file.filename}</span>
+                        <span className="text-xs text-outline">
+                          {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="material-symbols-outlined text-sm text-outline group-hover:text-primary transition-colors shrink-0">
+                      download
                     </span>
                   </div>
-                  <span className={styles.downloadIcon}>&#x2B07;</span>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Agent Tasks Summary */}
+          {agentTasks.length > 0 && (
+            <div className="space-y-3 border-t border-outline-variant/10 pt-4">
+              <h4 className="text-xs font-headline font-bold text-outline tracking-widest uppercase">代理任務</h4>
+              <div className="space-y-1.5">
+                {agentTasks.map(task => (
+                  <div key={task.taskId} className="flex items-center gap-2 p-2 bg-surface-container/50 rounded">
+                    {task.status === 'completed'
+                      ? <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
+                      : task.status === 'failed'
+                      ? <span className="material-symbols-outlined text-warning text-sm">warning</span>
+                      : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
+                    }
+                    <span className="text-xs text-on-surface-variant truncate">
+                      {SKILL_LABELS[task.skillId] || task.skillId}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-        </div>
+        </aside>
       </div>
     </div>
   );
