@@ -469,7 +469,7 @@ function FilesContent() {
               </span>
             </div>
             <div className="flex justify-between items-center text-xs font-bold tracking-widest uppercase text-on-surface-variant">
-              <span>儲存空間</span>
+              <span>{user?.displayName || user?.email?.split('@')[0] || '我的'}儲存</span>
               <span className={storageInfo?.warning ? 'text-error' : 'text-primary'}>{files.length} 個檔案</span>
             </div>
             <div className="h-1.5 bg-surface-container-lowest rounded-full overflow-hidden">
