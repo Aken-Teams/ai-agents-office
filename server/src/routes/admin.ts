@@ -35,18 +35,10 @@ router.get('/overview/stats', (_req: Request, res: Response) => {
   });
 });
 
-// GET /api/admin/overview/token-velocity?period=24h|7d|30d
+// GET /api/admin/overview/token-velocity?period=7d|30d
 router.get('/overview/token-velocity', (req: Request, res: Response) => {
   const period = (req.query.period as string) || '7d';
-
-  let dateFilter: string;
-  if (period === '24h') {
-    dateFilter = "datetime('now', '-1 day')";
-  } else if (period === '30d') {
-    dateFilter = "datetime('now', '-30 days')";
-  } else {
-    dateFilter = "datetime('now', '-7 days')";
-  }
+  const days = period === '30d' ? 30 : 7;
 
   const rows = db.prepare(`
     SELECT
@@ -55,12 +47,24 @@ router.get('/overview/token-velocity', (req: Request, res: Response) => {
       SUM(output_tokens) as total_output,
       COUNT(*) as invocation_count
     FROM token_usage
-    WHERE created_at >= ${dateFilter}
+    WHERE created_at >= datetime('now', '-${days} days')
     GROUP BY date(created_at)
     ORDER BY date ASC
-  `).all();
+  `).all() as { date: string; total_input: number; total_output: number; invocation_count: number }[];
 
-  res.json(rows);
+  // Fill missing dates with zeros
+  const dataMap = new Map(rows.map(r => [r.date, r]));
+  const result = [];
+  const now = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const existing = dataMap.get(dateStr);
+    result.push(existing || { date: dateStr, total_input: 0, total_output: 0, invocation_count: 0 });
+  }
+
+  res.json(result);
 });
 
 // GET /api/admin/overview/recent-activity?limit=20

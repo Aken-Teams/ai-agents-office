@@ -62,7 +62,7 @@ export default function AdminOverview() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [velocity, setVelocity] = useState<VelocityPoint[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
-  const [period, setPeriod] = useState<'24h' | '7d' | '30d'>('7d');
+  const [period, setPeriod] = useState<'7d' | '30d'>('7d');
 
   useEffect(() => {
     if (!token) return;
@@ -71,7 +71,7 @@ export default function AdminOverview() {
     fetch('/api/admin/overview/stats', { headers })
       .then(r => r.json()).then(setStats).catch(console.error);
 
-    fetch('/api/admin/overview/recent-activity?limit=6', { headers })
+    fetch('/api/admin/overview/recent-activity?limit=3', { headers })
       .then(r => r.json()).then(setActivity).catch(console.error);
   }, [token]);
 
@@ -165,7 +165,7 @@ export default function AdminOverview() {
                 <span className="text-xs font-bold uppercase tracking-widest">Token 消耗速度</span>
               </div>
               <div className="flex gap-1">
-                {(['24h', '7d', '30d'] as const).map(p => (
+                {(['7d', '30d'] as const).map(p => (
                   <button
                     key={p}
                     onClick={() => setPeriod(p)}
