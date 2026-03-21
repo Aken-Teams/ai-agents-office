@@ -63,13 +63,13 @@ const ALLOWED_TOOLS = [
   'Bash(node:*)',
   'Write',
   'Read',
+  'WebSearch',
+  'WebFetch',
 ];
 
 // Tools explicitly blocked for security
 const DISALLOWED_TOOLS = [
   'Edit',
-  'WebFetch',
-  'WebSearch',
   'Bash(rm:*)',
   'Bash(del:*)',
   'Bash(sudo:*)',
@@ -270,6 +270,21 @@ function processStreamEvent(
 ): void {
   const type = parsed.type as string;
 
+  // Content block start — detect tool_use early for real-time tracking
+  if (type === 'content_block_start') {
+    const block = parsed.content_block as Record<string, unknown> | undefined;
+    if (block?.type === 'tool_use') {
+      emitter.emit('event', {
+        type: 'tool_activity',
+        data: {
+          tool: block.name as string,
+          id: block.id as string,
+          status: 'running',
+        },
+      } satisfies SSEEvent);
+    }
+  }
+
   // Text content streaming (content_block_delta — may appear for long responses)
   if (type === 'content_block_delta') {
     const delta = parsed.delta as Record<string, unknown> | undefined;
@@ -287,9 +302,14 @@ function processStreamEvent(
     }
   }
 
-  // Assistant message — extract text content + tool use info
-  // Claude CLI stream-json emits full text here (NOT via content_block_delta)
+  // Assistant message — mark previous tools completed, extract text + new tool use
   if (type === 'assistant') {
+    // Signal: all previously running tools have completed (Claude got their results)
+    emitter.emit('event', {
+      type: 'tool_activity',
+      data: { tool: '_mark_completed', status: 'completed' },
+    } satisfies SSEEvent);
+
     const message = parsed.message as Record<string, unknown> | undefined;
     const content = message?.content as Array<Record<string, unknown>> | undefined;
     if (content) {
@@ -315,12 +335,14 @@ function processStreamEvent(
     }
   }
 
-  // Tool result
+  // Tool result (multiple formats)
   if (type === 'result' && parsed.subtype === 'tool_result') {
+    const toolUseId = parsed.tool_use_id as string | undefined;
     emitter.emit('event', {
       type: 'tool_activity',
       data: {
         tool: 'tool_result',
+        id: toolUseId,
         status: 'completed',
       },
     } satisfies SSEEvent);

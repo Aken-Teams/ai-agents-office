@@ -56,8 +56,12 @@ function getToolInfo(tool: string): { icon: string; label: string } {
   if (tool.startsWith('Bash')) return { icon: '\u25B6', label: 'Running command' };
   if (tool === 'Write') return { icon: '\u270E', label: 'Writing file' };
   if (tool === 'Read') return { icon: '\uD83D\uDCC4', label: 'Reading file' };
+  if (tool === 'Edit') return { icon: '\u270F\uFE0F', label: 'Editing file' };
+  if (tool === 'Glob') return { icon: '\uD83D\uDCC2', label: 'Finding files' };
+  if (tool === 'Grep') return { icon: '\uD83D\uDD0E', label: 'Searching code' };
   if (tool === 'WebSearch') return { icon: '\uD83D\uDD0D', label: 'Searching web' };
   if (tool === 'WebFetch') return { icon: '\uD83C\uDF10', label: 'Fetching URL' };
+  if (tool === 'TodoWrite') return { icon: '\uD83D\uDCDD', label: 'Updating tasks' };
   if (tool === 'tool_result') return { icon: '\u2705', label: 'Tool completed' };
   return { icon: '\u2699', label: `Using ${tool}` };
 }
@@ -79,6 +83,8 @@ function ChatContent() {
   const [title, setTitle] = useState('');
   const [skillId, setSkillId] = useState('');
   const [elapsed, setElapsed] = useState(0);
+  const [lastUsage, setLastUsage] = useState<{ inputTokens: number; outputTokens: number; model: string } | null>(null);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -148,6 +154,8 @@ function ChatContent() {
     setStreamText('');
     setThinkingText('');
     setTools([]);
+    setLastUsage(null);
+    setPanelCollapsed(false);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -193,6 +201,12 @@ function ChatContent() {
             if (event.type === 'tool_activity') {
               const activity = event.data as ToolActivity;
               setTools(prev => {
+                // Mark all running tools as completed
+                if (activity.tool === '_mark_completed') {
+                  return prev.map(t => t.status !== 'completed' ? { ...t, status: 'completed' } : t);
+                }
+                // Skip tool_result entries without id (redundant)
+                if (activity.tool === 'tool_result' && !activity.id) return prev;
                 const existing = prev.findIndex(t => t.id === activity.id);
                 if (existing >= 0) {
                   const updated = [...prev];
@@ -201,6 +215,12 @@ function ChatContent() {
                 }
                 return [...prev, activity];
               });
+            }
+            if (event.type === 'usage') {
+              const usage = event.data as { inputTokens: number; outputTokens: number; model: string };
+              if (usage.inputTokens > 0 || usage.outputTokens > 0) {
+                setLastUsage(usage);
+              }
             }
             if (event.type === 'file_generated') {
               const newFiles = event.data as GeneratedFile[];
@@ -222,7 +242,7 @@ function ChatContent() {
               }
               setStreamText('');
               setThinkingText('');
-              setTools([]);
+              // Keep tools visible (don't clear) so user can see what was done
             }
           } catch { /* skip parse errors */ }
         }
@@ -290,6 +310,28 @@ function ChatContent() {
 
   const isWaiting = streaming && !streamText && !thinkingText && tools.length === 0;
   const hasActivity = streaming && (tools.length > 0 || thinkingText || isWaiting);
+  // Show completed panel after streaming ends (with usage info)
+  const showCompletedPanel = !streaming && tools.length > 0 && lastUsage;
+
+  // Extract source URLs from AI response for display
+  const extractSources = (text: string): { title: string; url: string }[] => {
+    const urlRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+    const sources: { title: string; url: string }[] = [];
+    const seen = new Set<string>();
+    let match;
+    while ((match = urlRegex.exec(text)) !== null) {
+      const url = match[2];
+      if (!seen.has(url)) {
+        seen.add(url);
+        sources.push({ title: match[1], url });
+      }
+    }
+    return sources;
+  };
+
+  // Count completed and total tools for collapsed summary
+  const completedTools = tools.filter(t => t.status === 'completed').length;
+  const webSearchTools = tools.filter(t => t.tool === 'WebSearch' || t.tool === 'WebFetch');
 
   return (
     <div className={styles.page}>
@@ -306,91 +348,152 @@ function ChatContent() {
           </div>
 
           <div className={styles.messageList}>
-            {messages.map(msg => (
-              <div key={msg.id} className={`${styles.message} ${styles[msg.role]}`}>
-                <div className={styles.messageRole}>
-                  {msg.role === 'user' ? 'You' : 'AI Assistant'}
-                </div>
-                <div className={styles.messageContent}>
-                  {msg.role === 'assistant' ? (
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                  ) : (
-                    msg.content
-                  )}
-                </div>
-              </div>
-            ))}
-
-            {/* === Active AI Processing Panel === */}
-            {hasActivity && (
-              <div className={styles.processingPanel}>
-                <div className={styles.processingHeader}>
-                  <span className={styles.processingIcon}>
-                    <span className={styles.pulsingDot} />
-                  </span>
-                  <span className={styles.processingTitle}>AI Processing</span>
-                  <span className={styles.processingTime}>{formatElapsed(elapsed)}</span>
-                </div>
-
-                {/* Task steps (Claude-Code style todo list) */}
-                <div className={styles.taskList}>
-                  {/* Step 1: Connected — always done */}
-                  <div className={`${styles.taskItem} ${styles.taskDone}`}>
-                    <span className={styles.taskCheck} />
-                    <span className={styles.taskLabel}>Connected</span>
+            {messages.map(msg => {
+              const sources = msg.role === 'assistant' ? extractSources(msg.content) : [];
+              return (
+                <div key={msg.id} className={`${styles.message} ${styles[msg.role]}`}>
+                  <div className={styles.messageRole}>
+                    {msg.role === 'user' ? 'You' : 'AI Assistant'}
                   </div>
-
-                  {/* Step 2: Time-based progress while waiting for AI */}
-                  {isWaiting && (
-                    <div className={`${styles.taskItem} ${styles.taskActive}`}>
-                      <span className={styles.taskSpinner} />
-                      <span className={styles.taskLabel}>
-                        {elapsed < 3 ? 'Loading conversation context...'
-                          : elapsed < 8 ? 'Analyzing your request...'
-                          : elapsed < 15 ? 'Generating response...'
-                          : 'Still working... (complex request)'}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Thinking step (from actual Claude thinking events) */}
-                  {thinkingText && (
-                    <div className={`${styles.taskItem} ${styles.taskActive}`}>
-                      <span className={styles.taskSpinner} />
-                      <span className={styles.taskLabel}>Deep thinking...</span>
-                    </div>
-                  )}
-
-                  {/* Tool steps (from actual tool_activity events) */}
-                  {tools.map((tool, i) => {
-                    const info = getToolInfo(tool.tool);
-                    const detail = parseToolInput(tool.tool, tool.input);
-                    const isDone = tool.status === 'completed';
-                    return (
-                      <div key={tool.id || i} className={`${styles.taskItem} ${isDone ? styles.taskDone : styles.taskActive}`}>
-                        <span className={isDone ? styles.taskCheck : styles.taskSpinner} />
-                        <span className={styles.taskIcon}>{info.icon}</span>
-                        <span className={styles.taskLabel}>{info.label}</span>
-                        {detail && <span className={styles.taskDetail}>{detail}</span>}
+                  <div className={styles.messageContent}>
+                    {msg.role === 'assistant' ? (
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                    ) : (
+                      msg.content
+                    )}
+                  </div>
+                  {/* Source references */}
+                  {sources.length > 0 && (
+                    <details className={styles.sourcesSection}>
+                      <summary className={styles.sourcesSummary}>
+                        Sources ({sources.length})
+                      </summary>
+                      <div className={styles.sourcesList}>
+                        {sources.map((src, i) => (
+                          <a key={i} href={src.url} target="_blank" rel="noopener noreferrer" className={styles.sourceLink}>
+                            <span className={styles.sourceFavicon}>&#x1F517;</span>
+                            <span className={styles.sourceTitle}>{src.title}</span>
+                            <span className={styles.sourceUrl}>{new URL(src.url).hostname}</span>
+                          </a>
+                        ))}
                       </div>
-                    );
-                  })}
-
-                  {/* Writing response step */}
-                  {streamText && (
-                    <div className={`${styles.taskItem} ${styles.taskActive}`}>
-                      <span className={styles.taskSpinner} />
-                      <span className={styles.taskLabel}>Writing response...</span>
-                    </div>
+                    </details>
                   )}
                 </div>
+              );
+            })}
 
-                {/* Extended thinking (collapsible) */}
-                {thinkingText && (
-                  <details className={styles.thinkingDetails}>
-                    <summary className={styles.thinkingSummary}>View AI thinking</summary>
-                    <div className={styles.thinkingContent}>{thinkingText}</div>
-                  </details>
+            {/* === Active AI Processing Panel (Collapsible) === */}
+            {(hasActivity || showCompletedPanel) && (
+              <div className={styles.processingPanel}>
+                <div
+                  className={styles.processingHeader}
+                  onClick={() => setPanelCollapsed(c => !c)}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <span className={styles.processingIcon}>
+                    {streaming
+                      ? <span className={styles.pulsingDot} />
+                      : <span className={styles.taskCheck} style={{ width: 8, height: 8 }} />
+                    }
+                  </span>
+                  <span className={styles.processingTitle}>
+                    {streaming ? 'AI Processing' : 'Completed'}
+                    {panelCollapsed && tools.length > 0 && (
+                      <span className={styles.toolCountBadge}>
+                        {completedTools}/{tools.length} tools
+                        {webSearchTools.length > 0 && ` \u00B7 ${webSearchTools.length} web`}
+                      </span>
+                    )}
+                  </span>
+                  <span className={styles.processingTime}>
+                    {formatElapsed(elapsed)}
+                  </span>
+                  <span className={`${styles.collapseChevron} ${panelCollapsed ? styles.chevronCollapsed : ''}`}>
+                    &#x25BC;
+                  </span>
+                </div>
+
+                {!panelCollapsed && (
+                  <>
+                    {/* Task steps */}
+                    <div className={styles.taskList}>
+                      {/* Connected step */}
+                      <div className={`${styles.taskItem} ${styles.taskDone}`}>
+                        <span className={styles.taskCheck} />
+                        <span className={styles.taskLabel}>Connected</span>
+                      </div>
+
+                      {/* Time-based progress while waiting */}
+                      {isWaiting && (
+                        <div className={`${styles.taskItem} ${styles.taskActive}`}>
+                          <span className={styles.taskSpinner} />
+                          <span className={styles.taskLabel}>
+                            {elapsed < 3 ? 'Loading conversation context...'
+                              : elapsed < 8 ? 'Analyzing your request...'
+                              : elapsed < 15 ? 'Generating response...'
+                              : 'Still working... (complex request)'}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Thinking step */}
+                      {thinkingText && (
+                        <div className={`${styles.taskItem} ${styles.taskActive}`}>
+                          <span className={styles.taskSpinner} />
+                          <span className={styles.taskLabel}>Deep thinking...</span>
+                        </div>
+                      )}
+
+                      {/* Tool steps */}
+                      {tools.map((tool, i) => {
+                        const info = getToolInfo(tool.tool);
+                        const detail = parseToolInput(tool.tool, tool.input);
+                        const isDone = tool.status === 'completed';
+                        return (
+                          <div key={tool.id || i} className={`${styles.taskItem} ${isDone ? styles.taskDone : styles.taskActive}`}>
+                            <span className={isDone ? styles.taskCheck : styles.taskSpinner} />
+                            <span className={styles.taskIcon}>{info.icon}</span>
+                            <span className={styles.taskLabel}>{info.label}</span>
+                            {detail && <span className={styles.taskDetail}>{detail}</span>}
+                          </div>
+                        );
+                      })}
+
+                      {/* Writing response step */}
+                      {streaming && streamText && (
+                        <div className={`${styles.taskItem} ${styles.taskActive}`}>
+                          <span className={styles.taskSpinner} />
+                          <span className={styles.taskLabel}>Writing response...</span>
+                        </div>
+                      )}
+
+                      {/* Response complete step */}
+                      {!streaming && tools.length > 0 && (
+                        <div className={`${styles.taskItem} ${styles.taskDone}`}>
+                          <span className={styles.taskCheck} />
+                          <span className={styles.taskLabel}>Response complete</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Token usage summary (shown after completion) */}
+                    {lastUsage && !streaming && (
+                      <div className={styles.usageSummary}>
+                        <span>Tokens: {lastUsage.inputTokens.toLocaleString()} in / {lastUsage.outputTokens.toLocaleString()} out</span>
+                        {lastUsage.model && <span className={styles.modelBadge}>{lastUsage.model.split('-').slice(0, 2).join('-')}</span>}
+                      </div>
+                    )}
+
+                    {/* Extended thinking (collapsible) */}
+                    {thinkingText && (
+                      <details className={styles.thinkingDetails}>
+                        <summary className={styles.thinkingSummary}>View AI thinking</summary>
+                        <div className={styles.thinkingContent}>{thinkingText}</div>
+                      </details>
+                    )}
+                  </>
                 )}
               </div>
             )}

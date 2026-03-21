@@ -244,6 +244,12 @@
   font-size: 13px;
   font-weight: 600;
   color: #3730a3;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+.processingHeader:hover {
+  background: #e0e7ff;
 }
 
 .processingIcon {
@@ -393,6 +399,112 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* === Collapsible Header === */
+.collapseChevron {
+  font-size: 10px;
+  color: #6366f1;
+  transition: transform 0.2s;
+  margin-left: 4px;
+}
+
+.chevronCollapsed {
+  transform: rotate(-90deg);
+}
+
+.toolCountBadge {
+  font-size: 11px;
+  font-weight: 400;
+  color: #6366f1;
+  margin-left: 8px;
+}
+
+/* === Token Usage Summary === */
+.usageSummary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-top: 1px solid #e0e7ff;
+  font-size: 11px;
+  color: #64748b;
+  background: #f8faff;
+  border-radius: 0 0 11px 11px;
+}
+
+.modelBadge {
+  font-size: 10px;
+  background: #ede9fe;
+  color: #6d28d9;
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+/* === Source References === */
+.sourcesSection {
+  margin-top: 10px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 8px;
+}
+
+.sourcesSummary {
+  font-size: 12px;
+  color: #6366f1;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+  padding: 2px 0;
+}
+.sourcesSummary:hover {
+  color: #4338ca;
+}
+
+.sourcesList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.sourceLink {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  text-decoration: none;
+  color: inherit;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+.sourceLink:hover {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+}
+
+.sourceFavicon {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.sourceTitle {
+  font-weight: 500;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.sourceUrl {
+  font-size: 11px;
+  color: #94a3b8;
+  flex-shrink: 0;
 }
 
 /* === Input Bar === */
