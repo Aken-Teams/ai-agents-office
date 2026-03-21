@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
 import Navbar from '../components/Navbar';
+import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
 
 interface FileItem {
   id: string;
@@ -340,6 +341,7 @@ function FilesContent() {
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FileItem | null>(null);
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
+  const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
@@ -443,7 +445,7 @@ function FilesContent() {
         />
       )}
 
-      <main className="ml-64 pt-8 pb-12 px-10">
+      <main className={`${sidebarMargin} pt-8 pb-12 px-10 transition-all duration-300`}>
         {/* Header Section */}
         <div className="flex justify-between items-end mb-10">
           <div className="max-w-2xl">

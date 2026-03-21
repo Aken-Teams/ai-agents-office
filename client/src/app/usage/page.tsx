@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
 import Navbar from '../components/Navbar';
+import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
 
 interface DailyUsage {
   date: string;
@@ -25,6 +26,7 @@ function UsageContent() {
   const [total, setTotal] = useState<UsageTotal | null>(null);
   const [showAllRows, setShowAllRows] = useState(false);
   const LEDGER_DEFAULT_ROWS = 8;
+  const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
@@ -75,7 +77,7 @@ function UsageContent() {
     <div className="min-h-screen bg-surface-container-lowest">
       <Navbar />
 
-      <main className="ml-64 pt-8 pb-12 px-10">
+      <main className={`${sidebarMargin} pt-8 pb-12 px-10 transition-all duration-300`}>
           {/* Page Header */}
           <header className="mb-10 flex justify-between items-end">
             <div>

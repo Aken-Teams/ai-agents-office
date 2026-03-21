@@ -7,6 +7,7 @@ import conversationRoutes from './routes/conversations.js';
 import generateRoutes from './routes/generate.js';
 import fileRoutes from './routes/files.js';
 import usageRoutes from './routes/usage.js';
+import skillRoutes from './routes/skills.js';
 
 // Initialize database
 initializeDatabase();
@@ -32,6 +33,7 @@ app.use('/api/conversations', conversationRoutes);
 app.use('/api/generate', generateRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/usage', usageRoutes);
+app.use('/api/skills', skillRoutes);
 
 // Start server
 app.listen(config.port, () => {

@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CyberLogic Admin - Identity Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "inverse-on-surface": "#283044",
+                        "on-surface": "#dae2fd",
+                        "surface-tint": "#00dbe9",
+                        "on-tertiary-container": "#008cbd",
+                        "on-primary-fixed": "#002022",
+                        "primary": "#00dbe9",
+                        "surface-bright": "#31394d",
+                        "secondary": "#bcc7de",
+                        "surface-container-lowest": "#060e20",
+                        "primary-fixed": "#7df4ff",
+                        "on-primary-fixed-variant": "#004f54",
+                        "on-primary": "#00363a",
+                        "on-tertiary-fixed": "#001e2c",
+                        "on-secondary-container": "#aeb9d0",
+                        "tertiary": "#7bd0ff",
+                        "surface-dim": "#0b1326",
+                        "on-tertiary-fixed-variant": "#004c69",
+                        "error": "#ffb4ab",
+                        "on-secondary-fixed": "#111c2d",
+                        "background": "#0b1326",
+                        "surface-container-high": "#222a3d",
+                        "on-background": "#dae2fd",
+                        "tertiary-fixed-dim": "#7bd0ff",
+                        "surface-container": "#171f33",
+                        "on-error-container": "#ffdad6",
+                        "primary-container": "#001d1f",
+                        "on-tertiary": "#00354a",
+                        "secondary-container": "#3e495d",
+                        "surface-container-highest": "#2d3449",
+                        "on-secondary-fixed-variant": "#3c475a",
+                        "on-secondary": "#263143",
+                        "surface": "#0b1326",
+                        "primary-fixed-dim": "#00dbe9",
+                        "tertiary-container": "#001c29",
+                        "tertiary-fixed": "#c4e7ff",
+                        "outline": "#8f9097",
+                        "on-error": "#690005",
+                        "error-container": "#93000a",
+                        "inverse-surface": "#dae2fd",
+                        "inverse-primary": "#006970",
+                        "secondary-fixed-dim": "#bcc7de",
+                        "surface-container-low": "#131b2e",
+                        "on-surface-variant": "#c5c6cd",
+                        "secondary-fixed": "#d8e3fb",
+                        "on-primary-container": "#009099",
+                        "surface-variant": "#2d3449",
+                        "outline-variant": "#44474d"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #0b1326;
+            color: #dae2fd;
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-panel {
+            background: rgba(45, 52, 73, 0.7);
+            backdrop-filter: blur(12px);
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #060e20;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2d3449;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="overflow-hidden">
+<!-- TopNavBar -->
+<header class="bg-[#0b1326] dark:bg-[#0b1326] fixed top-0 w-full z-50 shadow-[0_24px_40px_rgba(17,28,45,0.08)]">
+<div class="flex justify-between items-center h-16 px-6 w-full bg-[#131b2e]">
+<div class="flex items-center space-x-8">
+<div class="text-xl font-black tracking-tighter text-[#dae2fd] uppercase font-['Space_Grotesk']">
+                    CyberLogic Admin
+                </div>
+<nav class="hidden md:flex space-x-6 font-['Space_Grotesk'] font-bold tracking-tight">
+<a class="text-[#c5c6cd] hover:text-[#dae2fd] transition-colors duration-200 cursor-pointer active:scale-95 transition-transform" href="#">System Status</a>
+<a class="text-[#c5c6cd] hover:text-[#dae2fd] transition-colors duration-200 cursor-pointer active:scale-95 transition-transform" href="#">Financial Oversight</a>
+<a class="text-[#c5c6cd] hover:text-[#dae2fd] transition-colors duration-200 cursor-pointer active:scale-95 transition-transform" href="#">Security Audits</a>
+</nav>
+</div>
+<div class="flex items-center space-x-4">
+<div class="bg-[#060e20] flex items-center px-3 py-1.5 rounded-sm border border-[#44474d]/20">
+<span class="material-symbols-outlined text-[#00dbe9] text-sm mr-2">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-xs text-on-surface-variant w-48 font-label" placeholder="Search systems..." type="text"/>
+</div>
+<div class="flex items-center space-x-2">
+<button class="p-2 text-[#c5c6cd] hover:bg-[#2d3449]/50 transition-colors duration-200 rounded-sm cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">notifications_active</span>
+</button>
+<button class="p-2 text-[#c5c6cd] hover:bg-[#2d3449]/50 transition-colors duration-200 rounded-sm cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<button class="p-2 text-[#c5c6cd] hover:bg-[#2d3449]/50 transition-colors duration-200 rounded-sm cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</div>
+</div>
+</header>
+<div class="flex h-screen pt-16">
+<!-- SideNavBar -->
+<aside class="bg-[#060e20] dark:bg-[#060e20] h-full w-64 border-r border-[#44474d]/20 fixed left-0 top-16 h-[calc(100vh-64px)] flex flex-col pt-4 z-40">
+<div class="px-6 mb-8">
+<div class="text-lg font-bold text-[#dae2fd] font-headline">Sovereign Admin</div>
+<div class="text-xs text-[#00dbe9] uppercase tracking-widest font-bold">Root Authority</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="group flex items-center px-4 py-3 space-x-3 text-[#c5c6cd] hover:bg-[#171f33]/40 hover:text-[#dae2fd] transition-all duration-300 font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-lg">dashboard</span>
+<span>Overview</span>
+</a>
+<a class="group flex items-center px-4 py-3 space-x-3 bg-[#171f33] text-[#00dbe9] border-l-4 border-[#00dbe9] rounded-r-sm font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">corporate_fare</span>
+<span>Tenants</span>
+</a>
+<a class="group flex items-center px-4 py-3 space-x-3 text-[#c5c6cd] hover:bg-[#171f33]/40 hover:text-[#dae2fd] transition-all duration-300 font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-lg">shield_with_heart</span>
+<span>Security Logs</span>
+</a>
+<a class="group flex items-center px-4 py-3 space-x-3 text-[#c5c6cd] hover:bg-[#171f33]/40 hover:text-[#dae2fd] transition-all duration-300 font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-lg">memory</span>
+<span>Node Health</span>
+</a>
+<a class="group flex items-center px-4 py-3 space-x-3 text-[#c5c6cd] hover:bg-[#171f33]/40 hover:text-[#dae2fd] transition-all duration-300 font-['Inter'] text-sm font-medium" href="#">
+<span class="material-symbols-outlined text-lg">payments</span>
+<span>Billing Config</span>
+</a>
+</nav>
+<div class="p-4 border-t border-[#44474d]/10">
+<a class="group flex items-center px-4 py-2 space-x-3 text-[#c5c6cd] hover:text-[#dae2fd] transition-all duration-300 font-['Inter'] text-xs" href="#">
+<span class="material-symbols-outlined text-base">terminal</span>
+<span>System Logs</span>
+</a>
+<a class="group flex items-center px-4 py-2 space-x-3 text-[#c5c6cd] hover:text-[#dae2fd] transition-all duration-300 font-['Inter'] text-xs" href="#">
+<span class="material-symbols-outlined text-base">menu_book</span>
+<span>Documentation</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 ml-64 flex overflow-hidden">
+<!-- Table Section -->
+<section class="flex-1 overflow-y-auto p-8 bg-surface">
+<header class="mb-10 flex justify-between items-end">
+<div>
+<h1 class="text-4xl font-bold font-headline tracking-tight text-on-surface mb-2">Registered Users</h1>
+<p class="text-on-surface-variant font-body">Manage global identity access and sandbox resource allocation.</p>
+</div>
+<div class="flex space-x-3">
+<button class="bg-surface-container-highest text-on-surface px-4 py-2 flex items-center space-x-2 hover:bg-surface-variant transition-colors active:scale-95">
+<span class="material-symbols-outlined text-sm">download</span>
+<span class="text-sm font-label">Export CSV</span>
+</button>
+<button class="bg-gradient-to-br from-primary to-on-primary-container text-on-primary-fixed px-5 py-2 flex items-center space-x-2 font-bold hover:brightness-110 transition-all active:scale-95 rounded-sm">
+<span class="material-symbols-outlined text-sm">person_add</span>
+<span class="text-sm font-label">Provision User</span>
+</button>
+</div>
+</header>
+<!-- Filters -->
+<div class="grid grid-cols-12 gap-6 mb-8">
+<div class="col-span-6 bg-surface-container-low p-1 flex items-center">
+<div class="bg-surface-container px-3 py-2 flex items-center flex-1">
+<span class="material-symbols-outlined text-outline-variant mr-3">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm w-full text-on-surface placeholder:text-outline" placeholder="Filter by email, User ID or hardware signature..." type="text"/>
+</div>
+</div>
+<div class="col-span-3 bg-surface-container-low p-1">
+<select class="bg-surface-container border-none focus:ring-0 text-sm w-full text-on-surface py-2 cursor-pointer">
+<option>All Statuses</option>
+<option>Active</option>
+<option>Suspended</option>
+<option>Pending</option>
+</select>
+</div>
+<div class="col-span-3 bg-surface-container-low p-1">
+<select class="bg-surface-container border-none focus:ring-0 text-sm w-full text-on-surface py-2 cursor-pointer">
+<option>All Tenant Groups</option>
+<option>Alpha Sector</option>
+<option>Legacy Nodes</option>
+<option>Quantum Resellers</option>
+</select>
+</div>
+</div>
+<!-- User Table -->
+<div class="bg-surface-container rounded-sm overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-high text-on-surface-variant text-[11px] uppercase tracking-widest font-bold">
+<th class="px-6 py-4">User Identity</th>
+<th class="px-6 py-4">Email Address</th>
+<th class="px-6 py-4">Reg Date</th>
+<th class="px-6 py-4">Status</th>
+<th class="px-6 py-4">Balance</th>
+<th class="px-6 py-4 text-right">Generations</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/10">
+<!-- User Row 1 (Selected) -->
+<tr class="bg-surface-container-highest/40 hover:bg-surface-container-highest transition-colors cursor-pointer group">
+<td class="px-6 py-5">
+<div class="flex items-center space-x-3">
+<div class="w-10 h-10 bg-primary-container rounded-sm flex items-center justify-center text-primary font-bold border border-primary/20">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="Headshot of a modern digital persona" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAYtNEbjtji2QLJsIIBkItu930mfaqE_28u8ZrduEPqwurfjtTs4Vt5JD8YmAueJl8B3Wycy_PQb_9sPRkpAL99awbTtR8V_OenfowWCpryG_Hvoy1lppygmRG5r425ofwgKB6J1N6Rkv6TU-2MreuZgIkzIoyTQFjoaw8uBJClWSG1F0lG3hybjDcmmIoy3eTmk4jivigV1LKbuu41naZI8BQUf5UmPou1gZryti96Q9wSbk3K2Mod2oVQ-586XbPqPbFBTUd_8lI"/>
+</div>
+<div>
+<div class="text-sm font-bold text-on-surface font-headline">JD-8829</div>
+<div class="text-[10px] text-primary uppercase font-bold tracking-tighter">Tier 3 Operator</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-5 text-sm text-on-surface-variant font-body">j.deckard@replicant.io</td>
+<td class="px-6 py-5 text-xs text-on-surface-variant">2023-11-04</td>
+<td class="px-6 py-5">
+<span class="px-2 py-0.5 bg-on-primary-container/20 text-primary text-[10px] font-bold uppercase tracking-wider rounded-sm border border-primary/30">Active</span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center space-x-1">
+<span class="text-sm font-bold text-on-surface">1,240</span>
+<span class="text-[10px] text-tertiary">CLX</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right font-mono text-xs text-on-surface-variant">14,202</td>
+</tr>
+<!-- User Row 2 -->
+<tr class="hover:bg-surface-container-high/60 transition-colors cursor-pointer">
+<td class="px-6 py-5">
+<div class="flex items-center space-x-3">
+<div class="w-10 h-10 bg-surface-container-highest rounded-sm flex items-center justify-center text-on-surface-variant font-bold">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="Abstract digital user representation" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAEK0FRQBGjcR-2KgnGbOyhBrAqKseyi0j83r1PUKrtIIT1uNJDLLneIcSu-zgAnWIWSml8YtMHMBnd_f0ctNpXoCBjQCX_vZKwnEQYky3YeGxC5hgyJZXeAZJv2r1rg2dpyioCF88Rny7zt2Zh4pFzh6OgjqGa8ApYR4k-HyI4fOo4IaeKtEDch98aWfMJkJXt57voEH-t8nlbq0a2AaMjMIZRqP8adqIx4as94VbJj7UHM4MJC-GDo98XgSQDqpiakiEFixjpvIE"/>
+</div>
+<div>
+<div class="text-sm font-bold text-on-surface font-headline">ES-0012</div>
+<div class="text-[10px] text-outline uppercase font-bold tracking-tighter">New Recruit</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-5 text-sm text-on-surface-variant font-body">e.selwyn@neural.net</td>
+<td class="px-6 py-5 text-xs text-on-surface-variant">2024-01-12</td>
+<td class="px-6 py-5">
+<span class="px-2 py-0.5 bg-yellow-500/10 text-yellow-500 text-[10px] font-bold uppercase tracking-wider rounded-sm border border-yellow-500/30">Pending</span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center space-x-1">
+<span class="text-sm font-bold text-on-surface">50</span>
+<span class="text-[10px] text-tertiary">CLX</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right font-mono text-xs text-on-surface-variant">0</td>
+</tr>
+<!-- User Row 3 -->
+<tr class="hover:bg-surface-container-high/60 transition-colors cursor-pointer">
+<td class="px-6 py-5">
+<div class="flex items-center space-x-3">
+<div class="w-10 h-10 bg-error-container/20 rounded-sm flex items-center justify-center text-error font-bold border border-error/20">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="Grayscale profile photo silhouette" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMP7Ugk7wvfDDWHZ0bEc59kki1_wyE6cYsqE4x8oGMm0oVhVeVcDJEYPNGcF58NkgxzCOw1HDG47JZCTr_sEZ7pt6TavG7GscvOtHAjFJzE-4scrWkEgjjRJmnTo_HxyYE5wnBEWvll8UAygsXaQBAprcy8E3f0rz5zNsg7IcEdqF61glhGJK8J2br2viTPYWtgqvoPEJrfZCAig6KosWBYUMN6KPxY79PBiC4kM3S8Uoa5JGy0uvQ_sd_9soZkPtaplkUsL5Rc2E"/>
+</div>
+<div>
+<div class="text-sm font-bold text-on-surface font-headline">KB-9110</div>
+<div class="text-[10px] text-error uppercase font-bold tracking-tighter">Restricted</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-5 text-sm text-on-surface-variant font-body">k.batty@offworld.sys</td>
+<td class="px-6 py-5 text-xs text-on-surface-variant">2023-08-20</td>
+<td class="px-6 py-5">
+<span class="px-2 py-0.5 bg-error/10 text-error text-[10px] font-bold uppercase tracking-wider rounded-sm border border-error/30">Suspended</span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center space-x-1">
+<span class="text-sm font-bold text-on-surface">0</span>
+<span class="text-[10px] text-tertiary">CLX</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right font-mono text-xs text-on-surface-variant">88,102</td>
+</tr>
+<!-- User Row 4 -->
+<tr class="hover:bg-surface-container-high/60 transition-colors cursor-pointer">
+<td class="px-6 py-5">
+<div class="flex items-center space-x-3">
+<div class="w-10 h-10 bg-tertiary-container rounded-sm flex items-center justify-center text-tertiary font-bold border border-tertiary/20">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="Technical professional user avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKp83UQvjPFsqOqb0oCif28XlJbcmnImlKa_cCL-9oP1_s2oWvfck3Fj21o2mSKMhFdBwvC1NWKo9BXeIr9hLI6yq33piHIJqwIUO8gp6JlYrZOBQrG1f-XYNF69Q7ZByOSZJM_edmGZX2ZcV1h0rUzQ06wxBJAy-q0HKWxgFhY0PVRtBYy7K7BET7c9dYEqypvCT_ZbAv2AxiKLA1yWbjotsSVMcfagNzCWEsz3d1FfEqguvVL-TDDm-jk6opdgpBDQEWwPeK-OE"/>
+</div>
+<div>
+<div class="text-sm font-bold text-on-surface font-headline">RA-4421</div>
+<div class="text-[10px] text-primary uppercase font-bold tracking-tighter">System Architect</div>
+</div>
+</div>
+</td>
+<td class="px-6 py-5 text-sm text-on-surface-variant font-body">r.armitage@wintermute.ai</td>
+<td class="px-6 py-5 text-xs text-on-surface-variant">2022-12-15</td>
+<td class="px-6 py-5">
+<span class="px-2 py-0.5 bg-on-primary-container/20 text-primary text-[10px] font-bold uppercase tracking-wider rounded-sm border border-primary/30">Active</span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center space-x-1">
+<span class="text-sm font-bold text-on-surface">9,550</span>
+<span class="text-[10px] text-tertiary">CLX</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right font-mono text-xs text-on-surface-variant">412,009</td>
+</tr>
+</tbody>
+</table>
+<footer class="bg-surface-container-low px-6 py-4 flex justify-between items-center text-xs text-on-surface-variant">
+<span>Showing 1-12 of 2,491 identities</span>
+<div class="flex space-x-4">
+<button class="hover:text-primary transition-colors flex items-center"><span class="material-symbols-outlined text-sm mr-1">chevron_left</span> Previous</button>
+<div class="flex space-x-2">
+<span class="text-primary font-bold">1</span>
+<span class="hover:text-on-surface cursor-pointer">2</span>
+<span class="hover:text-on-surface cursor-pointer">3</span>
+<span>...</span>
+<span class="hover:text-on-surface cursor-pointer">208</span>
+</div>
+<button class="hover:text-primary transition-colors flex items-center">Next <span class="material-symbols-outlined text-sm ml-1">chevron_right</span></button>
+</div>
+</footer>
+</div>
+</section>
+<!-- User Intel Sidebar -->
+<aside class="w-80 glass-panel border-l border-outline-variant/20 h-full flex flex-col p-6 z-30">
+<div class="flex justify-between items-start mb-8">
+<h2 class="text-xl font-bold font-headline text-on-surface">User Intel</h2>
+<button class="text-on-surface-variant hover:text-error transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Selected User Profile Header -->
+<div class="mb-8 p-4 bg-surface-container-lowest rounded-sm border-l-2 border-primary">
+<div class="flex items-center space-x-3 mb-3">
+<div class="w-12 h-12 bg-primary-container rounded-sm flex items-center justify-center text-primary font-bold">JD</div>
+<div>
+<div class="text-md font-bold text-on-surface leading-tight">J. Deckard</div>
+<div class="text-[10px] text-outline uppercase font-bold tracking-widest">ID: 8829-QX-00</div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 mt-4">
+<div class="bg-surface-container p-2">
+<div class="text-[9px] text-outline-variant uppercase font-bold mb-1">Risk Factor</div>
+<div class="text-sm font-bold text-primary">0.02%</div>
+</div>
+<div class="bg-surface-container p-2">
+<div class="text-[9px] text-outline-variant uppercase font-bold mb-1">Region</div>
+<div class="text-sm font-bold text-on-surface">NA-East</div>
+</div>
+</div>
+</div>
+<!-- Activity Feed -->
+<div class="flex-1 overflow-y-auto mb-6">
+<div class="flex items-center justify-between mb-4">
+<h3 class="text-[11px] font-bold text-outline-variant uppercase tracking-widest">Sandbox Activities</h3>
+<span class="text-[9px] text-tertiary underline cursor-pointer">View All</span>
+</div>
+<div class="space-y-4">
+<!-- Activity Item -->
+<div class="flex space-x-3">
+<div class="flex flex-col items-center">
+<div class="w-2 h-2 rounded-full bg-primary mt-1.5"></div>
+<div class="w-px h-full bg-outline-variant/20 my-1"></div>
+</div>
+<div class="pb-4">
+<div class="text-xs font-bold text-on-surface">Encrypted Document Gen</div>
+<div class="text-[10px] text-on-surface-variant mb-1">Authored by Agent-7 (LLM-V4)</div>
+<div class="text-[9px] text-outline">14 minutes ago</div>
+</div>
+</div>
+<!-- Activity Item -->
+<div class="flex space-x-3">
+<div class="flex flex-col items-center">
+<div class="w-2 h-2 rounded-full bg-tertiary mt-1.5"></div>
+<div class="w-px h-full bg-outline-variant/20 my-1"></div>
+</div>
+<div class="pb-4">
+<div class="text-xs font-bold text-on-surface">API Key Rotated</div>
+<div class="text-[10px] text-on-surface-variant mb-1">Manual action via Web Dashboard</div>
+<div class="text-[9px] text-outline">2 hours ago</div>
+</div>
+</div>
+<!-- Activity Item -->
+<div class="flex space-x-3">
+<div class="flex flex-col items-center">
+<div class="w-2 h-2 rounded-full bg-primary mt-1.5"></div>
+<div class="w-px h-full bg-outline-variant/20 my-1"></div>
+</div>
+<div class="pb-4">
+<div class="text-xs font-bold text-on-surface">Token Withdrawal</div>
+<div class="text-[10px] text-on-surface-variant mb-1">500 CLX transferred to External Wallet</div>
+<div class="text-[9px] text-outline">Yesterday at 22:10</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Admin Controls -->
+<div class="space-y-3 pt-6 border-t border-outline-variant/20">
+<button class="w-full bg-surface-container-highest text-on-surface py-2.5 flex items-center justify-center space-x-2 font-label text-sm hover:bg-surface-variant transition-colors border border-outline-variant/10 active:scale-95">
+<span class="material-symbols-outlined text-base">analytics</span>
+<span>Adjust Quota</span>
+</button>
+<button class="w-full bg-surface-container-highest text-on-surface py-2.5 flex items-center justify-center space-x-2 font-label text-sm hover:bg-surface-variant transition-colors border border-outline-variant/10 active:scale-95">
+<span class="material-symbols-outlined text-base">vpn_key</span>
+<span>Impersonate Session</span>
+</button>
+<button class="w-full bg-error-container/10 text-error py-2.5 flex items-center justify-center space-x-2 font-bold text-sm hover:bg-error-container/20 transition-colors border border-error/20 active:scale-95">
+<span class="material-symbols-outlined text-base">block</span>
+<span>Revoke Access</span>
+</button>
+</div>
+</aside>
+</main>
+</div>
+<!-- Floating Action Feedback (Global Alert) -->
+<div class="fixed bottom-6 right-86 z-50 pointer-events-none">
+<div class="bg-surface-container-highest/90 backdrop-blur-xl border-l-4 border-tertiary px-6 py-4 shadow-2xl flex items-center space-x-4 pointer-events-auto">
+<span class="material-symbols-outlined text-tertiary" style="font-variation-settings: 'FILL' 1;">info</span>
+<div>
+<div class="text-xs font-bold text-on-surface uppercase tracking-tighter">Observatory Alert</div>
+<div class="text-[10px] text-on-surface-variant">Real-time sync active for User Database Alpha.</div>
+</div>
+</div>
+</div>
+</body></html>

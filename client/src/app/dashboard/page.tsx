@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
 import Navbar from '../components/Navbar';
+import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
 
 interface Conversation {
   id: string;
@@ -40,6 +41,7 @@ function DashboardContent() {
   const [usage, setUsage] = useState<UsageTotal | null>(null);
   const [smartInput, setSmartInput] = useState('');
   const [creating, setCreating] = useState(false);
+  const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -102,7 +104,7 @@ function DashboardContent() {
     <div className="min-h-screen bg-surface-container-lowest">
       <Navbar />
 
-      <main className="ml-64 min-h-screen flex flex-col">
+      <main className={`${sidebarMargin} min-h-screen flex flex-col transition-all duration-300`}>
         {/* Top Header */}
         <header className="sticky top-0 h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
           <div className="flex items-center gap-8">

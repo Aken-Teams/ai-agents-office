@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CyberLogic Admin - Sovereign Observer</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-dim": "#0b1326",
+              "inverse-surface": "#dae2fd",
+              "primary": "#00dbe9",
+              "outline": "#8f9097",
+              "tertiary": "#7bd0ff",
+              "on-tertiary": "#00354a",
+              "on-tertiary-container": "#008cbd",
+              "inverse-primary": "#006970",
+              "surface-container": "#171f33",
+              "on-background": "#dae2fd",
+              "surface-container-high": "#222a3d",
+              "outline-variant": "#44474d",
+              "primary-container": "#001d1f",
+              "primary-fixed": "#7df4ff",
+              "on-tertiary-fixed": "#001e2c",
+              "primary-fixed-dim": "#00dbe9",
+              "on-error-container": "#ffdad6",
+              "surface-tint": "#00dbe9",
+              "tertiary-fixed": "#c4e7ff",
+              "background": "#0b1326",
+              "surface-container-lowest": "#060e20",
+              "on-surface": "#dae2fd",
+              "on-secondary": "#263143",
+              "secondary": "#bcc7de",
+              "surface-container-highest": "#2d3449",
+              "on-secondary-container": "#aeb9d0",
+              "secondary-fixed-dim": "#bcc7de",
+              "surface-container-low": "#131b2e",
+              "error": "#ffb4ab",
+              "on-primary-container": "#009099",
+              "on-primary-fixed": "#002022",
+              "tertiary-container": "#001c29",
+              "surface-bright": "#31394d",
+              "surface": "#0b1326",
+              "secondary-fixed": "#d8e3fb",
+              "on-surface-variant": "#c5c6cd",
+              "on-primary": "#00363a",
+              "tertiary-fixed-dim": "#7bd0ff",
+              "inverse-on-surface": "#283044",
+              "on-error": "#690005",
+              "on-secondary-fixed": "#111c2d",
+              "error-container": "#93000a",
+              "on-secondary-fixed-variant": "#3c475a",
+              "on-primary-fixed-variant": "#004f54",
+              "on-tertiary-fixed-variant": "#004c69",
+              "surface-variant": "#2d3449",
+              "secondary-container": "#3e495d"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .glass-panel {
+        background: rgba(45, 52, 73, 0.7);
+        backdrop-filter: blur(12px);
+      }
+      ::-webkit-scrollbar {
+        width: 4px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #060e20;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #2d3449;
+      }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body selection:bg-primary/30">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 bg-[#0b1326] dark:bg-[#0b1326] shadow-[0_24px_40px_rgba(17,28,45,0.08)]">
+<div class="flex justify-between items-center h-16 px-6 w-full bg-[#131b2e]">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black tracking-tighter text-[#dae2fd] uppercase font-headline">CyberLogic Admin</span>
+<nav class="hidden md:flex gap-6 items-center">
+<a class="text-[#00dbe9] border-b-2 border-[#00dbe9] pb-1 font-headline font-bold tracking-tight text-sm" href="#">System Status</a>
+<a class="text-[#c5c6cd] hover:text-[#dae2fd] transition-colors duration-200 font-headline font-bold tracking-tight text-sm" href="#">Financial Oversight</a>
+<a class="text-[#c5c6cd] hover:text-[#dae2fd] transition-colors duration-200 font-headline font-bold tracking-tight text-sm" href="#">Security Audits</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative group">
+<span class="material-symbols-outlined text-[#c5c6cd] hover:bg-[#2d3449]/50 p-2 rounded cursor-pointer transition-colors duration-200">notifications_active</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full animate-pulse"></span>
+</div>
+<span class="material-symbols-outlined text-[#c5c6cd] hover:bg-[#2d3449]/50 p-2 rounded cursor-pointer transition-colors duration-200">settings</span>
+<span class="material-symbols-outlined text-[#c5c6cd] hover:bg-[#2d3449]/50 p-2 rounded cursor-pointer transition-colors duration-200">account_circle</span>
+</div>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 flex flex-col pt-4 bg-[#060e20] dark:bg-[#060e20] border-r border-[#44474d]/20 hidden lg:flex">
+<div class="px-6 mb-8">
+<h2 class="text-lg font-bold text-[#dae2fd] font-headline">Sovereign Admin</h2>
+<p class="text-xs text-[#c5c6cd] uppercase tracking-widest opacity-60">Root Authority</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="group flex items-center px-4 py-3 space-x-3 bg-[#171f33] text-[#00dbe9] border-l-4 border-[#00dbe9] rounded-r-sm transition-all duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="font-['Inter'] text-sm font-medium">Overview</span>
+</a>
+<a class="group flex items-center px-4 py-3 space-x-3 text-[#c5c6cd] hover:bg-[#171f33]/40 hover:text-[#dae2fd] transition-all duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="corporate_fare">corporate_fare</span>
+<span class="font-['Inter'] text-sm font-medium">Tenants</span>
+</a>
+<a class="group flex items-center px-4 py-3 space-x-3 text-[#c5c6cd] hover:bg-[#171f33]/40 hover:text-[#dae2fd] transition-all duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="shield_with_heart">shield_with_heart</span>
+<span class="font-['Inter'] text-sm font-medium">Security Logs</span>
+</a>
+<a class="group flex items-center px-4 py-3 space-x-3 text-[#c5c6cd] hover:bg-[#171f33]/40 hover:text-[#dae2fd] transition-all duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="memory">memory</span>
+<span class="font-['Inter'] text-sm font-medium">Node Health</span>
+</a>
+<a class="group flex items-center px-4 py-3 space-x-3 text-[#c5c6cd] hover:bg-[#171f33]/40 hover:text-[#dae2fd] transition-all duration-300" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="font-['Inter'] text-sm font-medium">Billing Config</span>
+</a>
+</nav>
+<div class="mt-auto pb-6 space-y-1">
+<a class="group flex items-center px-4 py-2 space-x-3 text-[#c5c6cd] hover:bg-[#171f33]/40 hover:text-[#dae2fd] transition-all duration-300" href="#">
+<span class="material-symbols-outlined text-xs" data-icon="terminal">terminal</span>
+<span class="font-['Inter'] text-xs font-medium">System Logs</span>
+</a>
+<a class="group flex items-center px-4 py-2 space-x-3 text-[#c5c6cd] hover:bg-[#171f33]/40 hover:text-[#dae2fd] transition-all duration-300" href="#">
+<span class="material-symbols-outlined text-xs" data-icon="menu_book">menu_book</span>
+<span class="font-['Inter'] text-xs font-medium">Documentation</span>
+</a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="lg:ml-64 pt-24 px-6 pb-12 min-h-screen">
+<!-- Header Section -->
+<div class="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div class="max-w-2xl">
+<h1 class="text-4xl lg:text-5xl font-black font-headline tracking-tighter text-on-surface mb-2">Sovereign Command Center</h1>
+<p class="text-on-surface-variant font-body">Unified administrative oversight for CyberLogic AI clusters and autonomous security protocols.</p>
+</div>
+<div class="flex gap-2">
+<button class="bg-surface-container-highest hover:bg-surface-bright text-primary px-4 py-2 text-xs font-bold tracking-wider uppercase transition-colors">Export Report</button>
+<button class="bg-gradient-to-br from-primary to-on-primary-container text-on-primary-fixed px-6 py-2 text-xs font-black tracking-wider uppercase shadow-lg shadow-primary/10 active:scale-95 transition-all">Emergency Lockout</button>
+</div>
+</div>
+<!-- Metric Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+<div class="bg-surface-container p-6 flex flex-col gap-1 relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-4xl" data-icon="group">group</span>
+</div>
+<span class="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Total Users</span>
+<span class="text-3xl font-black font-headline text-primary">1,248</span>
+<div class="mt-4 flex items-center gap-2 text-[10px] text-tertiary">
+<span class="material-symbols-outlined text-xs" data-icon="trending_up">trending_up</span>
+<span>+12% from last cycle</span>
+</div>
+</div>
+<div class="bg-surface-container p-6 flex flex-col gap-1 relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-4xl" data-icon="smart_toy">smart_toy</span>
+</div>
+<span class="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Active Agents</span>
+<span class="text-3xl font-black font-headline text-primary">42</span>
+<div class="mt-4 flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+<span class="text-[10px] text-tertiary uppercase font-bold">Agents operational</span>
+</div>
+</div>
+<div class="bg-surface-container p-6 flex flex-col gap-1 relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-4xl" data-icon="token">token</span>
+</div>
+<span class="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Tokens Consumed</span>
+<span class="text-3xl font-black font-headline text-primary">4.2M</span>
+<div class="mt-4 flex items-center gap-2 text-[10px] text-on-surface-variant">
+<span>Quota: 10M / Month</span>
+<div class="flex-1 h-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[42%]"></div>
+</div>
+</div>
+</div>
+<div class="bg-surface-container p-6 flex flex-col gap-1 relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-4xl" data-icon="health_and_safety">health_and_safety</span>
+</div>
+<span class="text-xs font-bold uppercase tracking-widest text-on-surface-variant">System Health</span>
+<span class="text-3xl font-black font-headline text-primary">99.8%</span>
+<div class="mt-4 flex items-center gap-2 text-[10px] text-[#00ff9d]">
+<span class="material-symbols-outlined text-xs" data-icon="check_circle">check_circle</span>
+<span>All services nominal</span>
+</div>
+</div>
+</div>
+<!-- Main Dashboard Layout -->
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+<!-- Left Column: Chart & Node Stats -->
+<div class="xl:col-span-8 space-y-8">
+<!-- Velocity Chart -->
+<section class="bg-surface-container p-8">
+<div class="flex justify-between items-center mb-8">
+<div>
+<h3 class="text-lg font-bold font-headline text-on-surface">Token Consumption Velocity</h3>
+<p class="text-xs text-on-surface-variant">Real-time inference load across distributed neural nodes.</p>
+</div>
+<div class="flex gap-4">
+<button class="text-[10px] font-bold uppercase text-primary border-b border-primary">Live</button>
+<button class="text-[10px] font-bold uppercase text-on-surface-variant">24H</button>
+<button class="text-[10px] font-bold uppercase text-on-surface-variant">7D</button>
+</div>
+</div>
+<div class="h-64 relative">
+<!-- Simulated Chart Grid -->
+<div class="absolute inset-0 grid grid-cols-6 border-l border-b border-outline-variant/30">
+<div class="border-r border-outline-variant/10"></div>
+<div class="border-r border-outline-variant/10"></div>
+<div class="border-r border-outline-variant/10"></div>
+<div class="border-r border-outline-variant/10"></div>
+<div class="border-r border-outline-variant/10"></div>
+</div>
+<!-- Area Chart Visual -->
+<svg class="absolute inset-0 w-full h-full" preserveaspectratio="none">
+<defs>
+<lineargradient id="chartGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#00dbe9" stop-opacity="0.2"></stop>
+<stop offset="100%" stop-color="#00dbe9" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+<path d="M0 200 Q 100 150, 200 180 T 400 100 T 600 140 T 800 60 T 1000 80 L 1000 256 L 0 256 Z" fill="url(#chartGradient)"></path>
+<path d="M0 200 Q 100 150, 200 180 T 400 100 T 600 140 T 800 60 T 1000 80" fill="none" stroke="#00dbe9" stroke-width="2"></path>
+</svg>
+<!-- Markers -->
+<div class="absolute top-[60px] left-[78%] group">
+<div class="w-3 h-3 bg-primary rounded-full shadow-[0_0_12px_#00dbe9] animate-pulse"></div>
+<div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block">
+<div class="bg-surface-container-highest px-2 py-1 text-[10px] whitespace-nowrap border border-primary/20">Peak: 142k/sec</div>
+</div>
+</div>
+</div>
+<div class="mt-4 flex justify-between text-[10px] font-mono text-on-surface-variant/40">
+<span>08:00</span>
+<span>12:00</span>
+<span>16:00</span>
+<span>20:00</span>
+<span>00:00</span>
+</div>
+</section>
+<!-- Node Performance List -->
+<section>
+<div class="flex items-center justify-between mb-6">
+<h3 class="text-xl font-bold font-headline text-on-surface">Node Performance</h3>
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant px-3 py-1 bg-surface-container">All Clusters Nominal</span>
+</div>
+<div class="space-y-4">
+<!-- Node Alpha-7 -->
+<div class="bg-surface-container-low p-5 flex items-center gap-6 group hover:bg-surface-container transition-colors">
+<div class="flex items-center gap-4 w-48">
+<span class="material-symbols-outlined text-primary-fixed-dim" data-icon="dns">dns</span>
+<div>
+<h4 class="text-sm font-bold font-headline">Alpha-7</h4>
+<p class="text-[10px] text-on-surface-variant">North Virginia, US</p>
+</div>
+</div>
+<div class="flex-1 grid grid-cols-3 gap-8">
+<div>
+<div class="flex justify-between mb-1">
+<span class="text-[10px] text-on-surface-variant uppercase font-bold">CPU Usage</span>
+<span class="text-[10px] text-on-surface">42%</span>
+</div>
+<div class="h-1 bg-surface-container-highest rounded-full">
+<div class="h-full bg-primary w-[42%]"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between mb-1">
+<span class="text-[10px] text-on-surface-variant uppercase font-bold">Memory</span>
+<span class="text-[10px] text-on-surface">68%</span>
+</div>
+<div class="h-1 bg-surface-container-highest rounded-full">
+<div class="h-full bg-tertiary w-[68%]"></div>
+</div>
+</div>
+<div class="text-right">
+<span class="text-[10px] text-on-surface-variant uppercase font-bold block mb-1">Latency</span>
+<span class="text-sm font-bold font-headline text-primary">12ms</span>
+</div>
+</div>
+</div>
+<!-- Node Beta-4 -->
+<div class="bg-surface-container-low p-5 flex items-center gap-6 group hover:bg-surface-container transition-colors">
+<div class="flex items-center gap-4 w-48">
+<span class="material-symbols-outlined text-primary-fixed-dim" data-icon="dns">dns</span>
+<div>
+<h4 class="text-sm font-bold font-headline">Beta-4</h4>
+<p class="text-[10px] text-on-surface-variant">Frankfurt, DE</p>
+</div>
+</div>
+<div class="flex-1 grid grid-cols-3 gap-8">
+<div>
+<div class="flex justify-between mb-1">
+<span class="text-[10px] text-on-surface-variant uppercase font-bold">CPU Usage</span>
+<span class="text-[10px] text-on-surface">18%</span>
+</div>
+<div class="h-1 bg-surface-container-highest rounded-full">
+<div class="h-full bg-primary w-[18%]"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between mb-1">
+<span class="text-[10px] text-on-surface-variant uppercase font-bold">Memory</span>
+<span class="text-[10px] text-on-surface">24%</span>
+</div>
+<div class="h-1 bg-surface-container-highest rounded-full">
+<div class="h-full bg-tertiary w-[24%]"></div>
+</div>
+</div>
+<div class="text-right">
+<span class="text-[10px] text-on-surface-variant uppercase font-bold block mb-1">Latency</span>
+<span class="text-sm font-bold font-headline text-primary">48ms</span>
+</div>
+</div>
+</div>
+<!-- Node Gamma-1 -->
+<div class="bg-surface-container-low p-5 flex items-center gap-6 group hover:bg-surface-container transition-colors">
+<div class="flex items-center gap-4 w-48">
+<span class="material-symbols-outlined text-primary-fixed-dim" data-icon="dns">dns</span>
+<div>
+<h4 class="text-sm font-bold font-headline">Gamma-1</h4>
+<p class="text-[10px] text-on-surface-variant">Tokyo, JP</p>
+</div>
+</div>
+<div class="flex-1 grid grid-cols-3 gap-8">
+<div>
+<div class="flex justify-between mb-1">
+<span class="text-[10px] text-on-surface-variant uppercase font-bold">CPU Usage</span>
+<span class="text-[10px] text-on-surface">88%</span>
+</div>
+<div class="h-1 bg-surface-container-highest rounded-full">
+<div class="h-full bg-error w-[88%]"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between mb-1">
+<span class="text-[10px] text-on-surface-variant uppercase font-bold">Memory</span>
+<span class="text-[10px] text-on-surface">92%</span>
+</div>
+<div class="h-1 bg-surface-container-highest rounded-full">
+<div class="h-full bg-error w-[92%]"></div>
+</div>
+</div>
+<div class="text-right">
+<span class="text-[10px] text-on-surface-variant uppercase font-bold block mb-1">Latency</span>
+<span class="text-sm font-bold font-headline text-primary">114ms</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Column: Real-time Feed -->
+<div class="xl:col-span-4 space-y-8">
+<section class="bg-surface-container-lowest p-6 glass-panel border border-outline-variant/10 min-h-[500px] flex flex-col">
+<div class="flex items-center justify-between mb-8">
+<h3 class="text-lg font-bold font-headline text-on-surface">Security Events</h3>
+<span class="material-symbols-outlined text-tertiary animate-pulse" data-icon="sensors">sensors</span>
+</div>
+<div class="space-y-6 flex-1 overflow-y-auto pr-2">
+<!-- Event 1 -->
+<div class="flex gap-4">
+<div class="pt-1">
+<div class="w-1.5 h-1.5 rounded-full bg-primary mt-1"></div>
+<div class="w-0.5 h-16 bg-outline-variant/20 mx-auto mt-1"></div>
+</div>
+<div>
+<span class="text-[9px] font-mono text-on-surface-variant">14:22:15 UTC</span>
+<h5 class="text-xs font-bold text-primary mt-1">Unauthorized Login Attempt</h5>
+<p class="text-[11px] text-on-surface-variant leading-relaxed mt-1">IP 192.168.1.104 attempted brute force on Cluster Alpha. Origin: Moscow, RU.</p>
+<div class="mt-2 flex gap-2">
+<span class="text-[9px] bg-error-container text-on-error-container px-2 py-0.5 font-bold uppercase">Blocked</span>
+<span class="text-[9px] bg-surface-container-highest text-on-surface px-2 py-0.5">Details</span>
+</div>
+</div>
+</div>
+<!-- Event 2 -->
+<div class="flex gap-4">
+<div class="pt-1">
+<div class="w-1.5 h-1.5 rounded-full bg-tertiary mt-1"></div>
+<div class="w-0.5 h-16 bg-outline-variant/20 mx-auto mt-1"></div>
+</div>
+<div>
+<span class="text-[9px] font-mono text-on-surface-variant">14:18:02 UTC</span>
+<h5 class="text-xs font-bold text-on-surface mt-1">Agent Scale Expansion</h5>
+<p class="text-[11px] text-on-surface-variant leading-relaxed mt-1">Auto-scaling group 'Guardian-Main' initialized 4 new sub-agents to handle increased token velocity.</p>
+<div class="mt-2 flex gap-2">
+<span class="text-[9px] bg-tertiary-container text-on-tertiary-container px-2 py-0.5 font-bold uppercase">Scaling</span>
+</div>
+</div>
+</div>
+<!-- Event 3 -->
+<div class="flex gap-4">
+<div class="pt-1">
+<div class="w-1.5 h-1.5 rounded-full bg-primary mt-1"></div>
+<div class="w-0.5 h-16 bg-outline-variant/20 mx-auto mt-1"></div>
+</div>
+<div>
+<span class="text-[9px] font-mono text-on-surface-variant">13:55:40 UTC</span>
+<h5 class="text-xs font-bold text-on-surface mt-1">System Audit Complete</h5>
+<p class="text-[11px] text-on-surface-variant leading-relaxed mt-1">Weekly financial oversight scan completed. No discrepancies found in token billing logs.</p>
+<div class="mt-2">
+<button class="text-[9px] text-primary underline underline-offset-4 font-bold">Download Log</button>
+</div>
+</div>
+</div>
+<!-- Event 4 -->
+<div class="flex gap-4">
+<div class="pt-1">
+<div class="w-1.5 h-1.5 rounded-full bg-error mt-1"></div>
+</div>
+<div>
+<span class="text-[9px] font-mono text-on-surface-variant">13:32:11 UTC</span>
+<h5 class="text-xs font-bold text-error mt-1">Memory Overflow Warning</h5>
+<p class="text-[11px] text-on-surface-variant leading-relaxed mt-1">Node Gamma-1 reporting critical memory pressure. Re-routing non-essential inference tasks.</p>
+<div class="mt-2">
+<span class="text-[9px] bg-error-container text-on-error-container px-2 py-0.5 font-bold uppercase tracking-widest animate-pulse">Critical</span>
+</div>
+</div>
+</div>
+</div>
+<button class="w-full py-3 mt-6 border-t border-outline-variant/20 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors">View All Security Logs</button>
+</section>
+<div class="bg-primary-container p-6 relative overflow-hidden group border border-primary/10">
+<div class="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-700">
+<span class="material-symbols-outlined text-[120px]" data-icon="shield">shield</span>
+</div>
+<h4 class="text-sm font-bold text-primary font-headline mb-2">Automated Threat Response</h4>
+<p class="text-xs text-on-primary-container leading-relaxed mb-4">CyberLogic is currently in 'Sovereign' mode. Autonomous defense protocols are managing active threats.</p>
+<div class="flex items-center justify-between">
+<span class="text-[10px] font-bold uppercase text-primary">Active Protection</span>
+<span class="text-xs font-mono font-bold text-primary">v2.4.9</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Nav (Mobile Only) -->
+<footer class="md:hidden fixed bottom-0 w-full bg-surface-container-lowest border-t border-outline-variant/10 z-50">
+<div class="flex justify-around items-center h-16">
+<button class="flex flex-col items-center gap-1 text-primary">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="text-[10px] font-bold">Overview</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="memory">memory</span>
+<span class="text-[10px] font-bold">Nodes</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="shield">shield</span>
+<span class="text-[10px] font-bold">Security</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="text-[10px] font-bold">Admin</span>
+</button>
+</div>
+</footer>
+</body></html>

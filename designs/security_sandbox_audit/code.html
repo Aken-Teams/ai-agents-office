@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CyberLogic Admin | Security &amp; Sandbox Audit</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-dim": "#0b1326",
+                        "inverse-surface": "#dae2fd",
+                        "primary": "#00dbe9",
+                        "outline": "#8f9097",
+                        "tertiary": "#7bd0ff",
+                        "on-tertiary": "#00354a",
+                        "on-tertiary-container": "#008cbd",
+                        "inverse-primary": "#006970",
+                        "surface-container": "#171f33",
+                        "on-background": "#dae2fd",
+                        "surface-container-high": "#222a3d",
+                        "outline-variant": "#44474d",
+                        "primary-container": "#001d1f",
+                        "primary-fixed": "#7df4ff",
+                        "on-tertiary-fixed": "#001e2c",
+                        "primary-fixed-dim": "#00dbe9",
+                        "on-error-container": "#ffdad6",
+                        "surface-tint": "#00dbe9",
+                        "tertiary-fixed": "#c4e7ff",
+                        "background": "#0b1326",
+                        "surface-container-lowest": "#060e20",
+                        "on-surface": "#dae2fd",
+                        "on-secondary": "#263143",
+                        "secondary": "#bcc7de",
+                        "surface-container-highest": "#2d3449",
+                        "on-secondary-container": "#aeb9d0",
+                        "secondary-fixed-dim": "#bcc7de",
+                        "surface-container-low": "#131b2e",
+                        "error": "#ffb4ab",
+                        "on-primary-container": "#009099",
+                        "on-primary-fixed": "#002022",
+                        "tertiary-container": "#001c29",
+                        "surface-bright": "#31394d",
+                        "surface": "#0b1326",
+                        "secondary-fixed": "#d8e3fb",
+                        "on-surface-variant": "#c5c6cd",
+                        "on-primary": "#00363a",
+                        "tertiary-fixed-dim": "#7bd0ff",
+                        "inverse-on-surface": "#283044",
+                        "on-error": "#690005",
+                        "on-secondary-fixed": "#111c2d",
+                        "error-container": "#93000a",
+                        "on-secondary-fixed-variant": "#3c475a",
+                        "on-primary-fixed-variant": "#004f54",
+                        "on-tertiary-fixed-variant": "#004c69",
+                        "surface-variant": "#2d3449",
+                        "secondary-container": "#3e495d"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"],
+                        "mono": ["JetBrains Mono"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .cli-glow {
+            text-shadow: 0 0 5px rgba(0, 219, 233, 0.4);
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .glass-panel {
+            background: rgba(45, 52, 73, 0.6);
+            backdrop-filter: blur(12px);
+        }
+    </style>
+</head>
+<body class="bg-surface-container-lowest text-on-surface font-body selection:bg-primary/30">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 bg-[#0b1326] shadow-[0_24px_40px_rgba(17,28,45,0.08)]">
+<div class="flex justify-between items-center h-16 px-6 w-full">
+<div class="flex items-center gap-8">
+<span class="text-xl font-black tracking-tighter text-[#dae2fd] uppercase font-headline">CyberLogic Admin</span>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-[#c5c6cd] hover:text-[#dae2fd] font-headline font-bold tracking-tight transition-colors duration-200" href="#">System Status</a>
+<a class="text-[#c5c6cd] hover:text-[#dae2fd] font-headline font-bold tracking-tight transition-colors duration-200" href="#">Financial Oversight</a>
+<a class="text-[#00dbe9] border-b-2 border-[#00dbe9] pb-1 font-headline font-bold tracking-tight" href="#">Security Audits</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 hover:bg-[#2d3449]/50 transition-colors duration-200 cursor-pointer active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[#00dbe9]">notifications_active</span>
+</button>
+<button class="p-2 hover:bg-[#2d3449]/50 transition-colors duration-200 cursor-pointer active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[#00dbe9]">settings</span>
+</button>
+<button class="p-2 hover:bg-[#2d3449]/50 transition-colors duration-200 cursor-pointer active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[#00dbe9]">account_circle</span>
+</button>
+</div>
+</div>
+</header>
+<!-- SideNavBar (Hidden on small screens) -->
+<aside class="hidden md:flex fixed left-0 top-16 h-[calc(100vh-64px)] w-64 flex-col pt-4 bg-[#060e20] border-r border-[#44474d]/20 font-['Inter'] text-sm font-medium">
+<div class="px-6 py-4 mb-4">
+<h2 class="text-lg font-bold text-[#dae2fd]">Sovereign Admin</h2>
+<p class="text-xs text-[#00dbe9]/70 uppercase tracking-widest">Root Authority</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="group flex items-center px-4 py-3 space-x-3 text-[#c5c6cd] hover:bg-[#171f33]/40 hover:text-[#dae2fd] transition-all duration-300" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span>Overview</span>
+</a>
+<a class="group flex items-center px-4 py-3 space-x-3 text-[#c5c6cd] hover:bg-[#171f33]/40 hover:text-[#dae2fd] transition-all duration-300" href="#">
+<span class="material-symbols-outlined">corporate_fare</span>
+<span>Tenants</span>
+</a>
+<a class="group flex items-center px-4 py-3 space-x-3 bg-[#171f33] text-[#00dbe9] border-l-4 border-[#00dbe9] rounded-r-sm" href="#">
+<span class="material-symbols-outlined">shield_with_heart</span>
+<span>Security Logs</span>
+</a>
+<a class="group flex items-center px-4 py-3 space-x-3 text-[#c5c6cd] hover:bg-[#171f33]/40 hover:text-[#dae2fd] transition-all duration-300" href="#">
+<span class="material-symbols-outlined">memory</span>
+<span>Node Health</span>
+</a>
+<a class="group flex items-center px-4 py-3 space-x-3 text-[#c5c6cd] hover:bg-[#171f33]/40 hover:text-[#dae2fd] transition-all duration-300" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span>Billing Config</span>
+</a>
+</nav>
+<div class="mt-auto pb-6 border-t border-[#44474d]/10 pt-4">
+<a class="group flex items-center px-4 py-3 space-x-3 text-[#c5c6cd] hover:bg-[#171f33]/40 hover:text-[#dae2fd] transition-all duration-300" href="#">
+<span class="material-symbols-outlined">terminal</span>
+<span>System Logs</span>
+</a>
+<a class="group flex items-center px-4 py-3 space-x-3 text-[#c5c6cd] hover:bg-[#171f33]/40 hover:text-[#dae2fd] transition-all duration-300" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+<span>Documentation</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="md:ml-64 pt-20 p-6 min-h-screen">
+<div class="max-w-7xl mx-auto space-y-6">
+<!-- Header Section -->
+<section class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<h1 class="text-4xl font-headline font-bold text-on-surface tracking-tight">Security &amp; Sandbox Audit</h1>
+<p class="text-on-surface-variant mt-2 font-body max-w-xl">Deep-level inspection of autonomous agent containment units. Monitoring all I/O operations and memory isolation barriers in real-time.</p>
+</div>
+<div class="flex gap-3">
+<button class="px-4 py-2 bg-surface-container-highest text-on-surface font-label text-sm flex items-center gap-2 hover:bg-surface-bright transition-colors duration-200">
+<span class="material-symbols-outlined text-sm">download</span>
+                        Export Security Log
+                    </button>
+<button class="px-4 py-2 bg-gradient-to-br from-primary to-on-primary-container text-on-primary font-label text-sm flex items-center gap-2 hover:opacity-90 transition-all active:scale-95">
+<span class="material-symbols-outlined text-sm">security</span>
+                        Initiate Global Lockdown
+                    </button>
+</div>
+</section>
+<!-- Asymmetric Bento Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
+<!-- Filter Panel -->
+<div class="lg:col-span-3 space-y-6">
+<div class="bg-surface-container p-5 space-y-4">
+<h3 class="font-headline font-bold text-sm uppercase tracking-widest text-primary">Tenant Sandboxes</h3>
+<div class="space-y-2">
+<button class="w-full text-left px-3 py-2 bg-surface-container-high border-l-2 border-primary text-primary font-medium text-xs flex justify-between items-center group">
+<span>AETHER_CORP_01</span>
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+</button>
+<button class="w-full text-left px-3 py-2 text-on-surface-variant hover:bg-surface-container-low transition-colors text-xs flex justify-between items-center group">
+<span>NEURAL_LINK_Z</span>
+<span class="w-2 h-2 rounded-full bg-outline-variant"></span>
+</button>
+<button class="w-full text-left px-3 py-2 text-on-surface-variant hover:bg-surface-container-low transition-colors text-xs flex justify-between items-center group">
+<span>VOID_FINANCE_SYS</span>
+<span class="w-2 h-2 rounded-full bg-outline-variant"></span>
+</button>
+<button class="w-full text-left px-3 py-2 bg-error-container/20 text-error font-medium text-xs flex justify-between items-center group">
+<span>SENTINEL_AI_BETA</span>
+<span class="material-symbols-outlined text-xs">warning</span>
+</button>
+<button class="w-full text-left px-3 py-2 text-on-surface-variant hover:bg-surface-container-low transition-colors text-xs flex justify-between items-center group">
+<span>NEXUS_CORE_8</span>
+<span class="w-2 h-2 rounded-full bg-outline-variant"></span>
+</button>
+</div>
+<div class="pt-4 border-t border-outline-variant/20">
+<h3 class="font-headline font-bold text-sm uppercase tracking-widest text-on-surface-variant mb-3">Audit Filters</h3>
+<div class="space-y-3">
+<label class="flex items-center gap-3 text-xs text-on-surface-variant">
+<input checked="" class="rounded-sm bg-surface-container-highest border-none text-primary focus:ring-primary" type="checkbox"/>
+                                    File Write Attempts
+                                </label>
+<label class="flex items-center gap-3 text-xs text-on-surface-variant">
+<input checked="" class="rounded-sm bg-surface-container-highest border-none text-primary focus:ring-primary" type="checkbox"/>
+                                    Network Egress
+                                </label>
+<label class="flex items-center gap-3 text-xs text-on-surface-variant">
+<input checked="" class="rounded-sm bg-surface-container-highest border-none text-primary focus:ring-primary" type="checkbox"/>
+                                    System Call Violations
+                                </label>
+</div>
+</div>
+</div>
+<!-- Sandbox Integrity Map Visualization -->
+<div class="bg-surface-container p-5">
+<h3 class="font-headline font-bold text-sm uppercase tracking-widest text-tertiary mb-4">Integrity Map</h3>
+<div class="relative h-48 bg-surface-container-lowest overflow-hidden flex items-center justify-center p-4">
+<!-- Abstract Map Representation -->
+<div class="grid grid-cols-2 gap-2 w-full h-full">
+<div class="bg-surface-container-high flex flex-col items-center justify-center relative">
+<span class="text-[8px] absolute top-1 left-1 opacity-50">/sandbox/usr</span>
+<span class="material-symbols-outlined text-primary text-xl">lock</span>
+<div class="mt-1 h-1 w-8 bg-primary/20 rounded-full overflow-hidden">
+<div class="h-full bg-primary w-2/3"></div>
+</div>
+</div>
+<div class="bg-error-container/10 border border-error/20 flex flex-col items-center justify-center relative">
+<span class="text-[8px] absolute top-1 left-1 opacity-50">/sandbox/temp</span>
+<span class="material-symbols-outlined text-error text-xl">gpp_maybe</span>
+<div class="mt-1 h-1 w-8 bg-error/20 rounded-full"></div>
+</div>
+<div class="bg-surface-container-high flex flex-col items-center justify-center relative">
+<span class="text-[8px] absolute top-1 left-1 opacity-50">/sandbox/bin</span>
+<span class="material-symbols-outlined text-outline-variant text-xl">lock_open</span>
+</div>
+<div class="bg-surface-container-high flex flex-col items-center justify-center relative">
+<span class="text-[8px] absolute top-1 left-1 opacity-50">/sandbox/log</span>
+<span class="material-symbols-outlined text-primary text-xl">lock</span>
+</div>
+</div>
+</div>
+<div class="mt-4 flex flex-col gap-2">
+<div class="flex justify-between text-[10px]">
+<span class="text-on-surface-variant">Active File Locks:</span>
+<span class="text-primary">12 Active</span>
+</div>
+<div class="flex justify-between text-[10px]">
+<span class="text-on-surface-variant">IO Isolation:</span>
+<span class="text-tertiary">99.8%</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Terminal / CLI Log Stream -->
+<div class="lg:col-span-9 flex flex-col gap-6">
+<div class="bg-[#060e20] flex-1 min-h-[500px] flex flex-col relative overflow-hidden group">
+<!-- Terminal Header -->
+<div class="bg-[#131b2e] px-4 py-2 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="flex gap-1.5">
+<div class="w-2.5 h-2.5 rounded-full bg-error/40"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-tertiary/40"></div>
+<div class="w-2.5 h-2.5 rounded-full bg-primary/40"></div>
+</div>
+<span class="ml-4 text-[10px] font-mono text-on-surface-variant uppercase tracking-widest">AETHER_CORP_01 : SANDBOX_LOG_STREAM</span>
+</div>
+<div class="flex items-center gap-4 text-[10px] font-mono">
+<span class="text-primary flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span> LIVE</span>
+<span class="text-on-surface-variant">SESSION: 8B-F22</span>
+</div>
+</div>
+<!-- Terminal Body -->
+<div class="flex-1 p-6 font-mono text-xs leading-relaxed overflow-y-auto scrollbar-hide space-y-1">
+<p class="text-on-surface-variant/40">[2024-10-24 14:22:01] System initializing sandbox protocol v4.2...</p>
+<p class="text-primary">[OK] Kernel isolation active.</p>
+<p class="text-primary">[OK] Memory zero-page protection enabled.</p>
+<p class="text-on-surface-variant/60">[2024-10-24 14:22:05] Agent 'SENTINEL_01' spawned in /sandbox/usr</p>
+<p class="text-on-surface-variant/60">[2024-10-24 14:22:08] SENTINEL_01: Requesting write access to /sandbox/temp/buffer.tmp</p>
+<p class="text-tertiary">[ALLOW] Write permitted (temp volume).</p>
+<p class="text-on-surface-variant/60">[2024-10-24 14:22:15] SENTINEL_01: syscall(SYS_socket, AF_INET, SOCK_STREAM, 0)</p>
+<p class="text-on-surface-variant/60">[2024-10-24 14:22:15] SENTINEL_01: connect(3, {sa_family=AF_INET, sin_port=htons(443), sin_addr=inet_addr("10.0.4.12")}, 16)</p>
+<p class="text-tertiary">[MONITOR] Network egress detected. Destination verified.</p>
+<p class="text-on-surface-variant/60">[2024-10-24 14:22:20] SENTINEL_01: Generating audit hash... SHA-256: 4e3b...f2a1</p>
+<p class="text-on-surface-variant/40 mt-4">--- BUFFER GAP ---</p>
+<p class="text-error bg-error/10 px-2 py-1 flex items-center gap-2 mt-2">
+<span class="material-symbols-outlined text-sm">warning</span>
+                                [CRITICAL] [14:23:44] SENTINEL_01: Attempting unauthorized breakout!
+                            </p>
+<p class="text-error font-bold ml-4">syscall(SYS_ptrace, PTRACE_TRACEME, 0, 0, 0)</p>
+<p class="text-error font-bold ml-4">ACTION: SANDBOX_HALT_REJECTED</p>
+<p class="text-on-surface-variant/60 mt-2">[2024-10-24 14:23:45] Security kernel blocking PTRACE request. Isolation maintained.</p>
+<p class="text-error font-bold ml-4">ALERT: Signature match 'ESCAPE_ATTEMPT_V3'</p>
+<p class="text-primary mt-2">-- System Auto-Recovery: Resetting Environment Pointers --</p>
+<p class="text-on-surface-variant/60">[2024-10-24 14:24:01] Re-establishing memory boundaries...</p>
+<p class="text-on-surface-variant/60">[2024-10-24 14:24:02] SENTINEL_01 process quarantined to CPU_CORE_4 (Limited Mode)</p>
+<p class="text-primary">[OK] Sandbox integrity restored.</p>
+<div class="inline-block w-2 h-4 bg-primary animate-pulse ml-1 align-middle"></div>
+</div>
+<!-- Terminal Footer -->
+<div class="absolute bottom-0 w-full p-4 bg-gradient-to-t from-[#060e20] to-transparent pointer-events-none"></div>
+</div>
+<!-- Bottom Stat Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="bg-surface-container-high p-4 flex items-center gap-4">
+<div class="w-12 h-12 bg-primary/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">gavel</span>
+</div>
+<div>
+<p class="text-xs text-on-surface-variant">Breach Attempts</p>
+<p class="text-xl font-headline font-bold text-error">04 <span class="text-[10px] font-normal text-on-surface-variant/60">Last 24h</span></p>
+</div>
+</div>
+<div class="bg-surface-container-high p-4 flex items-center gap-4">
+<div class="w-12 h-12 bg-tertiary/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary">speed</span>
+</div>
+<div>
+<p class="text-xs text-on-surface-variant">Sandbox Overhead</p>
+<p class="text-xl font-headline font-bold text-on-surface">1.2ms <span class="text-[10px] font-normal text-on-surface-variant/60">Latency</span></p>
+</div>
+</div>
+<div class="bg-surface-container-high p-4 flex items-center gap-4">
+<div class="w-12 h-12 bg-primary/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">data_usage</span>
+</div>
+<div>
+<p class="text-xs text-on-surface-variant">Isolation Level</p>
+<p class="text-xl font-headline font-bold text-on-surface">LEVEL_5 <span class="text-[10px] font-normal text-primary">MAXIMUM</span></p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Detailed Event Table Section -->
+<section class="space-y-4">
+<div class="flex items-center justify-between">
+<h2 class="text-xl font-headline font-bold text-on-surface">Violation Forensics</h2>
+<span class="text-xs text-on-surface-variant font-mono">Viewing 4/4 Critical Events</span>
+</div>
+<div class="bg-surface-container overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-high text-[10px] uppercase tracking-widest text-on-surface-variant font-headline">
+<th class="px-6 py-3">Timestamp</th>
+<th class="px-6 py-3">Entity</th>
+<th class="px-6 py-3">Violation Type</th>
+<th class="px-6 py-3">Severity</th>
+<th class="px-6 py-3">Target Path</th>
+<th class="px-6 py-3 text-right">Action</th>
+</tr>
+</thead>
+<tbody class="text-xs font-mono">
+<tr class="hover:bg-surface-container-high transition-colors">
+<td class="px-6 py-4 text-on-surface-variant">14:23:44.122</td>
+<td class="px-6 py-4 text-primary">SENTINEL_01</td>
+<td class="px-6 py-4">SYS_PTRACE_ESCAPE</td>
+<td class="px-6 py-4">
+<span class="px-2 py-0.5 bg-error/10 text-error text-[10px]">CRITICAL</span>
+</td>
+<td class="px-6 py-4 text-on-surface-variant">/kernel/mem</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary hover:underline">REPLAY</button>
+</td>
+</tr>
+<tr class="bg-surface-container-low/30 hover:bg-surface-container-high transition-colors">
+<td class="px-6 py-4 text-on-surface-variant">13:10:02.894</td>
+<td class="px-6 py-4 text-primary">NEURAL_V2</td>
+<td class="px-6 py-4">NET_EGRESS_BLOCK</td>
+<td class="px-6 py-4">
+<span class="px-2 py-0.5 bg-tertiary/10 text-tertiary text-[10px]">MEDIUM</span>
+</td>
+<td class="px-6 py-4 text-on-surface-variant">external:8080</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary hover:underline">REPLAY</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-high transition-colors">
+<td class="px-6 py-4 text-on-surface-variant">11:45:12.001</td>
+<td class="px-6 py-4 text-primary">AETHER_X</td>
+<td class="px-6 py-4">FILE_SYSTEM_PROBE</td>
+<td class="px-6 py-4">
+<span class="px-2 py-0.5 bg-secondary-container text-secondary text-[10px]">LOW</span>
+</td>
+<td class="px-6 py-4 text-on-surface-variant">/etc/hosts</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary hover:underline">REPLAY</button>
+</td>
+</tr>
+<tr class="bg-surface-container-low/30 hover:bg-surface-container-high transition-colors">
+<td class="px-6 py-4 text-on-surface-variant">09:12:33.455</td>
+<td class="px-6 py-4 text-primary">SENTINEL_01</td>
+<td class="px-6 py-4">CPU_QUOTA_BREACH</td>
+<td class="px-6 py-4">
+<span class="px-2 py-0.5 bg-tertiary/10 text-tertiary text-[10px]">MEDIUM</span>
+</td>
+<td class="px-6 py-4 text-on-surface-variant">Core 4: 98%</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary hover:underline">REPLAY</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</main>
+<!-- Visual Polish: Data Noise Overlay -->
+<div class="fixed inset-0 pointer-events-none opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]"></div>
+</body></html>

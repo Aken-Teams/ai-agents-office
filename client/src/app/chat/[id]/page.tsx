@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AuthProvider, useAuth } from '../../components/AuthProvider';
 import Navbar from '../../components/Navbar';
+import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 
 // Direct connection to Express for SSE streaming.
 // Next.js rewrites proxy buffers the entire response, preventing real-time updates.
@@ -130,6 +131,7 @@ function ChatContent() {
   const [lastUsage, setLastUsage] = useState<{ inputTokens: number; outputTokens: number; model: string } | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [agentTasks, setAgentTasks] = useState<AgentTask[]>([]);
+  const sidebarMargin = useSidebarMargin();
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -460,7 +462,7 @@ function ChatContent() {
     <div className="h-screen bg-surface-container-lowest overflow-hidden">
       <Navbar />
 
-      <div className="ml-64 h-screen flex overflow-hidden">
+      <div className={`${sidebarMargin} h-screen flex overflow-hidden transition-all duration-300`}>
         {/* === Central Chat Area === */}
         <section className="flex flex-col flex-1 min-h-0">
           {/* Title Bar */}
