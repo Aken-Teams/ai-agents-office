@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
-import styles from '../login/login.module.css';
 
 function RegisterForm() {
   const { register } = useAuth();
@@ -30,60 +29,158 @@ function RegisterForm() {
   }
 
   return (
-    <div className={styles.container}>
-      <div className={styles.card}>
-        <div className={styles.header}>
-          <div className={styles.logo}>AI</div>
-          <h1>Create Account</h1>
-          <p>Start generating documents with AI</p>
-        </div>
+    <div className="bg-surface-container-lowest text-on-surface font-body min-h-screen flex flex-col items-center justify-center p-6 overflow-hidden relative selection:bg-primary/30">
+      {/* Background Decoration */}
+      <div className="absolute inset-0 bg-pattern pointer-events-none opacity-40" />
+      <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-[-5%] left-[-5%] w-[30%] h-[30%] bg-tertiary/5 rounded-full blur-[100px] pointer-events-none" />
 
-        <form onSubmit={handleSubmit} className={styles.form}>
-          {error && <div className={styles.error}>{error}</div>}
+      {/* Main Container */}
+      <main className="w-full max-w-6xl flex flex-col md:flex-row gap-0 shadow-2xl z-10">
+        {/* Left Side: Branding */}
+        <section className="hidden md:flex flex-col justify-between p-12 w-1/2 bg-surface-container-low relative overflow-hidden">
+          <div className="space-y-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 cyber-gradient flex items-center justify-center rounded">
+                <span className="material-symbols-outlined text-on-primary">terminal</span>
+              </div>
+              <div>
+                <h1 className="font-headline text-2xl font-bold tracking-tighter text-on-surface">
+                  AI Agents Office
+                </h1>
+                <p className="font-label text-[10px] uppercase tracking-[0.2em] text-primary">
+                  智能文件平台
+                </p>
+              </div>
+            </div>
 
-          <div className={styles.field}>
-            <label>Display Name</label>
-            <input
-              type="text"
-              value={displayName}
-              onChange={e => setDisplayName(e.target.value)}
-              placeholder="Your name"
-              required
-            />
+            <div className="space-y-6 mt-16">
+              <h2 className="font-headline text-4xl font-light leading-tight">
+                加入 <span className="text-primary font-medium">AI 文件工作流</span>
+                <br />開始智能協作
+              </h2>
+              <p className="text-on-surface-variant font-body leading-relaxed max-w-md">
+                建立你的帳號，即可使用 AI 代理團隊自動生成簡報、文件、報表與 PDF，大幅提升工作效率。
+              </p>
+            </div>
           </div>
 
-          <div className={styles.field}>
-            <label>Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="your@email.com"
-              required
-            />
+          <div className="space-y-4">
+            <div className="flex items-center gap-4 p-4 bg-surface-container rounded-lg">
+              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              <span className="font-label text-xs uppercase tracking-widest text-on-surface-variant">
+                系統狀態：運行中
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <div className="h-1 w-8 bg-primary" />
+              <div className="h-1 w-4 bg-surface-variant" />
+              <div className="h-1 w-4 bg-surface-variant" />
+            </div>
           </div>
 
-          <div className={styles.field}>
-            <label>Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="At least 6 characters"
-              minLength={6}
-              required
-            />
+          {/* Technical Decor */}
+          <div className="absolute bottom-12 right-12 opacity-10 pointer-events-none">
+            <span className="material-symbols-outlined text-[120px]">group</span>
           </div>
+        </section>
 
-          <button type="submit" className="btn-primary" disabled={loading} style={{ width: '100%', padding: '12px' }}>
-            {loading ? 'Creating account...' : 'Create Account'}
-          </button>
-        </form>
+        {/* Right Side: Register Form */}
+        <section className="flex-1 bg-surface-container-high p-8 md:p-16 flex flex-col justify-center">
+          <div className="max-w-md mx-auto w-full">
+            {/* Mobile Logo */}
+            <div className="md:hidden flex items-center gap-3 mb-10">
+              <div className="w-8 h-8 cyber-gradient flex items-center justify-center rounded">
+                <span className="material-symbols-outlined text-on-primary text-sm">terminal</span>
+              </div>
+              <span className="font-headline text-xl font-bold tracking-tighter">AI Agents Office</span>
+            </div>
 
-        <p className={styles.footer}>
-          Already have an account? <Link href="/login">Sign in</Link>
-        </p>
-      </div>
+            <div className="mb-10">
+              <h3 className="font-headline text-2xl font-bold mb-2">建立帳號</h3>
+              <p className="text-on-surface-variant text-sm">註冊以開始使用 AI 智能文件生成</p>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <div className="bg-error-container/30 border border-error/20 text-on-error-container px-4 py-3 rounded text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant ml-1">
+                  顯示名稱
+                </label>
+                <input
+                  className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
+                  type="text"
+                  value={displayName}
+                  onChange={e => setDisplayName(e.target.value)}
+                  placeholder="你的名字"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant ml-1">
+                  電子信箱
+                </label>
+                <input
+                  className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant ml-1">
+                  密碼
+                </label>
+                <input
+                  className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="至少 6 個字元"
+                  minLength={6}
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-xs py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? '建立中...' : '建立帳號'}
+              </button>
+            </form>
+
+            {/* Toggle to Login */}
+            <div className="mt-12 flex flex-col items-center gap-6">
+              <div className="w-full h-px bg-outline-variant/20 relative">
+                <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-container-high px-4 text-[10px] uppercase tracking-widest text-outline">
+                  已有帳號？
+                </span>
+              </div>
+              <Link
+                href="/login"
+                className="text-xs font-label text-on-surface-variant hover:text-primary transition-colors flex items-center gap-2 group"
+              >
+                返回登入
+                <span className="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">
+                  arrow_forward
+                </span>
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }
