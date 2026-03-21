@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Login | CyberLogic Core OS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-primary": "#00363a",
+                        "tertiary": "#7bd0ff",
+                        "error-container": "#93000a",
+                        "tertiary-fixed-dim": "#7bd0ff",
+                        "on-secondary-fixed": "#111c2d",
+                        "on-error": "#690005",
+                        "on-surface-variant": "#c5c6cd",
+                        "secondary-container": "#3e495d",
+                        "tertiary-fixed": "#c4e7ff",
+                        "on-tertiary-fixed": "#001e2c",
+                        "surface-container": "#171f33",
+                        "surface-container-low": "#131b2e",
+                        "on-tertiary-fixed-variant": "#004c69",
+                        "primary-fixed-dim": "#00dbe9",
+                        "primary": "#00dbe9",
+                        "secondary-fixed": "#d8e3fb",
+                        "on-primary-container": "#009099",
+                        "on-tertiary-container": "#008cbd",
+                        "on-tertiary": "#00354a",
+                        "on-secondary-fixed-variant": "#3c475a",
+                        "secondary-fixed-dim": "#bcc7de",
+                        "primary-fixed": "#7df4ff",
+                        "surface-container-lowest": "#060e20",
+                        "surface-container-high": "#222a3d",
+                        "tertiary-container": "#001c29",
+                        "on-secondary-container": "#aeb9d0",
+                        "secondary": "#bcc7de",
+                        "on-primary-fixed": "#002022",
+                        "on-secondary": "#263143",
+                        "on-error-container": "#ffdad6",
+                        "surface-tint": "#00dbe9",
+                        "surface-variant": "#2d3449",
+                        "outline": "#8f9097",
+                        "on-surface": "#dae2fd",
+                        "error": "#ffb4ab",
+                        "surface-dim": "#0b1326",
+                        "on-primary-fixed-variant": "#004f54",
+                        "surface": "#0b1326",
+                        "surface-container-highest": "#2d3449",
+                        "inverse-primary": "#006970",
+                        "outline-variant": "#44474d",
+                        "inverse-on-surface": "#283044",
+                        "on-background": "#dae2fd",
+                        "background": "#0b1326",
+                        "surface-bright": "#31394d",
+                        "primary-container": "#001d1f",
+                        "inverse-surface": "#dae2fd"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(45, 52, 73, 0.6);
+            backdrop-filter: blur(12px);
+        }
+        .cyber-gradient {
+            background: linear-gradient(135deg, #00dbe9 0%, #009099 100%);
+        }
+        .bg-pattern {
+            background-image: radial-gradient(circle at 2px 2px, rgba(0, 219, 233, 0.05) 1px, transparent 0);
+            background-size: 32px 32px;
+        }
+    </style>
+</head>
+<body class="bg-surface-container-lowest text-on-surface font-body selection:bg-primary/30 min-h-screen flex flex-col items-center justify-center p-6 overflow-hidden relative">
+<!-- Background Decoration -->
+<div class="absolute inset-0 bg-pattern pointer-events-none opacity-40"></div>
+<div class="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px] pointer-events-none"></div>
+<div class="absolute bottom-[-5%] left-[-5%] w-[30%] h-[30%] bg-tertiary/5 rounded-full blur-[100px] pointer-events-none"></div>
+<!-- Main Container -->
+<main class="w-full max-w-6xl flex flex-col md:flex-row gap-0 shadow-2xl z-10">
+<!-- Left Side: Branding & Identity -->
+<section class="hidden md:flex flex-col justify-between p-12 w-1/2 bg-surface-container-low relative">
+<div class="space-y-8">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 cyber-gradient flex items-center justify-center rounded">
+<span class="material-symbols-outlined text-on-primary" data-icon="terminal">terminal</span>
+</div>
+<div>
+<h1 class="font-headline text-2xl font-bold tracking-tighter text-on-surface">CyberLogic</h1>
+<p class="font-label text-[10px] uppercase tracking-[0.2em] text-primary">Core OS</p>
+</div>
+</div>
+<div class="space-y-6 mt-16">
+<h2 class="font-headline text-4xl font-light leading-tight">
+                        Orchestrating <span class="text-primary font-medium">Autonomous Intelligence</span> for Enterprise scale.
+                    </h2>
+<p class="text-on-surface-variant font-body leading-relaxed max-w-md">
+                        The Sovereign Observer provides a high-precision instrument panel for monitoring, generating, and securing agent-driven documentation workflows.
+                    </p>
+</div>
+</div>
+<div class="space-y-4">
+<div class="flex items-center gap-4 p-4 bg-surface-container rounded-lg">
+<div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+<span class="font-label text-xs uppercase tracking-widest text-on-surface-variant">System Status: Optimal</span>
+</div>
+<div class="flex gap-2">
+<div class="h-1 w-8 bg-primary"></div>
+<div class="h-1 w-4 bg-surface-variant"></div>
+<div class="h-1 w-4 bg-surface-variant"></div>
+</div>
+</div>
+<!-- Technical Decor -->
+<div class="absolute bottom-12 right-12 opacity-10 pointer-events-none">
+<span class="material-symbols-outlined text-[120px]" data-icon="security">security</span>
+</div>
+</section>
+<!-- Right Side: Interaction (Form) -->
+<section class="flex-1 bg-surface-container-high p-8 md:p-16 flex flex-col justify-center">
+<div class="max-w-md mx-auto w-full">
+<!-- Mobile Logo -->
+<div class="md:hidden flex items-center gap-3 mb-10">
+<div class="w-8 h-8 cyber-gradient flex items-center justify-center rounded">
+<span class="material-symbols-outlined text-on-primary text-sm" data-icon="terminal">terminal</span>
+</div>
+<span class="font-headline text-xl font-bold tracking-tighter">CyberLogic</span>
+</div>
+<div class="mb-10">
+<h3 class="font-headline text-2xl font-bold mb-2">Access Portal</h3>
+<p class="text-on-surface-variant text-sm">Initialize secure connection to agent documents.</p>
+</div>
+<!-- Form -->
+<form class="space-y-6">
+<div class="space-y-1.5">
+<label class="font-label text-[10px] uppercase tracking-widest text-on-surface-variant ml-1">Organization ID</label>
+<div class="relative">
+<input class="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-on-secondary-fixed-variant" placeholder="e.g. CL-7742-ALPHA" type="text"/>
+<div class="absolute right-4 top-1/2 -translate-y-1/2">
+<span class="material-symbols-outlined text-xs text-primary/40" data-icon="hub">hub</span>
+</div>
+</div>
+</div>
+<div class="space-y-1.5">
+<label class="font-label text-[10px] uppercase tracking-widest text-on-surface-variant ml-1">Email Identifier</label>
+<input class="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-on-secondary-fixed-variant" placeholder="operator@cyberlogic.io" type="email"/>
+</div>
+<div class="space-y-1.5">
+<div class="flex justify-between items-center">
+<label class="font-label text-[10px] uppercase tracking-widest text-on-surface-variant ml-1">Access Cipher</label>
+<a class="text-[10px] uppercase tracking-widest text-primary hover:text-tertiary transition-colors" href="#">Forgot Cipher?</a>
+</div>
+<input class="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-on-secondary-fixed-variant" placeholder="••••••••••••" type="password"/>
+</div>
+<div class="flex items-center gap-3 py-2">
+<div class="relative flex items-center">
+<input class="w-4 h-4 bg-surface-container-highest border-none rounded-sm text-primary focus:ring-0 focus:ring-offset-0" id="remember" type="checkbox"/>
+</div>
+<label class="text-xs text-on-surface-variant cursor-pointer select-none" for="remember">Maintain persistence across sessions</label>
+</div>
+<button class="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-xs py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all" type="submit">
+                        Establish Connection
+                    </button>
+</form>
+<!-- Toggle -->
+<div class="mt-12 flex flex-col items-center gap-6">
+<div class="w-full h-px bg-outline-variant/20 relative">
+<span class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-container-high px-4 text-[10px] uppercase tracking-widest text-on-secondary-fixed-variant">New Operator?</span>
+</div>
+<button class="text-xs font-label text-on-surface-variant hover:text-primary transition-colors flex items-center gap-2 group">
+                        Create Agent Account
+                        <span class="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer Stats -->
+<footer class="mt-8 flex gap-8 z-10 hidden md:flex">
+<div class="flex flex-col gap-1">
+<span class="text-[9px] uppercase tracking-widest text-on-secondary-fixed-variant">Active Agents</span>
+<span class="font-headline font-bold text-tertiary">14,202</span>
+</div>
+<div class="flex flex-col gap-1 border-l border-outline-variant/20 pl-8">
+<span class="text-[9px] uppercase tracking-widest text-on-secondary-fixed-variant">Encryption</span>
+<span class="font-headline font-bold text-on-surface">AES-256-GCM</span>
+</div>
+<div class="flex flex-col gap-1 border-l border-outline-variant/20 pl-8">
+<span class="text-[9px] uppercase tracking-widest text-on-secondary-fixed-variant">Region</span>
+<span class="font-headline font-bold text-on-surface">US-EAST-ALPHA</span>
+</div>
+</footer>
+</body></html>

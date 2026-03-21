@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CyberLogic | Sovereign Observer</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-primary": "#00363a",
+              "tertiary": "#7bd0ff",
+              "error-container": "#93000a",
+              "tertiary-fixed-dim": "#7bd0ff",
+              "on-secondary-fixed": "#111c2d",
+              "on-error": "#690005",
+              "on-surface-variant": "#c5c6cd",
+              "secondary-container": "#3e495d",
+              "tertiary-fixed": "#c4e7ff",
+              "on-tertiary-fixed": "#001e2c",
+              "surface-container": "#171f33",
+              "surface-container-low": "#131b2e",
+              "on-tertiary-fixed-variant": "#004c69",
+              "primary-fixed-dim": "#00dbe9",
+              "primary": "#00dbe9",
+              "secondary-fixed": "#d8e3fb",
+              "on-primary-container": "#009099",
+              "on-tertiary-container": "#008cbd",
+              "on-tertiary": "#00354a",
+              "on-secondary-fixed-variant": "#3c475a",
+              "secondary-fixed-dim": "#bcc7de",
+              "primary-fixed": "#7df4ff",
+              "surface-container-lowest": "#060e20",
+              "surface-container-high": "#222a3d",
+              "tertiary-container": "#001c29",
+              "on-secondary-container": "#aeb9d0",
+              "secondary": "#bcc7de",
+              "on-primary-fixed": "#002022",
+              "on-secondary": "#263143",
+              "on-error-container": "#ffdad6",
+              "surface-tint": "#00dbe9",
+              "surface-variant": "#2d3449",
+              "outline": "#8f9097",
+              "on-surface": "#dae2fd",
+              "error": "#ffb4ab",
+              "surface-dim": "#0b1326",
+              "on-primary-fixed-variant": "#004f54",
+              "surface": "#0b1326",
+              "surface-container-highest": "#2d3449",
+              "inverse-primary": "#006970",
+              "outline-variant": "#44474d",
+              "inverse-on-surface": "#283044",
+              "on-background": "#dae2fd",
+              "background": "#0b1326",
+              "surface-bright": "#31394d",
+              "primary-container": "#001d1f",
+              "inverse-surface": "#dae2fd"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .glass-panel {
+            background: rgba(45, 52, 73, 0.7);
+            backdrop-filter: blur(12px);
+        }
+        .glow-button {
+            background: linear-gradient(135deg, #00dbe9 0%, #009099 100%);
+        }
+        .pulse-tertiary {
+            box-shadow: 0 0 0 0 rgba(123, 208, 255, 0.7);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(123, 208, 255, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(123, 208, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(123, 208, 255, 0); }
+        }
+    </style>
+</head>
+<body class="bg-surface-container-lowest text-on-surface font-body selection:bg-primary/30 selection:text-primary overflow-hidden">
+<!-- SideNavBar (Shared Component) -->
+<aside class="h-screen w-64 fixed left-0 top-0 border-r-0 bg-[#0b1326] dark:bg-[#060e20] flex flex-col py-6 font-['Space_Grotesk'] text-sm tracking-tight z-50">
+<div class="px-6 mb-8">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 bg-primary/20 flex items-center justify-center rounded-lg">
+<span class="material-symbols-outlined text-primary" data-icon="terminal">terminal</span>
+</div>
+<div>
+<h1 class="text-xl font-bold tracking-tighter text-[#dae2fd]">CyberLogic</h1>
+<p class="text-[10px] uppercase tracking-[0.2em] text-primary">Core OS</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 px-4 space-y-1">
+<!-- Dashboard Active -->
+<a class="flex items-center gap-3 px-3 py-2.5 text-[#00dbe9] bg-[#171f33] border-l-2 border-[#00dbe9] transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-[#c5c6cd] hover:text-[#dae2fd] hover:bg-[#171f33]/50 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+<span>My Documents</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-[#c5c6cd] hover:text-[#dae2fd] hover:bg-[#171f33]/50 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="extension">extension</span>
+<span>Skills Hub</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-[#c5c6cd] hover:text-[#dae2fd] hover:bg-[#171f33]/50 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span>Billing</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 text-[#c5c6cd] hover:text-[#dae2fd] hover:bg-[#171f33]/50 transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<div class="px-6 mt-6">
+<button class="w-full glow-button py-3 text-on-primary font-bold rounded flex items-center justify-center gap-2 text-xs uppercase tracking-widest active:scale-[0.99] opacity-90 transition-all">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+                New Agent
+            </button>
+</div>
+<div class="px-4 mt-auto pt-6 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 text-[#c5c6cd] hover:text-[#dae2fd] transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span>Help</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-[#c5c6cd] hover:text-[#dae2fd] transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span>Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-64 min-h-screen flex flex-col">
+<!-- TopNavBar (Shared Component) -->
+<header class="fixed top-0 right-0 left-64 h-16 bg-[#0b1326]/80 backdrop-blur-xl flex justify-between items-center px-8 w-full z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
+<div class="flex items-center gap-8">
+<span class="text-lg font-black text-[#dae2fd] font-headline">Sovereign Observer</span>
+<div class="flex items-center gap-6 font-['Space_Grotesk'] font-medium text-[10px] uppercase tracking-widest">
+<span class="text-[#7bd0ff] font-bold">Sandbox: /usr/bin/local</span>
+<span class="text-[#c5c6cd] hover:text-[#00dbe9] cursor-pointer transition-colors">Node: Alpha-7</span>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-full">
+<div class="w-2 h-2 rounded-full bg-primary pulse-tertiary"></div>
+<span class="text-[10px] text-primary font-bold tracking-widest uppercase">Agent Active</span>
+</div>
+<div class="flex items-center gap-4 text-on-surface-variant">
+<span class="material-symbols-outlined hover:text-primary cursor-pointer transition-colors" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined hover:text-primary cursor-pointer transition-colors" data-icon="dns">dns</span>
+<span class="material-symbols-outlined hover:text-primary cursor-pointer transition-colors" data-icon="account_tree">account_tree</span>
+</div>
+<div class="w-8 h-8 rounded-lg overflow-hidden border border-outline/20">
+<img class="w-full h-full object-cover" data-alt="Cybernetic stylized profile avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD4BHjOywL0EPjObSDTFMxEKzG2NFcEjHAwvnA881HZG2mc7PI5IznaLXmsOYuiHu_Z4kKa5s8Pmn1lL3BYjUyAsDkaPl-jInvhD3zTYT1GMfrw6m6ixwrzuXLE1V2wGUwb0dIC7bfvfFbrcpJz562a-vAuOqwCciE8SkU4ZYkKZhN9jKuHAMkycC4lZbx_IPiKz3Ii_FzLwhiMAgbrJygAHGeRjVYPmH1zxCH1zoRfksiKmUMpB38nXpcls8jsLnmzzlzcCekEXM0"/>
+</div>
+</div>
+</header>
+<!-- Content Canvas -->
+<div class="mt-16 p-8 flex-1 grid grid-cols-12 gap-6 overflow-y-auto no-scrollbar bg-surface-container-lowest">
+<!-- Left Column: Command & Logs -->
+<div class="col-span-8 flex flex-col gap-6">
+<!-- Session Context Bento Section -->
+<div class="grid grid-cols-3 gap-6">
+<div class="bg-surface-container p-6 rounded-lg">
+<p class="text-[10px] uppercase tracking-widest text-on-surface-variant mb-1">Session Tokens</p>
+<div class="flex items-end gap-2">
+<span class="text-3xl font-headline font-bold text-on-surface">14.2k</span>
+<span class="text-xs text-primary mb-1">/ 50k</span>
+</div>
+<div class="w-full h-1 bg-surface-container-highest mt-4 overflow-hidden rounded-full">
+<div class="h-full bg-primary w-[28%]"></div>
+</div>
+</div>
+<div class="bg-surface-container p-6 rounded-lg">
+<p class="text-[10px] uppercase tracking-widest text-on-surface-variant mb-1">CLI Status</p>
+<div class="flex items-center gap-2">
+<span class="text-3xl font-headline font-bold text-on-surface">IDLE</span>
+<span class="material-symbols-outlined text-tertiary" data-icon="check_circle">check_circle</span>
+</div>
+<p class="text-[10px] text-on-surface-variant mt-3 font-mono">PID: 40922 | Latency: 12ms</p>
+</div>
+<div class="bg-surface-container p-6 rounded-lg">
+<p class="text-[10px] uppercase tracking-widest text-on-surface-variant mb-1">Sandbox Storage</p>
+<div class="flex items-center gap-2">
+<span class="text-3xl font-headline font-bold text-on-surface">1.4 GB</span>
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="storage">storage</span>
+</div>
+<p class="text-[10px] text-on-surface-variant mt-3 font-mono">Location: /tmp/claude_runtime</p>
+</div>
+</div>
+<!-- Main Chat/Prompting Interface -->
+<div class="bg-surface-container flex-1 rounded-lg flex flex-col min-h-[500px] shadow-2xl relative overflow-hidden">
+<!-- Chat Header -->
+<div class="px-6 py-4 bg-surface-container-high flex justify-between items-center">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary" data-icon="forum">forum</span>
+<span class="text-xs font-bold uppercase tracking-widest">Neural Command Interface</span>
+</div>
+<div class="flex gap-2">
+<span class="px-2 py-0.5 bg-surface-container-highest text-[9px] uppercase tracking-tighter text-on-surface-variant rounded">v4.2.0-stable</span>
+</div>
+</div>
+<!-- Conversation Thread -->
+<div class="flex-1 p-8 space-y-8 overflow-y-auto no-scrollbar">
+<!-- Agent Msg -->
+<div class="flex gap-4 max-w-2xl">
+<div class="w-8 h-8 rounded bg-primary/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="smart_toy">smart_toy</span>
+</div>
+<div class="space-y-2">
+<p class="text-sm leading-relaxed text-on-surface-variant">Initialized session. I have access to the `/usr/bin/sandbox` environment and all office automation tools. How shall we proceed with the document generation task?</p>
+</div>
+</div>
+<!-- User Msg -->
+<div class="flex gap-4 max-w-2xl ml-auto flex-row-reverse">
+<div class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-surface text-sm" data-icon="person">person</span>
+</div>
+<div class="bg-surface-container-high p-4 rounded-lg">
+<p class="text-sm leading-relaxed">Generate a quarterly security audit report in PDF format based on the logs in the sandbox. Then create a PPT summary for the stakeholders.</p>
+</div>
+</div>
+<!-- Agent Thinking -->
+<div class="flex gap-4 max-w-2xl">
+<div class="w-8 h-8 rounded bg-primary/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-sm" data-icon="terminal">terminal</span>
+</div>
+<div class="space-y-4 w-full">
+<div class="flex items-center gap-2">
+<span class="text-[10px] font-mono text-tertiary">EXECUTING: sandbox_explorer.sh</span>
+<div class="flex gap-1">
+<div class="w-1 h-1 bg-tertiary rounded-full animate-bounce"></div>
+<div class="w-1 h-1 bg-tertiary rounded-full animate-bounce delay-75"></div>
+<div class="w-1 h-1 bg-tertiary rounded-full animate-bounce delay-150"></div>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-4 font-mono text-[11px] text-on-surface-variant border-l-2 border-primary/20">
+<p>$ parsing system_logs_q3.db...</p>
+<p>$ found 4,219 entry points.</p>
+<p>$ initializing 'CyberLogic_PDF_Engine'...</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Input Area -->
+<div class="p-6 bg-surface-container-high">
+<div class="relative group">
+<input class="w-full bg-surface-container-highest border-0 focus:ring-1 focus:ring-primary/40 rounded py-4 pl-4 pr-16 text-sm placeholder:text-on-secondary-container transition-all" placeholder="Prompt Your Agent..." type="text"/>
+<button class="absolute right-2 top-2 bottom-2 aspect-square glow-button rounded flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined" data-icon="send">send</span>
+</button>
+</div>
+<div class="mt-3 flex gap-4 text-[10px] text-on-surface-variant uppercase tracking-widest font-medium">
+<span class="flex items-center gap-1 hover:text-primary cursor-pointer"><span class="material-symbols-outlined text-xs" data-icon="attach_file">attach_file</span> Attach Context</span>
+<span class="flex items-center gap-1 hover:text-primary cursor-pointer"><span class="material-symbols-outlined text-xs" data-icon="history">history</span> Task History</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Status & Tools -->
+<div class="col-span-4 flex flex-col gap-6">
+<!-- Current Task & Progress (Gantt-like) -->
+<div class="bg-surface-container p-6 rounded-lg">
+<div class="flex justify-between items-center mb-6">
+<h3 class="text-xs font-bold uppercase tracking-widest">Active Task Flow</h3>
+<span class="text-[10px] px-2 py-0.5 bg-tertiary/20 text-tertiary rounded">IN PROGRESS</span>
+</div>
+<div class="space-y-6">
+<!-- Step 1 -->
+<div class="relative pl-6 border-l border-primary">
+<div class="absolute -left-[5px] top-0 w-2 h-2 rounded-full bg-primary"></div>
+<div class="flex justify-between items-start mb-1">
+<span class="text-xs font-semibold text-on-surface">Data Ingestion</span>
+<span class="text-[10px] text-primary">COMPLETED</span>
+</div>
+<p class="text-[10px] text-on-surface-variant">Scanning /sandbox/logs for Q3 markers.</p>
+</div>
+<!-- Step 2 -->
+<div class="relative pl-6 border-l border-primary">
+<div class="absolute -left-[5px] top-0 w-2 h-2 rounded-full bg-primary pulse-tertiary"></div>
+<div class="flex justify-between items-start mb-1">
+<span class="text-xs font-semibold text-on-surface">PDF Generation</span>
+<span class="text-[10px] text-tertiary">74%</span>
+</div>
+<div class="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[74%]"></div>
+</div>
+</div>
+<!-- Step 3 -->
+<div class="relative pl-6 border-l border-surface-container-highest">
+<div class="absolute -left-[5px] top-0 w-2 h-2 rounded-full bg-surface-container-highest"></div>
+<div class="flex justify-between items-start mb-1">
+<span class="text-xs font-semibold text-on-secondary-container">PowerPoint Synthesis</span>
+<span class="text-[10px] text-on-surface-variant">PENDING</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Agent Skills (Bento Style) -->
+<div class="bg-surface-container p-6 rounded-lg">
+<h3 class="text-xs font-bold uppercase tracking-widest mb-6">Agent Capabilities</h3>
+<div class="grid grid-cols-2 gap-3">
+<div class="bg-surface-container-high p-4 rounded flex flex-col gap-3 hover:bg-surface-variant transition-colors cursor-default">
+<span class="material-symbols-outlined text-primary" data-icon="picture_as_pdf">picture_as_pdf</span>
+<span class="text-[11px] font-bold">PDF Master</span>
+<span class="text-[9px] text-on-surface-variant">Generation &amp; OCR</span>
+</div>
+<div class="bg-surface-container-high p-4 rounded flex flex-col gap-3 hover:bg-surface-variant transition-colors cursor-default">
+<span class="material-symbols-outlined text-tertiary" data-icon="slideshow">slideshow</span>
+<span class="text-[11px] font-bold">PPT Synthesizer</span>
+<span class="text-[9px] text-on-surface-variant">Slide Deck Creation</span>
+</div>
+<div class="bg-surface-container-high p-4 rounded flex flex-col gap-3 hover:bg-surface-variant transition-colors cursor-default">
+<span class="material-symbols-outlined text-on-primary-container" data-icon="description">description</span>
+<span class="text-[11px] font-bold">Word Engine</span>
+<span class="text-[9px] text-on-surface-variant">Drafting &amp; Review</span>
+</div>
+<div class="bg-surface-container-high p-4 rounded flex flex-col gap-3 hover:bg-surface-variant transition-colors cursor-default">
+<span class="material-symbols-outlined text-outline" data-icon="data_table">data_table</span>
+<span class="text-[11px] font-bold">XLS Analyzer</span>
+<span class="text-[9px] text-on-surface-variant">Financial Modeling</span>
+</div>
+</div>
+</div>
+<!-- Sandbox Explorer (Asymmetric Visualizer) -->
+<div class="bg-surface-container-high p-6 rounded-lg flex-1 overflow-hidden flex flex-col">
+<div class="flex justify-between items-center mb-4">
+<h3 class="text-xs font-bold uppercase tracking-widest">Sandbox: /usr/bin/local</h3>
+<span class="material-symbols-outlined text-xs text-on-surface-variant hover:text-primary cursor-pointer" data-icon="refresh">refresh</span>
+</div>
+<div class="flex-1 space-y-3 font-mono text-[10px]">
+<div class="flex items-center gap-3 p-2 bg-surface-container rounded group cursor-pointer hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-sm text-tertiary" data-icon="folder_open">folder_open</span>
+<span class="flex-1 text-on-surface-variant">reports/</span>
+<span class="text-primary hidden group-hover:block">DIR</span>
+</div>
+<div class="flex items-center gap-3 p-2 bg-surface-container/50 rounded group cursor-pointer hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-sm text-primary" data-icon="article">article</span>
+<span class="flex-1 text-on-surface">security_audit_v1.pdf</span>
+<span class="text-[9px] text-on-secondary-container">2.4 MB</span>
+</div>
+<div class="flex items-center gap-3 p-2 bg-surface-container/50 rounded group cursor-pointer hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined text-sm text-on-surface-variant" data-icon="table_chart">table_chart</span>
+<span class="flex-1 text-on-surface">raw_logs_q3.csv</span>
+<span class="text-[9px] text-on-secondary-container">112 KB</span>
+</div>
+<div class="flex items-center gap-3 p-2 bg-primary/5 rounded border-l border-primary group cursor-pointer transition-colors">
+<div class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
+<span class="flex-1 text-primary">generating_presentation.pptx...</span>
+<span class="text-[9px] text-primary italic">WRITING</span>
+</div>
+<!-- Ghosting effect for more files -->
+<div class="opacity-30 flex items-center gap-3 p-2">
+<span class="material-symbols-outlined text-sm" data-icon="draft">draft</span>
+<span class="flex-1">temporary_cache_092.tmp</span>
+</div>
+</div>
+<div class="mt-4 pt-4 border-t border-outline-variant/10">
+<button class="w-full py-2 text-[10px] font-bold text-on-surface-variant hover:text-on-surface bg-surface-container-highest/50 rounded transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-xs" data-icon="download">download</span>
+                            Exfiltrate Entire Sandbox
+                        </button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Action Tooltip (Minimalist) -->
+<div class="fixed bottom-6 right-8 flex items-center gap-4 z-50">
+<div class="glass-panel px-4 py-2 rounded-full border border-outline-variant/10 shadow-2xl flex items-center gap-3">
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">System Latency: 4ms</span>
+<div class="w-px h-3 bg-outline-variant/30"></div>
+<span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Region: US-EAST-1</span>
+<div class="w-px h-3 bg-outline-variant/30"></div>
+<div class="flex items-center gap-1">
+<div class="w-1.5 h-1.5 rounded-full bg-primary"></div>
+<span class="text-[10px] font-bold uppercase tracking-widest text-primary">Sovereign Mode</span>
+</div>
+</div>
+</div>
+</body></html>

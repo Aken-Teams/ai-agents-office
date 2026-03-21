@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "on-primary": "#00363a",
+            "tertiary": "#7bd0ff",
+            "error-container": "#93000a",
+            "tertiary-fixed-dim": "#7bd0ff",
+            "on-secondary-fixed": "#111c2d",
+            "on-error": "#690005",
+            "on-surface-variant": "#c5c6cd",
+            "secondary-container": "#3e495d",
+            "tertiary-fixed": "#c4e7ff",
+            "on-tertiary-fixed": "#001e2c",
+            "surface-container": "#171f33",
+            "surface-container-low": "#131b2e",
+            "on-tertiary-fixed-variant": "#004c69",
+            "primary-fixed-dim": "#00dbe9",
+            "primary": "#00dbe9",
+            "secondary-fixed": "#d8e3fb",
+            "on-primary-container": "#009099",
+            "on-tertiary-container": "#008cbd",
+            "on-tertiary": "#00354a",
+            "on-secondary-fixed-variant": "#3c475a",
+            "secondary-fixed-dim": "#bcc7de",
+            "primary-fixed": "#7df4ff",
+            "surface-container-lowest": "#060e20",
+            "surface-container-high": "#222a3d",
+            "tertiary-container": "#001c29",
+            "on-secondary-container": "#aeb9d0",
+            "secondary": "#bcc7de",
+            "on-primary-fixed": "#002022",
+            "on-secondary": "#263143",
+            "on-error-container": "#ffdad6",
+            "surface-tint": "#00dbe9",
+            "surface-variant": "#2d3449",
+            "outline": "#8f9097",
+            "on-surface": "#dae2fd",
+            "error": "#ffb4ab",
+            "surface-dim": "#0b1326",
+            "on-primary-fixed-variant": "#004f54",
+            "surface": "#0b1326",
+            "surface-container-highest": "#2d3449",
+            "inverse-primary": "#006970",
+            "outline-variant": "#44474d",
+            "inverse-on-surface": "#283044",
+            "on-background": "#dae2fd",
+            "background": "#0b1326",
+            "surface-bright": "#31394d",
+            "primary-container": "#001d1f",
+            "inverse-surface": "#dae2fd"
+          },
+          fontFamily: {
+            "headline": ["Space Grotesk"],
+            "body": ["Inter"],
+            "label": ["Inter"]
+          },
+          borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .glass-panel {
+      background: rgba(45, 52, 73, 0.6);
+      backdrop-filter: blur(12px);
+    }
+    .primary-gradient {
+      background: linear-gradient(135deg, #00dbe9 0%, #009099 100%);
+    }
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0b1326;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #2d3449;
+    }
+  </style>
+</head>
+<body class="bg-surface-container-lowest font-body text-on-surface">
+<!-- SideNavBar Component -->
+<aside class="h-screen w-64 fixed left-0 top-0 border-r-0 bg-[#0b1326] flex flex-col py-6 font-['Space_Grotesk'] text-sm tracking-tight z-50">
+<div class="px-6 mb-10 flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="terminal">terminal</span>
+</div>
+<div>
+<h1 class="text-xl font-bold tracking-tighter text-[#dae2fd]">CyberLogic</h1>
+<p class="text-[10px] uppercase tracking-[0.2em] text-primary">Core OS</p>
+</div>
+</div>
+<nav class="flex-1 px-4 space-y-1">
+<div class="flex items-center px-3 py-2.5 rounded text-[#c5c6cd] hover:text-[#dae2fd] hover:bg-[#171f33]/50 transition-all duration-200 ease-in-out cursor-pointer group">
+<span class="material-symbols-outlined mr-3" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</div>
+<div class="flex items-center px-3 py-2.5 rounded text-[#00dbe9] bg-[#171f33] border-l-2 border-[#00dbe9] transition-all duration-200 ease-in-out cursor-pointer">
+<span class="material-symbols-outlined mr-3" data-icon="description">description</span>
+<span>My Documents</span>
+</div>
+<div class="flex items-center px-3 py-2.5 rounded text-[#c5c6cd] hover:text-[#dae2fd] hover:bg-[#171f33]/50 transition-all duration-200 ease-in-out cursor-pointer group">
+<span class="material-symbols-outlined mr-3" data-icon="extension">extension</span>
+<span>Skills Hub</span>
+</div>
+<div class="flex items-center px-3 py-2.5 rounded text-[#c5c6cd] hover:text-[#dae2fd] hover:bg-[#171f33]/50 transition-all duration-200 ease-in-out cursor-pointer group">
+<span class="material-symbols-outlined mr-3" data-icon="payments">payments</span>
+<span>Billing</span>
+</div>
+<div class="flex items-center px-3 py-2.5 rounded text-[#c5c6cd] hover:text-[#dae2fd] hover:bg-[#171f33]/50 transition-all duration-200 ease-in-out cursor-pointer group">
+<span class="material-symbols-outlined mr-3" data-icon="settings">settings</span>
+<span>Settings</span>
+</div>
+</nav>
+<div class="px-4 mt-auto space-y-1">
+<button class="w-full primary-gradient text-on-primary font-bold py-2.5 rounded-sm mb-4 flex items-center justify-center gap-2 active:scale-[0.99] opacity-90 transition-all">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+        New Agent
+      </button>
+<div class="flex items-center px-3 py-2 text-[#c5c6cd] hover:text-[#dae2fd] cursor-pointer transition-colors">
+<span class="material-symbols-outlined mr-3 text-sm" data-icon="help">help</span>
+<span>Help</span>
+</div>
+<div class="flex items-center px-3 py-2 text-[#c5c6cd] hover:text-[#dae2fd] cursor-pointer transition-colors">
+<span class="material-symbols-outlined mr-3 text-sm" data-icon="logout">logout</span>
+<span>Logout</span>
+</div>
+</div>
+</aside>
+<!-- TopNavBar Component -->
+<header class="fixed top-0 right-0 left-64 h-16 bg-[#0b1326]/80 backdrop-blur-xl flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
+<div class="flex items-center gap-8">
+<div class="flex items-center bg-surface-container rounded px-3 py-1.5 w-64">
+<span class="material-symbols-outlined text-on-surface-variant text-sm mr-2" data-icon="search">search</span>
+<input class="bg-transparent border-none text-[10px] text-on-surface focus:ring-0 placeholder-on-secondary-container/50 w-full tracking-widest uppercase" placeholder="SEARCH LOCAL REPOSITORY..." type="text"/>
+</div>
+<nav class="hidden md:flex items-center gap-6 font-headline font-medium text-xs uppercase tracking-widest">
+<span class="text-[#7bd0ff] font-bold">Sandbox: /usr/bin/local</span>
+<span class="text-[#c5c6cd]">Node: Alpha-7</span>
+</nav>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2 bg-primary-container px-3 py-1 rounded-full">
+<span class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+<span class="text-[10px] font-bold tracking-widest text-primary uppercase">Agent Active</span>
+</div>
+<div class="flex items-center gap-4 text-on-surface-variant">
+<span class="material-symbols-outlined cursor-pointer hover:text-primary transition-colors" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-primary transition-colors" data-icon="dns">dns</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-primary transition-colors" data-icon="account_tree">account_tree</span>
+</div>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest border border-outline/20 overflow-hidden">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="Corporate professional user profile avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDBoHZJZIcRhWrTjqhtFALFY4G91tru1oTC1AWUgkq2C7tLyQP2j-58tQmP-fBMPIa4eZETRZ18gzDihCgkBY49DdO4njrAqOPdLPXeFRKixlY7897ZUsNC3GGr2-42uvw4vTicXC9IzvDSeEkiaBTfu2q5Kfta2bpPUvkrCDJPNfqdB5yqW6ushfG0wU2dSwaeF3bkr7VN0n4tEm_qLcnWc054sUhE4eoTXhGLQpu2LDJyS9gHgZPJXggaTNsHr3yGOsaM_E5466c"/>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="ml-64 pt-24 pb-12 px-10">
+<!-- Header Section -->
+<div class="flex justify-between items-end mb-10">
+<div class="max-w-2xl">
+<div class="flex items-center gap-2 mb-2">
+<span class="text-tertiary text-xs font-bold tracking-[0.3em] uppercase">Security Level: Alpha</span>
+<div class="h-[1px] w-12 bg-tertiary/30"></div>
+</div>
+<h2 class="text-4xl font-headline font-bold text-on-surface tracking-tight mb-2">My Documents</h2>
+<p class="text-on-surface-variant leading-relaxed">Local sandbox storage with zero cloud-sync exposure. All generative assets are encrypted at rest using Sovereign-Grade protocols.</p>
+</div>
+<!-- Storage Quota Widget (Bento Style) -->
+<div class="bg-surface-container rounded-lg p-5 w-72 flex flex-col gap-3 relative overflow-hidden">
+<div class="absolute top-0 right-0 p-4 opacity-10">
+<span class="material-symbols-outlined text-4xl" data-icon="database">database</span>
+</div>
+<div class="flex justify-between items-center text-[10px] font-bold tracking-widest uppercase text-on-surface-variant">
+<span>Tenant Storage</span>
+<span class="text-primary">64% FULL</span>
+</div>
+<div class="h-1.5 bg-surface-container-lowest rounded-full overflow-hidden">
+<div class="h-full primary-gradient w-[64%]"></div>
+</div>
+<div class="flex justify-between items-baseline">
+<span class="font-headline text-lg font-bold">1.28 <span class="text-xs text-on-surface-variant">/ 2.0 GB</span></span>
+<span class="text-[10px] text-on-surface-variant uppercase tracking-tighter">842 Files total</span>
+</div>
+</div>
+</div>
+<!-- Filters & Repository Controls -->
+<div class="flex items-center justify-between mb-8">
+<div class="flex items-center gap-3">
+<button class="bg-surface-container px-4 py-2 rounded text-xs font-bold tracking-widest uppercase border-b-2 border-primary text-on-surface">All Files</button>
+<button class="bg-transparent hover:bg-surface-container px-4 py-2 rounded text-xs font-medium tracking-widest uppercase text-on-surface-variant transition-colors">Word</button>
+<button class="bg-transparent hover:bg-surface-container px-4 py-2 rounded text-xs font-medium tracking-widest uppercase text-on-surface-variant transition-colors">Excel</button>
+<button class="bg-transparent hover:bg-surface-container px-4 py-2 rounded text-xs font-medium tracking-widest uppercase text-on-surface-variant transition-colors">PPT</button>
+<button class="bg-transparent hover:bg-surface-container px-4 py-2 rounded text-xs font-medium tracking-widest uppercase text-on-surface-variant transition-colors">PDF</button>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 bg-surface-container-low px-3 py-2 rounded cursor-pointer group">
+<span class="material-symbols-outlined text-sm text-on-surface-variant group-hover:text-primary" data-icon="calendar_today">calendar_today</span>
+<span class="text-xs text-on-surface-variant uppercase tracking-widest">Last 30 Days</span>
+<span class="material-symbols-outlined text-xs text-on-surface-variant" data-icon="expand_more">expand_more</span>
+</div>
+<div class="w-[1px] h-6 bg-outline/10"></div>
+<button class="flex items-center gap-2 text-on-surface-variant hover:text-on-surface">
+<span class="material-symbols-outlined text-lg" data-icon="filter_list">filter_list</span>
+</button>
+</div>
+</div>
+<!-- Secure File Library (Asymmetric Grid) -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+<!-- File Item: PPT -->
+<div class="bg-surface-container hover:bg-surface-container-high transition-colors p-5 flex flex-col gap-4 relative group">
+<div class="flex justify-between items-start">
+<div class="w-10 h-10 bg-[#FF8A65]/10 rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-[#FF8A65]" data-icon="present_to_all">present_to_all</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-[10px] text-tertiary font-bold tracking-widest uppercase">740 Tokens</span>
+<span class="text-[9px] text-on-surface-variant/60 uppercase">Encrypted AES-256</span>
+</div>
+</div>
+<div>
+<h3 class="font-headline font-bold text-lg leading-tight mb-1 truncate">Q4 Growth Strategy.pptx</h3>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-widest">Generated 12 Oct 2023</p>
+</div>
+<div class="mt-auto pt-4 flex items-center justify-between">
+<span class="text-[10px] bg-surface-container-lowest px-2 py-0.5 rounded text-on-surface-variant uppercase tracking-widest">12.4 MB</span>
+<button class="text-primary text-[10px] font-bold tracking-widest uppercase flex items-center gap-1 hover:underline">
+            View in Sandbox <span class="material-symbols-outlined text-xs" data-icon="arrow_outward">arrow_outward</span>
+</button>
+</div>
+</div>
+<!-- File Item: PDF -->
+<div class="bg-surface-container hover:bg-surface-container-high transition-colors p-5 flex flex-col gap-4 relative group">
+<div class="flex justify-between items-start">
+<div class="w-10 h-10 bg-[#FF5252]/10 rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-[#FF5252]" data-icon="picture_as_pdf">picture_as_pdf</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-[10px] text-tertiary font-bold tracking-widest uppercase">1.2k Tokens</span>
+<span class="text-[9px] text-on-surface-variant/60 uppercase">Read-Only Sandbox</span>
+</div>
+</div>
+<div>
+<h3 class="font-headline font-bold text-lg leading-tight mb-1 truncate">Risk Analysis Report.pdf</h3>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-widest">Generated 10 Oct 2023</p>
+</div>
+<div class="mt-auto pt-4 flex items-center justify-between">
+<span class="text-[10px] bg-surface-container-lowest px-2 py-0.5 rounded text-on-surface-variant uppercase tracking-widest">4.8 MB</span>
+<button class="text-primary text-[10px] font-bold tracking-widest uppercase flex items-center gap-1 hover:underline">
+            View in Sandbox <span class="material-symbols-outlined text-xs" data-icon="arrow_outward">arrow_outward</span>
+</button>
+</div>
+</div>
+<!-- File Item: Excel -->
+<div class="bg-surface-container hover:bg-surface-container-high transition-colors p-5 flex flex-col gap-4 relative group">
+<div class="flex justify-between items-start">
+<div class="w-10 h-10 bg-[#4CAF50]/10 rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-[#4CAF50]" data-icon="table_chart">table_chart</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-[10px] text-tertiary font-bold tracking-widest uppercase">450 Tokens</span>
+<span class="text-[9px] text-on-surface-variant/60 uppercase">Calculated Local</span>
+</div>
+</div>
+<div>
+<h3 class="font-headline font-bold text-lg leading-tight mb-1 truncate">Project Budgeting 2024.xlsx</h3>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-widest">Generated 08 Oct 2023</p>
+</div>
+<div class="mt-auto pt-4 flex items-center justify-between">
+<span class="text-[10px] bg-surface-container-lowest px-2 py-0.5 rounded text-on-surface-variant uppercase tracking-widest">2.1 MB</span>
+<button class="text-primary text-[10px] font-bold tracking-widest uppercase flex items-center gap-1 hover:underline">
+            View in Sandbox <span class="material-symbols-outlined text-xs" data-icon="arrow_outward">arrow_outward</span>
+</button>
+</div>
+</div>
+<!-- File Item: Word -->
+<div class="bg-surface-container hover:bg-surface-container-high transition-colors p-5 flex flex-col gap-4 relative group">
+<div class="flex justify-between items-start">
+<div class="w-10 h-10 bg-[#2196F3]/10 rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-[#2196F3]" data-icon="description">description</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-[10px] text-tertiary font-bold tracking-widest uppercase">320 Tokens</span>
+<span class="text-[9px] text-on-surface-variant/60 uppercase">Draft State</span>
+</div>
+</div>
+<div>
+<h3 class="font-headline font-bold text-lg leading-tight mb-1 truncate">Compliance Mandate.docx</h3>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-widest">Generated 05 Oct 2023</p>
+</div>
+<div class="mt-auto pt-4 flex items-center justify-between">
+<span class="text-[10px] bg-surface-container-lowest px-2 py-0.5 rounded text-on-surface-variant uppercase tracking-widest">856 KB</span>
+<button class="text-primary text-[10px] font-bold tracking-widest uppercase flex items-center gap-1 hover:underline">
+            View in Sandbox <span class="material-symbols-outlined text-xs" data-icon="arrow_outward">arrow_outward</span>
+</button>
+</div>
+</div>
+<!-- More Items following similar pattern -->
+<div class="bg-surface-container hover:bg-surface-container-high transition-colors p-5 flex flex-col gap-4 relative group">
+<div class="flex justify-between items-start">
+<div class="w-10 h-10 bg-[#FF8A65]/10 rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-[#FF8A65]" data-icon="present_to_all">present_to_all</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-[10px] text-tertiary font-bold tracking-widest uppercase">2.4k Tokens</span>
+<span class="text-[9px] text-on-surface-variant/60 uppercase">Encrypted AES-256</span>
+</div>
+</div>
+<div>
+<h3 class="font-headline font-bold text-lg leading-tight mb-1 truncate">Investor Relations.pptx</h3>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-widest">Generated 03 Oct 2023</p>
+</div>
+<div class="mt-auto pt-4 flex items-center justify-between">
+<span class="text-[10px] bg-surface-container-lowest px-2 py-0.5 rounded text-on-surface-variant uppercase tracking-widest">34.2 MB</span>
+<button class="text-primary text-[10px] font-bold tracking-widest uppercase flex items-center gap-1 hover:underline">
+            View in Sandbox <span class="material-symbols-outlined text-xs" data-icon="arrow_outward">arrow_outward</span>
+</button>
+</div>
+</div>
+<!-- Featured Slot (Asymmetric) -->
+<div class="md:col-span-2 bg-primary-container p-6 flex flex-col justify-between border-l-4 border-primary relative overflow-hidden group">
+<div class="absolute -right-4 -bottom-4 opacity-5 pointer-events-none group-hover:scale-110 transition-transform duration-500">
+<span class="material-symbols-outlined text-[180px]" data-icon="shield">shield</span>
+</div>
+<div>
+<div class="flex items-center gap-2 mb-4">
+<span class="bg-primary text-on-primary text-[10px] font-bold px-2 py-0.5 tracking-widest uppercase">Sandboxed Environment</span>
+</div>
+<h3 class="font-headline font-bold text-2xl text-on-primary-container max-w-sm mb-4">You are viewing files from the Secure Local Directory.</h3>
+<p class="text-on-secondary-container text-sm leading-relaxed max-w-md">Data integrity is maintained through hardware-level isolation. Files in this view cannot be accessed by external processes without manual clearance.</p>
+</div>
+<div class="flex gap-4 mt-6">
+<button class="primary-gradient text-on-primary font-bold text-xs py-3 px-6 rounded-sm uppercase tracking-widest">Open Secure Terminal</button>
+<button class="bg-surface-container-highest/20 hover:bg-surface-container-highest/40 transition-colors text-on-surface text-xs font-bold py-3 px-6 rounded-sm uppercase tracking-widest">Audit Logs</button>
+</div>
+</div>
+<div class="bg-surface-container hover:bg-surface-container-high transition-colors p-5 flex flex-col gap-4 relative group">
+<div class="flex justify-between items-start">
+<div class="w-10 h-10 bg-[#FF5252]/10 rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-[#FF5252]" data-icon="picture_as_pdf">picture_as_pdf</span>
+</div>
+<div class="flex flex-col items-end">
+<span class="text-[10px] text-tertiary font-bold tracking-widest uppercase">120 Tokens</span>
+<span class="text-[9px] text-on-surface-variant/60 uppercase">Exported Log</span>
+</div>
+</div>
+<div>
+<h3 class="font-headline font-bold text-lg leading-tight mb-1 truncate">Session_Log_832.pdf</h3>
+<p class="text-[10px] text-on-surface-variant uppercase tracking-widest">Generated 01 Oct 2023</p>
+</div>
+<div class="mt-auto pt-4 flex items-center justify-between">
+<span class="text-[10px] bg-surface-container-lowest px-2 py-0.5 rounded text-on-surface-variant uppercase tracking-widest">128 KB</span>
+<button class="text-primary text-[10px] font-bold tracking-widest uppercase flex items-center gap-1 hover:underline">
+            View in Sandbox <span class="material-symbols-outlined text-xs" data-icon="arrow_outward">arrow_outward</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Empty state/Footer hint -->
+<div class="mt-12 flex flex-col items-center justify-center py-16 border border-dashed border-outline/20 rounded-lg">
+<div class="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-4">
+<span class="material-symbols-outlined text-on-surface-variant text-3xl" data-icon="upload_file">upload_file</span>
+</div>
+<p class="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-xs">End of Local Directory</p>
+<p class="text-[10px] text-on-surface-variant/40 mt-1 uppercase tracking-widest">Scroll to Load Archived Nodes</p>
+</div>
+</main>
+<!-- Contextual FAB (Suppressed on Details/Settings but active here as per Task: New Documents) -->
+<button class="fixed bottom-8 right-8 w-14 h-14 primary-gradient rounded-sm shadow-xl flex items-center justify-center text-on-primary group transition-all hover:scale-105 active:scale-95 z-50">
+<span class="material-symbols-outlined text-2xl group-hover:rotate-90 transition-transform duration-300" data-icon="add">add</span>
+</button>
+</body></html>

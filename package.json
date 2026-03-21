@@ -1,0 +1,28 @@
+{
+  "name": "ai-agents-office",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-powered document generation service with Claude CLI agents",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently \"pnpm --filter ai-agents-office-server dev\" \"pnpm --filter ai-agents-office-client dev\"",
+    "dev:server": "pnpm --filter ai-agents-office-server dev",
+    "dev:client": "pnpm --filter ai-agents-office-client dev",
+    "build": "pnpm --filter ai-agents-office-server build && pnpm --filter ai-agents-office-client build",
+    "init-db": "pnpm --filter ai-agents-office-server init-db"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "bcrypt",
+      "better-sqlite3",
+      "esbuild",
+      "sharp"
+    ]
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CyberLogic | Sovereign Agent Chat</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary-fixed": "#7df4ff",
+              "on-error-container": "#ffdad6",
+              "primary-container": "#001d1f",
+              "on-tertiary-fixed-variant": "#004c69",
+              "on-tertiary-container": "#008cbd",
+              "error-container": "#93000a",
+              "primary": "#00dbe9",
+              "surface-container-low": "#131b2e",
+              "on-primary-fixed": "#002022",
+              "inverse-surface": "#dae2fd",
+              "on-background": "#dae2fd",
+              "inverse-primary": "#006970",
+              "secondary": "#bcc7de",
+              "surface-tint": "#00dbe9",
+              "surface-bright": "#31394d",
+              "on-secondary-container": "#aeb9d0",
+              "tertiary": "#7bd0ff",
+              "surface-dim": "#0b1326",
+              "on-error": "#690005",
+              "inverse-on-surface": "#283044",
+              "surface-variant": "#2d3449",
+              "tertiary-container": "#001c29",
+              "on-tertiary": "#00354a",
+              "on-secondary": "#263143",
+              "on-primary-fixed-variant": "#004f54",
+              "on-primary-container": "#009099",
+              "error": "#ffb4ab",
+              "outline-variant": "#44474d",
+              "background": "#0b1326",
+              "outline": "#8f9097",
+              "surface-container-high": "#222a3d",
+              "primary-fixed-dim": "#00dbe9",
+              "on-surface-variant": "#c5c6cd",
+              "secondary-fixed-dim": "#bcc7de",
+              "surface-container-highest": "#2d3449",
+              "on-secondary-fixed": "#111c2d",
+              "tertiary-fixed": "#c4e7ff",
+              "on-tertiary-fixed": "#001e2c",
+              "surface-container-lowest": "#060e20",
+              "on-surface": "#dae2fd",
+              "surface-container": "#171f33",
+              "tertiary-fixed-dim": "#7bd0ff",
+              "on-primary": "#00363a",
+              "secondary-container": "#3e495d",
+              "on-secondary-fixed-variant": "#3c475a",
+              "surface": "#0b1326",
+              "secondary-fixed": "#d8e3fb"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .glass-panel {
+        background: rgba(45, 52, 73, 0.6);
+        backdrop-filter: blur(12px);
+      }
+      .primary-glow {
+        background: linear-gradient(135deg, #00dbe9 0%, #009099 100%);
+      }
+      ::-webkit-scrollbar { width: 4px; }
+      ::-webkit-scrollbar-track { background: #060e20; }
+      ::-webkit-scrollbar-thumb { background: #2d3449; border-radius: 2px; }
+    </style>
+</head>
+<body class="bg-surface-container-lowest font-body text-on-surface selection:bg-primary/30 selection:text-primary min-h-screen flex overflow-hidden">
+<!-- SideNavBar (Shared Component) -->
+<aside class="fixed left-0 top-0 h-full flex flex-col py-8 items-center border-r border-outline-variant/20 bg-[#060e20] w-20 z-50">
+<div class="mb-10 text-primary font-black text-xs uppercase tracking-widest font-headline">
+            Sovereign
+        </div>
+<nav class="flex flex-col gap-6 items-center flex-1">
+<button class="w-12 h-12 flex items-center justify-center text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-all rounded-sm">
+<span class="material-symbols-outlined">grid_view</span>
+</button>
+<button class="w-12 h-12 flex items-center justify-center text-[#00dbe9] bg-[#171f33] rounded-sm">
+<span class="material-symbols-outlined">smart_toy</span>
+</button>
+<button class="w-12 h-12 flex items-center justify-center text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-all rounded-sm">
+<span class="material-symbols-outlined">inventory_2</span>
+</button>
+<button class="w-12 h-12 flex items-center justify-center text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-all rounded-sm">
+<span class="material-symbols-outlined">terminal</span>
+</button>
+<button class="w-12 h-12 flex items-center justify-center text-on-surface-variant hover:bg-surface-variant hover:text-on-surface transition-all rounded-sm">
+<span class="material-symbols-outlined">enhanced_encryption</span>
+</button>
+</nav>
+<div class="flex flex-col gap-4 mt-auto">
+<button class="text-outline hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+<button class="text-outline hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined">logout</span>
+</button>
+</div>
+</aside>
+<div class="flex flex-col flex-1 ml-20 h-screen">
+<!-- TopNavBar (Shared Component) -->
+<header class="flex justify-between items-center w-full px-8 h-16 bg-[#0b1326] shrink-0">
+<div class="flex items-center gap-12">
+<div class="text-xl font-bold text-[#dae2fd] tracking-widest uppercase font-headline">CyberLogic</div>
+<nav class="hidden md:flex gap-8 text-sm font-headline tracking-tight uppercase">
+<a class="text-[#c5c6cd] hover:text-[#00dbe9] transition-colors" href="#">Systems</a>
+<a class="text-[#c5c6cd] hover:text-[#00dbe9] transition-colors" href="#">Security</a>
+<a class="text-[#c5c6cd] hover:text-[#00dbe9] transition-colors" href="#">Logs</a>
+</nav>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2 bg-surface-container-low px-3 py-1.5 rounded-sm border border-outline-variant/10">
+<div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+<span class="text-[10px] font-headline text-on-surface-variant tracking-wider uppercase">Sovereign v2.4 Active</span>
+</div>
+<div class="flex items-center gap-4 text-on-surface-variant">
+<span class="material-symbols-outlined cursor-pointer hover:text-primary transition-colors">notifications_active</span>
+<span class="material-symbols-outlined cursor-pointer hover:text-primary transition-colors">settings</span>
+<div class="w-8 h-8 bg-surface-variant rounded-sm overflow-hidden border border-outline-variant/30">
+<img alt="User profile" data-alt="Minimalist user profile avatar icon" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBw4zL2uWHQBZOU40sJypdggrGAkxnVSfB3ZblTokxYc9iRddC6ptTj4bkIhD-8y6Ks0E-J-d7smHhyWtcZOcwtXf5P0E15HjeIPusWK8JTe3gobihg98OvnA_QAOH3zAwdYqqy2SkZXFSuvw8YDxFvefHPYfYyECnDdLKH7TqDlrNGbRMABF95grUsXXIv-z65EG1IYi4SqSJQgtlwq3fYJgAd8Hl7rsNC_fNaCeqbCJMNT4NLMQGwiTN16qViNCiapLvJVfqTgCw"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex flex-1 overflow-hidden">
+<!-- Central Chat Stream -->
+<section class="flex flex-col flex-1 bg-surface-container-lowest relative">
+<div class="flex-1 overflow-y-auto px-8 py-10 space-y-10">
+<!-- User Message -->
+<div class="flex flex-col items-end">
+<div class="max-w-[70%] bg-surface-container px-6 py-4 rounded-lg rounded-tr-none text-on-surface shadow-lg">
+<p class="text-sm leading-relaxed">Synthesize the quarterly logs from the production cluster. I need a summary of security anomalies and a PPT generated for the executive review.</p>
+</div>
+<span class="mt-2 text-[10px] font-headline text-outline tracking-widest uppercase">14:02:11 | Authorized User</span>
+</div>
+<!-- AI Response Sequence -->
+<div class="flex gap-6">
+<div class="w-10 h-10 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-sm">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">smart_toy</span>
+</div>
+<div class="flex flex-col gap-6 flex-1">
+<!-- AI Message Chunk 1 -->
+<div class="max-w-[85%]">
+<h3 class="font-headline font-bold text-primary text-sm tracking-wider uppercase mb-2">Sovereign Intelligence</h3>
+<div class="text-sm leading-relaxed text-on-surface-variant">
+                                    Initiating cluster synthesis protocol. I am accessing the distributed log shards and aggregating anomaly reports for the current quarter.
+                                </div>
+</div>
+<!-- Reasoning Block: CLI Commands -->
+<div class="bg-surface-container-low p-4 rounded-sm border-l-2 border-primary/40 font-mono text-[11px] space-y-2 max-w-[85%]">
+<div class="flex items-center gap-3 text-outline">
+<span class="material-symbols-outlined text-xs">terminal</span>
+<span>Reading /sandbox/input_quarterly_logs.json</span>
+</div>
+<div class="flex items-center gap-3 text-outline">
+<span class="material-symbols-outlined text-xs">search</span>
+<span>Scanning for pattern: <span class="text-primary">'unauthorized_access_attempt'</span></span>
+</div>
+<div class="flex items-center gap-3 text-primary/80">
+<span class="material-symbols-outlined text-xs animate-spin">refresh</span>
+<span>Invoking Skill: PPT-Synthesizer v1.4.2</span>
+</div>
+</div>
+<!-- Progress Bar for File Gen -->
+<div class="max-w-[85%] bg-surface-container px-5 py-4 rounded-sm border border-outline-variant/10">
+<div class="flex justify-between items-end mb-3">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">present_to_all</span>
+<span class="text-xs font-headline font-medium text-on-surface uppercase">Executive_Report_Q3.pptx</span>
+</div>
+<span class="text-[10px] font-mono text-primary">64%</span>
+</div>
+<div class="w-full h-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary primary-glow w-[64%] shadow-[0_0_8px_#00dbe9]"></div>
+</div>
+</div>
+<!-- AI Message Chunk 2 -->
+<div class="max-w-[85%] text-sm leading-relaxed text-on-surface-variant">
+                                Analysis complete. I have identified 12 high-priority anomalies, primarily originating from the secondary API gateway. The presentation draft is being finalized with the requested visualizations.
+                            </div>
+</div>
+</div>
+</div>
+<!-- Bottom Input Area -->
+<div class="p-8 pt-0">
+<div class="bg-surface-container rounded-sm border border-outline-variant/20 focus-within:border-primary/40 transition-all p-2">
+<div class="flex items-center gap-4 px-2 py-1">
+<button class="text-outline hover:text-primary transition-colors flex items-center justify-center p-2">
+<span class="material-symbols-outlined">attach_file_add</span>
+</button>
+<input class="bg-transparent border-none focus:ring-0 text-sm flex-1 text-on-surface placeholder:text-outline/50 font-body" placeholder="Command Sovereign Agent..." type="text"/>
+<button class="text-outline hover:text-primary transition-colors flex items-center justify-center p-2" title="Select Skill">
+<span class="material-symbols-outlined">extension</span>
+</button>
+<button class="primary-glow text-on-primary font-headline font-bold text-xs uppercase px-5 py-2.5 rounded-sm tracking-widest shadow-lg active:scale-95 transition-transform">
+                                Execute
+                            </button>
+</div>
+</div>
+<div class="mt-3 flex justify-between items-center px-2">
+<div class="flex gap-4">
+<span class="text-[10px] font-headline text-outline uppercase tracking-widest">Active: GPT-4-Sovereign</span>
+<span class="text-[10px] font-headline text-outline uppercase tracking-widest">Latency: 42ms</span>
+</div>
+<div class="text-[10px] font-mono text-on-secondary-container/60 bg-surface-container-low px-3 py-1 rounded-full">
+                            Session: <span class="text-primary">1.2k Tokens</span> / <span class="text-tertiary">$0.036</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Right Sidebar (Context Panel) -->
+<aside class="w-80 bg-surface-container-low border-l border-outline-variant/10 overflow-y-auto p-6 hidden lg:flex flex-col gap-8">
+<!-- Security Level -->
+<div class="space-y-3">
+<h4 class="text-[10px] font-headline font-bold text-outline tracking-widest uppercase">System Status</h4>
+<div class="bg-surface-container-highest p-4 rounded-sm border-l-2 border-primary shadow-md">
+<div class="flex items-center gap-3 mb-1">
+<span class="material-symbols-outlined text-primary text-sm">security</span>
+<span class="text-xs font-headline font-bold text-on-surface uppercase tracking-tight">Isolated Sandbox Mode</span>
+</div>
+<p class="text-[10px] text-on-surface-variant leading-tight">All executions are contained within a kernel-level virtualization layer. Network egress is strictly monitored.</p>
+</div>
+</div>
+<!-- Task Goal -->
+<div class="space-y-3">
+<h4 class="text-[10px] font-headline font-bold text-outline tracking-widest uppercase">Current Objective</h4>
+<div class="bg-surface-container px-4 py-3 rounded-sm">
+<p class="text-xs text-on-surface leading-normal italic">"Generate executive-level quarter-over-quarter security synthesis and anomaly report in PPTX format."</p>
+</div>
+</div>
+<!-- Active Sandbox Context -->
+<div class="space-y-4">
+<h4 class="text-[10px] font-headline font-bold text-outline tracking-widest uppercase">Active Sandbox Context</h4>
+<div class="space-y-1">
+<div class="flex items-center justify-between p-2 hover:bg-surface-container rounded-sm group cursor-pointer transition-colors">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-lg">description</span>
+<span class="text-xs text-on-surface-variant font-medium">input_logs.json</span>
+</div>
+<span class="text-[10px] font-mono text-outline group-hover:text-primary">1.2MB</span>
+</div>
+<div class="flex items-center justify-between p-2 hover:bg-surface-container rounded-sm group cursor-pointer transition-colors">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-lg">schema</span>
+<span class="text-xs text-on-surface-variant font-medium">cluster_topology.yml</span>
+</div>
+<span class="text-[10px] font-mono text-outline group-hover:text-primary">4KB</span>
+</div>
+<div class="flex items-center justify-between p-2 bg-surface-container/50 rounded-sm group cursor-pointer border border-primary/20">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-lg animate-pulse">pending</span>
+<span class="text-xs text-on-surface font-medium">Executive_Report.pptx</span>
+</div>
+<span class="text-[10px] font-mono text-primary">WRITING</span>
+</div>
+<div class="flex items-center justify-between p-2 hover:bg-surface-container rounded-sm group cursor-pointer transition-colors">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-lg">code</span>
+<span class="text-xs text-on-surface-variant font-medium">synthesis_script.py</span>
+</div>
+<span class="text-[10px] font-mono text-outline group-hover:text-primary">12KB</span>
+</div>
+</div>
+</div>
+<!-- Quick Terminal Output -->
+<div class="mt-auto pt-6 border-t border-outline-variant/10">
+<h4 class="text-[10px] font-headline font-bold text-outline tracking-widest uppercase mb-3">Kernel Logs</h4>
+<div class="bg-surface-container-lowest p-3 rounded-sm font-mono text-[9px] text-primary/60 h-32 overflow-hidden overflow-y-auto">
+<p>&gt; [0.122] mounting sandbox_fs...</p>
+<p>&gt; [0.145] loading skill: pptx_gen</p>
+<p>&gt; [0.442] auth: token_valid</p>
+<p>&gt; [0.551] cluster_read: connected</p>
+<p class="animate-pulse">&gt; [1.229] streaming chunk_4...</p>
+</div>
+</div>
+</aside>
+</main>
+</div>
+</body></html>
