@@ -64,7 +64,45 @@ export function initializeDatabase(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_usage_user ON token_usage(user_id);
     CREATE INDEX IF NOT EXISTS idx_usage_created ON token_usage(created_at);
+
+    -- Task execution tracking (multi-agent orchestration)
+    CREATE TABLE IF NOT EXISTS task_executions (
+      id              TEXT PRIMARY KEY,
+      conversation_id TEXT REFERENCES conversations(id) ON DELETE CASCADE,
+      pipeline_id     TEXT,
+      skill_id        TEXT NOT NULL,
+      description     TEXT,
+      status          TEXT DEFAULT 'pending',
+      result_summary  TEXT,
+      input_tokens    INTEGER DEFAULT 0,
+      output_tokens   INTEGER DEFAULT 0,
+      started_at      TEXT,
+      completed_at    TEXT,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_task_exec_conversation ON task_executions(conversation_id);
+
+    -- Agent sessions (persistent across conversation turns)
+    CREATE TABLE IF NOT EXISTS agent_sessions (
+      id              TEXT PRIMARY KEY,
+      conversation_id TEXT REFERENCES conversations(id) ON DELETE CASCADE,
+      skill_id        TEXT NOT NULL,
+      session_uuid    TEXT NOT NULL,
+      initialized     INTEGER DEFAULT 0,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(conversation_id, skill_id)
+    );
   `);
+
+  // Migration: add mode column to conversations if missing
+  // Default NULL = auto-detect; 'direct' = forced direct; 'orchestrated' = forced orchestrated
+  try {
+    db.prepare("SELECT mode FROM conversations LIMIT 1").get();
+  } catch {
+    db.exec("ALTER TABLE conversations ADD COLUMN mode TEXT");
+    // Set existing conversations (that already have a skill_id) to direct mode
+    db.exec("UPDATE conversations SET mode = 'direct' WHERE skill_id IS NOT NULL");
+  }
 }
 
 export default db;

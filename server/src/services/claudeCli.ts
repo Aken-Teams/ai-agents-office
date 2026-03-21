@@ -44,12 +44,16 @@ function resolveClaudeCliPath(cliPath: string): { bin: string; prefix: string[] 
   return { bin: cliPath, prefix: [] };
 }
 
-interface ClaudeCliOptions {
+export interface ClaudeCliOptions {
   userId: string;
   conversationId: string;
   sessionId?: string;
   isResume?: boolean;  // true = --resume (existing session), false = --session-id (new)
   skillId?: string;
+  role?: 'router' | 'worker';          // Agent role (affects tool permissions)
+  customAllowedTools?: string[];        // Override default allowed tools
+  customDisallowedTools?: string[];     // Override default disallowed tools
+  sandboxSubdir?: string;              // Subdirectory within sandbox (e.g. _agents/research)
 }
 
 interface ClaudeResult {
@@ -58,7 +62,7 @@ interface ClaudeResult {
   sessionId: string | undefined;
 }
 
-// Tools Claude is allowed to use in sandbox
+// Tools worker agents are allowed to use in sandbox
 const ALLOWED_TOOLS = [
   'Bash(node:*)',
   'Write',
@@ -67,7 +71,7 @@ const ALLOWED_TOOLS = [
   'WebFetch',
 ];
 
-// Tools explicitly blocked for security
+// Tools explicitly blocked for worker agents (security)
 const DISALLOWED_TOOLS = [
   'Edit',
   'Bash(rm:*)',
@@ -83,6 +87,24 @@ const DISALLOWED_TOOLS = [
   'Bash(net:*)',
 ];
 
+// Router agents: minimal tools — no file access, no code execution
+// Router only analyzes user requests and outputs [TASK] blocks
+const ROUTER_ALLOWED_TOOLS = [
+  'WebSearch',
+  'WebFetch',
+];
+
+const ROUTER_DISALLOWED_TOOLS = [
+  ...DISALLOWED_TOOLS,
+  'Write',
+  'Read',
+  'Bash',
+  'Glob',
+  'Grep',
+  'Task',
+  'Edit',
+];
+
 /**
  * Spawn a Claude CLI process with sandbox restrictions.
  *
@@ -96,7 +118,15 @@ export function spawnClaude(
   options: ClaudeCliOptions,
 ): ClaudeResult {
   const emitter = new EventEmitter();
-  const sandboxPath = getSandboxPath(options.userId, options.conversationId);
+  const baseSandboxPath = getSandboxPath(options.userId, options.conversationId);
+
+  // Support agent subdirectories (e.g. _agents/research)
+  const sandboxPath = options.sandboxSubdir
+    ? path.join(baseSandboxPath, options.sandboxSubdir)
+    : baseSandboxPath;
+
+  // Ensure sandbox directory exists
+  fs.mkdirSync(sandboxPath, { recursive: true });
 
   // Write system prompt as CLAUDE.md in the sandbox directory
   // Claude CLI automatically reads this as project instructions
@@ -119,9 +149,16 @@ export function spawnClaude(
     }
   }
 
+  // Role-based tool selection
+  // Router agents get read-only tools; workers get full tool access
+  const allowedTools = options.customAllowedTools
+    || (options.role === 'router' ? ROUTER_ALLOWED_TOOLS : ALLOWED_TOOLS);
+  const disallowedTools = options.customDisallowedTools
+    || (options.role === 'router' ? ROUTER_DISALLOWED_TOOLS : DISALLOWED_TOOLS);
+
   // Tool restrictions (security layer 2)
-  args.push('--allowedTools', ALLOWED_TOOLS.join(','));
-  args.push('--disallowedTools', DISALLOWED_TOOLS.join(','));
+  args.push('--allowedTools', allowedTools.join(','));
+  args.push('--disallowedTools', disallowedTools.join(','));
 
   // Clean environment to prevent nested Claude session detection
   // Remove ALL Claude-related env vars (inherited from VSCode extension, etc.)

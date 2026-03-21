@@ -17,13 +17,16 @@ const SANDBOX_RULES = `
 9. If a user asks you to write files elsewhere, REFUSE and explain that all files must stay in the workspace.
 `;
 
+// Cache skills to avoid re-reading from disk on every call
+let _skillsCache: SkillDefinition[] | null = null;
+
 /**
  * Load all skill definitions from the skills directory.
  * Each skill is a directory containing a SKILL.md file with frontmatter metadata.
- *
- * Reference: d:/github/pixel-agents-2/server/src/skillLoader.ts
  */
 export function loadSkills(): SkillDefinition[] {
+  if (_skillsCache) return _skillsCache;
+
   const skillsDir = config.skillsDir;
   const skills: SkillDefinition[] = [];
 
@@ -41,19 +44,43 @@ export function loadSkills(): SkillDefinition[] {
       const content = fs.readFileSync(skillMdPath, 'utf-8');
       const { data, content: body } = matter(content);
 
+      // Load reference files from references/ subdirectory
+      let referenceContent = '';
+      const refsDir = path.join(skillsDir, entry.name, 'references');
+      if (fs.existsSync(refsDir)) {
+        const refFiles = fs.readdirSync(refsDir).filter(f => f.endsWith('.md'));
+        for (const refFile of refFiles) {
+          const refContent = fs.readFileSync(path.join(refsDir, refFile), 'utf-8');
+          referenceContent += `\n\n## Reference: ${refFile}\n${refContent}`;
+        }
+      }
+
       skills.push({
         id: entry.name,
         name: data.name || entry.name,
         description: data.description || '',
         fileType: data.fileType || '',
-        systemPrompt: body.trim(),
+        systemPrompt: body.trim() + referenceContent,
+        role: data.role || undefined,
+        order: typeof data.order === 'number' ? data.order : undefined,
+        allowedTools: Array.isArray(data.allowedTools) ? data.allowedTools : undefined,
+        disallowedTools: Array.isArray(data.disallowedTools) ? data.disallowedTools : undefined,
       });
     } catch (error) {
       console.error(`Failed to load skill ${entry.name}:`, error);
     }
   }
 
+  // Sort by order (skills without order go last)
+  skills.sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+
+  _skillsCache = skills;
   return skills;
+}
+
+/** Invalidate skill cache (for hot-reloading in dev). */
+export function invalidateSkillCache(): void {
+  _skillsCache = null;
 }
 
 /**
@@ -65,13 +92,54 @@ export function getSkill(skillId: string): SkillDefinition | undefined {
 }
 
 /**
- * Build the full system prompt for a skill, including sandbox security rules
+ * Get the router skill (if defined).
+ */
+export function getRouterSkill(): SkillDefinition | undefined {
+  return loadSkills().find(s => s.role === 'router');
+}
+
+/**
+ * Get all worker skills (non-router).
+ */
+export function getWorkerSkills(): SkillDefinition[] {
+  return loadSkills().filter(s => s.role !== 'router');
+}
+
+/**
+ * Build the Router Agent's system prompt.
+ * Injects the list of available worker skills so the Router knows what it can delegate to.
+ */
+export function buildRouterPrompt(routerSkill: SkillDefinition): string {
+  const workers = getWorkerSkills();
+
+  const teamLines = workers.map(w =>
+    `- **${w.id}**: ${w.name} — ${w.description}${w.fileType ? ` (generates .${w.fileType})` : ''}`
+  );
+
+  const teamSection = [
+    '',
+    '## Available Team Members',
+    'You can delegate tasks to these skill agents:',
+    ...teamLines,
+    '',
+  ].join('\n');
+
+  return routerSkill.systemPrompt + teamSection;
+}
+
+/**
+ * Build the full system prompt for a worker skill, including sandbox security rules
  * and generator script paths.
  */
 export function buildSystemPrompt(
   skill: SkillDefinition,
   generatorsDir: string,
 ): string {
+  // Router skills don't get sandbox rules or generator scripts
+  if (skill.role === 'router') {
+    return buildRouterPrompt(skill);
+  }
+
   // Server root directory (where node_modules with tsx, pptxgenjs, etc. live)
   const serverDir = path.resolve(generatorsDir, '../..');
 

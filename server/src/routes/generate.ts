@@ -7,7 +7,8 @@ import { spawnClaude } from '../services/claudeCli.js';
 import { sanitizeUserInput, getSandboxPath } from '../services/sandbox.js';
 import { recordTokenUsage } from '../services/tokenTracker.js';
 import { registerNewFiles, getExistingFilePaths } from '../services/fileManager.js';
-import { getSkill, buildSystemPrompt, loadSkills } from '../skills/loader.js';
+import { getSkill, buildSystemPrompt, loadSkills, getRouterSkill } from '../skills/loader.js';
+import { Orchestrator } from '../services/orchestrator.js';
 import { config } from '../config.js';
 import type { Conversation, Message, SSEEvent } from '../types.js';
 
@@ -20,15 +21,26 @@ router.use(rateLimit);
 // Store active abort functions for cancellation
 const activeGenerations = new Map<string, () => void>();
 
-// GET /api/generate/skills — List available skills
+// GET /api/generate/skills — List available skills (exclude router from UI list)
 router.get('/skills', (_req: Request, res: Response) => {
   const skills = loadSkills();
-  res.json(skills.map(s => ({
-    id: s.id,
-    name: s.name,
-    description: s.description,
-    fileType: s.fileType,
-  })));
+  const routerExists = skills.some(s => s.role === 'router');
+
+  res.json(skills
+    .filter(s => s.role !== 'router')  // Don't show router in skill picker
+    .map(s => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      fileType: s.fileType,
+    }))
+    .concat(routerExists ? [{
+      id: '',
+      name: 'Smart (AI Decides)',
+      description: 'AI automatically analyzes your request and chooses the best approach',
+      fileType: '',
+    }] : [])
+  );
 });
 
 /**
@@ -72,7 +84,7 @@ function buildChatHistory(conversationId: string): string {
 // POST /api/generate/:conversationId — Stream Claude response via SSE
 router.post('/:conversationId', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { conversationId } = req.params;
+  const conversationId = req.params.conversationId as string;
   const { message, skillId } = req.body;
 
   if (!message) {
@@ -83,7 +95,7 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
   // Verify conversation ownership
   const conversation = db.prepare(
     'SELECT * FROM conversations WHERE id = ? AND user_id = ?'
-  ).get(conversationId, userId) as Conversation | undefined;
+  ).get(conversationId, userId) as (Conversation & { mode?: string }) | undefined;
 
   if (!conversation) {
     res.status(404).json({ error: 'Conversation not found' });
@@ -105,6 +117,141 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
     'INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)'
   ).run(userMsgId, conversationId, 'user', sanitizedMessage);
 
+  // Determine execution mode:
+  // - If user explicitly picked a specific skill (non-empty skillId) → Direct mode
+  // - If skillId is empty/null and router skill exists → Orchestrated mode
+  // - Backwards compat: existing conversations with a skill_id stay in Direct mode
+  const routerSkill = getRouterSkill();
+  const useOrchestrator = routerSkill
+    && !skillId  // User didn't explicitly pick a skill
+    && !conversation.skill_id  // Conversation doesn't have a pinned skill
+    && conversation.mode !== 'direct';  // Not forced to direct mode
+
+  if (useOrchestrator) {
+    // === Orchestrated Mode ===
+    await handleOrchestrated(req, res, userId, conversationId, sanitizedMessage);
+  } else {
+    // === Direct Mode (backwards compatible) ===
+    handleDirect(req, res, userId, conversationId, conversation, sanitizedMessage, skillId);
+  }
+});
+
+/**
+ * Orchestrated mode: Router Agent analyzes request and delegates to skill agents.
+ */
+async function handleOrchestrated(
+  _req: Request,
+  res: Response,
+  userId: string,
+  conversationId: string,
+  message: string,
+) {
+  // Setup SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
+  // Get existing files (to detect new ones after generation)
+  const existingFiles = getExistingFilePaths(conversationId);
+
+  // Update conversation mode
+  db.prepare("UPDATE conversations SET mode = 'orchestrated' WHERE id = ?").run(conversationId);
+
+  // Keepalive timer
+  const keepaliveTimer = setInterval(() => {
+    try { res.write(': keepalive\n\n'); } catch { /* connection closed */ }
+  }, 10000);
+
+  // SSE writer that forwards events to client
+  const sseWriter = (event: SSEEvent) => {
+    try {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    } catch { /* connection closed */ }
+  };
+
+  const orchestrator = new Orchestrator(userId, conversationId, sseWriter);
+
+  // Track abort function
+  activeGenerations.set(conversationId, () => orchestrator.abort());
+
+  try {
+    const result = await orchestrator.run(message);
+
+    // Save assistant message
+    if (result.assistantText) {
+      const assistantMsgId = uuidv4();
+      db.prepare(
+        'INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)'
+      ).run(assistantMsgId, conversationId, 'assistant', result.assistantText);
+    }
+
+    // Record total token usage
+    if (result.totalInputTokens > 0 || result.totalOutputTokens > 0) {
+      recordTokenUsage({
+        userId,
+        conversationId,
+        inputTokens: result.totalInputTokens,
+        outputTokens: result.totalOutputTokens,
+        model: result.model,
+      });
+    }
+
+    // Send usage event
+    sseWriter({
+      type: 'usage',
+      data: {
+        inputTokens: result.totalInputTokens,
+        outputTokens: result.totalOutputTokens,
+        model: result.model,
+      },
+    });
+
+    // Scan for new files across all agent subdirectories
+    const sandboxPath = getSandboxPath(userId, conversationId);
+    const newFiles = registerNewFiles(userId, conversationId, sandboxPath, existingFiles);
+
+    if (newFiles.length > 0) {
+      sseWriter({
+        type: 'file_generated',
+        data: newFiles.map(f => ({
+          id: f.id,
+          filename: f.filename,
+          file_type: f.file_type,
+          file_size: f.file_size,
+        })),
+      });
+    }
+  } catch (err) {
+    console.error(`[Generate] Orchestrator error for ${conversationId}:`, err);
+
+    // Fallback: try direct mode
+    sseWriter({
+      type: 'error',
+      data: `Orchestrator failed: ${(err as Error).message}. Falling back to direct mode.`,
+    });
+  } finally {
+    clearInterval(keepaliveTimer);
+    activeGenerations.delete(conversationId);
+    sseWriter({ type: 'done', data: { exitCode: 0 } });
+    res.end();
+  }
+}
+
+/**
+ * Direct mode: single skill agent handles the request (backwards compatible).
+ */
+function handleDirect(
+  _req: Request,
+  res: Response,
+  userId: string,
+  conversationId: string,
+  conversation: Conversation,
+  sanitizedMessage: string,
+  skillId?: string,
+) {
   // Load skill and build system prompt
   const effectiveSkillId = skillId || conversation.skill_id || 'pptx-gen';
   const skill = getSkill(effectiveSkillId);
@@ -134,7 +281,7 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
 
   // Session management
   const isExistingSession = !!conversation.session_id;
-  let sessionId = conversation.session_id || uuidv4();
+  const sessionId = conversation.session_id || uuidv4();
   if (!isExistingSession) {
     db.prepare('UPDATE conversations SET session_id = ? WHERE id = ?').run(sessionId, conversationId);
   }
@@ -278,11 +425,11 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
       abortFn();
     }
   });
-});
+}
 
 // POST /api/generate/:conversationId/abort — Abort active generation
 router.post('/:conversationId/abort', (req: Request, res: Response) => {
-  const { conversationId } = req.params;
+  const conversationId = req.params.conversationId as string;
   const abortFn = activeGenerations.get(conversationId);
 
   if (abortFn) {

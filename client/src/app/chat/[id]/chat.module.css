@@ -316,6 +316,11 @@
   opacity: 0.6;
 }
 
+.taskFailed {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
 /* Task spinner (in-progress) */
 .taskSpinner {
   width: 14px;

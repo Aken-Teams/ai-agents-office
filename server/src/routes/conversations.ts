@@ -25,9 +25,11 @@ router.post('/', (req: Request, res: Response) => {
   const { title, skillId } = req.body;
   const id = uuidv4();
 
+  const effectiveSkillId = skillId || null;
+  const mode = effectiveSkillId ? 'direct' : null;  // null = auto-detect (may use orchestrator)
   db.prepare(
-    'INSERT INTO conversations (id, user_id, title, skill_id) VALUES (?, ?, ?, ?)'
-  ).run(id, userId, title || 'New Conversation', skillId || null);
+    'INSERT INTO conversations (id, user_id, title, skill_id, mode) VALUES (?, ?, ?, ?, ?)'
+  ).run(id, userId, title || 'New Conversation', effectiveSkillId, mode);
 
   const conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(id) as Conversation;
   res.status(201).json(conversation);

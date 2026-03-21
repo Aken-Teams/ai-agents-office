@@ -21,6 +21,7 @@ interface UsageTotal {
 }
 
 const SKILLS = [
+  { id: '', label: 'Smart', icon: '\u{1F9E0}', color: '#8b5cf6' },
   { id: 'pptx-gen', label: 'PowerPoint', icon: '\u{1F4CA}', color: '#f59e0b' },
   { id: 'docx-gen', label: 'Word', icon: '\u{1F4DD}', color: '#3b82f6' },
   { id: 'xlsx-gen', label: 'Excel', icon: '\u{1F4C8}', color: '#10b981' },
@@ -60,13 +61,14 @@ function DashboardContent() {
   async function createConversation(skillId: string) {
     if (!token) return;
     const skill = SKILLS.find(s => s.id === skillId);
+    const title = skillId ? `New ${skill?.label || ''} Document` : 'New Smart Document';
     const res = await fetch('/api/conversations', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ title: `New ${skill?.label || ''} Document`, skillId }),
+      body: JSON.stringify({ title, skillId: skillId || undefined }),
     });
     const conv = await res.json();
     router.push(`/chat/${conv.id}`);

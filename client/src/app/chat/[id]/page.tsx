@@ -33,6 +33,25 @@ interface ToolActivity {
   input?: string;
 }
 
+interface AgentTask {
+  taskId: string;
+  skillId: string;
+  description: string;
+  status: 'dispatched' | 'running' | 'completed' | 'failed';
+  error?: string;
+}
+
+const SKILL_LABELS: Record<string, string> = {
+  'pptx-gen': 'PowerPoint',
+  'docx-gen': 'Word',
+  'xlsx-gen': 'Excel',
+  'pdf-gen': 'PDF',
+  'research': 'Research',
+  'planner': 'Planner',
+  'reviewer': 'Reviewer',
+  'router': 'Router',
+};
+
 /** Parse tool_use input JSON into a friendly one-liner */
 function parseToolInput(tool: string, rawInput?: string): string {
   if (!rawInput) return '';
@@ -57,6 +76,14 @@ function parseToolInput(tool: string, rawInput?: string): string {
 
 /** Get tool icon and label */
 function getToolInfo(tool: string): { icon: string; label: string } {
+  // Handle agent-prefixed tools (e.g. "pptx-gen:Bash")
+  if (tool.includes(':')) {
+    const [agentId, baseTool] = tool.split(':');
+    const agentLabel = SKILL_LABELS[agentId] || agentId;
+    const baseInfo = getToolInfo(baseTool);
+    return { icon: baseInfo.icon, label: `${agentLabel}: ${baseInfo.label}` };
+  }
+  if (tool === 'Router') return { icon: '\uD83E\uDDE0', label: 'Router analyzing' };
   if (tool.startsWith('Bash')) return { icon: '\u25B6', label: 'Running command' };
   if (tool === 'Write') return { icon: '\u270E', label: 'Writing file' };
   if (tool === 'Read') return { icon: '\uD83D\uDCC4', label: 'Reading file' };
@@ -89,6 +116,7 @@ function ChatContent() {
   const [elapsed, setElapsed] = useState(0);
   const [lastUsage, setLastUsage] = useState<{ inputTokens: number; outputTokens: number; model: string } | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [agentTasks, setAgentTasks] = useState<AgentTask[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -160,6 +188,7 @@ function ChatContent() {
     setTools([]);
     setLastUsage(null);
     setPanelCollapsed(false);
+    setAgentTasks([]);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -173,7 +202,7 @@ function ChatContent() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify({ message: userMessage, ...(skillId && { skillId }) }),
         signal: controller.signal,
       });
 
@@ -232,6 +261,67 @@ function ChatContent() {
               const newFiles = event.data as GeneratedFile[];
               setFiles(prev => [...prev, ...newFiles]);
             }
+            // Multi-agent orchestration events
+            if (event.type === 'task_dispatched') {
+              const task = event.data as { taskId: string; skillId: string; description: string };
+              setAgentTasks(prev => [...prev, {
+                taskId: task.taskId,
+                skillId: task.skillId,
+                description: task.description,
+                status: 'dispatched',
+              }]);
+            }
+            if (event.type === 'task_completed') {
+              const task = event.data as { taskId: string; skillId: string };
+              setAgentTasks(prev => prev.map(t =>
+                t.taskId === task.taskId ? { ...t, status: 'completed' as const } : t
+              ));
+            }
+            if (event.type === 'task_failed') {
+              const task = event.data as { taskId: string; skillId: string; error: string };
+              setAgentTasks(prev => prev.map(t =>
+                t.taskId === task.taskId ? { ...t, status: 'failed' as const, error: task.error } : t
+              ));
+            }
+            if (event.type === 'agent_stream') {
+              const agentData = event.data as { taskId: string; skillId: string; type: string; content: unknown };
+              // Track agent tool activity under the task
+              if (agentData.type === 'tool_activity') {
+                const activity = agentData.content as ToolActivity;
+                setTools(prev => {
+                  if (activity.tool === '_mark_completed') {
+                    return prev.map(t => t.status !== 'completed' ? { ...t, status: 'completed' } : t);
+                  }
+                  if (activity.tool === 'tool_result' && !activity.id) return prev;
+                  const existing = prev.findIndex(t => t.id === activity.id);
+                  if (existing >= 0) {
+                    const updated = [...prev];
+                    updated[existing] = { ...updated[existing], ...activity };
+                    return updated;
+                  }
+                  return [...prev, { ...activity, tool: `${agentData.skillId}:${activity.tool}` }];
+                });
+              }
+              // Agent text streaming (update running status)
+              if (agentData.type === 'text') {
+                setAgentTasks(prev => prev.map(t =>
+                  t.taskId === agentData.taskId && t.status === 'dispatched'
+                    ? { ...t, status: 'running' as const }
+                    : t
+                ));
+              }
+            }
+            if (event.type === 'agent_status') {
+              // Router thinking indicator
+              const status = event.data as { agent: string; status: string };
+              if (status.agent === 'router' && status.status === 'thinking') {
+                setTools(prev => [...prev, {
+                  tool: 'Router',
+                  id: `router-${Date.now()}`,
+                  status: 'running',
+                }]);
+              }
+            }
             if (event.type === 'error') {
               const errMsg = typeof event.data === 'string' ? event.data : 'Unknown error';
               fullText += `\n\n> **Error:** ${errMsg}`;
@@ -261,7 +351,7 @@ function ChatContent() {
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, streaming, token, conversationId]);
+  }, [input, streaming, token, conversationId, skillId]);
 
   function handleAbort() {
     abortRef.current?.abort();
@@ -466,6 +556,35 @@ function ChatContent() {
                           </div>
                         );
                       })}
+
+                      {/* Agent tasks (multi-agent mode) */}
+                      {agentTasks.map(task => (
+                        <div
+                          key={task.taskId}
+                          className={`${styles.taskItem} ${
+                            task.status === 'completed' ? styles.taskDone
+                            : task.status === 'failed' ? styles.taskFailed
+                            : styles.taskActive
+                          }`}
+                        >
+                          <span className={
+                            task.status === 'completed' ? styles.taskCheck
+                            : task.status === 'failed' ? styles.taskFailed
+                            : styles.taskSpinner
+                          } />
+                          <span className={styles.taskIcon}>
+                            {task.status === 'failed' ? '\u274C' : '\uD83E\uDD16'}
+                          </span>
+                          <span className={styles.taskLabel}>
+                            {SKILL_LABELS[task.skillId] || task.skillId}
+                          </span>
+                          <span className={styles.taskDetail}>
+                            {task.status === 'failed'
+                              ? (task.error || 'Failed').substring(0, 50)
+                              : task.description.substring(0, 60)}
+                          </span>
+                        </div>
+                      ))}
 
                       {/* Writing response step */}
                       {streaming && streamText && (

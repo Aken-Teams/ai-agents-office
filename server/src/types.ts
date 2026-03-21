@@ -49,7 +49,13 @@ export interface TokenUsage {
 }
 
 export interface SSEEvent {
-  type: 'text' | 'thinking' | 'tool_activity' | 'file_generated' | 'usage' | 'done' | 'error' | 'session_id';
+  type:
+    | 'text' | 'thinking' | 'tool_activity' | 'file_generated' | 'usage'
+    | 'done' | 'error' | 'session_id'
+    // Multi-agent orchestration events
+    | 'task_dispatched' | 'task_completed' | 'task_failed'
+    | 'pipeline_started' | 'pipeline_completed'
+    | 'agent_status' | 'agent_stream' | 'router_plan';
   data: unknown;
 }
 
@@ -59,6 +65,31 @@ export interface SkillDefinition {
   description: string;
   fileType: string;
   systemPrompt: string;
+  role?: 'router' | 'worker';
+  order?: number;
+  allowedTools?: string[];
+  disallowedTools?: string[];
+}
+
+// --- Multi-agent orchestration types ---
+
+export interface ParsedTask {
+  skillId: string;
+  description: string;
+}
+
+export interface ParsedPipeline {
+  tasks: ParsedTask[];
+  parallel: boolean;
+}
+
+export interface TaskExecution {
+  taskId: string;
+  skillId: string;
+  description: string;
+  status: 'pending' | 'dispatched' | 'running' | 'completed' | 'failed';
+  result?: string;
+  tokenUsage?: { inputTokens: number; outputTokens: number };
 }
 
 export interface AuthPayload {
