@@ -23,6 +23,8 @@ function UsageContent() {
   const router = useRouter();
   const [daily, setDaily] = useState<DailyUsage[]>([]);
   const [total, setTotal] = useState<UsageTotal | null>(null);
+  const [showAllRows, setShowAllRows] = useState(false);
+  const LEDGER_DEFAULT_ROWS = 4;
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
@@ -46,8 +48,22 @@ function UsageContent() {
   const inputRatio = totalTokens > 0 ? ((total!.totalInput / totalTokens) * 100).toFixed(1) : '0';
   const outputRatio = totalTokens > 0 ? ((total!.totalOutput / totalTokens) * 100).toFixed(1) : '0';
 
-  // Chart data: last 30 days, reversed to chronological
-  const chartData = daily.slice(0, 30).reverse();
+  // Chart data: always show at least 7 days, fill missing days with 0
+  const CHART_MIN_DAYS = 7;
+  const chartData = (() => {
+    const dataMap = new Map(daily.map(d => [d.date, d]));
+    const days: DailyUsage[] = [];
+    const today = new Date();
+    // Determine how many days to show: max(7, actual data range)
+    const totalDays = Math.max(CHART_MIN_DAYS, daily.length);
+    for (let i = totalDays - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      days.push(dataMap.get(key) ?? { date: key, total_input: 0, total_output: 0, invocation_count: 0 });
+    }
+    return days;
+  })();
   const maxTokens = Math.max(...chartData.map(d => d.total_input + d.total_output), 1);
 
   return (
@@ -55,8 +71,6 @@ function UsageContent() {
       <Navbar />
 
       <main className="ml-64 pt-8 pb-12 px-10">
-        <div className="max-w-7xl mx-auto">
-
           {/* Page Header */}
           <header className="mb-10 flex justify-between items-end">
             <div>
@@ -139,37 +153,33 @@ function UsageContent() {
                   <p className="text-sm text-on-surface-variant/60 uppercase tracking-widest">尚無用量數據</p>
                 </div>
               ) : (
-                <>
-                  <div className="h-40 flex items-end gap-1.5 px-1">
-                    {chartData.map(day => {
-                      const dayTotal = day.total_input + day.total_output;
-                      const pct = (dayTotal / maxTokens) * 100;
-                      const inputPct = dayTotal > 0 ? (day.total_input / dayTotal) * 100 : 0;
-                      return (
-                        <div key={day.date} className="flex-1 flex flex-col items-stretch h-full justify-end group relative">
+                <div className="flex items-end gap-1.5 px-1">
+                  {chartData.map(day => {
+                    const dayTotal = day.total_input + day.total_output;
+                    const pct = (dayTotal / maxTokens) * 100;
+                    const inputPct = dayTotal > 0 ? (day.total_input / dayTotal) * 100 : 0;
+                    return (
+                      <div key={day.date} className="flex-1 flex flex-col items-center group">
+                        {/* Bar area */}
+                        <div className="w-full h-40 flex flex-col justify-end relative">
                           {/* Tooltip */}
-                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-surface-container-highest text-on-surface px-2 py-1 text-[9px] font-mono whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
+                          <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-surface-container-highest text-on-surface px-2.5 py-1 text-xs font-mono whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
                             {dayTotal.toLocaleString()}
                           </div>
                           <div
                             className="w-full rounded-t-sm overflow-hidden transition-all duration-300"
                             style={{ height: `${Math.max(pct, 2)}%` }}
                           >
-                            {/* Output portion (top) */}
                             <div className="bg-tertiary/70" style={{ height: `${100 - inputPct}%` }} />
-                            {/* Input portion (bottom) */}
                             <div className="bg-primary" style={{ height: `${inputPct}%` }} />
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-3 flex justify-between text-[9px] text-on-surface-variant/60 font-mono uppercase tracking-widest px-1">
-                    <span>{chartData[0]?.date.slice(5)}</span>
-                    {chartData.length > 4 && <span>{chartData[Math.floor(chartData.length / 2)]?.date.slice(5)}</span>}
-                    <span>{chartData[chartData.length - 1]?.date.slice(5)}</span>
-                  </div>
-                </>
+                        {/* Date label */}
+                        <span className="mt-2 text-[10px] text-on-surface-variant/60 font-mono">{day.date}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </div>
@@ -260,7 +270,7 @@ function UsageContent() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                      {daily.map((day, i) => (
+                      {(showAllRows ? daily : daily.slice(0, LEDGER_DEFAULT_ROWS)).map((day, i) => (
                         <tr
                           key={day.date}
                           className={`hover:bg-primary/5 transition-colors ${i % 2 === 1 ? 'bg-surface-container-high/20' : ''}`}
@@ -283,6 +293,17 @@ function UsageContent() {
                   </table>
                 </div>
               )}
+              {daily.length > LEDGER_DEFAULT_ROWS && (
+                <div className="p-4 border-t border-white/5 flex justify-center">
+                  <button
+                    onClick={() => setShowAllRows(v => !v)}
+                    className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors cursor-pointer flex items-center gap-1"
+                  >
+                    {showAllRows ? '收合' : `顯示全部 ${daily.length} 筆記錄`}
+                    <span className={`material-symbols-outlined text-sm transition-transform ${showAllRows ? 'rotate-180' : ''}`}>expand_more</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -298,7 +319,6 @@ function UsageContent() {
               </div>
             </div>
           </div>
-        </div>
       </main>
     </div>
   );
