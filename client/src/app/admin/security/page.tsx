@@ -127,25 +127,25 @@ export default function AdminSecurity() {
         {/* Stats Row */}
         <div className="grid grid-cols-4 gap-6">
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-4 -right-4 text-[7rem] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none">receipt_long</span>
+            <span className="material-symbols-outlined absolute top-1/2 -translate-y-1/2 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '180px' }}>receipt_long</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">審計記錄</p>
             <span className="text-3xl font-headline font-black text-on-surface">{stats?.totalAuditEntries ?? 0}</span>
             <p className="text-xs text-on-surface-variant mt-2 font-mono">Admin 操作記錄</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-4 -right-4 text-[7rem] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none">person_off</span>
+            <span className="material-symbols-outlined absolute top-1/2 -translate-y-1/2 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '180px' }}>person_off</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">已停用帳號</p>
             <span className="text-3xl font-headline font-black text-error">{stats?.suspendedUsers ?? 0}</span>
             <p className="text-xs text-on-surface-variant mt-2 font-mono">共 {stats?.totalUsers ?? 0} 個用戶</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-4 -right-4 text-[7rem] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none">schedule</span>
+            <span className="material-symbols-outlined absolute top-1/2 -translate-y-1/2 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '180px' }}>schedule</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">系統運行時間</p>
             <span className="text-3xl font-headline font-black text-on-surface">{stats ? formatUptime(stats.systemUptime) : '—'}</span>
             <p className="text-xs text-on-surface-variant mt-2 font-mono">自上次啟動</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-4 -right-4 text-[7rem] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none">description</span>
+            <span className="material-symbols-outlined absolute top-1/2 -translate-y-1/2 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '180px' }}>description</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">已生成檔案</p>
             <span className="text-3xl font-headline font-black text-primary">{stats?.totalFiles ?? 0}</span>
             <p className="text-xs text-on-surface-variant mt-2 font-mono">跨 {stats?.totalConversations ?? 0} 個對話</p>

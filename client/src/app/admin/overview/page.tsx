@@ -110,7 +110,7 @@ export default function AdminOverview() {
         <div className="grid grid-cols-4 gap-6">
           {/* Total Users */}
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-6 -right-6 text-[12rem] text-on-surface opacity-[0.04] group-hover:opacity-[0.08] transition-opacity pointer-events-none">group</span>
+            <span className="material-symbols-outlined absolute top-1/2 -translate-y-1/2 right-2 text-[10rem] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none">group</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">用戶總數</p>
             <div className="flex items-end gap-2">
               <span className="text-4xl font-headline font-black text-on-surface">{stats?.totalUsers ?? '—'}</span>
@@ -120,7 +120,7 @@ export default function AdminOverview() {
 
           {/* Active Agents */}
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-6 -right-6 text-[12rem] text-on-surface opacity-[0.04] group-hover:opacity-[0.08] transition-opacity pointer-events-none">smart_toy</span>
+            <span className="material-symbols-outlined absolute top-1/2 -translate-y-1/2 right-2 text-[10rem] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none">smart_toy</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">活躍代理</p>
             <div className="flex items-end gap-2">
               <span className="text-4xl font-headline font-black text-on-surface">{stats?.activeSkills ?? '—'}</span>
@@ -134,7 +134,7 @@ export default function AdminOverview() {
 
           {/* Tokens Consumed */}
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-6 -right-6 text-[12rem] text-on-surface opacity-[0.04] group-hover:opacity-[0.08] transition-opacity pointer-events-none">token</span>
+            <span className="material-symbols-outlined absolute top-1/2 -translate-y-1/2 right-2 text-[10rem] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none">token</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">Token 消耗</p>
             <div className="flex items-end gap-2">
               <span className="text-4xl font-headline font-black text-on-surface">{stats ? formatTokens(stats.totalTokens) : '—'}</span>
@@ -146,7 +146,7 @@ export default function AdminOverview() {
 
           {/* System Health */}
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-6 -right-6 text-[12rem] text-on-surface opacity-[0.04] group-hover:opacity-[0.08] transition-opacity pointer-events-none">monitor_heart</span>
+            <span className="material-symbols-outlined absolute top-1/2 -translate-y-1/2 right-2 text-[10rem] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none">monitor_heart</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">系統健康度</p>
             <div className="flex items-end gap-2">
               <span className="text-4xl font-headline font-black text-success">99.8%</span>
