@@ -227,6 +227,20 @@ function ChatContent() {
         signal: controller.signal,
       });
 
+      // Handle non-SSE error responses (e.g. storage quota exceeded)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: '發生未知錯誤' }));
+        setMessages(prev => [...prev, {
+          id: `err-${Date.now()}`,
+          conversation_id: conversationId,
+          role: 'assistant',
+          content: `⚠️ ${err.error || '請求失敗'}`,
+          created_at: new Date().toISOString(),
+        }]);
+        setStreaming(false);
+        return;
+      }
+
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = '';

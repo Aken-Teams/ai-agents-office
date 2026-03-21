@@ -7,6 +7,7 @@ import { spawnClaude } from '../services/claudeCli.js';
 import { sanitizeUserInput, getSandboxPath } from '../services/sandbox.js';
 import { recordTokenUsage } from '../services/tokenTracker.js';
 import { registerNewFiles, getExistingFilePaths } from '../services/fileManager.js';
+import { getUserStorageUsed } from './files.js';
 import { getSkill, buildSystemPrompt, loadSkills, getRouterSkill } from '../skills/loader.js';
 import { Orchestrator } from '../services/orchestrator.js';
 import { config } from '../config.js';
@@ -108,6 +109,18 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
     sanitizedMessage = sanitizeUserInput(message);
   } catch (error) {
     res.status(400).json({ error: (error as Error).message });
+    return;
+  }
+
+  // Storage quota check — block generation if user is over quota
+  const storageUsed = getUserStorageUsed(userId);
+  if (storageUsed >= config.storageQuotaBytes) {
+    const usedGB = (storageUsed / (1024 * 1024 * 1024)).toFixed(2);
+    const quotaGB = (config.storageQuotaBytes / (1024 * 1024 * 1024)).toFixed(1);
+    res.status(413).json({
+      error: `儲存空間已滿（已使用 ${usedGB} GB / ${quotaGB} GB）。請先整理檔案，刪除不需要的文件後再生成新檔案。`,
+      code: 'STORAGE_QUOTA_EXCEEDED',
+    });
     return;
   }
 

@@ -27,4 +27,8 @@ export const config = {
   // Rate limiting
   rateLimitWindowMs: 60_000,
   rateLimitMaxRequests: 30,
+
+  // Storage quota (per user, in bytes)
+  storageQuotaBytes: parseFloat(process.env.STORAGE_QUOTA_GB || '2') * 1024 * 1024 * 1024,
+  storageWarningThreshold: 0.9, // warn at 90%
 } as const;

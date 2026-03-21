@@ -322,6 +322,14 @@ function PreviewModal({
 /* ============================================================
    Files Page Content
    ============================================================ */
+interface StorageInfo {
+  used: number;
+  quota: number;
+  percentage: number;
+  warning: boolean;
+  formatted: { used: string; quota: string };
+}
+
 function FilesContent() {
   const { user, token, isLoading } = useAuth();
   const router = useRouter();
@@ -331,10 +339,19 @@ function FilesContent() {
   const [page, setPage] = useState(1);
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FileItem | null>(null);
+  const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
   }, [user, isLoading, router]);
+
+  const fetchStorage = useCallback(() => {
+    if (!token) return;
+    fetch('/api/files/storage', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(setStorageInfo)
+      .catch(console.error);
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -343,7 +360,8 @@ function FilesContent() {
       .then(r => r.json())
       .then(setFiles)
       .catch(console.error);
-  }, [token, filter]);
+    fetchStorage();
+  }, [token, filter, fetchStorage]);
 
   async function confirmDelete() {
     if (!token || !deleteTarget) return;
@@ -354,6 +372,7 @@ function FilesContent() {
     setFiles(prev => prev.filter(f => f.id !== deleteTarget.id));
     if (previewFile?.id === deleteTarget.id) setPreviewFile(null);
     setDeleteTarget(null);
+    fetchStorage();
   }
 
   const handleDownload = useCallback(async (fileId: string, filename: string) => {
@@ -439,25 +458,37 @@ function FilesContent() {
           </div>
 
           {/* Storage Widget */}
-          <div className="bg-surface-container rounded-lg p-5 w-72 flex flex-col gap-3 relative overflow-hidden shrink-0">
+          <div className={`rounded-lg p-5 w-72 flex flex-col gap-3 relative overflow-hidden shrink-0 ${
+            storageInfo?.warning ? 'bg-error/10 border border-error/30' : 'bg-surface-container'
+          }`}>
             <div className="absolute top-0 right-0 p-4 opacity-10">
-              <span className="material-symbols-outlined text-4xl">database</span>
+              <span className={`material-symbols-outlined text-4xl ${storageInfo?.warning ? 'text-error' : ''}`}>
+                {storageInfo?.warning ? 'warning' : 'database'}
+              </span>
             </div>
             <div className="flex justify-between items-center text-xs font-bold tracking-widest uppercase text-on-surface-variant">
               <span>儲存空間</span>
-              <span className="text-primary">{files.length} 個檔案</span>
+              <span className={storageInfo?.warning ? 'text-error' : 'text-primary'}>{files.length} 個檔案</span>
             </div>
             <div className="h-1.5 bg-surface-container-lowest rounded-full overflow-hidden">
-              <div className="h-full cyber-gradient" style={{ width: `${Math.min((totalSize / (2 * 1024 * 1024 * 1024)) * 100, 100)}%` }} />
+              <div
+                className={`h-full ${storageInfo?.warning ? 'bg-error' : 'cyber-gradient'}`}
+                style={{ width: `${Math.min((storageInfo?.percentage ?? 0) * 100, 100)}%` }}
+              />
             </div>
             <div className="flex justify-between items-baseline">
               <span className="font-headline text-lg font-bold">
-                {formatSize(totalSize)}
+                {storageInfo?.formatted.used ?? formatSize(totalSize)}
               </span>
               <span className="text-xs text-on-surface-variant uppercase tracking-tighter">
-                已使用
+                / {storageInfo?.formatted.quota ?? '—'}
               </span>
             </div>
+            {storageInfo?.warning && (
+              <p className="text-[10px] text-error font-medium">
+                儲存空間即將滿載，請整理不需要的檔案。
+              </p>
+            )}
           </div>
         </div>
 

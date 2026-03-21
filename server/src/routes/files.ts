@@ -5,7 +5,16 @@ import db from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { getFileDownloadPath, deleteFile } from '../services/fileManager.js';
 import { convertOfficeFile } from '../services/filePreview.js';
+import { config } from '../config.js';
 import type { GeneratedFile } from '../types.js';
+
+/** Sum file_size for a given user from generated_files table */
+export function getUserStorageUsed(userId: string): number {
+  const row = db.prepare(
+    'SELECT COALESCE(SUM(file_size), 0) AS total FROM generated_files WHERE user_id = ?'
+  ).get(userId) as { total: number };
+  return row.total;
+}
 
 const MIME_MAP: Record<string, string> = {
   pdf: 'application/pdf',
@@ -99,6 +108,32 @@ router.get('/:id/preview', async (req: Request, res: Response) => {
 
   res.status(415).json({ error: 'Preview not supported for this file type', file_type: ext });
 });
+
+// GET /api/files/storage — Return user's storage usage + quota
+router.get('/storage', (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const used = getUserStorageUsed(userId);
+  const quota = config.storageQuotaBytes;
+  const percentage = quota > 0 ? used / quota : 0;
+
+  res.json({
+    used,
+    quota,
+    percentage,
+    warning: percentage >= config.storageWarningThreshold,
+    formatted: {
+      used: formatBytes(used),
+      quota: formatBytes(quota),
+    },
+  });
+});
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
 
 // DELETE /api/files/:id
 router.delete('/:id', (req: Request, res: Response) => {
