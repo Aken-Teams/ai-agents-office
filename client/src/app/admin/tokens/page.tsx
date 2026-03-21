@@ -30,6 +30,7 @@ interface LedgerEntry {
   id: string;
   user_id: string;
   email: string;
+  display_name: string | null;
   conversation_id: string | null;
   conversation_title: string | null;
   input_tokens: number;
@@ -265,7 +266,10 @@ export default function AdminTokens() {
                     <td className="py-3 px-6 text-sm text-on-surface truncate max-w-[200px]">
                       {entry.conversation_title || '—'}
                     </td>
-                    <td className="py-3 px-6 text-xs text-on-surface-variant truncate max-w-[150px]">{entry.email}</td>
+                    <td className="py-3 px-6 max-w-[180px]">
+                      <p className="text-sm text-on-surface truncate">{entry.display_name || entry.email.split('@')[0]}</p>
+                      <p className="text-[10px] text-on-surface-variant font-mono truncate">{entry.email}</p>
+                    </td>
                     <td className="py-3 px-6 text-right text-sm text-on-surface font-mono">
                       {formatTokens(entry.input_tokens + entry.output_tokens)}
                     </td>

@@ -321,7 +321,7 @@ router.get('/tokens/ledger', (req: Request, res: Response) => {
 
   const rows = db.prepare(`
     SELECT
-      tu.id, tu.user_id, u.email,
+      tu.id, tu.user_id, u.email, u.display_name,
       tu.conversation_id, c.title as conversation_title,
       tu.input_tokens, tu.output_tokens, tu.model, tu.duration_ms, tu.created_at
     FROM token_usage tu
