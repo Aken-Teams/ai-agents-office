@@ -20,6 +20,14 @@ interface UsageTotal {
   totalInvocations: number;
 }
 
+interface FileItem {
+  id: string;
+  filename: string;
+  file_type: string;
+  file_size: number;
+  created_at: string;
+}
+
 const DOC_TYPES = [
   { id: 'pptx-gen', label: '簡報', desc: '投影片製作', icon: 'present_to_all', colorClass: 'text-warning' },
   { id: 'docx-gen', label: '文件', desc: '文書撰寫', icon: 'description', colorClass: 'text-tertiary' },
@@ -34,11 +42,25 @@ const SKILL_ICONS: Record<string, string> = {
   'pdf-gen': 'picture_as_pdf',
 };
 
+const FILE_TYPE_ICONS: Record<string, { icon: string; color: string }> = {
+  pptx: { icon: 'present_to_all', color: 'text-warning' },
+  docx: { icon: 'description', color: 'text-tertiary' },
+  xlsx: { icon: 'table_chart', color: 'text-success' },
+  pdf:  { icon: 'picture_as_pdf', color: 'text-error' },
+};
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
 function DashboardContent() {
   const { user, token, isLoading } = useAuth();
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [usage, setUsage] = useState<UsageTotal | null>(null);
+  const [files, setFiles] = useState<FileItem[]>([]);
   const [smartInput, setSmartInput] = useState('');
   const [creating, setCreating] = useState(false);
   const sidebarMargin = useSidebarMargin();
@@ -64,6 +86,13 @@ function DashboardContent() {
     })
       .then(r => r.json())
       .then(data => setUsage(data.total))
+      .catch(console.error);
+
+    fetch('/api/files', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(setFiles)
       .catch(console.error);
   }, [token]);
 
@@ -278,31 +307,33 @@ function DashboardContent() {
               </div>
             </div>
 
-            {/* Workspace Explorer */}
+            {/* Workspace Explorer — shows real generated files */}
             <div className="bg-surface-container-high p-6 rounded-lg flex-1 overflow-hidden flex flex-col">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xs font-bold uppercase tracking-widest">工作區: /workspace</h3>
-                <span className="material-symbols-outlined text-xs text-on-surface-variant hover:text-primary cursor-pointer">refresh</span>
+                <h3 className="text-xs font-bold uppercase tracking-widest">最近文件</h3>
+                <span className="text-xs text-on-surface-variant">{files.length} 個檔案</span>
               </div>
               <div className="flex-1 space-y-2 font-mono text-xs overflow-y-auto">
-                {conversations.length === 0 ? (
+                {files.length === 0 ? (
                   <p className="text-on-surface-variant text-center py-4">尚無檔案</p>
                 ) : (
-                  conversations.slice(0, 10).map(conv => (
-                    <div
-                      key={conv.id}
-                      className="flex items-center gap-3 p-2 bg-surface-container/50 rounded group cursor-pointer hover:bg-surface-container-highest transition-colors"
-                      onClick={() => router.push(`/chat/${conv.id}`)}
-                    >
-                      <span className="material-symbols-outlined text-sm text-on-surface-variant">
-                        {conv.skill_id ? (SKILL_ICONS[conv.skill_id] || 'article') : 'article'}
-                      </span>
-                      <span className="flex-1 text-on-surface truncate">{conv.title}</span>
-                      <span className="text-xs text-on-secondary-container">
-                        {conv.skill_id?.replace('-gen', '').toUpperCase() || 'AI'}
-                      </span>
-                    </div>
-                  ))
+                  files.slice(0, 10).map(file => {
+                    const ext = file.file_type?.toLowerCase() || '';
+                    const meta = FILE_TYPE_ICONS[ext] || { icon: 'draft', color: 'text-on-surface-variant' };
+                    return (
+                      <div
+                        key={file.id}
+                        className="flex items-center gap-3 p-2 bg-surface-container/50 rounded group cursor-pointer hover:bg-surface-container-highest transition-colors"
+                        onClick={() => {
+                          window.open(`/api/files/${file.id}/download`, '_blank');
+                        }}
+                      >
+                        <span className={`material-symbols-outlined text-sm ${meta.color}`}>{meta.icon}</span>
+                        <span className="flex-1 text-on-surface truncate">{file.filename}</span>
+                        <span className="text-[10px] text-on-surface-variant shrink-0">{formatFileSize(file.file_size)}</span>
+                      </div>
+                    );
+                  })
                 )}
               </div>
               <div className="mt-4 pt-4 border-t border-outline-variant/10">

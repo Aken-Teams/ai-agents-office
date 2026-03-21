@@ -163,6 +163,13 @@ export default function Navbar() {
               </span>
             )}
           </button>
+
+          {/* Footer */}
+          <div className="mt-3 pt-3 border-t border-outline-variant/10 px-3">
+            <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className={`text-outline hover:text-on-surface-variant transition-colors no-underline block text-center ${collapsed ? 'text-[10px]' : 'text-[11px]'}`}>
+              {collapsed ? '©' : <>Powered by 智合科技 &copy; 2026</>}
+            </a>
+          </div>
         </div>
       </aside>
 
