@@ -244,7 +244,7 @@ export default function AdminSecurity() {
           <div className="relative z-10">
             <h2 className="text-2xl font-headline font-bold text-on-surface mb-4">自動化威脅回應</h2>
             <p className="text-on-surface-variant max-w-2xl mb-6">
-              CyberLogic 目前處於「Sovereign」模式。所有沙箱代理程式在隔離環境中運行，具備即時監控與自動復原能力。
+              AI Agents Office 目前處於「Sovereign」模式。所有沙箱代理程式在隔離環境中運行，具備即時監控與自動復原能力。
             </p>
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-surface-container p-4 border-l-2 border-primary">

@@ -28,7 +28,7 @@ export default function AdminSidebar() {
             <span className="material-symbols-outlined text-primary">admin_panel_settings</span>
           </div>
           <div>
-            <h1 className="text-lg font-bold tracking-tighter text-on-surface">CyberLogic</h1>
+            <h1 className="text-lg font-bold tracking-tighter text-on-surface">AI Agents Office</h1>
             <p className="text-[10px] uppercase tracking-[0.2em] text-primary">Admin</p>
           </div>
         </div>
