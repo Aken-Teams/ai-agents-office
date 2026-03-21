@@ -40,6 +40,16 @@
   font-weight: 500;
 }
 
+.elapsedBadge {
+  font-size: 11px;
+  background: #f0fdf4;
+  color: #166534;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+  margin-left: auto;
+}
+
 .messageList {
   flex: 1;
   overflow-y: auto;
@@ -49,25 +59,31 @@
   gap: 16px;
 }
 
+/* === Messages === */
 .message {
   max-width: 80%;
   padding: 14px 18px;
   border-radius: var(--radius-lg);
   line-height: 1.6;
   font-size: 14px;
-  white-space: pre-wrap;
 }
 
 .user {
   align-self: flex-end;
   background: var(--primary);
   color: white;
+  white-space: pre-wrap;
 }
 
 .assistant {
   align-self: flex-start;
   background: white;
   border: 1px solid var(--border);
+}
+
+.streaming {
+  border-color: #818cf8;
+  border-style: dashed;
 }
 
 .messageRole {
@@ -81,102 +97,230 @@
   word-break: break-word;
 }
 
-/* Thinking indicator - waiting dots */
-.thinkingBar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 18px;
-  background: #f0f4ff;
-  border-radius: var(--radius-lg);
-  font-size: 13px;
-  color: #4f46e5;
-  align-self: flex-start;
-  border: 1px solid #e0e7ff;
-}
-
-.thinkingDots {
-  display: flex;
-  gap: 4px;
-}
-
-.thinkingDots span {
-  width: 6px;
-  height: 6px;
+/* Cursor blink for streaming */
+.cursor {
+  display: inline-block;
+  width: 2px;
+  height: 16px;
   background: #4f46e5;
-  border-radius: 50%;
-  animation: bounce 1.4s infinite ease-in-out;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink 1s step-end infinite;
+}
+@keyframes blink {
+  50% { opacity: 0; }
 }
 
-.thinkingDots span:nth-child(1) { animation-delay: 0s; }
-.thinkingDots span:nth-child(2) { animation-delay: 0.2s; }
-.thinkingDots span:nth-child(3) { animation-delay: 0.4s; }
+/* === Markdown styles inside assistant messages === */
+.messageContent h1,
+.messageContent h2,
+.messageContent h3,
+.messageContent h4 {
+  margin: 10px 0 4px;
+  line-height: 1.3;
+}
+.messageContent h1 { font-size: 18px; }
+.messageContent h2 { font-size: 16px; }
+.messageContent h3 { font-size: 15px; }
+.messageContent h4 { font-size: 14px; }
 
-@keyframes bounce {
-  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
-  40% { transform: scale(1); opacity: 1; }
+/* First child in messageContent should not have top margin */
+.messageContent > :first-child {
+  margin-top: 0;
 }
 
-/* Extended thinking block */
-.thinkingBlock {
-  align-self: flex-start;
-  max-width: 80%;
-  background: #fefce8;
-  border: 1px solid #fef08a;
-  border-radius: var(--radius-lg);
+.messageContent p {
+  margin: 4px 0;
+}
+
+/* CRITICAL: react-markdown wraps li content in <p> tags. Remove p margin inside li. */
+.messageContent li > p {
+  margin: 0;
+  display: inline;
+}
+
+.messageContent ul,
+.messageContent ol {
+  margin: 4px 0;
+  padding-left: 22px;
+}
+
+.messageContent li {
+  margin: 2px 0;
+  line-height: 1.5;
+}
+
+/* Nested lists */
+.messageContent li > ul,
+.messageContent li > ol {
+  margin: 2px 0;
+}
+
+.messageContent strong {
+  font-weight: 600;
+}
+
+.messageContent em {
+  font-style: italic;
+}
+
+.messageContent code {
+  background: #f1f5f9;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 13px;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.messageContent pre {
+  background: #1e293b;
+  color: #e2e8f0;
   padding: 12px 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.messageContent pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.messageContent blockquote {
+  border-left: 3px solid #818cf8;
+  padding: 4px 12px;
+  margin: 6px 0;
+  background: #f8fafc;
+  border-radius: 0 4px 4px 0;
+}
+
+.messageContent table {
+  border-collapse: collapse;
+  margin: 6px 0;
+  width: 100%;
+}
+
+.messageContent th,
+.messageContent td {
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  text-align: left;
   font-size: 13px;
 }
 
-.thinkingLabel {
-  font-size: 11px;
+.messageContent th {
+  background: #f8fafc;
   font-weight: 600;
-  color: #a16207;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 6px;
 }
 
-.thinkingContent {
-  color: #713f12;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  max-height: 120px;
-  overflow-y: auto;
+.messageContent hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 8px 0;
 }
 
-/* Tool activity */
-.toolList {
+/* === Processing Panel (Claude-Code style) === */
+.processingPanel {
   align-self: flex-start;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-width: 80%;
+  max-width: 85%;
+  background: #fafbff;
+  border: 1px solid #e0e7ff;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
 
-.toolItem {
+.processingHeader {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px;
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
-  border-radius: var(--radius);
+  padding: 10px 16px;
+  background: #eef2ff;
+  border-bottom: 1px solid #e0e7ff;
   font-size: 13px;
-  color: #9a3412;
+  font-weight: 600;
+  color: #3730a3;
 }
 
-.toolSpinner {
+.processingIcon {
+  display: flex;
+  align-items: center;
+}
+
+.pulsingDot {
+  width: 8px;
+  height: 8px;
+  background: #4f46e5;
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.processingTitle {
+  flex: 1;
+}
+
+.processingTime {
+  font-size: 11px;
+  font-weight: 400;
+  color: #6366f1;
+  background: white;
+  padding: 1px 8px;
+  border-radius: 8px;
+}
+
+/* === Task List (Claude-Code Todo style) === */
+.taskList {
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.taskItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+
+.taskActive {
+  color: #1e293b;
+  background: #f0f4ff;
+}
+
+.taskDone {
+  color: #64748b;
+}
+
+.taskDone .taskLabel,
+.taskDone .taskDetail {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* Task spinner (in-progress) */
+.taskSpinner {
   width: 14px;
   height: 14px;
-  border: 2px solid #fdba74;
-  border-top-color: #9a3412;
+  border: 2px solid #c7d2fe;
+  border-top-color: #4f46e5;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   flex-shrink: 0;
 }
 
-.toolDone {
+/* Task checkmark (completed) */
+.taskCheck {
   width: 14px;
   height: 14px;
   background: #22c55e;
@@ -184,7 +328,7 @@
   flex-shrink: 0;
   position: relative;
 }
-.toolDone::after {
+.taskCheck::after {
   content: '';
   position: absolute;
   left: 4px;
@@ -196,45 +340,60 @@
   transform: rotate(45deg);
 }
 
-.toolName {
+.taskIcon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.taskLabel {
   font-weight: 500;
 }
 
-.toolInput {
+.taskDetail {
   font-size: 11px;
-  color: #b45309;
-  opacity: 0.7;
+  color: #6366f1;
+  background: #eef2ff;
+  padding: 1px 6px;
+  border-radius: 4px;
+  max-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 200px;
+  text-decoration: none !important;
+}
+
+/* === Thinking details (collapsible) === */
+.thinkingDetails {
+  margin: 0 12px 8px;
+  border-top: 1px solid #e0e7ff;
+}
+
+.thinkingSummary {
+  font-size: 11px;
+  color: #6366f1;
+  cursor: pointer;
+  padding: 6px 4px;
+  user-select: none;
+}
+.thinkingSummary:hover {
+  color: #4338ca;
+}
+
+.thinkingContent {
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 4px 4px 8px;
 }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
-/* Legacy activity (kept for compat) */
-.activity {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: #fef3c7;
-  border-radius: var(--radius);
-  font-size: 13px;
-  color: #92400e;
-}
-
-.spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid #fbbf24;
-  border-top-color: #92400e;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
+/* === Input Bar === */
 .inputBar {
   padding: 16px 24px;
   border-top: 1px solid var(--border);
@@ -255,7 +414,7 @@
   height: 44px;
 }
 
-/* Sidebar */
+/* === Sidebar === */
 .sidebar {
   width: 300px;
   background: white;
@@ -324,11 +483,6 @@
 }
 
 .fileMeta {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.fileSize {
   font-size: 11px;
   color: var(--text-muted);
 }

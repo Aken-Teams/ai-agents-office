@@ -9,7 +9,7 @@ import { recordTokenUsage } from '../services/tokenTracker.js';
 import { registerNewFiles, getExistingFilePaths } from '../services/fileManager.js';
 import { getSkill, buildSystemPrompt, loadSkills } from '../skills/loader.js';
 import { config } from '../config.js';
-import type { Conversation, SSEEvent } from '../types.js';
+import type { Conversation, Message, SSEEvent } from '../types.js';
 
 const router = Router();
 
@@ -17,7 +17,7 @@ const router = Router();
 router.use(authMiddleware);
 router.use(rateLimit);
 
-// Store active generations for abort
+// Store active abort functions for cancellation
 const activeGenerations = new Map<string, () => void>();
 
 // GET /api/generate/skills — List available skills
@@ -30,6 +30,44 @@ router.get('/skills', (_req: Request, res: Response) => {
     fileType: s.fileType,
   })));
 });
+
+/**
+ * Build conversation history string for context injection.
+ * Used when creating a new session (not resuming) so Claude
+ * has memory of previous messages in this conversation.
+ */
+function buildChatHistory(conversationId: string): string {
+  const messages = db.prepare(
+    'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at ASC'
+  ).all(conversationId) as Pick<Message, 'role' | 'content'>[];
+
+  if (messages.length === 0) return '';
+
+  // Take last N messages to avoid exceeding context limits
+  const MAX_HISTORY_MESSAGES = 20;
+  const recent = messages.slice(-MAX_HISTORY_MESSAGES);
+
+  const lines = recent.map(m => {
+    const role = m.role === 'user' ? 'User' : 'Assistant';
+    // Truncate very long messages to save context
+    const content = m.content.length > 2000
+      ? m.content.substring(0, 2000) + '... (truncated)'
+      : m.content;
+    return `[${role}]: ${content}`;
+  });
+
+  return [
+    '',
+    '## Previous Conversation History',
+    'Below is the conversation so far. Continue from where you left off.',
+    'If the user previously requested a document and it was not yet created, create it now.',
+    '',
+    ...lines,
+    '',
+    '---',
+    '',
+  ].join('\n');
+}
 
 // POST /api/generate/:conversationId — Stream Claude response via SSE
 router.post('/:conversationId', async (req: Request, res: Response) => {
@@ -76,7 +114,7 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
     return;
   }
 
-  const systemPrompt = buildSystemPrompt(skill, config.generatorsDir);
+  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir);
 
   // Update conversation skill if changed
   if (skillId && skillId !== conversation.skill_id) {
@@ -94,107 +132,136 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
   // Get existing files (to detect new ones after generation)
   const existingFiles = getExistingFilePaths(conversationId);
 
-  // Spawn Claude CLI
-  // First message: create new session (--session-id)
-  // Subsequent messages: resume existing session (--resume)
+  // Session management
   const isExistingSession = !!conversation.session_id;
-  const sessionId = conversation.session_id || uuidv4();
+  let sessionId = conversation.session_id || uuidv4();
   if (!isExistingSession) {
     db.prepare('UPDATE conversations SET session_id = ? WHERE id = ?').run(sessionId, conversationId);
   }
 
-  const { emitter, abort } = spawnClaude(sanitizedMessage, systemPrompt, {
-    userId,
-    conversationId,
-    sessionId,
-    isResume: isExistingSession,
-    skillId: effectiveSkillId,
-  });
-
-  // Store abort function for potential cancellation
-  activeGenerations.set(conversationId, abort);
-
-  // Accumulate assistant response
-  let assistantText = '';
-  let totalInputTokens = 0;
-  let totalOutputTokens = 0;
-  let model = '';
-
-  // Forward events as SSE
-  emitter.on('event', (event: SSEEvent) => {
-    res.write(`data: ${JSON.stringify(event)}\n\n`);
-
-    // Accumulate text for saving
-    if (event.type === 'text') {
-      assistantText += event.data as string;
-    }
-
-    // Track token usage
-    if (event.type === 'usage') {
-      const usage = event.data as { inputTokens: number; outputTokens: number; model: string };
-      totalInputTokens = usage.inputTokens;
-      totalOutputTokens = usage.outputTokens;
-      model = usage.model;
-    }
-
-    // Capture session_id from Claude CLI (may differ from what we passed)
-    if (event.type === 'session_id') {
-      const cliSessionId = event.data as string;
-      if (cliSessionId && cliSessionId !== sessionId) {
-        db.prepare('UPDATE conversations SET session_id = ? WHERE id = ?').run(cliSessionId, conversationId);
+  /**
+   * Start Claude CLI with the given session parameters.
+   * If isResume=true and it fails, auto-retries with a fresh session + chat history.
+   */
+  function startClaude(sid: string, isResume: boolean) {
+    // When NOT resuming, inject conversation history for memory
+    let systemPrompt = baseSystemPrompt;
+    if (!isResume) {
+      const history = buildChatHistory(conversationId);
+      if (history) {
+        systemPrompt = baseSystemPrompt + history;
       }
     }
 
-    // On completion
-    if (event.type === 'done') {
-      activeGenerations.delete(conversationId);
+    const { emitter, abort } = spawnClaude(sanitizedMessage, systemPrompt, {
+      userId,
+      conversationId,
+      sessionId: sid,
+      isResume,
+      skillId: effectiveSkillId,
+    });
 
-      // Save assistant message
-      if (assistantText) {
-        const assistantMsgId = uuidv4();
-        db.prepare(
-          'INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)'
-        ).run(assistantMsgId, conversationId, 'assistant', assistantText);
+    // Track current abort function
+    activeGenerations.set(conversationId, abort);
+
+    let assistantText = '';
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let model = '';
+    let hasRetried = false;
+
+    emitter.on('event', (event: SSEEvent) => {
+      // Auto-retry: if resume fails, create fresh session with history
+      if (event.type === 'error' && isResume && !hasRetried) {
+        const errStr = String(event.data || '');
+        if (errStr.includes('Session') || errStr.includes('exit') || errStr.includes('code 1')) {
+          hasRetried = true;
+          console.log(`[Generate] Resume failed for ${conversationId}, retrying with fresh session + history`);
+          const freshId = uuidv4();
+          db.prepare('UPDATE conversations SET session_id = ? WHERE id = ?').run(freshId, conversationId);
+          return; // Don't forward this error
+        }
       }
 
-      // Record token usage
-      if (totalInputTokens > 0 || totalOutputTokens > 0) {
-        recordTokenUsage({
-          userId,
-          conversationId,
-          inputTokens: totalInputTokens,
-          outputTokens: totalOutputTokens,
-          model,
-        });
+      // When the failed process exits, start fresh
+      if (event.type === 'done' && isResume && hasRetried) {
+        const row = db.prepare('SELECT session_id FROM conversations WHERE id = ?').get(conversationId) as { session_id: string } | undefined;
+        startClaude(row?.session_id || uuidv4(), false);
+        return;
       }
 
-      // Scan for new files (security layer 5)
-      const sandboxPath = getSandboxPath(userId, conversationId);
-      const newFiles = registerNewFiles(userId, conversationId, sandboxPath, existingFiles);
+      // Forward event to client
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
 
-      if (newFiles.length > 0) {
-        res.write(`data: ${JSON.stringify({
-          type: 'file_generated',
-          data: newFiles.map(f => ({
-            id: f.id,
-            filename: f.filename,
-            file_type: f.file_type,
-            file_size: f.file_size,
-          })),
-        })}\n\n`);
+      if (event.type === 'text') {
+        assistantText += event.data as string;
       }
 
-      res.end();
-    }
-  });
+      if (event.type === 'usage') {
+        const usage = event.data as { inputTokens: number; outputTokens: number; model: string };
+        totalInputTokens = usage.inputTokens;
+        totalOutputTokens = usage.outputTokens;
+        model = usage.model;
+      }
 
-  // Handle client disconnect — use res.on('close') not req.on('close')
-  // req.on('close') fires when request body is consumed (immediately for POST),
-  // while res.on('close') fires when the SSE connection is actually terminated.
+      if (event.type === 'session_id') {
+        const cliSessionId = event.data as string;
+        if (cliSessionId) {
+          db.prepare('UPDATE conversations SET session_id = ? WHERE id = ?').run(cliSessionId, conversationId);
+        }
+      }
+
+      if (event.type === 'done') {
+        activeGenerations.delete(conversationId);
+
+        // Save assistant message
+        if (assistantText) {
+          const assistantMsgId = uuidv4();
+          db.prepare(
+            'INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)'
+          ).run(assistantMsgId, conversationId, 'assistant', assistantText);
+        }
+
+        // Record token usage
+        if (totalInputTokens > 0 || totalOutputTokens > 0) {
+          recordTokenUsage({
+            userId,
+            conversationId,
+            inputTokens: totalInputTokens,
+            outputTokens: totalOutputTokens,
+            model,
+          });
+        }
+
+        // Scan for new files (security layer 5)
+        const sandboxPath = getSandboxPath(userId, conversationId);
+        const newFiles = registerNewFiles(userId, conversationId, sandboxPath, existingFiles);
+
+        if (newFiles.length > 0) {
+          res.write(`data: ${JSON.stringify({
+            type: 'file_generated',
+            data: newFiles.map(f => ({
+              id: f.id,
+              filename: f.filename,
+              file_type: f.file_type,
+              file_size: f.file_size,
+            })),
+          })}\n\n`);
+        }
+
+        res.end();
+      }
+    });
+  }
+
+  startClaude(sessionId, isExistingSession);
+
+  // Handle client disconnect
   res.on('close', () => {
-    if (activeGenerations.has(conversationId)) {
+    const abortFn = activeGenerations.get(conversationId);
+    if (abortFn) {
       activeGenerations.delete(conversationId);
-      abort();
+      abortFn();
     }
   });
 });
