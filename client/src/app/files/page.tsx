@@ -25,8 +25,9 @@ const FILE_TYPE_CONFIG: Record<string, { icon: string; color: string; bgColor: s
   md:   { icon: 'code', color: '#7bd0ff', bgColor: 'rgba(123,208,255,0.1)' },
 };
 
-const PREVIEWABLE_TYPES = new Set(['pdf', 'md', 'txt', 'csv', 'html', 'htm', 'png', 'jpg', 'jpeg', 'gif', 'svg']);
+// Types that render as text (fetched as text, shown in <pre>)
 const TEXT_TYPES = new Set(['md', 'txt', 'csv']);
+// Types that render as images
 const IMAGE_TYPES = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg']);
 
 const FILTER_TABS = [
@@ -38,6 +39,63 @@ const FILTER_TABS = [
 ];
 
 const PAGE_SIZE = 12;
+
+/* ============================================================
+   Delete Confirmation Modal
+   ============================================================ */
+function DeleteConfirmModal({
+  filename, onConfirm, onCancel,
+}: {
+  filename: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+      if (e.key === 'Enter') onConfirm();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onConfirm, onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center" onClick={onCancel}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div
+        className="relative bg-surface-container rounded-xl shadow-2xl border border-outline-variant/10 w-full max-w-sm mx-4 overflow-hidden animate-in"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Icon */}
+        <div className="flex flex-col items-center pt-8 pb-4 px-6">
+          <div className="w-14 h-14 rounded-full bg-error/10 flex items-center justify-center mb-4">
+            <span className="material-symbols-outlined text-error text-3xl">delete_forever</span>
+          </div>
+          <h3 className="font-headline font-bold text-lg text-on-surface mb-2">確定刪除？</h3>
+          <p className="text-sm text-on-surface-variant text-center leading-relaxed">
+            即將刪除 <span className="font-medium text-on-surface">{filename}</span>，此操作無法復原。
+          </p>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-3 p-6 pt-2">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-2.5 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-xs uppercase tracking-widest rounded cursor-pointer hover:bg-surface-variant transition-colors"
+          >
+            取消
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-2.5 px-4 bg-error text-on-error font-bold text-xs uppercase tracking-widest rounded cursor-pointer hover:bg-error/80 transition-colors"
+          >
+            刪除
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ============================================================
    Preview Modal
@@ -55,34 +113,42 @@ function PreviewModal({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const config = FILE_TYPE_CONFIG[file.file_type] || { icon: 'attach_file', color: '#8f9097', bgColor: 'rgba(143,144,151,0.1)' };
-  const canPreview = PREVIEWABLE_TYPES.has(file.file_type);
   const isText = TEXT_TYPES.has(file.file_type);
   const isImage = IMAGE_TYPES.has(file.file_type);
-  const isPdf = file.file_type === 'pdf';
 
   useEffect(() => {
-    if (!canPreview) { setLoading(false); return; }
-
+    let revoke: string | null = null;
     const headers = { Authorization: `Bearer ${token}` };
 
     if (isText) {
+      // Text files: fetch as text
       fetch(`/api/files/${file.id}/preview`, { headers })
         .then(r => { if (!r.ok) throw new Error(); return r.text(); })
         .then(t => { setTextContent(t); setLoading(false); })
         .catch(() => { setError(true); setLoading(false); });
     } else {
-      // PDF / Images: fetch as blob → create object URL (auth headers needed)
+      // Everything else (PDF, images, Office→PDF/HTML): fetch as blob
       fetch(`/api/files/${file.id}/preview`, { headers })
-        .then(r => { if (!r.ok) throw new Error(); return r.blob(); })
-        .then(blob => { setBlobUrl(URL.createObjectURL(blob)); setLoading(false); })
+        .then(r => {
+          if (!r.ok) throw new Error();
+          return r.blob().then(blob => ({ blob, contentType: r.headers.get('Content-Type') || '' }));
+        })
+        .then(({ blob, contentType }) => {
+          // If server returned HTML (JS fallback for office), treat as text
+          if (contentType.includes('text/html')) {
+            blob.text().then(html => { setTextContent(html); setLoading(false); });
+          } else {
+            const url = URL.createObjectURL(blob);
+            revoke = url;
+            setBlobUrl(url);
+            setLoading(false);
+          }
+        })
         .catch(() => { setError(true); setLoading(false); });
     }
 
-    return () => {
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [file.id, token, canPreview, isText]);
+    return () => { if (revoke) URL.revokeObjectURL(revoke); };
+  }, [file.id, token, isText, isImage]);
 
   // Close on Escape
   useEffect(() => {
@@ -97,15 +163,15 @@ function PreviewModal({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
+  // Determine what to render
+  const isPdfBlob = blobUrl && !isImage;
+  const isHtmlContent = !isText && textContent !== null; // HTML from Office conversion
+
   return (
     <div className="fixed inset-0 z-[100] flex" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
-      {/* Modal body */}
-      <div
-        className="relative flex w-full h-full animate-in"
-        onClick={e => e.stopPropagation()}
-      >
+      <div className="relative flex w-full h-full animate-in" onClick={e => e.stopPropagation()}>
         {/* Close button */}
         <button
           onClick={onClose}
@@ -119,37 +185,18 @@ function PreviewModal({
           {/* Background grid */}
           <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-pattern" />
 
-          {/* Watermark overlay */}
-          <div className="absolute inset-0 pointer-events-none overflow-hidden z-10 select-none" aria-hidden>
-            <div className="absolute inset-[-50%] flex flex-wrap gap-24 rotate-[-30deg] opacity-[0.06]">
-              {Array.from({ length: 40 }).map((_, i) => (
-                <span key={i} className="text-on-surface text-3xl font-headline font-bold tracking-[0.3em] uppercase whitespace-nowrap">
-                  CONFIDENTIAL 機密文件
-                </span>
-              ))}
-            </div>
-          </div>
-
           {/* Content */}
-          <div className="relative z-[5] w-full max-w-5xl max-h-[calc(100vh-6rem)]">
+          <div className="relative w-full max-w-5xl max-h-[calc(100vh-6rem)]">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-20">
                 <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-4" />
-                <p className="text-xs text-on-surface-variant uppercase tracking-widest">載入中...</p>
+                <p className="text-xs text-on-surface-variant uppercase tracking-widest">正在轉換預覽...</p>
               </div>
             ) : error ? (
-              <div className="flex flex-col items-center justify-center py-20">
-                <span className="material-symbols-outlined text-4xl text-error mb-4">error</span>
-                <p className="text-sm text-on-surface-variant">預覽載入失敗</p>
-              </div>
-            ) : !canPreview ? (
-              /* Non-previewable (Office files etc.) */
               <div className="flex flex-col items-center justify-center py-20 bg-surface-container/50 rounded-lg border border-outline-variant/10">
-                <div className="w-20 h-20 rounded flex items-center justify-center mb-6" style={{ background: config.bgColor }}>
-                  <span className="material-symbols-outlined text-5xl" style={{ color: config.color }}>{config.icon}</span>
-                </div>
-                <h3 className="font-headline text-xl font-bold text-on-surface mb-2">{file.filename}</h3>
-                <p className="text-sm text-on-surface-variant mb-6">此檔案格式不支援線上預覽，請下載後查看。</p>
+                <span className="material-symbols-outlined text-4xl text-error mb-4">error</span>
+                <p className="text-sm text-on-surface-variant mb-2">預覽載入失敗</p>
+                <p className="text-xs text-on-surface-variant/60 mb-6">請確認檔案完整性，或直接下載查看。</p>
                 <button
                   onClick={() => onDownload(file.id, file.filename)}
                   className="px-6 py-2.5 cyber-gradient text-on-primary font-bold text-xs uppercase tracking-widest flex items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity"
@@ -158,13 +205,15 @@ function PreviewModal({
                   下載檔案
                 </button>
               </div>
-            ) : isPdf && blobUrl ? (
+            ) : isPdfBlob ? (
+              /* PDF (native or LibreOffice converted) */
               <iframe
                 src={`${blobUrl}#toolbar=0`}
                 className="w-full h-[calc(100vh-8rem)] bg-white rounded"
                 title={file.filename}
               />
             ) : isImage && blobUrl ? (
+              /* Image */
               <div className="flex items-center justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -173,7 +222,18 @@ function PreviewModal({
                   className="max-w-full max-h-[calc(100vh-8rem)] object-contain rounded"
                 />
               </div>
+            ) : isHtmlContent ? (
+              /* HTML from Office JS-fallback conversion */
+              <div className="bg-surface-container rounded border border-outline-variant/10 overflow-auto max-h-[calc(100vh-8rem)]">
+                <iframe
+                  srcDoc={textContent!}
+                  className="w-full h-[calc(100vh-8rem)] rounded"
+                  title={file.filename}
+                  sandbox="allow-same-origin"
+                />
+              </div>
             ) : isText && textContent !== null ? (
+              /* Plain text / CSV / Markdown */
               <div className="bg-surface-container rounded border border-outline-variant/10 overflow-auto max-h-[calc(100vh-8rem)]">
                 <div className="p-6">
                   <pre className="text-sm text-on-surface-variant leading-relaxed whitespace-pre-wrap font-body break-words">
@@ -182,6 +242,17 @@ function PreviewModal({
                 </div>
               </div>
             ) : null}
+          </div>
+
+          {/* Watermark overlay — rendered AFTER content so it sits ON TOP of document */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden z-30 select-none" aria-hidden>
+            <div className="absolute inset-[-50%] flex flex-wrap gap-24 rotate-[-30deg]">
+              {Array.from({ length: 40 }).map((_, i) => (
+                <span key={i} className="text-3xl font-headline font-bold tracking-[0.3em] uppercase whitespace-nowrap" style={{ color: 'rgba(128,128,128,0.18)' }}>
+                  CONFIDENTIAL 機密文件
+                </span>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -231,22 +302,15 @@ function PreviewModal({
                 <span className="material-symbols-outlined text-sm">download</span>
                 下載到本機
               </button>
-              <button
-                onClick={onClose}
-                className="w-full py-2.5 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer hover:bg-surface-variant transition-colors"
-              >
-                <span className="material-symbols-outlined text-sm">close</span>
-                關閉預覽
-              </button>
             </div>
           </div>
 
           {/* Bottom indicator */}
           <div className="p-4 bg-primary/5 flex items-center gap-3 border-t border-outline-variant/10">
-            <span className="material-symbols-outlined text-primary text-sm">shield</span>
+            <span className="material-symbols-outlined text-primary text-base">shield</span>
             <div>
-              <p className="text-[10px] font-bold text-on-surface tracking-tighter">本地沙盒儲存</p>
-              <p className="text-[9px] text-on-surface-variant">所有檔案皆加密保護</p>
+              <p className="text-xs font-bold text-on-surface">本地沙盒儲存</p>
+              <p className="text-[10px] text-on-surface-variant">所有檔案皆加密保護</p>
             </div>
           </div>
         </aside>
@@ -266,6 +330,7 @@ function FilesContent() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<FileItem | null>(null);
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
@@ -280,14 +345,15 @@ function FilesContent() {
       .catch(console.error);
   }, [token, filter]);
 
-  async function deleteFile(id: string) {
-    if (!token || !confirm('確定要刪除這個檔案嗎？')) return;
-    await fetch(`/api/files/${id}`, {
+  async function confirmDelete() {
+    if (!token || !deleteTarget) return;
+    await fetch(`/api/files/${deleteTarget.id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
-    setFiles(prev => prev.filter(f => f.id !== id));
-    if (previewFile?.id === id) setPreviewFile(null);
+    setFiles(prev => prev.filter(f => f.id !== deleteTarget.id));
+    if (previewFile?.id === deleteTarget.id) setPreviewFile(null);
+    setDeleteTarget(null);
   }
 
   const handleDownload = useCallback(async (fileId: string, filename: string) => {
@@ -338,6 +404,15 @@ function FilesContent() {
   return (
     <div className="min-h-screen bg-surface-container-lowest">
       <Navbar />
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <DeleteConfirmModal
+          filename={deleteTarget.filename}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
 
       {/* Preview Modal */}
       {previewFile && token && (
@@ -494,7 +569,7 @@ function FilesContent() {
                         <span className="material-symbols-outlined text-sm">download</span>
                       </button>
                       <button
-                        onClick={e => { e.stopPropagation(); deleteFile(file.id); }}
+                        onClick={e => { e.stopPropagation(); setDeleteTarget(file); }}
                         className="w-8 h-8 flex items-center justify-center rounded bg-transparent hover:bg-error/10 text-on-surface-variant hover:text-error cursor-pointer transition-colors"
                         title="刪除"
                       >
