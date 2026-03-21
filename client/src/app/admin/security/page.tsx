@@ -4,13 +4,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
 
 interface AuditEntry {
-  id: string;
-  admin_id: string;
-  admin_email: string;
-  action: string;
-  target_type: string | null;
-  target_id: string | null;
-  details: string | null;
+  event_type: string;
+  event_id: string;
+  actor: string | null;
+  actor_name: string | null;
+  detail: string | null;
   created_at: string;
 }
 
@@ -48,11 +46,12 @@ function formatFileSize(bytes: number): string {
   return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
 }
 
-const ACTION_LABELS: Record<string, { label: string; color: string; icon: string }> = {
-  suspend_user:  { label: '停用用戶', color: 'text-error', icon: 'block' },
-  activate_user: { label: '啟用用戶', color: 'text-success', icon: 'check_circle' },
-  adjust_quota:  { label: '調整配額', color: 'text-warning', icon: 'tune' },
-  update_user:   { label: '更新用戶', color: 'text-tertiary', icon: 'edit' },
+const EVENT_META: Record<string, { label: string; color: string }> = {
+  user_registered:      { label: '用戶註冊', color: 'text-tertiary' },
+  conversation_created: { label: '建立對話', color: 'text-on-surface-variant' },
+  file_generated:       { label: '檔案生成', color: 'text-success' },
+  admin_suspend_user:   { label: '停用用戶', color: 'text-error' },
+  admin_activate_user:  { label: '啟用用戶', color: 'text-success' },
 };
 
 export default function AdminSecurity() {
@@ -76,7 +75,7 @@ export default function AdminSecurity() {
 
   const fetchAudit = useCallback(() => {
     if (!token) return;
-    fetch(`/api/admin/security/audit-log?page=${auditPage}&limit=10`, {
+    fetch(`/api/admin/security/audit-log?page=${auditPage}&limit=13`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
@@ -128,25 +127,25 @@ export default function AdminSecurity() {
         {/* Stats Row */}
         <div className="grid grid-cols-4 gap-6">
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-2 -right-2 text-[5rem] text-on-surface opacity-[0.04] group-hover:opacity-[0.08] transition-opacity pointer-events-none">receipt_long</span>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-4 text-[7rem] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none">receipt_long</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">審計記錄</p>
             <span className="text-3xl font-headline font-black text-on-surface">{stats?.totalAuditEntries ?? 0}</span>
             <p className="text-xs text-on-surface-variant mt-2 font-mono">Admin 操作記錄</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-2 -right-2 text-[5rem] text-on-surface opacity-[0.04] group-hover:opacity-[0.08] transition-opacity pointer-events-none">person_off</span>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-4 text-[7rem] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none">person_off</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">已停用帳號</p>
             <span className="text-3xl font-headline font-black text-error">{stats?.suspendedUsers ?? 0}</span>
             <p className="text-xs text-on-surface-variant mt-2 font-mono">共 {stats?.totalUsers ?? 0} 個用戶</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-2 -right-2 text-[5rem] text-on-surface opacity-[0.04] group-hover:opacity-[0.08] transition-opacity pointer-events-none">schedule</span>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-4 text-[7rem] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none">schedule</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">系統運行時間</p>
             <span className="text-3xl font-headline font-black text-on-surface">{stats ? formatUptime(stats.systemUptime) : '—'}</span>
             <p className="text-xs text-on-surface-variant mt-2 font-mono">自上次啟動</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-2 -right-2 text-[5rem] text-on-surface opacity-[0.04] group-hover:opacity-[0.08] transition-opacity pointer-events-none">description</span>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-4 text-[7rem] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none">description</span>
             <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">已生成檔案</p>
             <span className="text-3xl font-headline font-black text-primary">{stats?.totalFiles ?? 0}</span>
             <p className="text-xs text-on-surface-variant mt-2 font-mono">跨 {stats?.totalConversations ?? 0} 個對話</p>
@@ -233,29 +232,27 @@ export default function AdminSecurity() {
                   <div className="w-3 h-3 rounded-full bg-warning/60" />
                   <div className="w-3 h-3 rounded-full bg-success/60" />
                 </div>
-                <span className="text-[10px] text-on-surface-variant font-mono tracking-wider">ADMIN_AUDIT_LOG</span>
+                <span className="text-[10px] text-on-surface-variant font-mono tracking-wider">SYSTEM_AUDIT_LOG</span>
               </div>
               <span className="text-[10px] text-on-surface-variant font-mono">共 {auditTotal} 筆</span>
             </div>
             <div className="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-1 min-h-[300px] max-h-[500px]">
               {auditLog.length === 0 ? (
                 <div className="text-on-surface-variant py-8 text-center">
-                  <p>[SYSTEM] 尚無審計記錄</p>
-                  <p className="text-outline mt-1">[INFO] 管理操作將自動記錄於此</p>
+                  <p>[SYSTEM] 尚無記錄</p>
+                  <p className="text-outline mt-1">[INFO] 系統活動將自動記錄於此</p>
                 </div>
               ) : (
                 auditLog.map(entry => {
-                  const meta = ACTION_LABELS[entry.action] || { label: entry.action, color: 'text-on-surface-variant', icon: 'info' };
-                  let details = '';
-                  try { details = entry.details ? JSON.parse(entry.details)?.email || '' : ''; } catch { /* ignore */ }
+                  const meta = EVENT_META[entry.event_type] || { label: entry.event_type, color: 'text-on-surface-variant' };
+                  const actor = entry.actor_name || entry.actor?.split('@')[0] || '';
                   return (
-                    <div key={entry.id} className="flex gap-2 py-1">
+                    <div key={entry.event_id} className="flex gap-2 py-1">
                       <span className="text-outline shrink-0">[{new Date(entry.created_at).toLocaleString('zh-TW')}]</span>
                       <span className={`${meta.color} shrink-0`}>[{meta.label}]</span>
                       <span className="text-on-surface-variant">
-                        {entry.admin_email && <span className="text-on-surface">{entry.admin_email.split('@')[0]}</span>}
-                        {entry.target_type === 'user' && details ? ` → ${details}` : ''}
-                        {entry.target_id ? ` (${entry.target_id.slice(0, 8)})` : ''}
+                        <span className="text-on-surface">{actor}</span>
+                        {entry.detail ? ` — ${entry.detail}` : ''}
                       </span>
                     </div>
                   );
@@ -267,7 +264,7 @@ export default function AdminSecurity() {
             {auditTotalPages > 1 && (
               <div className="flex items-center justify-between px-6 py-3 border-t border-outline-variant/10 bg-surface-container-low">
                 <span className="text-xs text-on-surface-variant">
-                  第 {(auditPage - 1) * 10 + 1}-{Math.min(auditPage * 10, auditTotal)} 筆，共 {auditTotal} 筆
+                  第 {(auditPage - 1) * 13 + 1}-{Math.min(auditPage * 13, auditTotal)} 筆，共 {auditTotal} 筆
                 </span>
                 <div className="flex gap-1">
                   <button

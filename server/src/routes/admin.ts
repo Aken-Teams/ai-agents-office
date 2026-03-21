@@ -345,28 +345,73 @@ router.get('/tokens/ledger', (req: Request, res: Response) => {
 
 // ==================== Security & Audit ====================
 
-// GET /api/admin/security/audit-log?page=1&limit=50
+// GET /api/admin/security/audit-log?page=1&limit=10
+// Unified system activity log: user registrations, conversations, file generations, admin actions
 router.get('/security/audit-log', (req: Request, res: Response) => {
   const page = Math.max(parseInt(req.query.page as string) || 1, 1);
-  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const limit = Math.min(parseInt(req.query.limit as string) || 10, 100);
   const offset = (page - 1) * limit;
 
-  const countRow = db.prepare('SELECT COUNT(*) as total FROM admin_audit_log').get() as any;
+  // Count total across all sources
+  const counts = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM users WHERE role != 'admin') +
+      (SELECT COUNT(*) FROM conversations) +
+      (SELECT COUNT(*) FROM generated_files) +
+      (SELECT COUNT(*) FROM admin_audit_log)
+    as total
+  `).get() as any;
 
+  // Unified query across all activity sources
   const rows = db.prepare(`
-    SELECT al.*, u.email as admin_email
+    SELECT
+      'user_registered' as event_type,
+      u.id as event_id,
+      u.email as actor,
+      u.display_name as actor_name,
+      NULL as detail,
+      u.created_at
+    FROM users u WHERE u.role != 'admin'
+    UNION ALL
+    SELECT
+      'conversation_created',
+      c.id,
+      u.email,
+      u.display_name,
+      c.title,
+      c.created_at
+    FROM conversations c
+    LEFT JOIN users u ON u.id = c.user_id
+    UNION ALL
+    SELECT
+      'file_generated',
+      gf.id,
+      u.email,
+      u.display_name,
+      gf.filename,
+      gf.created_at
+    FROM generated_files gf
+    LEFT JOIN users u ON u.id = gf.user_id
+    UNION ALL
+    SELECT
+      'admin_' || al.action,
+      al.id,
+      adm.email,
+      adm.display_name,
+      al.details,
+      al.created_at
     FROM admin_audit_log al
-    LEFT JOIN users u ON u.id = al.admin_id
-    ORDER BY al.created_at DESC
+    LEFT JOIN users adm ON adm.id = al.admin_id
+    ORDER BY created_at DESC
     LIMIT ? OFFSET ?
   `).all(limit, offset);
 
   res.json({
     entries: rows,
-    total: countRow.total,
+    total: counts.total,
     page,
     limit,
-    totalPages: Math.ceil(countRow.total / limit),
+    totalPages: Math.ceil(counts.total / limit),
   });
 });
 
