@@ -282,32 +282,25 @@ function DashboardContent() {
                 <h3 className="text-xs font-bold uppercase tracking-widest">工作區: /workspace</h3>
                 <span className="material-symbols-outlined text-xs text-on-surface-variant hover:text-primary cursor-pointer">refresh</span>
               </div>
-              <div className="flex-1 space-y-3 font-mono text-xs">
+              <div className="flex-1 space-y-2 font-mono text-xs overflow-y-auto">
                 {conversations.length === 0 ? (
                   <p className="text-on-surface-variant text-center py-4">尚無檔案</p>
                 ) : (
-                  <>
-                    {conversations.slice(0, 5).map(conv => (
-                      <div
-                        key={conv.id}
-                        className="flex items-center gap-3 p-2 bg-surface-container/50 rounded group cursor-pointer hover:bg-surface-container-highest transition-colors"
-                        onClick={() => router.push(`/chat/${conv.id}`)}
-                      >
-                        <span className="material-symbols-outlined text-sm text-on-surface-variant">
-                          {conv.skill_id ? (SKILL_ICONS[conv.skill_id] || 'article') : 'article'}
-                        </span>
-                        <span className="flex-1 text-on-surface truncate">{conv.title}</span>
-                        <span className="text-xs text-on-secondary-container">
-                          {conv.skill_id?.replace('-gen', '').toUpperCase() || 'AI'}
-                        </span>
-                      </div>
-                    ))}
-                    {/* Ghost entries for aesthetic */}
-                    <div className="opacity-30 flex items-center gap-3 p-2">
-                      <span className="material-symbols-outlined text-sm">draft</span>
-                      <span className="flex-1">temp_cache.tmp</span>
+                  conversations.slice(0, 10).map(conv => (
+                    <div
+                      key={conv.id}
+                      className="flex items-center gap-3 p-2 bg-surface-container/50 rounded group cursor-pointer hover:bg-surface-container-highest transition-colors"
+                      onClick={() => router.push(`/chat/${conv.id}`)}
+                    >
+                      <span className="material-symbols-outlined text-sm text-on-surface-variant">
+                        {conv.skill_id ? (SKILL_ICONS[conv.skill_id] || 'article') : 'article'}
+                      </span>
+                      <span className="flex-1 text-on-surface truncate">{conv.title}</span>
+                      <span className="text-xs text-on-secondary-container">
+                        {conv.skill_id?.replace('-gen', '').toUpperCase() || 'AI'}
+                      </span>
                     </div>
-                  </>
+                  ))
                 )}
               </div>
               <div className="mt-4 pt-4 border-t border-outline-variant/10">

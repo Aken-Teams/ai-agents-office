@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from './AuthProvider';
 
 const NAV_LINKS = [
@@ -10,73 +11,163 @@ const NAV_LINKS = [
   { href: '/usage', label: '用量統計', icon: 'bar_chart' },
 ];
 
+const DOC_TYPES = [
+  { id: 'pptx-gen', label: '簡報', desc: '投影片製作', icon: 'slideshow', colorClass: 'text-warning' },
+  { id: 'docx-gen', label: '文件', desc: '文書撰寫', icon: 'description', colorClass: 'text-tertiary' },
+  { id: 'xlsx-gen', label: '試算表', desc: '數據分析', icon: 'table_chart', colorClass: 'text-success' },
+  { id: 'pdf-gen', label: 'PDF', desc: '文件輸出', icon: 'picture_as_pdf', colorClass: 'text-error' },
+];
+
 export default function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
+  const [showModal, setShowModal] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   if (!user) return null;
 
+  async function handleCreate(skillId: string) {
+    if (!token || creating) return;
+    setCreating(true);
+    try {
+      const docType = DOC_TYPES.find(s => s.id === skillId);
+      const title = `New ${docType?.label || ''} Document`;
+      const res = await fetch('/api/conversations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ title, skillId }),
+      });
+      const conv = await res.json();
+      setShowModal(false);
+      router.push(`/chat/${conv.id}`);
+    } finally {
+      setCreating(false);
+    }
+  }
+
   return (
-    <aside className="h-screen w-64 fixed left-0 top-0 bg-surface-dim flex flex-col py-6 font-headline text-sm tracking-tight z-50 border-r border-outline-variant/10">
-      {/* Logo */}
-      <div className="px-6 mb-8">
-        <Link href="/dashboard" className="flex items-center gap-3 no-underline">
-          <div className="w-8 h-8 bg-primary/20 flex items-center justify-center rounded-lg">
-            <span className="material-symbols-outlined text-primary">terminal</span>
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tighter text-on-surface">AI Agents</h1>
-            <p className="text-[10px] uppercase tracking-[0.2em] text-primary">Office</p>
-          </div>
-        </Link>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 px-4 space-y-1">
-        {NAV_LINKS.map(link => {
-          const isActive = pathname === link.href;
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`flex items-center gap-3 px-3 py-2.5 no-underline transition-all duration-200 ${
-                isActive
-                  ? 'text-primary bg-surface-container border-l-2 border-primary'
-                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/50'
-              }`}
-            >
-              <span className="material-symbols-outlined">{link.icon}</span>
-              <span>{link.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* New Document Button */}
-      <div className="px-6 mt-6">
-        <Link
-          href="/dashboard"
-          className="w-full cyber-gradient py-3 text-on-primary font-bold rounded flex items-center justify-center gap-2 text-xs uppercase tracking-widest active:scale-[0.99] transition-all no-underline"
-        >
-          <span className="material-symbols-outlined text-sm">add</span>
-          新建文件
-        </Link>
-      </div>
-
-      {/* Bottom */}
-      <div className="px-4 mt-auto pt-6 space-y-1">
-        <div className="flex items-center gap-3 px-3 py-2 text-on-surface-variant">
-          <span className="material-symbols-outlined text-sm">person</span>
-          <span className="text-xs truncate">{user.displayName || user.email}</span>
+    <>
+      <aside className="h-screen w-64 fixed left-0 top-0 bg-surface-dim flex flex-col py-6 font-headline text-sm tracking-tight z-50 border-r border-outline-variant/10">
+        {/* Logo */}
+        <div className="px-6 mb-8">
+          <Link href="/dashboard" className="flex items-center gap-3 no-underline">
+            <div className="w-8 h-8 bg-primary/20 flex items-center justify-center rounded-lg">
+              <span className="material-symbols-outlined text-primary">terminal</span>
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tighter text-on-surface">AI Agents</h1>
+              <p className="text-[10px] uppercase tracking-[0.2em] text-primary">Office</p>
+            </div>
+          </Link>
         </div>
-        <button
-          onClick={logout}
-          className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface transition-all w-full text-left bg-transparent"
+
+        {/* Navigation */}
+        <nav className="flex-1 px-4 space-y-1">
+          {NAV_LINKS.map(link => {
+            const isActive = pathname === link.href;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`flex items-center gap-3 px-3 py-2.5 no-underline transition-all duration-200 ${
+                  isActive
+                    ? 'text-primary bg-surface-container border-l-2 border-primary'
+                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/50'
+                }`}
+              >
+                <span className="material-symbols-outlined">{link.icon}</span>
+                <span>{link.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* New Document Button */}
+        <div className="px-6 mt-6">
+          <button
+            onClick={() => setShowModal(true)}
+            className="w-full cyber-gradient py-3 text-on-primary font-bold rounded flex items-center justify-center gap-2 text-xs uppercase tracking-widest active:scale-[0.99] transition-all cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-sm">add</span>
+            新建文件
+          </button>
+        </div>
+
+        {/* Bottom */}
+        <div className="px-4 mt-auto pt-6 space-y-1">
+          <div className="flex items-center gap-3 px-3 py-2 text-on-surface-variant">
+            <span className="material-symbols-outlined text-sm">person</span>
+            <span className="text-xs truncate">{user.displayName || user.email}</span>
+          </div>
+          <button
+            onClick={logout}
+            className="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:text-on-surface transition-all w-full text-left bg-transparent"
+          >
+            <span className="material-symbols-outlined">logout</span>
+            <span>登出</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Agent Tool Picker Modal */}
+      {showModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center"
+          onClick={() => setShowModal(false)}
         >
-          <span className="material-symbols-outlined">logout</span>
-          <span>登出</span>
-        </button>
-      </div>
-    </aside>
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+
+          {/* Modal */}
+          <div
+            className="relative bg-surface-container rounded-xl shadow-2xl border border-outline-variant/10 w-full max-w-md mx-4 overflow-hidden animate-in"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-6 py-5 flex items-center justify-between border-b border-outline-variant/10">
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-primary">add_circle</span>
+                <h2 className="text-sm font-headline font-bold">選擇代理工具</h2>
+              </div>
+              <button
+                onClick={() => setShowModal(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors bg-transparent cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
+              </button>
+            </div>
+
+            {/* Agent Options Grid */}
+            <div className="p-6 grid grid-cols-2 gap-3">
+              {DOC_TYPES.map(doc => (
+                <button
+                  key={doc.id}
+                  onClick={() => handleCreate(doc.id)}
+                  disabled={creating}
+                  className="bg-surface-container-high p-5 rounded-lg flex flex-col gap-3 hover:bg-surface-variant transition-all text-left disabled:opacity-50 cursor-pointer group border border-transparent hover:border-primary/20"
+                >
+                  <span className={`material-symbols-outlined text-2xl ${doc.colorClass} group-hover:scale-110 transition-transform`}>
+                    {doc.icon}
+                  </span>
+                  <span className="text-sm font-bold text-on-surface">{doc.label}</span>
+                  <span className="text-xs text-on-surface-variant">{doc.desc}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Footer hint */}
+            <div className="px-6 pb-5">
+              <p className="text-xs text-on-surface-variant text-center">
+                選擇工具後將建立新對話，或使用儀表板的智能指令讓 AI 自動判斷
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

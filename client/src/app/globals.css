@@ -187,3 +187,18 @@
   background-image: radial-gradient(circle at 2px 2px, rgba(0, 219, 233, 0.05) 1px, transparent 0);
   background-size: 32px 32px;
 }
+
+.animate-in {
+  animation: modal-in 0.2s ease-out;
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
