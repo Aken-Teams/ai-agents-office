@@ -1,8 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
+import path from 'path';
 import db from '../db.js';
 import { adminMiddleware } from '../middleware/adminAuth.js';
 import { loadSkills } from '../skills/loader.js';
+import { config } from '../config.js';
 
 const router = Router();
 router.use(adminMiddleware);
@@ -397,14 +400,81 @@ router.get('/security/stats', (_req: Request, res: Response) => {
   const auditCount = (db.prepare('SELECT COUNT(*) as count FROM admin_audit_log').get() as any).count;
   const userCount = (db.prepare("SELECT COUNT(*) as count FROM users WHERE role != 'admin'").get() as any).count;
   const suspendedCount = (db.prepare("SELECT COUNT(*) as count FROM users WHERE status = 'suspended'").get() as any).count;
+  const totalConversations = (db.prepare('SELECT COUNT(*) as count FROM conversations').get() as any).count;
+  const totalFiles = (db.prepare('SELECT COUNT(*) as count FROM generated_files').get() as any).count;
 
   res.json({
     totalAuditEntries: auditCount,
     totalUsers: userCount,
     suspendedUsers: suspendedCount,
+    totalConversations,
+    totalFiles,
     systemUptime: Math.floor(process.uptime()),
-    isolationLevel: 'LEVEL_5',
   });
+});
+
+// GET /api/admin/security/workspace-scan — real filesystem scan
+router.get('/security/workspace-scan', (_req: Request, res: Response) => {
+  const workspaceRoot = config.workspaceRoot;
+  const results: { userId: string; email: string; displayName: string | null; dirCount: number; fileCount: number; totalSize: number }[] = [];
+
+  try {
+    if (!fs.existsSync(workspaceRoot)) {
+      return res.json([]);
+    }
+
+    const userDirs = fs.readdirSync(workspaceRoot, { withFileTypes: true })
+      .filter(d => d.isDirectory());
+
+    // Map user IDs to user info
+    const users = db.prepare("SELECT id, email, display_name FROM users WHERE role != 'admin'").all() as any[];
+    const userMap = new Map(users.map(u => [u.id, u]));
+
+    for (const dir of userDirs) {
+      const userPath = path.join(workspaceRoot, dir.name);
+      let fileCount = 0;
+      let dirCount = 0;
+      let totalSize = 0;
+
+      // Recursively scan
+      function scan(dirPath: string) {
+        try {
+          const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+          for (const entry of entries) {
+            const fullPath = path.join(dirPath, entry.name);
+            if (entry.isDirectory()) {
+              dirCount++;
+              scan(fullPath);
+            } else if (entry.isFile()) {
+              fileCount++;
+              try {
+                const stat = fs.statSync(fullPath);
+                totalSize += stat.size;
+              } catch { /* skip unreadable */ }
+            }
+          }
+        } catch { /* skip unreadable dirs */ }
+      }
+
+      scan(userPath);
+
+      const userInfo = userMap.get(dir.name);
+      results.push({
+        userId: dir.name,
+        email: userInfo?.email || dir.name,
+        displayName: userInfo?.display_name || null,
+        dirCount,
+        fileCount,
+        totalSize,
+      });
+    }
+
+    // Sort by totalSize descending
+    results.sort((a, b) => b.totalSize - a.totalSize);
+    res.json(results);
+  } catch (err) {
+    res.json([]);
+  }
 });
 
 export default router;
