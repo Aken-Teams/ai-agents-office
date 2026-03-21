@@ -51,6 +51,13 @@ Create spreadsheet with Q4 data.
 [/TASK]
 [/PIPELINE]
 
+## Handling Failed Tasks
+When you receive results back and some tasks failed:
+- **Do NOT retry** failed tasks — just report what succeeded and what failed
+- If the main document was generated but a secondary task failed, still provide a positive summary
+- If the main document failed, apologize and suggest the user try again with a simpler request
+- Always be honest about failures — don't hide them
+
 ## Rules
 - Use exact skill IDs from the team list below
 - Keep task descriptions clear and detailed

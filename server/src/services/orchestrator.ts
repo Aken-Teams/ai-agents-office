@@ -8,7 +8,20 @@ import { config } from '../config.js';
 import type { SSEEvent, ParsedTask, ParsedPipeline, TaskExecution } from '../types.js';
 
 const MAX_ORCHESTRATION_DEPTH = 3;
-const TASK_TIMEOUT_MS = 180_000; // 3 minutes per task (safety valve)
+const ORCHESTRATION_TIMEOUT_MS = 900_000; // 15 minutes total orchestration limit
+
+// Per-skill timeout (ms) — text-only agents are fast, generators need more time
+const SKILL_TIMEOUT: Record<string, number> = {
+  router:    120_000,   // 2 min — just analyze and delegate
+  research:  180_000,   // 3 min — web search
+  planner:   120_000,   // 2 min — text planning
+  reviewer:  120_000,   // 2 min — text review
+  'pptx-gen': 600_000,  // 10 min — write code + run node to generate PPT
+  'docx-gen': 480_000,  // 8 min — write code + run node to generate Word
+  'xlsx-gen': 300_000,  // 5 min — write code + run node to generate Excel
+  'pdf-gen':  300_000,  // 5 min — write code + run node to generate PDF
+};
+const DEFAULT_TASK_TIMEOUT_MS = 300_000; // 5 min fallback for unknown skills
 
 export interface OrchestratorResult {
   assistantText: string;
@@ -63,8 +76,16 @@ export class Orchestrator {
     // Recursive orchestration loop
     let currentMessage = message;
     let depth = 0;
+    const orchestrationStart = Date.now();
 
     while (depth < MAX_ORCHESTRATION_DEPTH && !this.aborted) {
+      // Total orchestration time guard
+      if (Date.now() - orchestrationStart > ORCHESTRATION_TIMEOUT_MS) {
+        const warning = '\n\n(Reached maximum orchestration time limit. Providing final summary.)';
+        allAssistantText += warning;
+        this.sseWriter({ type: 'text', data: warning });
+        break;
+      }
       depth++;
 
       // Step 1: Send to Router Agent
@@ -153,11 +174,17 @@ export class Orchestrator {
 
       // Step 4: Feed results back to Router
       if (taskResults.length > 0 && !this.aborted) {
+        const hasFailures = taskResults.some(r => r.startsWith('Error') || r.startsWith('Skipped'));
         const resultsSummary = taskResults
           .map((r, i) => `### Task ${i + 1} Result:\n${truncateResultForRouter(r)}`)
           .join('\n\n');
 
-        currentMessage = `Here are the results from the tasks you dispatched:\n\n${resultsSummary}\n\nPlease summarize the results for the user. If more tasks are needed, dispatch them. Otherwise, provide a final response.`;
+        let instruction = 'Please summarize the results for the user. If more tasks are needed, dispatch them. Otherwise, provide a final response.';
+        if (hasFailures) {
+          instruction = 'Some tasks failed or were skipped. Summarize what succeeded and what failed for the user. Do NOT retry failed tasks — just report the status clearly. Provide a final response.';
+        }
+
+        currentMessage = `Here are the results from the tasks you dispatched:\n\n${resultsSummary}\n\n${instruction}`;
       } else {
         break;
       }
@@ -185,9 +212,21 @@ export class Orchestrator {
   private async executePipelineSerial(pipeline: ParsedPipeline, pipelineId: string): Promise<string[]> {
     const results: string[] = [];
     let previousOutput = '';
+    let previousFailed = false;
 
     for (const task of pipeline.tasks) {
       if (this.aborted) break;
+
+      // If previous step failed, skip dependent tasks
+      if (previousFailed) {
+        const skipMsg = `Skipped: previous pipeline step failed`;
+        results.push(skipMsg);
+        this.sseWriter({
+          type: 'task_failed',
+          data: { taskId: 'skipped', skillId: task.skillId, error: skipMsg },
+        });
+        continue;
+      }
 
       // Prepend previous task's output as context
       const enrichedTask = { ...task };
@@ -198,6 +237,11 @@ export class Orchestrator {
       const result = await this.executeTask(enrichedTask, pipelineId);
       results.push(result);
       previousOutput = result;
+
+      // Check if this task failed (result starts with "Error")
+      if (result.startsWith('Error')) {
+        previousFailed = true;
+      }
     }
 
     return results;
@@ -328,12 +372,22 @@ export class Orchestrator {
       let outputTokens = 0;
       let model = '';
 
-      // Task timeout: abort if agent takes too long
+      // Per-skill timeout: text agents get short limits, generators get long ones
+      const timeoutMs = SKILL_TIMEOUT[opts.skillId] ?? DEFAULT_TASK_TIMEOUT_MS;
       const timeout = setTimeout(() => {
-        console.warn(`[Orchestrator] Agent ${opts.skillId} timed out after ${TASK_TIMEOUT_MS / 1000}s`);
+        console.warn(`[Orchestrator] Agent ${opts.skillId} timed out after ${timeoutMs / 1000}s`);
         abort();
-        reject(new Error(`Agent ${opts.skillId} timed out after ${TASK_TIMEOUT_MS / 1000} seconds`));
-      }, TASK_TIMEOUT_MS);
+        // Remove abort fn
+        this.activeAbortFns = this.activeAbortFns.filter(fn => fn !== abort);
+
+        if (text.trim()) {
+          // Agent produced partial output — use it (file may already be generated)
+          console.log(`[Orchestrator] Agent ${opts.skillId} timed out but has partial output (${text.length} chars), using it`);
+          resolve({ text: text + '\n\n(Note: agent timed out, output may be incomplete)', inputTokens, outputTokens, model });
+        } else {
+          reject(new Error(`Agent ${opts.skillId} timed out after ${timeoutMs / 1000} seconds with no output`));
+        }
+      }, timeoutMs);
 
       emitter.on('event', (event: SSEEvent) => {
         if (this.aborted) return;
