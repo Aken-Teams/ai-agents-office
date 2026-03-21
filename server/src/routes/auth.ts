@@ -38,13 +38,13 @@ router.post('/register', async (req: Request, res: Response) => {
       'INSERT INTO users (id, email, password_hash, display_name) VALUES (?, ?, ?, ?)'
     ).run(id, email, passwordHash, displayName || null);
 
-    const token = jwt.sign({ userId: id, email }, config.jwtSecret, {
+    const token = jwt.sign({ userId: id, email, role: 'user' }, config.jwtSecret, {
       expiresIn: config.jwtExpiresIn,
     });
 
     res.status(201).json({
       token,
-      user: { id, email, displayName: displayName || null },
+      user: { id, email, displayName: displayName || null, role: 'user' },
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -74,7 +74,8 @@ router.post('/login', async (req: Request, res: Response) => {
       return;
     }
 
-    const token = jwt.sign({ userId: user.id, email: user.email }, config.jwtSecret, {
+    const role = (user as any).role || 'user';
+    const token = jwt.sign({ userId: user.id, email: user.email, role }, config.jwtSecret, {
       expiresIn: config.jwtExpiresIn,
     });
 
@@ -84,6 +85,7 @@ router.post('/login', async (req: Request, res: Response) => {
         id: user.id,
         email: user.email,
         displayName: user.display_name,
+        role,
       },
     });
   } catch (error) {
@@ -95,7 +97,7 @@ router.post('/login', async (req: Request, res: Response) => {
 // GET /api/auth/me
 router.get('/me', authMiddleware, (req: Request, res: Response) => {
   const user = db.prepare(
-    'SELECT id, email, display_name, created_at FROM users WHERE id = ?'
+    'SELECT id, email, display_name, role, status, created_at FROM users WHERE id = ?'
   ).get(req.user!.userId) as User | undefined;
 
   if (!user) {
@@ -107,6 +109,8 @@ router.get('/me', authMiddleware, (req: Request, res: Response) => {
     id: user.id,
     email: user.email,
     displayName: user.display_name,
+    role: user.role || 'user',
+    status: user.status || 'active',
     createdAt: user.created_at,
   });
 });

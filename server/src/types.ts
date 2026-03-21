@@ -3,6 +3,8 @@ export interface User {
   email: string;
   password_hash: string;
   display_name: string | null;
+  role: 'user' | 'admin';
+  status: 'active' | 'suspended';
   created_at: string;
   updated_at: string;
 }
@@ -95,6 +97,7 @@ export interface TaskExecution {
 export interface AuthPayload {
   userId: string;
   email: string;
+  role: 'user' | 'admin';
 }
 
 declare global {

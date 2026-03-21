@@ -19,6 +19,17 @@ function LoginForm() {
     setLoading(true);
     try {
       await login(email, password);
+      // Check JWT role to redirect admin users
+      const storedToken = localStorage.getItem('token');
+      if (storedToken) {
+        try {
+          const payload = JSON.parse(atob(storedToken.split('.')[1]));
+          if (payload.role === 'admin') {
+            router.push('/admin/overview');
+            return;
+          }
+        } catch { /* ignore decode errors */ }
+      }
       router.push('/dashboard');
     } catch (err) {
       setError((err as Error).message);

@@ -1,4 +1,6 @@
 import Database from 'better-sqlite3';
+import bcrypt from 'bcrypt';
+import { v4 as uuidv4 } from 'uuid';
 import { config } from './config.js';
 
 const db = new Database(config.dbPath);
@@ -100,8 +102,45 @@ export function initializeDatabase(): void {
     db.prepare("SELECT mode FROM conversations LIMIT 1").get();
   } catch {
     db.exec("ALTER TABLE conversations ADD COLUMN mode TEXT");
-    // Set existing conversations (that already have a skill_id) to direct mode
     db.exec("UPDATE conversations SET mode = 'direct' WHERE skill_id IS NOT NULL");
+  }
+
+  // Migration: add role + status columns to users if missing
+  try {
+    db.prepare("SELECT role FROM users LIMIT 1").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
+  }
+  try {
+    db.prepare("SELECT status FROM users LIMIT 1").get();
+  } catch {
+    db.exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  }
+
+  // Admin audit log table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS admin_audit_log (
+      id          TEXT PRIMARY KEY,
+      admin_id    TEXT NOT NULL,
+      action      TEXT NOT NULL,
+      target_type TEXT,
+      target_id   TEXT,
+      details     TEXT,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_admin ON admin_audit_log(admin_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_created ON admin_audit_log(created_at);
+  `);
+
+  // Seed admin user
+  const adminExists = db.prepare("SELECT id FROM users WHERE email = 'admin@zhaoi.ai'").get();
+  if (!adminExists) {
+    const hash = bcrypt.hashSync('zhaoi1023', 12);
+    const now = new Date().toISOString();
+    db.prepare(
+      "INSERT INTO users (id, email, password_hash, display_name, role, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(uuidv4(), 'admin@zhaoi.ai', hash, 'System Admin', 'admin', 'active', now, now);
+    console.log('Admin user seeded: admin@zhaoi.ai');
   }
 }
 
