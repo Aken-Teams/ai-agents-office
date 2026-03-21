@@ -177,8 +177,8 @@ function LoginForm() {
           <span className="font-headline font-bold text-on-surface">Claude Sonnet 4</span>
         </div>
         <div className="flex flex-col gap-1 border-l border-outline-variant/20 pl-8">
-          <span className="text-[9px] uppercase tracking-widest text-outline">多代理協作</span>
-          <span className="font-headline font-bold text-on-surface">Router + Workers</span>
+          <span className="text-[9px] uppercase tracking-widest text-outline">協作模式</span>
+          <span className="font-headline font-bold text-on-surface">多 AI 代理協作</span>
         </div>
       </footer>
     </div>
