@@ -158,17 +158,23 @@ function ChatContent() {
     }, 50);
   }, [messages, streamText, thinkingText, tools, streaming]);
 
-  // Elapsed time timer
+  // Elapsed time timer + auto-collapse panel when done
   useEffect(() => {
     if (streaming) {
       setElapsed(0);
+      setPanelCollapsed(false);
       timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = null;
+      // Auto-collapse processing panel when streaming ends
+      // so the response message is immediately visible
+      if (tools.length > 0) {
+        setPanelCollapsed(true);
+      }
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [streaming]);
+  }, [streaming]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || streaming || !token) return;
@@ -479,7 +485,18 @@ function ChatContent() {
               );
             })}
 
-            {/* === Active AI Processing Panel (Collapsible) === */}
+            {/* === Streaming text preview (ABOVE processing panel so response stays visible) === */}
+            {streamText && streamText.trim() && (
+              <div className={`${styles.message} ${styles.assistant} ${styles.streaming}`}>
+                <div className={styles.messageRole}>AI Assistant</div>
+                <div className={styles.messageContent}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamText}</ReactMarkdown>
+                  <span className={styles.cursor} />
+                </div>
+              </div>
+            )}
+
+            {/* === Processing Panel (below response — user can scroll down to see details) === */}
             {(hasActivity || showCompletedPanel) && (
               <div className={styles.processingPanel}>
                 <div
@@ -620,17 +637,6 @@ function ChatContent() {
                     )}
                   </>
                 )}
-              </div>
-            )}
-
-            {/* Streaming text preview */}
-            {streamText && streamText.trim() && (
-              <div className={`${styles.message} ${styles.assistant} ${styles.streaming}`}>
-                <div className={styles.messageRole}>AI Assistant</div>
-                <div className={styles.messageContent}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamText}</ReactMarkdown>
-                  <span className={styles.cursor} />
-                </div>
               </div>
             )}
 
