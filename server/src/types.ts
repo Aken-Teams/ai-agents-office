@@ -49,7 +49,7 @@ export interface TokenUsage {
 }
 
 export interface SSEEvent {
-  type: 'text' | 'thinking' | 'tool_activity' | 'file_generated' | 'usage' | 'done' | 'error';
+  type: 'text' | 'thinking' | 'tool_activity' | 'file_generated' | 'usage' | 'done' | 'error' | 'session_id';
   data: unknown;
 }
 

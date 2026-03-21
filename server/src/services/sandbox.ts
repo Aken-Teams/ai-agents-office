@@ -111,15 +111,23 @@ export function scanSandboxFiles(sandboxPath: string): Array<{
       if (entry.isDirectory()) {
         walkDir(fullPath);
       } else if (entry.isFile()) {
-        // Skip internal files (CLAUDE.md is the system prompt, not user output)
+        // Skip internal/intermediate files
         if (entry.name === 'CLAUDE.md') continue;
+        const ext = path.extname(entry.name).toLowerCase();
+        // Only register actual document output files, not intermediate scripts/data
+        const DOCUMENT_EXTENSIONS = new Set([
+          '.docx', '.doc', '.xlsx', '.xls', '.pptx', '.ppt',
+          '.pdf', '.csv', '.txt', '.rtf', '.odt', '.ods', '.odp',
+          '.html', '.htm', '.md', '.png', '.jpg', '.jpeg', '.gif', '.svg',
+        ]);
+        if (!DOCUMENT_EXTENSIONS.has(ext)) continue;
 
-        const ext = path.extname(entry.name).toLowerCase().replace('.', '');
+        const fileType = ext.replace('.', '');
         const stat = fs.statSync(fullPath);
         files.push({
           filename: entry.name,
           filePath: path.relative(config.workspaceRoot, fullPath),
-          fileType: ext,
+          fileType,
           fileSize: stat.size,
         });
       }

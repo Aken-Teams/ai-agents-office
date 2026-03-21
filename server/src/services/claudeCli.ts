@@ -48,6 +48,7 @@ interface ClaudeCliOptions {
   userId: string;
   conversationId: string;
   sessionId?: string;
+  isResume?: boolean;  // true = --resume (existing session), false = --session-id (new)
   skillId?: string;
 }
 
@@ -109,8 +110,13 @@ export function spawnClaude(
   ];
 
   // Session management for multi-turn conversations
+  // --session-id creates a NEW session; --resume continues an EXISTING one
   if (options.sessionId) {
-    args.push('--session-id', options.sessionId);
+    if (options.isResume) {
+      args.push('--resume', options.sessionId);
+    } else {
+      args.push('--session-id', options.sessionId);
+    }
   }
 
   // Tool restrictions (security layer 2)
@@ -264,7 +270,7 @@ function processStreamEvent(
 ): void {
   const type = parsed.type as string;
 
-  // Text content streaming
+  // Text content streaming (content_block_delta — may appear for long responses)
   if (type === 'content_block_delta') {
     const delta = parsed.delta as Record<string, unknown> | undefined;
     if (delta?.type === 'text_delta' && delta.text) {
@@ -281,38 +287,60 @@ function processStreamEvent(
     }
   }
 
-  // Assistant message with tool use
+  // Assistant message — extract text content + tool use info
+  // Claude CLI stream-json emits full text here (NOT via content_block_delta)
   if (type === 'assistant') {
     const message = parsed.message as Record<string, unknown> | undefined;
     const content = message?.content as Array<Record<string, unknown>> | undefined;
     if (content) {
       for (const block of content) {
-        if (block.type === 'tool_use') {
-          emitter.emit('event', {
-            type: 'tool_activity',
-            data: { tool: block.name, id: block.id },
-          } satisfies SSEEvent);
-        }
         if (block.type === 'text' && block.text) {
           emitter.emit('event', {
             type: 'text',
-            data: block.text,
+            data: block.text as string,
+          } satisfies SSEEvent);
+        }
+        if (block.type === 'tool_use') {
+          emitter.emit('event', {
+            type: 'tool_activity',
+            data: {
+              tool: block.name as string,
+              id: block.id as string,
+              status: 'running',
+              input: block.input ? JSON.stringify(block.input).substring(0, 200) : undefined,
+            },
           } satisfies SSEEvent);
         }
       }
     }
   }
 
-  // Result message (contains generated text after tool calls)
-  if (type === 'result') {
-    const result = parsed.result as string | undefined;
-    if (result) {
+  // Tool result
+  if (type === 'result' && parsed.subtype === 'tool_result') {
+    emitter.emit('event', {
+      type: 'tool_activity',
+      data: {
+        tool: 'tool_result',
+        status: 'completed',
+      },
+    } satisfies SSEEvent);
+  }
+
+  // System init — capture session_id
+  if (type === 'system' && parsed.subtype === 'init') {
+    const sid = parsed.session_id as string | undefined;
+    if (sid) {
       emitter.emit('event', {
-        type: 'text',
-        data: result,
+        type: 'session_id',
+        data: sid,
       } satisfies SSEEvent);
     }
+  }
 
+  // Result message — only extract usage/model/session_id, NOT text
+  // Text is already emitted from the 'assistant' event above.
+  // The 'result' event's parsed.result contains the same text (duplicate).
+  if (type === 'result') {
     const usage = parsed.usage as Record<string, number> | undefined;
     if (usage) {
       tokens.addInputTokens(usage.input_tokens || 0);
@@ -321,6 +349,15 @@ function processStreamEvent(
 
     const modelStr = parsed.model as string | undefined;
     if (modelStr) tokens.setModel(modelStr);
+
+    // Capture session_id from result
+    const sid = parsed.session_id as string | undefined;
+    if (sid) {
+      emitter.emit('event', {
+        type: 'session_id',
+        data: sid,
+      } satisfies SSEEvent);
+    }
   }
 
   // Message start with usage info

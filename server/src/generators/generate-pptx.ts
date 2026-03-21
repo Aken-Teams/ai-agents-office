@@ -17,8 +17,11 @@
  * }
  */
 
-import PptxGenJS from 'pptxgenjs';
+import PptxGenJSModule from 'pptxgenjs';
 import fs from 'fs';
+
+// Handle ESM/CJS interop - pptxgenjs may double-wrap the default export
+const PptxGenJS = (PptxGenJSModule as unknown as { default?: typeof PptxGenJSModule }).default || PptxGenJSModule;
 
 interface SlideData {
   type: 'title' | 'content' | 'two-column' | 'section' | 'image';

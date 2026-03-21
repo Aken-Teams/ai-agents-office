@@ -20,6 +20,13 @@ interface GeneratedFile {
   file_size: number;
 }
 
+interface ToolActivity {
+  tool: string;
+  id?: string;
+  status?: string;
+  input?: string;
+}
+
 function ChatContent() {
   const { user, token, isLoading } = useAuth();
   const router = useRouter();
@@ -31,9 +38,11 @@ function ChatContent() {
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [streamText, setStreamText] = useState('');
-  const [toolActivity, setToolActivity] = useState('');
+  const [thinkingText, setThinkingText] = useState('');
+  const [tools, setTools] = useState<ToolActivity[]>([]);
   const [files, setFiles] = useState<GeneratedFile[]>([]);
   const [title, setTitle] = useState('');
+  const [skillId, setSkillId] = useState('');
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -49,6 +58,7 @@ function ChatContent() {
       .then(r => r.ok ? r.json() : Promise.reject('Not found'))
       .then(data => {
         setTitle(data.title);
+        setSkillId(data.skill_id || '');
         setMessages(data.messages || []);
       })
       .catch(() => router.replace('/dashboard'));
@@ -68,7 +78,7 @@ function ChatContent() {
   // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamText]);
+  }, [messages, streamText, thinkingText, tools]);
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || streaming || !token) return;
@@ -84,7 +94,8 @@ function ChatContent() {
 
     setStreaming(true);
     setStreamText('');
-    setToolActivity('');
+    setThinkingText('');
+    setTools([]);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -104,6 +115,7 @@ function ChatContent() {
       const decoder = new TextDecoder();
       let buffer = '';
       let fullText = '';
+      let fullThinking = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -122,8 +134,22 @@ function ChatContent() {
               fullText += event.data;
               setStreamText(fullText);
             }
+            if (event.type === 'thinking') {
+              fullThinking += event.data;
+              setThinkingText(fullThinking);
+            }
             if (event.type === 'tool_activity') {
-              setToolActivity(`Running: ${event.data.tool}`);
+              const activity = event.data as ToolActivity;
+              setTools(prev => {
+                // Update existing tool or add new
+                const existing = prev.findIndex(t => t.id === activity.id);
+                if (existing >= 0) {
+                  const updated = [...prev];
+                  updated[existing] = { ...updated[existing], ...activity };
+                  return updated;
+                }
+                return [...prev, activity];
+              });
             }
             if (event.type === 'file_generated') {
               const newFiles = event.data as GeneratedFile[];
@@ -144,7 +170,8 @@ function ChatContent() {
                 }]);
               }
               setStreamText('');
-              setToolActivity('');
+              setThinkingText('');
+              setTools([]);
             }
           } catch { /* skip parse errors */ }
         }
@@ -167,7 +194,42 @@ function ChatContent() {
     }).catch(() => {});
   }
 
+  // Map tool names to friendly labels
+  function getToolLabel(tool: string): string {
+    const labels: Record<string, string> = {
+      'Bash': 'Running command',
+      'Write': 'Writing file',
+      'Read': 'Reading file',
+      'tool_result': 'Tool completed',
+    };
+    // Check prefix match (e.g., "Bash" matches "Bash(node:*)")
+    for (const [key, label] of Object.entries(labels)) {
+      if (tool.startsWith(key)) return label;
+    }
+    return `Using ${tool}`;
+  }
+
+  // Format file size
+  function formatSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  // Get file icon
+  function getFileIcon(type: string): string {
+    const icons: Record<string, string> = {
+      docx: '\u{1F4DD}', doc: '\u{1F4DD}',
+      xlsx: '\u{1F4CA}', xls: '\u{1F4CA}',
+      pptx: '\u{1F4CA}', ppt: '\u{1F4CA}',
+      pdf: '\u{1F4C4}',
+    };
+    return icons[type] || '\u{1F4CE}';
+  }
+
   if (isLoading || !user) return null;
+
+  const isWaiting = streaming && !streamText && !thinkingText && tools.length === 0;
 
   return (
     <div className={styles.page}>
@@ -177,6 +239,7 @@ function ChatContent() {
         <div className={styles.messages}>
           <div className={styles.titleBar}>
             <h2>{title}</h2>
+            {skillId && <span className={styles.skillBadge}>{skillId}</span>}
           </div>
 
           <div className={styles.messageList}>
@@ -189,16 +252,42 @@ function ChatContent() {
               </div>
             ))}
 
+            {/* Thinking indicator */}
+            {isWaiting && (
+              <div className={styles.thinkingBar}>
+                <span className={styles.thinkingDots}>
+                  <span /><span /><span />
+                </span>
+                AI is thinking...
+              </div>
+            )}
+
+            {/* Extended thinking text */}
+            {thinkingText && (
+              <div className={styles.thinkingBlock}>
+                <div className={styles.thinkingLabel}>Thinking</div>
+                <div className={styles.thinkingContent}>{thinkingText}</div>
+              </div>
+            )}
+
+            {/* Tool activity list */}
+            {tools.length > 0 && (
+              <div className={styles.toolList}>
+                {tools.map((tool, i) => (
+                  <div key={tool.id || i} className={styles.toolItem}>
+                    <span className={tool.status === 'completed' ? styles.toolDone : styles.toolSpinner} />
+                    <span className={styles.toolName}>{getToolLabel(tool.tool)}</span>
+                    {tool.input && <span className={styles.toolInput}>{tool.input}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Streaming text */}
             {streamText && (
               <div className={`${styles.message} ${styles.assistant}`}>
                 <div className={styles.messageRole}>AI Assistant</div>
                 <div className={styles.messageContent}>{streamText}</div>
-              </div>
-            )}
-
-            {toolActivity && (
-              <div className={styles.activity}>
-                <span className={styles.spinner} /> {toolActivity}
               </div>
             )}
 
@@ -232,7 +321,7 @@ function ChatContent() {
         <div className={styles.sidebar}>
           <h3>Generated Files</h3>
           {files.length === 0 ? (
-            <p className={styles.noFiles}>No files generated yet</p>
+            <p className={styles.noFiles}>No files generated yet. Ask the AI to create a document!</p>
           ) : (
             <div className={styles.fileList}>
               {files.map(file => (
@@ -242,13 +331,14 @@ function ChatContent() {
                   className={styles.fileItem}
                   download
                 >
-                  <span className={`badge badge-${file.file_type}`}>
-                    {file.file_type.toUpperCase()}
-                  </span>
-                  <span className={styles.fileName}>{file.filename}</span>
-                  <span className={styles.fileSize}>
-                    {(file.file_size / 1024).toFixed(1)} KB
-                  </span>
+                  <span className={styles.fileIcon}>{getFileIcon(file.file_type)}</span>
+                  <div className={styles.fileInfo}>
+                    <span className={styles.fileName}>{file.filename}</span>
+                    <span className={styles.fileMeta}>
+                      {file.file_type.toUpperCase()} &middot; {formatSize(file.file_size)}
+                    </span>
+                  </div>
+                  <span className={styles.downloadIcon}>&#x2B07;</span>
                 </a>
               ))}
             </div>

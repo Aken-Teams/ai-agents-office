@@ -95,9 +95,11 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
   const existingFiles = getExistingFilePaths(conversationId);
 
   // Spawn Claude CLI
+  // First message: create new session (--session-id)
+  // Subsequent messages: resume existing session (--resume)
+  const isExistingSession = !!conversation.session_id;
   const sessionId = conversation.session_id || uuidv4();
-  // Update session ID if new
-  if (!conversation.session_id) {
+  if (!isExistingSession) {
     db.prepare('UPDATE conversations SET session_id = ? WHERE id = ?').run(sessionId, conversationId);
   }
 
@@ -105,6 +107,7 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
     userId,
     conversationId,
     sessionId,
+    isResume: isExistingSession,
     skillId: effectiveSkillId,
   });
 
@@ -132,6 +135,14 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
       totalInputTokens = usage.inputTokens;
       totalOutputTokens = usage.outputTokens;
       model = usage.model;
+    }
+
+    // Capture session_id from Claude CLI (may differ from what we passed)
+    if (event.type === 'session_id') {
+      const cliSessionId = event.data as string;
+      if (cliSessionId && cliSessionId !== sessionId) {
+        db.prepare('UPDATE conversations SET session_id = ? WHERE id = ?').run(cliSessionId, conversationId);
+      }
     }
 
     // On completion
