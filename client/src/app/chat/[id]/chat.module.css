@@ -230,7 +230,6 @@
   background: #fafbff;
   border: 1px solid #e0e7ff;
   border-radius: var(--radius-lg);
-  overflow: hidden;
   margin-bottom: 4px;
 }
 
@@ -241,6 +240,7 @@
   padding: 10px 16px;
   background: #eef2ff;
   border-bottom: 1px solid #e0e7ff;
+  border-radius: 11px 11px 0 0;
   font-size: 13px;
   font-weight: 600;
   color: #3730a3;

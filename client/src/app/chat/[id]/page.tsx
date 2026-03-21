@@ -112,9 +112,12 @@ function ChatContent() {
       .catch(console.error);
   }, [token, conversationId]);
 
-  // Auto-scroll
+  // Auto-scroll — use scrollTo for reliability (scrollIntoView can misfire before layout)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => {
+      const el = messagesEndRef.current?.parentElement;
+      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }, 50);
   }, [messages, streamText, thinkingText, tools, streaming]);
 
   // Elapsed time timer
