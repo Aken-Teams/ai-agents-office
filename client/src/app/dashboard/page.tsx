@@ -175,7 +175,7 @@ function DashboardContent() {
     <div className="min-h-screen bg-surface-container-lowest">
       <Navbar />
 
-      <main className={`${sidebarMargin} min-h-screen flex flex-col transition-all duration-300`}>
+      <main className={`${sidebarMargin} transition-all duration-300`}>
         {/* Top Header */}
         <header className="sticky top-0 h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
           <div className="flex items-center gap-8">
@@ -197,7 +197,7 @@ function DashboardContent() {
         </header>
 
         {/* Content Canvas */}
-        <div className="p-8 flex-1 grid grid-cols-12 gap-6 overflow-y-auto">
+        <div className="p-8 grid grid-cols-12 gap-6">
           {/* ===== Left Column (8 cols) ===== */}
           <div className="col-span-8 flex flex-col gap-6">
             {/* Bento Stats Row */}
@@ -216,11 +216,14 @@ function DashboardContent() {
               </div>
               <div className="bg-surface-container p-6 rounded-lg">
                 <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-1">Token 用量</p>
-                <div className="flex items-center gap-2">
+                <div className="flex items-end gap-3">
                   <span className="text-3xl font-headline font-bold text-on-surface">
                     {usage ? ((usage.totalInput + usage.totalOutput) / 1000).toFixed(1) + 'k' : '0'}
                   </span>
-                  <span className="material-symbols-outlined text-tertiary">check_circle</span>
+                  <span className="text-lg font-headline font-bold text-success mb-0.5">
+                    ${usage ? ((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000).toFixed(2) : '0.00'}
+                    <span className="text-xs text-on-surface-variant font-normal ml-1">(USD)</span>
+                  </span>
                 </div>
                 <p className="text-xs text-on-surface-variant mt-3 font-mono">
                   輸入: {usage ? (usage.totalInput / 1000).toFixed(1) + 'k' : '0'} | 輸出: {usage ? (usage.totalOutput / 1000).toFixed(1) + 'k' : '0'}
@@ -241,7 +244,7 @@ function DashboardContent() {
             </div>
 
             {/* Smart Input */}
-            <div className="bg-surface-container rounded-lg overflow-hidden">
+            <div className="bg-surface-container rounded-lg overflow-hidden flex flex-col flex-1">
               <div className="px-6 py-4 bg-surface-container-high flex items-center gap-3">
                 <span className="material-symbols-outlined text-primary">forum</span>
                 <span className="text-xs font-bold uppercase tracking-widest">智能指令</span>
@@ -249,7 +252,7 @@ function DashboardContent() {
                   AI 自動判斷
                 </span>
               </div>
-              <div className="p-6">
+              <div className="p-6 flex flex-col flex-1">
                 <p className="text-sm text-on-surface-variant mb-4">
                   描述你的需求，AI 代理會自動規劃並生成對應的文件
                 </p>
@@ -276,7 +279,7 @@ function DashboardContent() {
                     ))}
                   </div>
                 )}
-                <div className="relative">
+                <div className="relative flex-1 flex flex-col">
                   <input
                     ref={smartFileRef}
                     type="file"
@@ -286,7 +289,7 @@ function DashboardContent() {
                     onChange={e => { handleSmartFileAttach(e.target.files); e.target.value = ''; }}
                   />
                   <textarea
-                    className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 rounded py-4 pl-12 pr-16 text-sm text-on-surface placeholder:text-outline font-body resize-none"
+                    className="w-full flex-1 bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 rounded py-4 pl-12 pr-16 text-sm text-on-surface placeholder:text-outline font-body resize-none"
                     value={smartInput}
                     onChange={e => setSmartInput(e.target.value)}
                     onKeyDown={e => {
@@ -296,7 +299,6 @@ function DashboardContent() {
                       }
                     }}
                     placeholder="例如：幫我製作一份 10 頁的 AI 趨勢簡報..."
-                    rows={2}
                     disabled={creating}
                   />
                   <button
@@ -317,87 +319,21 @@ function DashboardContent() {
               </div>
             </div>
 
-            {/* Recent Conversations */}
-            <div className="bg-surface-container rounded-lg overflow-hidden flex-1">
-              <div className="px-6 py-4 bg-surface-container-high flex items-center gap-3">
-                <span className="material-symbols-outlined text-on-surface-variant">history</span>
-                <span className="text-xs font-bold uppercase tracking-widest">最近對話</span>
-                <span className="ml-auto text-xs text-on-surface-variant">
-                  {conversations.length} 個對話
-                </span>
-              </div>
-
-              {conversations.length === 0 ? (
-                <div className="p-8 text-center">
-                  <span className="material-symbols-outlined text-4xl text-outline-variant block mb-2">chat_bubble_outline</span>
-                  <p className="text-sm text-on-surface-variant">還沒有對話紀錄，開始建立你的第一份文件吧！</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-outline-variant/10">
-                  {conversations.slice(0, 8).map(conv => (
-                    <div
-                      key={conv.id}
-                      className="flex items-center gap-4 px-6 py-3.5 hover:bg-surface-container-high/50 cursor-pointer transition-colors group"
-                      onClick={() => router.push(`/chat/${conv.id}`)}
-                    >
-                      <div className="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center shrink-0">
-                        <span className="material-symbols-outlined text-sm text-on-surface-variant">
-                          {conv.skill_id ? (SKILL_ICONS[conv.skill_id] || 'smart_toy') : 'smart_toy'}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-on-surface truncate">{conv.title}</p>
-                        <p className="text-xs text-on-surface-variant mt-0.5">
-                          {new Date(conv.created_at).toLocaleDateString('zh-TW')}
-                        </p>
-                      </div>
-                      {conv.skill_id && (
-                        <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded font-bold tracking-wider uppercase">
-                          {conv.skill_id.replace('-gen', '')}
-                        </span>
-                      )}
-                      <span className="material-symbols-outlined text-sm text-outline-variant group-hover:text-primary transition-colors">
-                        arrow_forward
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
 
           {/* ===== Right Column (4 cols) ===== */}
           <div className="col-span-4 flex flex-col gap-6">
-            {/* Agent Capabilities / Quick Create */}
-            <div className="bg-surface-container p-6 rounded-lg">
-              <h3 className="text-xs font-bold uppercase tracking-widest mb-6">代理能力</h3>
-              <div className="grid grid-cols-3 gap-3">
-                {DOC_TYPES.map(doc => (
-                  <button
-                    key={doc.id}
-                    onClick={() => createConversation(doc.id)}
-                    disabled={creating}
-                    className="bg-surface-container-high p-4 rounded flex flex-col gap-3 hover:bg-surface-variant transition-colors text-left disabled:opacity-50 cursor-pointer"
-                  >
-                    <span className={`material-symbols-outlined ${doc.colorClass}`}>{doc.icon}</span>
-                    <span className="text-xs font-bold text-on-surface">{doc.label}</span>
-                    <span className="text-xs text-on-surface-variant">{doc.desc}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Workspace Explorer — shows real generated files */}
-            <div className="bg-surface-container-high p-6 rounded-lg flex-1 overflow-hidden flex flex-col">
+            {/* Recent Files */}
+            <div className="bg-surface-container-high p-6 rounded-lg overflow-hidden flex flex-col">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xs font-bold uppercase tracking-widest">最近文件</h3>
-                <span className="text-xs text-on-surface-variant">{files.length} 個檔案</span>
+                <span className="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-full">{files.length} 個檔案</span>
               </div>
-              <div className="flex-1 space-y-2 font-mono text-xs overflow-y-auto">
+              <div className="space-y-2 font-mono text-xs">
                 {files.length === 0 ? (
                   <p className="text-on-surface-variant text-center py-4">尚無檔案</p>
                 ) : (
-                  files.slice(0, 10).map(file => {
+                  files.slice(0, 4).map(file => {
                     const ext = file.file_type?.toLowerCase() || '';
                     const meta = FILE_TYPE_ICONS[ext] || { icon: 'draft', color: 'text-on-surface-variant' };
                     return (
@@ -425,6 +361,54 @@ function DashboardContent() {
                   瀏覽所有檔案
                 </button>
               </div>
+            </div>
+
+            {/* Recent Conversations */}
+            <div className="bg-surface-container rounded-lg overflow-hidden flex flex-col">
+              <div className="px-6 py-4 bg-surface-container-high flex items-center gap-3">
+                <span className="material-symbols-outlined text-on-surface-variant">history</span>
+                <span className="text-xs font-bold uppercase tracking-widest">最近對話</span>
+                <span className="ml-auto text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                  {conversations.length} 個對話
+                </span>
+              </div>
+
+              {conversations.length === 0 ? (
+                <div className="p-8 text-center">
+                  <span className="material-symbols-outlined text-4xl text-outline-variant block mb-2">chat_bubble_outline</span>
+                  <p className="text-sm text-on-surface-variant">還沒有對話紀錄</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-outline-variant/10">
+                  {conversations.slice(0, 4).map(conv => (
+                    <div
+                      key={conv.id}
+                      className="flex items-center gap-3 px-5 py-3 hover:bg-surface-container-high/50 cursor-pointer transition-colors group"
+                      onClick={() => router.push(`/chat/${conv.id}`)}
+                    >
+                      <div className="w-7 h-7 rounded bg-surface-container-highest flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined text-xs text-on-surface-variant">
+                          {conv.skill_id ? (SKILL_ICONS[conv.skill_id] || 'smart_toy') : 'smart_toy'}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-on-surface truncate">{conv.title}</p>
+                        <p className="text-[10px] text-on-surface-variant mt-0.5">
+                          {new Date(conv.created_at).toLocaleDateString('zh-TW')}
+                        </p>
+                      </div>
+                      {conv.skill_id && (
+                        <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-bold tracking-wider uppercase">
+                          {conv.skill_id.replace('-gen', '')}
+                        </span>
+                      )}
+                      <span className="material-symbols-outlined text-xs text-outline-variant group-hover:text-primary transition-colors">
+                        arrow_forward
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
