@@ -1071,14 +1071,19 @@ function ChatContent() {
             )}
           </div>
 
-          {/* Uploaded Files (conversation history) */}
+          {/* Uploaded Files (conversation history) — show latest 3 */}
           {conversationUploads.length > 0 && (
             <div className="space-y-3 border-t border-outline-variant/10 pt-4">
-              <h4 className="text-xs font-headline font-bold text-outline tracking-widest uppercase">
-                上傳的檔案
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-headline font-bold text-outline tracking-widest uppercase">
+                  上傳的檔案
+                </h4>
+                <span className="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                  {conversationUploads.length}
+                </span>
+              </div>
               <div className="space-y-1.5">
-                {conversationUploads.map(file => (
+                {conversationUploads.slice(0, 3).map(file => (
                   <div
                     key={file.id}
                     className="flex items-center gap-3 p-3 hover:bg-surface-container rounded-lg group transition-colors border border-transparent hover:border-outline-variant/20"
