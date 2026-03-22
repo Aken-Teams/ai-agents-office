@@ -888,7 +888,9 @@ function ChatContent() {
                     {/* Token usage */}
                     {lastUsage && !streaming && (
                       <div className="flex items-center justify-between px-4 py-2 border-t border-outline-variant/10 text-sm text-outline">
-                        <span>Tokens: {lastUsage.inputTokens.toLocaleString()} in / {lastUsage.outputTokens.toLocaleString()} out</span>
+                        <span>Tokens: {lastUsage.inputTokens.toLocaleString()} in / {lastUsage.outputTokens.toLocaleString()} out
+                          <span className="ml-2 text-primary/70">${(((lastUsage.inputTokens / 1_000_000) * 3 + (lastUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)}</span>
+                        </span>
                         {lastUsage.model && (
                           <span className="px-2 py-0.5 bg-primary/10 text-primary rounded text-sm">
                             {lastUsage.model.split('-').slice(0, 2).join('-')}
@@ -1012,6 +1014,7 @@ function ChatContent() {
               {lastUsage && (
                 <div className="text-sm font-mono text-on-secondary-container/60 bg-surface-container-low px-3 py-1 rounded-full">
                   Session: <span className="text-primary">{((lastUsage.inputTokens + lastUsage.outputTokens) / 1000).toFixed(1)}k Tokens</span>
+                  <span className="text-primary/60 ml-1">(${(((lastUsage.inputTokens / 1_000_000) * 3 + (lastUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)})</span>
                 </div>
               )}
             </div>

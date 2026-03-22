@@ -117,9 +117,13 @@ const zhTW = {
   'dashboard.recentConversations.count': '{count} 個對話',
   'dashboard.recentConversations.empty': '還沒有對話紀錄',
   'dashboard.samples.pptx': '製作 AI 趨勢簡報',
+  'dashboard.samples.pptx.template': '幫我製作一份 10 頁的 AI 趨勢簡報（PPT），包含以下內容：\n1. 封面：標題「2026 AI 產業趨勢報告」\n2. 目錄頁\n3. AI 產業整體市場規模與成長預測\n4. 生成式 AI 技術發展現況（LLM、多模態）\n5. 企業 AI 導入案例與成效分析\n6. AI Agent 與自動化工作流趨勢\n7. AI 安全與法規治理最新動態\n8. 台灣 AI 產業機會與挑戰\n9. 未來 3 年關鍵預測\n10. 總結與建議\n\n風格：專業商務風格，使用圖表與數據視覺化',
   'dashboard.samples.docx': '撰寫產品需求規格文件',
+  'dashboard.samples.docx.template': '幫我撰寫一份產品需求規格文件（PRD），使用 Word 格式，包含以下章節：\n\n1. 產品概述：產品名稱、目標用戶、核心價值主張\n2. 專案背景：市場痛點、競品分析、商業目標\n3. 功能需求清單：依優先級（P0/P1/P2）列出主要功能\n4. 使用者故事：至少 5 個核心使用情境\n5. 非功能性需求：效能、安全性、可用性要求\n6. 技術架構建議：前後端技術選型\n7. 時程規劃：里程碑與交付時間表\n8. 風險評估：潛在風險與應對方案\n\n請使用繁體中文，格式清晰、具專業感',
   'dashboard.samples.xlsx': '建立銷售數據分析表',
+  'dashboard.samples.xlsx.template': '幫我建立一份銷售數據分析 Excel 報表，包含以下工作表：\n\n【Sheet 1 - 月度銷售總覽】\n- 欄位：月份、營收、成本、毛利、毛利率、訂單數、客單價\n- 產生 12 個月的模擬數據（2025/01 ~ 2025/12）\n- 加入合計列與平均值\n\n【Sheet 2 - 產品分類分析】\n- 欄位：產品類別、銷售額、佔比、同期比較、成長率\n- 至少 5 個產品類別\n\n【Sheet 3 - 區域業績排行】\n- 欄位：區域、業務員、目標額、實際額、達成率\n- 依達成率排序\n\n請加入適當的格式設定（數字格式、粗體標題、顏色區分）',
   'dashboard.samples.research': '研究 AI 產業最新趨勢',
+  'dashboard.samples.research.template': '請幫我研究 2026 年 AI 產業最新趨勢，並整理成一份完整的研究報告，涵蓋以下面向：\n\n1. 全球 AI 市場規模與投資趨勢\n2. 大型語言模型（LLM）技術突破與新進展\n3. AI Agent 生態系發展現況\n4. 企業 AI 導入率與 ROI 分析\n5. AI 對各產業的影響（製造、金融、醫療、教育）\n6. AI 監管法規最新動態（歐盟 AI Act、美國行政令）\n7. 台灣 AI 產業政策與機會\n8. 值得關注的 AI 新創公司\n\n請提供具體數據與來源，使用繁體中文撰寫',
 
   // Chat
   'chat.tool.generatePptx': '生成簡報檔案',

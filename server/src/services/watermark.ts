@@ -237,7 +237,7 @@ async function watermarkPptx(filePath: string): Promise<Buffer> {
             <a:pPr algn="ctr"/>
             <a:r>
               <a:rPr lang="zh-TW" sz="${p.sz}" dirty="0">
-                <a:solidFill><a:srgbClr val="808080"><a:alpha val="25000"/></a:srgbClr></a:solidFill>
+                <a:solidFill><a:srgbClr val="C0C0C0"><a:alpha val="12000"/></a:srgbClr></a:solidFill>
                 <a:latin typeface="Arial"/>
                 <a:ea typeface="Microsoft JhengHei"/>
               </a:rPr>

@@ -117,9 +117,13 @@ const zhCN = {
   'dashboard.recentConversations.count': '{count} 个对话',
   'dashboard.recentConversations.empty': '还没有对话记录',
   'dashboard.samples.pptx': '制作 AI 趋势演示文稿',
+  'dashboard.samples.pptx.template': '帮我制作一份 10 页的 AI 趋势简报（PPT），包含以下内容：\n1. 封面：标题「2026 AI 产业趋势报告」\n2. 目录页\n3. AI 产业整体市场规模与增长预测\n4. 生成式 AI 技术发展现况（LLM、多模态）\n5. 企业 AI 导入案例与成效分析\n6. AI Agent 与自动化工作流趋势\n7. AI 安全与法规治理最新动态\n8. 中国 AI 产业机遇与挑战\n9. 未来 3 年关键预测\n10. 总结与建议\n\n风格：专业商务风格，使用图表与数据可视化',
   'dashboard.samples.docx': '撰写产品需求规格文档',
+  'dashboard.samples.docx.template': '帮我撰写一份产品需求规格文档（PRD），使用 Word 格式，包含以下章节：\n\n1. 产品概述：产品名称、目标用户、核心价值主张\n2. 项目背景：市场痛点、竞品分析、商业目标\n3. 功能需求清单：依优先级（P0/P1/P2）列出主要功能\n4. 用户故事：至少 5 个核心使用情境\n5. 非功能性需求：性能、安全性、可用性要求\n6. 技术架构建议：前后端技术选型\n7. 时程规划：里程碑与交付时间表\n8. 风险评估：潜在风险与应对方案\n\n请使用简体中文，格式清晰、具专业感',
   'dashboard.samples.xlsx': '建立销售数据分析表',
+  'dashboard.samples.xlsx.template': '帮我建立一份销售数据分析 Excel 报表，包含以下工作表：\n\n【Sheet 1 - 月度销售总览】\n- 字段：月份、营收、成本、毛利、毛利率、订单数、客单价\n- 生成 12 个月的模拟数据（2025/01 ~ 2025/12）\n- 加入合计行与平均值\n\n【Sheet 2 - 产品分类分析】\n- 字段：产品类别、销售额、占比、同期比较、增长率\n- 至少 5 个产品类别\n\n【Sheet 3 - 区域业绩排行】\n- 字段：区域、销售员、目标额、实际额、达成率\n- 依达成率排序\n\n请加入适当的格式设定（数字格式、粗体标题、颜色区分）',
   'dashboard.samples.research': '研究 AI 产业最新趋势',
+  'dashboard.samples.research.template': '请帮我研究 2026 年 AI 产业最新趋势，并整理成一份完整的研究报告，涵盖以下方面：\n\n1. 全球 AI 市场规模与投资趋势\n2. 大型语言模型（LLM）技术突破与新进展\n3. AI Agent 生态系发展现况\n4. 企业 AI 导入率与 ROI 分析\n5. AI 对各产业的影响（制造、金融、医疗、教育）\n6. AI 监管法规最新动态（欧盟 AI Act、美国行政令）\n7. 中国 AI 产业政策与机遇\n8. 值得关注的 AI 初创公司\n\n请提供具体数据与来源，使用简体中文撰写',
 
   // Chat
   'chat.tool.generatePptx': '生成演示文稿',
