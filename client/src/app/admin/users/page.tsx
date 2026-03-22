@@ -316,118 +316,113 @@ export default function AdminUsers() {
 
         {/* User Detail Sidebar */}
         {selectedUser && (
-          <div className="w-[340px] bg-surface-container-low border-l border-outline-variant/10 flex flex-col overflow-y-auto">
-            {/* Close */}
-            <div className="flex justify-end p-3 pb-0">
+          <div className="w-[320px] bg-surface-container-low border-l border-outline-variant/10 flex flex-col">
+            {/* Header: Avatar + Name + Close */}
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-outline-variant/10">
+              <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center text-sm font-black text-primary shrink-0">
+                {(selectedUser.display_name || selectedUser.email).slice(0, 2).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-bold text-on-surface truncate">{selectedUser.display_name || selectedUser.email.split('@')[0]}</h3>
+                <p className="text-xs text-on-surface-variant truncate">{selectedUser.email}</p>
+              </div>
               <button
                 onClick={() => setSelectedUser(null)}
-                className="w-8 h-8 flex items-center justify-center rounded hover:bg-surface-container-high transition-colors bg-transparent cursor-pointer"
+                className="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-container-high transition-colors bg-transparent cursor-pointer shrink-0"
               >
                 <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
               </button>
             </div>
 
-            {/* Profile Card */}
-            <div className="px-6 pb-5">
-              <div className="bg-surface-container rounded-lg p-5 border border-outline-variant/10">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-lg bg-primary/15 flex items-center justify-center text-lg font-black text-primary shrink-0">
-                    {(selectedUser.display_name || selectedUser.email).slice(0, 2).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-on-surface truncate">{selectedUser.display_name || selectedUser.email.split('@')[0]}</h3>
-                    <p className="text-sm text-on-surface-variant font-mono mt-0.5">ID: {selectedUser.id.slice(0, 8)}</p>
-                    <p className="text-sm text-on-surface-variant font-mono mt-0.5 truncate">{selectedUser.email}</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-surface-container-high rounded p-2.5">
-                    <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold">{t('admin.users.detail.statusLabel')}</p>
-                    <p className={`text-sm font-black mt-0.5 ${
-                      selectedUser.status === 'active' ? 'text-success' : selectedUser.status === 'pending' ? 'text-warning' : 'text-error'
-                    }`}>
-                      {selectedUser.status === 'active' ? 'Active' : selectedUser.status === 'pending' ? 'Pending' : 'Suspended'}
-                    </p>
-                  </div>
-                  <div className="bg-surface-container-high rounded p-2.5">
-                    <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold">{t('admin.users.detail.registeredLabel')}</p>
-                    <p className="text-sm font-bold text-on-surface mt-0.5">{new Date(selectedUser.created_at).toLocaleDateString('zh-TW')}</p>
-                  </div>
+            {/* Info Row: Status + Role + Registered */}
+            <div className="px-4 py-3 flex items-center gap-2 text-xs border-b border-outline-variant/10">
+              <span className={`px-2 py-0.5 rounded font-bold uppercase ${
+                selectedUser.status === 'active' ? 'bg-success/10 text-success' : selectedUser.status === 'pending' ? 'bg-warning/10 text-warning' : 'bg-error/10 text-error'
+              }`}>
+                {selectedUser.status === 'active' ? 'Active' : selectedUser.status === 'pending' ? 'Pending' : 'Suspended'}
+              </span>
+              <span className={`px-2 py-0.5 rounded font-bold uppercase ${
+                selectedUser.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-surface-container-high text-on-surface-variant'
+              }`}>
+                {selectedUser.role === 'admin' ? 'Admin' : 'User'}
+              </span>
+              <span className="text-on-surface-variant ml-auto">{new Date(selectedUser.created_at).toLocaleDateString('zh-TW')}</span>
+            </div>
+
+            {/* Role Toggle */}
+            <div className="px-4 py-3 border-b border-outline-variant/10">
+              <div className="flex items-center gap-2">
+                <span className="text-xs uppercase tracking-wider text-on-surface-variant font-bold">{t('admin.users.detail.roleLabel')}</span>
+                <div className="flex rounded overflow-hidden border border-outline-variant/15 ml-auto">
+                  {(['user', 'admin'] as const).map(r => (
+                    <button
+                      key={r}
+                      onClick={() => changeRole(selectedUser.id, r)}
+                      disabled={actionLoading || selectedUser.role === r}
+                      className={`px-3 py-1 text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors disabled:cursor-default ${
+                        selectedUser.role === r
+                          ? r === 'admin' ? 'bg-primary/15 text-primary' : 'bg-surface-container-high text-on-surface'
+                          : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                      }`}
+                    >
+                      {r === 'admin' ? 'Admin' : 'User'}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
 
-            {/* Role Control */}
-            <div className="px-6 pb-5 border-t border-outline-variant/25 pt-5">
-              <h4 className="text-sm uppercase tracking-widest text-on-surface-variant font-bold mb-3">{t('admin.users.detail.roleLabel')}</h4>
-              <div className="flex rounded overflow-hidden border border-outline-variant/15">
-                {(['user', 'admin'] as const).map(r => (
-                  <button
-                    key={r}
-                    onClick={() => changeRole(selectedUser.id, r)}
-                    disabled={actionLoading || selectedUser.role === r}
-                    className={`flex-1 py-2 text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors disabled:cursor-default ${
-                      selectedUser.role === r
-                        ? r === 'admin' ? 'bg-primary/15 text-primary' : 'bg-surface-container-high text-on-surface'
-                        : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
-                    }`}
-                  >
-                    {r === 'admin' ? 'Admin' : 'User'}
-                  </button>
-                ))}
+            {/* Token Stats — Compact */}
+            <div className="px-4 py-3 border-b border-outline-variant/10">
+              <div className="flex items-center justify-between text-xs">
+                <span className="uppercase tracking-wider text-on-surface-variant font-bold">{t('admin.users.detail.tokenUsage')}</span>
+                <span className="text-on-surface-variant">{selectedUser.tokenStats.invocation_count} calls</span>
+              </div>
+              <div className="flex gap-4 mt-2">
+                <div>
+                  <span className="text-xs text-on-surface-variant">{t('admin.users.detail.tokenInput')} </span>
+                  <span className="text-sm font-bold text-on-surface">{formatTokens(selectedUser.tokenStats.total_input)}</span>
+                </div>
+                <div>
+                  <span className="text-xs text-on-surface-variant">{t('admin.users.detail.tokenOutput')} </span>
+                  <span className="text-sm font-bold text-on-surface">{formatTokens(selectedUser.tokenStats.total_output)}</span>
+                </div>
               </div>
             </div>
 
-            {/* Token Stats */}
-            <div className="px-6 pb-5 border-t border-outline-variant/25 pt-5">
-              <h4 className="text-sm uppercase tracking-widest text-on-surface-variant font-bold mb-3">{t('admin.users.detail.tokenUsage')}</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-surface-container p-3 rounded">
-                  <p className="text-xs uppercase text-on-surface-variant">{t('admin.users.detail.tokenInput')}</p>
-                  <p className="text-lg font-bold text-on-surface font-headline">{formatTokens(selectedUser.tokenStats.total_input)}</p>
-                </div>
-                <div className="bg-surface-container p-3 rounded">
-                  <p className="text-xs uppercase text-on-surface-variant">{t('admin.users.detail.tokenOutput')}</p>
-                  <p className="text-lg font-bold text-on-surface font-headline">{formatTokens(selectedUser.tokenStats.total_output)}</p>
-                </div>
-              </div>
-              <p className="text-sm text-on-surface-variant mt-2">{t('admin.users.detail.invocationCount', { count: selectedUser.tokenStats.invocation_count })}</p>
-            </div>
-
-            {/* Recent Files */}
-            <div className="px-6 pb-5 border-t border-outline-variant/25 pt-5">
-              <h4 className="text-sm uppercase tracking-widest text-on-surface-variant font-bold mb-3">{t('admin.users.detail.recentFiles')}</h4>
+            {/* Recent Files — Max 3 */}
+            <div className="px-4 py-3 border-b border-outline-variant/10 flex-1 min-h-0">
+              <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold mb-2">{t('admin.users.detail.recentFiles')}</p>
               {selectedUser.recentFiles.length === 0 ? (
-                <p className="text-sm text-on-surface-variant">{t('admin.users.detail.noFiles')}</p>
+                <p className="text-xs text-on-surface-variant">{t('admin.users.detail.noFiles')}</p>
               ) : (
-                <div className="space-y-1.5">
-                  {selectedUser.recentFiles.map(f => (
-                    <div key={f.id} className="flex items-center gap-2 text-sm p-2 rounded hover:bg-surface-container/50 transition-colors">
-                      <span className="material-symbols-outlined text-sm text-on-surface-variant shrink-0">draft</span>
+                <div className="space-y-0.5">
+                  {selectedUser.recentFiles.slice(0, 5).map(f => (
+                    <div key={f.id} className="flex items-center gap-1.5 text-xs py-1 rounded">
+                      <span className="material-symbols-outlined text-xs text-on-surface-variant shrink-0">draft</span>
                       <span className="flex-1 text-on-surface truncate">{f.filename}</span>
-                      <span className="text-sm text-on-surface-variant shrink-0">{formatFileSize(f.file_size)}</span>
+                      <span className="text-on-surface-variant shrink-0">{formatFileSize(f.file_size)}</span>
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Admin Controls */}
-            <div className="px-6 pb-6 mt-auto border-t border-outline-variant/25 pt-5">
-              <h4 className="text-sm uppercase tracking-widest text-on-surface-variant font-bold mb-3">{t('admin.users.detail.adminControls')}</h4>
+            {/* Actions — Compact */}
+            <div className="px-4 py-3">
               {selectedUser.status === 'pending' ? (
-                <div className="space-y-2">
+                <div className="flex gap-2">
                   <button
                     onClick={() => toggleUserStatus(selectedUser.id, 'active')}
                     disabled={actionLoading}
-                    className="w-full py-2 px-4 bg-success/10 text-success text-sm font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
+                    className="flex-1 py-1.5 bg-success/10 text-success text-xs font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
                   >
                     {t('admin.users.detail.approve')}
                   </button>
                   <button
                     onClick={() => toggleUserStatus(selectedUser.id, 'suspended')}
                     disabled={actionLoading}
-                    className="w-full py-2 px-4 bg-error/10 text-error text-sm font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
+                    className="flex-1 py-1.5 bg-error/10 text-error text-xs font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
                   >
                     {t('admin.users.detail.reject')}
                   </button>
@@ -436,7 +431,7 @@ export default function AdminUsers() {
                 <button
                   onClick={() => toggleUserStatus(selectedUser.id, 'suspended')}
                   disabled={actionLoading}
-                  className="w-full py-2 px-4 bg-error/10 text-error text-sm font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
+                  className="w-full py-1.5 bg-error/10 text-error text-xs font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {t('admin.users.detail.suspend')}
                 </button>
@@ -444,18 +439,16 @@ export default function AdminUsers() {
                 <button
                   onClick={() => toggleUserStatus(selectedUser.id, 'active')}
                   disabled={actionLoading}
-                  className="w-full py-2 px-4 bg-success/10 text-success text-sm font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
+                  className="w-full py-1.5 bg-success/10 text-success text-xs font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {t('admin.users.detail.activate')}
                 </button>
               )}
-
-              {/* Delete Button */}
               <button
                 onClick={() => setDeleteConfirm({ id: selectedUser.id, email: selectedUser.email })}
-                className="w-full mt-3 py-2 px-4 border border-error/30 text-error/70 text-sm font-bold uppercase tracking-wider rounded hover:bg-error/10 hover:text-error transition-colors cursor-pointer flex items-center justify-center gap-2"
+                className="w-full mt-2 py-1.5 border border-error/30 text-error/70 text-xs font-bold uppercase tracking-wider rounded hover:bg-error/10 hover:text-error transition-colors cursor-pointer flex items-center justify-center gap-1.5"
               >
-                <span className="material-symbols-outlined text-sm">delete_forever</span>
+                <span className="material-symbols-outlined text-xs">delete_forever</span>
                 {t('admin.users.detail.delete')}
               </button>
             </div>

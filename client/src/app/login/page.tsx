@@ -264,21 +264,6 @@ function LoginForm() {
         </section>
       </main>
 
-      {/* Footer Stats */}
-      <footer className="mt-8 hidden md:flex gap-8 z-10">
-        <div className="flex flex-col gap-1">
-          <span className="text-[9px] uppercase tracking-widest text-outline">{t('login.footerFormats')}</span>
-          <span className="font-headline font-bold text-tertiary">PPTX / DOCX / XLSX / PDF</span>
-        </div>
-        <div className="flex flex-col gap-1 border-l border-outline-variant/20 pl-8">
-          <span className="text-[9px] uppercase tracking-widest text-outline">{t('login.footerEngine')}</span>
-          <span className="font-headline font-bold text-on-surface">Claude Sonnet 4</span>
-        </div>
-        <div className="flex flex-col gap-1 border-l border-outline-variant/20 pl-8">
-          <span className="text-[9px] uppercase tracking-widest text-outline">{t('login.footerCollaboration')}</span>
-          <span className="font-headline font-bold text-on-surface">{t('login.footerCollaborationValue')}</span>
-        </div>
-      </footer>
     </div>
   );
 }
