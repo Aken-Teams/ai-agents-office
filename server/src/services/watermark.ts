@@ -93,14 +93,8 @@ async function watermarkDocx(filePath: string): Promise<Buffer> {
   const data = fs.readFileSync(filePath);
   const zip = await JSZip.loadAsync(data);
 
-  // Create watermark header XML
-  const headerXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-       xmlns:v="urn:schemas-microsoft-com:vml"
-       xmlns:o="urn:schemas-microsoft-com:office:office"
-       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <w:p>
-    <w:pPr><w:pStyle w:val="Header"/></w:pPr>
+  // Helper: generate a VML watermark shape
+  const makeShape = (id: string, spid: string, marginTop: string, size: string) => `
     <w:r>
       <w:rPr><w:noProof/></w:rPr>
       <w:pict>
@@ -127,14 +121,26 @@ async function watermarkDocx(filePath: string): Promise<Buffer> {
           <v:handles><v:h position="#0,bottomRight" xrange="6629,14971"/></v:handles>
           <o:lock v:ext="edit" text="t" shapetype="t"/>
         </v:shapetype>
-        <v:shape id="PowerPlusWaterMarkObject" o:spid="_x0000_s2049" type="#_x0000_t136"
-          style="position:absolute;margin-left:0;margin-top:0;width:494pt;height:141pt;rotation:315;z-index:-251657216;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin"
+        <v:shape id="${id}" o:spid="${spid}" type="#_x0000_t136"
+          style="position:absolute;margin-left:0;margin-top:${marginTop};width:${size};height:80pt;rotation:315;z-index:-251657216;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical-relative:margin"
           o:allowincell="f" fillcolor="silver" stroked="f">
           <v:fill opacity=".20"/>
           <v:textpath style="font-family:&quot;Arial&quot;;font-size:1pt" string="${WATERMARK_TEXT}"/>
         </v:shape>
       </w:pict>
-    </w:r>
+    </w:r>`;
+
+  // 3 watermarks: top, center, bottom of each page
+  const headerXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+       xmlns:v="urn:schemas-microsoft-com:vml"
+       xmlns:o="urn:schemas-microsoft-com:office:office"
+       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:p>
+    <w:pPr><w:pStyle w:val="Header"/></w:pPr>
+    ${makeShape('WM_Top', '_x0000_s2049', '-50pt', '400pt')}
+    ${makeShape('WM_Center', '_x0000_s2050', '280pt', '494pt')}
+    ${makeShape('WM_Bottom', '_x0000_s2051', '600pt', '400pt')}
   </w:p>
 </w:hdr>`;
 
@@ -202,18 +208,24 @@ async function watermarkPptx(filePath: string): Promise<Buffer> {
   for (const slidePath of slideFiles) {
     let xml = await zip.file(slidePath)!.async('text');
 
-    // Watermark shape XML (diagonal semi-transparent text)
-    const watermarkShape = `
+    // 3 watermark shapes per slide: top-left, center, bottom-right
+    const positions = [
+      { id: 99901, name: 'WM_TopLeft',     x: 500000,  y: 400000,  cx: 5500000, cy: 1200000, sz: 3200 },
+      { id: 99902, name: 'WM_Center',      x: 1500000, y: 2500000, cx: 7000000, cy: 1600000, sz: 4800 },
+      { id: 99903, name: 'WM_BottomRight', x: 3000000, y: 4600000, cx: 5500000, cy: 1200000, sz: 3200 },
+    ];
+
+    const watermarkShapes = positions.map(p => `
       <p:sp>
         <p:nvSpPr>
-          <p:cNvPr id="99999" name="Watermark"/>
+          <p:cNvPr id="${p.id}" name="${p.name}"/>
           <p:cNvSpPr txBox="1"/>
           <p:nvPr/>
         </p:nvSpPr>
         <p:spPr>
           <a:xfrm rot="-2700000">
-            <a:off x="1500000" y="2500000"/>
-            <a:ext cx="7000000" cy="2000000"/>
+            <a:off x="${p.x}" y="${p.y}"/>
+            <a:ext cx="${p.cx}" cy="${p.cy}"/>
           </a:xfrm>
           <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
           <a:noFill/>
@@ -224,7 +236,7 @@ async function watermarkPptx(filePath: string): Promise<Buffer> {
           <a:p>
             <a:pPr algn="ctr"/>
             <a:r>
-              <a:rPr lang="zh-TW" sz="4800" dirty="0">
+              <a:rPr lang="zh-TW" sz="${p.sz}" dirty="0">
                 <a:solidFill><a:srgbClr val="808080"><a:alpha val="25000"/></a:srgbClr></a:solidFill>
                 <a:latin typeface="Arial"/>
                 <a:ea typeface="Microsoft JhengHei"/>
@@ -233,10 +245,10 @@ async function watermarkPptx(filePath: string): Promise<Buffer> {
             </a:r>
           </a:p>
         </p:txBody>
-      </p:sp>`;
+      </p:sp>`).join('');
 
     // Insert before closing </p:spTree>
-    xml = xml.replace('</p:spTree>', watermarkShape + '</p:spTree>');
+    xml = xml.replace('</p:spTree>', watermarkShapes + '</p:spTree>');
     zip.file(slidePath, xml);
   }
 
