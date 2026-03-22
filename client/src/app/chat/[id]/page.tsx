@@ -68,23 +68,57 @@ const SKILL_ICONS: Record<string, string> = {
   'pdf-gen': 'picture_as_pdf',
 };
 
-/** Parse tool_use input JSON into a friendly one-liner */
+/** Parse tool_use input JSON into a friendly, human-readable one-liner */
 function parseToolInput(tool: string, rawInput?: string): string {
   if (!rawInput) return '';
+  // Strip agent prefix (e.g. "pptx-gen:Bash" → "Bash")
+  const baseTool = tool.includes(':') ? tool.split(':').pop()! : tool;
   try {
     const input = JSON.parse(rawInput);
-    if (tool === 'Write' || tool === 'Read') {
+    if (baseTool === 'Write') {
       const fp = input.file_path || input.path || '';
-      const parts = fp.replace(/\\/g, '/').split('/');
-      return parts[parts.length - 1] || fp;
+      const name = fp.replace(/\\/g, '/').split('/').pop() || fp;
+      return `寫入 ${name}`;
     }
-    if (tool === 'Bash') {
+    if (baseTool === 'Read') {
+      const fp = input.file_path || input.path || '';
+      const name = fp.replace(/\\/g, '/').split('/').pop() || fp;
+      return `讀取 ${name}`;
+    }
+    if (baseTool === 'WebSearch') {
+      const q = input.query || '';
+      return q.length > 80 ? q.substring(0, 80) + '…' : q;
+    }
+    if (baseTool === 'WebFetch') {
+      const url = input.url || '';
+      try { return new URL(url).hostname; } catch { return url.substring(0, 60); }
+    }
+    if (baseTool === 'Bash') {
       const cmd = input.command || '';
-      return cmd.length > 60 ? cmd.substring(0, 60) + '...' : cmd;
+      // Show a simplified version of the command
+      if (cmd.includes('generate-pptx')) return '生成簡報檔案';
+      if (cmd.includes('generate-docx')) return '生成文件檔案';
+      if (cmd.includes('generate-xlsx')) return '生成試算表';
+      if (cmd.includes('generate-pdf')) return '生成 PDF';
+      if (cmd.includes('node ')) {
+        const match = cmd.match(/node\s+.*?([^\\/\s]+\.(?:mjs|js|ts))/);
+        if (match) return `執行 ${match[1]}`;
+      }
+      if (cmd.includes('cat ') || cmd.includes('ls ')) return '檢查檔案';
+      const short = cmd.length > 80 ? cmd.substring(0, 80) + '…' : cmd;
+      return short;
     }
-    return rawInput.length > 60 ? rawInput.substring(0, 60) + '...' : rawInput;
+    if (baseTool === 'Edit') {
+      const fp = input.file_path || '';
+      const name = fp.replace(/\\/g, '/').split('/').pop() || fp;
+      return `編輯 ${name}`;
+    }
+    if (baseTool === 'Glob') return `搜尋 ${input.pattern || ''}`;
+    if (baseTool === 'Grep') return `搜尋 "${input.pattern || ''}"`;
+    // Fallback: show raw but longer
+    return rawInput.length > 80 ? rawInput.substring(0, 80) + '…' : rawInput;
   } catch {
-    return rawInput.length > 60 ? rawInput.substring(0, 60) + '...' : rawInput;
+    return rawInput.length > 80 ? rawInput.substring(0, 80) + '…' : rawInput;
   }
 }
 
@@ -720,7 +754,7 @@ function ChatContent() {
                             <span className="material-symbols-outlined text-xs">{info.icon}</span>
                             <span className={isDone ? 'line-through opacity-60' : ''}>{info.label}</span>
                             {detail && (
-                              <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-xs truncate max-w-[200px]">
+                              <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-xs truncate max-w-[400px]">
                                 {detail}
                               </span>
                             )}
@@ -746,7 +780,7 @@ function ChatContent() {
                           }
                           <span className="material-symbols-outlined text-xs">smart_toy</span>
                           <span>{SKILL_LABELS[task.skillId] || task.skillId}</span>
-                          <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-xs truncate max-w-[200px]">
+                          <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-xs truncate max-w-[400px]">
                             {task.status === 'failed'
                               ? (task.error || 'Timed out').substring(0, 50)
                               : task.description.substring(0, 60)}

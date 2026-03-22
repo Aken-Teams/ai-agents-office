@@ -23,9 +23,24 @@ router.use(authMiddleware);
 const tempDir = path.join(config.workspaceRoot, '_tmp_uploads');
 fs.mkdirSync(tempDir, { recursive: true });
 
+/**
+ * Fix multer's latin1 filename encoding.
+ * Multer parses multipart filenames as latin1 by default,
+ * which mangles non-ASCII characters (e.g. Chinese).
+ * Re-decode from latin1 → utf8 to restore the original filename.
+ */
+function fixFilename(name: string): string {
+  try {
+    return Buffer.from(name, 'latin1').toString('utf8');
+  } catch {
+    return name;
+  }
+}
+
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, tempDir),
   filename: (_req, file, cb) => {
+    file.originalname = fixFilename(file.originalname);
     const uniqueName = `${uuidv4()}${path.extname(file.originalname)}`;
     cb(null, uniqueName);
   },
@@ -35,6 +50,7 @@ const upload = multer({
   storage,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
   fileFilter: (_req, file, cb) => {
+    file.originalname = fixFilename(file.originalname);
     if (!isAllowedExtension(file.originalname)) {
       cb(new Error(`不允許的檔案類型: ${path.extname(file.originalname)}`));
       return;
