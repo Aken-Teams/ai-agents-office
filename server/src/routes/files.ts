@@ -7,6 +7,7 @@ import { getFileDownloadPath, deleteFile } from '../services/fileManager.js';
 import { convertOfficeFile } from '../services/filePreview.js';
 import { applyWatermark } from '../services/watermark.js';
 import { config } from '../config.js';
+import { getStorageQuotaGb } from '../services/usageLimit.js';
 import type { GeneratedFile } from '../types.js';
 
 /** Sum file_size for a given user from generated_files table */
@@ -127,7 +128,7 @@ router.get('/:id/preview', async (req: Request, res: Response) => {
 router.get('/storage', (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const used = getUserStorageUsed(userId);
-  const quota = config.storageQuotaBytes;
+  const quota = getStorageQuotaGb() * 1024 * 1024 * 1024;
   const percentage = quota > 0 ? used / quota : 0;
 
   res.json({

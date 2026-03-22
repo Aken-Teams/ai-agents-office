@@ -51,6 +51,8 @@ export default function AdminUsers() {
   const [selectedUser, setSelectedUser] = useState<UserDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; email: string } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const limit = 10;
 
   const fetchUsers = useCallback(() => {
@@ -110,6 +112,24 @@ export default function AdminUsers() {
       }
     } finally {
       setActionLoading(false);
+    }
+  }
+
+  async function deleteUser(userId: string) {
+    if (!token || deleteLoading) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setDeleteConfirm(null);
+        setSelectedUser(null);
+        fetchUsers();
+      }
+    } finally {
+      setDeleteLoading(false);
     }
   }
 
@@ -284,12 +304,12 @@ export default function AdminUsers() {
                   <div className="min-w-0">
                     <h3 className="text-sm font-bold text-on-surface truncate">{selectedUser.display_name || selectedUser.email.split('@')[0]}</h3>
                     <p className="text-sm text-on-surface-variant font-mono mt-0.5">ID: {selectedUser.id.slice(0, 8)}</p>
-                    <p className="text-[11px] text-on-surface-variant font-mono mt-0.5 truncate">{selectedUser.email}</p>
+                    <p className="text-sm text-on-surface-variant font-mono mt-0.5 truncate">{selectedUser.email}</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-surface-container-high rounded p-2.5">
-                    <p className="text-[9px] uppercase tracking-wider text-on-surface-variant font-bold">狀態</p>
+                    <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold">狀態</p>
                     <p className={`text-sm font-black mt-0.5 ${
                       selectedUser.status === 'active' ? 'text-success' : selectedUser.status === 'pending' ? 'text-warning' : 'text-error'
                     }`}>
@@ -297,7 +317,7 @@ export default function AdminUsers() {
                     </p>
                   </div>
                   <div className="bg-surface-container-high rounded p-2.5">
-                    <p className="text-[9px] uppercase tracking-wider text-on-surface-variant font-bold">註冊日期</p>
+                    <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold">註冊日期</p>
                     <p className="text-sm font-bold text-on-surface mt-0.5">{new Date(selectedUser.created_at).toLocaleDateString('zh-TW')}</p>
                   </div>
                 </div>
@@ -309,11 +329,11 @@ export default function AdminUsers() {
               <h4 className="text-sm uppercase tracking-widest text-on-surface-variant font-bold mb-3">Token 用量</h4>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-surface-container p-3 rounded">
-                  <p className="text-[9px] uppercase text-on-surface-variant">輸入</p>
+                  <p className="text-xs uppercase text-on-surface-variant">輸入</p>
                   <p className="text-lg font-bold text-on-surface font-headline">{formatTokens(selectedUser.tokenStats.total_input)}</p>
                 </div>
                 <div className="bg-surface-container p-3 rounded">
-                  <p className="text-[9px] uppercase text-on-surface-variant">輸出</p>
+                  <p className="text-xs uppercase text-on-surface-variant">輸出</p>
                   <p className="text-lg font-bold text-on-surface font-headline">{formatTokens(selectedUser.tokenStats.total_output)}</p>
                 </div>
               </div>
@@ -375,10 +395,75 @@ export default function AdminUsers() {
                   啟用用戶
                 </button>
               )}
+
+              {/* Delete Button */}
+              <button
+                onClick={() => setDeleteConfirm({ id: selectedUser.id, email: selectedUser.email })}
+                className="w-full mt-3 py-2 px-4 border border-error/30 text-error/70 text-sm font-bold uppercase tracking-wider rounded hover:bg-error/10 hover:text-error transition-colors cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">delete_forever</span>
+                永久刪除用戶
+              </button>
             </div>
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-surface-container w-full max-w-md mx-4 rounded-lg shadow-2xl border border-outline-variant/10 overflow-hidden">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-error/15 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-error">warning</span>
+                </div>
+                <h3 className="text-lg font-headline font-bold text-on-surface">確認刪除用戶</h3>
+              </div>
+              <p className="text-sm text-on-surface-variant mb-2">
+                您即將永久刪除以下用戶：
+              </p>
+              <div className="bg-surface-container-highest rounded p-3 mb-4">
+                <p className="text-sm font-mono text-on-surface font-bold">{deleteConfirm.email}</p>
+                <p className="text-sm text-on-surface-variant mt-0.5">ID: {deleteConfirm.id.slice(0, 8)}...</p>
+              </div>
+              <div className="bg-error/5 border border-error/15 rounded p-3 text-sm text-error/90">
+                <p className="font-bold mb-1">此操作不可復原，將會刪除：</p>
+                <ul className="list-disc list-inside space-y-0.5 text-sm">
+                  <li>用戶帳號與所有個人資料</li>
+                  <li>所有對話記錄與訊息</li>
+                  <li>所有生成的檔案與上傳的檔案</li>
+                  <li>Token 使用記錄</li>
+                  <li>Workspace 工作目錄（含所有檔案）</li>
+                </ul>
+              </div>
+            </div>
+            <div className="flex gap-3 px-6 pb-6">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deleteLoading}
+                className="flex-1 py-2.5 px-4 bg-surface-container-high text-on-surface-variant text-sm font-bold uppercase tracking-wider rounded hover:bg-surface-variant transition-colors cursor-pointer disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => deleteUser(deleteConfirm.id)}
+                disabled={deleteLoading}
+                className="flex-1 py-2.5 px-4 bg-error text-on-error text-sm font-bold uppercase tracking-wider rounded hover:bg-error/90 transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {deleteLoading ? (
+                  '刪除中...'
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-sm">delete_forever</span>
+                    確認刪除
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

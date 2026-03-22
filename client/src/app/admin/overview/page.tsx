@@ -63,7 +63,6 @@ export default function AdminOverview() {
   const [velocity, setVelocity] = useState<VelocityPoint[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [period, setPeriod] = useState<'7d' | '30d'>('7d');
-
   useEffect(() => {
     if (!token) return;
     const headers = { Authorization: `Bearer ${token}` };
@@ -238,7 +237,7 @@ export default function AdminOverview() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold text-on-surface">{meta.label}</p>
-                          <p className="text-[11px] text-on-surface-variant truncate">{evt.description}</p>
+                          <p className="text-sm text-on-surface-variant truncate">{evt.description}</p>
                           <p className="text-sm text-outline mt-0.5 font-mono">{timeAgo(evt.created_at)}</p>
                         </div>
                       </div>

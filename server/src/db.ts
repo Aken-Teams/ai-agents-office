@@ -184,10 +184,17 @@ export function initializeDatabase(): void {
     );
   `);
 
-  // Default: per-user usage cap = $50 (in x10 display dollars)
-  const capExists = db.prepare("SELECT key FROM system_settings WHERE key = 'user_usage_limit_usd'").get();
-  if (!capExists) {
-    db.prepare("INSERT INTO system_settings (key, value) VALUES (?, ?)").run('user_usage_limit_usd', '50');
+  // Default system settings
+  const defaults: Record<string, string> = {
+    user_usage_limit_usd: '50',        // Per-user usage cap in x10 display dollars
+    storage_quota_gb: '2',             // Per-user generated file storage quota (GB)
+    upload_quota_mb: '500',            // Per-user upload storage quota (MB)
+  };
+  for (const [key, value] of Object.entries(defaults)) {
+    const exists = db.prepare("SELECT key FROM system_settings WHERE key = ?").get(key);
+    if (!exists) {
+      db.prepare("INSERT INTO system_settings (key, value) VALUES (?, ?)").run(key, value);
+    }
   }
 
   // Seed admin user

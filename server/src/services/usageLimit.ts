@@ -37,3 +37,23 @@ export function checkUserUsageLimit(userId: string): { exceeded: boolean; cost: 
   const cost = getUserDisplayCost(userId);
   return { exceeded: cost >= limit, cost, limit };
 }
+
+// --- Storage Quota Settings ---
+
+export function getStorageQuotaGb(): number {
+  const row = db.prepare("SELECT value FROM system_settings WHERE key = 'storage_quota_gb'").get() as { value: string } | undefined;
+  return row ? parseFloat(row.value) : 2;
+}
+
+export function setStorageQuotaGb(value: number): void {
+  db.prepare("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)").run('storage_quota_gb', String(value));
+}
+
+export function getUploadQuotaMb(): number {
+  const row = db.prepare("SELECT value FROM system_settings WHERE key = 'upload_quota_mb'").get() as { value: string } | undefined;
+  return row ? parseFloat(row.value) : 500;
+}
+
+export function setUploadQuotaMb(value: number): void {
+  db.prepare("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)").run('upload_quota_mb', String(value));
+}

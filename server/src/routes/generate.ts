@@ -13,6 +13,7 @@ import { getSkill, buildSystemPrompt, loadSkills, getRouterSkill } from '../skil
 import { getUserUploadsForPrompt } from '../services/uploadContext.js';
 import { Orchestrator } from '../services/orchestrator.js';
 import { config } from '../config.js';
+import { checkUserUsageLimit, getStorageQuotaGb } from '../services/usageLimit.js';
 import type { Conversation, Message, SSEEvent } from '../types.js';
 
 const router = Router();
@@ -105,6 +106,16 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
     return;
   }
 
+  // Usage cap check — block generation if user exceeds spending limit
+  const usageCheck = checkUserUsageLimit(userId);
+  if (usageCheck.exceeded) {
+    res.status(403).json({
+      error: `您的帳號已超過用量上限（$${usageCheck.cost.toFixed(2)} / $${usageCheck.limit.toFixed(2)}），請聯繫管理者。`,
+      code: 'USAGE_EXCEEDED',
+    });
+    return;
+  }
+
   // Input Guard — multi-layer prompt injection detection (security layer 4)
   const guard = analyzeInput(message);
 
@@ -131,9 +142,10 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
 
   // Storage quota check — block generation if user is over quota
   const storageUsed = getUserStorageUsed(userId);
-  if (storageUsed >= config.storageQuotaBytes) {
+  const storageQuotaBytes = getStorageQuotaGb() * 1024 * 1024 * 1024;
+  if (storageUsed >= storageQuotaBytes) {
     const usedGB = (storageUsed / (1024 * 1024 * 1024)).toFixed(2);
-    const quotaGB = (config.storageQuotaBytes / (1024 * 1024 * 1024)).toFixed(1);
+    const quotaGB = (storageQuotaBytes / (1024 * 1024 * 1024)).toFixed(1);
     res.status(413).json({
       error: `儲存空間已滿（已使用 ${usedGB} GB / ${quotaGB} GB）。請先整理檔案，刪除不需要的文件後再生成新檔案。`,
       code: 'STORAGE_QUOTA_EXCEEDED',

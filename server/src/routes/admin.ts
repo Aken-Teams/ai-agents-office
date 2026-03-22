@@ -6,6 +6,7 @@ import db from '../db.js';
 import { adminMiddleware } from '../middleware/adminAuth.js';
 import { loadSkills } from '../skills/loader.js';
 import { config } from '../config.js';
+import { getUserUsageLimitUsd, setUserUsageLimitUsd, getUserDisplayCost, getStorageQuotaGb, setStorageQuotaGb, getUploadQuotaMb, setUploadQuotaMb } from '../services/usageLimit.js';
 
 const router = Router();
 router.use(adminMiddleware);
@@ -235,6 +236,54 @@ router.patch('/users/:id', (req: Request, res: Response) => {
   if (displayName !== undefined) {
     db.prepare('UPDATE users SET display_name = ?, updated_at = datetime(\'now\') WHERE id = ?').run(displayName, userId);
   }
+
+  res.json({ success: true });
+});
+
+// DELETE /api/admin/users/:id — Permanently delete user + workspace
+router.delete('/users/:id', (req: Request, res: Response) => {
+  const userId = req.params.id as string;
+
+  const user = db.prepare('SELECT id, email, role FROM users WHERE id = ?').get(userId) as any;
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+  if (user.role === 'admin') {
+    res.status(403).json({ error: 'Cannot delete admin user' });
+    return;
+  }
+
+  // Delete workspace directory
+  const workspacePath = path.join(config.workspaceRoot, userId);
+  try {
+    if (fs.existsSync(workspacePath)) {
+      fs.rmSync(workspacePath, { recursive: true, force: true });
+    }
+  } catch (err) {
+    console.error(`[Admin] Failed to delete workspace for ${userId}:`, err);
+  }
+
+  // Delete uploads directory
+  const uploadsPath = path.join(config.workspaceRoot, '_tmp_uploads', userId);
+  try {
+    if (fs.existsSync(uploadsPath)) {
+      fs.rmSync(uploadsPath, { recursive: true, force: true });
+    }
+  } catch { /* ignore */ }
+
+  // Delete from DB (cascading: conversations, messages, files, token_usage, etc.)
+  db.prepare('DELETE FROM generated_files WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM token_usage WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM user_uploads WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM security_events WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM conversations WHERE user_id = ?').run(userId);
+  db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+
+  // Audit log
+  db.prepare(
+    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(uuidv4(), req.user!.userId, 'delete_user', 'user', userId, JSON.stringify({ email: user.email }));
 
   res.json({ success: true });
 });
@@ -569,6 +618,81 @@ router.get('/security/events/stats', (_req: Request, res: Response) => {
   const last24h = (db.prepare("SELECT COUNT(*) as count FROM security_events WHERE created_at >= datetime('now','-1 day')").get() as any).count;
 
   res.json({ total, blocked, last24h });
+});
+
+// ==================== Settings ====================
+
+// GET /api/admin/settings — All system settings
+router.get('/settings', (_req: Request, res: Response) => {
+  res.json({
+    usageLimitUsd: getUserUsageLimitUsd(),
+    storageQuotaGb: getStorageQuotaGb(),
+    uploadQuotaMb: getUploadQuotaMb(),
+  });
+});
+
+// PATCH /api/admin/settings — Update system settings
+router.patch('/settings', (req: Request, res: Response) => {
+  const { usageLimitUsd, storageQuotaGb, uploadQuotaMb } = req.body;
+  const changes: string[] = [];
+
+  if (typeof usageLimitUsd === 'number' && usageLimitUsd >= 0 && usageLimitUsd <= 100000) {
+    const old = getUserUsageLimitUsd();
+    setUserUsageLimitUsd(usageLimitUsd);
+    changes.push(`usageLimitUsd: ${old} → ${usageLimitUsd}`);
+  }
+  if (typeof storageQuotaGb === 'number' && storageQuotaGb >= 0 && storageQuotaGb <= 100) {
+    const old = getStorageQuotaGb();
+    setStorageQuotaGb(storageQuotaGb);
+    changes.push(`storageQuotaGb: ${old} → ${storageQuotaGb}`);
+  }
+  if (typeof uploadQuotaMb === 'number' && uploadQuotaMb >= 0 && uploadQuotaMb <= 10000) {
+    const old = getUploadQuotaMb();
+    setUploadQuotaMb(uploadQuotaMb);
+    changes.push(`uploadQuotaMb: ${old} → ${uploadQuotaMb}`);
+  }
+
+  if (changes.length === 0) {
+    res.status(400).json({ error: 'No valid settings to update' });
+    return;
+  }
+
+  // Audit log
+  db.prepare(
+    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(uuidv4(), req.user!.userId, 'update_settings', 'system', 'system_settings',
+    JSON.stringify({ changes }));
+
+  res.json({
+    success: true,
+    usageLimitUsd: getUserUsageLimitUsd(),
+    storageQuotaGb: getStorageQuotaGb(),
+    uploadQuotaMb: getUploadQuotaMb(),
+  });
+});
+
+// GET /api/admin/settings/usage-limit (backwards compat)
+router.get('/settings/usage-limit', (_req: Request, res: Response) => {
+  res.json({ limit: getUserUsageLimitUsd() });
+});
+
+// GET /api/admin/settings/users-usage — all users' usage costs
+router.get('/settings/users-usage', (_req: Request, res: Response) => {
+  const limit = getUserUsageLimitUsd();
+  const users = db.prepare(
+    "SELECT id, email, display_name, status FROM users WHERE role != 'admin'"
+  ).all() as { id: string; email: string; display_name: string | null; status: string }[];
+
+  const result = users.map(u => ({
+    ...u,
+    cost: getUserDisplayCost(u.id),
+    limit,
+    exceeded: getUserDisplayCost(u.id) >= limit,
+  }));
+
+  // Sort by cost descending
+  result.sort((a, b) => b.cost - a.cost);
+  res.json(result);
 });
 
 export default router;

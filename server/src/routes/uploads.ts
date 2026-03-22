@@ -10,8 +10,8 @@ import {
   scanUploadedFile,
   isAllowedExtension,
   isAllowedSize,
-  UPLOAD_QUOTA_BYTES,
 } from '../services/uploadScanner.js';
+import { getUploadQuotaMb } from '../services/usageLimit.js';
 import { applyWatermark } from '../services/watermark.js';
 
 const router = Router();
@@ -119,13 +119,14 @@ router.post('/', upload.array('files', 10), (req: Request, res: Response) => {
   // Check upload quota
   const currentUsage = getUserUploadSize(userId);
   const incomingSize = files.reduce((sum, f) => sum + f.size, 0);
-  if (currentUsage + incomingSize > UPLOAD_QUOTA_BYTES) {
+  const uploadQuotaBytes = getUploadQuotaMb() * 1024 * 1024;
+  if (currentUsage + incomingSize > uploadQuotaBytes) {
     // Clean up temp files
     for (const f of files) {
       try { fs.unlinkSync(f.path); } catch { /* ignore */ }
     }
     const usedMB = (currentUsage / (1024 * 1024)).toFixed(1);
-    const quotaMB = (UPLOAD_QUOTA_BYTES / (1024 * 1024)).toFixed(0);
+    const quotaMB = (uploadQuotaBytes / (1024 * 1024)).toFixed(0);
     res.status(413).json({
       error: `上傳空間不足（已使用 ${usedMB} MB / ${quotaMB} MB）`,
       code: 'UPLOAD_QUOTA_EXCEEDED',
@@ -244,7 +245,7 @@ router.get('/', (req: Request, res: Response) => {
 router.get('/storage', (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const used = getUserUploadSize(userId);
-  const quota = UPLOAD_QUOTA_BYTES;
+  const quota = getUploadQuotaMb() * 1024 * 1024;
   const count = (db.prepare(
     "SELECT COUNT(*) as count FROM user_uploads WHERE user_id = ? AND scan_status != 'rejected'"
   ).get(userId) as any).count;

@@ -10,9 +10,10 @@ const ADMIN_SIDEBAR_KEY = 'admin-sidebar-collapsed';
 const ADMIN_NAV = [
   { href: '/admin/overview', label: '總覽', icon: 'dashboard' },
   { href: '/admin/users', label: '用戶管理', icon: 'corporate_fare' },
+  { href: '/admin/skills', label: 'Skills 中心', icon: 'hub' },
   { href: '/admin/tokens', label: 'Token 帳本', icon: 'payments' },
   { href: '/admin/security', label: '安全審計', icon: 'shield_with_heart' },
-  { href: '/admin/skills', label: 'Skills 中心', icon: 'hub' },
+  { href: '/admin/settings', label: '系統設定', icon: 'settings' },
 ];
 
 export default function AdminSidebar() {
@@ -49,7 +50,7 @@ export default function AdminSidebar() {
       {!collapsed && (
         <div className="px-6 py-4">
           <p className="text-sm uppercase tracking-[0.3em] text-on-surface-variant font-bold">系統管理員</p>
-          <p className="text-[9px] text-outline mt-0.5">最高權限</p>
+          <p className="text-xs text-outline mt-0.5">最高權限</p>
         </div>
       )}
 
@@ -122,7 +123,7 @@ export default function AdminSidebar() {
 
         {/* Footer */}
         <div className="mt-3 pt-3 border-t border-outline-variant/10 px-3">
-          <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className={`text-outline hover:text-on-surface-variant transition-colors no-underline block text-center ${collapsed ? 'text-sm' : 'text-[11px]'}`}>
+          <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className={`text-outline hover:text-on-surface-variant transition-colors no-underline block text-center ${collapsed ? 'text-sm' : 'text-xs'}`}>
             {collapsed ? '©' : <>Powered by 智合科技 &copy; 2026</>}
           </a>
         </div>

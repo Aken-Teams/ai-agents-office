@@ -40,6 +40,8 @@ function LoginForm() {
         setErrorType('warning');
       } else if (msg.includes('鎖定') || msg.includes('頻繁')) {
         setErrorType('info');
+      } else if (msg.includes('用量上限') || msg.includes('超過')) {
+        setErrorType('warning');
       } else {
         setErrorType('error');
       }
