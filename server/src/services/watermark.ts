@@ -42,43 +42,43 @@ async function watermarkPdf(filePath: string): Promise<Buffer> {
   const pdfDoc = await PDFDocument.load(existing);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
+  // StandardFonts only support Latin chars — use English-only text for PDF
+  const pdfWatermarkText = 'TEST VERSION';
+
   const pages = pdfDoc.getPages();
   for (const page of pages) {
     const { width, height } = page.getSize();
     const fontSize = Math.min(width, height) * 0.07;
+    const textWidth = font.widthOfTextAtSize(pdfWatermarkText, fontSize);
 
-    // Draw repeated watermarks in a grid pattern
-    const texts = [WATERMARK_TEXT];
-    for (const text of texts) {
-      const textWidth = font.widthOfTextAtSize(text, fontSize);
-      // Center main watermark
-      page.drawText(text, {
-        x: width / 2 - textWidth / 2,
-        y: height / 2,
-        size: fontSize,
+    // Center main watermark
+    page.drawText(pdfWatermarkText, {
+      x: width / 2 - textWidth / 2,
+      y: height / 2,
+      size: fontSize,
+      font,
+      color: rgb(0.75, 0.75, 0.75),
+      opacity: 0.12,
+      rotate: degrees(-45),
+    });
+    // Additional copies for coverage
+    const positions = [
+      { x: width * 0.2, y: height * 0.8 },
+      { x: width * 0.8, y: height * 0.8 },
+      { x: width * 0.2, y: height * 0.2 },
+      { x: width * 0.8, y: height * 0.2 },
+    ];
+    const smallWidth = font.widthOfTextAtSize(pdfWatermarkText, fontSize * 0.7);
+    for (const pos of positions) {
+      page.drawText(pdfWatermarkText, {
+        x: pos.x - smallWidth / 2,
+        y: pos.y,
+        size: fontSize * 0.7,
         font,
-        color: rgb(0.7, 0.7, 0.7),
-        opacity: 0.25,
+        color: rgb(0.75, 0.75, 0.75),
+        opacity: 0.10,
         rotate: degrees(-45),
       });
-      // Additional copies for coverage
-      const positions = [
-        { x: width * 0.2, y: height * 0.8 },
-        { x: width * 0.8, y: height * 0.8 },
-        { x: width * 0.2, y: height * 0.2 },
-        { x: width * 0.8, y: height * 0.2 },
-      ];
-      for (const pos of positions) {
-        page.drawText(text, {
-          x: pos.x - textWidth / 2,
-          y: pos.y,
-          size: fontSize * 0.7,
-          font,
-          color: rgb(0.7, 0.7, 0.7),
-          opacity: 0.18,
-          rotate: degrees(-45),
-        });
-      }
     }
   }
 
@@ -257,8 +257,7 @@ async function watermarkPptx(filePath: string): Promise<Buffer> {
 }
 
 /* ============================================================
-   XLSX — add watermark text to sheet header (print header)
-   + overlay drawing for on-screen visibility
+   XLSX — add DrawingML watermark shape overlay on each sheet
    ============================================================ */
 async function watermarkXlsx(filePath: string): Promise<Buffer> {
   const data = fs.readFileSync(filePath);
@@ -270,21 +269,124 @@ async function watermarkXlsx(filePath: string): Promise<Buffer> {
     if (/^xl\/worksheets\/sheet\d+\.xml$/.test(p)) sheetFiles.push(p);
   });
 
+  const wmText = 'TEST VERSION';
+
   for (const sheetPath of sheetFiles) {
+    const sheetNum = sheetPath.match(/sheet(\d+)/)?.[1] || '1';
     let xml = await zip.file(sheetPath)!.async('text');
 
-    // Add print header/footer with watermark
-    const headerFooter = `<headerFooter><oddHeader>&amp;C&amp;"Arial,Regular"&amp;18&amp;K808080${WATERMARK_TEXT}</oddHeader></headerFooter>`;
+    // Skip if sheet already has a drawing (avoid conflicts with charts etc.)
+    if (xml.includes('<drawing ')) continue;
 
-    if (xml.includes('<headerFooter')) {
-      // Replace existing
-      xml = xml.replace(/<headerFooter[^>]*>[\s\S]*?<\/headerFooter>/, headerFooter);
-    } else {
-      // Insert before </worksheet>
-      xml = xml.replace('</worksheet>', headerFooter + '</worksheet>');
+    const drawingName = `drawingWM${sheetNum}`;
+    const drawingPath = `xl/drawings/${drawingName}.xml`;
+    const relId = `rIdWM${sheetNum}`;
+
+    // Create DrawingML with watermark text shapes
+    const drawingXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing"
+          xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <xdr:absoluteAnchor>
+    <xdr:pos x="1500000" y="2500000"/>
+    <xdr:ext cx="7000000" cy="2000000"/>
+    <xdr:sp macro="" textlink="">
+      <xdr:nvSpPr>
+        <xdr:cNvPr id="99901" name="WM_Center"/>
+        <xdr:cNvSpPr txBox="1"/>
+      </xdr:nvSpPr>
+      <xdr:spPr>
+        <a:xfrm rot="-2700000">
+          <a:off x="0" y="0"/>
+          <a:ext cx="7000000" cy="2000000"/>
+        </a:xfrm>
+        <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+        <a:noFill/>
+        <a:ln><a:noFill/></a:ln>
+      </xdr:spPr>
+      <xdr:txBody>
+        <a:bodyPr wrap="square" rtlCol="0" anchor="ctr"/>
+        <a:lstStyle/>
+        <a:p>
+          <a:pPr algn="ctr"/>
+          <a:r>
+            <a:rPr lang="en-US" sz="4800">
+              <a:solidFill><a:srgbClr val="C0C0C0"><a:alpha val="15000"/></a:srgbClr></a:solidFill>
+              <a:latin typeface="Arial"/>
+            </a:rPr>
+            <a:t>${wmText}</a:t>
+          </a:r>
+        </a:p>
+      </xdr:txBody>
+    </xdr:sp>
+  </xdr:absoluteAnchor>
+  <xdr:absoluteAnchor>
+    <xdr:pos x="300000" y="500000"/>
+    <xdr:ext cx="5000000" cy="1500000"/>
+    <xdr:sp macro="" textlink="">
+      <xdr:nvSpPr>
+        <xdr:cNvPr id="99902" name="WM_TopLeft"/>
+        <xdr:cNvSpPr txBox="1"/>
+      </xdr:nvSpPr>
+      <xdr:spPr>
+        <a:xfrm rot="-2700000">
+          <a:off x="0" y="0"/>
+          <a:ext cx="5000000" cy="1500000"/>
+        </a:xfrm>
+        <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+        <a:noFill/>
+        <a:ln><a:noFill/></a:ln>
+      </xdr:spPr>
+      <xdr:txBody>
+        <a:bodyPr wrap="square" rtlCol="0" anchor="ctr"/>
+        <a:lstStyle/>
+        <a:p>
+          <a:pPr algn="ctr"/>
+          <a:r>
+            <a:rPr lang="en-US" sz="3200">
+              <a:solidFill><a:srgbClr val="C0C0C0"><a:alpha val="12000"/></a:srgbClr></a:solidFill>
+              <a:latin typeface="Arial"/>
+            </a:rPr>
+            <a:t>${wmText}</a:t>
+          </a:r>
+        </a:p>
+      </xdr:txBody>
+    </xdr:sp>
+  </xdr:absoluteAnchor>
+</xdr:wsDr>`;
+    zip.file(drawingPath, drawingXml);
+
+    // Add/update sheet rels
+    const relsFile = `xl/worksheets/_rels/sheet${sheetNum}.xml.rels`;
+    let relsXml = await zip.file(relsFile)?.async('text') || '';
+    if (!relsXml) {
+      relsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="${relId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/${drawingName}.xml"/>
+</Relationships>`;
+    } else if (!relsXml.includes(relId)) {
+      relsXml = relsXml.replace('</Relationships>',
+        `<Relationship Id="${relId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/${drawingName}.xml"/></Relationships>`);
     }
+    zip.file(relsFile, relsXml);
 
+    // Add <drawing> reference in sheet XML — before </worksheet>
+    if (!xml.includes(`r:id="${relId}"`)) {
+      // Ensure r: namespace
+      if (!xml.includes('xmlns:r=')) {
+        xml = xml.replace('<worksheet', '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"');
+      }
+      xml = xml.replace('</worksheet>', `<drawing r:id="${relId}"/></worksheet>`);
+    }
     zip.file(sheetPath, xml);
+
+    // Add content type
+    const ctPath = '[Content_Types].xml';
+    let ctXml = await zip.file(ctPath)?.async('text') || '';
+    if (!ctXml.includes(drawingName)) {
+      ctXml = ctXml.replace('</Types>',
+        `<Override PartName="/xl/drawings/${drawingName}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/></Types>`);
+      zip.file(ctPath, ctXml);
+    }
   }
 
   const buf = await zip.generateAsync({ type: 'nodebuffer' });
