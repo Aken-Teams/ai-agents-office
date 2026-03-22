@@ -144,12 +144,27 @@ function PreviewModal({
   const config = FILE_TYPE_CONFIG[file.file_type] || { icon: 'attach_file', color: '#8f9097', bgColor: 'rgba(143,144,151,0.1)' };
   const isText = TEXT_TYPES.has(file.file_type);
   const isImage = IMAGE_TYPES.has(file.file_type);
+  const isNativeHtml = file.file_type === 'html'; // e.g. Reveal.js slides
 
   useEffect(() => {
     let revoke: string | null = null;
     const headers = { Authorization: `Bearer ${token}` };
 
-    if (isText) {
+    if (isNativeHtml) {
+      // Native HTML files (slides): load as blob URL so iframe can execute scripts
+      fetch(`/api/files/${file.id}/preview`, { headers })
+        .then(r => {
+          if (!r.ok) throw new Error();
+          return r.blob();
+        })
+        .then(blob => {
+          const url = URL.createObjectURL(new Blob([blob], { type: 'text/html' }));
+          revoke = url;
+          setBlobUrl(url);
+          setLoading(false);
+        })
+        .catch(() => { setError(true); setLoading(false); });
+    } else if (isText) {
       // Text files: fetch as text
       fetch(`/api/files/${file.id}/preview`, { headers })
         .then(r => { if (!r.ok) throw new Error(); return r.text(); })
@@ -177,7 +192,7 @@ function PreviewModal({
     }
 
     return () => { if (revoke) URL.revokeObjectURL(revoke); };
-  }, [file.id, token, isText, isImage]);
+  }, [file.id, token, isText, isImage, isNativeHtml]);
 
   // Close on Escape
   useEffect(() => {
@@ -193,8 +208,9 @@ function PreviewModal({
   }
 
   // Determine what to render
-  const isPdfBlob = blobUrl && !isImage;
-  const isHtmlContent = !isText && textContent !== null; // HTML from Office conversion
+  const isHtmlSlides = isNativeHtml && blobUrl; // Reveal.js slides — needs scripts
+  const isPdfBlob = blobUrl && !isImage && !isHtmlSlides;
+  const isHtmlContent = !isText && !isNativeHtml && textContent !== null; // HTML from Office conversion
 
   return (
     <div className="fixed inset-0 z-[100] flex" onClick={onClose}>
@@ -234,6 +250,15 @@ function PreviewModal({
                   {t('files.preview.download')}
                 </button>
               </div>
+            ) : isHtmlSlides ? (
+              /* Native HTML (Reveal.js slides) — embedded with scripts enabled */
+              <iframe
+                src={blobUrl!}
+                className="w-full h-[calc(100vh-8rem)] bg-white rounded"
+                title={file.filename}
+                sandbox="allow-scripts allow-same-origin"
+                style={{ border: 'none' }}
+              />
             ) : isPdfBlob ? (
               /* PDF (native or LibreOffice converted) */
               <iframe
@@ -544,9 +569,9 @@ function FilesContent() {
                 {storageInfo?.warning ? 'warning' : 'database'}
               </span>
             </div>
-            <div className="flex justify-between items-center text-sm font-bold tracking-widest uppercase text-on-surface-variant">
-              <span>{user?.displayName || user?.email?.split('@')[0] || ''}{t('files.storage.myStorage')}</span>
-              <span className={storageInfo?.warning ? 'text-error' : 'text-primary'}>{t('files.storage.fileCount', { count: files.length })}</span>
+            <div className="flex justify-between items-center gap-2 text-sm font-bold tracking-widest uppercase text-on-surface-variant">
+              <span className="truncate min-w-0">{user?.displayName || user?.email?.split('@')[0] || ''}{t('files.storage.myStorage')}</span>
+              <span className={`shrink-0 ${storageInfo?.warning ? 'text-error' : 'text-primary'}`}>{t('files.storage.fileCount', { count: files.length })}</span>
             </div>
             <div className="h-1.5 bg-surface-container-lowest rounded-full overflow-hidden">
               <div
