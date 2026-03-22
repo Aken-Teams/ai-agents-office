@@ -120,6 +120,16 @@ function getFileIcon(type: string): string {
   return icons[type] || 'attach_file';
 }
 
+function getFileColor(type: string): string {
+  const colors: Record<string, string> = {
+    docx: 'text-tertiary', doc: 'text-tertiary',
+    xlsx: 'text-success', xls: 'text-success',
+    pptx: 'text-warning', ppt: 'text-warning',
+    pdf: 'text-error',
+  };
+  return colors[type] || 'text-primary';
+}
+
 function ChatContent() {
   const { user, token, isLoading } = useAuth();
   const router = useRouter();
@@ -930,7 +940,7 @@ function ChatContent() {
                     tabIndex={0}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="material-symbols-outlined text-primary text-lg">
+                      <span className={`material-symbols-outlined ${getFileColor(file.file_type)} text-lg`}>
                         {getFileIcon(file.file_type)}
                       </span>
                       <div className="min-w-0">
