@@ -71,6 +71,13 @@ function applyThemeClass(theme: Theme) {
   root.classList.add(theme);
 }
 
+function applyLocaleClass(locale: Locale) {
+  const root = document.documentElement;
+  // Remove all locale classes
+  root.classList.remove('locale-zh-TW', 'locale-zh-CN', 'locale-en');
+  root.classList.add(`locale-${locale}`);
+}
+
 function readLocalStorage<T extends string>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
   return (localStorage.getItem(key) as T) || fallback;
@@ -94,9 +101,10 @@ export function I18nProvider({ children, initialLocale, initialTheme }: I18nProv
   );
   const [dict, setDict] = useState<TranslationDictionary>(zhTW);
 
-  // Load dictionary when locale changes
+  // Load dictionary + apply locale class when locale changes
   useEffect(() => {
     getDictionary(locale).then(setDict);
+    applyLocaleClass(locale);
   }, [locale]);
 
   // Apply theme class on mount and when theme changes
@@ -132,10 +140,11 @@ export function I18nProvider({ children, initialLocale, initialTheme }: I18nProv
     [dict],
   );
 
-  // Set locale — persist to server (if logged in) + localStorage
+  // Set locale — persist to server (if logged in) + localStorage + DOM class
   const setLocale = useCallback(async (newLocale: Locale) => {
     setLocaleState(newLocale);
     localStorage.setItem('locale', newLocale);
+    applyLocaleClass(newLocale);
     // Try to persist to server (ignore errors for unauthenticated pages)
     const token = localStorage.getItem('token');
     if (token) {

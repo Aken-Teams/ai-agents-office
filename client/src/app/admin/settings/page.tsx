@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
-import { I18nProvider, useTranslation } from '../../../i18n';
+import { useTranslation } from '../../../i18n';
 import type { Locale, Theme } from '../../../i18n/types';
 
 interface Settings {
@@ -18,12 +18,7 @@ const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
 ];
 
 export default function AdminSettings() {
-  const { user } = useAdminAuth();
-  return (
-    <I18nProvider initialLocale={user?.locale} initialTheme={user?.theme}>
-      <AdminSettingsContent />
-    </I18nProvider>
-  );
+  return <AdminSettingsContent />;
 }
 
 function AdminSettingsContent() {

@@ -240,10 +240,23 @@ export default function Navbar() {
           <div className="relative" ref={userMenuRef}>
             <button
               onClick={() => setShowUserMenu(v => !v)}
-              className={`relative group flex items-center gap-3 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container/50 transition-all w-full bg-transparent cursor-pointer rounded ${collapsed ? 'justify-center px-0' : 'px-3'}`}
+              className={`relative group flex items-center gap-3 py-2.5 transition-all w-full cursor-pointer rounded-lg border ${
+                showUserMenu
+                  ? 'bg-surface-container border-primary/30 text-on-surface'
+                  : 'bg-surface-container/0 border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container hover:border-outline-variant/20'
+              } ${collapsed ? 'justify-center px-0' : 'px-3'}`}
             >
-              <span className="material-symbols-outlined text-sm">person</span>
-              {!collapsed && <span className="text-sm truncate">{user.displayName || user.email}</span>}
+              <div className="w-7 h-7 bg-primary/15 flex items-center justify-center rounded-full shrink-0">
+                <span className="material-symbols-outlined text-primary text-sm">person</span>
+              </div>
+              {!collapsed && (
+                <>
+                  <span className="text-sm truncate flex-1 text-left">{user.displayName || user.email}</span>
+                  <span className={`material-symbols-outlined text-sm text-on-surface-variant transition-transform duration-200 ${showUserMenu ? 'rotate-180' : ''}`}>
+                    expand_less
+                  </span>
+                </>
+              )}
               {collapsed && (
                 <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
                   {user.displayName || user.email}
