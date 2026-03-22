@@ -12,6 +12,7 @@
     "dev:server": "pnpm --filter ai-agents-office-server dev",
     "dev:client": "pnpm --filter ai-agents-office-client dev",
     "build": "pnpm --filter ai-agents-office-server build && pnpm --filter ai-agents-office-client build",
+    "start": "concurrently \"pnpm --filter ai-agents-office-server start\" \"pnpm --filter ai-agents-office-client start\"",
     "init-db": "pnpm --filter ai-agents-office-server init-db"
   },
   "pnpm": {
