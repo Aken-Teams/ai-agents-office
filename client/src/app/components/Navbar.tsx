@@ -265,6 +265,22 @@ export default function Navbar() {
 
         {/* Bottom */}
         <div className={`mt-auto pt-6 space-y-1 ${collapsed ? 'px-2' : 'px-4'}`}>
+          {/* Switch to Admin (admin only) */}
+          {user.role === 'admin' && (
+            <Link
+              href="/admin/overview"
+              className={`relative group flex items-center gap-3 py-2.5 no-underline text-primary hover:bg-primary/10 transition-all rounded-lg mb-1 ${collapsed ? 'justify-center px-0' : 'px-3'}`}
+            >
+              <span className="material-symbols-outlined text-[20px]">admin_panel_settings</span>
+              {!collapsed && <span className="text-sm font-bold">{t('nav.switchToAdmin' as any)}</span>}
+              {collapsed && (
+                <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
+                  {t('nav.switchToAdmin' as any)}
+                </span>
+              )}
+            </Link>
+          )}
+
           {/* Collapse Toggle */}
           <button
             onClick={() => setCollapsed(v => !v)}
