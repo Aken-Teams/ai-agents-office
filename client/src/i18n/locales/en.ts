@@ -52,6 +52,9 @@ const en = {
   'login.submit': 'Connect',
   'login.noAccount': "Don't have an account?",
   'login.createAccount': 'Create Account',
+  'login.orDivider': 'OR',
+  'login.googleError': 'Google sign-in failed, please try again',
+  'login.googleAccountOnly': 'This account uses Google sign-in, please use the Google button',
   'login.footerFormats': 'Supported Formats',
   'login.footerEngine': 'AI Engine',
   'login.footerCollaboration': 'Collaboration',
@@ -79,6 +82,7 @@ const en = {
   'register.submit': 'Create Account',
   'register.hasAccount': 'Already have an account?',
   'register.goToLogin': 'Back to Login',
+  'register.orDivider': 'OR',
 
   'dashboard.title': 'Dashboard',
   'dashboard.engineLabel': 'AI Engine: Claude',
@@ -289,6 +293,7 @@ const en = {
   'userMenu.theme.light': 'Light',
   'userMenu.saved': 'Saved',
   'userMenu.logout': 'Log Out',
+  'userMenu.setPassword': 'Set Password',
 
   'settings.title': 'Settings',
   'settings.subtitle': 'Language & Appearance',

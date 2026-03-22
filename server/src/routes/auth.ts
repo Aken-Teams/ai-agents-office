@@ -2,11 +2,15 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
+import { OAuth2Client } from 'google-auth-library';
 import db from '../db.js';
 import { config } from '../config.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { checkUserUsageLimit } from '../services/usageLimit.js';
 import type { User } from '../types.js';
+
+const OAUTH_NO_PASSWORD = 'OAUTH_NO_PASSWORD';
+const googleClient = config.googleClientId ? new OAuth2Client(config.googleClientId) : null;
 
 const router = Router();
 
@@ -198,6 +202,13 @@ router.post('/login', async (req: Request, res: Response) => {
       return;
     }
 
+    // OAuth-only users cannot login with password
+    if (user.password_hash === OAUTH_NO_PASSWORD) {
+      clearLoginFailures(email.toLowerCase().trim());
+      res.status(400).json({ error: '此帳號使用 Google 登入，請使用 Google 按鈕登入', code: 'OAUTH_ONLY' });
+      return;
+    }
+
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
       recordLoginFailure(email.toLowerCase().trim());
@@ -257,11 +268,109 @@ router.post('/login', async (req: Request, res: Response) => {
 });
 
 /* ============================================================
+   POST /api/auth/google
+   ============================================================ */
+router.post('/google', async (req: Request, res: Response) => {
+  try {
+    if (!googleClient || !config.googleClientId) {
+      res.status(501).json({ error: 'Google OAuth is not configured' });
+      return;
+    }
+
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    if (!checkAuthRate(ip, 'google', 10, 15 * 60_000)) {
+      res.status(429).json({ error: '請求過於頻繁，請稍後再試' });
+      return;
+    }
+
+    const { credential } = req.body;
+    if (!credential) {
+      res.status(400).json({ error: 'Missing Google credential' });
+      return;
+    }
+
+    // Verify Google ID token
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: config.googleClientId,
+    });
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email) {
+      res.status(400).json({ error: 'Invalid Google token' });
+      return;
+    }
+
+    const email = payload.email.toLowerCase().trim();
+    const name = payload.name || '';
+    const googleId = payload.sub;
+
+    // Look up existing user by email
+    let user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as User | undefined;
+
+    if (user) {
+      // Link Google if not yet linked
+      if (!user.oauth_provider) {
+        db.prepare("UPDATE users SET oauth_provider = 'google', oauth_id = ?, updated_at = datetime('now') WHERE id = ?")
+          .run(googleId, user.id);
+      }
+
+      // Check user status
+      const status = user.status || 'active';
+      if (status === 'pending') {
+        // Auto-approve Google OAuth users
+        db.prepare("UPDATE users SET status = 'active', updated_at = datetime('now') WHERE id = ?").run(user.id);
+      } else if (status === 'suspended') {
+        res.status(403).json({ error: '您的帳號已被停用，如有疑問請聯繫管理者', code: 'SUSPENDED' });
+        return;
+      }
+    } else {
+      // Create new user — auto-approved
+      const id = uuidv4();
+      db.prepare(
+        "INSERT INTO users (id, email, password_hash, display_name, role, status, oauth_provider, oauth_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(id, email, OAUTH_NO_PASSWORD, name || null, 'user', 'active', 'google', googleId);
+      user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as User;
+    }
+
+    const role = user.role || 'user';
+
+    // Check usage limit for non-admin users
+    if (role !== 'admin') {
+      const usage = checkUserUsageLimit(user.id);
+      if (usage.exceeded) {
+        res.status(403).json({
+          error: `您的帳號已超過用量上限（$${usage.cost.toFixed(2)} / $${usage.limit.toFixed(2)}），請聯繫管理者升級方案`,
+          code: 'USAGE_EXCEEDED',
+        });
+        return;
+      }
+    }
+
+    const token = jwt.sign({ userId: user.id, email: user.email, role }, config.jwtSecret, {
+      expiresIn: config.jwtExpiresIn,
+    });
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.display_name,
+        role,
+      },
+    });
+  } catch (error) {
+    console.error('Google OAuth error:', error);
+    res.status(401).json({ error: 'Google 登入驗證失敗' });
+  }
+});
+
+/* ============================================================
    GET /api/auth/me
    ============================================================ */
 router.get('/me', authMiddleware, (req: Request, res: Response) => {
   const user = db.prepare(
-    'SELECT id, email, display_name, role, status, locale, theme, created_at FROM users WHERE id = ?'
+    'SELECT id, email, password_hash, display_name, role, status, locale, theme, oauth_provider, created_at FROM users WHERE id = ?'
   ).get(req.user!.userId) as User | undefined;
 
   if (!user) {
@@ -277,6 +386,8 @@ router.get('/me', authMiddleware, (req: Request, res: Response) => {
     status: user.status || 'active',
     locale: user.locale || 'zh-TW',
     theme: user.theme || 'light',
+    oauthProvider: user.oauth_provider || null,
+    hasPassword: user.password_hash !== OAUTH_NO_PASSWORD,
     createdAt: user.created_at,
   });
 });
@@ -319,8 +430,8 @@ router.patch('/password', authMiddleware, async (req: Request, res: Response) =>
     const userId = req.user!.userId;
     const { currentPassword, newPassword } = req.body;
 
-    if (!currentPassword || !newPassword) {
-      res.status(400).json({ error: 'currentPassword and newPassword are required' });
+    if (!newPassword) {
+      res.status(400).json({ error: 'newPassword is required' });
       return;
     }
     if (newPassword.length < 8) {
@@ -338,10 +449,19 @@ router.patch('/password', authMiddleware, async (req: Request, res: Response) =>
       return;
     }
 
-    const valid = await bcrypt.compare(currentPassword, user.password_hash);
-    if (!valid) {
-      res.status(401).json({ error: 'Current password is incorrect' });
-      return;
+    const isOAuthOnly = user.password_hash === OAUTH_NO_PASSWORD;
+
+    // OAuth-only users can set password without providing current password
+    if (!isOAuthOnly) {
+      if (!currentPassword) {
+        res.status(400).json({ error: 'currentPassword is required' });
+        return;
+      }
+      const valid = await bcrypt.compare(currentPassword, user.password_hash);
+      if (!valid) {
+        res.status(401).json({ error: 'Current password is incorrect' });
+        return;
+      }
     }
 
     const newHash = await bcrypt.hash(newPassword, config.bcryptRounds);

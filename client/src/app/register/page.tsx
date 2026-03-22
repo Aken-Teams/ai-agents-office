@@ -1,13 +1,18 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
 import { I18nProvider, useTranslation } from '../../i18n';
 
+const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+
 function RegisterForm() {
-  const { register } = useAuth();
-  const { t } = useTranslation();
+  const { register, loginWithGoogle } = useAuth();
+  const { t, theme } = useTranslation();
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -195,8 +200,40 @@ function RegisterForm() {
                   </button>
                 </form>
 
+                {/* Google OAuth */}
+                {googleClientId && (
+                  <div className="mt-6 flex flex-col items-center gap-4">
+                    <div className="w-full h-px bg-outline-variant/20 relative">
+                      <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-container-high px-4 text-sm uppercase tracking-widest text-outline">
+                        {t('register.orDivider')}
+                      </span>
+                    </div>
+                    <div className="w-full flex justify-center">
+                      <GoogleLogin
+                        onSuccess={async (credentialResponse) => {
+                          setError('');
+                          setLoading(true);
+                          try {
+                            await loginWithGoogle(credentialResponse.credential!);
+                            router.push('/dashboard');
+                          } catch (err) {
+                            setError((err as Error).message);
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}
+                        onError={() => setError(t('login.googleError'))}
+                        theme={theme === 'dark' ? 'filled_black' : 'outline'}
+                        size="large"
+                        width="400"
+                        text="signup_with"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {/* Toggle to Login */}
-                <div className="mt-12 flex flex-col items-center gap-6">
+                <div className="mt-8 flex flex-col items-center gap-6">
                   <div className="w-full h-px bg-outline-variant/20 relative">
                     <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-container-high px-4 text-sm uppercase tracking-widest text-outline">
                       {t('register.hasAccount')}
@@ -221,7 +258,7 @@ function RegisterForm() {
   );
 }
 
-export default function RegisterPage() {
+function RegisterPageInner() {
   return (
     <I18nProvider>
       <AuthProvider>
@@ -229,4 +266,15 @@ export default function RegisterPage() {
       </AuthProvider>
     </I18nProvider>
   );
+}
+
+export default function RegisterPage() {
+  if (googleClientId) {
+    return (
+      <GoogleOAuthProvider clientId={googleClientId}>
+        <RegisterPageInner />
+      </GoogleOAuthProvider>
+    );
+  }
+  return <RegisterPageInner />;
 }

@@ -125,6 +125,12 @@ export function initializeDatabase(): void {
   // Migrate existing users from dark (old default) to light (new default)
   db.exec("UPDATE users SET theme = 'light' WHERE theme = 'dark'");
 
+  // Migration: add OAuth columns to users
+  try { db.prepare("SELECT oauth_provider FROM users LIMIT 1").get(); }
+  catch { db.exec("ALTER TABLE users ADD COLUMN oauth_provider TEXT"); }
+  try { db.prepare("SELECT oauth_id FROM users LIMIT 1").get(); }
+  catch { db.exec("ALTER TABLE users ADD COLUMN oauth_id TEXT"); }
+
   // Migration: add conversation_id to user_uploads if missing
   try {
     db.prepare("SELECT conversation_id FROM user_uploads LIMIT 1").get();

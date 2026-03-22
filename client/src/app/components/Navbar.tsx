@@ -112,6 +112,8 @@ export default function Navbar() {
     setTimeout(() => setSaved(false), 2000);
   }
 
+  const isOAuthOnly = user.oauthProvider && user.hasPassword === false;
+
   async function handlePasswordChange() {
     setPasswordError('');
     if (newPassword.length < 8) {
@@ -124,13 +126,15 @@ export default function Navbar() {
     }
     setChangingPassword(true);
     try {
+      const body: Record<string, string> = { newPassword };
+      if (!isOAuthOnly) body.currentPassword = currentPassword;
       const res = await fetch('/api/auth/password', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ currentPassword, newPassword }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -282,6 +286,11 @@ export default function Navbar() {
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${user.role === 'admin' ? 'bg-warning/20 text-warning' : 'bg-primary/10 text-primary'}`}>
                       {user.role === 'admin' ? t('userMenu.role.admin') : t('userMenu.role.user')}
                     </span>
+                    {user.oauthProvider === 'google' && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-surface-container-high text-on-surface-variant">
+                        Google
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -293,18 +302,22 @@ export default function Navbar() {
                       className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors w-full bg-transparent cursor-pointer py-1"
                     >
                       <span className="material-symbols-outlined text-sm">lock</span>
-                      {t('userMenu.changePassword')}
+                      {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
                     </button>
                   ) : (
                     <div className="space-y-2">
-                      <p className="text-sm font-bold text-on-surface mb-2">{t('userMenu.changePassword')}</p>
-                      <input
-                        type="password"
-                        placeholder={t('userMenu.changePassword.current')}
-                        value={currentPassword}
-                        onChange={e => setCurrentPassword(e.target.value)}
-                        className="w-full px-3 py-2 bg-surface-container-high border border-outline-variant/20 rounded text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
-                      />
+                      <p className="text-sm font-bold text-on-surface mb-2">
+                        {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
+                      </p>
+                      {!isOAuthOnly && (
+                        <input
+                          type="password"
+                          placeholder={t('userMenu.changePassword.current')}
+                          value={currentPassword}
+                          onChange={e => setCurrentPassword(e.target.value)}
+                          className="w-full px-3 py-2 bg-surface-container-high border border-outline-variant/20 rounded text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
+                        />
+                      )}
                       <input
                         type="password"
                         placeholder={t('userMenu.changePassword.new')}
@@ -328,7 +341,7 @@ export default function Navbar() {
                       <div className="flex gap-2 pt-1">
                         <button
                           onClick={handlePasswordChange}
-                          disabled={changingPassword || !currentPassword || !newPassword || !confirmPassword}
+                          disabled={changingPassword || (!isOAuthOnly && !currentPassword) || !newPassword || !confirmPassword}
                           className="flex-1 px-3 py-1.5 bg-primary text-on-primary text-xs font-medium rounded hover:bg-primary-hover transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {t('userMenu.changePassword.submit')}

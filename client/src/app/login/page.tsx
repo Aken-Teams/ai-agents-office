@@ -3,12 +3,15 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
 import { I18nProvider, useTranslation } from '../../i18n';
 
+const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+
 function LoginForm() {
-  const { login } = useAuth();
-  const { t } = useTranslation();
+  const { login, loginWithGoogle } = useAuth();
+  const { t, theme } = useTranslation();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -44,6 +47,8 @@ function LoginForm() {
         setErrorType('info');
       } else if (msg.includes('用量上限') || msg.includes('超過')) {
         setErrorType('warning');
+      } else if (msg.includes('Google')) {
+        setErrorType('info');
       } else {
         setErrorType('error');
       }
@@ -180,8 +185,54 @@ function LoginForm() {
               </button>
             </form>
 
+            {/* Google OAuth */}
+            {googleClientId && (
+              <div className="mt-6 flex flex-col items-center gap-4">
+                <div className="w-full h-px bg-outline-variant/20 relative">
+                  <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-container-high px-4 text-sm uppercase tracking-widest text-outline">
+                    {t('login.orDivider')}
+                  </span>
+                </div>
+                <div className="w-full flex justify-center">
+                  <GoogleLogin
+                    onSuccess={async (credentialResponse) => {
+                      setError('');
+                      setLoading(true);
+                      try {
+                        await loginWithGoogle(credentialResponse.credential!);
+                        const storedToken = localStorage.getItem('token');
+                        if (storedToken) {
+                          try {
+                            const payload = JSON.parse(atob(storedToken.split('.')[1]));
+                            if (payload.role === 'admin') {
+                              router.push('/admin/overview');
+                              return;
+                            }
+                          } catch { /* ignore */ }
+                        }
+                        router.push('/dashboard');
+                      } catch (err) {
+                        setErrorType('error');
+                        setError((err as Error).message);
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    onError={() => {
+                      setErrorType('error');
+                      setError(t('login.googleError'));
+                    }}
+                    theme={theme === 'dark' ? 'filled_black' : 'outline'}
+                    size="large"
+                    width="400"
+                    text="signin_with"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Toggle to Register */}
-            <div className="mt-12 flex flex-col items-center gap-6">
+            <div className="mt-8 flex flex-col items-center gap-6">
               <div className="w-full h-px bg-outline-variant/20 relative">
                 <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-container-high px-4 text-sm uppercase tracking-widest text-outline">
                   {t('login.noAccount')}
@@ -220,7 +271,7 @@ function LoginForm() {
   );
 }
 
-export default function LoginPage() {
+function LoginPageInner() {
   return (
     <I18nProvider>
       <AuthProvider>
@@ -228,4 +279,15 @@ export default function LoginPage() {
       </AuthProvider>
     </I18nProvider>
   );
+}
+
+export default function LoginPage() {
+  if (googleClientId) {
+    return (
+      <GoogleOAuthProvider clientId={googleClientId}>
+        <LoginPageInner />
+      </GoogleOAuthProvider>
+    );
+  }
+  return <LoginPageInner />;
 }

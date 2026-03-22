@@ -55,6 +55,9 @@ const zhTW = {
   'login.submit': '建立連線',
   'login.noAccount': '還沒有帳號？',
   'login.createAccount': '建立新帳號',
+  'login.orDivider': '或',
+  'login.googleError': 'Google 登入失敗，請重試',
+  'login.googleAccountOnly': '此帳號使用 Google 登入，請使用 Google 按鈕',
   'login.footerFormats': '支援格式',
   'login.footerEngine': 'AI 引擎',
   'login.footerCollaboration': '協作模式',
@@ -83,6 +86,7 @@ const zhTW = {
   'register.submit': '建立帳號',
   'register.hasAccount': '已有帳號？',
   'register.goToLogin': '返回登入',
+  'register.orDivider': '或',
 
   // Dashboard
   'dashboard.title': '儀表板',
@@ -298,6 +302,7 @@ const zhTW = {
   'userMenu.theme.light': '淺色',
   'userMenu.saved': '已儲存',
   'userMenu.logout': '登出',
+  'userMenu.setPassword': '設定密碼',
 
   // Settings (personal) — kept for backward compat
   'settings.title': '個人設定',

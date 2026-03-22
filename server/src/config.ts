@@ -1,8 +1,20 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(__dirname, '../..');
+
+// Load root .env file
+const envPath = path.resolve(ROOT_DIR, '.env');
+if (fs.existsSync(envPath)) {
+  for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
+    const match = line.match(/^([^#=\s]+)\s*=\s*(.*)$/);
+    if (match && !process.env[match[1].trim()]) {
+      process.env[match[1].trim()] = match[2].trim();
+    }
+  }
+}
 
 export const config = {
   port: parseInt(process.env.PORT || '3000', 10),
@@ -19,6 +31,9 @@ export const config = {
 
   // Claude CLI
   claudeCliPath: process.env.CLAUDE_CLI_PATH || 'claude',
+
+  // Google OAuth
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
 
   // Security
   maxMessageLength: 10_000,

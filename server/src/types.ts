@@ -7,6 +7,8 @@ export interface User {
   status: 'active' | 'pending' | 'suspended';
   locale: 'zh-TW' | 'zh-CN' | 'en';
   theme: 'dark' | 'light';
+  oauth_provider: string | null;
+  oauth_id: string | null;
   created_at: string;
   updated_at: string;
 }

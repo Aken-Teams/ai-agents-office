@@ -9,6 +9,8 @@ interface User {
   role?: string;
   locale?: 'zh-TW' | 'zh-CN' | 'en';
   theme?: 'dark' | 'light';
+  oauthProvider?: string | null;
+  hasPassword?: boolean;
 }
 
 interface AuthContextType {
@@ -16,6 +18,7 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<void>;
   register: (email: string, password: string, displayName: string) => Promise<{ pending: boolean; message?: string }>;
   logout: () => void;
 }
@@ -74,6 +77,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user);
   }, []);
 
+  const loginWithGoogle = useCallback(async (credential: string) => {
+    const res = await fetch('/api/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Google login failed');
+    }
+    const data = await res.json();
+    localStorage.setItem('token', data.token);
+    setToken(data.token);
+    // Fetch full user profile (including oauthProvider, hasPassword, locale, theme)
+    await fetchMe(data.token);
+  }, []);
+
   const register = useCallback(async (email: string, password: string, displayName: string) => {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
@@ -105,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, loginWithGoogle, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

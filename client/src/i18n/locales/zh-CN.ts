@@ -55,6 +55,9 @@ const zhCN = {
   'login.submit': '建立连线',
   'login.noAccount': '还没有账号？',
   'login.createAccount': '创建新账号',
+  'login.orDivider': '或',
+  'login.googleError': 'Google 登录失败，请重试',
+  'login.googleAccountOnly': '此账号使用 Google 登录，请使用 Google 按钮',
   'login.footerFormats': '支持格式',
   'login.footerEngine': 'AI 引擎',
   'login.footerCollaboration': '协作模式',
@@ -83,6 +86,7 @@ const zhCN = {
   'register.submit': '创建账号',
   'register.hasAccount': '已有账号？',
   'register.goToLogin': '返回登录',
+  'register.orDivider': '或',
 
   // Dashboard
   'dashboard.title': '仪表板',
@@ -298,6 +302,7 @@ const zhCN = {
   'userMenu.theme.light': '浅色',
   'userMenu.saved': '已保存',
   'userMenu.logout': '退出登录',
+  'userMenu.setPassword': '设置密码',
 
   // Settings (personal)
   'settings.title': '个人设置',
