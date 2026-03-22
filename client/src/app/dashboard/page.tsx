@@ -320,7 +320,7 @@ function DashboardContent() {
                 </div>
                 {/* Sample prompts / templates */}
                 {!smartInput.trim() && (
-                  <div className="flex flex-wrap gap-2 mt-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-4">
                     {[
                       {
                         icon: 'present_to_all',
@@ -395,7 +395,7 @@ function DashboardContent() {
                       <button
                         key={sample.labelKey}
                         onClick={() => setSmartInput(sample.template)}
-                        className="flex items-center gap-2 px-3 py-2 bg-surface-container-highest/50 border border-outline-variant/10 rounded-lg text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest hover:border-primary/20 transition-all cursor-pointer"
+                        className="flex items-center gap-2 px-3 py-2 bg-surface-container-highest/50 border border-outline-variant/10 rounded-lg text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest hover:border-primary/20 transition-all cursor-pointer whitespace-nowrap overflow-hidden"
                       >
                         <span className="material-symbols-outlined text-sm text-primary/60">{sample.icon}</span>
                         {t(sample.labelKey)}
