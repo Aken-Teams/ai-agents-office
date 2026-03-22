@@ -20,6 +20,7 @@ cat > slides.json << 'SLIDESEOF'
 {
   "title": "Presentation Title",
   "author": "Author Name",
+  "style": "corporate",
   "slides": [
     {
       "type": "title",
@@ -36,12 +37,36 @@ cat > slides.json << 'SLIDESEOF'
       "title": "Comparison",
       "left": { "heading": "Option A", "bullets": ["Pro 1", "Pro 2"] },
       "right": { "heading": "Option B", "bullets": ["Pro 1", "Pro 2"] }
+    },
+    {
+      "type": "section",
+      "title": "Section Divider"
     }
   ]
 }
 SLIDESEOF
 node --import tsx generate-pptx.ts slides.json output.pptx
 ```
+
+## Available Styles
+
+Use the `"style"` field to apply a built-in visual theme. **Always use these pre-built styles instead of writing custom code for styling.**
+
+| Style | Description |
+|-------|-------------|
+| `"minimal-pro"` | Clean white background, gray tones, understated and professional |
+| `"tech-dark"` | Dark background (0F0F23), neon cyan accents, Consolas font, tech feel |
+| `"corporate"` | White background, navy blue headings, blue accent bars (default) |
+| `"creative"` | Warm cream background, red/orange accents, vibrant and playful |
+
+If the user mentions a style preference (e.g. "dark theme", "professional", "colorful"), pick the closest matching style. If no style is mentioned, use `"corporate"`.
+
+## Slide Types
+
+- `"title"` — Title slide with main title, subtitle, and accent line
+- `"content"` — Heading + bullet points
+- `"two-column"` — Heading + two columns with sub-headings and bullets
+- `"section"` — Section divider slide
 
 ## Custom Generation
 For complex requirements (charts, images, special layouts), write custom Node.js code using `pptxgenjs`:
