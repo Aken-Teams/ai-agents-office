@@ -230,15 +230,15 @@ function DashboardContent() {
                 </p>
               </div>
               <div className="bg-surface-container p-6 rounded-lg">
-                <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-1">工作區</p>
+                <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-1">對話總數</p>
                 <div className="flex items-center gap-2">
                   <span className="text-3xl font-headline font-bold text-on-surface">
                     {conversations.length}
                   </span>
-                  <span className="material-symbols-outlined text-on-surface-variant">storage</span>
+                  <span className="material-symbols-outlined text-on-surface-variant">chat</span>
                 </div>
                 <p className="text-xs text-on-surface-variant mt-3 font-mono">
-                  對話: {conversations.length} | 模式: 多代理協作
+                  進行中: {conversations.filter(c => c.status === 'active').length} | 模式: 多代理協作
                 </p>
               </div>
             </div>
