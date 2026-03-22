@@ -246,7 +246,7 @@ function DashboardContent() {
             </div>
 
             {/* Smart Input */}
-            <div className="bg-surface-container rounded-lg overflow-hidden flex flex-col flex-1">
+            <div className="bg-surface-container rounded-lg overflow-hidden flex flex-col flex-1 min-h-[400px]">
               <div className="px-6 py-4 bg-surface-container-high flex items-center gap-3">
                 <span className="material-symbols-outlined text-primary">forum</span>
                 <span className="text-sm font-bold uppercase tracking-widest">{t('dashboard.smartInput.title')}</span>
