@@ -363,8 +363,6 @@ function FilesContent() {
   const [activeTab, setActiveTab] = useState<'generated' | 'uploads'>('generated');
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [uploadStorage, setUploadStorage] = useState<UploadStorageInfo | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
@@ -402,43 +400,6 @@ function FilesContent() {
   }, [token]);
 
   useEffect(() => { fetchUploads(); }, [fetchUploads]);
-
-  async function handleUpload(fileList: FileList | File[]) {
-    if (!token || uploading) return;
-    const filesArr = Array.from(fileList);
-    if (filesArr.length === 0) return;
-
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      for (const f of filesArr) formData.append('files', f);
-
-      const resp = await fetch('/api/uploads', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-      const data = await resp.json();
-      if (!resp.ok) {
-        alert(data.error || '上傳失敗');
-        return;
-      }
-
-      // Check for rejected files
-      const rejected = data.uploads?.filter((u: any) => u.scanStatus === 'rejected') || [];
-      if (rejected.length > 0) {
-        alert(`安全掃描攔截了 ${rejected.length} 個檔案:\n${rejected.map((r: any) => `${r.originalName}: ${r.scanDetail}`).join('\n')}`);
-      }
-
-      fetchUploads();
-      setActiveTab('uploads');
-    } catch (err) {
-      console.error('Upload error:', err);
-      alert('上傳失敗，請稍後重試');
-    } finally {
-      setUploading(false);
-    }
-  }
 
   async function deleteUpload(id: string) {
     if (!token) return;
@@ -774,60 +735,24 @@ function FilesContent() {
         ) : (
         /* ============ Uploads Tab ============ */
         <>
-          {/* Upload Drop Zone */}
-          <div
-            className={`border-2 border-dashed rounded-lg p-8 mb-8 text-center transition-colors ${
-              dragOver
-                ? 'border-primary bg-primary/5'
-                : 'border-outline-variant/20 hover:border-primary/30'
-            }`}
-            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={e => {
-              e.preventDefault();
-              setDragOver(false);
-              if (e.dataTransfer.files.length > 0) handleUpload(e.dataTransfer.files);
-            }}
-          >
-            <span className="material-symbols-outlined text-4xl text-on-surface-variant mb-3 block">
-              {uploading ? 'progress_activity' : 'cloud_upload'}
-            </span>
-            <p className="text-sm text-on-surface-variant mb-2">
-              {uploading ? '上傳中...' : '拖拽檔案到此處，或點擊選擇檔案'}
-            </p>
-            <p className="text-xs text-outline mb-4">
-              支援格式: CSV, XLSX, XLS, PDF, TXT, MD, JSON, DOCX, DOC（單檔最大 50MB）
-            </p>
-            <label className={`inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary text-xs font-bold uppercase tracking-widest rounded cursor-pointer hover:bg-primary/80 transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
-              <span className="material-symbols-outlined text-sm">folder_open</span>
-              選擇檔案
-              <input
-                type="file"
-                multiple
-                accept=".csv,.xlsx,.xls,.pdf,.txt,.md,.json,.docx,.doc"
-                className="hidden"
-                onChange={e => { if (e.target.files) handleUpload(e.target.files); e.target.value = ''; }}
-                disabled={uploading}
-              />
-            </label>
-            {uploadStorage && (
-              <div className="mt-4 flex items-center justify-center gap-4 text-xs text-on-surface-variant">
-                <span>已上傳 {uploadStorage.count} 個檔案</span>
-                <span>·</span>
-                <span>{uploadStorage.formatted.used} / {uploadStorage.formatted.quota}</span>
-                <div className="w-24 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-                  <div className="h-full bg-primary/60 rounded-full" style={{ width: `${Math.min(uploadStorage.percentage * 100, 100)}%` }} />
-                </div>
+          {/* Upload storage summary */}
+          {uploadStorage && (
+            <div className="flex items-center gap-6 mb-6 px-1 text-xs text-on-surface-variant">
+              <span>共 {uploadStorage.count} 個檔案</span>
+              <span>·</span>
+              <span>{uploadStorage.formatted.used} / {uploadStorage.formatted.quota}</span>
+              <div className="w-24 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                <div className="h-full bg-primary/60 rounded-full" style={{ width: `${Math.min(uploadStorage.percentage * 100, 100)}%` }} />
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Uploaded Files List */}
+          {/* Uploaded Files List (read-only view) */}
           {uploads.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 border border-dashed border-outline-variant/20 rounded-lg">
               <span className="material-symbols-outlined text-on-surface-variant text-3xl mb-3 opacity-30">upload_file</span>
               <p className="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-xs">尚無上傳檔案</p>
-              <p className="text-xs text-on-surface-variant/40 mt-1">上傳 CSV、Excel、PDF 等資料，讓 AI 代理進行分析</p>
+              <p className="text-xs text-on-surface-variant/40 mt-1">在對話輸入框中附加檔案即可上傳</p>
             </div>
           ) : (
             <div className="space-y-2">

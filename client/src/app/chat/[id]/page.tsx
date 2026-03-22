@@ -26,6 +26,15 @@ interface GeneratedFile {
   file_size: number;
 }
 
+interface AttachedFile {
+  id: string;
+  originalName: string;
+  fileType: string;
+  fileSize: number;
+  scanStatus: string;
+  uploading?: boolean;
+}
+
 interface ToolActivity {
   tool: string;
   id?: string;
@@ -131,6 +140,8 @@ function ChatContent() {
   const [lastUsage, setLastUsage] = useState<{ inputTokens: number; outputTokens: number; model: string } | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [agentTasks, setAgentTasks] = useState<AgentTask[]>([]);
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const sidebarMargin = useSidebarMargin();
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -199,11 +210,16 @@ function ChatContent() {
     if (!messageToSend || streaming || !token) return;
 
     const userMessage = messageToSend;
+    // Capture attached file names for display in the message
+    const currentAttached = attachedFiles.filter(f => !f.uploading && f.scanStatus !== 'rejected');
+    const attachmentNote = currentAttached.length > 0
+      ? `\n\n📎 ${currentAttached.map(f => f.originalName).join(', ')}`
+      : '';
     if (!directMessage) setInput('');
     setMessages(prev => [...prev, {
       id: `temp-${Date.now()}`,
       role: 'user',
-      content: userMessage,
+      content: userMessage + attachmentNote,
       created_at: new Date().toISOString(),
     }]);
 
@@ -214,6 +230,7 @@ function ChatContent() {
     setLastUsage(null);
     setPanelCollapsed(false);
     setAgentTasks([]);
+    setAttachedFiles([]);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -401,6 +418,71 @@ function ChatContent() {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     }).catch(() => {});
+  }
+
+  async function handleFileAttach(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0 || !token) return;
+    const filesArr = Array.from(fileList);
+
+    // Add placeholder chips
+    const placeholders: AttachedFile[] = filesArr.map(f => ({
+      id: `tmp-${Date.now()}-${f.name}`,
+      originalName: f.name,
+      fileType: f.name.split('.').pop() || '',
+      fileSize: f.size,
+      scanStatus: 'pending',
+      uploading: true,
+    }));
+    setAttachedFiles(prev => [...prev, ...placeholders]);
+
+    try {
+      const formData = new FormData();
+      for (const f of filesArr) formData.append('files', f);
+
+      const resp = await fetch('/api/uploads', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        alert(data.error || '上傳失敗');
+        setAttachedFiles(prev => prev.filter(f => !f.uploading));
+        return;
+      }
+
+      // Replace placeholders with real results
+      const uploaded: AttachedFile[] = (data.uploads || []).map((u: any) => ({
+        id: u.id,
+        originalName: u.originalName,
+        fileType: u.fileType,
+        fileSize: u.fileSize,
+        scanStatus: u.scanStatus,
+        uploading: false,
+      }));
+
+      // Remove placeholders, add real ones
+      setAttachedFiles(prev => [
+        ...prev.filter(f => !f.uploading),
+        ...uploaded,
+      ]);
+
+      // Notify about rejected files
+      const rejected = uploaded.filter(u => u.scanStatus === 'rejected');
+      if (rejected.length > 0) {
+        alert(`安全掃描攔截了 ${rejected.length} 個檔案`);
+      }
+    } catch (err) {
+      console.error('Upload error:', err);
+      setAttachedFiles(prev => prev.filter(f => !f.uploading));
+      alert('上傳失敗，請稍後重試');
+    }
+  }
+
+  function removeAttachedFile(fileId: string) {
+    setAttachedFiles(prev => prev.filter(f => f.id !== fileId));
+    // Optionally delete from server — but keep it since user may want it later
   }
 
   function formatSize(bytes: number): string {
@@ -712,7 +794,57 @@ function ChatContent() {
           {/* Input Area */}
           <div className="p-6 pt-0">
             <div className="bg-surface-container rounded-lg border border-outline-variant/20 focus-within:border-primary/40 transition-all p-2">
+              {/* Attached files chips */}
+              {attachedFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2 px-2 pt-2 pb-1">
+                  {attachedFiles.map(file => (
+                    <div
+                      key={file.id}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs border ${
+                        file.uploading ? 'bg-surface-container-high border-outline-variant/20 text-on-surface-variant' :
+                        file.scanStatus === 'rejected' ? 'bg-error/10 border-error/30 text-error' :
+                        file.scanStatus === 'suspicious' ? 'bg-warning/10 border-warning/30 text-warning' :
+                        'bg-primary/10 border-primary/20 text-primary'
+                      }`}
+                    >
+                      {file.uploading ? (
+                        <span className="material-symbols-outlined text-xs animate-spin">progress_activity</span>
+                      ) : file.scanStatus === 'rejected' ? (
+                        <span className="material-symbols-outlined text-xs">gpp_bad</span>
+                      ) : (
+                        <span className="material-symbols-outlined text-xs">attach_file</span>
+                      )}
+                      <span className="max-w-[120px] truncate">{file.originalName}</span>
+                      {!file.uploading && (
+                        <button
+                          onClick={() => removeAttachedFile(file.id)}
+                          className="hover:text-error transition-colors cursor-pointer ml-0.5"
+                        >
+                          <span className="material-symbols-outlined text-xs">close</span>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="flex items-center gap-3 px-2 py-1">
+                {/* Attach file button */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".csv,.xlsx,.xls,.pdf,.txt,.md,.json,.docx,.doc"
+                  className="hidden"
+                  onChange={e => { handleFileAttach(e.target.files); e.target.value = ''; }}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={streaming}
+                  className="w-9 h-9 flex items-center justify-center rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  title="上傳檔案"
+                >
+                  <span className="material-symbols-outlined text-lg">attach_file</span>
+                </button>
                 <textarea
                   className="bg-transparent border-none focus:ring-0 text-sm flex-1 text-on-surface placeholder:text-outline/50 font-body resize-none min-h-[40px] max-h-[120px]"
                   value={input}

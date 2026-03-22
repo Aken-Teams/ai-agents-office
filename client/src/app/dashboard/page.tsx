@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
 import Navbar from '../components/Navbar';
@@ -33,6 +33,8 @@ const DOC_TYPES = [
   { id: 'docx-gen', label: '文件', desc: '文書撰寫', icon: 'description', colorClass: 'text-tertiary' },
   { id: 'xlsx-gen', label: '試算表', desc: '數據分析', icon: 'table_chart', colorClass: 'text-success' },
   { id: 'pdf-gen', label: 'PDF', desc: '文件輸出', icon: 'picture_as_pdf', colorClass: 'text-error' },
+  { id: 'data-analyst', label: '數據分析', desc: '上傳資料分析', icon: 'analytics', colorClass: 'text-primary' },
+  { id: 'research', label: '網路研究', desc: '搜尋與彙整', icon: 'travel_explore', colorClass: 'text-on-surface-variant' },
 ];
 
 const SKILL_ICONS: Record<string, string> = {
@@ -63,6 +65,8 @@ function DashboardContent() {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [smartInput, setSmartInput] = useState('');
   const [creating, setCreating] = useState(false);
+  const [smartAttached, setSmartAttached] = useState<Array<{ id: string; name: string; uploading?: boolean }>>([]);
+  const smartFileRef = useRef<HTMLInputElement>(null);
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
@@ -125,6 +129,44 @@ function DashboardContent() {
   async function handleSmartSubmit() {
     if (!smartInput.trim()) return;
     await createConversation(undefined, smartInput.trim());
+    setSmartAttached([]);
+  }
+
+  async function handleSmartFileAttach(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0 || !token) return;
+    const filesArr = Array.from(fileList);
+
+    const placeholders = filesArr.map(f => ({
+      id: `tmp-${Date.now()}-${f.name}`,
+      name: f.name,
+      uploading: true,
+    }));
+    setSmartAttached(prev => [...prev, ...placeholders]);
+
+    try {
+      const formData = new FormData();
+      for (const f of filesArr) formData.append('files', f);
+      const resp = await fetch('/api/uploads', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        alert(data.error || '上傳失敗');
+        setSmartAttached(prev => prev.filter(f => !f.uploading));
+        return;
+      }
+      const uploaded = (data.uploads || [])
+        .filter((u: any) => u.scanStatus !== 'rejected')
+        .map((u: any) => ({ id: u.id, name: u.originalName, uploading: false }));
+      const rejected = (data.uploads || []).filter((u: any) => u.scanStatus === 'rejected');
+      if (rejected.length > 0) alert(`安全掃描攔截了 ${rejected.length} 個檔案`);
+      setSmartAttached(prev => [...prev.filter(f => !f.uploading), ...uploaded]);
+    } catch {
+      setSmartAttached(prev => prev.filter(f => !f.uploading));
+      alert('上傳失敗');
+    }
   }
 
   if (isLoading || !user) return null;
@@ -211,9 +253,40 @@ function DashboardContent() {
                 <p className="text-sm text-on-surface-variant mb-4">
                   描述你的需求，AI 代理會自動規劃並生成對應的文件
                 </p>
+                {/* Attached files chips */}
+                {smartAttached.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {smartAttached.map(file => (
+                      <div key={file.id} className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-primary/10 border border-primary/20 text-primary">
+                        {file.uploading ? (
+                          <span className="material-symbols-outlined text-xs animate-spin">progress_activity</span>
+                        ) : (
+                          <span className="material-symbols-outlined text-xs">attach_file</span>
+                        )}
+                        <span className="max-w-[120px] truncate">{file.name}</span>
+                        {!file.uploading && (
+                          <button
+                            onClick={() => setSmartAttached(prev => prev.filter(f => f.id !== file.id))}
+                            className="hover:text-error transition-colors cursor-pointer ml-0.5"
+                          >
+                            <span className="material-symbols-outlined text-xs">close</span>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="relative">
+                  <input
+                    ref={smartFileRef}
+                    type="file"
+                    multiple
+                    accept=".csv,.xlsx,.xls,.pdf,.txt,.md,.json,.docx,.doc"
+                    className="hidden"
+                    onChange={e => { handleSmartFileAttach(e.target.files); e.target.value = ''; }}
+                  />
                   <textarea
-                    className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 rounded py-4 px-4 pr-16 text-sm text-on-surface placeholder:text-outline font-body resize-none"
+                    className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 rounded py-4 pl-12 pr-16 text-sm text-on-surface placeholder:text-outline font-body resize-none"
                     value={smartInput}
                     onChange={e => setSmartInput(e.target.value)}
                     onKeyDown={e => {
@@ -226,6 +299,13 @@ function DashboardContent() {
                     rows={2}
                     disabled={creating}
                   />
+                  <button
+                    className="absolute left-3 bottom-3 w-9 h-9 flex items-center justify-center rounded hover:bg-surface-container text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+                    onClick={() => smartFileRef.current?.click()}
+                    title="上傳檔案"
+                  >
+                    <span className="material-symbols-outlined text-lg">attach_file</span>
+                  </button>
                   <button
                     className="absolute right-3 bottom-3 w-10 h-10 cyber-gradient rounded flex items-center justify-center text-on-primary disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-95 transition-all"
                     onClick={handleSmartSubmit}
@@ -291,7 +371,7 @@ function DashboardContent() {
             {/* Agent Capabilities / Quick Create */}
             <div className="bg-surface-container p-6 rounded-lg">
               <h3 className="text-xs font-bold uppercase tracking-widest mb-6">代理能力</h3>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 {DOC_TYPES.map(doc => (
                   <button
                     key={doc.id}
