@@ -132,6 +132,41 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_audit_created ON admin_audit_log(created_at);
   `);
 
+  // Security events table (inputGuard logging)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS security_events (
+      id          TEXT PRIMARY KEY,
+      user_id     TEXT NOT NULL,
+      event_type  TEXT NOT NULL,
+      severity    TEXT NOT NULL DEFAULT 'low',
+      detail      TEXT,
+      raw_input   TEXT,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_security_events_user ON security_events(user_id);
+    CREATE INDEX IF NOT EXISTS idx_security_events_created ON security_events(created_at);
+    CREATE INDEX IF NOT EXISTS idx_security_events_severity ON security_events(severity);
+  `);
+
+  // User uploads table (user-provided files for analysis)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_uploads (
+      id            TEXT PRIMARY KEY,
+      user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      filename      TEXT NOT NULL,
+      original_name TEXT NOT NULL,
+      file_type     TEXT NOT NULL,
+      mime_type     TEXT,
+      file_size     INTEGER NOT NULL DEFAULT 0,
+      scan_status   TEXT NOT NULL DEFAULT 'pending',
+      scan_detail   TEXT,
+      storage_path  TEXT NOT NULL,
+      created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_uploads_user ON user_uploads(user_id);
+    CREATE INDEX IF NOT EXISTS idx_uploads_scan ON user_uploads(scan_status);
+  `);
+
   // Seed admin user
   const adminExists = db.prepare("SELECT id FROM users WHERE email = 'admin@zhaoi.ai'").get();
   if (!adminExists) {

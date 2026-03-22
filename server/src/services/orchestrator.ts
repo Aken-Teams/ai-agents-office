@@ -4,6 +4,8 @@ import db from '../db.js';
 import { spawnClaude } from './claudeCli.js';
 import { parsePipelineBlocks, truncateResultForRouter } from './taskParser.js';
 import { getSkill, buildSystemPrompt, getRouterSkill, buildRouterPrompt } from '../skills/loader.js';
+import { getUserUploadsForPrompt } from './uploadContext.js';
+import { getSandboxPath } from './sandbox.js';
 import { config } from '../config.js';
 import type { SSEEvent, ParsedTask, ParsedPipeline, TaskExecution } from '../types.js';
 
@@ -292,8 +294,10 @@ export class Orchestrator {
       return `Error: ${error}`;
     }
 
-    // Build system prompt for this skill
-    const systemPrompt = buildSystemPrompt(skill, config.generatorsDir);
+    // Build system prompt for this skill (with user upload context)
+    const sandboxPath = getSandboxPath(this.userId, this.conversationId);
+    const uploadContext = getUserUploadsForPrompt(this.userId, sandboxPath);
+    const systemPrompt = buildSystemPrompt(skill, config.generatorsDir) + uploadContext;
 
     // Get or create session for this skill agent
     const agentSessionId = this.getOrCreateAgentSession(task.skillId);

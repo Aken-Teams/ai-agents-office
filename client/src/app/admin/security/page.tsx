@@ -18,7 +18,21 @@ interface SecurityStats {
   suspendedUsers: number;
   totalConversations: number;
   totalFiles: number;
+  securityEventsCount: number;
+  blockedThreats: number;
   systemUptime: number;
+}
+
+interface SecurityEvent {
+  id: string;
+  user_id: string;
+  user_email: string | null;
+  user_name: string | null;
+  event_type: string;
+  severity: string;
+  detail: string;
+  raw_input: string | null;
+  created_at: string;
 }
 
 interface WorkspaceScan {
@@ -64,6 +78,10 @@ export default function AdminSecurity() {
   const [workspace, setWorkspace] = useState<WorkspaceScan[]>([]);
   const [scanning, setScanning] = useState(false);
   const [lastScan, setLastScan] = useState<string | null>(null);
+  const [secEvents, setSecEvents] = useState<SecurityEvent[]>([]);
+  const [secPage, setSecPage] = useState(1);
+  const [secTotal, setSecTotal] = useState(0);
+  const [secTotalPages, setSecTotalPages] = useState(1);
 
   useEffect(() => {
     if (!token) return;
@@ -88,6 +106,22 @@ export default function AdminSecurity() {
   }, [token, auditPage]);
 
   useEffect(() => { fetchAudit(); }, [fetchAudit]);
+
+  const fetchSecEvents = useCallback(() => {
+    if (!token) return;
+    fetch(`/api/admin/security/events?page=${secPage}&limit=10`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(data => {
+        setSecEvents(data.events);
+        setSecTotal(data.total);
+        setSecTotalPages(data.totalPages);
+      })
+      .catch(console.error);
+  }, [token, secPage]);
+
+  useEffect(() => { fetchSecEvents(); }, [fetchSecEvents]);
 
   function handleScan() {
     if (!token || scanning) return;
@@ -127,16 +161,16 @@ export default function AdminSecurity() {
         {/* Stats Row */}
         <div className="grid grid-cols-4 gap-6">
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>receipt_long</span>
-            <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">審計記錄</p>
-            <span className="text-3xl font-headline font-black text-on-surface">{stats?.totalAuditEntries ?? 0}</span>
-            <p className="text-xs text-on-surface-variant mt-2 font-mono">Admin 操作記錄</p>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>shield</span>
+            <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">安全事件</p>
+            <span className="text-3xl font-headline font-black text-on-surface">{stats?.securityEventsCount ?? 0}</span>
+            <p className="text-xs text-on-surface-variant mt-2 font-mono">Input Guard 偵測記錄</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>person_off</span>
-            <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">已停用帳號</p>
-            <span className="text-3xl font-headline font-black text-error">{stats?.suspendedUsers ?? 0}</span>
-            <p className="text-xs text-on-surface-variant mt-2 font-mono">共 {stats?.totalUsers ?? 0} 個用戶</p>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>block</span>
+            <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">已攔截威脅</p>
+            <span className="text-3xl font-headline font-black text-error">{stats?.blockedThreats ?? 0}</span>
+            <p className="text-xs text-on-surface-variant mt-2 font-mono">高風險請求已阻擋</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
             <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>schedule</span>
@@ -287,13 +321,91 @@ export default function AdminSecurity() {
           </div>
         </div>
 
+        {/* Security Events (Input Guard) */}
+        <div className="bg-surface-container rounded-lg overflow-hidden">
+          <div className="px-6 py-4 bg-surface-container-high flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-error">gpp_maybe</span>
+              <span className="text-xs font-bold uppercase tracking-widest">Input Guard 安全事件</span>
+            </div>
+            <span className="text-xs text-on-surface-variant font-mono">共 {secTotal} 筆</span>
+          </div>
+          {secEvents.length === 0 ? (
+            <div className="p-8 text-center text-on-surface-variant">
+              <span className="material-symbols-outlined text-4xl mb-3 opacity-30">verified_user</span>
+              <p className="text-sm">尚無安全事件</p>
+              <p className="text-xs text-outline mt-1">所有使用者輸入均通過安全檢查</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-outline-variant/10 text-on-surface-variant uppercase tracking-wider">
+                      <th className="py-3 px-4 text-left font-bold">時間</th>
+                      <th className="py-3 px-4 text-left font-bold">嚴重度</th>
+                      <th className="py-3 px-4 text-left font-bold">類型</th>
+                      <th className="py-3 px-4 text-left font-bold">用戶</th>
+                      <th className="py-3 px-4 text-left font-bold">詳情</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant/10">
+                    {secEvents.map(ev => {
+                      const sevColor = ev.severity === 'critical' ? 'text-error font-bold' :
+                        ev.severity === 'high' ? 'text-error' :
+                        ev.severity === 'medium' ? 'text-warning' : 'text-on-surface-variant';
+                      const sevLabel = ev.severity === 'critical' ? '嚴重' :
+                        ev.severity === 'high' ? '高' :
+                        ev.severity === 'medium' ? '中' : '低';
+                      return (
+                        <tr key={ev.id} className="hover:bg-surface-container-high/50 transition-colors">
+                          <td className="py-3 px-4 text-on-surface-variant font-mono whitespace-nowrap">
+                            {new Date(ev.created_at.endsWith('Z') ? ev.created_at : ev.created_at + 'Z').toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${sevColor} bg-current/10`}>
+                              {sevLabel}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-on-surface font-mono">{ev.event_type}</td>
+                          <td className="py-3 px-4 text-on-surface-variant">{ev.user_name || ev.user_email || ev.user_id}</td>
+                          <td className="py-3 px-4 text-on-surface-variant max-w-xs truncate">{ev.detail}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {secTotalPages > 1 && (
+                <div className="flex items-center justify-between px-6 py-3 border-t border-outline-variant/10 bg-surface-container-high">
+                  <span className="text-xs text-on-surface-variant">
+                    第 {(secPage - 1) * 10 + 1}-{Math.min(secPage * 10, secTotal)} 筆，共 {secTotal} 筆
+                  </span>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setSecPage(p => Math.max(1, p - 1))}
+                      disabled={secPage === 1}
+                      className="px-3 py-1.5 text-xs bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
+                    >上一頁</button>
+                    <button
+                      onClick={() => setSecPage(p => Math.min(secTotalPages, p + 1))}
+                      disabled={secPage === secTotalPages}
+                      className="px-3 py-1.5 text-xs bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
+                    >下一頁</button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
         {/* Security Architecture */}
         <div className="bg-surface-container rounded-lg overflow-hidden">
           <div className="px-6 py-4 bg-surface-container-high flex items-center gap-3">
             <span className="material-symbols-outlined text-on-surface-variant">security</span>
             <span className="text-xs font-bold uppercase tracking-widest">安全架構</span>
           </div>
-          <div className="p-6 grid grid-cols-3 gap-4">
+          <div className="p-6 grid grid-cols-4 gap-4">
             <div className="bg-surface-container-high p-5 border-l-2 border-primary">
               <div className="flex items-center gap-2 mb-2">
                 <span className="material-symbols-outlined text-primary text-lg">folder_special</span>
@@ -319,6 +431,15 @@ export default function AdminSecurity() {
               </div>
               <p className="text-xs text-on-surface-variant leading-relaxed">
                 JWT Token 驗證 + bcrypt 密碼雜湊，Admin 角色需通過額外的 <span className="text-on-surface font-mono">role</span> 檢查。
+              </p>
+            </div>
+            <div className="bg-surface-container-high p-5 border-l-2 border-error">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="material-symbols-outlined text-error text-lg">shield</span>
+                <h4 className="text-on-surface font-bold text-sm">Input Guard</h4>
+              </div>
+              <p className="text-xs text-on-surface-variant leading-relaxed">
+                多層 Prompt Injection 偵測：XML tag、自然語言注入、Unicode 混淆、Base64 編碼、路徑遍歷。風險評分超過閾值自動攔截。
               </p>
             </div>
           </div>

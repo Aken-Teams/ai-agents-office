@@ -9,6 +9,7 @@ import fileRoutes from './routes/files.js';
 import usageRoutes from './routes/usage.js';
 import skillRoutes from './routes/skills.js';
 import adminRoutes from './routes/admin.js';
+import uploadRoutes from './routes/uploads.js';
 
 // Initialize database
 initializeDatabase();
@@ -36,6 +37,7 @@ app.use('/api/files', fileRoutes);
 app.use('/api/usage', usageRoutes);
 app.use('/api/skills', skillRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/uploads', uploadRoutes);
 
 // Start server
 app.listen(config.port, () => {

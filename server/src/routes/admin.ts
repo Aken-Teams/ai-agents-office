@@ -447,6 +447,8 @@ router.get('/security/stats', (_req: Request, res: Response) => {
   const suspendedCount = (db.prepare("SELECT COUNT(*) as count FROM users WHERE status = 'suspended'").get() as any).count;
   const totalConversations = (db.prepare('SELECT COUNT(*) as count FROM conversations').get() as any).count;
   const totalFiles = (db.prepare('SELECT COUNT(*) as count FROM generated_files').get() as any).count;
+  const securityEventsCount = (db.prepare('SELECT COUNT(*) as count FROM security_events').get() as any).count;
+  const blockedThreats = (db.prepare("SELECT COUNT(*) as count FROM security_events WHERE severity IN ('high','critical')").get() as any).count;
 
   res.json({
     totalAuditEntries: auditCount,
@@ -454,6 +456,8 @@ router.get('/security/stats', (_req: Request, res: Response) => {
     suspendedUsers: suspendedCount,
     totalConversations,
     totalFiles,
+    securityEventsCount,
+    blockedThreats,
     systemUptime: Math.floor(process.uptime()),
   });
 });
@@ -520,6 +524,51 @@ router.get('/security/workspace-scan', (_req: Request, res: Response) => {
   } catch (err) {
     res.json([]);
   }
+});
+
+// GET /api/admin/security/events — security events from inputGuard
+router.get('/security/events', (req: Request, res: Response) => {
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 20;
+  const offset = (page - 1) * limit;
+  const severity = req.query.severity as string;
+
+  let where = '';
+  const params: unknown[] = [];
+  if (severity && ['low', 'medium', 'high', 'critical'].includes(severity)) {
+    where = 'WHERE se.severity = ?';
+    params.push(severity);
+  }
+
+  const total = (db.prepare(
+    `SELECT COUNT(*) as count FROM security_events se ${where}`
+  ).get(...params) as any).count;
+
+  const rows = db.prepare(`
+    SELECT se.*, u.email as user_email, u.display_name as user_name
+    FROM security_events se
+    LEFT JOIN users u ON u.id = se.user_id
+    ${where}
+    ORDER BY se.created_at DESC
+    LIMIT ? OFFSET ?
+  `).all(...params, limit, offset);
+
+  res.json({
+    events: rows,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+  });
+});
+
+// GET /api/admin/security/events/stats — security events summary
+router.get('/security/events/stats', (_req: Request, res: Response) => {
+  const total = (db.prepare('SELECT COUNT(*) as count FROM security_events').get() as any).count;
+  const blocked = (db.prepare("SELECT COUNT(*) as count FROM security_events WHERE severity IN ('high','critical')").get() as any).count;
+  const last24h = (db.prepare("SELECT COUNT(*) as count FROM security_events WHERE created_at >= datetime('now','-1 day')").get() as any).count;
+
+  res.json({ total, blocked, last24h });
 });
 
 export default router;

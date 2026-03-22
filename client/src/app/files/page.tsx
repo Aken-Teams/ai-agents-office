@@ -15,6 +15,25 @@ interface FileItem {
   created_at: string;
 }
 
+interface UploadItem {
+  id: string;
+  filename: string;
+  original_name: string;
+  file_type: string;
+  file_size: number;
+  scan_status: 'pending' | 'clean' | 'suspicious' | 'rejected';
+  scan_detail: string | null;
+  created_at: string;
+}
+
+interface UploadStorageInfo {
+  used: number;
+  quota: number;
+  count: number;
+  percentage: number;
+  formatted: { used: string; quota: string };
+}
+
 const FILE_TYPE_CONFIG: Record<string, { icon: string; color: string; bgColor: string }> = {
   pptx: { icon: 'present_to_all', color: '#FF8A65', bgColor: 'rgba(255,138,101,0.1)' },
   ppt:  { icon: 'present_to_all', color: '#FF8A65', bgColor: 'rgba(255,138,101,0.1)' },
@@ -341,6 +360,11 @@ function FilesContent() {
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FileItem | null>(null);
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null);
+  const [activeTab, setActiveTab] = useState<'generated' | 'uploads'>('generated');
+  const [uploads, setUploads] = useState<UploadItem[]>([]);
+  const [uploadStorage, setUploadStorage] = useState<UploadStorageInfo | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
@@ -364,6 +388,66 @@ function FilesContent() {
       .catch(console.error);
     fetchStorage();
   }, [token, filter, fetchStorage]);
+
+  const fetchUploads = useCallback(() => {
+    if (!token) return;
+    fetch('/api/uploads', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(setUploads)
+      .catch(console.error);
+    fetch('/api/uploads/storage', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(setUploadStorage)
+      .catch(console.error);
+  }, [token]);
+
+  useEffect(() => { fetchUploads(); }, [fetchUploads]);
+
+  async function handleUpload(fileList: FileList | File[]) {
+    if (!token || uploading) return;
+    const filesArr = Array.from(fileList);
+    if (filesArr.length === 0) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      for (const f of filesArr) formData.append('files', f);
+
+      const resp = await fetch('/api/uploads', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        alert(data.error || '上傳失敗');
+        return;
+      }
+
+      // Check for rejected files
+      const rejected = data.uploads?.filter((u: any) => u.scanStatus === 'rejected') || [];
+      if (rejected.length > 0) {
+        alert(`安全掃描攔截了 ${rejected.length} 個檔案:\n${rejected.map((r: any) => `${r.originalName}: ${r.scanDetail}`).join('\n')}`);
+      }
+
+      fetchUploads();
+      setActiveTab('uploads');
+    } catch (err) {
+      console.error('Upload error:', err);
+      alert('上傳失敗，請稍後重試');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function deleteUpload(id: string) {
+    if (!token) return;
+    await fetch(`/api/uploads/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    fetchUploads();
+  }
 
   async function confirmDelete() {
     if (!token || !deleteTarget) return;
@@ -494,6 +578,37 @@ function FilesContent() {
           </div>
         </div>
 
+        {/* Main Tab Switcher: Generated vs Uploads */}
+        <div className="flex items-center gap-6 mb-8 border-b border-outline-variant/10">
+          <button
+            onClick={() => setActiveTab('generated')}
+            className={`pb-3 text-sm font-bold tracking-widest uppercase transition-colors cursor-pointer border-b-2 ${
+              activeTab === 'generated'
+                ? 'text-primary border-primary'
+                : 'text-on-surface-variant border-transparent hover:text-on-surface'
+            }`}
+          >
+            <span className="material-symbols-outlined text-sm align-middle mr-1">auto_awesome</span>
+            AI 生成檔案
+          </button>
+          <button
+            onClick={() => setActiveTab('uploads')}
+            className={`pb-3 text-sm font-bold tracking-widest uppercase transition-colors cursor-pointer border-b-2 ${
+              activeTab === 'uploads'
+                ? 'text-primary border-primary'
+                : 'text-on-surface-variant border-transparent hover:text-on-surface'
+            }`}
+          >
+            <span className="material-symbols-outlined text-sm align-middle mr-1">upload_file</span>
+            我的上傳
+            {uploads.length > 0 && (
+              <span className="ml-2 px-1.5 py-0.5 bg-primary/10 text-primary rounded text-[10px] font-bold">{uploads.length}</span>
+            )}
+          </button>
+        </div>
+
+        {activeTab === 'generated' ? (
+        <>
         {/* Filter Tabs + Search */}
         <div className="flex items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-3">
@@ -654,6 +769,104 @@ function FilesContent() {
               </div>
             )}
           </div>
+        )}
+        </>
+        ) : (
+        /* ============ Uploads Tab ============ */
+        <>
+          {/* Upload Drop Zone */}
+          <div
+            className={`border-2 border-dashed rounded-lg p-8 mb-8 text-center transition-colors ${
+              dragOver
+                ? 'border-primary bg-primary/5'
+                : 'border-outline-variant/20 hover:border-primary/30'
+            }`}
+            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={e => {
+              e.preventDefault();
+              setDragOver(false);
+              if (e.dataTransfer.files.length > 0) handleUpload(e.dataTransfer.files);
+            }}
+          >
+            <span className="material-symbols-outlined text-4xl text-on-surface-variant mb-3 block">
+              {uploading ? 'progress_activity' : 'cloud_upload'}
+            </span>
+            <p className="text-sm text-on-surface-variant mb-2">
+              {uploading ? '上傳中...' : '拖拽檔案到此處，或點擊選擇檔案'}
+            </p>
+            <p className="text-xs text-outline mb-4">
+              支援格式: CSV, XLSX, XLS, PDF, TXT, MD, JSON, DOCX, DOC（單檔最大 50MB）
+            </p>
+            <label className={`inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary text-xs font-bold uppercase tracking-widest rounded cursor-pointer hover:bg-primary/80 transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+              <span className="material-symbols-outlined text-sm">folder_open</span>
+              選擇檔案
+              <input
+                type="file"
+                multiple
+                accept=".csv,.xlsx,.xls,.pdf,.txt,.md,.json,.docx,.doc"
+                className="hidden"
+                onChange={e => { if (e.target.files) handleUpload(e.target.files); e.target.value = ''; }}
+                disabled={uploading}
+              />
+            </label>
+            {uploadStorage && (
+              <div className="mt-4 flex items-center justify-center gap-4 text-xs text-on-surface-variant">
+                <span>已上傳 {uploadStorage.count} 個檔案</span>
+                <span>·</span>
+                <span>{uploadStorage.formatted.used} / {uploadStorage.formatted.quota}</span>
+                <div className="w-24 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                  <div className="h-full bg-primary/60 rounded-full" style={{ width: `${Math.min(uploadStorage.percentage * 100, 100)}%` }} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Uploaded Files List */}
+          {uploads.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 border border-dashed border-outline-variant/20 rounded-lg">
+              <span className="material-symbols-outlined text-on-surface-variant text-3xl mb-3 opacity-30">upload_file</span>
+              <p className="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-xs">尚無上傳檔案</p>
+              <p className="text-xs text-on-surface-variant/40 mt-1">上傳 CSV、Excel、PDF 等資料，讓 AI 代理進行分析</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {uploads.map(up => {
+                const cfg = getTypeConfig(up.file_type) || { icon: 'attach_file', color: '#8f9097', bgColor: 'rgba(143,144,151,0.1)' };
+                const scanColor = up.scan_status === 'clean' ? 'text-success' :
+                  up.scan_status === 'suspicious' ? 'text-warning' : 'text-error';
+                const scanIcon = up.scan_status === 'clean' ? 'verified_user' :
+                  up.scan_status === 'suspicious' ? 'warning' : 'gpp_bad';
+                const scanLabel = up.scan_status === 'clean' ? '安全' :
+                  up.scan_status === 'suspicious' ? '可疑' : '已拒絕';
+                return (
+                  <div key={up.id} className="bg-surface-container p-4 rounded-lg flex items-center gap-4 group hover:bg-surface-container-high transition-colors">
+                    <div className="w-10 h-10 rounded flex items-center justify-center shrink-0" style={{ background: cfg.bgColor }}>
+                      <span className="material-symbols-outlined" style={{ color: cfg.color }}>{cfg.icon}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-on-surface truncate">{up.original_name}</p>
+                      <p className="text-xs text-on-surface-variant">
+                        {formatSize(up.file_size)} · {new Date(up.created_at.endsWith('Z') ? up.created_at : up.created_at + 'Z').toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
+                      </p>
+                    </div>
+                    <div className={`flex items-center gap-1 ${scanColor} shrink-0`}>
+                      <span className="material-symbols-outlined text-sm">{scanIcon}</span>
+                      <span className="text-xs font-bold uppercase">{scanLabel}</span>
+                    </div>
+                    <button
+                      onClick={() => deleteUpload(up.id)}
+                      className="w-8 h-8 flex items-center justify-center rounded hover:bg-error/10 text-on-surface-variant hover:text-error cursor-pointer transition-colors opacity-0 group-hover:opacity-100"
+                      title="刪除"
+                    >
+                      <span className="material-symbols-outlined text-sm">delete</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
         )}
       </main>
     </div>

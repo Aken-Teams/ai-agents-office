@@ -4,11 +4,13 @@ import db from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { spawnClaude } from '../services/claudeCli.js';
-import { sanitizeUserInput, getSandboxPath } from '../services/sandbox.js';
+import { getSandboxPath } from '../services/sandbox.js';
+import { analyzeInput, logSecurityEvent, WARN_THRESHOLD } from '../services/inputGuard.js';
 import { recordTokenUsage } from '../services/tokenTracker.js';
 import { registerNewFiles, getExistingFilePaths } from '../services/fileManager.js';
 import { getUserStorageUsed } from './files.js';
 import { getSkill, buildSystemPrompt, loadSkills, getRouterSkill } from '../skills/loader.js';
+import { getUserUploadsForPrompt } from '../services/uploadContext.js';
 import { Orchestrator } from '../services/orchestrator.js';
 import { config } from '../config.js';
 import type { Conversation, Message, SSEEvent } from '../types.js';
@@ -103,14 +105,29 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
     return;
   }
 
-  // Sanitize input (security layer 4)
-  let sanitizedMessage: string;
-  try {
-    sanitizedMessage = sanitizeUserInput(message);
-  } catch (error) {
-    res.status(400).json({ error: (error as Error).message });
+  // Input Guard — multi-layer prompt injection detection (security layer 4)
+  const guard = analyzeInput(message);
+
+  if (guard.blocked) {
+    logSecurityEvent(userId, 'prompt_injection', 'high',
+      `Blocked: flags=[${guard.flags.join(',')}] score=${guard.score}`,
+      message);
+    res.status(400).json({
+      error: '您的訊息包含可疑內容，已被安全系統攔截。請修改後重試。',
+      code: 'INPUT_BLOCKED',
+      flags: guard.flags,
+    });
     return;
   }
+
+  if (!guard.safe) {
+    // Warn-level: log but allow through with sanitized content
+    logSecurityEvent(userId, 'prompt_injection', 'medium',
+      `Warning: flags=[${guard.flags.join(',')}] score=${guard.score}`,
+      message);
+  }
+
+  const sanitizedMessage = guard.sanitized;
 
   // Storage quota check — block generation if user is over quota
   const storageUsed = getUserStorageUsed(userId);
@@ -274,7 +291,10 @@ function handleDirect(
     return;
   }
 
-  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir);
+  // Build system prompt with user upload context
+  const sandboxPath = getSandboxPath(userId, conversationId);
+  const uploadContext = getUserUploadsForPrompt(userId, sandboxPath);
+  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir) + uploadContext;
 
   // Update conversation skill if changed
   if (skillId && skillId !== conversation.skill_id) {
