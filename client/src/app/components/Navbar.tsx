@@ -11,7 +11,6 @@ const NAV_LINKS = [
   { href: '/dashboard', label: '儀表板', icon: 'dashboard' },
   { href: '/conversations', label: '對話記錄', icon: 'chat' },
   { href: '/files', label: '檔案管理', icon: 'folder_open' },
-  { href: '/skills', label: 'Skills 中心', icon: 'hub' },
   { href: '/usage', label: '用量統計', icon: 'bar_chart' },
 ];
 

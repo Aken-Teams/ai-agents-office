@@ -59,7 +59,7 @@ function LoginForm() {
                   AI Agents Office
                 </h1>
                 <p className="font-label text-sm uppercase tracking-[0.2em] text-primary">
-                  智能文件平台
+                  強茂集團 · 智能文件平台
                 </p>
               </div>
             </div>

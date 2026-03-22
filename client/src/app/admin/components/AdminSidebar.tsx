@@ -12,6 +12,7 @@ const ADMIN_NAV = [
   { href: '/admin/users', label: '用戶管理', icon: 'corporate_fare' },
   { href: '/admin/tokens', label: 'Token 帳本', icon: 'payments' },
   { href: '/admin/security', label: '安全審計', icon: 'shield_with_heart' },
+  { href: '/admin/skills', label: 'Skills 中心', icon: 'hub' },
 ];
 
 export default function AdminSidebar() {
