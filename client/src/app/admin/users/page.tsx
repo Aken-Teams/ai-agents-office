@@ -117,6 +117,29 @@ export default function AdminUsers() {
     }
   }
 
+  async function changeRole(userId: string, newRole: string) {
+    if (!token || actionLoading) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/role`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ role: newRole }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Failed to change role');
+        return;
+      }
+      fetchUsers();
+      if (selectedUser?.id === userId) {
+        setSelectedUser(prev => prev ? { ...prev, role: newRole } : null);
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   async function deleteUser(userId: string) {
     if (!token || deleteLoading) return;
     setDeleteLoading(true);
@@ -194,6 +217,7 @@ export default function AdminUsers() {
                 <tr className="text-left text-sm uppercase tracking-widest text-on-surface-variant">
                   <th className="py-3 px-4 font-bold">{t('admin.users.table.user')}</th>
                   <th className="py-3 px-4 font-bold">{t('admin.users.table.registered')}</th>
+                  <th className="py-3 px-4 font-bold">{t('admin.users.table.role')}</th>
                   <th className="py-3 px-4 font-bold">{t('admin.users.table.status')}</th>
                   <th className="py-3 px-4 font-bold text-right">Tokens</th>
                   <th className="py-3 px-4 font-bold text-right">{t('admin.users.table.files')}</th>
@@ -222,6 +246,13 @@ export default function AdminUsers() {
                     </td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-0.5 text-sm font-bold uppercase tracking-wider rounded ${
+                        user.role === 'admin' ? 'bg-primary/15 text-primary' : 'bg-surface-container text-on-surface-variant'
+                      }`}>
+                        {user.role === 'admin' ? 'Admin' : 'User'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2 py-0.5 text-sm font-bold uppercase tracking-wider rounded ${
                         user.status === 'active'
                           ? 'bg-success/15 text-success'
                           : user.status === 'pending'
@@ -237,7 +268,7 @@ export default function AdminUsers() {
                 ))}
                 {users.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-on-surface-variant">{t('admin.users.table.empty')}</td>
+                    <td colSpan={6} className="py-12 text-center text-on-surface-variant">{t('admin.users.table.empty')}</td>
                   </tr>
                 )}
               </tbody>
@@ -323,6 +354,27 @@ export default function AdminUsers() {
                     <p className="text-sm font-bold text-on-surface mt-0.5">{new Date(selectedUser.created_at).toLocaleDateString('zh-TW')}</p>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Role Control */}
+            <div className="px-6 pb-5 border-t border-outline-variant/25 pt-5">
+              <h4 className="text-sm uppercase tracking-widest text-on-surface-variant font-bold mb-3">{t('admin.users.detail.roleLabel')}</h4>
+              <div className="flex rounded overflow-hidden border border-outline-variant/15">
+                {(['user', 'admin'] as const).map(r => (
+                  <button
+                    key={r}
+                    onClick={() => changeRole(selectedUser.id, r)}
+                    disabled={actionLoading || selectedUser.role === r}
+                    className={`flex-1 py-2 text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors disabled:cursor-default ${
+                      selectedUser.role === r
+                        ? r === 'admin' ? 'bg-primary/15 text-primary' : 'bg-surface-container-high text-on-surface'
+                        : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                    }`}
+                  >
+                    {r === 'admin' ? 'Admin' : 'User'}
+                  </button>
+                ))}
               </div>
             </div>
 

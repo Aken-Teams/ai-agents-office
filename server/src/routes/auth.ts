@@ -283,26 +283,48 @@ router.post('/google', async (req: Request, res: Response) => {
       return;
     }
 
-    const { credential } = req.body;
-    if (!credential) {
-      res.status(400).json({ error: 'Missing Google credential' });
+    const { credential, access_token } = req.body;
+    if (!credential && !access_token) {
+      res.status(400).json({ error: 'Missing Google credential or access_token' });
       return;
     }
 
-    // Verify Google ID token
-    const ticket = await googleClient.verifyIdToken({
-      idToken: credential,
-      audience: config.googleClientId,
-    });
-    const payload = ticket.getPayload();
-    if (!payload || !payload.email) {
-      res.status(400).json({ error: 'Invalid Google token' });
-      return;
-    }
+    let email: string;
+    let name: string;
+    let googleId: string;
 
-    const email = payload.email.toLowerCase().trim();
-    const name = payload.name || '';
-    const googleId = payload.sub;
+    if (credential) {
+      // Verify Google ID token
+      const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: config.googleClientId,
+      });
+      const payload = ticket.getPayload();
+      if (!payload || !payload.email) {
+        res.status(400).json({ error: 'Invalid Google token' });
+        return;
+      }
+      email = payload.email.toLowerCase().trim();
+      name = payload.name || '';
+      googleId = payload.sub;
+    } else {
+      // Verify Google access token via userinfo endpoint
+      const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${access_token}` },
+      });
+      if (!userinfoRes.ok) {
+        res.status(400).json({ error: 'Invalid Google access token' });
+        return;
+      }
+      const userinfo = await userinfoRes.json() as { email?: string; name?: string; sub?: string };
+      if (!userinfo.email) {
+        res.status(400).json({ error: 'Failed to get email from Google' });
+        return;
+      }
+      email = userinfo.email.toLowerCase().trim();
+      name = userinfo.name || '';
+      googleId = userinfo.sub || '';
+    }
 
     // Look up existing user by email
     let user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as User | undefined;
@@ -317,19 +339,20 @@ router.post('/google', async (req: Request, res: Response) => {
       // Check user status
       const status = user.status || 'active';
       if (status === 'pending') {
-        // Auto-approve Google OAuth users
-        db.prepare("UPDATE users SET status = 'active', updated_at = datetime('now') WHERE id = ?").run(user.id);
+        res.status(403).json({ error: '您的帳號正在等待管理者審核', code: 'PENDING' });
+        return;
       } else if (status === 'suspended') {
         res.status(403).json({ error: '您的帳號已被停用，如有疑問請聯繫管理者', code: 'SUSPENDED' });
         return;
       }
     } else {
-      // Create new user — auto-approved
+      // Create new user — pending approval
       const id = uuidv4();
       db.prepare(
         "INSERT INTO users (id, email, password_hash, display_name, role, status, oauth_provider, oauth_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-      ).run(id, email, OAUTH_NO_PASSWORD, name || null, 'user', 'active', 'google', googleId);
-      user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as User;
+      ).run(id, email, OAUTH_NO_PASSWORD, name || null, 'user', 'pending', 'google', googleId);
+      res.status(403).json({ error: '帳號已建立，請等待管理者審核後即可登入', code: 'PENDING' });
+      return;
     }
 
     const role = user.role || 'user';

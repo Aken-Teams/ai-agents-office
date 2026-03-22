@@ -101,7 +101,7 @@ router.get('/users', (req: Request, res: Response) => {
   const search = req.query.search as string || '';
   const status = req.query.status as string || '';
 
-  let whereClause = "WHERE u.role != 'admin'";
+  let whereClause = "WHERE 1=1";
   const params: any[] = [];
 
   if (search) {
@@ -216,6 +216,39 @@ router.patch('/users/:id/status', (req: Request, res: Response) => {
   ).run(uuidv4(), req.user!.userId, status === 'suspended' ? 'suspend_user' : 'activate_user', 'user', userId, JSON.stringify({ email: user.email }));
 
   res.json({ success: true, status });
+});
+
+// PATCH /api/admin/users/:id/role
+router.patch('/users/:id/role', (req: Request, res: Response) => {
+  const userId = req.params.id;
+  const { role } = req.body;
+
+  if (!['user', 'admin'].includes(role)) {
+    res.status(400).json({ error: 'Invalid role. Must be "user" or "admin"' });
+    return;
+  }
+
+  const user = db.prepare('SELECT id, email, role FROM users WHERE id = ?').get(userId) as any;
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  // Prevent demoting yourself
+  if (userId === req.user!.userId && role !== 'admin') {
+    res.status(403).json({ error: '無法降級自己的管理者權限' });
+    return;
+  }
+
+  const oldRole = user.role;
+  db.prepare("UPDATE users SET role = ?, updated_at = datetime('now') WHERE id = ?").run(role, userId);
+
+  // Audit log
+  db.prepare(
+    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(uuidv4(), req.user!.userId, 'change_role', 'user', userId, JSON.stringify({ email: user.email, from: oldRole, to: role }));
+
+  res.json({ success: true, role });
 });
 
 // PATCH /api/admin/users/:id

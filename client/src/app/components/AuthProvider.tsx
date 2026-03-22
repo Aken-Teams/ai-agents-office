@@ -18,7 +18,7 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: (credential: string) => Promise<void>;
+  loginWithGoogle: (token: string, tokenType?: 'credential' | 'access_token') => Promise<void>;
   register: (email: string, password: string, displayName: string) => Promise<{ pending: boolean; message?: string }>;
   logout: () => void;
 }
@@ -77,11 +77,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user);
   }, []);
 
-  const loginWithGoogle = useCallback(async (credential: string) => {
+  const loginWithGoogle = useCallback(async (token: string, tokenType: 'credential' | 'access_token' = 'credential') => {
+    const body = tokenType === 'access_token'
+      ? { access_token: token }
+      : { credential: token };
     const res = await fetch('/api/auth/google', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const err = await res.json();
