@@ -113,7 +113,7 @@ export default function AdminSettings() {
       </header>
 
       {/* Content */}
-      <div className="p-8 flex-1 space-y-6">
+      <div className="p-8 flex-1 space-y-6 flex flex-col">
         {/* 用戶用量上限 — 滿版 */}
         {(() => {
           const cfg = SETTINGS_CONFIG[0];
@@ -213,8 +213,8 @@ export default function AdminSettings() {
           })}
         </div>
 
-        {/* Info Section — 滿版 */}
-        <div className="bg-surface-container-low border border-outline-variant/5 p-6 relative overflow-hidden">
+        {/* Info Section — 固定底部 */}
+        <div className="mt-auto bg-surface-container-low border border-outline-variant/5 p-6 relative overflow-hidden">
           <div className="absolute right-4 bottom-4 opacity-[0.04] pointer-events-none">
             <span className="material-symbols-outlined text-[6rem]">info</span>
           </div>
@@ -224,7 +224,7 @@ export default function AdminSettings() {
               <div className="bg-surface-container p-4 border-l-2 border-warning">
                 <h4 className="text-sm text-on-surface font-bold mb-1">用量上限</h4>
                 <p className="text-sm text-on-surface-variant">
-                  基於 Claude Sonnet 4 定價（$3/M input, $15/M output）乘以 10 倍計費。用戶超過上限後，登入與生成文件都會被阻擋。
+                  基於 Claude Sonnet 4 定價（$3/M input, $15/M output）計費。用戶超過上限後，登入與生成文件都會被阻擋。
                 </p>
               </div>
               <div className="bg-surface-container p-4 border-l-2 border-primary">
