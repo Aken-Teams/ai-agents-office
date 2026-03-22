@@ -5,6 +5,8 @@ export interface User {
   display_name: string | null;
   role: 'user' | 'admin';
   status: 'active' | 'pending' | 'suspended';
+  locale: 'zh-TW' | 'zh-CN' | 'en';
+  theme: 'dark' | 'light';
   created_at: string;
   updated_at: string;
 }

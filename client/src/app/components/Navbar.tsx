@@ -4,27 +4,30 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from './AuthProvider';
+import { useTranslation } from '../../i18n';
 
 const SIDEBAR_KEY = 'sidebar-collapsed';
 
 const NAV_LINKS = [
-  { href: '/dashboard', label: '儀表板', icon: 'dashboard' },
-  { href: '/conversations', label: '對話記錄', icon: 'chat' },
-  { href: '/files', label: '檔案管理', icon: 'folder_open' },
-  { href: '/usage', label: '用量統計', icon: 'bar_chart' },
+  { href: '/dashboard', labelKey: 'nav.dashboard' as const, icon: 'dashboard' },
+  { href: '/conversations', labelKey: 'nav.conversations' as const, icon: 'chat' },
+  { href: '/files', labelKey: 'nav.files' as const, icon: 'folder_open' },
+  { href: '/usage', labelKey: 'nav.usage' as const, icon: 'bar_chart' },
+  { href: '/settings', labelKey: 'nav.settings' as const, icon: 'settings' },
 ];
 
 const DOC_TYPES = [
-  { id: 'pptx-gen', label: '簡報', desc: '投影片製作', icon: 'present_to_all', colorClass: 'text-warning' },
-  { id: 'docx-gen', label: '文件', desc: '文書撰寫', icon: 'description', colorClass: 'text-tertiary' },
-  { id: 'xlsx-gen', label: '試算表', desc: '數據分析', icon: 'table_chart', colorClass: 'text-success' },
-  { id: 'pdf-gen', label: 'PDF', desc: '文件輸出', icon: 'picture_as_pdf', colorClass: 'text-error' },
-  { id: 'data-analyst', label: '數據分析', desc: '上傳資料分析', icon: 'analytics', colorClass: 'text-primary' },
-  { id: 'research', label: '網路研究', desc: '搜尋與彙整', icon: 'travel_explore', colorClass: 'text-on-surface-variant' },
+  { id: 'pptx-gen', labelKey: 'nav.docTypes.pptx.label' as const, descKey: 'nav.docTypes.pptx.desc' as const, icon: 'present_to_all', colorClass: 'text-warning' },
+  { id: 'docx-gen', labelKey: 'nav.docTypes.docx.label' as const, descKey: 'nav.docTypes.docx.desc' as const, icon: 'description', colorClass: 'text-tertiary' },
+  { id: 'xlsx-gen', labelKey: 'nav.docTypes.xlsx.label' as const, descKey: 'nav.docTypes.xlsx.desc' as const, icon: 'table_chart', colorClass: 'text-success' },
+  { id: 'pdf-gen', labelKey: 'nav.docTypes.pdf.label' as const, descKey: 'nav.docTypes.pdf.desc' as const, icon: 'picture_as_pdf', colorClass: 'text-error' },
+  { id: 'data-analyst', labelKey: 'nav.docTypes.dataAnalyst.label' as const, descKey: 'nav.docTypes.dataAnalyst.desc' as const, icon: 'analytics', colorClass: 'text-primary' },
+  { id: 'research', labelKey: 'nav.docTypes.research.label' as const, descKey: 'nav.docTypes.research.desc' as const, icon: 'travel_explore', colorClass: 'text-on-surface-variant' },
 ];
 
 export default function Navbar() {
   const { user, token, logout } = useAuth();
+  const { t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
@@ -47,7 +50,7 @@ export default function Navbar() {
     setCreating(true);
     try {
       const docType = DOC_TYPES.find(s => s.id === skillId);
-      const title = docType?.label ? `New ${docType.label}` : 'New Conversation';
+      const title = docType?.labelKey ? `New ${t(docType.labelKey)}` : 'New Conversation';
       const res = await fetch('/api/conversations', {
         method: 'POST',
         headers: {
@@ -97,10 +100,10 @@ export default function Navbar() {
                 }`}
               >
                 <span className="material-symbols-outlined">{link.icon}</span>
-                {!collapsed && <span>{link.label}</span>}
+                {!collapsed && <span>{t(link.labelKey)}</span>}
                 {collapsed && (
                   <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
-                    {link.label}
+                    {t(link.labelKey)}
                   </span>
                 )}
               </Link>
@@ -116,11 +119,11 @@ export default function Navbar() {
               className={`w-full cyber-gradient py-3 text-on-primary font-bold rounded flex items-center justify-center gap-2 text-sm uppercase tracking-widest active:scale-[0.99] transition-all cursor-pointer ${collapsed ? 'px-0' : ''}`}
             >
               <span className="material-symbols-outlined text-sm">add</span>
-              {!collapsed && '新建文件'}
+              {!collapsed && t('nav.newDocument')}
             </button>
             {collapsed && (
               <span className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
-                新建文件
+                {t('nav.newDocument')}
               </span>
             )}
           </div>
@@ -136,10 +139,10 @@ export default function Navbar() {
             <span className={`material-symbols-outlined text-sm transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`}>
               chevron_left
             </span>
-            {!collapsed && <span className="text-sm">收合</span>}
+            {!collapsed && <span className="text-sm">{t('nav.collapse')}</span>}
             {collapsed && (
               <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
-                展開側邊欄
+                {t('nav.expandSidebar')}
               </span>
             )}
           </button>
@@ -158,10 +161,10 @@ export default function Navbar() {
             className={`relative group flex items-center gap-3 py-2 text-on-surface-variant hover:text-on-surface transition-all w-full text-left bg-transparent ${collapsed ? 'justify-center px-0' : 'px-3'}`}
           >
             <span className="material-symbols-outlined">logout</span>
-            {!collapsed && <span>登出</span>}
+            {!collapsed && <span>{t('nav.logout')}</span>}
             {collapsed && (
               <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
-                登出
+                {t('nav.logout')}
               </span>
             )}
           </button>
@@ -169,7 +172,7 @@ export default function Navbar() {
           {/* Footer */}
           <div className="mt-3 pt-3 border-t border-outline-variant/10 px-3">
             <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className={`text-outline hover:text-on-surface-variant transition-colors no-underline block text-center ${collapsed ? 'text-sm' : 'text-[11px]'}`}>
-              {collapsed ? '©' : <>Powered by 智合科技 &copy; 2026</>}
+              {collapsed ? '©' : <>{t('nav.poweredBy')} &copy; 2026</>}
             </a>
           </div>
         </div>
@@ -193,7 +196,7 @@ export default function Navbar() {
             <div className="px-6 py-5 flex items-center justify-between border-b border-outline-variant/10">
               <div className="flex items-center gap-3">
                 <span className="material-symbols-outlined text-primary">add_circle</span>
-                <h2 className="text-sm font-headline font-bold">選擇代理工具</h2>
+                <h2 className="text-sm font-headline font-bold">{t('nav.modalTitle')}</h2>
               </div>
               <button
                 onClick={() => setShowModal(false)}
@@ -215,8 +218,8 @@ export default function Navbar() {
                   <span className={`material-symbols-outlined text-2xl ${doc.colorClass} group-hover:scale-110 transition-transform`}>
                     {doc.icon}
                   </span>
-                  <span className="text-sm font-bold text-on-surface">{doc.label}</span>
-                  <span className="text-sm text-on-surface-variant">{doc.desc}</span>
+                  <span className="text-sm font-bold text-on-surface">{t(doc.labelKey)}</span>
+                  <span className="text-sm text-on-surface-variant">{t(doc.descKey)}</span>
                 </button>
               ))}
             </div>
@@ -224,7 +227,7 @@ export default function Navbar() {
             {/* Footer hint */}
             <div className="px-6 pb-5">
               <p className="text-sm text-on-surface-variant text-center">
-                選擇工具後將建立新對話，或使用儀表板的智能指令讓 AI 自動判斷
+                {t('nav.modalHint')}
               </p>
             </div>
           </div>

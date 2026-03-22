@@ -174,12 +174,16 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
     ? uploadIds.filter((id: unknown) => typeof id === 'string')
     : [];
 
+  // Read user locale for AI language instruction
+  const userRow = db.prepare('SELECT locale FROM users WHERE id = ?').get(userId) as { locale: string } | undefined;
+  const userLocale = userRow?.locale || 'zh-TW';
+
   if (useOrchestrator) {
     // === Orchestrated Mode ===
-    await handleOrchestrated(req, res, userId, conversationId, sanitizedMessage, validUploadIds);
+    await handleOrchestrated(req, res, userId, conversationId, sanitizedMessage, validUploadIds, userLocale);
   } else {
     // === Direct Mode (backwards compatible) ===
-    handleDirect(req, res, userId, conversationId, conversation, sanitizedMessage, skillId, validUploadIds);
+    handleDirect(req, res, userId, conversationId, conversation, sanitizedMessage, skillId, validUploadIds, userLocale);
   }
 });
 
@@ -193,6 +197,7 @@ async function handleOrchestrated(
   conversationId: string,
   message: string,
   uploadIds: string[] = [],
+  userLocale: string = 'zh-TW',
 ) {
   // Setup SSE headers
   res.writeHead(200, {
@@ -220,7 +225,7 @@ async function handleOrchestrated(
     } catch { /* connection closed */ }
   };
 
-  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds);
+  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds, userLocale);
 
   // Track abort function
   activeGenerations.set(conversationId, () => orchestrator.abort());
@@ -300,6 +305,7 @@ function handleDirect(
   sanitizedMessage: string,
   skillId?: string,
   uploadIds: string[] = [],
+  userLocale: string = 'zh-TW',
 ) {
   // Load skill and build system prompt
   const effectiveSkillId = skillId || conversation.skill_id || 'pptx-gen';
@@ -316,7 +322,7 @@ function handleDirect(
     uploadIds: uploadIds.length > 0 ? uploadIds : undefined,
     conversationId,
   });
-  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir) + uploadContext;
+  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + uploadContext;
 
   // Update conversation skill if changed
   if (skillId && skillId !== conversation.skill_id) {

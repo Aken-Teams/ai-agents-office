@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
+import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
 
@@ -57,7 +58,7 @@ const TEXT_TYPES = new Set(['md', 'txt', 'csv']);
 const IMAGE_TYPES = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg']);
 
 const FILTER_TABS = [
-  { value: '', label: '全部' },
+  { value: '', label: '' },
   { value: 'pptx', label: 'PPT' },
   { value: 'docx', label: 'Word' },
   { value: 'xlsx', label: 'Excel' },
@@ -76,6 +77,7 @@ function DeleteConfirmModal({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCancel();
@@ -97,9 +99,9 @@ function DeleteConfirmModal({
           <div className="w-14 h-14 rounded-full bg-error/10 flex items-center justify-center mb-4">
             <span className="material-symbols-outlined text-error text-3xl">delete_forever</span>
           </div>
-          <h3 className="font-headline font-bold text-lg text-on-surface mb-2">確定刪除？</h3>
+          <h3 className="font-headline font-bold text-lg text-on-surface mb-2">{t('files.deleteModal.title')}</h3>
           <p className="text-sm text-on-surface-variant text-center leading-relaxed">
-            即將刪除 <span className="font-medium text-on-surface">{filename}</span>，此操作無法復原。
+            {t('files.deleteModal.message', { filename })}
           </p>
         </div>
 
@@ -109,13 +111,13 @@ function DeleteConfirmModal({
             onClick={onCancel}
             className="flex-1 py-2.5 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-sm uppercase tracking-widest rounded cursor-pointer hover:bg-surface-variant transition-colors"
           >
-            取消
+            {t('common.cancel')}
           </button>
           <button
             onClick={onConfirm}
             className="flex-1 py-2.5 px-4 bg-error text-on-error font-bold text-sm uppercase tracking-widest rounded cursor-pointer hover:bg-error/80 transition-colors"
           >
-            刪除
+            {t('common.delete')}
           </button>
         </div>
       </div>
@@ -134,6 +136,7 @@ function PreviewModal({
   onClose: () => void;
   onDownload: (id: string, name: string) => void;
 }) {
+  const { t } = useTranslation();
   const [textContent, setTextContent] = useState<string | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -216,19 +219,19 @@ function PreviewModal({
             {loading ? (
               <div className="flex flex-col items-center justify-center py-20">
                 <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-4" />
-                <p className="text-sm text-on-surface-variant uppercase tracking-widest">正在轉換預覽...</p>
+                <p className="text-sm text-on-surface-variant uppercase tracking-widest">{t('files.preview.converting')}</p>
               </div>
             ) : error ? (
               <div className="flex flex-col items-center justify-center py-20 bg-surface-container/50 rounded-lg border border-outline-variant/10">
                 <span className="material-symbols-outlined text-4xl text-error mb-4">error</span>
-                <p className="text-sm text-on-surface-variant mb-2">預覽載入失敗</p>
-                <p className="text-sm text-on-surface-variant/60 mb-6">請確認檔案完整性，或直接下載查看。</p>
+                <p className="text-sm text-on-surface-variant mb-2">{t('files.preview.loadFailed')}</p>
+                <p className="text-sm text-on-surface-variant/60 mb-6">{t('files.preview.loadFailedHint')}</p>
                 <button
                   onClick={() => onDownload(file.id, file.filename)}
                   className="px-6 py-2.5 cyber-gradient text-on-primary font-bold text-sm uppercase tracking-widest flex items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity"
                 >
                   <span className="material-symbols-outlined text-sm">download</span>
-                  下載檔案
+                  {t('files.preview.download')}
                 </button>
               </div>
             ) : isPdfBlob ? (
@@ -287,32 +290,32 @@ function PreviewModal({
           {/* File info */}
           <div className="p-6 border-b border-outline-variant/10">
             <h3 className="text-sm font-headline font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-sm">info</span> 文件資訊
+              <span className="material-symbols-outlined text-sm">info</span> {t('files.preview.fileInfo')}
             </h3>
             <div className="space-y-3">
               <div className="p-3 bg-surface-container-low rounded">
-                <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">檔案名稱</p>
+                <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">{t('files.preview.filename')}</p>
                 <p className="text-sm font-medium text-on-surface break-all">{file.filename}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 bg-surface-container-low rounded">
-                  <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">格式</p>
+                  <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">{t('files.preview.format')}</p>
                   <p className="text-sm font-bold uppercase" style={{ color: config.color }}>{file.file_type}</p>
                 </div>
                 <div className="p-3 bg-surface-container-low rounded">
-                  <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">大小</p>
+                  <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">{t('files.preview.size')}</p>
                   <p className="text-sm font-bold text-on-surface">{formatSize(file.file_size)}</p>
                 </div>
               </div>
               <div className="p-3 bg-surface-container-low rounded">
-                <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">建立日期</p>
+                <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">{t('files.preview.createdDate')}</p>
                 <p className="text-sm text-on-surface">{new Date(file.created_at).toLocaleString('zh-TW')}</p>
               </div>
               <div className="p-3 bg-surface-container-low rounded">
-                <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">安全等級</p>
+                <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">{t('files.preview.securityLevel')}</p>
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_#00dbe9]" />
-                  <p className="text-sm font-bold text-on-surface">機密</p>
+                  <p className="text-sm font-bold text-on-surface">{t('files.preview.confidential')}</p>
                 </div>
               </div>
             </div>
@@ -326,7 +329,7 @@ function PreviewModal({
                 className="w-full py-2.5 px-4 cyber-gradient text-on-primary font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer hover:opacity-90 transition-opacity"
               >
                 <span className="material-symbols-outlined text-sm">download</span>
-                下載到本機
+                {t('files.preview.downloadLocal')}
               </button>
             </div>
           </div>
@@ -335,8 +338,8 @@ function PreviewModal({
           <div className="p-4 bg-primary/5 flex items-center gap-3 border-t border-outline-variant/10">
             <span className="material-symbols-outlined text-primary text-base">shield</span>
             <div>
-              <p className="text-sm font-bold text-on-surface">本地沙盒儲存</p>
-              <p className="text-sm text-on-surface-variant">所有檔案皆加密保護</p>
+              <p className="text-sm font-bold text-on-surface">{t('files.preview.localSandbox')}</p>
+              <p className="text-sm text-on-surface-variant">{t('files.preview.encryptedProtection')}</p>
             </div>
           </div>
         </aside>
@@ -358,6 +361,7 @@ interface StorageInfo {
 
 function FilesContent() {
   const { user, token, isLoading } = useAuth();
+  const { t } = useTranslation();
   const router = useRouter();
   const [files, setFiles] = useState<FileItem[]>([]);
   const [filter, setFilter] = useState('');
@@ -522,12 +526,12 @@ function FilesContent() {
         <div className="flex justify-between items-end mb-10">
           <div className="max-w-2xl">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-tertiary text-sm font-bold tracking-[0.3em] uppercase">本地儲存</span>
+              <span className="text-tertiary text-sm font-bold tracking-[0.3em] uppercase">{t('files.header.subtitle')}</span>
               <div className="h-px w-12 bg-tertiary/30" />
             </div>
-            <h2 className="text-4xl font-headline font-bold text-on-surface tracking-tight mb-2">檔案管理</h2>
+            <h2 className="text-4xl font-headline font-bold text-on-surface tracking-tight mb-2">{t('files.header.title')}</h2>
             <p className="text-on-surface-variant leading-relaxed">
-              所有 AI 代理生成的文件都安全存放在本地沙盒環境中。
+              {t('files.header.description')}
             </p>
           </div>
 
@@ -541,8 +545,8 @@ function FilesContent() {
               </span>
             </div>
             <div className="flex justify-between items-center text-sm font-bold tracking-widest uppercase text-on-surface-variant">
-              <span>{user?.displayName || user?.email?.split('@')[0] || '我的'}儲存</span>
-              <span className={storageInfo?.warning ? 'text-error' : 'text-primary'}>{files.length} 個檔案</span>
+              <span>{user?.displayName || user?.email?.split('@')[0] || ''}{t('files.storage.myStorage')}</span>
+              <span className={storageInfo?.warning ? 'text-error' : 'text-primary'}>{t('files.storage.fileCount', { count: files.length })}</span>
             </div>
             <div className="h-1.5 bg-surface-container-lowest rounded-full overflow-hidden">
               <div
@@ -560,7 +564,7 @@ function FilesContent() {
             </div>
             {storageInfo?.warning && (
               <p className="text-sm text-error font-medium">
-                儲存空間即將滿載，請整理不需要的檔案。
+                {t('files.storage.warning')}
               </p>
             )}
           </div>
@@ -577,7 +581,7 @@ function FilesContent() {
             }`}
           >
             <span className="material-symbols-outlined text-sm align-middle mr-1">auto_awesome</span>
-            AI 生成檔案
+            {t('files.tabs.generated')}
           </button>
           <button
             onClick={() => setActiveTab('uploads')}
@@ -588,7 +592,7 @@ function FilesContent() {
             }`}
           >
             <span className="material-symbols-outlined text-sm align-middle mr-1">upload_file</span>
-            我的上傳
+            {t('files.tabs.uploads')}
             {uploads.length > 0 && (
               <span className="ml-2 px-1.5 py-0.5 bg-primary/10 text-primary rounded text-sm font-bold">{uploads.length}</span>
             )}
@@ -610,7 +614,7 @@ function FilesContent() {
                     : 'bg-transparent text-on-surface-variant hover:bg-surface-container'
                 }`}
               >
-                {tab.label}
+                {tab.value === '' ? t('files.filter.all') : tab.label}
               </button>
             ))}
           </div>
@@ -620,7 +624,7 @@ function FilesContent() {
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="搜尋檔案名稱..."
+              placeholder={t('files.search.placeholder')}
               className="pl-9 pr-4 py-2 bg-surface-container border border-outline-variant/20 rounded text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/40 w-64 transition-colors"
             />
             {search && (
@@ -643,10 +647,10 @@ function FilesContent() {
               </span>
             </div>
             <p className="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-sm">
-              {search ? '找不到符合的檔案' : '尚無檔案'}
+              {search ? t('files.empty.noSearchResults') : t('files.empty.noFiles')}
             </p>
             <p className="text-sm text-on-surface-variant/40 mt-1">
-              {search ? '請嘗試其他關鍵字' : '從儀表板開始生成文件'}
+              {search ? t('files.empty.tryOtherKeyword') : t('files.empty.startGenerating')}
             </p>
           </div>
         ) : (
@@ -693,21 +697,21 @@ function FilesContent() {
                       <button
                         onClick={e => { e.stopPropagation(); setPreviewFile(file); }}
                         className="w-8 h-8 flex items-center justify-center rounded bg-transparent hover:bg-tertiary/10 text-on-surface-variant hover:text-tertiary cursor-pointer transition-colors"
-                        title="預覽"
+                        title={t('files.tooltip.preview')}
                       >
                         <span className="material-symbols-outlined text-sm">visibility</span>
                       </button>
                       <button
                         onClick={e => { e.stopPropagation(); handleDownload(file.id, file.filename); }}
                         className="w-8 h-8 flex items-center justify-center rounded bg-transparent hover:bg-primary/10 text-on-surface-variant hover:text-primary cursor-pointer transition-colors"
-                        title="下載"
+                        title={t('files.tooltip.download')}
                       >
                         <span className="material-symbols-outlined text-sm">download</span>
                       </button>
                       <button
                         onClick={e => { e.stopPropagation(); setDeleteTarget(file); }}
                         className="w-8 h-8 flex items-center justify-center rounded bg-transparent hover:bg-error/10 text-on-surface-variant hover:text-error cursor-pointer transition-colors"
-                        title="刪除"
+                        title={t('files.tooltip.delete')}
                       >
                         <span className="material-symbols-outlined text-sm">delete</span>
                       </button>
@@ -723,7 +727,7 @@ function FilesContent() {
         {filteredFiles.length > 0 && (
           <div className="mt-8 flex items-center justify-between">
             <p className="text-on-surface-variant/60 text-sm uppercase tracking-widest">
-              共 {filteredFiles.length} 個檔案{search && ` (搜尋結果)`}
+              {t('files.pagination.totalFiles', { count: filteredFiles.length })}
             </p>
             {totalPages > 1 && (
               <div className="flex items-center gap-1">
@@ -765,7 +769,7 @@ function FilesContent() {
           {/* Upload storage summary */}
           {uploadStorage && (
             <div className="flex items-center gap-6 mb-6 px-1 text-sm text-on-surface-variant">
-              <span>共 {uploadStorage.count} 個檔案</span>
+              <span>{t('files.uploads.totalFiles', { count: uploadStorage.count })}</span>
               <span>·</span>
               <span>{uploadStorage.formatted.used} / {uploadStorage.formatted.quota}</span>
               <div className="w-24 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
@@ -778,8 +782,8 @@ function FilesContent() {
           {uploads.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 border border-dashed border-outline-variant/20 rounded-lg">
               <span className="material-symbols-outlined text-on-surface-variant text-3xl mb-3 opacity-30">upload_file</span>
-              <p className="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-sm">尚無上傳檔案</p>
-              <p className="text-sm text-on-surface-variant/40 mt-1">在對話輸入框中附加檔案即可上傳</p>
+              <p className="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-sm">{t('files.uploads.empty')}</p>
+              <p className="text-sm text-on-surface-variant/40 mt-1">{t('files.uploads.emptyHint')}</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -789,8 +793,8 @@ function FilesContent() {
                   up.scan_status === 'suspicious' ? 'text-warning' : 'text-error';
                 const scanIcon = up.scan_status === 'clean' ? 'verified_user' :
                   up.scan_status === 'suspicious' ? 'warning' : 'gpp_bad';
-                const scanLabel = up.scan_status === 'clean' ? '安全' :
-                  up.scan_status === 'suspicious' ? '可疑' : '已拒絕';
+                const scanLabel = up.scan_status === 'clean' ? t('files.uploads.scanClean') :
+                  up.scan_status === 'suspicious' ? t('files.uploads.scanSuspicious') : t('files.uploads.scanRejected');
                 const conv = up.conversation_id ? conversations.find(c => c.id === up.conversation_id) : null;
                 const linkedFiles = up.conversation_id
                   ? files.filter(f => f.conversation_id === up.conversation_id)
@@ -819,7 +823,7 @@ function FilesContent() {
                       <button
                         onClick={() => setDeleteUploadTarget(up)}
                         className="w-8 h-8 flex items-center justify-center rounded hover:bg-error/10 text-on-surface-variant hover:text-error cursor-pointer transition-colors opacity-0 group-hover:opacity-100"
-                        title="刪除"
+                        title={t('files.tooltip.delete')}
                       >
                         <span className="material-symbols-outlined text-sm">delete</span>
                       </button>
@@ -871,7 +875,16 @@ function FilesContent() {
 export default function FilesPage() {
   return (
     <AuthProvider>
-      <FilesContent />
+      <FilesWithI18n />
     </AuthProvider>
+  );
+}
+
+function FilesWithI18n() {
+  const { user } = useAuth();
+  return (
+    <I18nProvider initialLocale={user?.locale} initialTheme={user?.theme}>
+      <FilesContent />
+    </I18nProvider>
   );
 }

@@ -8,6 +8,8 @@ interface AdminUser {
   email: string;
   displayName: string | null;
   role: string;
+  locale?: 'zh-TW' | 'zh-CN' | 'en';
+  theme?: 'dark' | 'light';
 }
 
 interface AdminAuthContextType {

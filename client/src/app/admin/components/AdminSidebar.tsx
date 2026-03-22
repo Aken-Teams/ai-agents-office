@@ -4,21 +4,23 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAdminAuth } from './AdminAuthProvider';
+import { useTranslation } from '../../../i18n';
 
 const ADMIN_SIDEBAR_KEY = 'admin-sidebar-collapsed';
 
 const ADMIN_NAV = [
-  { href: '/admin/overview', label: '總覽', icon: 'dashboard' },
-  { href: '/admin/users', label: '用戶管理', icon: 'corporate_fare' },
-  { href: '/admin/skills', label: 'Skills 中心', icon: 'hub' },
-  { href: '/admin/tokens', label: 'Token 帳本', icon: 'payments' },
-  { href: '/admin/security', label: '安全審計', icon: 'shield_with_heart' },
-  { href: '/admin/settings', label: '系統設定', icon: 'settings' },
+  { href: '/admin/overview', labelKey: 'admin.sidebar.overview' as const, icon: 'dashboard' },
+  { href: '/admin/users', labelKey: 'admin.sidebar.users' as const, icon: 'corporate_fare' },
+  { href: '/admin/skills', labelKey: 'admin.sidebar.skills' as const, icon: 'hub' },
+  { href: '/admin/tokens', labelKey: 'admin.sidebar.tokens' as const, icon: 'payments' },
+  { href: '/admin/security', labelKey: 'admin.sidebar.security' as const, icon: 'shield_with_heart' },
+  { href: '/admin/settings', labelKey: 'admin.sidebar.settings' as const, icon: 'settings' },
 ];
 
 export default function AdminSidebar() {
   const pathname = usePathname();
   const { user, logout } = useAdminAuth();
+  const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem(ADMIN_SIDEBAR_KEY) === '1';
     return false;
@@ -49,8 +51,8 @@ export default function AdminSidebar() {
       {/* Role Label */}
       {!collapsed && (
         <div className="px-6 py-4">
-          <p className="text-sm uppercase tracking-[0.3em] text-on-surface-variant font-bold">系統管理員</p>
-          <p className="text-xs text-outline mt-0.5">最高權限</p>
+          <p className="text-sm uppercase tracking-[0.3em] text-on-surface-variant font-bold">{t('admin.sidebar.roleLabel')}</p>
+          <p className="text-xs text-outline mt-0.5">{t('admin.sidebar.roleDescription')}</p>
         </div>
       )}
 
@@ -69,10 +71,10 @@ export default function AdminSidebar() {
               }`}
             >
               <span className="material-symbols-outlined text-[20px]">{link.icon}</span>
-              {!collapsed && <span>{link.label}</span>}
+              {!collapsed && <span>{t(link.labelKey)}</span>}
               {collapsed && (
                 <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
-                  {link.label}
+                  {t(link.labelKey)}
                 </span>
               )}
             </Link>
@@ -90,10 +92,10 @@ export default function AdminSidebar() {
           <span className={`material-symbols-outlined text-sm transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`}>
             chevron_left
           </span>
-          {!collapsed && <span className="text-sm">收合</span>}
+          {!collapsed && <span className="text-sm">{t('admin.sidebar.collapse')}</span>}
           {collapsed && (
             <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
-              展開側邊欄
+              {t('admin.sidebar.expand')}
             </span>
           )}
         </button>
@@ -113,10 +115,10 @@ export default function AdminSidebar() {
           className={`relative group flex items-center gap-3 py-2 text-on-surface-variant hover:text-on-surface transition-all w-full text-left bg-transparent cursor-pointer ${collapsed ? 'justify-center px-0' : 'px-3'}`}
         >
           <span className="material-symbols-outlined text-sm">logout</span>
-          {!collapsed && <span className="text-sm">登出</span>}
+          {!collapsed && <span className="text-sm">{t('admin.sidebar.logout')}</span>}
           {collapsed && (
             <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
-              登出
+              {t('admin.sidebar.logout')}
             </span>
           )}
         </button>
@@ -124,7 +126,7 @@ export default function AdminSidebar() {
         {/* Footer */}
         <div className="mt-3 pt-3 border-t border-outline-variant/10 px-3">
           <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className={`text-outline hover:text-on-surface-variant transition-colors no-underline block text-center ${collapsed ? 'text-sm' : 'text-xs'}`}>
-            {collapsed ? '©' : <>Powered by 智合科技 &copy; 2026</>}
+            {collapsed ? '\u00A9' : <>{t('admin.sidebar.poweredBy')} &copy; 2026</>}
           </a>
         </div>
       </div>

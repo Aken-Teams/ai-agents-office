@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
+import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
 
@@ -29,12 +30,12 @@ interface FileItem {
 }
 
 const DOC_TYPES = [
-  { id: 'pptx-gen', label: '簡報', desc: '投影片製作', icon: 'present_to_all', colorClass: 'text-warning' },
-  { id: 'docx-gen', label: '文件', desc: '文書撰寫', icon: 'description', colorClass: 'text-tertiary' },
-  { id: 'xlsx-gen', label: '試算表', desc: '數據分析', icon: 'table_chart', colorClass: 'text-success' },
-  { id: 'pdf-gen', label: 'PDF', desc: '文件輸出', icon: 'picture_as_pdf', colorClass: 'text-error' },
-  { id: 'data-analyst', label: '數據分析', desc: '上傳資料分析', icon: 'analytics', colorClass: 'text-primary' },
-  { id: 'research', label: '網路研究', desc: '搜尋與彙整', icon: 'travel_explore', colorClass: 'text-on-surface-variant' },
+  { id: 'pptx-gen', labelKey: 'nav.docTypes.pptx.label' as const, descKey: 'nav.docTypes.pptx.desc' as const, icon: 'present_to_all', colorClass: 'text-warning' },
+  { id: 'docx-gen', labelKey: 'nav.docTypes.docx.label' as const, descKey: 'nav.docTypes.docx.desc' as const, icon: 'description', colorClass: 'text-tertiary' },
+  { id: 'xlsx-gen', labelKey: 'nav.docTypes.xlsx.label' as const, descKey: 'nav.docTypes.xlsx.desc' as const, icon: 'table_chart', colorClass: 'text-success' },
+  { id: 'pdf-gen', labelKey: 'nav.docTypes.pdf.label' as const, descKey: 'nav.docTypes.pdf.desc' as const, icon: 'picture_as_pdf', colorClass: 'text-error' },
+  { id: 'data-analyst', labelKey: 'nav.docTypes.dataAnalyst.label' as const, descKey: 'nav.docTypes.dataAnalyst.desc' as const, icon: 'analytics', colorClass: 'text-primary' },
+  { id: 'research', labelKey: 'nav.docTypes.research.label' as const, descKey: 'nav.docTypes.research.desc' as const, icon: 'travel_explore', colorClass: 'text-on-surface-variant' },
 ];
 
 const SKILL_ICONS: Record<string, string> = {
@@ -59,6 +60,7 @@ function formatFileSize(bytes: number): string {
 
 function DashboardContent() {
   const { user, token, isLoading } = useAuth();
+  const { t } = useTranslation();
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [usage, setUsage] = useState<UsageTotal | null>(null);
@@ -106,7 +108,7 @@ function DashboardContent() {
     try {
       const docType = DOC_TYPES.find(s => s.id === skillId);
       const title = skillId
-        ? `New ${docType?.label || ''} Document`
+        ? `New ${docType ? t(docType.labelKey) : ''} Document`
         : (initialMessage || 'New Conversation').substring(0, 60);
       const res = await fetch('/api/conversations', {
         method: 'POST',
@@ -179,19 +181,19 @@ function DashboardContent() {
         {/* Top Header */}
         <header className="sticky top-0 h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
           <div className="flex items-center gap-8">
-            <span className="text-lg font-black text-on-surface font-headline">儀表板</span>
+            <span className="text-lg font-black text-on-surface font-headline">{t('dashboard.title')}</span>
             <div className="flex items-center gap-6 font-headline font-medium text-sm uppercase tracking-widest">
               <span className="text-tertiary font-bold">Workspace: /workspace/{user.email?.split('@')[0]}</span>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm font-bold uppercase tracking-widest text-on-surface-variant">AI 引擎: Claude</span>
+            <span className="text-sm font-bold uppercase tracking-widest text-on-surface-variant">{t('dashboard.engineLabel')}</span>
             <div className="w-px h-3 bg-outline-variant/30" />
-            <span className="text-sm font-bold uppercase tracking-widest text-on-surface-variant">模式: 多代理協作</span>
+            <span className="text-sm font-bold uppercase tracking-widest text-on-surface-variant">{t('dashboard.modeLabel')}</span>
             <div className="w-px h-3 bg-outline-variant/30" />
             <div className="flex items-center gap-1.5 px-3 py-1 bg-primary/10 rounded-full">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span className="text-sm text-primary font-bold tracking-widest uppercase">運行中</span>
+              <span className="text-sm text-primary font-bold tracking-widest uppercase">{t('dashboard.statusRunning')}</span>
             </div>
           </div>
         </header>
@@ -203,19 +205,19 @@ function DashboardContent() {
             {/* Bento Stats Row */}
             <div className="grid grid-cols-3 gap-6">
               <div className="bg-surface-container p-6 rounded-lg">
-                <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-1">本月生成次數</p>
+                <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-1">{t('dashboard.stats.invocationsTitle')}</p>
                 <div className="flex items-end gap-2">
                   <span className="text-3xl font-headline font-bold text-on-surface">
                     {usage?.totalInvocations ?? 0}
                   </span>
-                  <span className="text-sm text-primary mb-1">次</span>
+                  <span className="text-sm text-primary mb-1">{t('dashboard.stats.invocationsUnit')}</span>
                 </div>
                 <p className="text-sm text-on-surface-variant mt-3 font-mono">
-                  支援: PPTX / DOCX / XLSX / PDF
+                  {t('dashboard.stats.invocationsFormats')}
                 </p>
               </div>
               <div className="bg-surface-container p-6 rounded-lg">
-                <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-1">Token 用量</p>
+                <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-1">{t('dashboard.stats.tokenTitle')}</p>
                 <div className="flex items-end gap-3">
                   <span className="text-3xl font-headline font-bold text-on-surface">
                     {usage ? ((usage.totalInput + usage.totalOutput) / 1000).toFixed(1) + 'k' : '0'}
@@ -226,11 +228,11 @@ function DashboardContent() {
                   </span>
                 </div>
                 <p className="text-sm text-on-surface-variant mt-3 font-mono">
-                  輸入: {usage ? (usage.totalInput / 1000).toFixed(1) + 'k' : '0'} | 輸出: {usage ? (usage.totalOutput / 1000).toFixed(1) + 'k' : '0'}
+                  {t('dashboard.stats.tokenInputLabel')}: {usage ? (usage.totalInput / 1000).toFixed(1) + 'k' : '0'} | {t('dashboard.stats.tokenOutputLabel')}: {usage ? (usage.totalOutput / 1000).toFixed(1) + 'k' : '0'}
                 </p>
               </div>
               <div className="bg-surface-container p-6 rounded-lg">
-                <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-1">對話總數</p>
+                <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-1">{t('dashboard.stats.conversationsTitle')}</p>
                 <div className="flex items-center gap-2">
                   <span className="text-3xl font-headline font-bold text-on-surface">
                     {conversations.length}
@@ -238,7 +240,7 @@ function DashboardContent() {
                   <span className="material-symbols-outlined text-on-surface-variant">chat</span>
                 </div>
                 <p className="text-sm text-on-surface-variant mt-3 font-mono">
-                  進行中: {conversations.filter(c => c.status === 'active').length} | 模式: 多代理協作
+                  {t('dashboard.stats.conversationsActive')}: {conversations.filter(c => c.status === 'active').length} | {t('dashboard.stats.conversationsMode')}
                 </p>
               </div>
             </div>
@@ -247,14 +249,14 @@ function DashboardContent() {
             <div className="bg-surface-container rounded-lg overflow-hidden flex flex-col flex-1">
               <div className="px-6 py-4 bg-surface-container-high flex items-center gap-3">
                 <span className="material-symbols-outlined text-primary">forum</span>
-                <span className="text-sm font-bold uppercase tracking-widest">智能指令</span>
+                <span className="text-sm font-bold uppercase tracking-widest">{t('dashboard.smartInput.title')}</span>
                 <span className="ml-auto text-sm px-2 py-0.5 bg-primary/10 text-primary rounded font-bold tracking-widest uppercase">
-                  AI 自動判斷
+                  {t('dashboard.smartInput.badge')}
                 </span>
               </div>
               <div className="p-6 flex flex-col flex-1">
                 <p className="text-sm text-on-surface-variant mb-4">
-                  描述你的需求，AI 代理會自動規劃並生成對應的文件
+                  {t('dashboard.smartInput.description')}
                 </p>
                 {/* Attached files chips */}
                 {smartAttached.length > 0 && (
@@ -298,13 +300,13 @@ function DashboardContent() {
                         handleSmartSubmit();
                       }
                     }}
-                    placeholder="例如：幫我製作一份 10 頁的 AI 趨勢簡報..."
+                    placeholder={t('dashboard.smartInput.placeholder')}
                     disabled={creating}
                   />
                   <button
                     className="absolute left-3 bottom-3 w-9 h-9 flex items-center justify-center rounded hover:bg-surface-container text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
                     onClick={() => smartFileRef.current?.click()}
-                    title="上傳檔案"
+                    title={t('dashboard.smartInput.uploadTooltip')}
                   >
                     <span className="material-symbols-outlined text-lg">attach_file</span>
                   </button>
@@ -322,7 +324,7 @@ function DashboardContent() {
                     {[
                       {
                         icon: 'present_to_all',
-                        label: '製作 AI 趨勢簡報',
+                        labelKey: 'dashboard.samples.pptx' as const,
                         template: `幫我製作一份 10 頁的 AI 趨勢簡報（PPT），包含以下內容：
 1. 封面：標題「2026 AI 產業趨勢報告」
 2. 目錄頁
@@ -339,7 +341,7 @@ function DashboardContent() {
                       },
                       {
                         icon: 'description',
-                        label: '撰寫產品需求規格文件',
+                        labelKey: 'dashboard.samples.docx' as const,
                         template: `幫我撰寫一份產品需求規格文件（PRD），使用 Word 格式，包含以下章節：
 
 1. 產品概述：產品名稱、目標用戶、核心價值主張
@@ -355,7 +357,7 @@ function DashboardContent() {
                       },
                       {
                         icon: 'table_chart',
-                        label: '建立銷售數據分析表',
+                        labelKey: 'dashboard.samples.xlsx' as const,
                         template: `幫我建立一份銷售數據分析 Excel 報表，包含以下工作表：
 
 【Sheet 1 - 月度銷售總覽】
@@ -375,7 +377,7 @@ function DashboardContent() {
                       },
                       {
                         icon: 'travel_explore',
-                        label: '研究 AI 產業最新趨勢',
+                        labelKey: 'dashboard.samples.research' as const,
                         template: `請幫我研究 2026 年 AI 產業最新趨勢，並整理成一份完整的研究報告，涵蓋以下面向：
 
 1. 全球 AI 市場規模與投資趨勢
@@ -391,12 +393,12 @@ function DashboardContent() {
                       },
                     ].map(sample => (
                       <button
-                        key={sample.label}
+                        key={sample.labelKey}
                         onClick={() => setSmartInput(sample.template)}
                         className="flex items-center gap-2 px-3 py-2 bg-surface-container-highest/50 border border-outline-variant/10 rounded-lg text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest hover:border-primary/20 transition-all cursor-pointer"
                       >
                         <span className="material-symbols-outlined text-sm text-primary/60">{sample.icon}</span>
-                        {sample.label}
+                        {t(sample.labelKey)}
                       </button>
                     ))}
                   </div>
@@ -411,12 +413,12 @@ function DashboardContent() {
             {/* Recent Files */}
             <div className="bg-surface-container-high p-6 rounded-lg overflow-hidden flex flex-col">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-bold uppercase tracking-widest">最近文件</h3>
-                <span className="text-sm font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-full">{files.length} 個檔案</span>
+                <h3 className="text-sm font-bold uppercase tracking-widest">{t('dashboard.recentFiles.title')}</h3>
+                <span className="text-sm font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-full">{t('dashboard.recentFiles.count', { count: files.length })}</span>
               </div>
               <div className="space-y-2 font-mono text-sm">
                 {files.length === 0 ? (
-                  <p className="text-on-surface-variant text-center py-4">尚無檔案</p>
+                  <p className="text-on-surface-variant text-center py-4">{t('dashboard.recentFiles.empty')}</p>
                 ) : (
                   files.slice(0, 4).map(file => {
                     const ext = file.file_type?.toLowerCase() || '';
@@ -443,7 +445,7 @@ function DashboardContent() {
                   className="w-full py-2 text-sm font-bold text-on-surface-variant hover:text-on-surface bg-surface-container-highest/50 rounded transition-all flex items-center justify-center gap-2"
                 >
                   <span className="material-symbols-outlined text-sm">folder_open</span>
-                  瀏覽所有檔案
+                  {t('dashboard.recentFiles.browseAll')}
                 </button>
               </div>
             </div>
@@ -452,16 +454,16 @@ function DashboardContent() {
             <div className="bg-surface-container rounded-lg overflow-hidden flex flex-col">
               <div className="px-6 py-4 bg-surface-container-high flex items-center gap-3">
                 <span className="material-symbols-outlined text-on-surface-variant">history</span>
-                <span className="text-sm font-bold uppercase tracking-widest">最近對話</span>
+                <span className="text-sm font-bold uppercase tracking-widest">{t('dashboard.recentConversations.title')}</span>
                 <span className="ml-auto text-sm font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                  {conversations.length} 個對話
+                  {t('dashboard.recentConversations.count', { count: conversations.length })}
                 </span>
               </div>
 
               {conversations.length === 0 ? (
                 <div className="p-8 text-center">
                   <span className="material-symbols-outlined text-4xl text-outline-variant block mb-2">chat_bubble_outline</span>
-                  <p className="text-sm text-on-surface-variant">還沒有對話紀錄</p>
+                  <p className="text-sm text-on-surface-variant">{t('dashboard.recentConversations.empty')}</p>
                 </div>
               ) : (
                 <div className="divide-y divide-outline-variant/10">
@@ -503,10 +505,19 @@ function DashboardContent() {
   );
 }
 
+function DashboardWithI18n() {
+  const { user } = useAuth();
+  return (
+    <I18nProvider initialLocale={user?.locale} initialTheme={user?.theme}>
+      <DashboardContent />
+    </I18nProvider>
+  );
+}
+
 export default function DashboardPage() {
   return (
     <AuthProvider>
-      <DashboardContent />
+      <DashboardWithI18n />
     </AuthProvider>
   );
 }

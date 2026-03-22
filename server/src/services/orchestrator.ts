@@ -53,11 +53,13 @@ export class Orchestrator {
   private activeAbortFns: Array<() => void> = [];
   private tasks: TaskExecution[] = [];
   private uploadIds: string[];
+  private userLocale: string;
 
-  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = []) {
+  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = [], userLocale: string = 'zh-TW') {
     this.userId = userId;
     this.conversationId = conversationId;
     this.sseWriter = sseWriter;
+    this.userLocale = userLocale;
     this.uploadIds = uploadIds;
   }
 
@@ -75,7 +77,7 @@ export class Orchestrator {
     // Get or create Router's session for this conversation
     const { sessionId: routerSessionId, initialized: routerInitialized } = this.getOrCreateAgentSession('router');
 
-    const routerSystemPrompt = buildRouterPrompt(routerSkill);
+    const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale);
 
     // Recursive orchestration loop
     let currentMessage = message;
@@ -304,7 +306,7 @@ export class Orchestrator {
       uploadIds: this.uploadIds.length > 0 ? this.uploadIds : undefined,
       conversationId: this.conversationId,
     });
-    const systemPrompt = buildSystemPrompt(skill, config.generatorsDir) + uploadContext;
+    const systemPrompt = buildSystemPrompt(skill, config.generatorsDir, this.userLocale) + uploadContext;
 
     // Get or create session for this skill agent
     const { sessionId: agentSessionId, initialized: agentInitialized } = this.getOrCreateAgentSession(task.skillId);

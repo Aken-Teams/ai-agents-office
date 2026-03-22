@@ -106,10 +106,22 @@ export function getWorkerSkills(): SkillDefinition[] {
 }
 
 /**
+ * Get language instruction for the system prompt based on user locale.
+ */
+function getLanguageInstruction(locale: string): string {
+  const instructions: Record<string, string> = {
+    'zh-TW': '## Language Instruction\nYou MUST respond in Traditional Chinese (繁體中文). All text output, explanations, and generated document content must be in Traditional Chinese.\n',
+    'zh-CN': '## Language Instruction\nYou MUST respond in Simplified Chinese (简体中文). All text output, explanations, and generated document content must be in Simplified Chinese.\n',
+    'en': '## Language Instruction\nYou MUST respond in English. All text output, explanations, and generated document content must be in English.\n',
+  };
+  return instructions[locale] || instructions['zh-TW'];
+}
+
+/**
  * Build the Router Agent's system prompt.
  * Injects the list of available worker skills so the Router knows what it can delegate to.
  */
-export function buildRouterPrompt(routerSkill: SkillDefinition): string {
+export function buildRouterPrompt(routerSkill: SkillDefinition, userLocale: string = 'zh-TW'): string {
   const workers = getWorkerSkills();
 
   const teamLines = workers.map(w =>
@@ -124,7 +136,7 @@ export function buildRouterPrompt(routerSkill: SkillDefinition): string {
     '',
   ].join('\n');
 
-  return routerSkill.systemPrompt + teamSection;
+  return getLanguageInstruction(userLocale) + '\n' + routerSkill.systemPrompt + teamSection;
 }
 
 /**
@@ -134,10 +146,11 @@ export function buildRouterPrompt(routerSkill: SkillDefinition): string {
 export function buildSystemPrompt(
   skill: SkillDefinition,
   generatorsDir: string,
+  userLocale: string = 'zh-TW',
 ): string {
   // Router skills don't get sandbox rules or generator scripts
   if (skill.role === 'router') {
-    return buildRouterPrompt(skill);
+    return buildRouterPrompt(skill, userLocale);
   }
 
   // Server root directory (where node_modules with tsx, pptxgenjs, etc. live)
@@ -147,6 +160,8 @@ export function buildSystemPrompt(
   const genDir = generatorsDir.replace(/\\/g, '/');
 
   const parts = [
+    getLanguageInstruction(userLocale),
+    '',
     skill.systemPrompt,
     '',
     SANDBOX_RULES,

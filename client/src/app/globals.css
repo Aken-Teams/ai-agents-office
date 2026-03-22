@@ -1,58 +1,58 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/forms";
 
-/* === Custom Theme (Cyber Dark) === */
+/* === Custom Theme (registers Tailwind utility names) === */
 @theme {
   /* Primary palette */
-  --color-primary: #00dbe9;
-  --color-primary-hover: #00b8c4;
-  --color-primary-light: #7df4ff;
-  --color-primary-dim: #009099;
+  --color-primary: var(--th-primary);
+  --color-primary-hover: var(--th-primary-hover);
+  --color-primary-light: var(--th-primary-light);
+  --color-primary-dim: var(--th-primary-dim);
 
-  /* Surface palette (dark) */
-  --color-surface: #0b1326;
-  --color-surface-dim: #0b1326;
-  --color-surface-bright: #31394d;
-  --color-surface-container-lowest: #060e20;
-  --color-surface-container-low: #131b2e;
-  --color-surface-container: #171f33;
-  --color-surface-container-high: #222a3d;
-  --color-surface-container-highest: #2d3449;
-  --color-surface-variant: #2d3449;
+  /* Surface palette */
+  --color-surface: var(--th-surface);
+  --color-surface-dim: var(--th-surface-dim);
+  --color-surface-bright: var(--th-surface-bright);
+  --color-surface-container-lowest: var(--th-surface-container-lowest);
+  --color-surface-container-low: var(--th-surface-container-low);
+  --color-surface-container: var(--th-surface-container);
+  --color-surface-container-high: var(--th-surface-container-high);
+  --color-surface-container-highest: var(--th-surface-container-highest);
+  --color-surface-variant: var(--th-surface-variant);
 
-  /* On-surface (text on dark bg) */
-  --color-on-surface: #dae2fd;
-  --color-on-surface-variant: #c5c6cd;
-  --color-on-primary: #00363a;
+  /* On-surface (text) */
+  --color-on-surface: var(--th-on-surface);
+  --color-on-surface-variant: var(--th-on-surface-variant);
+  --color-on-primary: var(--th-on-primary);
 
   /* Secondary */
-  --color-secondary: #bcc7de;
-  --color-secondary-container: #3e495d;
-  --color-on-secondary: #263143;
-  --color-on-secondary-container: #aeb9d0;
+  --color-secondary: var(--th-secondary);
+  --color-secondary-container: var(--th-secondary-container);
+  --color-on-secondary: var(--th-on-secondary);
+  --color-on-secondary-container: var(--th-on-secondary-container);
 
   /* Tertiary */
-  --color-tertiary: #7bd0ff;
-  --color-tertiary-container: #001c29;
-  --color-on-tertiary: #00354a;
+  --color-tertiary: var(--th-tertiary);
+  --color-tertiary-container: var(--th-tertiary-container);
+  --color-on-tertiary: var(--th-on-tertiary);
 
   /* Semantic */
-  --color-error: #ffb4ab;
-  --color-error-container: #93000a;
-  --color-on-error: #690005;
-  --color-on-error-container: #ffdad6;
-  --color-success: #10b981;
-  --color-warning: #f59e0b;
+  --color-error: var(--th-error);
+  --color-error-container: var(--th-error-container);
+  --color-on-error: var(--th-on-error);
+  --color-on-error-container: var(--th-on-error-container);
+  --color-success: var(--th-success);
+  --color-warning: var(--th-warning);
 
   /* Outline / border */
-  --color-outline: #8f9097;
-  --color-outline-variant: #44474d;
+  --color-outline: var(--th-outline);
+  --color-outline-variant: var(--th-outline-variant);
 
   /* Inverse */
-  --color-inverse-surface: #dae2fd;
-  --color-inverse-on-surface: #283044;
-  --color-inverse-primary: #006970;
-  --color-surface-tint: #00dbe9;
+  --color-inverse-surface: var(--th-inverse-surface);
+  --color-inverse-on-surface: var(--th-inverse-on-surface);
+  --color-inverse-primary: var(--th-inverse-primary);
+  --color-surface-tint: var(--th-surface-tint);
 
   /* Fonts */
   --font-headline: "Space Grotesk", sans-serif;
@@ -66,8 +66,54 @@
   --radius-xl: 0.75rem;
 }
 
-/* === Legacy CSS Variables (backward compat for CSS Modules) === */
-:root {
+/* ============================================================
+   DARK THEME (default)
+   ============================================================ */
+html, html.dark {
+  --th-primary: #00dbe9;
+  --th-primary-hover: #00b8c4;
+  --th-primary-light: #7df4ff;
+  --th-primary-dim: #009099;
+
+  --th-surface: #0b1326;
+  --th-surface-dim: #0b1326;
+  --th-surface-bright: #31394d;
+  --th-surface-container-lowest: #060e20;
+  --th-surface-container-low: #131b2e;
+  --th-surface-container: #171f33;
+  --th-surface-container-high: #222a3d;
+  --th-surface-container-highest: #2d3449;
+  --th-surface-variant: #2d3449;
+
+  --th-on-surface: #dae2fd;
+  --th-on-surface-variant: #c5c6cd;
+  --th-on-primary: #00363a;
+
+  --th-secondary: #bcc7de;
+  --th-secondary-container: #3e495d;
+  --th-on-secondary: #263143;
+  --th-on-secondary-container: #aeb9d0;
+
+  --th-tertiary: #7bd0ff;
+  --th-tertiary-container: #001c29;
+  --th-on-tertiary: #00354a;
+
+  --th-error: #ffb4ab;
+  --th-error-container: #93000a;
+  --th-on-error: #690005;
+  --th-on-error-container: #ffdad6;
+  --th-success: #10b981;
+  --th-warning: #f59e0b;
+
+  --th-outline: #8f9097;
+  --th-outline-variant: #44474d;
+
+  --th-inverse-surface: #dae2fd;
+  --th-inverse-on-surface: #283044;
+  --th-inverse-primary: #006970;
+  --th-surface-tint: #00dbe9;
+
+  /* Legacy CSS vars */
   --primary: #00dbe9;
   --primary-hover: #00b8c4;
   --primary-light: rgba(0, 219, 233, 0.15);
@@ -85,9 +131,126 @@
   --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.4);
   --radius: 8px;
   --radius-lg: 12px;
+
+  /* Chat markdown vars */
+  --md-heading: #dae2fd;
+  --md-text: #c5c6cd;
+  --md-code-bg: #222a3d;
+  --md-code-text: #7bd0ff;
+  --md-pre-bg: #0b1326;
+  --md-pre-text: #c5c6cd;
+  --md-pre-border: #44474d;
+  --md-blockquote-bg: #131b2e;
+  --md-blockquote-border: #00dbe9;
+  --md-table-border: #44474d;
+  --md-th-bg: #222a3d;
+  --md-hr: #44474d;
+
+  /* Glass */
+  --glass-bg: rgba(45, 52, 73, 0.6);
+
+  /* Scrollbar */
+  --scrollbar-track: #060e20;
+  --scrollbar-thumb: #2d3449;
+  --scrollbar-thumb-hover: #44474d;
+
+  /* Bg-pattern */
+  --pattern-dot: rgba(0, 219, 233, 0.05);
 }
 
-/* === Base Layer (can be overridden by Tailwind utilities) === */
+/* ============================================================
+   LIGHT THEME
+   ============================================================ */
+html.light {
+  --th-primary: #006970;
+  --th-primary-hover: #005a60;
+  --th-primary-light: #a8f0f5;
+  --th-primary-dim: #00898f;
+
+  --th-surface: #f8fafb;
+  --th-surface-dim: #eef1f5;
+  --th-surface-bright: #ffffff;
+  --th-surface-container-lowest: #ffffff;
+  --th-surface-container-low: #f3f5f8;
+  --th-surface-container: #eef1f5;
+  --th-surface-container-high: #e5e8ed;
+  --th-surface-container-highest: #dde0e6;
+  --th-surface-variant: #dde0e6;
+
+  --th-on-surface: #1a1c2e;
+  --th-on-surface-variant: #44474d;
+  --th-on-primary: #ffffff;
+
+  --th-secondary: #3e495d;
+  --th-secondary-container: #dae2f3;
+  --th-on-secondary: #ffffff;
+  --th-on-secondary-container: #3e495d;
+
+  --th-tertiary: #00658c;
+  --th-tertiary-container: #c3e8ff;
+  --th-on-tertiary: #ffffff;
+
+  --th-error: #ba1a1a;
+  --th-error-container: #ffdad6;
+  --th-on-error: #ffffff;
+  --th-on-error-container: #410002;
+  --th-success: #0d9668;
+  --th-warning: #b77400;
+
+  --th-outline: #747680;
+  --th-outline-variant: #c4c7d0;
+
+  --th-inverse-surface: #2e3143;
+  --th-inverse-on-surface: #eef1f7;
+  --th-inverse-primary: #4cd9e5;
+  --th-surface-tint: #006970;
+
+  /* Legacy CSS vars */
+  --primary: #006970;
+  --primary-hover: #005a60;
+  --primary-light: rgba(0, 105, 112, 0.1);
+  --bg: #f8fafb;
+  --bg-card: #eef1f5;
+  --bg-sidebar: #f3f5f8;
+  --text: #1a1c2e;
+  --text-muted: #44474d;
+  --text-light: #1a1c2e;
+  --border: #c4c7d0;
+  --success: #0d9668;
+  --warning: #b77400;
+  --error: #ba1a1a;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1);
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  /* Chat markdown vars */
+  --md-heading: #1a1c2e;
+  --md-text: #44474d;
+  --md-code-bg: #e5e8ed;
+  --md-code-text: #006970;
+  --md-pre-bg: #f3f5f8;
+  --md-pre-text: #1a1c2e;
+  --md-pre-border: #c4c7d0;
+  --md-blockquote-bg: #eef1f5;
+  --md-blockquote-border: #006970;
+  --md-table-border: #c4c7d0;
+  --md-th-bg: #e5e8ed;
+  --md-hr: #c4c7d0;
+
+  /* Glass */
+  --glass-bg: rgba(255, 255, 255, 0.7);
+
+  /* Scrollbar */
+  --scrollbar-track: #f3f5f8;
+  --scrollbar-thumb: #c4c7d0;
+  --scrollbar-thumb-hover: #a0a3ab;
+
+  /* Bg-pattern */
+  --pattern-dot: rgba(0, 105, 112, 0.05);
+}
+
+/* === Base Layer === */
 @layer base {
   body {
     font-family: "Inter", -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -102,11 +265,11 @@
   }
 }
 
-/* === Legacy Component Classes (for CSS Module pages) === */
+/* === Legacy Component Classes === */
 @layer components {
   .btn-primary {
     background: var(--primary);
-    color: #00363a;
+    color: var(--th-on-primary);
     cursor: pointer;
     border: none;
     border-radius: var(--radius);
@@ -140,7 +303,7 @@
 
   .btn-danger {
     background: var(--error);
-    color: #690005;
+    color: var(--th-on-error);
     cursor: pointer;
     border: none;
     border-radius: var(--radius);
@@ -150,7 +313,7 @@
     transition: all 0.2s;
   }
   .btn-danger:hover {
-    background: #ff9b91;
+    opacity: 0.9;
   }
 
   .card {
@@ -173,18 +336,18 @@
   .badge-pdf  { background: rgba(236, 72, 153, 0.2); color: #f472b6; }
 }
 
-/* === Custom Utilities (always available) === */
+/* === Custom Utilities === */
 .glass-panel {
-  background: rgba(45, 52, 73, 0.6);
+  background: var(--glass-bg);
   backdrop-filter: blur(12px);
 }
 
 .cyber-gradient {
-  background: linear-gradient(135deg, #00dbe9 0%, #009099 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, var(--th-primary-dim) 100%);
 }
 
 .bg-pattern {
-  background-image: radial-gradient(circle at 2px 2px, rgba(0, 219, 233, 0.05) 1px, transparent 0);
+  background-image: radial-gradient(circle at 2px 2px, var(--pattern-dot) 1px, transparent 0);
   background-size: 32px 32px;
 }
 
@@ -203,14 +366,14 @@
   }
 }
 
-/* === Chat Markdown (dark theme) === */
+/* === Chat Markdown (theme-aware) === */
 .chat-markdown h1,
 .chat-markdown h2,
 .chat-markdown h3,
 .chat-markdown h4 {
   margin: 10px 0 4px;
   line-height: 1.3;
-  color: #dae2fd;
+  color: var(--md-heading);
   font-weight: 600;
 }
 .chat-markdown h1 { font-size: 18px; }
@@ -249,7 +412,7 @@
 
 .chat-markdown strong {
   font-weight: 600;
-  color: #dae2fd;
+  color: var(--md-heading);
 }
 
 .chat-markdown em {
@@ -257,24 +420,24 @@
 }
 
 .chat-markdown code {
-  background: #222a3d;
+  background: var(--md-code-bg);
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 13px;
   font-family: 'Consolas', 'Monaco', monospace;
-  color: #7bd0ff;
+  color: var(--md-code-text);
 }
 
 .chat-markdown pre {
-  background: #0b1326;
-  color: #c5c6cd;
+  background: var(--md-pre-bg);
+  color: var(--md-pre-text);
   padding: 12px 16px;
   border-radius: 8px;
   overflow-x: auto;
   margin: 8px 0;
   font-size: 13px;
   line-height: 1.5;
-  border: 1px solid #44474d;
+  border: 1px solid var(--md-pre-border);
 }
 
 .chat-markdown pre code {
@@ -284,12 +447,12 @@
 }
 
 .chat-markdown blockquote {
-  border-left: 3px solid #00dbe9;
+  border-left: 3px solid var(--md-blockquote-border);
   padding: 4px 12px;
   margin: 6px 0;
-  background: #131b2e;
+  background: var(--md-blockquote-bg);
   border-radius: 0 4px 4px 0;
-  color: #c5c6cd;
+  color: var(--md-text);
 }
 
 .chat-markdown table {
@@ -300,26 +463,26 @@
 
 .chat-markdown th,
 .chat-markdown td {
-  border: 1px solid #44474d;
+  border: 1px solid var(--md-table-border);
   padding: 5px 10px;
   text-align: left;
   font-size: 13px;
 }
 
 .chat-markdown th {
-  background: #222a3d;
+  background: var(--md-th-bg);
   font-weight: 600;
-  color: #dae2fd;
+  color: var(--md-heading);
 }
 
 .chat-markdown hr {
   border: none;
-  border-top: 1px solid #44474d;
+  border-top: 1px solid var(--md-hr);
   margin: 8px 0;
 }
 
-/* Custom scrollbar (dark theme) */
+/* Custom scrollbar (theme-aware) */
 ::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: #060e20; }
-::-webkit-scrollbar-thumb { background: #2d3449; border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: #44474d; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }

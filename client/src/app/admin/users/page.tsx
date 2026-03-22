@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
+import { useTranslation } from '../../../i18n';
 
 interface UserRow {
   id: string;
@@ -42,6 +43,7 @@ function formatFileSize(bytes: number): string {
 
 export default function AdminUsers() {
   const { token } = useAdminAuth();
+  const { t } = useTranslation();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -138,13 +140,13 @@ export default function AdminUsers() {
       {/* Header */}
       <header className="sticky top-0 h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
         <div className="flex items-center gap-4">
-          <span className="text-lg font-black text-on-surface font-headline">用戶身份管理</span>
-          <span className="text-sm text-on-surface-variant font-mono">共 {total} 個已註冊身份</span>
+          <span className="text-lg font-black text-on-surface font-headline">{t('admin.users.title')}</span>
+          <span className="text-sm text-on-surface-variant font-mono">{t('admin.users.count', { count: total })}</span>
         </div>
         <div className="flex items-center gap-3">
           <button className="flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
             <span className="material-symbols-outlined text-sm">download</span>
-            匯出 CSV
+            {t('admin.users.exportCsv')}
           </button>
         </div>
       </header>
@@ -158,17 +160,17 @@ export default function AdminUsers() {
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm">search</span>
               <input
                 className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 rounded py-2.5 pl-10 pr-4 text-sm text-on-surface placeholder:text-outline font-body"
-                placeholder="搜尋 Email、用戶 ID..."
+                placeholder={t('admin.users.search.placeholder')}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
             </form>
             <div className="flex rounded overflow-hidden border border-outline-variant/15">
               {[
-                { value: '', label: '全部' },
-                { value: 'pending', label: '待審核' },
-                { value: 'active', label: '啟用' },
-                { value: 'suspended', label: '停用' },
+                { value: '', label: t('admin.users.filter.all') },
+                { value: 'pending', label: t('admin.users.filter.pending') },
+                { value: 'active', label: t('admin.users.filter.active') },
+                { value: 'suspended', label: t('admin.users.filter.suspended') },
               ].map(opt => (
                 <button
                   key={opt.value}
@@ -190,11 +192,11 @@ export default function AdminUsers() {
             <table className="w-full">
               <thead className="sticky top-0 bg-surface-container-lowest">
                 <tr className="text-left text-sm uppercase tracking-widest text-on-surface-variant">
-                  <th className="py-3 px-4 font-bold">用戶</th>
-                  <th className="py-3 px-4 font-bold">註冊日期</th>
-                  <th className="py-3 px-4 font-bold">狀態</th>
+                  <th className="py-3 px-4 font-bold">{t('admin.users.table.user')}</th>
+                  <th className="py-3 px-4 font-bold">{t('admin.users.table.registered')}</th>
+                  <th className="py-3 px-4 font-bold">{t('admin.users.table.status')}</th>
                   <th className="py-3 px-4 font-bold text-right">Tokens</th>
-                  <th className="py-3 px-4 font-bold text-right">檔案</th>
+                  <th className="py-3 px-4 font-bold text-right">{t('admin.users.table.files')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/10">
@@ -235,7 +237,7 @@ export default function AdminUsers() {
                 ))}
                 {users.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-on-surface-variant">未找到用戶</td>
+                    <td colSpan={5} className="py-12 text-center text-on-surface-variant">{t('admin.users.table.empty')}</td>
                   </tr>
                 )}
               </tbody>
@@ -246,7 +248,7 @@ export default function AdminUsers() {
           {totalPages > 1 && (
             <div className="flex items-center justify-between pt-4 border-t border-outline-variant/10 mt-4">
               <span className="text-sm text-on-surface-variant">
-                第 {(page - 1) * limit + 1}-{Math.min(page * limit, total)} 筆，共 {total} 個身份
+                {t('admin.users.pagination.summary', { start: (page - 1) * limit + 1, end: Math.min(page * limit, total), total })}
               </span>
               <div className="flex gap-1">
                 <button
@@ -254,7 +256,7 @@ export default function AdminUsers() {
                   disabled={page === 1}
                   className="px-3 py-1.5 text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer hover:bg-surface-container-high transition-colors"
                 >
-                  上一頁
+                  {t('common.prev')}
                 </button>
                 {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map(p => (
                   <button
@@ -274,7 +276,7 @@ export default function AdminUsers() {
                   disabled={page === totalPages}
                   className="px-3 py-1.5 text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer hover:bg-surface-container-high transition-colors"
                 >
-                  下一頁
+                  {t('common.next')}
                 </button>
               </div>
             </div>
@@ -309,7 +311,7 @@ export default function AdminUsers() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-surface-container-high rounded p-2.5">
-                    <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold">狀態</p>
+                    <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold">{t('admin.users.detail.statusLabel')}</p>
                     <p className={`text-sm font-black mt-0.5 ${
                       selectedUser.status === 'active' ? 'text-success' : selectedUser.status === 'pending' ? 'text-warning' : 'text-error'
                     }`}>
@@ -317,7 +319,7 @@ export default function AdminUsers() {
                     </p>
                   </div>
                   <div className="bg-surface-container-high rounded p-2.5">
-                    <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold">註冊日期</p>
+                    <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold">{t('admin.users.detail.registeredLabel')}</p>
                     <p className="text-sm font-bold text-on-surface mt-0.5">{new Date(selectedUser.created_at).toLocaleDateString('zh-TW')}</p>
                   </div>
                 </div>
@@ -326,25 +328,25 @@ export default function AdminUsers() {
 
             {/* Token Stats */}
             <div className="px-6 pb-5 border-t border-outline-variant/25 pt-5">
-              <h4 className="text-sm uppercase tracking-widest text-on-surface-variant font-bold mb-3">Token 用量</h4>
+              <h4 className="text-sm uppercase tracking-widest text-on-surface-variant font-bold mb-3">{t('admin.users.detail.tokenUsage')}</h4>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-surface-container p-3 rounded">
-                  <p className="text-xs uppercase text-on-surface-variant">輸入</p>
+                  <p className="text-xs uppercase text-on-surface-variant">{t('admin.users.detail.tokenInput')}</p>
                   <p className="text-lg font-bold text-on-surface font-headline">{formatTokens(selectedUser.tokenStats.total_input)}</p>
                 </div>
                 <div className="bg-surface-container p-3 rounded">
-                  <p className="text-xs uppercase text-on-surface-variant">輸出</p>
+                  <p className="text-xs uppercase text-on-surface-variant">{t('admin.users.detail.tokenOutput')}</p>
                   <p className="text-lg font-bold text-on-surface font-headline">{formatTokens(selectedUser.tokenStats.total_output)}</p>
                 </div>
               </div>
-              <p className="text-sm text-on-surface-variant mt-2">{selectedUser.tokenStats.invocation_count} 次調用</p>
+              <p className="text-sm text-on-surface-variant mt-2">{t('admin.users.detail.invocationCount', { count: selectedUser.tokenStats.invocation_count })}</p>
             </div>
 
             {/* Recent Files */}
             <div className="px-6 pb-5 border-t border-outline-variant/25 pt-5">
-              <h4 className="text-sm uppercase tracking-widest text-on-surface-variant font-bold mb-3">最近檔案</h4>
+              <h4 className="text-sm uppercase tracking-widest text-on-surface-variant font-bold mb-3">{t('admin.users.detail.recentFiles')}</h4>
               {selectedUser.recentFiles.length === 0 ? (
-                <p className="text-sm text-on-surface-variant">尚無檔案</p>
+                <p className="text-sm text-on-surface-variant">{t('admin.users.detail.noFiles')}</p>
               ) : (
                 <div className="space-y-1.5">
                   {selectedUser.recentFiles.map(f => (
@@ -360,7 +362,7 @@ export default function AdminUsers() {
 
             {/* Admin Controls */}
             <div className="px-6 pb-6 mt-auto border-t border-outline-variant/25 pt-5">
-              <h4 className="text-sm uppercase tracking-widest text-on-surface-variant font-bold mb-3">管理操作</h4>
+              <h4 className="text-sm uppercase tracking-widest text-on-surface-variant font-bold mb-3">{t('admin.users.detail.adminControls')}</h4>
               {selectedUser.status === 'pending' ? (
                 <div className="space-y-2">
                   <button
@@ -368,14 +370,14 @@ export default function AdminUsers() {
                     disabled={actionLoading}
                     className="w-full py-2 px-4 bg-success/10 text-success text-sm font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    核准帳號
+                    {t('admin.users.detail.approve')}
                   </button>
                   <button
                     onClick={() => toggleUserStatus(selectedUser.id, 'suspended')}
                     disabled={actionLoading}
                     className="w-full py-2 px-4 bg-error/10 text-error text-sm font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    拒絕申請
+                    {t('admin.users.detail.reject')}
                   </button>
                 </div>
               ) : selectedUser.status === 'active' ? (
@@ -384,7 +386,7 @@ export default function AdminUsers() {
                   disabled={actionLoading}
                   className="w-full py-2 px-4 bg-error/10 text-error text-sm font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  停用用戶
+                  {t('admin.users.detail.suspend')}
                 </button>
               ) : (
                 <button
@@ -392,7 +394,7 @@ export default function AdminUsers() {
                   disabled={actionLoading}
                   className="w-full py-2 px-4 bg-success/10 text-success text-sm font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  啟用用戶
+                  {t('admin.users.detail.activate')}
                 </button>
               )}
 
@@ -402,7 +404,7 @@ export default function AdminUsers() {
                 className="w-full mt-3 py-2 px-4 border border-error/30 text-error/70 text-sm font-bold uppercase tracking-wider rounded hover:bg-error/10 hover:text-error transition-colors cursor-pointer flex items-center justify-center gap-2"
               >
                 <span className="material-symbols-outlined text-sm">delete_forever</span>
-                永久刪除用戶
+                {t('admin.users.detail.delete')}
               </button>
             </div>
           </div>
@@ -418,23 +420,23 @@ export default function AdminUsers() {
                 <div className="w-10 h-10 rounded-full bg-error/15 flex items-center justify-center shrink-0">
                   <span className="material-symbols-outlined text-error">warning</span>
                 </div>
-                <h3 className="text-lg font-headline font-bold text-on-surface">確認刪除用戶</h3>
+                <h3 className="text-lg font-headline font-bold text-on-surface">{t('admin.users.deleteModal.title')}</h3>
               </div>
               <p className="text-sm text-on-surface-variant mb-2">
-                您即將永久刪除以下用戶：
+                {t('admin.users.deleteModal.warning')}
               </p>
               <div className="bg-surface-container-highest rounded p-3 mb-4">
                 <p className="text-sm font-mono text-on-surface font-bold">{deleteConfirm.email}</p>
                 <p className="text-sm text-on-surface-variant mt-0.5">ID: {deleteConfirm.id.slice(0, 8)}...</p>
               </div>
               <div className="bg-error/5 border border-error/15 rounded p-3 text-sm text-error/90">
-                <p className="font-bold mb-1">此操作不可復原，將會刪除：</p>
+                <p className="font-bold mb-1">{t('admin.users.deleteModal.irreversible')}</p>
                 <ul className="list-disc list-inside space-y-0.5 text-sm">
-                  <li>用戶帳號與所有個人資料</li>
-                  <li>所有對話記錄與訊息</li>
-                  <li>所有生成的檔案與上傳的檔案</li>
-                  <li>Token 使用記錄</li>
-                  <li>Workspace 工作目錄（含所有檔案）</li>
+                  <li>{t('admin.users.deleteModal.itemAccount')}</li>
+                  <li>{t('admin.users.deleteModal.itemConversations')}</li>
+                  <li>{t('admin.users.deleteModal.itemFiles')}</li>
+                  <li>{t('admin.users.deleteModal.itemTokens')}</li>
+                  <li>{t('admin.users.deleteModal.itemWorkspace')}</li>
                 </ul>
               </div>
             </div>
@@ -444,7 +446,7 @@ export default function AdminUsers() {
                 disabled={deleteLoading}
                 className="flex-1 py-2.5 px-4 bg-surface-container-high text-on-surface-variant text-sm font-bold uppercase tracking-wider rounded hover:bg-surface-variant transition-colors cursor-pointer disabled:opacity-50"
               >
-                取消
+                {t('common.cancel')}
               </button>
               <button
                 onClick={() => deleteUser(deleteConfirm.id)}
@@ -452,11 +454,11 @@ export default function AdminUsers() {
                 className="flex-1 py-2.5 px-4 bg-error text-on-error text-sm font-bold uppercase tracking-wider rounded hover:bg-error/90 transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {deleteLoading ? (
-                  '刪除中...'
+                  t('admin.users.deleteModal.deleting')
                 ) : (
                   <>
                     <span className="material-symbols-outlined text-sm">delete_forever</span>
-                    確認刪除
+                    {t('admin.users.deleteModal.confirm')}
                   </>
                 )}
               </button>

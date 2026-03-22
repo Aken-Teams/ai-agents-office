@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
+import { useTranslation } from '../../../i18n';
 
 interface Skill {
   id: string;
@@ -11,19 +12,6 @@ interface Skill {
   role: string;
 }
 
-const SKILL_META: Record<string, { icon: string; iconColor: string; bgColor: string; tag: string; tagColor: string }> = {
-  'pptx-gen': { icon: 'present_to_all', iconColor: 'text-warning', bgColor: 'bg-warning/10', tag: '文件生成', tagColor: 'text-primary' },
-  'docx-gen': { icon: 'description', iconColor: 'text-tertiary', bgColor: 'bg-tertiary/10', tag: '文件生成', tagColor: 'text-primary' },
-  'xlsx-gen': { icon: 'table_chart', iconColor: 'text-success', bgColor: 'bg-success/10', tag: '文件生成', tagColor: 'text-primary' },
-  'pdf-gen':  { icon: 'picture_as_pdf', iconColor: 'text-error', bgColor: 'bg-error/10', tag: '文件生成', tagColor: 'text-primary' },
-  'router':   { icon: 'route', iconColor: 'text-primary', bgColor: 'bg-primary/10', tag: '系統核心', tagColor: 'text-tertiary' },
-  'research': { icon: 'travel_explore', iconColor: 'text-tertiary', bgColor: 'bg-tertiary/10', tag: '輔助代理', tagColor: 'text-secondary' },
-  'planner':  { icon: 'account_tree', iconColor: 'text-secondary', bgColor: 'bg-secondary/10', tag: '輔助代理', tagColor: 'text-secondary' },
-  'reviewer': { icon: 'rate_review', iconColor: 'text-primary', bgColor: 'bg-primary/10', tag: '輔助代理', tagColor: 'text-secondary' },
-};
-
-const DEFAULT_META = { icon: 'smart_toy', iconColor: 'text-on-surface-variant', bgColor: 'bg-surface-container-highest', tag: 'Agent', tagColor: 'text-on-surface-variant' };
-
 const FILE_TYPE_LABELS: Record<string, string> = {
   pptx: 'PowerPoint (.pptx)',
   docx: 'Word (.docx)',
@@ -31,15 +19,29 @@ const FILE_TYPE_LABELS: Record<string, string> = {
   pdf: 'PDF (.pdf)',
 };
 
-const ROLE_LABELS: Record<string, string> = {
-  router: '路由代理',
-  worker: '工作代理',
-};
-
 export default function AdminSkillsPage() {
   const { token } = useAdminAuth();
+  const { t } = useTranslation();
   const [skills, setSkills] = useState<Skill[]>([]);
   const [filter, setFilter] = useState<'all' | 'generator' | 'agent'>('all');
+
+  const SKILL_META: Record<string, { icon: string; iconColor: string; bgColor: string; tag: string; tagColor: string }> = {
+    'pptx-gen': { icon: 'present_to_all', iconColor: 'text-warning', bgColor: 'bg-warning/10', tag: t('admin.skills.tag.docGen'), tagColor: 'text-primary' },
+    'docx-gen': { icon: 'description', iconColor: 'text-tertiary', bgColor: 'bg-tertiary/10', tag: t('admin.skills.tag.docGen'), tagColor: 'text-primary' },
+    'xlsx-gen': { icon: 'table_chart', iconColor: 'text-success', bgColor: 'bg-success/10', tag: t('admin.skills.tag.docGen'), tagColor: 'text-primary' },
+    'pdf-gen':  { icon: 'picture_as_pdf', iconColor: 'text-error', bgColor: 'bg-error/10', tag: t('admin.skills.tag.docGen'), tagColor: 'text-primary' },
+    'router':   { icon: 'route', iconColor: 'text-primary', bgColor: 'bg-primary/10', tag: t('admin.skills.tag.systemCore'), tagColor: 'text-tertiary' },
+    'research': { icon: 'travel_explore', iconColor: 'text-tertiary', bgColor: 'bg-tertiary/10', tag: t('admin.skills.tag.assistantAgent'), tagColor: 'text-secondary' },
+    'planner':  { icon: 'account_tree', iconColor: 'text-secondary', bgColor: 'bg-secondary/10', tag: t('admin.skills.tag.assistantAgent'), tagColor: 'text-secondary' },
+    'reviewer': { icon: 'rate_review', iconColor: 'text-primary', bgColor: 'bg-primary/10', tag: t('admin.skills.tag.assistantAgent'), tagColor: 'text-secondary' },
+  };
+
+  const DEFAULT_META = { icon: 'smart_toy', iconColor: 'text-on-surface-variant', bgColor: 'bg-surface-container-highest', tag: 'Agent', tagColor: 'text-on-surface-variant' };
+
+  const ROLE_LABELS: Record<string, string> = {
+    router: t('admin.skills.role.router'),
+    worker: t('admin.skills.role.worker'),
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -61,7 +63,7 @@ export default function AdminSkillsPage() {
       {/* Header */}
       <header className="sticky top-0 h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
         <div className="flex items-center gap-4">
-          <span className="text-lg font-black text-on-surface font-headline">Skills 中心</span>
+          <span className="text-lg font-black text-on-surface font-headline">{t('admin.skills.title')}</span>
         </div>
         <div className="flex gap-1 rounded overflow-hidden border border-outline-variant/15">
           {(['all', 'generator', 'agent'] as const).map(f => (
@@ -74,7 +76,7 @@ export default function AdminSkillsPage() {
                   : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
               }`}
             >
-              {f === 'all' ? '全部' : f === 'generator' ? '文件生成' : '輔助代理'}
+              {f === 'all' ? t('admin.skills.filter.all') : f === 'generator' ? t('admin.skills.filter.generator') : t('admin.skills.filter.agent')}
             </button>
           ))}
         </div>
@@ -88,10 +90,16 @@ export default function AdminSkillsPage() {
           <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div>
               <h3 className="text-2xl font-headline font-bold text-on-surface mb-2">
-                <span className="text-primary">{skills.length}</span> 個 Skills 已載入
+                {t('admin.skills.hero.loaded', { count: skills.length }).split(String(skills.length)).map((part, i, arr) =>
+                  i < arr.length - 1 ? (
+                    <span key={i}>{part}<span className="text-primary">{skills.length}</span></span>
+                  ) : (
+                    <span key={i}>{part}</span>
+                  )
+                )}
               </h3>
               <p className="text-sm text-on-surface-variant">
-                包含 {generators.length} 個文件生成器與 {agents.length} 個輔助代理
+                {t('admin.skills.hero.summary', { generatorCount: generators.length, agentCount: agents.length })}
               </p>
             </div>
           </div>
@@ -136,7 +144,7 @@ export default function AdminSkillsPage() {
                   ) : (
                     <span className="flex items-center gap-1.5">
                       <span className="material-symbols-outlined text-sm">psychology</span>
-                      內部處理
+                      {t('admin.skills.noFileType')}
                     </span>
                   )}
                 </div>
@@ -144,7 +152,7 @@ export default function AdminSkillsPage() {
             );
           })}
           {filtered.length === 0 && (
-            <div className="col-span-full py-12 text-center text-on-surface-variant">此分類中無代理</div>
+            <div className="col-span-full py-12 text-center text-on-surface-variant">{t('admin.skills.empty')}</div>
           )}
         </section>
 
@@ -154,22 +162,22 @@ export default function AdminSkillsPage() {
             <span className="material-symbols-outlined text-[8rem]">hub</span>
           </div>
           <div className="relative z-10">
-            <h2 className="text-2xl font-headline font-bold text-on-surface mb-4">多代理協作架構</h2>
+            <h2 className="text-2xl font-headline font-bold text-on-surface mb-4">{t('admin.skills.architecture.title')}</h2>
             <p className="text-on-surface-variant max-w-2xl mb-6">
-              AI Agents Office 採用 Router → Worker 協作模式。Router Agent 分析需求後，自動將任務分派給最適合的 Skill Agent，並支援串連或並行管線處理。
+              {t('admin.skills.architecture.description')}
             </p>
             <div className="grid grid-cols-3 gap-4">
               <div className="bg-surface-container p-4 border-l-2 border-primary">
-                <h4 className="text-on-surface font-bold text-sm mb-1">智慧路由</h4>
-                <p className="text-sm text-on-surface-variant">Router Agent 自動分析需求，選擇最佳代理處理</p>
+                <h4 className="text-on-surface font-bold text-sm mb-1">{t('admin.skills.architecture.routingTitle')}</h4>
+                <p className="text-sm text-on-surface-variant">{t('admin.skills.architecture.routingDesc')}</p>
               </div>
               <div className="bg-surface-container p-4 border-l-2 border-tertiary">
-                <h4 className="text-on-surface font-bold text-sm mb-1">沙盒安全</h4>
-                <p className="text-sm text-on-surface-variant">每個 Agent 在隔離環境中運行，確保系統安全</p>
+                <h4 className="text-on-surface font-bold text-sm mb-1">{t('admin.skills.architecture.sandboxTitle')}</h4>
+                <p className="text-sm text-on-surface-variant">{t('admin.skills.architecture.sandboxDesc')}</p>
               </div>
               <div className="bg-surface-container p-4 border-l-2 border-secondary">
-                <h4 className="text-on-surface font-bold text-sm mb-1">管線處理</h4>
-                <p className="text-sm text-on-surface-variant">支援多步驟串連與並行任務，自動彙整結果</p>
+                <h4 className="text-on-surface font-bold text-sm mb-1">{t('admin.skills.architecture.pipelineTitle')}</h4>
+                <p className="text-sm text-on-surface-variant">{t('admin.skills.architecture.pipelineDesc')}</p>
               </div>
             </div>
           </div>

@@ -261,7 +261,7 @@ router.post('/login', async (req: Request, res: Response) => {
    ============================================================ */
 router.get('/me', authMiddleware, (req: Request, res: Response) => {
   const user = db.prepare(
-    'SELECT id, email, display_name, role, status, created_at FROM users WHERE id = ?'
+    'SELECT id, email, display_name, role, status, locale, theme, created_at FROM users WHERE id = ?'
   ).get(req.user!.userId) as User | undefined;
 
   if (!user) {
@@ -275,8 +275,40 @@ router.get('/me', authMiddleware, (req: Request, res: Response) => {
     displayName: user.display_name,
     role: user.role || 'user',
     status: user.status || 'active',
+    locale: user.locale || 'zh-TW',
+    theme: user.theme || 'dark',
     createdAt: user.created_at,
   });
+});
+
+/* ============================================================
+   PATCH /api/auth/preferences
+   ============================================================ */
+router.patch('/preferences', authMiddleware, (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const { locale, theme } = req.body;
+
+  const validLocales = ['zh-TW', 'zh-CN', 'en'];
+  const validThemes = ['dark', 'light'];
+
+  if (locale && !validLocales.includes(locale)) {
+    res.status(400).json({ error: 'Invalid locale' });
+    return;
+  }
+  if (theme && !validThemes.includes(theme)) {
+    res.status(400).json({ error: 'Invalid theme' });
+    return;
+  }
+
+  if (locale) {
+    db.prepare("UPDATE users SET locale = ?, updated_at = datetime('now') WHERE id = ?").run(locale, userId);
+  }
+  if (theme) {
+    db.prepare("UPDATE users SET theme = ?, updated_at = datetime('now') WHERE id = ?").run(theme, userId);
+  }
+
+  const updated = db.prepare('SELECT locale, theme FROM users WHERE id = ?').get(userId) as { locale: string; theme: string };
+  res.json({ locale: updated.locale, theme: updated.theme });
 });
 
 export default router;

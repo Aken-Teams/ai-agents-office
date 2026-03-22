@@ -117,6 +117,12 @@ export function initializeDatabase(): void {
     db.exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
   }
 
+  // Migration: add locale + theme columns to users
+  try { db.prepare("SELECT locale FROM users LIMIT 1").get(); }
+  catch { db.exec("ALTER TABLE users ADD COLUMN locale TEXT NOT NULL DEFAULT 'zh-TW'"); }
+  try { db.prepare("SELECT theme FROM users LIMIT 1").get(); }
+  catch { db.exec("ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'dark'"); }
+
   // Migration: add conversation_id to user_uploads if missing
   try {
     db.prepare("SELECT conversation_id FROM user_uploads LIMIT 1").get();

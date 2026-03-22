@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
+import { I18nProvider, useTranslation } from '../../i18n';
 
 function LoginForm() {
   const { login } = useAuth();
+  const { t } = useTranslation();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -69,21 +71,21 @@ function LoginForm() {
               </div>
               <div>
                 <h1 className="font-headline text-2xl font-bold tracking-tighter text-on-surface">
-                  AI Agents Office
+                  {t('common.appName')}
                 </h1>
                 <p className="font-label text-sm uppercase tracking-[0.2em] text-primary">
-                  強茂集團 · 智能文件平台
+                  {t('login.brandSubtitle')}
                 </p>
               </div>
             </div>
 
             <div className="space-y-6 mt-16">
               <h2 className="font-headline text-4xl font-light leading-tight">
-                以 <span className="text-primary font-medium">AI 智能代理</span>
-                <br />驅動企業級文件生成
+                {t('login.heroTitle.prefix')}<span className="text-primary font-medium">{t('login.heroTitle.highlight')}</span>
+                <br />{t('login.heroTitle.suffix')}
               </h2>
               <p className="text-on-surface-variant font-body leading-relaxed max-w-md">
-                自動化的文件生成工作流程 — 從簡報、報告到試算表，讓 AI 代理團隊為你協作完成高品質文件。
+                {t('login.heroDescription')}
               </p>
             </div>
           </div>
@@ -92,7 +94,7 @@ function LoginForm() {
             <div className="flex items-center gap-4 p-4 bg-surface-container rounded-lg">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="font-label text-sm uppercase tracking-widest text-on-surface-variant">
-                系統狀態：運行中
+                {t('login.systemStatus')}
               </span>
             </div>
             <div className="flex gap-2">
@@ -116,12 +118,12 @@ function LoginForm() {
               <div className="w-8 h-8 cyber-gradient flex items-center justify-center rounded">
                 <span className="material-symbols-outlined text-on-primary text-sm">terminal</span>
               </div>
-              <span className="font-headline text-xl font-bold tracking-tighter">AI Agents Office</span>
+              <span className="font-headline text-xl font-bold tracking-tighter">{t('common.appName')}</span>
             </div>
 
             <div className="mb-10">
-              <h3 className="font-headline text-2xl font-bold mb-2">登入系統</h3>
-              <p className="text-on-surface-variant text-sm">連線至 AI 智能文件生成平台</p>
+              <h3 className="font-headline text-2xl font-bold mb-2">{t('login.title')}</h3>
+              <p className="text-on-surface-variant text-sm">{t('login.subtitle')}</p>
             </div>
 
             {/* Form */}
@@ -143,7 +145,7 @@ function LoginForm() {
 
               <div className="space-y-1.5">
                 <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
-                  電子信箱
+                  {t('login.emailLabel')}
                 </label>
                 <input
                   className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
@@ -157,7 +159,7 @@ function LoginForm() {
 
               <div className="space-y-1.5">
                 <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
-                  密碼
+                  {t('login.passwordLabel')}
                 </label>
                 <input
                   className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
@@ -174,7 +176,7 @@ function LoginForm() {
                 disabled={loading}
                 className="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? '連線中...' : '建立連線'}
+                {loading ? t('login.submitLoading') : t('login.submit')}
               </button>
             </form>
 
@@ -182,14 +184,14 @@ function LoginForm() {
             <div className="mt-12 flex flex-col items-center gap-6">
               <div className="w-full h-px bg-outline-variant/20 relative">
                 <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-container-high px-4 text-sm uppercase tracking-widest text-outline">
-                  還沒有帳號？
+                  {t('login.noAccount')}
                 </span>
               </div>
               <Link
                 href="/register"
                 className="text-sm font-label text-on-surface-variant hover:text-primary transition-colors flex items-center gap-2 group"
               >
-                建立新帳號
+                {t('login.createAccount')}
                 <span className="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">
                   arrow_forward
                 </span>
@@ -202,16 +204,16 @@ function LoginForm() {
       {/* Footer Stats */}
       <footer className="mt-8 hidden md:flex gap-8 z-10">
         <div className="flex flex-col gap-1">
-          <span className="text-[9px] uppercase tracking-widest text-outline">支援格式</span>
+          <span className="text-[9px] uppercase tracking-widest text-outline">{t('login.footerFormats')}</span>
           <span className="font-headline font-bold text-tertiary">PPTX / DOCX / XLSX / PDF</span>
         </div>
         <div className="flex flex-col gap-1 border-l border-outline-variant/20 pl-8">
-          <span className="text-[9px] uppercase tracking-widest text-outline">AI 引擎</span>
+          <span className="text-[9px] uppercase tracking-widest text-outline">{t('login.footerEngine')}</span>
           <span className="font-headline font-bold text-on-surface">Claude Sonnet 4</span>
         </div>
         <div className="flex flex-col gap-1 border-l border-outline-variant/20 pl-8">
-          <span className="text-[9px] uppercase tracking-widest text-outline">協作模式</span>
-          <span className="font-headline font-bold text-on-surface">多 AI 代理協作</span>
+          <span className="text-[9px] uppercase tracking-widest text-outline">{t('login.footerCollaboration')}</span>
+          <span className="font-headline font-bold text-on-surface">{t('login.footerCollaborationValue')}</span>
         </div>
       </footer>
     </div>
@@ -220,8 +222,10 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <AuthProvider>
-      <LoginForm />
-    </AuthProvider>
+    <I18nProvider>
+      <AuthProvider>
+        <LoginForm />
+      </AuthProvider>
+    </I18nProvider>
   );
 }

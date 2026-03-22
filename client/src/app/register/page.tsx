@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
+import { I18nProvider, useTranslation } from '../../i18n';
 
 function RegisterForm() {
   const { register } = useAuth();
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -47,21 +49,21 @@ function RegisterForm() {
               </div>
               <div>
                 <h1 className="font-headline text-2xl font-bold tracking-tighter text-on-surface">
-                  AI Agents Office
+                  {t('common.appName')}
                 </h1>
                 <p className="font-label text-sm uppercase tracking-[0.2em] text-primary">
-                  強茂集團 · 智能文件平台
+                  {t('register.brandSubtitle')}
                 </p>
               </div>
             </div>
 
             <div className="space-y-6 mt-16">
               <h2 className="font-headline text-4xl font-light leading-tight">
-                加入 <span className="text-primary font-medium">AI 文件工作流</span>
-                <br />開始智能協作
+                {t('register.heroTitle.prefix')}<span className="text-primary font-medium">{t('register.heroTitle.highlight')}</span>
+                <br />{t('register.heroTitle.suffix')}
               </h2>
               <p className="text-on-surface-variant font-body leading-relaxed max-w-md">
-                建立你的帳號，即可使用 AI 代理團隊自動生成簡報、文件、報表與 PDF，大幅提升工作效率。
+                {t('register.heroDescription')}
               </p>
             </div>
           </div>
@@ -70,7 +72,7 @@ function RegisterForm() {
             <div className="flex items-center gap-4 p-4 bg-surface-container rounded-lg">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="font-label text-sm uppercase tracking-widest text-on-surface-variant">
-                系統狀態：運行中
+                {t('register.systemStatus')}
               </span>
             </div>
             <div className="flex gap-2">
@@ -94,7 +96,7 @@ function RegisterForm() {
               <div className="w-8 h-8 cyber-gradient flex items-center justify-center rounded">
                 <span className="material-symbols-outlined text-on-primary text-sm">terminal</span>
               </div>
-              <span className="font-headline text-xl font-bold tracking-tighter">AI Agents Office</span>
+              <span className="font-headline text-xl font-bold tracking-tighter">{t('common.appName')}</span>
             </div>
 
             {success ? (
@@ -103,16 +105,16 @@ function RegisterForm() {
                 <div className="w-20 h-20 mx-auto mb-6 bg-primary/10 rounded-full flex items-center justify-center">
                   <span className="material-symbols-outlined text-4xl text-primary">hourglass_top</span>
                 </div>
-                <h3 className="font-headline text-2xl font-bold mb-3">帳號已建立</h3>
-                <p className="text-on-surface-variant mb-2">您的帳號正在等待管理者審核</p>
+                <h3 className="font-headline text-2xl font-bold mb-3">{t('register.successTitle')}</h3>
+                <p className="text-on-surface-variant mb-2">{t('register.successMessage')}</p>
                 <p className="text-on-surface-variant text-sm mb-8">
-                  審核通過後即可使用帳號登入系統。<br />如有急需，請聯繫系統管理者。
+                  {t('register.successDetail')}<br />{t('register.successContact')}
                 </p>
                 <Link
                   href="/login"
                   className="inline-flex items-center gap-2 cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-3 px-8 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 transition-all no-underline"
                 >
-                  返回登入頁面
+                  {t('register.backToLogin')}
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </Link>
               </div>
@@ -120,8 +122,8 @@ function RegisterForm() {
               /* ===== Registration Form ===== */
               <>
                 <div className="mb-10">
-                  <h3 className="font-headline text-2xl font-bold mb-2">建立帳號</h3>
-                  <p className="text-on-surface-variant text-sm">註冊後需經管理者核准才可登入</p>
+                  <h3 className="font-headline text-2xl font-bold mb-2">{t('register.title')}</h3>
+                  <p className="text-on-surface-variant text-sm">{t('register.subtitle')}</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -133,14 +135,14 @@ function RegisterForm() {
 
                   <div className="space-y-1.5">
                     <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
-                      顯示名稱
+                      {t('register.displayNameLabel')}
                     </label>
                     <input
                       className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
                       type="text"
                       value={displayName}
                       onChange={e => setDisplayName(e.target.value)}
-                      placeholder="你的名字"
+                      placeholder={t('register.displayNamePlaceholder')}
                       required
                       maxLength={50}
                       autoComplete="name"
@@ -149,7 +151,7 @@ function RegisterForm() {
 
                   <div className="space-y-1.5">
                     <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
-                      電子信箱
+                      {t('register.emailLabel')}
                     </label>
                     <input
                       className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
@@ -164,14 +166,14 @@ function RegisterForm() {
 
                   <div className="space-y-1.5">
                     <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
-                      密碼
+                      {t('register.passwordLabel')}
                     </label>
                     <input
                       className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
                       type="password"
                       value={password}
                       onChange={e => setPassword(e.target.value)}
-                      placeholder="至少 8 個字元"
+                      placeholder={t('register.passwordPlaceholder')}
                       minLength={8}
                       required
                       autoComplete="new-password"
@@ -189,7 +191,7 @@ function RegisterForm() {
                     disabled={loading}
                     className="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {loading ? '建立中...' : '建立帳號'}
+                    {loading ? t('register.submitLoading') : t('register.submit')}
                   </button>
                 </form>
 
@@ -197,14 +199,14 @@ function RegisterForm() {
                 <div className="mt-12 flex flex-col items-center gap-6">
                   <div className="w-full h-px bg-outline-variant/20 relative">
                     <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-container-high px-4 text-sm uppercase tracking-widest text-outline">
-                      已有帳號？
+                      {t('register.hasAccount')}
                     </span>
                   </div>
                   <Link
                     href="/login"
                     className="text-sm font-label text-on-surface-variant hover:text-primary transition-colors flex items-center gap-2 group"
                   >
-                    返回登入
+                    {t('register.goToLogin')}
                     <span className="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">
                       arrow_forward
                     </span>
@@ -221,8 +223,10 @@ function RegisterForm() {
 
 export default function RegisterPage() {
   return (
-    <AuthProvider>
-      <RegisterForm />
-    </AuthProvider>
+    <I18nProvider>
+      <AuthProvider>
+        <RegisterForm />
+      </AuthProvider>
+    </I18nProvider>
   );
 }

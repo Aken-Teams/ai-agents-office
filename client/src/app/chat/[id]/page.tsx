@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AuthProvider, useAuth } from '../../components/AuthProvider';
 import Navbar from '../../components/Navbar';
+import { I18nProvider, useTranslation } from '../../../i18n';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 
 // Direct connection to Express for SSE streaming.
@@ -69,7 +70,7 @@ const SKILL_ICONS: Record<string, string> = {
 };
 
 /** Parse tool_use input JSON into a friendly, human-readable one-liner */
-function parseToolInput(tool: string, rawInput?: string): string {
+function parseToolInput(tool: string, rawInput: string | undefined, t: (key: any, params?: Record<string, string | number>) => string): string {
   if (!rawInput) return '';
   // Strip agent prefix (e.g. "pptx-gen:Bash" → "Bash")
   const baseTool = tool.includes(':') ? tool.split(':').pop()! : tool;
@@ -100,60 +101,60 @@ function parseToolInput(tool: string, rawInput?: string): string {
   if (baseTool === 'Write') {
     const fp = input.file_path || input.path || '';
     const name = fp.replace(/\\/g, '/').split('/').pop() || fp;
-    return name ? `寫入 ${name}` : '寫入檔案';
+    return name ? `${t('chat.toolInfo.writeFile')} ${name}` : t('chat.toolInfo.writeFile');
   }
   if (baseTool === 'Read') {
     const fp = input.file_path || input.path || '';
     const name = fp.replace(/\\/g, '/').split('/').pop() || fp;
-    return name ? `讀取 ${name}` : '讀取檔案';
+    return name ? `${t('chat.toolInfo.readFile')} ${name}` : t('chat.toolInfo.readFile');
   }
   if (baseTool === 'WebSearch') {
     const q = input.query || '';
-    return q ? (q.length > 80 ? q.substring(0, 80) + '…' : q) : '搜尋中';
+    return q ? (q.length > 80 ? q.substring(0, 80) + '…' : q) : t('chat.toolInfo.webSearch');
   }
   if (baseTool === 'WebFetch') {
     const url = input.url || '';
-    try { return `瀏覽 ${new URL(url).hostname}`; } catch { return url ? `瀏覽 ${url.substring(0, 60)}` : '瀏覽網頁'; }
+    try { return `${t('chat.toolInfo.fetchWeb')} ${new URL(url).hostname}`; } catch { return url ? `${t('chat.toolInfo.fetchWeb')} ${url.substring(0, 60)}` : t('chat.toolInfo.fetchWeb'); }
   }
   if (baseTool === 'Bash') {
     const cmd = input.command || '';
-    if (!cmd) return '執行指令';
+    if (!cmd) return t('chat.toolInfo.executeCommand');
     // Generator scripts
-    if (cmd.includes('generate-pptx')) return '生成簡報檔案';
-    if (cmd.includes('generate-docx')) return '生成文件檔案';
-    if (cmd.includes('generate-xlsx')) return '生成試算表';
-    if (cmd.includes('generate-pdf')) return '生成 PDF';
+    if (cmd.includes('generate-pptx')) return t('chat.tool.generatePptx');
+    if (cmd.includes('generate-docx')) return t('chat.tool.generateDocx');
+    if (cmd.includes('generate-xlsx')) return t('chat.tool.generateXlsx');
+    if (cmd.includes('generate-pdf')) return t('chat.tool.generatePdf');
     // Node/script execution
     if (cmd.includes('node ')) {
       const match = cmd.match(/([^\\/\s]+\.(?:mjs|js|ts))/);
-      if (match) return `執行 ${match[1]}`;
-      return '執行 Node 腳本';
+      if (match) return `${t('chat.tool.runNode')} ${match[1]}`;
+      return t('chat.tool.runNode');
     }
     // File operations
-    if (cmd.includes('cat ') || cmd.includes('head ') || cmd.includes('tail ')) return '讀取檔案內容';
-    if (cmd.includes('ls ') || cmd.includes('dir ')) return '檢視目錄';
-    if (cmd.includes('mkdir ')) return '建立目錄';
-    if (cmd.includes('cp ') || cmd.includes('copy ')) return '複製檔案';
-    if (cmd.includes('mv ') || cmd.includes('move ')) return '移動檔案';
-    if (cmd.includes('pip ') || cmd.includes('npm ') || cmd.includes('npx ')) return '安裝套件';
-    if (cmd.includes('python')) return '執行 Python 腳本';
+    if (cmd.includes('cat ') || cmd.includes('head ') || cmd.includes('tail ')) return t('chat.tool.readFile');
+    if (cmd.includes('ls ') || cmd.includes('dir ')) return t('chat.tool.listDir');
+    if (cmd.includes('mkdir ')) return t('chat.tool.createDir');
+    if (cmd.includes('cp ') || cmd.includes('copy ')) return t('chat.tool.copyFile');
+    if (cmd.includes('mv ') || cmd.includes('move ')) return t('chat.tool.moveFile');
+    if (cmd.includes('pip ') || cmd.includes('npm ') || cmd.includes('npx ')) return t('chat.tool.installPackage');
+    if (cmd.includes('python')) return t('chat.tool.runPython');
     // cd + subsequent command
     if (cmd.startsWith('cd ')) {
       // Extract the command after cd: "cd /path && actual_command"
       const afterCd = cmd.replace(/^cd\s+"?[^"&]+"?\s*&&\s*/, '').replace(/^cd\s+\S+\s*&&\s*/, '');
       if (afterCd !== cmd && afterCd.length > 0) {
         // Re-parse the command after cd
-        if (afterCd.includes('generate-pptx')) return '生成簡報檔案';
-        if (afterCd.includes('generate-docx')) return '生成文件檔案';
-        if (afterCd.includes('generate-xlsx')) return '生成試算表';
-        if (afterCd.includes('generate-pdf')) return '生成 PDF';
-        if (afterCd.includes('node ')) return '執行 Node 腳本';
-        if (afterCd.includes('python')) return '執行 Python 腳本';
-        if (afterCd.includes('cat ') || afterCd.includes('head ')) return '讀取檔案內容';
+        if (afterCd.includes('generate-pptx')) return t('chat.tool.generatePptx');
+        if (afterCd.includes('generate-docx')) return t('chat.tool.generateDocx');
+        if (afterCd.includes('generate-xlsx')) return t('chat.tool.generateXlsx');
+        if (afterCd.includes('generate-pdf')) return t('chat.tool.generatePdf');
+        if (afterCd.includes('node ')) return t('chat.tool.runNode');
+        if (afterCd.includes('python')) return t('chat.tool.runPython');
+        if (afterCd.includes('cat ') || afterCd.includes('head ')) return t('chat.tool.readFile');
         const shortAfter = afterCd.length > 60 ? afterCd.substring(0, 60) + '…' : afterCd;
         return shortAfter;
       }
-      return '切換目錄';
+      return t('chat.tool.changeDir');
     }
     // Fallback: show simplified command
     const short = cmd.length > 80 ? cmd.substring(0, 80) + '…' : cmd;
@@ -162,34 +163,34 @@ function parseToolInput(tool: string, rawInput?: string): string {
   if (baseTool === 'Edit') {
     const fp = input.file_path || '';
     const name = fp.replace(/\\/g, '/').split('/').pop() || fp;
-    return name ? `編輯 ${name}` : '編輯檔案';
+    return name ? `${t('chat.tool.editFile')} ${name}` : t('chat.tool.editFile');
   }
-  if (baseTool === 'Glob') return `搜尋 ${input.pattern || '檔案'}`;
-  if (baseTool === 'Grep') return `搜尋 "${input.pattern || '內容'}"`;
+  if (baseTool === 'Glob') return `${t('chat.toolInfo.searchFiles')} ${input.pattern || ''}`.trim();
+  if (baseTool === 'Grep') return `${t('chat.toolInfo.searchCode')} "${input.pattern || ''}"`;
   // Fallback
   return rawInput.length > 80 ? rawInput.substring(0, 80) + '…' : rawInput;
 }
 
 /** Get tool icon (material symbol name) and label */
-function getToolInfo(tool: string): { icon: string; label: string } {
+function getToolInfo(tool: string, t: (key: any, params?: Record<string, string | number>) => string): { icon: string; label: string } {
   if (tool.includes(':')) {
     const [agentId, baseTool] = tool.split(':');
     const agentLabel = SKILL_LABELS[agentId] || agentId;
-    const baseInfo = getToolInfo(baseTool);
+    const baseInfo = getToolInfo(baseTool, t);
     return { icon: baseInfo.icon, label: `${agentLabel}: ${baseInfo.label}` };
   }
-  if (tool === 'Router') return { icon: 'psychology', label: 'Router 分析中' };
-  if (tool.startsWith('Bash')) return { icon: 'terminal', label: '執行指令' };
-  if (tool === 'Write') return { icon: 'edit_document', label: '寫入檔案' };
-  if (tool === 'Read') return { icon: 'description', label: '讀取檔案' };
-  if (tool === 'Edit') return { icon: 'edit', label: '編輯檔案' };
-  if (tool === 'Glob') return { icon: 'folder_open', label: '搜尋檔案' };
-  if (tool === 'Grep') return { icon: 'search', label: '搜尋程式碼' };
-  if (tool === 'WebSearch') return { icon: 'travel_explore', label: '網路搜尋' };
-  if (tool === 'WebFetch') return { icon: 'language', label: '擷取網頁' };
-  if (tool === 'TodoWrite') return { icon: 'checklist', label: '更新任務' };
-  if (tool === 'tool_result') return { icon: 'check_circle', label: '工具完成' };
-  return { icon: 'settings', label: `使用 ${tool}` };
+  if (tool === 'Router') return { icon: 'psychology', label: t('chat.toolInfo.routerAnalyzing') };
+  if (tool.startsWith('Bash')) return { icon: 'terminal', label: t('chat.toolInfo.executeCommand') };
+  if (tool === 'Write') return { icon: 'edit_document', label: t('chat.toolInfo.writeFile') };
+  if (tool === 'Read') return { icon: 'description', label: t('chat.toolInfo.readFile') };
+  if (tool === 'Edit') return { icon: 'edit', label: t('chat.toolInfo.editFile') };
+  if (tool === 'Glob') return { icon: 'folder_open', label: t('chat.toolInfo.searchFiles') };
+  if (tool === 'Grep') return { icon: 'search', label: t('chat.toolInfo.searchCode') };
+  if (tool === 'WebSearch') return { icon: 'travel_explore', label: t('chat.toolInfo.webSearch') };
+  if (tool === 'WebFetch') return { icon: 'language', label: t('chat.toolInfo.fetchWeb') };
+  if (tool === 'TodoWrite') return { icon: 'checklist', label: t('chat.toolInfo.updateTask') };
+  if (tool === 'tool_result') return { icon: 'check_circle', label: t('chat.toolInfo.toolComplete') };
+  return { icon: 'settings', label: tool };
 }
 
 function getFileIcon(type: string): string {
@@ -214,6 +215,7 @@ function getFileColor(type: string): string {
 
 function ChatContent() {
   const { user, token, isLoading } = useAuth();
+  const { t, locale } = useTranslation();
   const router = useRouter();
   const params = useParams();
   const conversationId = params.id as string;
@@ -367,12 +369,12 @@ function ChatContent() {
 
       // Handle non-SSE error responses (e.g. storage quota exceeded)
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: '發生未知錯誤' }));
+        const err = await res.json().catch(() => ({ error: t('chat.error.unknown') }));
         setMessages(prev => [...prev, {
           id: `err-${Date.now()}`,
           conversation_id: conversationId,
           role: 'assistant',
-          content: `⚠️ ${err.error || '請求失敗'}`,
+          content: `⚠️ ${err.error || t('chat.error.unknown')}`,
           created_at: new Date().toISOString(),
         }]);
         setStreaming(false);
@@ -517,7 +519,7 @@ function ChatContent() {
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, streaming, token, conversationId, skillId, attachedFiles]);
+  }, [input, streaming, token, conversationId, skillId, attachedFiles, t]);
 
   // Auto-send pending message from dashboard smart input
   useEffect(() => {
@@ -567,7 +569,7 @@ function ChatContent() {
       const data = await resp.json();
 
       if (!resp.ok) {
-        alert(data.error || '上傳失敗');
+        alert(data.error || t('chat.error.uploadFailed'));
         setAttachedFiles(prev => prev.filter(f => !f.uploading));
         return;
       }
@@ -594,12 +596,12 @@ function ChatContent() {
       // Notify about rejected files
       const rejected = uploaded.filter(u => u.scanStatus === 'rejected');
       if (rejected.length > 0) {
-        alert(`安全掃描攔截了 ${rejected.length} 個檔案`);
+        alert(t('chat.error.scanBlocked', { count: rejected.length }));
       }
     } catch (err) {
       console.error('Upload error:', err);
       setAttachedFiles(prev => prev.filter(f => !f.uploading));
-      alert('上傳失敗，請稍後重試');
+      alert(t('chat.error.uploadRetry'));
     }
   }
 
@@ -711,7 +713,7 @@ function ChatContent() {
                       <>
                         <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                         <span className="block mt-2 text-sm text-outline">
-                          {new Date(msg.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(msg.created_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </>
                     ) : (
@@ -722,7 +724,7 @@ function ChatContent() {
                         {sources.length > 0 && (
                           <details className="mt-3 border-t border-outline-variant/10 pt-2">
                             <summary className="text-sm text-primary cursor-pointer font-bold uppercase tracking-wider">
-                              來源 ({sources.length})
+                              {t('chat.sources', { count: sources.length })}
                             </summary>
                             <div className="flex flex-col gap-1.5 mt-2">
                               {sources.map((src, i) => (
@@ -774,11 +776,11 @@ function ChatContent() {
                     : <span className="material-symbols-outlined text-sm text-green-400">check_circle</span>
                   }
                   <span className="text-sm font-headline font-bold text-on-surface uppercase tracking-wider flex-1">
-                    {streaming ? 'AI 處理中' : '已完成'}
+                    {streaming ? t('chat.processing.title') : t('chat.processing.completed')}
                     {panelCollapsed && tools.length > 0 && (
                       <span className="font-normal text-on-surface-variant ml-2">
-                        {completedTools}/{tools.length} 工具
-                        {webSearchTools.length > 0 && ` · ${webSearchTools.length} 搜尋`}
+                        {completedTools}/{tools.length}
+                        {webSearchTools.length > 0 && ` · ${webSearchTools.length}`}
                       </span>
                     )}
                   </span>
@@ -794,7 +796,7 @@ function ChatContent() {
                       {/* Connected */}
                       <div className="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant">
                         <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
-                        <span>已連線</span>
+                        <span>{t('chat.processing.connected')}</span>
                       </div>
 
                       {/* Waiting */}
@@ -802,10 +804,10 @@ function ChatContent() {
                         <div className="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant bg-surface-container/50 rounded">
                           <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
                           <span>
-                            {elapsed < 3 ? '載入對話...'
-                              : elapsed < 8 ? '分析需求...'
-                              : elapsed < 15 ? '生成回應...'
-                              : '處理中... (複雜任務)'}
+                            {elapsed < 3 ? t('chat.processing.loadingConversation')
+                              : elapsed < 8 ? t('chat.processing.analyzingRequest')
+                              : elapsed < 15 ? t('chat.processing.generatingResponse')
+                              : t('chat.processing.complexTask')}
                           </span>
                         </div>
                       )}
@@ -814,14 +816,14 @@ function ChatContent() {
                       {thinkingText && (
                         <div className="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant bg-surface-container/50 rounded">
                           <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
-                          <span>深度思考中...</span>
+                          <span>{t('chat.processing.deepThinking')}</span>
                         </div>
                       )}
 
                       {/* Tool steps */}
                       {tools.map((tool, i) => {
-                        const info = getToolInfo(tool.tool);
-                        const detail = parseToolInput(tool.tool, tool.input);
+                        const info = getToolInfo(tool.tool, t);
+                        const detail = parseToolInput(tool.tool, tool.input, t);
                         const isDone = tool.status === 'completed';
                         return (
                           <div key={tool.id || i} className={`flex items-center gap-2 px-2 py-1.5 rounded ${isDone ? 'text-outline' : 'text-on-surface-variant bg-surface-container/50'}`}>
@@ -870,7 +872,7 @@ function ChatContent() {
                       {streaming && streamText && (
                         <div className="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant bg-surface-container/50 rounded">
                           <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
-                          <span>撰寫回應中...</span>
+                          <span>{t('chat.processing.writingResponse')}</span>
                         </div>
                       )}
 
@@ -878,7 +880,7 @@ function ChatContent() {
                       {!streaming && tools.length > 0 && (
                         <div className="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant">
                           <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
-                          <span>回應完成</span>
+                          <span>{t('chat.processing.responseComplete')}</span>
                         </div>
                       )}
                     </div>
@@ -899,7 +901,7 @@ function ChatContent() {
                     {thinkingText && (
                       <details className="mx-4 mb-3 border-t border-outline-variant/10">
                         <summary className="text-sm text-primary cursor-pointer py-2 font-bold uppercase tracking-wider">
-                          查看 AI 思考過程
+                          {t('chat.processing.viewThinking')}
                         </summary>
                         <div className="text-sm text-on-surface-variant leading-relaxed whitespace-pre-wrap max-h-36 overflow-y-auto pb-2">
                           {thinkingText}
@@ -964,7 +966,7 @@ function ChatContent() {
                   onClick={() => fileInputRef.current?.click()}
                   disabled={streaming}
                   className="w-9 h-9 flex items-center justify-center rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-                  title="上傳檔案"
+                  title={t('chat.input.uploadFile')}
                 >
                   <span className="material-symbols-outlined text-lg">attach_file</span>
                 </button>
@@ -978,7 +980,7 @@ function ChatContent() {
                       sendMessage();
                     }
                   }}
-                  placeholder="輸入你的指令..."
+                  placeholder={t('chat.input.placeholder')}
                   rows={1}
                   disabled={streaming}
                 />
@@ -987,7 +989,7 @@ function ChatContent() {
                     className="bg-error/20 text-error font-headline font-bold text-sm uppercase px-5 py-2.5 rounded tracking-widest hover:bg-error/30 active:scale-95 transition-all cursor-pointer"
                     onClick={handleAbort}
                   >
-                    停止
+                    {t('chat.input.stop')}
                   </button>
                 ) : (
                   <button
@@ -995,7 +997,7 @@ function ChatContent() {
                     onClick={() => sendMessage()}
                     disabled={!input.trim()}
                   >
-                    發送
+                    {t('chat.input.send')}
                   </button>
                 )}
               </div>
@@ -1004,7 +1006,7 @@ function ChatContent() {
             <div className="mt-2 flex justify-between items-center px-2">
               <div className="flex gap-4">
                 <span className="text-sm text-outline uppercase tracking-widest">
-                  {skillId ? `技能: ${SKILL_LABELS[skillId] || skillId}` : 'AI 自動判斷'}
+                  {skillId ? `${SKILL_LABELS[skillId] || skillId}` : t('chat.input.autoDetect')}
                 </span>
               </div>
               {lastUsage && (
@@ -1020,14 +1022,14 @@ function ChatContent() {
         <aside className="w-72 bg-surface-container-low border-l border-outline-variant/10 overflow-y-auto p-5 hidden lg:flex flex-col gap-6 shrink-0">
           {/* System Status */}
           <div className="space-y-3">
-            <h4 className="text-sm font-headline font-bold text-outline tracking-widest uppercase">系統狀態</h4>
+            <h4 className="text-sm font-headline font-bold text-outline tracking-widest uppercase">{t('chat.sidebar.systemStatus')}</h4>
             <div className="bg-surface-container-highest p-4 rounded-sm border-l-2 border-primary">
               <div className="flex items-center gap-2 mb-1">
                 <span className="material-symbols-outlined text-primary text-sm">security</span>
-                <span className="text-sm font-headline font-bold text-on-surface uppercase tracking-tight">沙盒隔離模式</span>
+                <span className="text-sm font-headline font-bold text-on-surface uppercase tracking-tight">{t('chat.sidebar.sandboxMode')}</span>
               </div>
               <p className="text-sm text-on-surface-variant leading-relaxed">
-                所有執行操作皆在隔離環境中運行，確保系統安全。
+                {t('chat.sidebar.sandboxDescription')}
               </p>
             </div>
           </div>
@@ -1035,11 +1037,11 @@ function ChatContent() {
           {/* Generated Files */}
           <div className="space-y-3 flex-1">
             <h4 className="text-sm font-headline font-bold text-outline tracking-widest uppercase">
-              生成的檔案
+              {t('chat.sidebar.generatedFiles')}
             </h4>
             {files.length === 0 ? (
               <p className="text-sm text-on-surface-variant text-center py-6 leading-relaxed">
-                尚未生成任何檔案。<br />向 AI 描述需求即可開始。
+                {t('chat.sidebar.noFiles')}<br />{t('chat.sidebar.noFilesHint')}
               </p>
             ) : (
               <div className="space-y-1.5">
@@ -1076,7 +1078,7 @@ function ChatContent() {
             <div className="space-y-3 border-t border-outline-variant/10 pt-4">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-headline font-bold text-outline tracking-widest uppercase">
-                  上傳的檔案
+                  {t('chat.sidebar.uploadedFiles')}
                 </h4>
                 <span className="text-sm font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                   {conversationUploads.length}
@@ -1098,7 +1100,7 @@ function ChatContent() {
                       </span>
                     </div>
                     {file.scanStatus === 'clean' && (
-                      <span className="material-symbols-outlined text-green-400 text-sm shrink-0" title="安全">verified_user</span>
+                      <span className="material-symbols-outlined text-green-400 text-sm shrink-0" title={t('chat.sidebar.safe')}>verified_user</span>
                     )}
                   </div>
                 ))}
@@ -1109,7 +1111,7 @@ function ChatContent() {
           {/* Agent Tasks Summary */}
           {agentTasks.length > 0 && (
             <div className="space-y-3 border-t border-outline-variant/10 pt-4">
-              <h4 className="text-sm font-headline font-bold text-outline tracking-widest uppercase">代理任務</h4>
+              <h4 className="text-sm font-headline font-bold text-outline tracking-widest uppercase">{t('chat.sidebar.agentTasks')}</h4>
               <div className="space-y-1.5">
                 {agentTasks.map(task => (
                   <div key={task.taskId} className="flex items-center gap-2 p-2 bg-surface-container/50 rounded">
@@ -1133,10 +1135,19 @@ function ChatContent() {
   );
 }
 
+function ChatWithI18n() {
+  const { user } = useAuth();
+  return (
+    <I18nProvider initialLocale={user?.locale} initialTheme={user?.theme}>
+      <ChatContent />
+    </I18nProvider>
+  );
+}
+
 export default function ChatPage() {
   return (
     <AuthProvider>
-      <ChatContent />
+      <ChatWithI18n />
     </AuthProvider>
   );
 }

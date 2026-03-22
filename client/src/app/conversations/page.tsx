@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
+import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
 
@@ -46,6 +47,7 @@ function DeleteConfirmModal({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCancel();
@@ -66,9 +68,9 @@ function DeleteConfirmModal({
           <div className="w-14 h-14 rounded-full bg-error/10 flex items-center justify-center mb-4">
             <span className="material-symbols-outlined text-error text-3xl">delete_forever</span>
           </div>
-          <h3 className="font-headline font-bold text-lg text-on-surface mb-2">確定刪除？</h3>
+          <h3 className="font-headline font-bold text-lg text-on-surface mb-2">{t('conversations.deleteModal.title')}</h3>
           <p className="text-sm text-on-surface-variant text-center leading-relaxed">
-            即將刪除對話 <span className="font-medium text-on-surface">{title}</span>，此操作無法復原。
+            {t('conversations.deleteModal.message', { title })}
           </p>
         </div>
         <div className="flex gap-3 p-6 pt-2">
@@ -76,13 +78,13 @@ function DeleteConfirmModal({
             onClick={onCancel}
             className="flex-1 py-2.5 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-sm uppercase tracking-widest rounded cursor-pointer hover:bg-surface-variant transition-colors"
           >
-            取消
+            {t('common.cancel')}
           </button>
           <button
             onClick={onConfirm}
             className="flex-1 py-2.5 px-4 bg-error text-on-error font-bold text-sm uppercase tracking-widest rounded cursor-pointer hover:bg-error/80 transition-colors"
           >
-            刪除
+            {t('common.delete')}
           </button>
         </div>
       </div>
@@ -100,6 +102,7 @@ function RenameModal({
   onConfirm: (newTitle: string) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [value, setValue] = useState(currentTitle);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -124,7 +127,7 @@ function RenameModal({
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
               <span className="material-symbols-outlined text-primary">edit</span>
             </div>
-            <h3 className="font-headline font-bold text-lg text-on-surface">重新命名</h3>
+            <h3 className="font-headline font-bold text-lg text-on-surface">{t('conversations.renameModal.title')}</h3>
           </div>
           <input
             ref={inputRef}
@@ -133,7 +136,7 @@ function RenameModal({
             onChange={e => setValue(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && value.trim()) onConfirm(value.trim()); }}
             className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-lg py-3 px-4 text-sm text-on-surface placeholder:text-outline focus:ring-1 focus:ring-primary/40 focus:border-primary/40 outline-none"
-            placeholder="輸入新的對話名稱..."
+            placeholder={t('conversations.renameModal.placeholder')}
           />
         </div>
         <div className="flex gap-3 p-6 pt-2">
@@ -141,14 +144,14 @@ function RenameModal({
             onClick={onCancel}
             className="flex-1 py-2.5 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-sm uppercase tracking-widest rounded cursor-pointer hover:bg-surface-variant transition-colors"
           >
-            取消
+            {t('common.cancel')}
           </button>
           <button
             onClick={() => value.trim() && onConfirm(value.trim())}
             disabled={!value.trim() || value.trim() === currentTitle}
             className="flex-1 py-2.5 px-4 cyber-gradient text-on-primary font-bold text-sm uppercase tracking-widest rounded cursor-pointer hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            儲存
+            {t('common.save')}
           </button>
         </div>
       </div>
@@ -161,6 +164,7 @@ function RenameModal({
    ============================================================ */
 function ConversationsContent() {
   const { user, token, isLoading } = useAuth();
+  const { t } = useTranslation();
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [search, setSearch] = useState('');
@@ -256,12 +260,12 @@ function ConversationsContent() {
         <div className="mb-10">
           <div className="max-w-2xl">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-tertiary text-sm font-bold tracking-[0.3em] uppercase">對話歷程</span>
+              <span className="text-tertiary text-sm font-bold tracking-[0.3em] uppercase">{t('conversations.header.subtitle')}</span>
               <div className="h-px w-12 bg-tertiary/30" />
             </div>
-            <h2 className="text-4xl font-headline font-bold text-on-surface tracking-tight mb-2">對話記錄</h2>
+            <h2 className="text-4xl font-headline font-bold text-on-surface tracking-tight mb-2">{t('conversations.header.title')}</h2>
             <p className="text-on-surface-variant leading-relaxed">
-              所有與 AI 代理的對話歷程，點擊可繼續進行對話。
+              {t('conversations.header.description')}
             </p>
           </div>
         </div>
@@ -284,7 +288,7 @@ function ConversationsContent() {
                       : 'bg-transparent text-on-surface-variant hover:bg-surface-container'
                   }`}
                 >
-                  {tab.label}
+                  {tab.value === 'all' ? t('conversations.filter.all') : tab.label}
                   <span className="ml-1 text-sm opacity-60">{count}</span>
                 </button>
               );
@@ -296,7 +300,7 @@ function ConversationsContent() {
               type="text"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="搜尋對話標題..."
+              placeholder={t('conversations.search.placeholder')}
               className="pl-9 pr-4 py-2 bg-surface-container border border-outline-variant/20 rounded text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/40 w-64 transition-colors"
             />
             {search && (
@@ -319,10 +323,10 @@ function ConversationsContent() {
               </span>
             </div>
             <p className="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-sm">
-              {search ? '找不到符合的對話' : '尚無對話'}
+              {search ? t('conversations.empty.noSearchResults') : t('conversations.empty.noConversations')}
             </p>
             <p className="text-sm text-on-surface-variant/40 mt-1">
-              {search ? '請嘗試其他關鍵字' : '從儀表板開始建立新對話'}
+              {search ? t('conversations.empty.tryOtherKeyword') : t('conversations.empty.startNew')}
             </p>
           </div>
         ) : (
@@ -330,11 +334,11 @@ function ConversationsContent() {
             {/* Table Header */}
             <div className="grid grid-cols-[auto_1fr_100px_120px_140px_80px] gap-4 px-6 py-3 bg-surface-container-high text-sm font-bold uppercase tracking-widest text-on-surface-variant">
               <span className="w-9" />
-              <span>標題</span>
-              <span>類型</span>
-              <span>狀態</span>
-              <span>建立時間</span>
-              <span className="text-right">操作</span>
+              <span>{t('conversations.table.title')}</span>
+              <span>{t('conversations.table.type')}</span>
+              <span>{t('conversations.table.status')}</span>
+              <span>{t('conversations.table.createdAt')}</span>
+              <span className="text-right">{t('conversations.table.actions')}</span>
             </div>
             {/* Table Rows */}
             <div className="divide-y divide-outline-variant/10">
@@ -365,7 +369,7 @@ function ConversationsContent() {
                     <div className="flex items-center gap-1.5">
                       <span className={`w-1.5 h-1.5 rounded-full ${conv.status === 'active' ? 'bg-success' : 'bg-outline-variant'}`} />
                       <span className="text-sm text-on-surface-variant">
-                        {conv.status === 'active' ? '進行中' : '已完成'}
+                        {conv.status === 'active' ? t('conversations.status.active') : t('conversations.status.completed')}
                       </span>
                     </div>
                     {/* Date */}
@@ -377,14 +381,14 @@ function ConversationsContent() {
                       <button
                         onClick={e => { e.stopPropagation(); setRenameTarget(conv); }}
                         className="w-7 h-7 flex items-center justify-center rounded bg-transparent hover:bg-primary/10 text-on-surface-variant hover:text-primary cursor-pointer transition-colors opacity-0 group-hover:opacity-100"
-                        title="重新命名"
+                        title={t('conversations.tooltip.rename')}
                       >
                         <span className="material-symbols-outlined text-sm">edit</span>
                       </button>
                       <button
                         onClick={e => { e.stopPropagation(); setDeleteTarget(conv); }}
                         className="w-7 h-7 flex items-center justify-center rounded bg-transparent hover:bg-error/10 text-on-surface-variant hover:text-error cursor-pointer transition-colors opacity-0 group-hover:opacity-100"
-                        title="刪除"
+                        title={t('conversations.tooltip.delete')}
                       >
                         <span className="material-symbols-outlined text-sm">delete</span>
                       </button>
@@ -400,7 +404,7 @@ function ConversationsContent() {
         {filtered.length > 0 && (
           <div className="mt-8 flex items-center justify-between">
             <p className="text-on-surface-variant/60 text-sm uppercase tracking-widest">
-              共 {filtered.length} 個對話{search && ' (搜尋結果)'}
+              {t('conversations.pagination.totalConversations', { count: filtered.length })}
             </p>
             {totalPages > 1 && (
               <div className="flex items-center gap-1">
@@ -443,7 +447,16 @@ function ConversationsContent() {
 export default function ConversationsPage() {
   return (
     <AuthProvider>
-      <ConversationsContent />
+      <ConversationsWithI18n />
     </AuthProvider>
+  );
+}
+
+function ConversationsWithI18n() {
+  const { user } = useAuth();
+  return (
+    <I18nProvider initialLocale={user?.locale} initialTheme={user?.theme}>
+      <ConversationsContent />
+    </I18nProvider>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
+import { useTranslation } from '../../../i18n';
 
 interface AuditEntry {
   event_type: string;
@@ -44,15 +45,6 @@ interface WorkspaceScan {
   totalSize: number;
 }
 
-function formatUptime(seconds: number): string {
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  if (d > 0) return `${d}天 ${h}時 ${m}分`;
-  if (h > 0) return `${h}時 ${m}分`;
-  return `${m}分`;
-}
-
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -60,16 +52,9 @@ function formatFileSize(bytes: number): string {
   return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
 }
 
-const EVENT_META: Record<string, { label: string; color: string }> = {
-  user_registered:      { label: '用戶註冊', color: 'text-tertiary' },
-  conversation_created: { label: '建立對話', color: 'text-on-surface-variant' },
-  file_generated:       { label: '檔案生成', color: 'text-success' },
-  admin_suspend_user:   { label: '停用用戶', color: 'text-error' },
-  admin_activate_user:  { label: '啟用用戶', color: 'text-success' },
-};
-
 export default function AdminSecurity() {
   const { token } = useAdminAuth();
+  const { t } = useTranslation();
   const [stats, setStats] = useState<SecurityStats | null>(null);
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
   const [auditTotal, setAuditTotal] = useState(0);
@@ -82,6 +67,25 @@ export default function AdminSecurity() {
   const [secPage, setSecPage] = useState(1);
   const [secTotal, setSecTotal] = useState(0);
   const [secTotalPages, setSecTotalPages] = useState(1);
+
+  const EVENT_META: Record<string, { label: string; color: string }> = {
+    user_registered:      { label: t('admin.security.event.userRegistered'), color: 'text-tertiary' },
+    conversation_created: { label: t('admin.security.event.conversationCreated'), color: 'text-on-surface-variant' },
+    file_generated:       { label: t('admin.security.event.fileGenerated'), color: 'text-success' },
+    admin_suspend_user:   { label: t('admin.security.event.adminSuspendUser'), color: 'text-error' },
+    admin_activate_user:  { label: t('admin.security.event.adminActivateUser'), color: 'text-success' },
+  };
+
+  function formatUptime(seconds: number): string {
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const parts: string[] = [];
+    if (d > 0) parts.push(`${d}${t('admin.security.uptime.days')}`);
+    if (h > 0) parts.push(`${h}${t('admin.security.uptime.hours')}`);
+    parts.push(`${m}${t('admin.security.uptime.minutes')}`);
+    return parts.join(' ');
+  }
 
   useEffect(() => {
     if (!token) return;
@@ -147,12 +151,12 @@ export default function AdminSecurity() {
       {/* Header */}
       <header className="sticky top-0 h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
         <div className="flex items-center gap-4">
-          <span className="text-lg font-black text-on-surface font-headline">安全與審計</span>
+          <span className="text-lg font-black text-on-surface font-headline">{t('admin.security.title')}</span>
         </div>
         <div className="flex items-center gap-3">
           <button className="flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
             <span className="material-symbols-outlined text-sm">download</span>
-            匯出安全日誌
+            {t('admin.security.exportLog')}
           </button>
         </div>
       </header>
@@ -162,27 +166,27 @@ export default function AdminSecurity() {
         <div className="grid grid-cols-4 gap-6">
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
             <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>shield</span>
-            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">安全事件</p>
+            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">{t('admin.security.stats.securityEvents')}</p>
             <span className="text-3xl font-headline font-black text-on-surface">{stats?.securityEventsCount ?? 0}</span>
-            <p className="text-sm text-on-surface-variant mt-2 font-mono">Input Guard 偵測記錄</p>
+            <p className="text-sm text-on-surface-variant mt-2 font-mono">{t('admin.security.stats.securityEventsDesc')}</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
             <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>block</span>
-            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">已攔截威脅</p>
+            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">{t('admin.security.stats.blockedThreats')}</p>
             <span className="text-3xl font-headline font-black text-error">{stats?.blockedThreats ?? 0}</span>
-            <p className="text-sm text-on-surface-variant mt-2 font-mono">高風險請求已阻擋</p>
+            <p className="text-sm text-on-surface-variant mt-2 font-mono">{t('admin.security.stats.blockedThreatsDesc')}</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
             <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>schedule</span>
-            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">系統運行時間</p>
-            <span className="text-3xl font-headline font-black text-on-surface">{stats ? formatUptime(stats.systemUptime) : '—'}</span>
-            <p className="text-sm text-on-surface-variant mt-2 font-mono">自上次啟動</p>
+            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">{t('admin.security.stats.systemUptime')}</p>
+            <span className="text-3xl font-headline font-black text-on-surface">{stats ? formatUptime(stats.systemUptime) : '\u2014'}</span>
+            <p className="text-sm text-on-surface-variant mt-2 font-mono">{t('admin.security.stats.systemUptimeDesc')}</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
             <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>description</span>
-            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">已生成檔案</p>
+            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">{t('admin.security.stats.filesGenerated')}</p>
             <span className="text-3xl font-headline font-black text-primary">{stats?.totalFiles ?? 0}</span>
-            <p className="text-sm text-on-surface-variant mt-2 font-mono">跨 {stats?.totalConversations ?? 0} 個對話</p>
+            <p className="text-sm text-on-surface-variant mt-2 font-mono">{t('admin.security.stats.filesGeneratedDesc', { count: stats?.totalConversations ?? 0 })}</p>
           </div>
         </div>
 
@@ -193,7 +197,7 @@ export default function AdminSecurity() {
             <div className="px-6 py-4 bg-surface-container-high flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="material-symbols-outlined text-primary">hard_drive_2</span>
-                <span className="text-sm font-bold uppercase tracking-widest">沙箱磁碟用量</span>
+                <span className="text-sm font-bold uppercase tracking-widest">{t('admin.security.workspace.title')}</span>
               </div>
               <button
                 onClick={handleScan}
@@ -203,28 +207,28 @@ export default function AdminSecurity() {
                 <span className={`material-symbols-outlined text-sm ${scanning ? 'animate-spin' : ''}`}>
                   {scanning ? 'progress_activity' : 'radar'}
                 </span>
-                {scanning ? '掃描中...' : '掃描'}
+                {scanning ? t('admin.security.workspace.scanning') : t('admin.security.workspace.scan')}
               </button>
             </div>
 
             {workspace.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-on-surface-variant">
                 <span className="material-symbols-outlined text-4xl mb-3 opacity-30">folder_open</span>
-                <p className="text-sm mb-1">尚未掃描</p>
-                <p className="text-sm text-outline">點擊上方「掃描」按鈕檢查 workspace 目錄</p>
+                <p className="text-sm mb-1">{t('admin.security.workspace.notScanned')}</p>
+                <p className="text-sm text-outline">{t('admin.security.workspace.notScannedHint')}</p>
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto">
                 {/* Summary bar */}
                 <div className="px-6 py-3 border-b border-outline-variant/10 flex items-center justify-between">
                   <span className="text-sm text-on-surface-variant">
-                    {workspace.length} 個用戶沙箱 · {totalFiles} 檔案
+                    {t('admin.security.workspace.sandboxCount', { count: workspace.length })} · {t('admin.security.workspace.fileCount', { count: totalFiles })}
                   </span>
                   <span className="text-sm font-mono font-bold text-on-surface">{formatFileSize(totalDisk)}</span>
                 </div>
                 {lastScan && (
                   <div className="px-6 py-1.5 text-sm text-outline">
-                    最後掃描: {lastScan}
+                    {t('admin.security.workspace.lastScan')} {lastScan}
                   </div>
                 )}
 
@@ -240,7 +244,7 @@ export default function AdminSecurity() {
                           </div>
                           <div className="text-right shrink-0 ml-3">
                             <p className="text-sm font-mono font-bold text-on-surface">{formatFileSize(w.totalSize)}</p>
-                            <p className="text-sm text-on-surface-variant">{w.fileCount} 檔案 · {w.dirCount} 資料夾</p>
+                            <p className="text-sm text-on-surface-variant">{t('admin.security.workspace.fileCount', { count: w.fileCount })} · {w.dirCount}</p>
                           </div>
                         </div>
                         <div className="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
@@ -268,13 +272,13 @@ export default function AdminSecurity() {
                 </div>
                 <span className="text-sm text-on-surface-variant font-mono tracking-wider">SYSTEM_AUDIT_LOG</span>
               </div>
-              <span className="text-sm text-on-surface-variant font-mono">共 {auditTotal} 筆</span>
+              <span className="text-sm text-on-surface-variant font-mono">{t('admin.security.audit.total', { count: auditTotal })}</span>
             </div>
             <div className="flex-1 overflow-y-auto p-4 font-mono text-sm space-y-1 min-h-[300px] max-h-[500px]">
               {auditLog.length === 0 ? (
                 <div className="text-on-surface-variant py-8 text-center">
-                  <p>[SYSTEM] 尚無記錄</p>
-                  <p className="text-outline mt-1">[INFO] 系統活動將自動記錄於此</p>
+                  <p>{t('admin.security.audit.emptyTitle')}</p>
+                  <p className="text-outline mt-1">{t('admin.security.audit.emptyHint')}</p>
                 </div>
               ) : (
                 auditLog.map(entry => {
@@ -286,7 +290,7 @@ export default function AdminSecurity() {
                       <span className={`${meta.color} shrink-0`}>[{meta.label}]</span>
                       <span className="text-on-surface-variant">
                         <span className="text-on-surface">{actor}</span>
-                        {entry.detail ? ` — ${entry.detail}` : ''}
+                        {entry.detail ? ` \u2014 ${entry.detail}` : ''}
                       </span>
                     </div>
                   );
@@ -298,7 +302,7 @@ export default function AdminSecurity() {
             {auditTotalPages > 1 && (
               <div className="flex items-center justify-between px-6 py-3 border-t border-outline-variant/10 bg-surface-container-low">
                 <span className="text-sm text-on-surface-variant">
-                  第 {(auditPage - 1) * 13 + 1}-{Math.min(auditPage * 13, auditTotal)} 筆，共 {auditTotal} 筆
+                  {t('admin.security.audit.paginationSummary', { start: (auditPage - 1) * 13 + 1, end: Math.min(auditPage * 13, auditTotal), total: auditTotal })}
                 </span>
                 <div className="flex gap-1">
                   <button
@@ -306,14 +310,14 @@ export default function AdminSecurity() {
                     disabled={auditPage === 1}
                     className="px-3 py-1.5 text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
                   >
-                    上一頁
+                    {t('common.prev')}
                   </button>
                   <button
                     onClick={() => setAuditPage(p => Math.min(auditTotalPages, p + 1))}
                     disabled={auditPage === auditTotalPages}
                     className="px-3 py-1.5 text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
                   >
-                    下一頁
+                    {t('common.next')}
                   </button>
                 </div>
               </div>
@@ -326,15 +330,15 @@ export default function AdminSecurity() {
           <div className="px-6 py-4 bg-surface-container-high flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="material-symbols-outlined text-error">gpp_maybe</span>
-              <span className="text-sm font-bold uppercase tracking-widest">Input Guard 安全事件</span>
+              <span className="text-sm font-bold uppercase tracking-widest">{t('admin.security.inputGuard.title')}</span>
             </div>
-            <span className="text-sm text-on-surface-variant font-mono">共 {secTotal} 筆</span>
+            <span className="text-sm text-on-surface-variant font-mono">{t('admin.security.inputGuard.total', { count: secTotal })}</span>
           </div>
           {secEvents.length === 0 ? (
             <div className="p-8 text-center text-on-surface-variant">
               <span className="material-symbols-outlined text-4xl mb-3 opacity-30">verified_user</span>
-              <p className="text-sm">尚無安全事件</p>
-              <p className="text-sm text-outline mt-1">所有使用者輸入均通過安全檢查</p>
+              <p className="text-sm">{t('admin.security.inputGuard.empty')}</p>
+              <p className="text-sm text-outline mt-1">{t('admin.security.inputGuard.emptyHint')}</p>
             </div>
           ) : (
             <>
@@ -342,11 +346,11 @@ export default function AdminSecurity() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-outline-variant/10 text-on-surface-variant uppercase tracking-wider">
-                      <th className="py-3 px-4 text-left font-bold">時間</th>
-                      <th className="py-3 px-4 text-left font-bold">嚴重度</th>
-                      <th className="py-3 px-4 text-left font-bold">類型</th>
-                      <th className="py-3 px-4 text-left font-bold">用戶</th>
-                      <th className="py-3 px-4 text-left font-bold">詳情</th>
+                      <th className="py-3 px-4 text-left font-bold">{t('admin.security.inputGuard.colTime')}</th>
+                      <th className="py-3 px-4 text-left font-bold">{t('admin.security.inputGuard.colSeverity')}</th>
+                      <th className="py-3 px-4 text-left font-bold">{t('admin.security.inputGuard.colType')}</th>
+                      <th className="py-3 px-4 text-left font-bold">{t('admin.security.inputGuard.colUser')}</th>
+                      <th className="py-3 px-4 text-left font-bold">{t('admin.security.inputGuard.colDetail')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/10">
@@ -354,9 +358,9 @@ export default function AdminSecurity() {
                       const sevColor = ev.severity === 'critical' ? 'text-error font-bold' :
                         ev.severity === 'high' ? 'text-error' :
                         ev.severity === 'medium' ? 'text-warning' : 'text-on-surface-variant';
-                      const sevLabel = ev.severity === 'critical' ? '嚴重' :
-                        ev.severity === 'high' ? '高' :
-                        ev.severity === 'medium' ? '中' : '低';
+                      const sevLabel = ev.severity === 'critical' ? t('admin.security.inputGuard.severityCritical') :
+                        ev.severity === 'high' ? t('admin.security.inputGuard.severityHigh') :
+                        ev.severity === 'medium' ? t('admin.security.inputGuard.severityMedium') : t('admin.security.inputGuard.severityLow');
                       return (
                         <tr key={ev.id} className="hover:bg-surface-container-high/50 transition-colors">
                           <td className="py-3 px-4 text-on-surface-variant font-mono whitespace-nowrap">
@@ -379,19 +383,19 @@ export default function AdminSecurity() {
               {secTotalPages > 1 && (
                 <div className="flex items-center justify-between px-6 py-3 border-t border-outline-variant/10 bg-surface-container-high">
                   <span className="text-sm text-on-surface-variant">
-                    第 {(secPage - 1) * 10 + 1}-{Math.min(secPage * 10, secTotal)} 筆，共 {secTotal} 筆
+                    {t('admin.security.audit.paginationSummary', { start: (secPage - 1) * 10 + 1, end: Math.min(secPage * 10, secTotal), total: secTotal })}
                   </span>
                   <div className="flex gap-1">
                     <button
                       onClick={() => setSecPage(p => Math.max(1, p - 1))}
                       disabled={secPage === 1}
                       className="px-3 py-1.5 text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
-                    >上一頁</button>
+                    >{t('common.prev')}</button>
                     <button
                       onClick={() => setSecPage(p => Math.min(secTotalPages, p + 1))}
                       disabled={secPage === secTotalPages}
                       className="px-3 py-1.5 text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
-                    >下一頁</button>
+                    >{t('common.next')}</button>
                   </div>
                 </div>
               )}
@@ -403,43 +407,43 @@ export default function AdminSecurity() {
         <div className="bg-surface-container rounded-lg overflow-hidden">
           <div className="px-6 py-4 bg-surface-container-high flex items-center gap-3">
             <span className="material-symbols-outlined text-on-surface-variant">security</span>
-            <span className="text-sm font-bold uppercase tracking-widest">安全架構</span>
+            <span className="text-sm font-bold uppercase tracking-widest">{t('admin.security.architecture.title')}</span>
           </div>
           <div className="p-6 grid grid-cols-4 gap-4">
             <div className="bg-surface-container-high p-5 border-l-2 border-primary">
               <div className="flex items-center gap-2 mb-2">
                 <span className="material-symbols-outlined text-primary text-lg">folder_special</span>
-                <h4 className="text-on-surface font-bold text-sm">目錄隔離</h4>
+                <h4 className="text-on-surface font-bold text-sm">{t('admin.security.architecture.dirIsolationTitle')}</h4>
               </div>
               <p className="text-sm text-on-surface-variant leading-relaxed">
-                每位用戶的檔案限制在 <span className="text-on-surface font-mono">workspace/&#123;userId&#125;/</span> 目錄中，路徑驗證防止目錄遍歷攻擊。
+                {t('admin.security.architecture.dirIsolationDesc')}
               </p>
             </div>
             <div className="bg-surface-container-high p-5 border-l-2 border-tertiary">
               <div className="flex items-center gap-2 mb-2">
                 <span className="material-symbols-outlined text-tertiary text-lg">build_circle</span>
-                <h4 className="text-on-surface font-bold text-sm">工具白名單</h4>
+                <h4 className="text-on-surface font-bold text-sm">{t('admin.security.architecture.toolWhitelistTitle')}</h4>
               </div>
               <p className="text-sm text-on-surface-variant leading-relaxed">
-                Claude CLI 透過 <span className="text-on-surface font-mono">--allowedTools</span> 限制可用工具，依 Skill 角色動態配置權限。
+                {t('admin.security.architecture.toolWhitelistDesc')}
               </p>
             </div>
             <div className="bg-surface-container-high p-5 border-l-2 border-success">
               <div className="flex items-center gap-2 mb-2">
                 <span className="material-symbols-outlined text-success text-lg">verified_user</span>
-                <h4 className="text-on-surface font-bold text-sm">身分驗證</h4>
+                <h4 className="text-on-surface font-bold text-sm">{t('admin.security.architecture.authTitle')}</h4>
               </div>
               <p className="text-sm text-on-surface-variant leading-relaxed">
-                JWT Token 驗證 + bcrypt 密碼雜湊，Admin 角色需通過額外的 <span className="text-on-surface font-mono">role</span> 檢查。
+                {t('admin.security.architecture.authDesc')}
               </p>
             </div>
             <div className="bg-surface-container-high p-5 border-l-2 border-error">
               <div className="flex items-center gap-2 mb-2">
                 <span className="material-symbols-outlined text-error text-lg">shield</span>
-                <h4 className="text-on-surface font-bold text-sm">Input Guard</h4>
+                <h4 className="text-on-surface font-bold text-sm">{t('admin.security.architecture.inputGuardTitle')}</h4>
               </div>
               <p className="text-sm text-on-surface-variant leading-relaxed">
-                多層 Prompt Injection 偵測：XML tag、自然語言注入、Unicode 混淆、Base64 編碼、路徑遍歷。風險評分超過閾值自動攔截。
+                {t('admin.security.architecture.inputGuardDesc')}
               </p>
             </div>
           </div>

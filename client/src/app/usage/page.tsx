@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
+import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
 
@@ -21,6 +22,7 @@ interface UsageTotal {
 
 function UsageContent() {
   const { user, token, isLoading } = useAuth();
+  const { t } = useTranslation();
   const router = useRouter();
   const [daily, setDaily] = useState<DailyUsage[]>([]);
   const [total, setTotal] = useState<UsageTotal | null>(null);
@@ -82,12 +84,12 @@ function UsageContent() {
           <header className="mb-10 flex justify-between items-end">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-tertiary text-sm font-bold tracking-[0.3em] uppercase">系統監控</span>
+                <span className="text-tertiary text-sm font-bold tracking-[0.3em] uppercase">{t('usage.header.subtitle')}</span>
                 <div className="h-px w-12 bg-tertiary/30" />
               </div>
-              <h2 className="text-4xl font-headline font-bold text-on-surface tracking-tight mb-2">用量統計</h2>
+              <h2 className="text-4xl font-headline font-bold text-on-surface tracking-tight mb-2">{t('usage.header.title')}</h2>
               <p className="text-on-surface-variant leading-relaxed max-w-xl">
-                即時追蹤 AI 代理的 Token 消耗量與生成活動記錄。
+                {t('usage.header.description')}
               </p>
             </div>
             <button
@@ -105,7 +107,7 @@ function UsageContent() {
               className="flex items-center gap-2 px-5 py-2.5 bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors text-sm font-bold uppercase tracking-widest shrink-0"
             >
               <span className="material-symbols-outlined text-sm">download</span>
-              匯出 CSV
+              {t('usage.header.exportCsv')}
             </button>
           </header>
 
@@ -116,24 +118,24 @@ function UsageContent() {
             <div className="col-span-12 lg:col-span-4 bg-surface-container p-8 relative overflow-hidden flex flex-col justify-between">
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-10 -mt-10 blur-3xl" />
               <div>
-                <span className="text-sm uppercase tracking-[0.2em] text-primary font-bold mb-3 block">總覽</span>
-                <h3 className="text-on-surface-variant text-sm mb-1">累計 Token 用量</h3>
+                <span className="text-sm uppercase tracking-[0.2em] text-primary font-bold mb-3 block">{t('usage.overview.title')}</span>
+                <h3 className="text-on-surface-variant text-sm mb-1">{t('usage.overview.totalTokenUsage')}</h3>
                 <div className="text-5xl font-bold text-on-surface font-headline">{totalTokens.toLocaleString()}</div>
                 <p className="text-sm text-on-surface-variant mt-2">
-                  預估費用 <span className="text-primary font-bold font-headline text-lg">${estimatedCost.toFixed(4)}</span> <span className="text-sm uppercase tracking-wider">USD</span>
+                  {t('usage.overview.estimatedCost')} <span className="text-primary font-bold font-headline text-lg">${estimatedCost.toFixed(4)}</span> <span className="text-sm uppercase tracking-wider">USD</span>
                 </p>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <p className="text-sm text-on-surface-variant uppercase tracking-wider mb-1">生成次數</p>
+                  <p className="text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.generations')}</p>
                   <p className="text-2xl font-headline font-bold text-primary">{total?.totalInvocations ?? 0}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-on-surface-variant uppercase tracking-wider mb-1">輸入</p>
+                  <p className="text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.input')}</p>
                   <p className="text-2xl font-headline font-bold text-tertiary">{total?.totalInput.toLocaleString() ?? 0}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-on-surface-variant uppercase tracking-wider mb-1">輸出</p>
+                  <p className="text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.output')}</p>
                   <p className="text-2xl font-headline font-bold text-secondary">{total?.totalOutput.toLocaleString() ?? 0}</p>
                 </div>
               </div>
@@ -143,8 +145,8 @@ function UsageContent() {
             <div className="col-span-12 lg:col-span-8 bg-surface-container p-8">
               <div className="flex justify-between items-center mb-8">
                 <div>
-                  <span className="text-sm uppercase tracking-[0.2em] text-tertiary font-bold block mb-1">趨勢</span>
-                  <h3 className="text-xl font-bold font-headline text-on-surface">Token 消耗速率</h3>
+                  <span className="text-sm uppercase tracking-[0.2em] text-tertiary font-bold block mb-1">{t('usage.chart.title')}</span>
+                  <h3 className="text-xl font-bold font-headline text-on-surface">{t('usage.chart.subtitle')}</h3>
                 </div>
                 <div className="flex items-center gap-4 text-sm">
                   <span className="flex items-center gap-1.5">
@@ -160,7 +162,7 @@ function UsageContent() {
 
               {chartData.length === 0 ? (
                 <div className="h-40 flex items-center justify-center">
-                  <p className="text-sm text-on-surface-variant/60 uppercase tracking-widest">尚無用量數據</p>
+                  <p className="text-sm text-on-surface-variant/60 uppercase tracking-widest">{t('usage.chart.noData')}</p>
                 </div>
               ) : (
                 <div className="flex items-end gap-1.5 px-1">
@@ -204,12 +206,12 @@ function UsageContent() {
               <section className="bg-surface-container p-6">
                 <h4 className="text-sm font-bold font-headline uppercase tracking-widest mb-6 text-on-surface flex items-center gap-2">
                   <span className="material-symbols-outlined text-primary text-lg">donut_large</span>
-                  Token 分佈
+                  {t('usage.distribution.title')}
                 </h4>
                 <div className="space-y-5">
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="text-on-surface-variant">輸入 Token (Input)</span>
+                      <span className="text-on-surface-variant">{t('usage.distribution.inputToken')}</span>
                       <span className="text-on-surface font-mono">{inputRatio}%</span>
                     </div>
                     <div className="h-1.5 bg-surface-variant w-full overflow-hidden">
@@ -218,7 +220,7 @@ function UsageContent() {
                   </div>
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="text-on-surface-variant">輸出 Token (Output)</span>
+                      <span className="text-on-surface-variant">{t('usage.distribution.outputToken')}</span>
                       <span className="text-on-surface font-mono">{outputRatio}%</span>
                     </div>
                     <div className="h-1.5 bg-surface-variant w-full overflow-hidden">
@@ -232,7 +234,7 @@ function UsageContent() {
               <section className="bg-surface-container p-6">
                 <h4 className="text-sm font-bold font-headline uppercase tracking-widest mb-6 text-on-surface flex items-center gap-2">
                   <span className="material-symbols-outlined text-primary text-lg">insights</span>
-                  活動摘要
+                  {t('usage.activity.title')}
                 </h4>
                 <div className="space-y-4">
                   {daily.slice(0, 3).map(day => (
@@ -240,14 +242,14 @@ function UsageContent() {
                       <div>
                         <p className="text-sm font-bold text-on-surface">{day.date}</p>
                         <p className="text-sm text-on-surface-variant">
-                          {day.invocation_count} 次生成 · {(day.total_input + day.total_output).toLocaleString()} tokens
+                          {t('usage.activity.generationCount', { count: day.invocation_count })} · {(day.total_input + day.total_output).toLocaleString()} tokens
                         </p>
                       </div>
                       <span className="text-sm font-mono text-primary">{day.total_output.toLocaleString()}</span>
                     </div>
                   ))}
                   {daily.length === 0 && (
-                    <p className="text-sm text-on-surface-variant/60 text-center py-4 uppercase tracking-widest">尚無記錄</p>
+                    <p className="text-sm text-on-surface-variant/60 text-center py-4 uppercase tracking-widest">{t('usage.activity.noRecords')}</p>
                   )}
                 </div>
               </section>
@@ -256,27 +258,27 @@ function UsageContent() {
             {/* Right Column: Session Ledger Table */}
             <div className="col-span-12 lg:col-span-8 bg-surface-container overflow-hidden">
               <div className="p-6 border-b border-white/5 flex justify-between items-center">
-                <h4 className="text-sm font-bold font-headline uppercase tracking-widest text-on-surface">用量明細</h4>
+                <h4 className="text-sm font-bold font-headline uppercase tracking-widest text-on-surface">{t('usage.ledger.title')}</h4>
                 <span className="text-sm text-on-surface-variant/60 uppercase tracking-widest">
-                  共 {daily.length} 筆記錄
+                  {t('usage.ledger.totalRecords', { count: daily.length })}
                 </span>
               </div>
 
               {daily.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16">
                   <span className="material-symbols-outlined text-3xl text-on-surface-variant/30 mb-3">analytics</span>
-                  <p className="text-sm text-on-surface-variant/60 uppercase tracking-widest">尚無用量數據</p>
+                  <p className="text-sm text-on-surface-variant/60 uppercase tracking-widest">{t('usage.ledger.noData')}</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-surface-container-high/50 text-sm uppercase tracking-widest text-on-surface-variant">
-                        <th className="px-6 py-4 font-bold">日期</th>
-                        <th className="px-6 py-4 font-bold">生成次數</th>
-                        <th className="px-6 py-4 font-bold">輸入 Token</th>
-                        <th className="px-6 py-4 font-bold">輸出 Token</th>
-                        <th className="px-6 py-4 font-bold text-right">合計</th>
+                        <th className="px-6 py-4 font-bold">{t('usage.ledger.date')}</th>
+                        <th className="px-6 py-4 font-bold">{t('usage.ledger.generations')}</th>
+                        <th className="px-6 py-4 font-bold">{t('usage.ledger.inputTokens')}</th>
+                        <th className="px-6 py-4 font-bold">{t('usage.ledger.outputTokens')}</th>
+                        <th className="px-6 py-4 font-bold text-right">{t('usage.ledger.total')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
@@ -309,7 +311,7 @@ function UsageContent() {
                     onClick={() => setShowAllRows(v => !v)}
                     className="text-sm font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors cursor-pointer flex items-center gap-1"
                   >
-                    {showAllRows ? '收合' : `顯示全部 ${daily.length} 筆記錄`}
+                    {showAllRows ? t('usage.ledger.collapse') : t('usage.ledger.showAll', { count: daily.length })}
                     <span className={`material-symbols-outlined text-sm transition-transform ${showAllRows ? 'rotate-180' : ''}`}>expand_more</span>
                   </button>
                 </div>
@@ -322,9 +324,9 @@ function UsageContent() {
             <div className="flex items-start gap-4">
               <span className="material-symbols-outlined text-tertiary">info</span>
               <div>
-                <h5 className="text-on-surface text-sm font-bold font-headline mb-1">用量計算說明</h5>
+                <h5 className="text-on-surface text-sm font-bold font-headline mb-1">{t('usage.info.title')}</h5>
                 <p className="text-sm text-on-surface-variant leading-relaxed">
-                  Token 用量統計包含所有 AI 代理的輸入提示詞與輸出生成內容。每次文件生成或對話互動均會產生 Token 消耗。輸入 Token 來自系統指令與用戶訊息，輸出 Token 來自 AI 回應與生成的檔案內容。
+                  {t('usage.info.description')}
                 </p>
               </div>
             </div>
@@ -337,7 +339,16 @@ function UsageContent() {
 export default function UsagePage() {
   return (
     <AuthProvider>
-      <UsageContent />
+      <UsageWithI18n />
     </AuthProvider>
+  );
+}
+
+function UsageWithI18n() {
+  const { user } = useAuth();
+  return (
+    <I18nProvider initialLocale={user?.locale} initialTheme={user?.theme}>
+      <UsageContent />
+    </I18nProvider>
   );
 }
