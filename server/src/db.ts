@@ -121,7 +121,9 @@ export function initializeDatabase(): void {
   try { db.prepare("SELECT locale FROM users LIMIT 1").get(); }
   catch { db.exec("ALTER TABLE users ADD COLUMN locale TEXT NOT NULL DEFAULT 'zh-TW'"); }
   try { db.prepare("SELECT theme FROM users LIMIT 1").get(); }
-  catch { db.exec("ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'dark'"); }
+  catch { db.exec("ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'light'"); }
+  // Migrate existing users from dark (old default) to light (new default)
+  db.exec("UPDATE users SET theme = 'light' WHERE theme = 'dark'");
 
   // Migration: add conversation_id to user_uploads if missing
   try {

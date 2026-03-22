@@ -53,7 +53,7 @@ const fallbackT = (key: TranslationKey, params?: Record<string, string | number>
 
 const fallbackCtx: I18nContextType = {
   locale: 'zh-TW',
-  theme: 'dark',
+  theme: 'light',
   t: fallbackT,
   setLocale: async () => {},
   setTheme: async () => {},
@@ -90,7 +90,7 @@ export function I18nProvider({ children, initialLocale, initialTheme }: I18nProv
     initialLocale || readLocalStorage('locale', 'zh-TW' as Locale),
   );
   const [theme, setThemeState] = useState<Theme>(
-    initialTheme || readLocalStorage('theme', 'dark' as Theme),
+    initialTheme || readLocalStorage('theme', 'light' as Theme),
   );
   const [dict, setDict] = useState<TranslationDictionary>(zhTW);
 

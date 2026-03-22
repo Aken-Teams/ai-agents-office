@@ -67,9 +67,9 @@
 }
 
 /* ============================================================
-   DARK THEME (default)
+   DARK THEME
    ============================================================ */
-html, html.dark {
+html.dark {
   --th-primary: #00dbe9;
   --th-primary-hover: #00b8c4;
   --th-primary-light: #7df4ff;
@@ -159,9 +159,9 @@ html, html.dark {
 }
 
 /* ============================================================
-   LIGHT THEME
+   LIGHT THEME (default)
    ============================================================ */
-html.light {
+html, html.light {
   --th-primary: #006970;
   --th-primary-hover: #005a60;
   --th-primary-light: #a8f0f5;

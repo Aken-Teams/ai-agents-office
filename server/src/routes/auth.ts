@@ -276,7 +276,7 @@ router.get('/me', authMiddleware, (req: Request, res: Response) => {
     role: user.role || 'user',
     status: user.status || 'active',
     locale: user.locale || 'zh-TW',
-    theme: user.theme || 'dark',
+    theme: user.theme || 'light',
     createdAt: user.created_at,
   });
 });
@@ -309,6 +309,49 @@ router.patch('/preferences', authMiddleware, (req: Request, res: Response) => {
 
   const updated = db.prepare('SELECT locale, theme FROM users WHERE id = ?').get(userId) as { locale: string; theme: string };
   res.json({ locale: updated.locale, theme: updated.theme });
+});
+
+/* ============================================================
+   PATCH /api/auth/password
+   ============================================================ */
+router.patch('/password', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ error: 'currentPassword and newPassword are required' });
+      return;
+    }
+    if (newPassword.length < 8) {
+      res.status(400).json({ error: 'New password must be at least 8 characters' });
+      return;
+    }
+    if (newPassword.length > 128) {
+      res.status(400).json({ error: 'New password is too long' });
+      return;
+    }
+
+    const user = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(userId) as { password_hash: string } | undefined;
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const valid = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!valid) {
+      res.status(401).json({ error: 'Current password is incorrect' });
+      return;
+    }
+
+    const newHash = await bcrypt.hash(newPassword, config.bcryptRounds);
+    db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?").run(newHash, userId);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Password change error:', error);
+    res.status(500).json({ error: 'Failed to change password' });
+  }
 });
 
 export default router;

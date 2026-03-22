@@ -274,7 +274,32 @@ const zhTW = {
   'usage.info.title': '用量計算說明',
   'usage.info.description': 'Token 用量統計包含所有 AI 代理的輸入提示詞與輸出生成內容。每次文件生成或對話互動均會產生 Token 消耗。輸入 Token 來自系統指令與用戶訊息，輸出 Token 來自 AI 回應與生成的檔案內容。',
 
-  // Settings (personal)
+  // User Menu (popup from clicking user in navbar)
+  'userMenu.title': '個人資訊',
+  'userMenu.email': '電子信箱',
+  'userMenu.displayName': '顯示名稱',
+  'userMenu.role': '角色',
+  'userMenu.role.user': '一般用戶',
+  'userMenu.role.admin': '管理員',
+  'userMenu.changePassword': '修改密碼',
+  'userMenu.changePassword.current': '目前密碼',
+  'userMenu.changePassword.new': '新密碼',
+  'userMenu.changePassword.confirm': '確認新密碼',
+  'userMenu.changePassword.submit': '確認修改',
+  'userMenu.changePassword.success': '密碼修改成功',
+  'userMenu.changePassword.mismatch': '新密碼與確認密碼不一致',
+  'userMenu.changePassword.tooShort': '新密碼至少需要 8 個字元',
+  'userMenu.changePassword.wrongCurrent': '目前密碼不正確',
+  'userMenu.changePassword.failed': '修改密碼失敗，請稍後再試',
+  'userMenu.language': '介面語言',
+  'userMenu.language.description': '同時影響 AI 回覆語言',
+  'userMenu.theme': '外觀主題',
+  'userMenu.theme.dark': '深色',
+  'userMenu.theme.light': '淺色',
+  'userMenu.saved': '已儲存',
+  'userMenu.logout': '登出',
+
+  // Settings (personal) — kept for backward compat
   'settings.title': '個人設定',
   'settings.subtitle': '語言與外觀偏好',
   'settings.language.title': '介面語言',
