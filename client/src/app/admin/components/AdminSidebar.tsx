@@ -38,7 +38,7 @@ export default function AdminSidebar() {
           {!collapsed && (
             <div>
               <h1 className="text-lg font-bold tracking-tighter text-on-surface">AI Agents Office</h1>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-primary">Admin</p>
+              <p className="text-sm uppercase tracking-[0.2em] text-primary">Admin</p>
             </div>
           )}
         </Link>
@@ -47,7 +47,7 @@ export default function AdminSidebar() {
       {/* Role Label */}
       {!collapsed && (
         <div className="px-6 py-4">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-on-surface-variant font-bold">系統管理員</p>
+          <p className="text-sm uppercase tracking-[0.3em] text-on-surface-variant font-bold">系統管理員</p>
           <p className="text-[9px] text-outline mt-0.5">最高權限</p>
         </div>
       )}
@@ -69,7 +69,7 @@ export default function AdminSidebar() {
               <span className="material-symbols-outlined text-[20px]">{link.icon}</span>
               {!collapsed && <span>{link.label}</span>}
               {collapsed && (
-                <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
+                <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
                   {link.label}
                 </span>
               )}
@@ -88,9 +88,9 @@ export default function AdminSidebar() {
           <span className={`material-symbols-outlined text-sm transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`}>
             chevron_left
           </span>
-          {!collapsed && <span className="text-xs">收合</span>}
+          {!collapsed && <span className="text-sm">收合</span>}
           {collapsed && (
-            <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
+            <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
               展開側邊欄
             </span>
           )}
@@ -98,9 +98,9 @@ export default function AdminSidebar() {
 
         <div className={`relative group flex items-center gap-3 py-2 text-on-surface-variant ${collapsed ? 'justify-center px-0' : 'px-3'}`}>
           <span className="material-symbols-outlined text-sm">person</span>
-          {!collapsed && <span className="text-xs truncate">{user?.email || 'Admin'}</span>}
+          {!collapsed && <span className="text-sm truncate">{user?.email || 'Admin'}</span>}
           {collapsed && (
-            <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
+            <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
               {user?.email || 'Admin'}
             </span>
           )}
@@ -111,9 +111,9 @@ export default function AdminSidebar() {
           className={`relative group flex items-center gap-3 py-2 text-on-surface-variant hover:text-on-surface transition-all w-full text-left bg-transparent cursor-pointer ${collapsed ? 'justify-center px-0' : 'px-3'}`}
         >
           <span className="material-symbols-outlined text-sm">logout</span>
-          {!collapsed && <span className="text-xs">登出</span>}
+          {!collapsed && <span className="text-sm">登出</span>}
           {collapsed && (
-            <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
+            <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
               登出
             </span>
           )}
@@ -121,7 +121,7 @@ export default function AdminSidebar() {
 
         {/* Footer */}
         <div className="mt-3 pt-3 border-t border-outline-variant/10 px-3">
-          <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className={`text-outline hover:text-on-surface-variant transition-colors no-underline block text-center ${collapsed ? 'text-[10px]' : 'text-[11px]'}`}>
+          <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className={`text-outline hover:text-on-surface-variant transition-colors no-underline block text-center ${collapsed ? 'text-sm' : 'text-[11px]'}`}>
             {collapsed ? '©' : <>Powered by 智合科技 &copy; 2026</>}
           </a>
         </div>

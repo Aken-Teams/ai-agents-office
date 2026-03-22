@@ -1,7 +1,5 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import fs from 'fs';
-import path from 'path';
 import db from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import type { Conversation, Message } from '../types.js';
@@ -94,17 +92,11 @@ router.delete('/:id', (req: Request, res: Response) => {
     return;
   }
 
-  // Delete related DB records
+  // Delete related DB records only (workspace files preserved)
   db.prepare('DELETE FROM messages WHERE conversation_id = ?').run(conversation.id);
   db.prepare('DELETE FROM task_executions WHERE conversation_id = ?').run(conversation.id);
   db.prepare('DELETE FROM agent_sessions WHERE conversation_id = ?').run(conversation.id);
   db.prepare('DELETE FROM conversations WHERE id = ?').run(conversation.id);
-
-  // Delete workspace folder
-  const workspaceDir = path.resolve('workspace', userId, conversation.id);
-  if (fs.existsSync(workspaceDir)) {
-    fs.rmSync(workspaceDir, { recursive: true, force: true });
-  }
 
   res.json({ success: true });
 });

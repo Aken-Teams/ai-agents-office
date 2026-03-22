@@ -76,7 +76,7 @@ function SkillsContent() {
         {/* Page Header */}
         <header className="mb-10">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-tertiary text-xs font-bold tracking-[0.3em] uppercase">AI 能力</span>
+            <span className="text-tertiary text-sm font-bold tracking-[0.3em] uppercase">AI 能力</span>
             <div className="h-px w-12 bg-tertiary/30" />
           </div>
           <h2 className="text-4xl font-headline font-bold text-on-surface tracking-tight mb-2">Skills 中心</h2>
@@ -102,7 +102,7 @@ function SkillsContent() {
                 <button
                   key={f}
                   onClick={() => setFilter(f)}
-                  className={`px-5 py-2.5 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                  className={`px-5 py-2.5 text-sm font-bold uppercase tracking-wider transition-colors cursor-pointer ${
                     filter === f
                       ? 'bg-primary/15 text-primary border border-primary/30'
                       : 'bg-surface-container-highest text-on-surface-variant hover:text-on-surface border border-transparent'
@@ -130,7 +130,7 @@ function SkillsContent() {
                     <div className={`w-12 h-12 rounded flex items-center justify-center ${meta.bgColor}`}>
                       <span className={`material-symbols-outlined text-3xl ${meta.iconColor}`}>{meta.icon}</span>
                     </div>
-                    <span className={`px-2 py-0.5 bg-surface-container-highest text-[10px] font-bold tracking-widest uppercase ${meta.tagColor}`}>
+                    <span className={`px-2 py-0.5 bg-surface-container-highest text-sm font-bold tracking-widest uppercase ${meta.tagColor}`}>
                       {meta.tag}
                     </span>
                   </div>
@@ -179,15 +179,15 @@ function SkillsContent() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-surface-container p-4 border-l-2 border-primary">
                 <h4 className="text-on-surface font-bold text-sm mb-1">智慧路由</h4>
-                <p className="text-xs text-on-surface-variant">Router Agent 自動分析需求，選擇最佳代理處理</p>
+                <p className="text-sm text-on-surface-variant">Router Agent 自動分析需求，選擇最佳代理處理</p>
               </div>
               <div className="bg-surface-container p-4 border-l-2 border-tertiary">
                 <h4 className="text-on-surface font-bold text-sm mb-1">沙盒安全</h4>
-                <p className="text-xs text-on-surface-variant">每個 Agent 在隔離環境中運行，確保系統安全</p>
+                <p className="text-sm text-on-surface-variant">每個 Agent 在隔離環境中運行，確保系統安全</p>
               </div>
               <div className="bg-surface-container p-4 border-l-2 border-secondary">
                 <h4 className="text-on-surface font-bold text-sm mb-1">管線處理</h4>
-                <p className="text-xs text-on-surface-variant">支援多步驟串連與並行任務，自動彙整結果</p>
+                <p className="text-sm text-on-surface-variant">支援多步驟串連與並行任務，自動彙整結果</p>
               </div>
             </div>
           </div>

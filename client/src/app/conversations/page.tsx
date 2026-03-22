@@ -74,13 +74,13 @@ function DeleteConfirmModal({
         <div className="flex gap-3 p-6 pt-2">
           <button
             onClick={onCancel}
-            className="flex-1 py-2.5 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-xs uppercase tracking-widest rounded cursor-pointer hover:bg-surface-variant transition-colors"
+            className="flex-1 py-2.5 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-sm uppercase tracking-widest rounded cursor-pointer hover:bg-surface-variant transition-colors"
           >
             取消
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 py-2.5 px-4 bg-error text-on-error font-bold text-xs uppercase tracking-widest rounded cursor-pointer hover:bg-error/80 transition-colors"
+            className="flex-1 py-2.5 px-4 bg-error text-on-error font-bold text-sm uppercase tracking-widest rounded cursor-pointer hover:bg-error/80 transition-colors"
           >
             刪除
           </button>
@@ -139,14 +139,14 @@ function RenameModal({
         <div className="flex gap-3 p-6 pt-2">
           <button
             onClick={onCancel}
-            className="flex-1 py-2.5 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-xs uppercase tracking-widest rounded cursor-pointer hover:bg-surface-variant transition-colors"
+            className="flex-1 py-2.5 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-sm uppercase tracking-widest rounded cursor-pointer hover:bg-surface-variant transition-colors"
           >
             取消
           </button>
           <button
             onClick={() => value.trim() && onConfirm(value.trim())}
             disabled={!value.trim() || value.trim() === currentTitle}
-            className="flex-1 py-2.5 px-4 cyber-gradient text-on-primary font-bold text-xs uppercase tracking-widest rounded cursor-pointer hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 py-2.5 px-4 cyber-gradient text-on-primary font-bold text-sm uppercase tracking-widest rounded cursor-pointer hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
             儲存
           </button>
@@ -256,7 +256,7 @@ function ConversationsContent() {
         <div className="mb-10">
           <div className="max-w-2xl">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-tertiary text-xs font-bold tracking-[0.3em] uppercase">對話歷程</span>
+              <span className="text-tertiary text-sm font-bold tracking-[0.3em] uppercase">對話歷程</span>
               <div className="h-px w-12 bg-tertiary/30" />
             </div>
             <h2 className="text-4xl font-headline font-bold text-on-surface tracking-tight mb-2">對話記錄</h2>
@@ -278,14 +278,14 @@ function ConversationsContent() {
                 <button
                   key={tab.value}
                   onClick={() => setFilter(tab.value)}
-                  className={`px-4 py-2 rounded text-xs font-bold tracking-widest uppercase transition-colors cursor-pointer ${
+                  className={`px-4 py-2 rounded text-sm font-bold tracking-widest uppercase transition-colors cursor-pointer ${
                     filter === tab.value
                       ? 'bg-surface-container text-on-surface border-b-2 border-primary'
                       : 'bg-transparent text-on-surface-variant hover:bg-surface-container'
                   }`}
                 >
                   {tab.label}
-                  <span className="ml-1 text-[10px] opacity-60">{count}</span>
+                  <span className="ml-1 text-sm opacity-60">{count}</span>
                 </button>
               );
             })}
@@ -318,17 +318,17 @@ function ConversationsContent() {
                 {search ? 'search_off' : 'chat_bubble_outline'}
               </span>
             </div>
-            <p className="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-xs">
+            <p className="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-sm">
               {search ? '找不到符合的對話' : '尚無對話'}
             </p>
-            <p className="text-xs text-on-surface-variant/40 mt-1">
+            <p className="text-sm text-on-surface-variant/40 mt-1">
               {search ? '請嘗試其他關鍵字' : '從儀表板開始建立新對話'}
             </p>
           </div>
         ) : (
           <div className="bg-surface-container rounded-lg overflow-hidden">
             {/* Table Header */}
-            <div className="grid grid-cols-[auto_1fr_100px_120px_140px_80px] gap-4 px-6 py-3 bg-surface-container-high text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+            <div className="grid grid-cols-[auto_1fr_100px_120px_140px_80px] gap-4 px-6 py-3 bg-surface-container-high text-sm font-bold uppercase tracking-widest text-on-surface-variant">
               <span className="w-9" />
               <span>標題</span>
               <span>類型</span>
@@ -358,18 +358,18 @@ function ConversationsContent() {
                     {/* Title */}
                     <p className="text-sm text-on-surface truncate font-medium">{conv.title}</p>
                     {/* Type */}
-                    <span className="text-xs font-bold tracking-widest uppercase" style={{ color: config.color }}>
+                    <span className="text-sm font-bold tracking-widest uppercase" style={{ color: config.color }}>
                       {config.label}
                     </span>
                     {/* Status */}
                     <div className="flex items-center gap-1.5">
                       <span className={`w-1.5 h-1.5 rounded-full ${conv.status === 'active' ? 'bg-success' : 'bg-outline-variant'}`} />
-                      <span className="text-xs text-on-surface-variant">
+                      <span className="text-sm text-on-surface-variant">
                         {conv.status === 'active' ? '進行中' : '已完成'}
                       </span>
                     </div>
                     {/* Date */}
-                    <span className="text-xs text-on-surface-variant">
+                    <span className="text-sm text-on-surface-variant">
                       {new Date(conv.created_at).toLocaleString('zh-TW', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </span>
                     {/* Actions */}
@@ -399,7 +399,7 @@ function ConversationsContent() {
         {/* Pagination */}
         {filtered.length > 0 && (
           <div className="mt-8 flex items-center justify-between">
-            <p className="text-on-surface-variant/60 text-xs uppercase tracking-widest">
+            <p className="text-on-surface-variant/60 text-sm uppercase tracking-widest">
               共 {filtered.length} 個對話{search && ' (搜尋結果)'}
             </p>
             {totalPages > 1 && (
@@ -415,7 +415,7 @@ function ConversationsContent() {
                   <button
                     key={p}
                     onClick={() => setPage(p)}
-                    className={`w-8 h-8 flex items-center justify-center rounded text-xs font-bold cursor-pointer transition-colors ${
+                    className={`w-8 h-8 flex items-center justify-center rounded text-sm font-bold cursor-pointer transition-colors ${
                       p === page
                         ? 'bg-primary text-on-primary'
                         : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant'

@@ -109,10 +109,10 @@ export default function AdminTokens() {
       <header className="sticky top-0 h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
         <div className="flex items-center gap-4">
           <span className="text-lg font-black text-on-surface font-headline">Token 帳本與計費</span>
-          <span className="text-[10px] px-2 py-0.5 bg-success/10 text-success rounded font-bold tracking-wider uppercase">即時同步</span>
+          <span className="text-sm px-2 py-0.5 bg-success/10 text-success rounded font-bold tracking-wider uppercase">即時同步</span>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant text-xs font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
+          <button className="flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
             <span className="material-symbols-outlined text-sm">download</span>
             匯出 CSV
           </button>
@@ -124,37 +124,37 @@ export default function AdminTokens() {
         <div className="grid grid-cols-4 gap-6">
           <div className="bg-surface-container p-6 rounded-lg col-span-1 group relative overflow-hidden">
             <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>token</span>
-            <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">總 Token 用量</p>
+            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">總 Token 用量</p>
             <span className="text-3xl font-headline font-black text-on-surface">
               {summary ? formatTokens(summary.totalInput + summary.totalOutput) : '—'}
             </span>
-            <p className="text-xs text-on-surface-variant mt-2 font-mono">
+            <p className="text-sm text-on-surface-variant mt-2 font-mono">
               輸入: {summary ? formatTokens(summary.totalInput) : '0'} | 輸出: {summary ? formatTokens(summary.totalOutput) : '0'}
             </p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg col-span-1 group relative overflow-hidden">
             <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>attach_money</span>
-            <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">預估費用 (USD)</p>
+            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">預估費用 (USD)</p>
             <span className="text-3xl font-headline font-black text-primary">
               ${summary?.estimatedCost.toFixed(4) ?? '0'}
             </span>
-            <p className="text-xs text-on-surface-variant mt-2 font-mono">Claude Sonnet 4 定價</p>
+            <p className="text-sm text-on-surface-variant mt-2 font-mono">Claude Sonnet 4 定價</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg col-span-1 group relative overflow-hidden">
             <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>api</span>
-            <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">總調用次數</p>
+            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">總調用次數</p>
             <span className="text-3xl font-headline font-black text-on-surface">
               {summary?.totalInvocations ?? 0}
             </span>
-            <p className="text-xs text-on-surface-variant mt-2 font-mono">API 調用</p>
+            <p className="text-sm text-on-surface-variant mt-2 font-mono">API 調用</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg col-span-1 group relative overflow-hidden">
             <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>check_circle</span>
-            <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">計費狀態</p>
+            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">計費狀態</p>
             <div className="flex items-center gap-2">
               <span className="text-3xl font-headline font-black text-success">啟用中</span>
             </div>
-            <p className="text-xs text-on-surface-variant mt-2 font-mono">隨用隨付</p>
+            <p className="text-sm text-on-surface-variant mt-2 font-mono">隨用隨付</p>
           </div>
         </div>
 
@@ -165,14 +165,14 @@ export default function AdminTokens() {
             <div className="px-6 py-4 bg-surface-container-high flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="material-symbols-outlined text-tertiary">show_chart</span>
-                <span className="text-xs font-bold uppercase tracking-widest">Token 消耗速度</span>
+                <span className="text-sm font-bold uppercase tracking-widest">Token 消耗速度</span>
               </div>
               <div className="flex gap-1">
                 {(['7d', '30d'] as const).map(p => (
                   <button
                     key={p}
                     onClick={() => setPeriod(p)}
-                    className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-colors ${
+                    className={`px-3 py-1 text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
                       period === p ? 'text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:text-on-surface'
                     }`}
                   >
@@ -194,13 +194,13 @@ export default function AdminTokens() {
                     const barHeight = Math.max(pct, 4);
                     return (
                       <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full group/bar">
-                        <span className="text-xs text-on-surface-variant opacity-0 group-hover/bar:opacity-100 transition-opacity font-mono font-bold">
+                        <span className="text-sm text-on-surface-variant opacity-0 group-hover/bar:opacity-100 transition-opacity font-mono font-bold">
                           {formatTokens(total)}
                         </span>
                         <div className="flex-1 w-full flex items-end">
                           <div className="w-full bg-primary/60 rounded-t transition-all" style={{ height: `${barHeight}%` }} />
                         </div>
-                        <span className="text-[10px] text-outline truncate w-full text-center">
+                        <span className="text-sm text-outline truncate w-full text-center">
                           {v.date.split(' ')[0]?.slice(5) || v.date.slice(5)}
                         </span>
                       </div>
@@ -215,7 +215,7 @@ export default function AdminTokens() {
           <div className="col-span-4 bg-surface-container rounded-lg overflow-hidden">
             <div className="px-6 py-4 bg-surface-container-high flex items-center gap-3">
               <span className="material-symbols-outlined text-on-surface-variant">pie_chart</span>
-              <span className="text-xs font-bold uppercase tracking-widest">用戶用量分佈</span>
+              <span className="text-sm font-bold uppercase tracking-widest">用戶用量分佈</span>
             </div>
             <div className="p-6 space-y-3">
               {byUser.length === 0 ? (
@@ -226,7 +226,7 @@ export default function AdminTokens() {
                   const pct = ((total / totalByUserTokens) * 100).toFixed(1);
                   return (
                     <div key={u.id}>
-                      <div className="flex justify-between text-xs mb-1">
+                      <div className="flex justify-between text-sm mb-1">
                         <span className="text-on-surface truncate max-w-[60%]">{u.display_name || u.email}</span>
                         <span className="text-on-surface-variant font-mono">{pct}%</span>
                       </div>
@@ -246,13 +246,13 @@ export default function AdminTokens() {
           <div className="px-6 py-4 bg-surface-container-high flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="material-symbols-outlined text-on-surface-variant">receipt_long</span>
-              <span className="text-xs font-bold uppercase tracking-widest">Session 明細帳本</span>
+              <span className="text-sm font-bold uppercase tracking-widest">Session 明細帳本</span>
             </div>
-            <span className="text-xs text-on-surface-variant">{ledgerTotal} 筆記錄</span>
+            <span className="text-sm text-on-surface-variant">{ledgerTotal} 筆記錄</span>
           </div>
           <table className="w-full">
             <thead>
-              <tr className="text-left text-[10px] uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
+              <tr className="text-left text-sm uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
                 <th className="py-3 px-6 font-bold">Session ID</th>
                 <th className="py-3 px-6 font-bold">文件 / 動作</th>
                 <th className="py-3 px-6 font-bold">用戶</th>
@@ -266,13 +266,13 @@ export default function AdminTokens() {
                 const cost = (entry.input_tokens / 1_000_000) * 3 + (entry.output_tokens / 1_000_000) * 10;
                 return (
                   <tr key={entry.id} className="hover:bg-surface-container-high/50 transition-colors">
-                    <td className="py-3 px-6 text-xs text-primary font-mono">{entry.id.slice(0, 8)}</td>
+                    <td className="py-3 px-6 text-sm text-primary font-mono">{entry.id.slice(0, 8)}</td>
                     <td className="py-3 px-6 text-sm text-on-surface truncate max-w-[200px]">
                       {entry.conversation_title || '—'}
                     </td>
                     <td className="py-3 px-6 max-w-[180px]">
                       <p className="text-sm text-on-surface truncate">{entry.display_name || entry.email.split('@')[0]}</p>
-                      <p className="text-[10px] text-on-surface-variant font-mono truncate">{entry.email}</p>
+                      <p className="text-sm text-on-surface-variant font-mono truncate">{entry.email}</p>
                     </td>
                     <td className="py-3 px-6 text-right text-sm text-on-surface font-mono">
                       {formatTokens(entry.input_tokens + entry.output_tokens)}
@@ -280,7 +280,7 @@ export default function AdminTokens() {
                     <td className="py-3 px-6 text-right text-sm text-on-surface font-mono">
                       ${cost.toFixed(3)}
                     </td>
-                    <td className="py-3 px-6 text-right text-xs text-on-surface-variant">
+                    <td className="py-3 px-6 text-right text-sm text-on-surface-variant">
                       {timeAgo(entry.created_at)}
                     </td>
                   </tr>
@@ -295,21 +295,21 @@ export default function AdminTokens() {
           {/* Pagination */}
           {ledgerTotalPages > 1 && (
             <div className="flex items-center justify-between px-6 py-4 border-t border-outline-variant/10">
-              <span className="text-xs text-on-surface-variant">
+              <span className="text-sm text-on-surface-variant">
                 第 {(ledgerPage - 1) * 10 + 1}-{Math.min(ledgerPage * 10, ledgerTotal)} 筆，共 {ledgerTotal} 筆
               </span>
               <div className="flex gap-1">
                 <button
                   onClick={() => setLedgerPage(p => Math.max(1, p - 1))}
                   disabled={ledgerPage === 1}
-                  className="px-3 py-1.5 text-xs bg-surface-container-high text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
+                  className="px-3 py-1.5 text-sm bg-surface-container-high text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
                 >
                   上一頁
                 </button>
                 <button
                   onClick={() => setLedgerPage(p => Math.min(ledgerTotalPages, p + 1))}
                   disabled={ledgerPage === ledgerTotalPages}
-                  className="px-3 py-1.5 text-xs bg-surface-container-high text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
+                  className="px-3 py-1.5 text-sm bg-surface-container-high text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
                 >
                   下一頁
                 </button>

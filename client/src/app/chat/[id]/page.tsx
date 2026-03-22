@@ -680,12 +680,12 @@ function ChatContent() {
             </button>
             <h2 className="text-sm font-headline font-bold text-on-surface truncate">{title}</h2>
             {skillId && (
-              <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded font-bold tracking-wider uppercase shrink-0">
+              <span className="text-sm px-2 py-0.5 bg-primary/10 text-primary rounded font-bold tracking-wider uppercase shrink-0">
                 {skillId.replace('-gen', '')}
               </span>
             )}
             {streaming && (
-              <span className="ml-auto text-xs px-2 py-0.5 bg-surface-container-high text-primary rounded font-mono shrink-0">
+              <span className="ml-auto text-sm px-2 py-0.5 bg-surface-container-high text-primary rounded font-mono shrink-0">
                 {formatElapsed(elapsed)}
               </span>
             )}
@@ -710,7 +710,7 @@ function ChatContent() {
                     {msg.role === 'user' ? (
                       <>
                         <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                        <span className="block mt-2 text-xs text-outline">
+                        <span className="block mt-2 text-sm text-outline">
                           {new Date(msg.created_at).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </>
@@ -721,16 +721,16 @@ function ChatContent() {
                         </div>
                         {sources.length > 0 && (
                           <details className="mt-3 border-t border-outline-variant/10 pt-2">
-                            <summary className="text-xs text-primary cursor-pointer font-bold uppercase tracking-wider">
+                            <summary className="text-sm text-primary cursor-pointer font-bold uppercase tracking-wider">
                               來源 ({sources.length})
                             </summary>
                             <div className="flex flex-col gap-1.5 mt-2">
                               {sources.map((src, i) => (
                                 <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
-                                  className="flex items-center gap-2 px-3 py-2 bg-surface-container rounded text-xs hover:bg-surface-container-high transition-colors no-underline">
+                                  className="flex items-center gap-2 px-3 py-2 bg-surface-container rounded text-sm hover:bg-surface-container-high transition-colors no-underline">
                                   <span className="material-symbols-outlined text-primary text-sm">link</span>
                                   <span className="text-on-surface truncate flex-1">{src.title}</span>
-                                  <span className="text-outline text-xs shrink-0">{new URL(src.url).hostname}</span>
+                                  <span className="text-outline text-sm shrink-0">{new URL(src.url).hostname}</span>
                                 </a>
                               ))}
                             </div>
@@ -773,7 +773,7 @@ function ChatContent() {
                     ? <span className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
                     : <span className="material-symbols-outlined text-sm text-green-400">check_circle</span>
                   }
-                  <span className="text-xs font-headline font-bold text-on-surface uppercase tracking-wider flex-1">
+                  <span className="text-sm font-headline font-bold text-on-surface uppercase tracking-wider flex-1">
                     {streaming ? 'AI 處理中' : '已完成'}
                     {panelCollapsed && tools.length > 0 && (
                       <span className="font-normal text-on-surface-variant ml-2">
@@ -782,7 +782,7 @@ function ChatContent() {
                       </span>
                     )}
                   </span>
-                  <span className="text-xs font-mono text-primary">{formatElapsed(elapsed)}</span>
+                  <span className="text-sm font-mono text-primary">{formatElapsed(elapsed)}</span>
                   <span className={`material-symbols-outlined text-sm text-on-surface-variant transition-transform ${panelCollapsed ? '-rotate-90' : ''}`}>
                     expand_more
                   </span>
@@ -790,7 +790,7 @@ function ChatContent() {
 
                 {!panelCollapsed && (
                   <>
-                    <div className="px-4 py-2 space-y-1 font-mono text-xs">
+                    <div className="px-4 py-2 space-y-1 font-mono text-sm">
                       {/* Connected */}
                       <div className="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant">
                         <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
@@ -829,10 +829,10 @@ function ChatContent() {
                               ? <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
                               : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
                             }
-                            <span className="material-symbols-outlined text-xs">{info.icon}</span>
+                            <span className="material-symbols-outlined text-sm">{info.icon}</span>
                             <span className={isDone ? 'line-through opacity-60' : ''}>{info.label}</span>
                             {detail && (
-                              <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-xs truncate max-w-[400px]">
+                              <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[400px]">
                                 {detail}
                               </span>
                             )}
@@ -856,9 +856,9 @@ function ChatContent() {
                             ? <span className="material-symbols-outlined text-warning text-sm">warning</span>
                             : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
                           }
-                          <span className="material-symbols-outlined text-xs">smart_toy</span>
+                          <span className="material-symbols-outlined text-sm">smart_toy</span>
                           <span>{SKILL_LABELS[task.skillId] || task.skillId}</span>
-                          <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-xs truncate max-w-[400px]">
+                          <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[400px]">
                             {task.status === 'failed'
                               ? (task.error || 'Timed out').substring(0, 50)
                               : task.description.substring(0, 60)}
@@ -885,10 +885,10 @@ function ChatContent() {
 
                     {/* Token usage */}
                     {lastUsage && !streaming && (
-                      <div className="flex items-center justify-between px-4 py-2 border-t border-outline-variant/10 text-xs text-outline">
+                      <div className="flex items-center justify-between px-4 py-2 border-t border-outline-variant/10 text-sm text-outline">
                         <span>Tokens: {lastUsage.inputTokens.toLocaleString()} in / {lastUsage.outputTokens.toLocaleString()} out</span>
                         {lastUsage.model && (
-                          <span className="px-2 py-0.5 bg-primary/10 text-primary rounded text-xs">
+                          <span className="px-2 py-0.5 bg-primary/10 text-primary rounded text-sm">
                             {lastUsage.model.split('-').slice(0, 2).join('-')}
                           </span>
                         )}
@@ -898,10 +898,10 @@ function ChatContent() {
                     {/* Extended thinking */}
                     {thinkingText && (
                       <details className="mx-4 mb-3 border-t border-outline-variant/10">
-                        <summary className="text-xs text-primary cursor-pointer py-2 font-bold uppercase tracking-wider">
+                        <summary className="text-sm text-primary cursor-pointer py-2 font-bold uppercase tracking-wider">
                           查看 AI 思考過程
                         </summary>
-                        <div className="text-xs text-on-surface-variant leading-relaxed whitespace-pre-wrap max-h-36 overflow-y-auto pb-2">
+                        <div className="text-sm text-on-surface-variant leading-relaxed whitespace-pre-wrap max-h-36 overflow-y-auto pb-2">
                           {thinkingText}
                         </div>
                       </details>
@@ -923,7 +923,7 @@ function ChatContent() {
                   {attachedFiles.map(file => (
                     <div
                       key={file.id}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs border ${
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-sm border ${
                         file.uploading ? 'bg-surface-container-high border-outline-variant/20 text-on-surface-variant' :
                         file.scanStatus === 'rejected' ? 'bg-error/10 border-error/30 text-error' :
                         file.scanStatus === 'suspicious' ? 'bg-warning/10 border-warning/30 text-warning' :
@@ -931,11 +931,11 @@ function ChatContent() {
                       }`}
                     >
                       {file.uploading ? (
-                        <span className="material-symbols-outlined text-xs animate-spin">progress_activity</span>
+                        <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
                       ) : file.scanStatus === 'rejected' ? (
-                        <span className="material-symbols-outlined text-xs">gpp_bad</span>
+                        <span className="material-symbols-outlined text-sm">gpp_bad</span>
                       ) : (
-                        <span className="material-symbols-outlined text-xs">attach_file</span>
+                        <span className="material-symbols-outlined text-sm">attach_file</span>
                       )}
                       <span className="max-w-[120px] truncate">{file.originalName}</span>
                       {!file.uploading && (
@@ -943,7 +943,7 @@ function ChatContent() {
                           onClick={() => removeAttachedFile(file.id)}
                           className="hover:text-error transition-colors cursor-pointer ml-0.5"
                         >
-                          <span className="material-symbols-outlined text-xs">close</span>
+                          <span className="material-symbols-outlined text-sm">close</span>
                         </button>
                       )}
                     </div>
@@ -984,14 +984,14 @@ function ChatContent() {
                 />
                 {streaming ? (
                   <button
-                    className="bg-error/20 text-error font-headline font-bold text-xs uppercase px-5 py-2.5 rounded tracking-widest hover:bg-error/30 active:scale-95 transition-all cursor-pointer"
+                    className="bg-error/20 text-error font-headline font-bold text-sm uppercase px-5 py-2.5 rounded tracking-widest hover:bg-error/30 active:scale-95 transition-all cursor-pointer"
                     onClick={handleAbort}
                   >
                     停止
                   </button>
                 ) : (
                   <button
-                    className="cyber-gradient text-on-primary font-headline font-bold text-xs uppercase px-5 py-2.5 rounded tracking-widest shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    className="cyber-gradient text-on-primary font-headline font-bold text-sm uppercase px-5 py-2.5 rounded tracking-widest shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     onClick={() => sendMessage()}
                     disabled={!input.trim()}
                   >
@@ -1003,12 +1003,12 @@ function ChatContent() {
             {/* Input footer info */}
             <div className="mt-2 flex justify-between items-center px-2">
               <div className="flex gap-4">
-                <span className="text-xs text-outline uppercase tracking-widest">
+                <span className="text-sm text-outline uppercase tracking-widest">
                   {skillId ? `技能: ${SKILL_LABELS[skillId] || skillId}` : 'AI 自動判斷'}
                 </span>
               </div>
               {lastUsage && (
-                <div className="text-xs font-mono text-on-secondary-container/60 bg-surface-container-low px-3 py-1 rounded-full">
+                <div className="text-sm font-mono text-on-secondary-container/60 bg-surface-container-low px-3 py-1 rounded-full">
                   Session: <span className="text-primary">{((lastUsage.inputTokens + lastUsage.outputTokens) / 1000).toFixed(1)}k Tokens</span>
                 </div>
               )}
@@ -1020,13 +1020,13 @@ function ChatContent() {
         <aside className="w-72 bg-surface-container-low border-l border-outline-variant/10 overflow-y-auto p-5 hidden lg:flex flex-col gap-6 shrink-0">
           {/* System Status */}
           <div className="space-y-3">
-            <h4 className="text-xs font-headline font-bold text-outline tracking-widest uppercase">系統狀態</h4>
+            <h4 className="text-sm font-headline font-bold text-outline tracking-widest uppercase">系統狀態</h4>
             <div className="bg-surface-container-highest p-4 rounded-sm border-l-2 border-primary">
               <div className="flex items-center gap-2 mb-1">
                 <span className="material-symbols-outlined text-primary text-sm">security</span>
-                <span className="text-xs font-headline font-bold text-on-surface uppercase tracking-tight">沙盒隔離模式</span>
+                <span className="text-sm font-headline font-bold text-on-surface uppercase tracking-tight">沙盒隔離模式</span>
               </div>
-              <p className="text-xs text-on-surface-variant leading-relaxed">
+              <p className="text-sm text-on-surface-variant leading-relaxed">
                 所有執行操作皆在隔離環境中運行，確保系統安全。
               </p>
             </div>
@@ -1034,11 +1034,11 @@ function ChatContent() {
 
           {/* Generated Files */}
           <div className="space-y-3 flex-1">
-            <h4 className="text-xs font-headline font-bold text-outline tracking-widest uppercase">
+            <h4 className="text-sm font-headline font-bold text-outline tracking-widest uppercase">
               生成的檔案
             </h4>
             {files.length === 0 ? (
-              <p className="text-xs text-on-surface-variant text-center py-6 leading-relaxed">
+              <p className="text-sm text-on-surface-variant text-center py-6 leading-relaxed">
                 尚未生成任何檔案。<br />向 AI 描述需求即可開始。
               </p>
             ) : (
@@ -1056,8 +1056,8 @@ function ChatContent() {
                         {getFileIcon(file.file_type)}
                       </span>
                       <div className="min-w-0">
-                        <span className="text-xs text-on-surface font-medium block truncate">{file.filename}</span>
-                        <span className="text-xs text-outline">
+                        <span className="text-sm text-on-surface font-medium block truncate">{file.filename}</span>
+                        <span className="text-sm text-outline">
                           {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
                         </span>
                       </div>
@@ -1075,10 +1075,10 @@ function ChatContent() {
           {conversationUploads.length > 0 && (
             <div className="space-y-3 border-t border-outline-variant/10 pt-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-headline font-bold text-outline tracking-widest uppercase">
+                <h4 className="text-sm font-headline font-bold text-outline tracking-widest uppercase">
                   上傳的檔案
                 </h4>
-                <span className="text-xs font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                <span className="text-sm font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                   {conversationUploads.length}
                 </span>
               </div>
@@ -1092,8 +1092,8 @@ function ChatContent() {
                       {getFileIcon(file.fileType)}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <span className="text-xs text-on-surface font-medium block truncate">{file.originalName}</span>
-                      <span className="text-xs text-outline">
+                      <span className="text-sm text-on-surface font-medium block truncate">{file.originalName}</span>
+                      <span className="text-sm text-outline">
                         {file.fileType.toUpperCase()} · {formatSize(file.fileSize)}
                       </span>
                     </div>
@@ -1109,7 +1109,7 @@ function ChatContent() {
           {/* Agent Tasks Summary */}
           {agentTasks.length > 0 && (
             <div className="space-y-3 border-t border-outline-variant/10 pt-4">
-              <h4 className="text-xs font-headline font-bold text-outline tracking-widest uppercase">代理任務</h4>
+              <h4 className="text-sm font-headline font-bold text-outline tracking-widest uppercase">代理任務</h4>
               <div className="space-y-1.5">
                 {agentTasks.map(task => (
                   <div key={task.taskId} className="flex items-center gap-2 p-2 bg-surface-container/50 rounded">
@@ -1119,7 +1119,7 @@ function ChatContent() {
                       ? <span className="material-symbols-outlined text-warning text-sm">warning</span>
                       : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
                     }
-                    <span className="text-xs text-on-surface-variant truncate">
+                    <span className="text-sm text-on-surface-variant truncate">
                       {SKILL_LABELS[task.skillId] || task.skillId}
                     </span>
                   </div>

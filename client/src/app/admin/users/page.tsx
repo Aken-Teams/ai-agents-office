@@ -119,10 +119,10 @@ export default function AdminUsers() {
       <header className="sticky top-0 h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
         <div className="flex items-center gap-4">
           <span className="text-lg font-black text-on-surface font-headline">用戶身份管理</span>
-          <span className="text-xs text-on-surface-variant font-mono">共 {total} 個已註冊身份</span>
+          <span className="text-sm text-on-surface-variant font-mono">共 {total} 個已註冊身份</span>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant text-xs font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
+          <button className="flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
             <span className="material-symbols-outlined text-sm">download</span>
             匯出 CSV
           </button>
@@ -152,7 +152,7 @@ export default function AdminUsers() {
                 <button
                   key={opt.value}
                   onClick={() => { setStatusFilter(opt.value); setPage(1); }}
-                  className={`px-4 py-2 text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors ${
+                  className={`px-4 py-2 text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
                     statusFilter === opt.value
                       ? 'bg-primary/15 text-primary'
                       : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
@@ -168,7 +168,7 @@ export default function AdminUsers() {
           <div className="flex-1 overflow-y-auto">
             <table className="w-full">
               <thead className="sticky top-0 bg-surface-container-lowest">
-                <tr className="text-left text-[10px] uppercase tracking-widest text-on-surface-variant">
+                <tr className="text-left text-sm uppercase tracking-widest text-on-surface-variant">
                   <th className="py-3 px-4 font-bold">用戶</th>
                   <th className="py-3 px-4 font-bold">註冊日期</th>
                   <th className="py-3 px-4 font-bold">狀態</th>
@@ -185,20 +185,20 @@ export default function AdminUsers() {
                   >
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded bg-primary/15 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                        <div className="w-8 h-8 rounded bg-primary/15 flex items-center justify-center text-sm font-bold text-primary shrink-0">
                           {(user.display_name || user.email)[0].toUpperCase()}
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm text-on-surface font-medium truncate">{user.display_name || user.email.split('@')[0]}</p>
-                          <p className="text-[10px] text-on-surface-variant font-mono truncate">{user.email}</p>
+                          <p className="text-sm text-on-surface-variant font-mono truncate">{user.email}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-xs text-on-surface-variant font-mono">
+                    <td className="py-3 px-4 text-sm text-on-surface-variant font-mono">
                       {new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded ${
+                      <span className={`px-2 py-0.5 text-sm font-bold uppercase tracking-wider rounded ${
                         user.status === 'active'
                           ? 'bg-success/15 text-success'
                           : 'bg-error/15 text-error'
@@ -222,14 +222,14 @@ export default function AdminUsers() {
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between pt-4 border-t border-outline-variant/10 mt-4">
-              <span className="text-xs text-on-surface-variant">
+              <span className="text-sm text-on-surface-variant">
                 第 {(page - 1) * limit + 1}-{Math.min(page * limit, total)} 筆，共 {total} 個身份
               </span>
               <div className="flex gap-1">
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-3 py-1.5 text-xs bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer hover:bg-surface-container-high transition-colors"
+                  className="px-3 py-1.5 text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer hover:bg-surface-container-high transition-colors"
                 >
                   上一頁
                 </button>
@@ -237,7 +237,7 @@ export default function AdminUsers() {
                   <button
                     key={p}
                     onClick={() => setPage(p)}
-                    className={`px-3 py-1.5 text-xs rounded cursor-pointer transition-colors ${
+                    className={`px-3 py-1.5 text-sm rounded cursor-pointer transition-colors ${
                       page === p
                         ? 'bg-primary/15 text-primary font-bold'
                         : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
@@ -249,7 +249,7 @@ export default function AdminUsers() {
                 <button
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="px-3 py-1.5 text-xs bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer hover:bg-surface-container-high transition-colors"
+                  className="px-3 py-1.5 text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer hover:bg-surface-container-high transition-colors"
                 >
                   下一頁
                 </button>
@@ -280,7 +280,7 @@ export default function AdminUsers() {
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-sm font-bold text-on-surface truncate">{selectedUser.display_name || selectedUser.email.split('@')[0]}</h3>
-                    <p className="text-[10px] text-on-surface-variant font-mono mt-0.5">ID: {selectedUser.id.slice(0, 8)}</p>
+                    <p className="text-sm text-on-surface-variant font-mono mt-0.5">ID: {selectedUser.id.slice(0, 8)}</p>
                     <p className="text-[11px] text-on-surface-variant font-mono mt-0.5 truncate">{selectedUser.email}</p>
                   </div>
                 </div>
@@ -301,7 +301,7 @@ export default function AdminUsers() {
 
             {/* Token Stats */}
             <div className="px-6 pb-5 border-t border-outline-variant/25 pt-5">
-              <h4 className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-3">Token 用量</h4>
+              <h4 className="text-sm uppercase tracking-widest text-on-surface-variant font-bold mb-3">Token 用量</h4>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-surface-container p-3 rounded">
                   <p className="text-[9px] uppercase text-on-surface-variant">輸入</p>
@@ -312,21 +312,21 @@ export default function AdminUsers() {
                   <p className="text-lg font-bold text-on-surface font-headline">{formatTokens(selectedUser.tokenStats.total_output)}</p>
                 </div>
               </div>
-              <p className="text-xs text-on-surface-variant mt-2">{selectedUser.tokenStats.invocation_count} 次調用</p>
+              <p className="text-sm text-on-surface-variant mt-2">{selectedUser.tokenStats.invocation_count} 次調用</p>
             </div>
 
             {/* Recent Files */}
             <div className="px-6 pb-5 border-t border-outline-variant/25 pt-5">
-              <h4 className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-3">最近檔案</h4>
+              <h4 className="text-sm uppercase tracking-widest text-on-surface-variant font-bold mb-3">最近檔案</h4>
               {selectedUser.recentFiles.length === 0 ? (
-                <p className="text-xs text-on-surface-variant">尚無檔案</p>
+                <p className="text-sm text-on-surface-variant">尚無檔案</p>
               ) : (
                 <div className="space-y-1.5">
                   {selectedUser.recentFiles.map(f => (
-                    <div key={f.id} className="flex items-center gap-2 text-xs p-2 rounded hover:bg-surface-container/50 transition-colors">
+                    <div key={f.id} className="flex items-center gap-2 text-sm p-2 rounded hover:bg-surface-container/50 transition-colors">
                       <span className="material-symbols-outlined text-sm text-on-surface-variant shrink-0">draft</span>
                       <span className="flex-1 text-on-surface truncate">{f.filename}</span>
-                      <span className="text-[10px] text-on-surface-variant shrink-0">{formatFileSize(f.file_size)}</span>
+                      <span className="text-sm text-on-surface-variant shrink-0">{formatFileSize(f.file_size)}</span>
                     </div>
                   ))}
                 </div>
@@ -335,12 +335,12 @@ export default function AdminUsers() {
 
             {/* Admin Controls */}
             <div className="px-6 pb-6 mt-auto border-t border-outline-variant/25 pt-5">
-              <h4 className="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold mb-3">管理操作</h4>
+              <h4 className="text-sm uppercase tracking-widest text-on-surface-variant font-bold mb-3">管理操作</h4>
               {selectedUser.status === 'active' ? (
                 <button
                   onClick={() => toggleUserStatus(selectedUser.id, 'suspended')}
                   disabled={actionLoading}
-                  className="w-full py-2 px-4 bg-error/10 text-error text-xs font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
+                  className="w-full py-2 px-4 bg-error/10 text-error text-sm font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   停用用戶
                 </button>
@@ -348,7 +348,7 @@ export default function AdminUsers() {
                 <button
                   onClick={() => toggleUserStatus(selectedUser.id, 'active')}
                   disabled={actionLoading}
-                  className="w-full py-2 px-4 bg-success/10 text-success text-xs font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
+                  className="w-full py-2 px-4 bg-success/10 text-success text-sm font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   啟用用戶
                 </button>

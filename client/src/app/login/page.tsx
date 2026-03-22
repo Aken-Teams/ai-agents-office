@@ -58,7 +58,7 @@ function LoginForm() {
                 <h1 className="font-headline text-2xl font-bold tracking-tighter text-on-surface">
                   AI Agents Office
                 </h1>
-                <p className="font-label text-[10px] uppercase tracking-[0.2em] text-primary">
+                <p className="font-label text-sm uppercase tracking-[0.2em] text-primary">
                   智能文件平台
                 </p>
               </div>
@@ -78,7 +78,7 @@ function LoginForm() {
           <div className="space-y-4">
             <div className="flex items-center gap-4 p-4 bg-surface-container rounded-lg">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span className="font-label text-xs uppercase tracking-widest text-on-surface-variant">
+              <span className="font-label text-sm uppercase tracking-widest text-on-surface-variant">
                 系統狀態：運行中
               </span>
             </div>
@@ -120,7 +120,7 @@ function LoginForm() {
               )}
 
               <div className="space-y-1.5">
-                <label className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant ml-1">
+                <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
                   電子信箱
                 </label>
                 <input
@@ -134,7 +134,7 @@ function LoginForm() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="font-label text-[10px] uppercase tracking-widest text-on-surface-variant ml-1">
+                <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
                   密碼
                 </label>
                 <input
@@ -150,7 +150,7 @@ function LoginForm() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-xs py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? '連線中...' : '建立連線'}
               </button>
@@ -159,13 +159,13 @@ function LoginForm() {
             {/* Toggle to Register */}
             <div className="mt-12 flex flex-col items-center gap-6">
               <div className="w-full h-px bg-outline-variant/20 relative">
-                <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-container-high px-4 text-[10px] uppercase tracking-widest text-outline">
+                <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-container-high px-4 text-sm uppercase tracking-widest text-outline">
                   還沒有帳號？
                 </span>
               </div>
               <Link
                 href="/register"
-                className="text-xs font-label text-on-surface-variant hover:text-primary transition-colors flex items-center gap-2 group"
+                className="text-sm font-label text-on-surface-variant hover:text-primary transition-colors flex items-center gap-2 group"
               >
                 建立新帳號
                 <span className="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">

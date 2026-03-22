@@ -150,7 +150,7 @@ export default function AdminSecurity() {
           <span className="text-lg font-black text-on-surface font-headline">安全與審計</span>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant text-xs font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
+          <button className="flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
             <span className="material-symbols-outlined text-sm">download</span>
             匯出安全日誌
           </button>
@@ -162,27 +162,27 @@ export default function AdminSecurity() {
         <div className="grid grid-cols-4 gap-6">
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
             <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>shield</span>
-            <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">安全事件</p>
+            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">安全事件</p>
             <span className="text-3xl font-headline font-black text-on-surface">{stats?.securityEventsCount ?? 0}</span>
-            <p className="text-xs text-on-surface-variant mt-2 font-mono">Input Guard 偵測記錄</p>
+            <p className="text-sm text-on-surface-variant mt-2 font-mono">Input Guard 偵測記錄</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
             <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>block</span>
-            <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">已攔截威脅</p>
+            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">已攔截威脅</p>
             <span className="text-3xl font-headline font-black text-error">{stats?.blockedThreats ?? 0}</span>
-            <p className="text-xs text-on-surface-variant mt-2 font-mono">高風險請求已阻擋</p>
+            <p className="text-sm text-on-surface-variant mt-2 font-mono">高風險請求已阻擋</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
             <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>schedule</span>
-            <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">系統運行時間</p>
+            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">系統運行時間</p>
             <span className="text-3xl font-headline font-black text-on-surface">{stats ? formatUptime(stats.systemUptime) : '—'}</span>
-            <p className="text-xs text-on-surface-variant mt-2 font-mono">自上次啟動</p>
+            <p className="text-sm text-on-surface-variant mt-2 font-mono">自上次啟動</p>
           </div>
           <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
             <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>description</span>
-            <p className="text-xs uppercase tracking-widest text-on-surface-variant mb-2">已生成檔案</p>
+            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">已生成檔案</p>
             <span className="text-3xl font-headline font-black text-primary">{stats?.totalFiles ?? 0}</span>
-            <p className="text-xs text-on-surface-variant mt-2 font-mono">跨 {stats?.totalConversations ?? 0} 個對話</p>
+            <p className="text-sm text-on-surface-variant mt-2 font-mono">跨 {stats?.totalConversations ?? 0} 個對話</p>
           </div>
         </div>
 
@@ -193,12 +193,12 @@ export default function AdminSecurity() {
             <div className="px-6 py-4 bg-surface-container-high flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="material-symbols-outlined text-primary">hard_drive_2</span>
-                <span className="text-xs font-bold uppercase tracking-widest">沙箱磁碟用量</span>
+                <span className="text-sm font-bold uppercase tracking-widest">沙箱磁碟用量</span>
               </div>
               <button
                 onClick={handleScan}
                 disabled={scanning}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider rounded hover:bg-primary/20 transition-colors cursor-pointer disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary text-sm font-bold uppercase tracking-wider rounded hover:bg-primary/20 transition-colors cursor-pointer disabled:opacity-50"
               >
                 <span className={`material-symbols-outlined text-sm ${scanning ? 'animate-spin' : ''}`}>
                   {scanning ? 'progress_activity' : 'radar'}
@@ -211,19 +211,19 @@ export default function AdminSecurity() {
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-on-surface-variant">
                 <span className="material-symbols-outlined text-4xl mb-3 opacity-30">folder_open</span>
                 <p className="text-sm mb-1">尚未掃描</p>
-                <p className="text-xs text-outline">點擊上方「掃描」按鈕檢查 workspace 目錄</p>
+                <p className="text-sm text-outline">點擊上方「掃描」按鈕檢查 workspace 目錄</p>
               </div>
             ) : (
               <div className="flex-1 overflow-y-auto">
                 {/* Summary bar */}
                 <div className="px-6 py-3 border-b border-outline-variant/10 flex items-center justify-between">
-                  <span className="text-xs text-on-surface-variant">
+                  <span className="text-sm text-on-surface-variant">
                     {workspace.length} 個用戶沙箱 · {totalFiles} 檔案
                   </span>
-                  <span className="text-xs font-mono font-bold text-on-surface">{formatFileSize(totalDisk)}</span>
+                  <span className="text-sm font-mono font-bold text-on-surface">{formatFileSize(totalDisk)}</span>
                 </div>
                 {lastScan && (
-                  <div className="px-6 py-1.5 text-[10px] text-outline">
+                  <div className="px-6 py-1.5 text-sm text-outline">
                     最後掃描: {lastScan}
                   </div>
                 )}
@@ -235,12 +235,12 @@ export default function AdminSecurity() {
                       <div key={w.userId} className="px-6 py-3 hover:bg-surface-container-high/50 transition-colors">
                         <div className="flex justify-between items-center mb-1.5">
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs text-on-surface truncate">{w.displayName || w.email.split('@')[0]}</p>
-                            <p className="text-[10px] text-on-surface-variant font-mono truncate">{w.email}</p>
+                            <p className="text-sm text-on-surface truncate">{w.displayName || w.email.split('@')[0]}</p>
+                            <p className="text-sm text-on-surface-variant font-mono truncate">{w.email}</p>
                           </div>
                           <div className="text-right shrink-0 ml-3">
-                            <p className="text-xs font-mono font-bold text-on-surface">{formatFileSize(w.totalSize)}</p>
-                            <p className="text-[10px] text-on-surface-variant">{w.fileCount} 檔案 · {w.dirCount} 資料夾</p>
+                            <p className="text-sm font-mono font-bold text-on-surface">{formatFileSize(w.totalSize)}</p>
+                            <p className="text-sm text-on-surface-variant">{w.fileCount} 檔案 · {w.dirCount} 資料夾</p>
                           </div>
                         </div>
                         <div className="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
@@ -266,11 +266,11 @@ export default function AdminSecurity() {
                   <div className="w-3 h-3 rounded-full bg-warning/60" />
                   <div className="w-3 h-3 rounded-full bg-success/60" />
                 </div>
-                <span className="text-[10px] text-on-surface-variant font-mono tracking-wider">SYSTEM_AUDIT_LOG</span>
+                <span className="text-sm text-on-surface-variant font-mono tracking-wider">SYSTEM_AUDIT_LOG</span>
               </div>
-              <span className="text-[10px] text-on-surface-variant font-mono">共 {auditTotal} 筆</span>
+              <span className="text-sm text-on-surface-variant font-mono">共 {auditTotal} 筆</span>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-1 min-h-[300px] max-h-[500px]">
+            <div className="flex-1 overflow-y-auto p-4 font-mono text-sm space-y-1 min-h-[300px] max-h-[500px]">
               {auditLog.length === 0 ? (
                 <div className="text-on-surface-variant py-8 text-center">
                   <p>[SYSTEM] 尚無記錄</p>
@@ -297,21 +297,21 @@ export default function AdminSecurity() {
             {/* Pagination */}
             {auditTotalPages > 1 && (
               <div className="flex items-center justify-between px-6 py-3 border-t border-outline-variant/10 bg-surface-container-low">
-                <span className="text-xs text-on-surface-variant">
+                <span className="text-sm text-on-surface-variant">
                   第 {(auditPage - 1) * 13 + 1}-{Math.min(auditPage * 13, auditTotal)} 筆，共 {auditTotal} 筆
                 </span>
                 <div className="flex gap-1">
                   <button
                     onClick={() => setAuditPage(p => Math.max(1, p - 1))}
                     disabled={auditPage === 1}
-                    className="px-3 py-1.5 text-xs bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
+                    className="px-3 py-1.5 text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
                   >
                     上一頁
                   </button>
                   <button
                     onClick={() => setAuditPage(p => Math.min(auditTotalPages, p + 1))}
                     disabled={auditPage === auditTotalPages}
-                    className="px-3 py-1.5 text-xs bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
+                    className="px-3 py-1.5 text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
                   >
                     下一頁
                   </button>
@@ -326,20 +326,20 @@ export default function AdminSecurity() {
           <div className="px-6 py-4 bg-surface-container-high flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="material-symbols-outlined text-error">gpp_maybe</span>
-              <span className="text-xs font-bold uppercase tracking-widest">Input Guard 安全事件</span>
+              <span className="text-sm font-bold uppercase tracking-widest">Input Guard 安全事件</span>
             </div>
-            <span className="text-xs text-on-surface-variant font-mono">共 {secTotal} 筆</span>
+            <span className="text-sm text-on-surface-variant font-mono">共 {secTotal} 筆</span>
           </div>
           {secEvents.length === 0 ? (
             <div className="p-8 text-center text-on-surface-variant">
               <span className="material-symbols-outlined text-4xl mb-3 opacity-30">verified_user</span>
               <p className="text-sm">尚無安全事件</p>
-              <p className="text-xs text-outline mt-1">所有使用者輸入均通過安全檢查</p>
+              <p className="text-sm text-outline mt-1">所有使用者輸入均通過安全檢查</p>
             </div>
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-outline-variant/10 text-on-surface-variant uppercase tracking-wider">
                       <th className="py-3 px-4 text-left font-bold">時間</th>
@@ -363,7 +363,7 @@ export default function AdminSecurity() {
                             {new Date(ev.created_at.endsWith('Z') ? ev.created_at : ev.created_at + 'Z').toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
                           </td>
                           <td className="py-3 px-4">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${sevColor} bg-current/10`}>
+                            <span className={`px-2 py-0.5 rounded text-sm font-bold uppercase ${sevColor} bg-current/10`}>
                               {sevLabel}
                             </span>
                           </td>
@@ -378,19 +378,19 @@ export default function AdminSecurity() {
               </div>
               {secTotalPages > 1 && (
                 <div className="flex items-center justify-between px-6 py-3 border-t border-outline-variant/10 bg-surface-container-high">
-                  <span className="text-xs text-on-surface-variant">
+                  <span className="text-sm text-on-surface-variant">
                     第 {(secPage - 1) * 10 + 1}-{Math.min(secPage * 10, secTotal)} 筆，共 {secTotal} 筆
                   </span>
                   <div className="flex gap-1">
                     <button
                       onClick={() => setSecPage(p => Math.max(1, p - 1))}
                       disabled={secPage === 1}
-                      className="px-3 py-1.5 text-xs bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
+                      className="px-3 py-1.5 text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
                     >上一頁</button>
                     <button
                       onClick={() => setSecPage(p => Math.min(secTotalPages, p + 1))}
                       disabled={secPage === secTotalPages}
-                      className="px-3 py-1.5 text-xs bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
+                      className="px-3 py-1.5 text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
                     >下一頁</button>
                   </div>
                 </div>
@@ -403,7 +403,7 @@ export default function AdminSecurity() {
         <div className="bg-surface-container rounded-lg overflow-hidden">
           <div className="px-6 py-4 bg-surface-container-high flex items-center gap-3">
             <span className="material-symbols-outlined text-on-surface-variant">security</span>
-            <span className="text-xs font-bold uppercase tracking-widest">安全架構</span>
+            <span className="text-sm font-bold uppercase tracking-widest">安全架構</span>
           </div>
           <div className="p-6 grid grid-cols-4 gap-4">
             <div className="bg-surface-container-high p-5 border-l-2 border-primary">
@@ -411,7 +411,7 @@ export default function AdminSecurity() {
                 <span className="material-symbols-outlined text-primary text-lg">folder_special</span>
                 <h4 className="text-on-surface font-bold text-sm">目錄隔離</h4>
               </div>
-              <p className="text-xs text-on-surface-variant leading-relaxed">
+              <p className="text-sm text-on-surface-variant leading-relaxed">
                 每位用戶的檔案限制在 <span className="text-on-surface font-mono">workspace/&#123;userId&#125;/</span> 目錄中，路徑驗證防止目錄遍歷攻擊。
               </p>
             </div>
@@ -420,7 +420,7 @@ export default function AdminSecurity() {
                 <span className="material-symbols-outlined text-tertiary text-lg">build_circle</span>
                 <h4 className="text-on-surface font-bold text-sm">工具白名單</h4>
               </div>
-              <p className="text-xs text-on-surface-variant leading-relaxed">
+              <p className="text-sm text-on-surface-variant leading-relaxed">
                 Claude CLI 透過 <span className="text-on-surface font-mono">--allowedTools</span> 限制可用工具，依 Skill 角色動態配置權限。
               </p>
             </div>
@@ -429,7 +429,7 @@ export default function AdminSecurity() {
                 <span className="material-symbols-outlined text-success text-lg">verified_user</span>
                 <h4 className="text-on-surface font-bold text-sm">身分驗證</h4>
               </div>
-              <p className="text-xs text-on-surface-variant leading-relaxed">
+              <p className="text-sm text-on-surface-variant leading-relaxed">
                 JWT Token 驗證 + bcrypt 密碼雜湊，Admin 角色需通過額外的 <span className="text-on-surface font-mono">role</span> 檢查。
               </p>
             </div>
@@ -438,7 +438,7 @@ export default function AdminSecurity() {
                 <span className="material-symbols-outlined text-error text-lg">shield</span>
                 <h4 className="text-on-surface font-bold text-sm">Input Guard</h4>
               </div>
-              <p className="text-xs text-on-surface-variant leading-relaxed">
+              <p className="text-sm text-on-surface-variant leading-relaxed">
                 多層 Prompt Injection 偵測：XML tag、自然語言注入、Unicode 混淆、Base64 編碼、路徑遍歷。風險評分超過閾值自動攔截。
               </p>
             </div>

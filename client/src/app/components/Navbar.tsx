@@ -77,7 +77,7 @@ export default function Navbar() {
             {!collapsed && (
               <div>
                 <h1 className="text-xl font-bold tracking-tighter text-on-surface">AI Agents</h1>
-                <p className="text-[10px] uppercase tracking-[0.2em] text-primary">Office</p>
+                <p className="text-sm uppercase tracking-[0.2em] text-primary">Office</p>
               </div>
             )}
           </Link>
@@ -100,7 +100,7 @@ export default function Navbar() {
                 <span className="material-symbols-outlined">{link.icon}</span>
                 {!collapsed && <span>{link.label}</span>}
                 {collapsed && (
-                  <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
+                  <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
                     {link.label}
                   </span>
                 )}
@@ -114,13 +114,13 @@ export default function Navbar() {
           <div className="relative group">
             <button
               onClick={() => setShowModal(true)}
-              className={`w-full cyber-gradient py-3 text-on-primary font-bold rounded flex items-center justify-center gap-2 text-xs uppercase tracking-widest active:scale-[0.99] transition-all cursor-pointer ${collapsed ? 'px-0' : ''}`}
+              className={`w-full cyber-gradient py-3 text-on-primary font-bold rounded flex items-center justify-center gap-2 text-sm uppercase tracking-widest active:scale-[0.99] transition-all cursor-pointer ${collapsed ? 'px-0' : ''}`}
             >
               <span className="material-symbols-outlined text-sm">add</span>
               {!collapsed && '新建文件'}
             </button>
             {collapsed && (
-              <span className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-surface-container-highest text-on-surface text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
+              <span className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
                 新建文件
               </span>
             )}
@@ -137,9 +137,9 @@ export default function Navbar() {
             <span className={`material-symbols-outlined text-sm transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`}>
               chevron_left
             </span>
-            {!collapsed && <span className="text-xs">收合</span>}
+            {!collapsed && <span className="text-sm">收合</span>}
             {collapsed && (
-              <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
+              <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
                 展開側邊欄
               </span>
             )}
@@ -147,9 +147,9 @@ export default function Navbar() {
 
           <div className={`relative group flex items-center gap-3 py-2 text-on-surface-variant ${collapsed ? 'justify-center px-0' : 'px-3'}`}>
             <span className="material-symbols-outlined text-sm">person</span>
-            {!collapsed && <span className="text-xs truncate">{user.displayName || user.email}</span>}
+            {!collapsed && <span className="text-sm truncate">{user.displayName || user.email}</span>}
             {collapsed && (
-              <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
+              <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
                 {user.displayName || user.email}
               </span>
             )}
@@ -161,7 +161,7 @@ export default function Navbar() {
             <span className="material-symbols-outlined">logout</span>
             {!collapsed && <span>登出</span>}
             {collapsed && (
-              <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-xs font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
+              <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
                 登出
               </span>
             )}
@@ -169,7 +169,7 @@ export default function Navbar() {
 
           {/* Footer */}
           <div className="mt-3 pt-3 border-t border-outline-variant/10 px-3">
-            <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className={`text-outline hover:text-on-surface-variant transition-colors no-underline block text-center ${collapsed ? 'text-[10px]' : 'text-[11px]'}`}>
+            <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className={`text-outline hover:text-on-surface-variant transition-colors no-underline block text-center ${collapsed ? 'text-sm' : 'text-[11px]'}`}>
               {collapsed ? '©' : <>Powered by 智合科技 &copy; 2026</>}
             </a>
           </div>
@@ -217,14 +217,14 @@ export default function Navbar() {
                     {doc.icon}
                   </span>
                   <span className="text-sm font-bold text-on-surface">{doc.label}</span>
-                  <span className="text-xs text-on-surface-variant">{doc.desc}</span>
+                  <span className="text-sm text-on-surface-variant">{doc.desc}</span>
                 </button>
               ))}
             </div>
 
             {/* Footer hint */}
             <div className="px-6 pb-5">
-              <p className="text-xs text-on-surface-variant text-center">
+              <p className="text-sm text-on-surface-variant text-center">
                 選擇工具後將建立新對話，或使用儀表板的智能指令讓 AI 自動判斷
               </p>
             </div>

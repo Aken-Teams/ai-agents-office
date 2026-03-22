@@ -107,13 +107,13 @@ function DeleteConfirmModal({
         <div className="flex gap-3 p-6 pt-2">
           <button
             onClick={onCancel}
-            className="flex-1 py-2.5 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-xs uppercase tracking-widest rounded cursor-pointer hover:bg-surface-variant transition-colors"
+            className="flex-1 py-2.5 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-sm uppercase tracking-widest rounded cursor-pointer hover:bg-surface-variant transition-colors"
           >
             取消
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 py-2.5 px-4 bg-error text-on-error font-bold text-xs uppercase tracking-widest rounded cursor-pointer hover:bg-error/80 transition-colors"
+            className="flex-1 py-2.5 px-4 bg-error text-on-error font-bold text-sm uppercase tracking-widest rounded cursor-pointer hover:bg-error/80 transition-colors"
           >
             刪除
           </button>
@@ -216,16 +216,16 @@ function PreviewModal({
             {loading ? (
               <div className="flex flex-col items-center justify-center py-20">
                 <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-4" />
-                <p className="text-xs text-on-surface-variant uppercase tracking-widest">正在轉換預覽...</p>
+                <p className="text-sm text-on-surface-variant uppercase tracking-widest">正在轉換預覽...</p>
               </div>
             ) : error ? (
               <div className="flex flex-col items-center justify-center py-20 bg-surface-container/50 rounded-lg border border-outline-variant/10">
                 <span className="material-symbols-outlined text-4xl text-error mb-4">error</span>
                 <p className="text-sm text-on-surface-variant mb-2">預覽載入失敗</p>
-                <p className="text-xs text-on-surface-variant/60 mb-6">請確認檔案完整性，或直接下載查看。</p>
+                <p className="text-sm text-on-surface-variant/60 mb-6">請確認檔案完整性，或直接下載查看。</p>
                 <button
                   onClick={() => onDownload(file.id, file.filename)}
-                  className="px-6 py-2.5 cyber-gradient text-on-primary font-bold text-xs uppercase tracking-widest flex items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity"
+                  className="px-6 py-2.5 cyber-gradient text-on-primary font-bold text-sm uppercase tracking-widest flex items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity"
                 >
                   <span className="material-symbols-outlined text-sm">download</span>
                   下載檔案
@@ -286,30 +286,30 @@ function PreviewModal({
         <aside className="w-80 bg-surface-container border-l border-outline-variant/10 flex flex-col shrink-0">
           {/* File info */}
           <div className="p-6 border-b border-outline-variant/10">
-            <h3 className="text-xs font-headline font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
+            <h3 className="text-sm font-headline font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
               <span className="material-symbols-outlined text-sm">info</span> 文件資訊
             </h3>
             <div className="space-y-3">
               <div className="p-3 bg-surface-container-low rounded">
-                <p className="text-[10px] text-on-surface-variant uppercase font-medium mb-1 tracking-wider">檔案名稱</p>
+                <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">檔案名稱</p>
                 <p className="text-sm font-medium text-on-surface break-all">{file.filename}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 bg-surface-container-low rounded">
-                  <p className="text-[10px] text-on-surface-variant uppercase font-medium mb-1 tracking-wider">格式</p>
+                  <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">格式</p>
                   <p className="text-sm font-bold uppercase" style={{ color: config.color }}>{file.file_type}</p>
                 </div>
                 <div className="p-3 bg-surface-container-low rounded">
-                  <p className="text-[10px] text-on-surface-variant uppercase font-medium mb-1 tracking-wider">大小</p>
+                  <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">大小</p>
                   <p className="text-sm font-bold text-on-surface">{formatSize(file.file_size)}</p>
                 </div>
               </div>
               <div className="p-3 bg-surface-container-low rounded">
-                <p className="text-[10px] text-on-surface-variant uppercase font-medium mb-1 tracking-wider">建立日期</p>
+                <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">建立日期</p>
                 <p className="text-sm text-on-surface">{new Date(file.created_at).toLocaleString('zh-TW')}</p>
               </div>
               <div className="p-3 bg-surface-container-low rounded">
-                <p className="text-[10px] text-on-surface-variant uppercase font-medium mb-1 tracking-wider">安全等級</p>
+                <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">安全等級</p>
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-primary shadow-[0_0_8px_#00dbe9]" />
                   <p className="text-sm font-bold text-on-surface">機密</p>
@@ -335,8 +335,8 @@ function PreviewModal({
           <div className="p-4 bg-primary/5 flex items-center gap-3 border-t border-outline-variant/10">
             <span className="material-symbols-outlined text-primary text-base">shield</span>
             <div>
-              <p className="text-xs font-bold text-on-surface">本地沙盒儲存</p>
-              <p className="text-[10px] text-on-surface-variant">所有檔案皆加密保護</p>
+              <p className="text-sm font-bold text-on-surface">本地沙盒儲存</p>
+              <p className="text-sm text-on-surface-variant">所有檔案皆加密保護</p>
             </div>
           </div>
         </aside>
@@ -370,6 +370,7 @@ function FilesContent() {
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [uploadStorage, setUploadStorage] = useState<UploadStorageInfo | null>(null);
   const [conversations, setConversations] = useState<ConversationInfo[]>([]);
+  const [deleteUploadTarget, setDeleteUploadTarget] = useState<UploadItem | null>(null);
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
@@ -417,12 +418,13 @@ function FilesContent() {
       .catch(console.error);
   }, [token]);
 
-  async function deleteUpload(id: string) {
-    if (!token) return;
-    await fetch(`/api/uploads/${id}`, {
+  async function confirmDeleteUpload() {
+    if (!token || !deleteUploadTarget) return;
+    await fetch(`/api/uploads/${deleteUploadTarget.id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
+    setDeleteUploadTarget(null);
     fetchUploads();
   }
 
@@ -487,12 +489,21 @@ function FilesContent() {
     <div className="min-h-screen bg-surface-container-lowest">
       <Navbar />
 
-      {/* Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal (generated files) */}
       {deleteTarget && (
         <DeleteConfirmModal
           filename={deleteTarget.filename}
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {/* Delete Confirmation Modal (uploads) */}
+      {deleteUploadTarget && (
+        <DeleteConfirmModal
+          filename={deleteUploadTarget.original_name}
+          onConfirm={confirmDeleteUpload}
+          onCancel={() => setDeleteUploadTarget(null)}
         />
       )}
 
@@ -511,7 +522,7 @@ function FilesContent() {
         <div className="flex justify-between items-end mb-10">
           <div className="max-w-2xl">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-tertiary text-xs font-bold tracking-[0.3em] uppercase">本地儲存</span>
+              <span className="text-tertiary text-sm font-bold tracking-[0.3em] uppercase">本地儲存</span>
               <div className="h-px w-12 bg-tertiary/30" />
             </div>
             <h2 className="text-4xl font-headline font-bold text-on-surface tracking-tight mb-2">檔案管理</h2>
@@ -529,7 +540,7 @@ function FilesContent() {
                 {storageInfo?.warning ? 'warning' : 'database'}
               </span>
             </div>
-            <div className="flex justify-between items-center text-xs font-bold tracking-widest uppercase text-on-surface-variant">
+            <div className="flex justify-between items-center text-sm font-bold tracking-widest uppercase text-on-surface-variant">
               <span>{user?.displayName || user?.email?.split('@')[0] || '我的'}儲存</span>
               <span className={storageInfo?.warning ? 'text-error' : 'text-primary'}>{files.length} 個檔案</span>
             </div>
@@ -543,12 +554,12 @@ function FilesContent() {
               <span className="font-headline text-lg font-bold">
                 {storageInfo?.formatted.used ?? formatSize(totalSize)}
               </span>
-              <span className="text-xs text-on-surface-variant uppercase tracking-tighter">
+              <span className="text-sm text-on-surface-variant uppercase tracking-tighter">
                 / {storageInfo?.formatted.quota ?? '—'}
               </span>
             </div>
             {storageInfo?.warning && (
-              <p className="text-[10px] text-error font-medium">
+              <p className="text-sm text-error font-medium">
                 儲存空間即將滿載，請整理不需要的檔案。
               </p>
             )}
@@ -579,7 +590,7 @@ function FilesContent() {
             <span className="material-symbols-outlined text-sm align-middle mr-1">upload_file</span>
             我的上傳
             {uploads.length > 0 && (
-              <span className="ml-2 px-1.5 py-0.5 bg-primary/10 text-primary rounded text-[10px] font-bold">{uploads.length}</span>
+              <span className="ml-2 px-1.5 py-0.5 bg-primary/10 text-primary rounded text-sm font-bold">{uploads.length}</span>
             )}
           </button>
         </div>
@@ -593,7 +604,7 @@ function FilesContent() {
               <button
                 key={tab.value}
                 onClick={() => setFilter(tab.value)}
-                className={`px-4 py-2 rounded text-xs font-bold tracking-widest uppercase transition-colors cursor-pointer ${
+                className={`px-4 py-2 rounded text-sm font-bold tracking-widest uppercase transition-colors cursor-pointer ${
                   filter === tab.value
                     ? 'bg-surface-container text-on-surface border-b-2 border-primary'
                     : 'bg-transparent text-on-surface-variant hover:bg-surface-container'
@@ -631,10 +642,10 @@ function FilesContent() {
                 {search ? 'search_off' : 'upload_file'}
               </span>
             </div>
-            <p className="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-xs">
+            <p className="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-sm">
               {search ? '找不到符合的檔案' : '尚無檔案'}
             </p>
-            <p className="text-xs text-on-surface-variant/40 mt-1">
+            <p className="text-sm text-on-surface-variant/40 mt-1">
               {search ? '請嘗試其他關鍵字' : '從儀表板開始生成文件'}
             </p>
           </div>
@@ -658,7 +669,7 @@ function FilesContent() {
                         {config.icon}
                       </span>
                     </div>
-                    <span className="text-xs font-bold tracking-widest uppercase" style={{ color: config.color }}>
+                    <span className="text-sm font-bold tracking-widest uppercase" style={{ color: config.color }}>
                       {file.file_type.toUpperCase()}
                     </span>
                   </div>
@@ -668,14 +679,14 @@ function FilesContent() {
                     <h3 className="font-headline font-bold text-base leading-tight mb-1 truncate text-on-surface">
                       {file.filename}
                     </h3>
-                    <p className="text-xs text-on-surface-variant uppercase tracking-widest">
+                    <p className="text-sm text-on-surface-variant uppercase tracking-widest">
                       {new Date(file.created_at).toLocaleDateString('zh-TW')}
                     </p>
                   </div>
 
                   {/* Bottom: Size + Actions */}
                   <div className="mt-auto pt-3 flex items-center justify-between border-t border-outline-variant/10">
-                    <span className="text-xs bg-surface-container-lowest px-2 py-0.5 rounded text-on-surface-variant uppercase tracking-widest">
+                    <span className="text-sm bg-surface-container-lowest px-2 py-0.5 rounded text-on-surface-variant uppercase tracking-widest">
                       {formatSize(file.file_size)}
                     </span>
                     <div className="flex items-center gap-1">
@@ -711,7 +722,7 @@ function FilesContent() {
         {/* Pagination */}
         {filteredFiles.length > 0 && (
           <div className="mt-8 flex items-center justify-between">
-            <p className="text-on-surface-variant/60 text-xs uppercase tracking-widest">
+            <p className="text-on-surface-variant/60 text-sm uppercase tracking-widest">
               共 {filteredFiles.length} 個檔案{search && ` (搜尋結果)`}
             </p>
             {totalPages > 1 && (
@@ -727,7 +738,7 @@ function FilesContent() {
                   <button
                     key={p}
                     onClick={() => setPage(p)}
-                    className={`w-8 h-8 flex items-center justify-center rounded text-xs font-bold cursor-pointer transition-colors ${
+                    className={`w-8 h-8 flex items-center justify-center rounded text-sm font-bold cursor-pointer transition-colors ${
                       p === page
                         ? 'bg-primary text-on-primary'
                         : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant'
@@ -753,7 +764,7 @@ function FilesContent() {
         <>
           {/* Upload storage summary */}
           {uploadStorage && (
-            <div className="flex items-center gap-6 mb-6 px-1 text-xs text-on-surface-variant">
+            <div className="flex items-center gap-6 mb-6 px-1 text-sm text-on-surface-variant">
               <span>共 {uploadStorage.count} 個檔案</span>
               <span>·</span>
               <span>{uploadStorage.formatted.used} / {uploadStorage.formatted.quota}</span>
@@ -767,8 +778,8 @@ function FilesContent() {
           {uploads.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 border border-dashed border-outline-variant/20 rounded-lg">
               <span className="material-symbols-outlined text-on-surface-variant text-3xl mb-3 opacity-30">upload_file</span>
-              <p className="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-xs">尚無上傳檔案</p>
-              <p className="text-xs text-on-surface-variant/40 mt-1">在對話輸入框中附加檔案即可上傳</p>
+              <p className="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-sm">尚無上傳檔案</p>
+              <p className="text-sm text-on-surface-variant/40 mt-1">在對話輸入框中附加檔案即可上傳</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -792,16 +803,21 @@ function FilesContent() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-on-surface truncate">{up.original_name}</p>
-                        <p className="text-xs text-on-surface-variant">
+                        <p className="text-sm text-on-surface-variant">
                           {formatSize(up.file_size)} · {new Date(up.created_at.endsWith('Z') ? up.created_at : up.created_at + 'Z').toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
                         </p>
                       </div>
-                      <div className={`flex items-center gap-1 ${scanColor} shrink-0`}>
-                        <span className="material-symbols-outlined text-sm">{scanIcon}</span>
-                        <span className="text-xs font-bold uppercase">{scanLabel}</span>
+                      <div className={`flex flex-col items-end gap-0.5 shrink-0`}>
+                        <div className={`flex items-center gap-1 ${scanColor}`}>
+                          <span className="material-symbols-outlined text-sm">{scanIcon}</span>
+                          <span className="text-sm font-bold uppercase">{scanLabel}</span>
+                        </div>
+                        <span className="text-sm text-on-surface-variant/60 max-w-[200px] text-right leading-tight">
+                          {up.scan_status === 'clean' ? '通過所有安全檢查' : up.scan_status === 'suspicious' ? (up.scan_detail || '發現可疑內容') : (up.scan_detail || '已被系統拒絕')}
+                        </span>
                       </div>
                       <button
-                        onClick={() => deleteUpload(up.id)}
+                        onClick={() => setDeleteUploadTarget(up)}
                         className="w-8 h-8 flex items-center justify-center rounded hover:bg-error/10 text-on-surface-variant hover:text-error cursor-pointer transition-colors opacity-0 group-hover:opacity-100"
                         title="刪除"
                       >
@@ -814,24 +830,24 @@ function FilesContent() {
                         {conv && (
                           <button
                             onClick={() => router.push(`/chat/${up.conversation_id}`)}
-                            className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 cursor-pointer transition-colors mt-2"
+                            className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 cursor-pointer transition-colors mt-2"
                           >
-                            <span className="material-symbols-outlined text-xs">chat</span>
+                            <span className="material-symbols-outlined text-sm">chat</span>
                             <span className="truncate max-w-[200px]">{conv.title}</span>
                           </button>
                         )}
                         {linkedFiles.length > 0 && (
                           <div className="flex items-center gap-2 mt-2">
-                            <span className="material-symbols-outlined text-xs text-on-surface-variant">arrow_forward</span>
+                            <span className="material-symbols-outlined text-sm text-on-surface-variant">arrow_forward</span>
                             {linkedFiles.map(lf => {
                               const lfCfg = getTypeConfig(lf.file_type);
                               return (
                                 <span
                                   key={lf.id}
-                                  className="flex items-center gap-1 text-xs px-2 py-0.5 bg-surface-container-lowest rounded cursor-pointer hover:bg-surface-container-highest transition-colors"
+                                  className="flex items-center gap-1 text-sm px-2 py-0.5 bg-surface-container-lowest rounded cursor-pointer hover:bg-surface-container-highest transition-colors"
                                   onClick={() => setPreviewFile(lf)}
                                 >
-                                  <span className="material-symbols-outlined text-xs" style={{ color: lfCfg.color }}>{lfCfg.icon}</span>
+                                  <span className="material-symbols-outlined text-sm" style={{ color: lfCfg.color }}>{lfCfg.icon}</span>
                                   <span className="text-on-surface truncate max-w-[100px]">{lf.filename}</span>
                                 </span>
                               );
