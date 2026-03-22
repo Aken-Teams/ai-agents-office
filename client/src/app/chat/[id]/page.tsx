@@ -673,7 +673,7 @@ function ChatContent() {
           {/* Title Bar */}
           <header className="flex items-center gap-4 px-8 h-14 bg-surface/80 backdrop-blur-xl shrink-0 border-b border-outline-variant/10">
             <button
-              onClick={() => router.push('/dashboard')}
+              onClick={() => router.push('/conversations')}
               className="text-on-surface-variant hover:text-on-surface transition-colors bg-transparent cursor-pointer"
             >
               <span className="material-symbols-outlined text-sm">arrow_back</span>

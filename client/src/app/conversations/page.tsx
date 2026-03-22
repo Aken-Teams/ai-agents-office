@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
 import Navbar from '../components/Navbar';
@@ -34,8 +34,131 @@ const FILTER_TABS = [
   { value: 'research', label: '研究' },
 ];
 
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 12;
 
+/* ============================================================
+   Delete Confirmation Modal
+   ============================================================ */
+function DeleteConfirmModal({
+  title, onConfirm, onCancel,
+}: {
+  title: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+      if (e.key === 'Enter') onConfirm();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onConfirm, onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center" onClick={onCancel}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div
+        className="relative bg-surface-container rounded-xl shadow-2xl border border-outline-variant/10 w-full max-w-sm mx-4 overflow-hidden animate-in"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex flex-col items-center pt-8 pb-4 px-6">
+          <div className="w-14 h-14 rounded-full bg-error/10 flex items-center justify-center mb-4">
+            <span className="material-symbols-outlined text-error text-3xl">delete_forever</span>
+          </div>
+          <h3 className="font-headline font-bold text-lg text-on-surface mb-2">確定刪除？</h3>
+          <p className="text-sm text-on-surface-variant text-center leading-relaxed">
+            即將刪除對話 <span className="font-medium text-on-surface">{title}</span>，此操作無法復原。
+          </p>
+        </div>
+        <div className="flex gap-3 p-6 pt-2">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-2.5 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-xs uppercase tracking-widest rounded cursor-pointer hover:bg-surface-variant transition-colors"
+          >
+            取消
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-2.5 px-4 bg-error text-on-error font-bold text-xs uppercase tracking-widest rounded cursor-pointer hover:bg-error/80 transition-colors"
+          >
+            刪除
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Rename Modal
+   ============================================================ */
+function RenameModal({
+  currentTitle, onConfirm, onCancel,
+}: {
+  currentTitle: string;
+  onConfirm: (newTitle: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(currentTitle);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.select();
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onCancel]);
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center" onClick={onCancel}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div
+        className="relative bg-surface-container rounded-xl shadow-2xl border border-outline-variant/10 w-full max-w-sm mx-4 overflow-hidden animate-in"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex flex-col pt-8 pb-4 px-6">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <span className="material-symbols-outlined text-primary">edit</span>
+            </div>
+            <h3 className="font-headline font-bold text-lg text-on-surface">重新命名</h3>
+          </div>
+          <input
+            ref={inputRef}
+            type="text"
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && value.trim()) onConfirm(value.trim()); }}
+            className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-lg py-3 px-4 text-sm text-on-surface placeholder:text-outline focus:ring-1 focus:ring-primary/40 focus:border-primary/40 outline-none"
+            placeholder="輸入新的對話名稱..."
+          />
+        </div>
+        <div className="flex gap-3 p-6 pt-2">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-2.5 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-xs uppercase tracking-widest rounded cursor-pointer hover:bg-surface-variant transition-colors"
+          >
+            取消
+          </button>
+          <button
+            onClick={() => value.trim() && onConfirm(value.trim())}
+            disabled={!value.trim() || value.trim() === currentTitle}
+            className="flex-1 py-2.5 px-4 cyber-gradient text-on-primary font-bold text-xs uppercase tracking-widest rounded cursor-pointer hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            儲存
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   Main Content
+   ============================================================ */
 function ConversationsContent() {
   const { user, token, isLoading } = useAuth();
   const router = useRouter();
@@ -43,13 +166,15 @@ function ConversationsContent() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const [page, setPage] = useState(1);
+  const [deleteTarget, setDeleteTarget] = useState<Conversation | null>(null);
+  const [renameTarget, setRenameTarget] = useState<Conversation | null>(null);
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
   }, [user, isLoading, router]);
 
-  useEffect(() => {
+  const fetchConversations = useCallback(() => {
     if (!token) return;
     fetch('/api/conversations', {
       headers: { Authorization: `Bearer ${token}` },
@@ -59,8 +184,33 @@ function ConversationsContent() {
       .catch(console.error);
   }, [token]);
 
+  useEffect(() => { fetchConversations(); }, [fetchConversations]);
+
   // Reset page on filter/search change
   useEffect(() => { setPage(1); }, [filter, search]);
+
+  async function handleDelete() {
+    if (!token || !deleteTarget) return;
+    await fetch(`/api/conversations/${deleteTarget.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setConversations(prev => prev.filter(c => c.id !== deleteTarget.id));
+    setDeleteTarget(null);
+  }
+
+  async function handleRename(newTitle: string) {
+    if (!token || !renameTarget) return;
+    await fetch(`/api/conversations/${renameTarget.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ title: newTitle }),
+    });
+    setConversations(prev => prev.map(c =>
+      c.id === renameTarget.id ? { ...c, title: newTitle } : c
+    ));
+    setRenameTarget(null);
+  }
 
   if (isLoading || !user) return null;
 
@@ -85,9 +235,25 @@ function ConversationsContent() {
     <div className="min-h-screen bg-surface-container-lowest">
       <Navbar />
 
+      {/* Modals */}
+      {deleteTarget && (
+        <DeleteConfirmModal
+          title={deleteTarget.title}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+      {renameTarget && (
+        <RenameModal
+          currentTitle={renameTarget.title}
+          onConfirm={handleRename}
+          onCancel={() => setRenameTarget(null)}
+        />
+      )}
+
       <main className={`${sidebarMargin} pt-8 pb-12 px-10 transition-all duration-300`}>
         {/* Header Section — matches /files style */}
-        <div className="flex justify-between items-end mb-10">
+        <div className="mb-10">
           <div className="max-w-2xl">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-tertiary text-xs font-bold tracking-[0.3em] uppercase">對話歷程</span>
@@ -98,37 +264,9 @@ function ConversationsContent() {
               所有與 AI 代理的對話歷程，點擊可繼續進行對話。
             </p>
           </div>
-
-          {/* Summary Widget */}
-          <div className="rounded-lg p-5 w-72 bg-surface-container flex flex-col gap-3 relative overflow-hidden shrink-0">
-            <div className="absolute top-0 right-0 p-4 opacity-10">
-              <span className="material-symbols-outlined text-4xl">forum</span>
-            </div>
-            <div className="flex justify-between items-center text-xs font-bold tracking-widest uppercase text-on-surface-variant">
-              <span>對話統計</span>
-              <span className="text-primary">{conversations.length} 個對話</span>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {Object.entries(
-                conversations.reduce<Record<string, number>>((acc, c) => {
-                  const label = c.skill_id ? (SKILL_META[c.skill_id]?.label || 'OTHER') : 'AUTO';
-                  acc[label] = (acc[label] || 0) + 1;
-                  return acc;
-                }, {})
-              )
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 3)
-                .map(([label, count]) => (
-                  <div key={label} className="text-center">
-                    <p className="text-lg font-headline font-bold text-on-surface">{count}</p>
-                    <p className="text-[10px] text-on-surface-variant uppercase tracking-wider">{label}</p>
-                  </div>
-                ))}
-            </div>
-          </div>
         </div>
 
-        {/* Filter Tabs + Search — matches /files style */}
+        {/* Filter Tabs + Search */}
         <div className="flex items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-3">
             {FILTER_TABS.map(tab => {
@@ -171,7 +309,7 @@ function ConversationsContent() {
           </div>
         </div>
 
-        {/* Conversations Grid — card style matching /files */}
+        {/* Conversations Table */}
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 border border-dashed border-outline-variant/20 rounded-lg">
             <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-4">
@@ -187,59 +325,77 @@ function ConversationsContent() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {paged.map(conv => {
-              const config = getSkillConfig(conv.skill_id);
-              return (
-                <div
-                  key={conv.id}
-                  className="bg-surface-container hover:bg-surface-container-high transition-colors p-5 flex flex-col gap-4 group cursor-pointer"
-                  onClick={() => router.push(`/chat/${conv.id}`)}
-                >
-                  {/* Top: Icon + Type badge */}
-                  <div className="flex justify-between items-start">
+          <div className="bg-surface-container rounded-lg overflow-hidden">
+            {/* Table Header */}
+            <div className="grid grid-cols-[auto_1fr_100px_120px_140px_80px] gap-4 px-6 py-3 bg-surface-container-high text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+              <span className="w-9" />
+              <span>標題</span>
+              <span>類型</span>
+              <span>狀態</span>
+              <span>建立時間</span>
+              <span className="text-right">操作</span>
+            </div>
+            {/* Table Rows */}
+            <div className="divide-y divide-outline-variant/10">
+              {paged.map(conv => {
+                const config = getSkillConfig(conv.skill_id);
+                return (
+                  <div
+                    key={conv.id}
+                    className="grid grid-cols-[auto_1fr_100px_120px_140px_80px] gap-4 px-6 py-3.5 items-center hover:bg-surface-container-high/50 cursor-pointer transition-colors group"
+                    onClick={() => router.push(`/chat/${conv.id}`)}
+                  >
+                    {/* Icon */}
                     <div
-                      className="w-10 h-10 rounded flex items-center justify-center"
+                      className="w-9 h-9 rounded flex items-center justify-center shrink-0"
                       style={{ background: config.bgColor }}
                     >
-                      <span className="material-symbols-outlined" style={{ color: config.color }}>
+                      <span className="material-symbols-outlined text-sm" style={{ color: config.color }}>
                         {config.icon}
                       </span>
                     </div>
+                    {/* Title */}
+                    <p className="text-sm text-on-surface truncate font-medium">{conv.title}</p>
+                    {/* Type */}
                     <span className="text-xs font-bold tracking-widest uppercase" style={{ color: config.color }}>
                       {config.label}
                     </span>
-                  </div>
-
-                  {/* Title + date */}
-                  <div>
-                    <h3 className="font-headline font-bold text-base leading-tight mb-1 truncate text-on-surface">
-                      {conv.title}
-                    </h3>
-                    <p className="text-xs text-on-surface-variant uppercase tracking-widest">
-                      {new Date(conv.created_at).toLocaleDateString('zh-TW')}
-                    </p>
-                  </div>
-
-                  {/* Bottom: Status + Arrow */}
-                  <div className="mt-auto pt-3 flex items-center justify-between border-t border-outline-variant/10">
+                    {/* Status */}
                     <div className="flex items-center gap-1.5">
                       <span className={`w-1.5 h-1.5 rounded-full ${conv.status === 'active' ? 'bg-success' : 'bg-outline-variant'}`} />
-                      <span className="text-xs text-on-surface-variant uppercase tracking-widest">
+                      <span className="text-xs text-on-surface-variant">
                         {conv.status === 'active' ? '進行中' : '已完成'}
                       </span>
                     </div>
-                    <span className="material-symbols-outlined text-sm text-outline-variant group-hover:text-primary transition-colors">
-                      arrow_forward
+                    {/* Date */}
+                    <span className="text-xs text-on-surface-variant">
+                      {new Date(conv.created_at).toLocaleString('zh-TW', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </span>
+                    {/* Actions */}
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={e => { e.stopPropagation(); setRenameTarget(conv); }}
+                        className="w-7 h-7 flex items-center justify-center rounded bg-transparent hover:bg-primary/10 text-on-surface-variant hover:text-primary cursor-pointer transition-colors opacity-0 group-hover:opacity-100"
+                        title="重新命名"
+                      >
+                        <span className="material-symbols-outlined text-sm">edit</span>
+                      </button>
+                      <button
+                        onClick={e => { e.stopPropagation(); setDeleteTarget(conv); }}
+                        className="w-7 h-7 flex items-center justify-center rounded bg-transparent hover:bg-error/10 text-on-surface-variant hover:text-error cursor-pointer transition-colors opacity-0 group-hover:opacity-100"
+                        title="刪除"
+                      >
+                        <span className="material-symbols-outlined text-sm">delete</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
 
-        {/* Pagination — matches /files style */}
+        {/* Pagination */}
         {filtered.length > 0 && (
           <div className="mt-8 flex items-center justify-between">
             <p className="text-on-surface-variant/60 text-xs uppercase tracking-widest">
