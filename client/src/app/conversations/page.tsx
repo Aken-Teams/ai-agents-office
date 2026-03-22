@@ -285,6 +285,7 @@ function ConversationsContent() {
                   }`}
                 >
                   {tab.label}
+                  <span className="ml-1 text-[10px] opacity-60">{count}</span>
                 </button>
               );
             })}
