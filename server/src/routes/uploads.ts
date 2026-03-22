@@ -25,13 +25,32 @@ fs.mkdirSync(tempDir, { recursive: true });
 
 /**
  * Fix multer's latin1 filename encoding.
- * Multer parses multipart filenames as latin1 by default,
+ * Multer/busboy parses multipart filenames as latin1 by default,
  * which mangles non-ASCII characters (e.g. Chinese).
- * Re-decode from latin1 → utf8 to restore the original filename.
+ *
+ * However, some busboy versions or browser configurations already provide
+ * valid Unicode filenames. We detect whether conversion is actually needed
+ * by checking if all characters are in the latin1 range (0–255).
+ * Characters above 255 mean the string is already proper Unicode.
  */
 function fixFilename(name: string): string {
   try {
-    return Buffer.from(name, 'latin1').toString('utf8');
+    // ASCII-only names don't need fixing
+    if (/^[\x00-\x7F]*$/.test(name)) return name;
+
+    // If any character code > 255, the string is already valid Unicode
+    // (latin1-encoded strings can only have char codes 0–255)
+    for (let i = 0; i < name.length; i++) {
+      if (name.charCodeAt(i) > 255) return name;
+    }
+
+    // All chars are 0–255 with some > 127 → likely latin1-encoded UTF-8
+    const fixed = Buffer.from(name, 'latin1').toString('utf8');
+
+    // Verify the conversion didn't produce replacement characters
+    if (fixed.includes('\uFFFD')) return name;
+
+    return fixed;
   } catch {
     return name;
   }
@@ -50,7 +69,9 @@ const upload = multer({
   storage,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
   fileFilter: (_req, file, cb) => {
-    file.originalname = fixFilename(file.originalname);
+    // Note: fixFilename is applied in storage.filename callback, not here,
+    // to avoid double-conversion which corrupts the name.
+    // Extension check works on ASCII extensions, so no fix needed here.
     if (!isAllowedExtension(file.originalname)) {
       cb(new Error(`不允許的檔案類型: ${path.extname(file.originalname)}`));
       return;
@@ -190,9 +211,16 @@ router.post('/', upload.array('files', 10), (req: Request, res: Response) => {
 router.get('/', (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const status = req.query.status as string;
+  const conversationId = req.query.conversationId as string;
 
   let query = "SELECT * FROM user_uploads WHERE user_id = ?";
   const params: unknown[] = [userId];
+
+  // Filter by conversation
+  if (conversationId) {
+    query += ' AND conversation_id = ?';
+    params.push(conversationId);
+  }
 
   if (status && ['clean', 'suspicious', 'rejected', 'pending'].includes(status)) {
     query += ' AND scan_status = ?';

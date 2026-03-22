@@ -22,11 +22,20 @@ interface UploadRow {
 /**
  * Build a system prompt snippet describing user's uploaded files.
  * Only includes files that passed security scanning (clean or suspicious-but-allowed).
+ * When conversationId is provided, only includes files uploaded in that conversation.
  */
-export function getUserUploadsForPrompt(userId: string, sandboxPath: string): string {
-  const uploads = db.prepare(
-    "SELECT id, filename, original_name, file_type, file_size, storage_path FROM user_uploads WHERE user_id = ? AND scan_status IN ('clean', 'suspicious') ORDER BY created_at DESC"
-  ).all(userId) as UploadRow[];
+export function getUserUploadsForPrompt(userId: string, sandboxPath: string, conversationId?: string): string {
+  let query = "SELECT id, filename, original_name, file_type, file_size, storage_path FROM user_uploads WHERE user_id = ? AND scan_status IN ('clean', 'suspicious')";
+  const params: unknown[] = [userId];
+
+  if (conversationId) {
+    query += ' AND conversation_id = ?';
+    params.push(conversationId);
+  }
+
+  query += ' ORDER BY created_at DESC';
+
+  const uploads = db.prepare(query).all(...params) as UploadRow[];
 
   if (uploads.length === 0) return '';
 

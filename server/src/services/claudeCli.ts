@@ -373,7 +373,7 @@ function processStreamEvent(
               tool: block.name as string,
               id: block.id as string,
               status: 'running',
-              input: block.input ? JSON.stringify(block.input).substring(0, 200) : undefined,
+              input: block.input ? JSON.stringify(block.input).substring(0, 800) : undefined,
             },
           } satisfies SSEEvent);
         }

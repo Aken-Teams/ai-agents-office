@@ -73,53 +73,101 @@ function parseToolInput(tool: string, rawInput?: string): string {
   if (!rawInput) return '';
   // Strip agent prefix (e.g. "pptx-gen:Bash" → "Bash")
   const baseTool = tool.includes(':') ? tool.split(':').pop()! : tool;
+
+  // Try JSON.parse first; if truncated JSON fails, try regex extraction
+  let input: Record<string, string> | null = null;
   try {
-    const input = JSON.parse(rawInput);
-    if (baseTool === 'Write') {
-      const fp = input.file_path || input.path || '';
-      const name = fp.replace(/\\/g, '/').split('/').pop() || fp;
-      return `寫入 ${name}`;
-    }
-    if (baseTool === 'Read') {
-      const fp = input.file_path || input.path || '';
-      const name = fp.replace(/\\/g, '/').split('/').pop() || fp;
-      return `讀取 ${name}`;
-    }
-    if (baseTool === 'WebSearch') {
-      const q = input.query || '';
-      return q.length > 80 ? q.substring(0, 80) + '…' : q;
-    }
-    if (baseTool === 'WebFetch') {
-      const url = input.url || '';
-      try { return new URL(url).hostname; } catch { return url.substring(0, 60); }
-    }
-    if (baseTool === 'Bash') {
-      const cmd = input.command || '';
-      // Show a simplified version of the command
-      if (cmd.includes('generate-pptx')) return '生成簡報檔案';
-      if (cmd.includes('generate-docx')) return '生成文件檔案';
-      if (cmd.includes('generate-xlsx')) return '生成試算表';
-      if (cmd.includes('generate-pdf')) return '生成 PDF';
-      if (cmd.includes('node ')) {
-        const match = cmd.match(/node\s+.*?([^\\/\s]+\.(?:mjs|js|ts))/);
-        if (match) return `執行 ${match[1]}`;
-      }
-      if (cmd.includes('cat ') || cmd.includes('ls ')) return '檢查檔案';
-      const short = cmd.length > 80 ? cmd.substring(0, 80) + '…' : cmd;
-      return short;
-    }
-    if (baseTool === 'Edit') {
-      const fp = input.file_path || '';
-      const name = fp.replace(/\\/g, '/').split('/').pop() || fp;
-      return `編輯 ${name}`;
-    }
-    if (baseTool === 'Glob') return `搜尋 ${input.pattern || ''}`;
-    if (baseTool === 'Grep') return `搜尋 "${input.pattern || ''}"`;
-    // Fallback: show raw but longer
-    return rawInput.length > 80 ? rawInput.substring(0, 80) + '…' : rawInput;
+    input = JSON.parse(rawInput);
   } catch {
+    // Truncated JSON — extract fields via regex
+    input = {};
+    const cmdMatch = rawInput.match(/"command"\s*:\s*"((?:[^"\\]|\\.)*)(?:"|$)/);
+    if (cmdMatch) input.command = cmdMatch[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+    const queryMatch = rawInput.match(/"query"\s*:\s*"((?:[^"\\]|\\.)*)(?:"|$)/);
+    if (queryMatch) input.query = queryMatch[1];
+    const urlMatch = rawInput.match(/"url"\s*:\s*"((?:[^"\\]|\\.)*)(?:"|$)/);
+    if (urlMatch) input.url = urlMatch[1];
+    const fpMatch = rawInput.match(/"file_path"\s*:\s*"((?:[^"\\]|\\.)*)(?:"|$)/);
+    if (fpMatch) input.file_path = fpMatch[1].replace(/\\\\/g, '\\');
+    const patMatch = rawInput.match(/"pattern"\s*:\s*"((?:[^"\\]|\\.)*)(?:"|$)/);
+    if (patMatch) input.pattern = patMatch[1];
+  }
+
+  if (!input || Object.keys(input).length === 0) {
     return rawInput.length > 80 ? rawInput.substring(0, 80) + '…' : rawInput;
   }
+
+  if (baseTool === 'Write') {
+    const fp = input.file_path || input.path || '';
+    const name = fp.replace(/\\/g, '/').split('/').pop() || fp;
+    return name ? `寫入 ${name}` : '寫入檔案';
+  }
+  if (baseTool === 'Read') {
+    const fp = input.file_path || input.path || '';
+    const name = fp.replace(/\\/g, '/').split('/').pop() || fp;
+    return name ? `讀取 ${name}` : '讀取檔案';
+  }
+  if (baseTool === 'WebSearch') {
+    const q = input.query || '';
+    return q ? (q.length > 80 ? q.substring(0, 80) + '…' : q) : '搜尋中';
+  }
+  if (baseTool === 'WebFetch') {
+    const url = input.url || '';
+    try { return `瀏覽 ${new URL(url).hostname}`; } catch { return url ? `瀏覽 ${url.substring(0, 60)}` : '瀏覽網頁'; }
+  }
+  if (baseTool === 'Bash') {
+    const cmd = input.command || '';
+    if (!cmd) return '執行指令';
+    // Generator scripts
+    if (cmd.includes('generate-pptx')) return '生成簡報檔案';
+    if (cmd.includes('generate-docx')) return '生成文件檔案';
+    if (cmd.includes('generate-xlsx')) return '生成試算表';
+    if (cmd.includes('generate-pdf')) return '生成 PDF';
+    // Node/script execution
+    if (cmd.includes('node ')) {
+      const match = cmd.match(/([^\\/\s]+\.(?:mjs|js|ts))/);
+      if (match) return `執行 ${match[1]}`;
+      return '執行 Node 腳本';
+    }
+    // File operations
+    if (cmd.includes('cat ') || cmd.includes('head ') || cmd.includes('tail ')) return '讀取檔案內容';
+    if (cmd.includes('ls ') || cmd.includes('dir ')) return '檢視目錄';
+    if (cmd.includes('mkdir ')) return '建立目錄';
+    if (cmd.includes('cp ') || cmd.includes('copy ')) return '複製檔案';
+    if (cmd.includes('mv ') || cmd.includes('move ')) return '移動檔案';
+    if (cmd.includes('pip ') || cmd.includes('npm ') || cmd.includes('npx ')) return '安裝套件';
+    if (cmd.includes('python')) return '執行 Python 腳本';
+    // cd + subsequent command
+    if (cmd.startsWith('cd ')) {
+      // Extract the command after cd: "cd /path && actual_command"
+      const afterCd = cmd.replace(/^cd\s+"?[^"&]+"?\s*&&\s*/, '').replace(/^cd\s+\S+\s*&&\s*/, '');
+      if (afterCd !== cmd && afterCd.length > 0) {
+        // Re-parse the command after cd
+        if (afterCd.includes('generate-pptx')) return '生成簡報檔案';
+        if (afterCd.includes('generate-docx')) return '生成文件檔案';
+        if (afterCd.includes('generate-xlsx')) return '生成試算表';
+        if (afterCd.includes('generate-pdf')) return '生成 PDF';
+        if (afterCd.includes('node ')) return '執行 Node 腳本';
+        if (afterCd.includes('python')) return '執行 Python 腳本';
+        if (afterCd.includes('cat ') || afterCd.includes('head ')) return '讀取檔案內容';
+        const shortAfter = afterCd.length > 60 ? afterCd.substring(0, 60) + '…' : afterCd;
+        return shortAfter;
+      }
+      return '切換目錄';
+    }
+    // Fallback: show simplified command
+    const short = cmd.length > 80 ? cmd.substring(0, 80) + '…' : cmd;
+    return short;
+  }
+  if (baseTool === 'Edit') {
+    const fp = input.file_path || '';
+    const name = fp.replace(/\\/g, '/').split('/').pop() || fp;
+    return name ? `編輯 ${name}` : '編輯檔案';
+  }
+  if (baseTool === 'Glob') return `搜尋 ${input.pattern || '檔案'}`;
+  if (baseTool === 'Grep') return `搜尋 "${input.pattern || '內容'}"`;
+  // Fallback
+  return rawInput.length > 80 ? rawInput.substring(0, 80) + '…' : rawInput;
 }
 
 /** Get tool icon (material symbol name) and label */
@@ -222,6 +270,28 @@ function ChatContent() {
     })
       .then(r => r.json())
       .then(setFiles)
+      .catch(console.error);
+  }, [token, conversationId]);
+
+  // Load previously uploaded files for this conversation (persists across refresh)
+  useEffect(() => {
+    if (!token || !conversationId) return;
+    fetch(`/api/uploads?conversationId=${conversationId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : [])
+      .then((uploads: Array<{ id: string; original_name: string; file_type: string; file_size: number; scan_status: string }>) => {
+        if (uploads.length > 0) {
+          setAttachedFiles(uploads.map(u => ({
+            id: u.id,
+            originalName: u.original_name,
+            fileType: u.file_type,
+            fileSize: u.file_size,
+            scanStatus: u.scan_status,
+            uploading: false,
+          })));
+        }
+      })
       .catch(console.error);
   }, [token, conversationId]);
 

@@ -293,7 +293,7 @@ function handleDirect(
 
   // Build system prompt with user upload context
   const sandboxPath = getSandboxPath(userId, conversationId);
-  const uploadContext = getUserUploadsForPrompt(userId, sandboxPath);
+  const uploadContext = getUserUploadsForPrompt(userId, sandboxPath, conversationId);
   const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir) + uploadContext;
 
   // Update conversation skill if changed

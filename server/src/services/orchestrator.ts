@@ -298,7 +298,7 @@ export class Orchestrator {
 
     // Build system prompt for this skill (with user upload context)
     const sandboxPath = getSandboxPath(this.userId, this.conversationId);
-    const uploadContext = getUserUploadsForPrompt(this.userId, sandboxPath);
+    const uploadContext = getUserUploadsForPrompt(this.userId, sandboxPath, this.conversationId);
     const systemPrompt = buildSystemPrompt(skill, config.generatorsDir) + uploadContext;
 
     // Get or create session for this skill agent
