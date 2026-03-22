@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-assets.mjs",
     "start": "node dist/index.js",
-    "init-db": "tsx scripts/init-db.ts"
+    "init-db": "tsx scripts/init-db.mjs"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

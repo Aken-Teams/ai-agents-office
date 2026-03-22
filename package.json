@@ -13,7 +13,10 @@
     "dev:client": "pnpm --filter ai-agents-office-client dev",
     "build": "pnpm --filter ai-agents-office-server build && pnpm --filter ai-agents-office-client build",
     "start": "concurrently \"pnpm --filter ai-agents-office-server start\" \"pnpm --filter ai-agents-office-client start\"",
-    "init-db": "pnpm --filter ai-agents-office-server init-db"
+    "start:server": "pnpm --filter ai-agents-office-server start",
+    "start:client": "pnpm --filter ai-agents-office-client start",
+    "init-db": "pnpm --filter ai-agents-office-server init-db",
+    "setup": "pnpm install && pnpm run init-db && pnpm run build"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
