@@ -88,7 +88,7 @@ function buildChatHistory(conversationId: string): string {
 router.post('/:conversationId', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const conversationId = req.params.conversationId as string;
-  const { message, skillId } = req.body;
+  const { message, skillId, uploadIds } = req.body;
 
   if (!message) {
     res.status(400).json({ error: 'Message is required' });
@@ -157,12 +157,17 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
     && !conversation.skill_id  // Conversation doesn't have a pinned skill
     && conversation.mode !== 'direct';  // Not forced to direct mode
 
+  // Validate uploadIds (array of strings)
+  const validUploadIds: string[] = Array.isArray(uploadIds)
+    ? uploadIds.filter((id: unknown) => typeof id === 'string')
+    : [];
+
   if (useOrchestrator) {
     // === Orchestrated Mode ===
-    await handleOrchestrated(req, res, userId, conversationId, sanitizedMessage);
+    await handleOrchestrated(req, res, userId, conversationId, sanitizedMessage, validUploadIds);
   } else {
     // === Direct Mode (backwards compatible) ===
-    handleDirect(req, res, userId, conversationId, conversation, sanitizedMessage, skillId);
+    handleDirect(req, res, userId, conversationId, conversation, sanitizedMessage, skillId, validUploadIds);
   }
 });
 
@@ -175,6 +180,7 @@ async function handleOrchestrated(
   userId: string,
   conversationId: string,
   message: string,
+  uploadIds: string[] = [],
 ) {
   // Setup SSE headers
   res.writeHead(200, {
@@ -202,7 +208,7 @@ async function handleOrchestrated(
     } catch { /* connection closed */ }
   };
 
-  const orchestrator = new Orchestrator(userId, conversationId, sseWriter);
+  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds);
 
   // Track abort function
   activeGenerations.set(conversationId, () => orchestrator.abort());
@@ -281,6 +287,7 @@ function handleDirect(
   conversation: Conversation,
   sanitizedMessage: string,
   skillId?: string,
+  uploadIds: string[] = [],
 ) {
   // Load skill and build system prompt
   const effectiveSkillId = skillId || conversation.skill_id || 'pptx-gen';
@@ -293,7 +300,10 @@ function handleDirect(
 
   // Build system prompt with user upload context
   const sandboxPath = getSandboxPath(userId, conversationId);
-  const uploadContext = getUserUploadsForPrompt(userId, sandboxPath, conversationId);
+  const uploadContext = getUserUploadsForPrompt(userId, sandboxPath, {
+    uploadIds: uploadIds.length > 0 ? uploadIds : undefined,
+    conversationId,
+  });
   const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir) + uploadContext;
 
   // Update conversation skill if changed

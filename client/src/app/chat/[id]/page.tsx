@@ -273,27 +273,27 @@ function ChatContent() {
       .catch(console.error);
   }, [token, conversationId]);
 
-  // Load previously uploaded files for this conversation (persists across refresh)
-  useEffect(() => {
+  // Load conversation's uploaded files for the right sidebar display
+  const [conversationUploads, setConversationUploads] = useState<AttachedFile[]>([]);
+  const reloadConversationUploads = useCallback(() => {
     if (!token || !conversationId) return;
     fetch(`/api/uploads?conversationId=${conversationId}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.ok ? r.json() : [])
       .then((uploads: Array<{ id: string; original_name: string; file_type: string; file_size: number; scan_status: string }>) => {
-        if (uploads.length > 0) {
-          setAttachedFiles(uploads.map(u => ({
-            id: u.id,
-            originalName: u.original_name,
-            fileType: u.file_type,
-            fileSize: u.file_size,
-            scanStatus: u.scan_status,
-            uploading: false,
-          })));
-        }
+        setConversationUploads(uploads.map(u => ({
+          id: u.id,
+          originalName: u.original_name,
+          fileType: u.file_type,
+          fileSize: u.file_size,
+          scanStatus: u.scan_status,
+          uploading: false,
+        })));
       })
       .catch(console.error);
   }, [token, conversationId]);
+  useEffect(() => { reloadConversationUploads(); }, [reloadConversationUploads]);
 
   // Auto-scroll
   useEffect(() => {
@@ -326,6 +326,7 @@ function ChatContent() {
     const userMessage = messageToSend;
     // Capture attached file names for display in the message
     const currentAttached = attachedFiles.filter(f => !f.uploading && f.scanStatus !== 'rejected');
+    const currentUploadIds = currentAttached.map(f => f.id);
     const attachmentNote = currentAttached.length > 0
       ? `\n\n📎 ${currentAttached.map(f => f.originalName).join(', ')}`
       : '';
@@ -356,7 +357,11 @@ function ChatContent() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ message: userMessage, ...(skillId && { skillId }) }),
+        body: JSON.stringify({
+          message: userMessage,
+          ...(skillId && { skillId }),
+          ...(currentUploadIds.length > 0 && { uploadIds: currentUploadIds }),
+        }),
         signal: controller.signal,
       });
 
@@ -512,7 +517,7 @@ function ChatContent() {
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, streaming, token, conversationId, skillId]);
+  }, [input, streaming, token, conversationId, skillId, attachedFiles]);
 
   // Auto-send pending message from dashboard smart input
   useEffect(() => {
@@ -582,6 +587,9 @@ function ChatContent() {
         ...prev.filter(f => !f.uploading),
         ...uploaded,
       ]);
+
+      // Refresh sidebar upload list
+      reloadConversationUploads();
 
       // Notify about rejected files
       const rejected = uploaded.filter(u => u.scanStatus === 'rejected');
@@ -1062,6 +1070,36 @@ function ChatContent() {
               </div>
             )}
           </div>
+
+          {/* Uploaded Files (conversation history) */}
+          {conversationUploads.length > 0 && (
+            <div className="space-y-3 border-t border-outline-variant/10 pt-4">
+              <h4 className="text-xs font-headline font-bold text-outline tracking-widest uppercase">
+                上傳的檔案
+              </h4>
+              <div className="space-y-1.5">
+                {conversationUploads.map(file => (
+                  <div
+                    key={file.id}
+                    className="flex items-center gap-3 p-3 hover:bg-surface-container rounded-lg group transition-colors border border-transparent hover:border-outline-variant/20"
+                  >
+                    <span className={`material-symbols-outlined ${getFileColor(file.fileType)} text-lg`}>
+                      {getFileIcon(file.fileType)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-xs text-on-surface font-medium block truncate">{file.originalName}</span>
+                      <span className="text-xs text-outline">
+                        {file.fileType.toUpperCase()} · {formatSize(file.fileSize)}
+                      </span>
+                    </div>
+                    {file.scanStatus === 'clean' && (
+                      <span className="material-symbols-outlined text-green-400 text-sm shrink-0" title="安全">verified_user</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Agent Tasks Summary */}
           {agentTasks.length > 0 && (

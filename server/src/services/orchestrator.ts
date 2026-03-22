@@ -52,11 +52,13 @@ export class Orchestrator {
   private aborted = false;
   private activeAbortFns: Array<() => void> = [];
   private tasks: TaskExecution[] = [];
+  private uploadIds: string[];
 
-  constructor(userId: string, conversationId: string, sseWriter: SSEWriter) {
+  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = []) {
     this.userId = userId;
     this.conversationId = conversationId;
     this.sseWriter = sseWriter;
+    this.uploadIds = uploadIds;
   }
 
   async run(message: string): Promise<OrchestratorResult> {
@@ -298,7 +300,10 @@ export class Orchestrator {
 
     // Build system prompt for this skill (with user upload context)
     const sandboxPath = getSandboxPath(this.userId, this.conversationId);
-    const uploadContext = getUserUploadsForPrompt(this.userId, sandboxPath, this.conversationId);
+    const uploadContext = getUserUploadsForPrompt(this.userId, sandboxPath, {
+      uploadIds: this.uploadIds.length > 0 ? this.uploadIds : undefined,
+      conversationId: this.conversationId,
+    });
     const systemPrompt = buildSystemPrompt(skill, config.generatorsDir) + uploadContext;
 
     // Get or create session for this skill agent

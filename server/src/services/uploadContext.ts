@@ -22,20 +22,35 @@ interface UploadRow {
 /**
  * Build a system prompt snippet describing user's uploaded files.
  * Only includes files that passed security scanning (clean or suspicious-but-allowed).
- * When conversationId is provided, only includes files uploaded in that conversation.
+ *
+ * @param uploadIds - Specific upload IDs to include (message-level binding).
+ *                    If provided, only these files are included.
+ *                    If empty/undefined, falls back to conversation-level scope.
+ * @param conversationId - Fallback: include all uploads in this conversation.
  */
-export function getUserUploadsForPrompt(userId: string, sandboxPath: string, conversationId?: string): string {
-  let query = "SELECT id, filename, original_name, file_type, file_size, storage_path FROM user_uploads WHERE user_id = ? AND scan_status IN ('clean', 'suspicious')";
-  const params: unknown[] = [userId];
+export function getUserUploadsForPrompt(
+  userId: string,
+  sandboxPath: string,
+  options?: { uploadIds?: string[]; conversationId?: string },
+): string {
+  const { uploadIds, conversationId } = options || {};
 
-  if (conversationId) {
-    query += ' AND conversation_id = ?';
-    params.push(conversationId);
+  let uploads: UploadRow[];
+
+  if (uploadIds && uploadIds.length > 0) {
+    // Message-level: only include specific files
+    const placeholders = uploadIds.map(() => '?').join(',');
+    uploads = db.prepare(
+      `SELECT id, filename, original_name, file_type, file_size, storage_path FROM user_uploads WHERE user_id = ? AND id IN (${placeholders}) AND scan_status IN ('clean', 'suspicious') ORDER BY created_at DESC`
+    ).all(userId, ...uploadIds) as UploadRow[];
+  } else if (conversationId) {
+    // Conversation-level fallback
+    uploads = db.prepare(
+      "SELECT id, filename, original_name, file_type, file_size, storage_path FROM user_uploads WHERE user_id = ? AND conversation_id = ? AND scan_status IN ('clean', 'suspicious') ORDER BY created_at DESC"
+    ).all(userId, conversationId) as UploadRow[];
+  } else {
+    uploads = [];
   }
-
-  query += ' ORDER BY created_at DESC';
-
-  const uploads = db.prepare(query).all(...params) as UploadRow[];
 
   if (uploads.length === 0) return '';
 
