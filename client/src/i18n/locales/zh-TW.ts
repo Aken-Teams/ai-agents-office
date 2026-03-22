@@ -125,6 +125,68 @@ const zhTW = {
   'dashboard.samples.research': '研究 AI 產業最新趨勢',
   'dashboard.samples.research.template': '請幫我研究 2026 年 AI 產業最新趨勢，並整理成一份完整的研究報告，涵蓋以下面向：\n\n1. 全球 AI 市場規模與投資趨勢\n2. 大型語言模型（LLM）技術突破與新進展\n3. AI Agent 生態系發展現況\n4. 企業 AI 導入率與 ROI 分析\n5. AI 對各產業的影響（製造、金融、醫療、教育）\n6. AI 監管法規最新動態（歐盟 AI Act、美國行政令）\n7. 台灣 AI 產業政策與機會\n8. 值得關注的 AI 新創公司\n\n請提供具體數據與來源，使用繁體中文撰寫',
 
+  // Templates
+  'templates.selectTitle': '選擇範本',
+  'templates.skip': '跳過，讓 AI 自行決定格式',
+  'templates.active': '使用範本',
+  'templates.instruction': '範本格式',
+
+  // PPTX Style Templates
+  'templates.pptx.minimalPro': '簡約專業',
+  'templates.pptx.minimalPro.desc': '乾淨留白、低對比配色',
+  'templates.pptx.minimalPro.prompt': '簡約專業風格：大量留白，低對比度配色（白底、淺灰輔助色、深灰文字），無裝飾線條，San-serif 字體，每頁只放一個重點，圖表使用單色系，整體簡潔俐落。',
+  'templates.pptx.techDark': '科技深色',
+  'templates.pptx.techDark.desc': '深色背景、霓虹強調色',
+  'templates.pptx.techDark.prompt': '科技深色風格：深色背景（#1a1a2e 或深藍黑色），霓虹色強調（青色、電光藍、亮綠），等寬字體標題，漸層元素，數據用發光效果呈現，整體科技感、未來感十足。',
+  'templates.pptx.corporate': '商務經典',
+  'templates.pptx.corporate.desc': '藍白配色、正式穩重',
+  'templates.pptx.corporate.prompt': '商務經典風格：藍白主色調，正式穩重排版，含頁首頁尾（公司名/頁碼），結構化條列重點，圖表使用商務藍色系，適合會議室簡報和正式場合。',
+  'templates.pptx.creative': '活潑創意',
+  'templates.pptx.creative.desc': '大膽配色、圖文並茂',
+  'templates.pptx.creative.prompt': '活潑創意風格：大膽多彩配色（橙、紫、青綠），不規則排版，圓角色塊，活潑的圖示搭配，適當使用 emoji，大字標題搭配精簡文字，適合行銷、創意提案。',
+
+  // DOCX Style Templates
+  'templates.docx.formal': '正式公文',
+  'templates.docx.formal.desc': '嚴謹格式、標準排版',
+  'templates.docx.formal.prompt': '正式公文風格：標準公文排版，明確的標題層級（一、（一）、1.），1.5 倍行距，新細明體或標楷體，含發文字號、主旨、說明、辦法等段落，頁首頁尾含機關名稱與頁碼。',
+  'templates.docx.modern': '現代簡約',
+  'templates.docx.modern.desc': '無襯線字體、清爽版面',
+  'templates.docx.modern.prompt': '現代簡約風格：無襯線字體（如 Noto Sans），充足的段落間距，使用色塊和分隔線劃分區域，重點文字用顏色標示而非粗體，整體乾淨清爽，適合新創公司和科技業文件。',
+  'templates.docx.academic': '學術論文',
+  'templates.docx.academic.desc': '嚴謹引用、APA 格式',
+  'templates.docx.academic.prompt': '學術論文風格：APA/IEEE 格式參考，Times New Roman 12pt，雙倍行距，含摘要、關鍵字、章節編號、圖表編號與說明、參考文獻格式，頁碼置於右上角，適合學術發表。',
+  'templates.docx.compact': '精簡摘要',
+  'templates.docx.compact.desc': '高密度資訊、一頁重點',
+  'templates.docx.compact.prompt': '精簡摘要風格：高密度排版，縮小行距和邊距，使用表格和條列式整理資訊，重點用粗體和色塊標示，盡量在最少頁數內呈現完整內容，適合管理層快速閱讀的摘要報告。',
+
+  // XLSX Style Templates
+  'templates.xlsx.dashboard': '儀表板風格',
+  'templates.xlsx.dashboard.desc': '資訊卡片、KPI 摘要',
+  'templates.xlsx.dashboard.prompt': '儀表板風格：頂部放 KPI 摘要區（大數字+趨勢箭頭），下方為數據表格和圖表區，使用色塊區分區域，條件格式標示異常值，整體像是 BI 儀表板的佈局，資訊一目瞭然。',
+  'templates.xlsx.clean': '簡約清爽',
+  'templates.xlsx.clean.desc': '極簡線條、低飽和色',
+  'templates.xlsx.clean.prompt': '簡約清爽風格：極簡設計，細框線或無框線，淡灰色標題列背景，數據對齊整齊，使用低飽和度顏色，留白充足，字體統一，整體乾淨專業，不花俏。',
+  'templates.xlsx.financial': '財務報表',
+  'templates.xlsx.financial.desc': '專業會計、雙線框格式',
+  'templates.xlsx.financial.prompt': '財務報表風格：傳統會計報表排版，使用雙底線表示合計，千分位格式，負數用括號表示，標題列加粗底色，小計和合計行明確區分，含備註欄位，適合正式財務呈報。',
+  'templates.xlsx.colorful': '彩色數據',
+  'templates.xlsx.colorful.desc': '多色區分、視覺化標示',
+  'templates.xlsx.colorful.prompt': '彩色數據風格：使用多種顏色區分不同類別和狀態，條件格式（紅黃綠燈號），交替行背景色，重要數據用色塊標示，圖表用鮮明配色，適合需要快速視覺辨識的數據報表。',
+
+  // PDF Style Templates
+  'templates.pdf.formal': '正式報告',
+  'templates.pdf.formal.desc': '封面頁、目錄、頁首尾',
+  'templates.pdf.formal.prompt': '正式報告風格：含精美封面頁（標題、作者、日期、機構標誌位置），自動目錄，頁首含文件標題，頁尾含頁碼，章節編號清晰，版面正式專業，適合企業年報或政府報告。',
+  'templates.pdf.modern': '現代雜誌',
+  'templates.pdf.modern.desc': '多欄排版、色塊點綴',
+  'templates.pdf.modern.prompt': '現代雜誌風格：使用雙欄或多欄排版，色塊側邊欄放重點摘要，大標題搭配細字內文，善用引言區塊和數據亮點框，整體像雜誌版面，視覺豐富但不雜亂。',
+  'templates.pdf.magazine': '圖文並茂',
+  'templates.pdf.magazine.desc': '大圖搭配、視覺導向',
+  'templates.pdf.magazine.prompt': '圖文並茂風格：每個段落搭配圖示或圖片區域，大面積視覺元素，文字精簡有力，使用 pull quote 和 callout box，色彩豐富，適合產品手冊、行銷素材。',
+  'templates.pdf.technical': '技術文件',
+  'templates.pdf.technical.desc': '程式碼區塊、結構化',
+  'templates.pdf.technical.prompt': '技術文件風格：等寬字體程式碼區塊（含語法高亮說明），表格呈現 API 規格，清晰的章節層級，注意和警告使用不同色塊標示，含版本資訊和更新紀錄區塊，適合開發文件。',
+
   // Chat
   'chat.tool.generatePptx': '生成簡報檔案',
   'chat.tool.generateDocx': '生成文件檔案',

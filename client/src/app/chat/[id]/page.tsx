@@ -235,6 +235,7 @@ function ChatContent() {
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [agentTasks, setAgentTasks] = useState<AgentTask[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [pendingTemplate, setPendingTemplate] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sidebarMargin = useSidebarMargin();
   const abortRef = useRef<AbortController | null>(null);
@@ -325,7 +326,11 @@ function ChatContent() {
     const messageToSend = directMessage || input.trim();
     if (!messageToSend || streaming || !token) return;
 
-    const userMessage = messageToSend;
+    // Inject template instruction if a template was selected
+    const userMessage = pendingTemplate
+      ? `[${t('templates.instruction' as any)}：${pendingTemplate}]\n\n${messageToSend}`
+      : messageToSend;
+    if (pendingTemplate) setPendingTemplate(null);
     // Capture attached file names for display in the message
     const currentAttached = attachedFiles.filter(f => !f.uploading && f.scanStatus !== 'rejected');
     const currentUploadIds = currentAttached.map(f => f.id);
@@ -519,7 +524,18 @@ function ChatContent() {
       setStreaming(false);
       abortRef.current = null;
     }
-  }, [input, streaming, token, conversationId, skillId, attachedFiles, t]);
+  }, [input, streaming, token, conversationId, skillId, attachedFiles, pendingTemplate, t]);
+
+  // Load pending template from sessionStorage (set by Navbar modal)
+  useEffect(() => {
+    if (!conversationLoaded) return;
+    const tplKey = `pending_template_${conversationId}`;
+    const tpl = sessionStorage.getItem(tplKey);
+    if (tpl) {
+      sessionStorage.removeItem(tplKey);
+      setPendingTemplate(tpl);
+    }
+  }, [conversationLoaded, conversationId]);
 
   // Auto-send pending message from dashboard smart input
   useEffect(() => {
@@ -920,6 +936,20 @@ function ChatContent() {
 
           {/* Input Area */}
           <div className="p-6 pt-0">
+            {/* Template banner */}
+            {pendingTemplate && (
+              <div className="mb-2 flex items-center gap-2 px-3 py-2 bg-primary/10 border border-primary/20 rounded-lg text-sm text-primary">
+                <span className="material-symbols-outlined text-sm">style</span>
+                <span className="font-bold">{t('templates.active' as any)}:</span>
+                <span className="flex-1 truncate">{pendingTemplate}</span>
+                <button
+                  onClick={() => setPendingTemplate(null)}
+                  className="hover:text-error transition-colors cursor-pointer shrink-0"
+                >
+                  <span className="material-symbols-outlined text-sm">close</span>
+                </button>
+              </div>
+            )}
             <div className="bg-surface-container rounded-lg border border-outline-variant/20 focus-within:border-primary/40 transition-all p-2">
               {/* Attached files chips */}
               {attachedFiles.length > 0 && (

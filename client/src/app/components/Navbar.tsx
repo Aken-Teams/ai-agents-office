@@ -25,6 +25,33 @@ const DOC_TYPES = [
   { id: 'research', labelKey: 'nav.docTypes.research.label' as const, descKey: 'nav.docTypes.research.desc' as const, icon: 'travel_explore', colorClass: 'text-on-surface-variant' },
 ];
 
+const SKILL_TEMPLATES: Record<string, Array<{ id: string; icon: string; labelKey: string; promptKey: string; descKey: string }>> = {
+  'pptx-gen': [
+    { id: 'minimal-pro', icon: 'tune', labelKey: 'templates.pptx.minimalPro' as any, descKey: 'templates.pptx.minimalPro.desc' as any, promptKey: 'templates.pptx.minimalPro.prompt' as any },
+    { id: 'tech-dark', icon: 'dark_mode', labelKey: 'templates.pptx.techDark' as any, descKey: 'templates.pptx.techDark.desc' as any, promptKey: 'templates.pptx.techDark.prompt' as any },
+    { id: 'corporate', icon: 'business_center', labelKey: 'templates.pptx.corporate' as any, descKey: 'templates.pptx.corporate.desc' as any, promptKey: 'templates.pptx.corporate.prompt' as any },
+    { id: 'creative', icon: 'palette', labelKey: 'templates.pptx.creative' as any, descKey: 'templates.pptx.creative.desc' as any, promptKey: 'templates.pptx.creative.prompt' as any },
+  ],
+  'docx-gen': [
+    { id: 'formal', icon: 'verified', labelKey: 'templates.docx.formal' as any, descKey: 'templates.docx.formal.desc' as any, promptKey: 'templates.docx.formal.prompt' as any },
+    { id: 'modern', icon: 'auto_awesome', labelKey: 'templates.docx.modern' as any, descKey: 'templates.docx.modern.desc' as any, promptKey: 'templates.docx.modern.prompt' as any },
+    { id: 'academic', icon: 'school', labelKey: 'templates.docx.academic' as any, descKey: 'templates.docx.academic.desc' as any, promptKey: 'templates.docx.academic.prompt' as any },
+    { id: 'compact', icon: 'density_small', labelKey: 'templates.docx.compact' as any, descKey: 'templates.docx.compact.desc' as any, promptKey: 'templates.docx.compact.prompt' as any },
+  ],
+  'xlsx-gen': [
+    { id: 'dashboard', icon: 'dashboard', labelKey: 'templates.xlsx.dashboard' as any, descKey: 'templates.xlsx.dashboard.desc' as any, promptKey: 'templates.xlsx.dashboard.prompt' as any },
+    { id: 'clean', icon: 'filter_none', labelKey: 'templates.xlsx.clean' as any, descKey: 'templates.xlsx.clean.desc' as any, promptKey: 'templates.xlsx.clean.prompt' as any },
+    { id: 'financial', icon: 'account_balance', labelKey: 'templates.xlsx.financial' as any, descKey: 'templates.xlsx.financial.desc' as any, promptKey: 'templates.xlsx.financial.prompt' as any },
+    { id: 'colorful', icon: 'format_color_fill', labelKey: 'templates.xlsx.colorful' as any, descKey: 'templates.xlsx.colorful.desc' as any, promptKey: 'templates.xlsx.colorful.prompt' as any },
+  ],
+  'pdf-gen': [
+    { id: 'formal', icon: 'verified', labelKey: 'templates.pdf.formal' as any, descKey: 'templates.pdf.formal.desc' as any, promptKey: 'templates.pdf.formal.prompt' as any },
+    { id: 'modern', icon: 'auto_awesome', labelKey: 'templates.pdf.modern' as any, descKey: 'templates.pdf.modern.desc' as any, promptKey: 'templates.pdf.modern.prompt' as any },
+    { id: 'magazine', icon: 'menu_book', labelKey: 'templates.pdf.magazine' as any, descKey: 'templates.pdf.magazine.desc' as any, promptKey: 'templates.pdf.magazine.prompt' as any },
+    { id: 'technical', icon: 'code', labelKey: 'templates.pdf.technical' as any, descKey: 'templates.pdf.technical.desc' as any, promptKey: 'templates.pdf.technical.prompt' as any },
+  ],
+};
+
 const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
   { value: 'zh-TW', label: '繁體中文' },
   { value: 'zh-CN', label: '简体中文' },
@@ -38,6 +65,7 @@ export default function Navbar() {
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem(SIDEBAR_KEY) === '1';
@@ -78,7 +106,7 @@ export default function Navbar() {
 
   if (!user) return null;
 
-  async function handleCreate(skillId: string) {
+  async function handleCreate(skillId: string, templatePrompt?: string) {
     if (!token || creating) return;
     setCreating(true);
     try {
@@ -93,10 +121,23 @@ export default function Navbar() {
         body: JSON.stringify({ title, skillId }),
       });
       const conv = await res.json();
+      if (templatePrompt) {
+        sessionStorage.setItem(`pending_template_${conv.id}`, templatePrompt);
+      }
       setShowModal(false);
+      setSelectedSkill(null);
       router.push(`/chat/${conv.id}`);
     } finally {
       setCreating(false);
+    }
+  }
+
+  function handleSkillClick(skillId: string) {
+    // data-analyst and research have no templates — go directly
+    if (SKILL_TEMPLATES[skillId]) {
+      setSelectedSkill(skillId);
+    } else {
+      handleCreate(skillId);
     }
   }
 
@@ -453,7 +494,7 @@ export default function Navbar() {
       {showModal && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center"
-          onClick={() => setShowModal(false)}
+          onClick={() => { setShowModal(false); setSelectedSkill(null); }}
         >
           {/* Backdrop */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
@@ -463,44 +504,96 @@ export default function Navbar() {
             className="relative bg-surface-container rounded-xl shadow-2xl border border-outline-variant/10 w-full max-w-lg mx-4 overflow-hidden animate-in"
             onClick={e => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="px-6 py-5 flex items-center justify-between border-b border-outline-variant/10">
-              <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-primary">add_circle</span>
-                <h2 className="text-sm font-headline font-bold">{t('nav.modalTitle')}</h2>
-              </div>
-              <button
-                onClick={() => setShowModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors bg-transparent cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
-              </button>
-            </div>
-
-            {/* Agent Options Grid */}
-            <div className="p-6 grid grid-cols-3 gap-3">
-              {DOC_TYPES.map(doc => (
-                <button
-                  key={doc.id}
-                  onClick={() => handleCreate(doc.id)}
-                  disabled={creating}
-                  className="bg-surface-container-high p-5 rounded-lg flex flex-col gap-3 hover:bg-surface-variant transition-all text-left disabled:opacity-50 cursor-pointer group border border-transparent hover:border-primary/20"
-                >
-                  <span className={`material-symbols-outlined text-2xl ${doc.colorClass} group-hover:scale-110 transition-transform`}>
-                    {doc.icon}
-                  </span>
-                  <span className="text-sm font-bold text-on-surface">{t(doc.labelKey)}</span>
-                  <span className="text-sm text-on-surface-variant">{t(doc.descKey)}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Footer hint */}
-            <div className="px-6 pb-5">
-              <p className="text-sm text-on-surface-variant text-center">
-                {t('nav.modalHint')}
-              </p>
-            </div>
+            {!selectedSkill ? (
+              <>
+                {/* Step 1: Agent Options */}
+                <div className="px-6 py-5 flex items-center justify-between border-b border-outline-variant/10">
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-primary">add_circle</span>
+                    <h2 className="text-sm font-headline font-bold">{t('nav.modalTitle')}</h2>
+                  </div>
+                  <button
+                    onClick={() => { setShowModal(false); setSelectedSkill(null); }}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors bg-transparent cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
+                  </button>
+                </div>
+                <div className="p-6 grid grid-cols-3 gap-3">
+                  {DOC_TYPES.map(doc => (
+                    <button
+                      key={doc.id}
+                      onClick={() => handleSkillClick(doc.id)}
+                      disabled={creating}
+                      className="bg-surface-container-high p-5 rounded-lg flex flex-col gap-3 hover:bg-surface-variant transition-all text-left disabled:opacity-50 cursor-pointer group border border-transparent hover:border-primary/20"
+                    >
+                      <span className={`material-symbols-outlined text-2xl ${doc.colorClass} group-hover:scale-110 transition-transform`}>
+                        {doc.icon}
+                      </span>
+                      <span className="text-sm font-bold text-on-surface">{t(doc.labelKey)}</span>
+                      <span className="text-sm text-on-surface-variant">{t(doc.descKey)}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="px-6 pb-5">
+                  <p className="text-sm text-on-surface-variant text-center">
+                    {t('nav.modalHint')}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Step 2: Template Selection */}
+                <div className="px-6 py-5 flex items-center justify-between border-b border-outline-variant/10">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setSelectedSkill(null)}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors bg-transparent cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-on-surface-variant text-sm">arrow_back</span>
+                    </button>
+                    <span className={`material-symbols-outlined ${DOC_TYPES.find(d => d.id === selectedSkill)?.colorClass || 'text-primary'}`}>
+                      {DOC_TYPES.find(d => d.id === selectedSkill)?.icon}
+                    </span>
+                    <h2 className="text-sm font-headline font-bold">
+                      {t((DOC_TYPES.find(d => d.id === selectedSkill)?.labelKey || 'nav.modalTitle') as any)} — {t('templates.selectTitle' as any)}
+                    </h2>
+                  </div>
+                  <button
+                    onClick={() => { setShowModal(false); setSelectedSkill(null); }}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors bg-transparent cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
+                  </button>
+                </div>
+                <div className="p-6 grid grid-cols-2 gap-3">
+                  {(SKILL_TEMPLATES[selectedSkill] || []).map(tmpl => (
+                    <button
+                      key={tmpl.id}
+                      onClick={() => handleCreate(selectedSkill, t(tmpl.promptKey as any))}
+                      disabled={creating}
+                      className="bg-surface-container-high p-5 rounded-lg flex flex-col gap-2 hover:bg-surface-variant transition-all text-left disabled:opacity-50 cursor-pointer group border border-transparent hover:border-primary/20"
+                    >
+                      <span className="material-symbols-outlined text-2xl text-primary group-hover:scale-110 transition-transform">
+                        {tmpl.icon}
+                      </span>
+                      <span className="text-sm font-bold text-on-surface">{t(tmpl.labelKey as any)}</span>
+                      <span className="text-sm text-on-surface-variant leading-snug">{t(tmpl.descKey as any)}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="px-6 pb-5">
+                  <button
+                    onClick={() => handleCreate(selectedSkill)}
+                    disabled={creating}
+                    className="w-full py-2.5 text-sm font-bold text-on-surface-variant hover:text-on-surface bg-surface-container-highest/50 hover:bg-surface-container-highest rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-sm">skip_next</span>
+                    {t('templates.skip' as any)}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
