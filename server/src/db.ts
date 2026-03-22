@@ -117,6 +117,13 @@ export function initializeDatabase(): void {
     db.exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
   }
 
+  // Migration: add conversation_id to user_uploads if missing
+  try {
+    db.prepare("SELECT conversation_id FROM user_uploads LIMIT 1").get();
+  } catch {
+    db.exec("ALTER TABLE user_uploads ADD COLUMN conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL");
+  }
+
   // Admin audit log table
   db.exec(`
     CREATE TABLE IF NOT EXISTS admin_audit_log (
@@ -151,20 +158,22 @@ export function initializeDatabase(): void {
   // User uploads table (user-provided files for analysis)
   db.exec(`
     CREATE TABLE IF NOT EXISTS user_uploads (
-      id            TEXT PRIMARY KEY,
-      user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      filename      TEXT NOT NULL,
-      original_name TEXT NOT NULL,
-      file_type     TEXT NOT NULL,
-      mime_type     TEXT,
-      file_size     INTEGER NOT NULL DEFAULT 0,
-      scan_status   TEXT NOT NULL DEFAULT 'pending',
-      scan_detail   TEXT,
-      storage_path  TEXT NOT NULL,
-      created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+      id              TEXT PRIMARY KEY,
+      user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+      filename        TEXT NOT NULL,
+      original_name   TEXT NOT NULL,
+      file_type       TEXT NOT NULL,
+      mime_type       TEXT,
+      file_size       INTEGER NOT NULL DEFAULT 0,
+      scan_status     TEXT NOT NULL DEFAULT 'pending',
+      scan_detail     TEXT,
+      storage_path    TEXT NOT NULL,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_uploads_user ON user_uploads(user_id);
     CREATE INDEX IF NOT EXISTS idx_uploads_scan ON user_uploads(scan_status);
+    CREATE INDEX IF NOT EXISTS idx_uploads_conv ON user_uploads(conversation_id);
   `);
 
   // Seed admin user

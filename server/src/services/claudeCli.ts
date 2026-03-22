@@ -63,8 +63,9 @@ interface ClaudeResult {
 }
 
 // Tools worker agents are allowed to use in sandbox
+// Bash is broadly allowed; dangerous patterns are blocked via DISALLOWED_TOOLS
 const ALLOWED_TOOLS = [
-  'Bash(node:*)',
+  'Bash',
   'Write',
   'Read',
   'WebSearch',
@@ -173,7 +174,11 @@ export function spawnClaude(
   // npm global installs create .cmd wrappers that can break under concurrently/tsx
   const resolvedCmd = resolveClaudeCliPath(config.claudeCliPath);
 
-  console.log(`[Claude CLI] Spawning for conversation ${options.conversationId} (cwd: ${sandboxPath})`);
+  const logRole = options.role || 'worker';
+  const logSkill = options.skillId || 'unknown';
+  console.log(`[Claude CLI] Spawning ${logRole}/${logSkill} for conversation ${options.conversationId} (cwd: ${sandboxPath})`);
+  console.log(`[Claude CLI]   allowedTools: ${allowedTools.join(',')}`);
+  console.log(`[Claude CLI]   args: ${args.join(' ')}`);
 
   let proc: ChildProcess;
   try {
@@ -240,9 +245,13 @@ export function spawnClaude(
 
   // Process exit
   proc.on('exit', (code) => {
-    console.log(`[Claude CLI] Process exited with code ${code}`);
+    console.log(`[Claude CLI] ${logRole}/${logSkill} exited with code ${code}`);
+    if (stderrBuffer) {
+      console.error(`[Claude CLI] ${logRole}/${logSkill} stderr:\n${stderrBuffer.substring(0, 1000)}`);
+    }
 
     if (code !== 0 && !inputTokens) {
+      console.error(`[Claude CLI] ${logRole}/${logSkill} FAILED: code=${code}, inputTokens=0, stderr=${stderrBuffer.substring(0, 500)}`);
       emitter.emit('event', {
         type: 'error',
         data: `Claude CLI exited with code ${code}. ${stderrBuffer || 'No error details.'}`,

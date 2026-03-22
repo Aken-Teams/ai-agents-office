@@ -19,6 +19,8 @@ const DOC_TYPES = [
   { id: 'docx-gen', label: '文件', desc: '文書撰寫', icon: 'description', colorClass: 'text-tertiary' },
   { id: 'xlsx-gen', label: '試算表', desc: '數據分析', icon: 'table_chart', colorClass: 'text-success' },
   { id: 'pdf-gen', label: 'PDF', desc: '文件輸出', icon: 'picture_as_pdf', colorClass: 'text-error' },
+  { id: 'data-analyst', label: '數據分析', desc: '上傳資料分析', icon: 'analytics', colorClass: 'text-primary' },
+  { id: 'research', label: '網路研究', desc: '搜尋與彙整', icon: 'travel_explore', colorClass: 'text-on-surface-variant' },
 ];
 
 export default function Navbar() {
@@ -45,7 +47,7 @@ export default function Navbar() {
     setCreating(true);
     try {
       const docType = DOC_TYPES.find(s => s.id === skillId);
-      const title = `New ${docType?.label || ''} Document`;
+      const title = docType?.label ? `New ${docType.label}` : 'New Conversation';
       const res = await fetch('/api/conversations', {
         method: 'POST',
         headers: {
@@ -184,7 +186,7 @@ export default function Navbar() {
 
           {/* Modal */}
           <div
-            className="relative bg-surface-container rounded-xl shadow-2xl border border-outline-variant/10 w-full max-w-md mx-4 overflow-hidden animate-in"
+            className="relative bg-surface-container rounded-xl shadow-2xl border border-outline-variant/10 w-full max-w-lg mx-4 overflow-hidden animate-in"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
@@ -202,7 +204,7 @@ export default function Navbar() {
             </div>
 
             {/* Agent Options Grid */}
-            <div className="p-6 grid grid-cols-2 gap-3">
+            <div className="p-6 grid grid-cols-3 gap-3">
               {DOC_TYPES.map(doc => (
                 <button
                   key={doc.id}

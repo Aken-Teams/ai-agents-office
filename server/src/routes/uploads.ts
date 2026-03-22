@@ -70,6 +70,7 @@ function getUserUploadSize(userId: string): number {
 
 router.post('/', upload.array('files', 10), (req: Request, res: Response) => {
   const userId = req.user!.userId;
+  const conversationId = (req.body?.conversationId as string) || null;
   const files = req.files as Express.Multer.File[];
 
   if (!files || files.length === 0) {
@@ -121,9 +122,9 @@ router.post('/', upload.array('files', 10), (req: Request, res: Response) => {
 
       // Still record in DB for audit trail
       db.prepare(`
-        INSERT INTO user_uploads (id, user_id, filename, original_name, file_type, mime_type, file_size, scan_status, scan_detail, storage_path)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(fileId, userId, destName, file.originalname, ext.replace('.', ''), file.mimetype, file.size, 'rejected', scanResult.detail, '');
+        INSERT INTO user_uploads (id, user_id, conversation_id, filename, original_name, file_type, mime_type, file_size, scan_status, scan_detail, storage_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(fileId, userId, conversationId, destName, file.originalname, ext.replace('.', ''), file.mimetype, file.size, 'rejected', scanResult.detail, '');
 
       results.push({
         id: fileId,
@@ -148,9 +149,9 @@ router.post('/', upload.array('files', 10), (req: Request, res: Response) => {
 
     // Save to DB
     db.prepare(`
-      INSERT INTO user_uploads (id, user_id, filename, original_name, file_type, mime_type, file_size, scan_status, scan_detail, storage_path)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(fileId, userId, destName, file.originalname, ext.replace('.', ''), file.mimetype, file.size, scanResult.status, scanResult.detail, relPath);
+      INSERT INTO user_uploads (id, user_id, conversation_id, filename, original_name, file_type, mime_type, file_size, scan_status, scan_detail, storage_path)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(fileId, userId, conversationId, destName, file.originalname, ext.replace('.', ''), file.mimetype, file.size, scanResult.status, scanResult.detail, relPath);
 
     results.push({
       id: fileId,

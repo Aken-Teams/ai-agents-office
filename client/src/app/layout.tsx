@@ -4,6 +4,9 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'AI Agents Office',
   description: 'AI 驅動的智能文件生成平台',
+  icons: {
+    icon: '/logo.png',
+  },
 };
 
 export default function RootLayout({

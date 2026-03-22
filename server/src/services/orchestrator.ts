@@ -71,13 +71,14 @@ export class Orchestrator {
     let allAssistantText = '';
 
     // Get or create Router's session for this conversation
-    const routerSessionId = this.getOrCreateAgentSession('router');
+    const { sessionId: routerSessionId, initialized: routerInitialized } = this.getOrCreateAgentSession('router');
 
     const routerSystemPrompt = buildRouterPrompt(routerSkill);
 
     // Recursive orchestration loop
     let currentMessage = message;
     let depth = 0;
+    let routerResumed = routerInitialized; // Track if we should resume within this run
     const orchestrationStart = Date.now();
 
     while (depth < MAX_ORCHESTRATION_DEPTH && !this.aborted) {
@@ -98,11 +99,12 @@ export class Orchestrator {
         routerSystemPrompt,
         {
           sessionId: routerSessionId,
-          isResume: depth > 1, // Resume after first call
+          isResume: routerResumed, // Resume if session was already initialized
           role: 'router' as const,
           skillId: 'router',
         }
       );
+      routerResumed = true; // After first call in this run, always resume
 
       if (this.aborted) break;
 
@@ -300,7 +302,7 @@ export class Orchestrator {
     const systemPrompt = buildSystemPrompt(skill, config.generatorsDir) + uploadContext;
 
     // Get or create session for this skill agent
-    const agentSessionId = this.getOrCreateAgentSession(task.skillId);
+    const { sessionId: agentSessionId, initialized: agentInitialized } = this.getOrCreateAgentSession(task.skillId);
 
     execution.status = 'running';
     this.updateTaskInDb(taskId, 'running');
@@ -312,7 +314,7 @@ export class Orchestrator {
         systemPrompt,
         {
           sessionId: agentSessionId,
-          isResume: false,
+          isResume: agentInitialized, // Resume if session was already used
           role: 'worker',
           skillId: task.skillId,
         },
@@ -448,8 +450,12 @@ export class Orchestrator {
           // Remove abort fn
           this.activeAbortFns = this.activeAbortFns.filter(fn => fn !== abort);
 
-          if (!text && (event.data as { exitCode?: number })?.exitCode !== 0) {
-            reject(new Error(`Agent ${opts.skillId} failed with no output`));
+          const exitCode = (event.data as { exitCode?: number; stderr?: string })?.exitCode;
+          const stderr = (event.data as { stderr?: string })?.stderr;
+          if (!text && exitCode !== 0) {
+            const detail = stderr ? ` (stderr: ${stderr.substring(0, 300)})` : '';
+            console.error(`[Orchestrator] Agent ${opts.skillId} FAILED: exitCode=${exitCode}, text="${text}", stderr=${stderr?.substring(0, 300)}`);
+            reject(new Error(`Agent ${opts.skillId} failed with no output (exit code ${exitCode})${detail}`));
           } else {
             resolve({ text, inputTokens, outputTokens, model });
           }
@@ -460,20 +466,21 @@ export class Orchestrator {
 
   /**
    * Get or create a persistent session ID for an agent in this conversation.
+   * Returns sessionId and whether it was already initialized (used for resume logic).
    */
-  private getOrCreateAgentSession(skillId: string): string {
+  private getOrCreateAgentSession(skillId: string): { sessionId: string; initialized: boolean } {
     const existing = db.prepare(
-      'SELECT session_uuid FROM agent_sessions WHERE conversation_id = ? AND skill_id = ?'
-    ).get(this.conversationId, skillId) as { session_uuid: string } | undefined;
+      'SELECT session_uuid, initialized FROM agent_sessions WHERE conversation_id = ? AND skill_id = ?'
+    ).get(this.conversationId, skillId) as { session_uuid: string; initialized: number } | undefined;
 
-    if (existing) return existing.session_uuid;
+    if (existing) return { sessionId: existing.session_uuid, initialized: existing.initialized === 1 };
 
     const sessionUuid = uuidv4();
     db.prepare(
       'INSERT INTO agent_sessions (id, conversation_id, skill_id, session_uuid) VALUES (?, ?, ?, ?)'
     ).run(uuidv4(), this.conversationId, skillId, sessionUuid);
 
-    return sessionUuid;
+    return { sessionId: sessionUuid, initialized: false };
   }
 
   /**

@@ -438,6 +438,7 @@ function ChatContent() {
     try {
       const formData = new FormData();
       for (const f of filesArr) formData.append('files', f);
+      formData.append('conversationId', conversationId);
 
       const resp = await fetch('/api/uploads', {
         method: 'POST',

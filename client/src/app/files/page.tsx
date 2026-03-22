@@ -15,6 +15,11 @@ interface FileItem {
   created_at: string;
 }
 
+interface ConversationInfo {
+  id: string;
+  title: string;
+}
+
 interface UploadItem {
   id: string;
   filename: string;
@@ -23,6 +28,7 @@ interface UploadItem {
   file_size: number;
   scan_status: 'pending' | 'clean' | 'suspicious' | 'rejected';
   scan_detail: string | null;
+  conversation_id: string | null;
   created_at: string;
 }
 
@@ -363,6 +369,7 @@ function FilesContent() {
   const [activeTab, setActiveTab] = useState<'generated' | 'uploads'>('generated');
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [uploadStorage, setUploadStorage] = useState<UploadStorageInfo | null>(null);
+  const [conversations, setConversations] = useState<ConversationInfo[]>([]);
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
@@ -400,6 +407,15 @@ function FilesContent() {
   }, [token]);
 
   useEffect(() => { fetchUploads(); }, [fetchUploads]);
+
+  // Fetch conversations for linking display
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/conversations', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then((convs: ConversationInfo[]) => setConversations(convs))
+      .catch(console.error);
+  }, [token]);
 
   async function deleteUpload(id: string) {
     if (!token) return;
@@ -764,28 +780,66 @@ function FilesContent() {
                   up.scan_status === 'suspicious' ? 'warning' : 'gpp_bad';
                 const scanLabel = up.scan_status === 'clean' ? '安全' :
                   up.scan_status === 'suspicious' ? '可疑' : '已拒絕';
+                const conv = up.conversation_id ? conversations.find(c => c.id === up.conversation_id) : null;
+                const linkedFiles = up.conversation_id
+                  ? files.filter(f => f.conversation_id === up.conversation_id)
+                  : [];
                 return (
-                  <div key={up.id} className="bg-surface-container p-4 rounded-lg flex items-center gap-4 group hover:bg-surface-container-high transition-colors">
-                    <div className="w-10 h-10 rounded flex items-center justify-center shrink-0" style={{ background: cfg.bgColor }}>
-                      <span className="material-symbols-outlined" style={{ color: cfg.color }}>{cfg.icon}</span>
+                  <div key={up.id} className="bg-surface-container rounded-lg group hover:bg-surface-container-high transition-colors overflow-hidden">
+                    <div className="p-4 flex items-center gap-4">
+                      <div className="w-10 h-10 rounded flex items-center justify-center shrink-0" style={{ background: cfg.bgColor }}>
+                        <span className="material-symbols-outlined" style={{ color: cfg.color }}>{cfg.icon}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-on-surface truncate">{up.original_name}</p>
+                        <p className="text-xs text-on-surface-variant">
+                          {formatSize(up.file_size)} · {new Date(up.created_at.endsWith('Z') ? up.created_at : up.created_at + 'Z').toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
+                        </p>
+                      </div>
+                      <div className={`flex items-center gap-1 ${scanColor} shrink-0`}>
+                        <span className="material-symbols-outlined text-sm">{scanIcon}</span>
+                        <span className="text-xs font-bold uppercase">{scanLabel}</span>
+                      </div>
+                      <button
+                        onClick={() => deleteUpload(up.id)}
+                        className="w-8 h-8 flex items-center justify-center rounded hover:bg-error/10 text-on-surface-variant hover:text-error cursor-pointer transition-colors opacity-0 group-hover:opacity-100"
+                        title="刪除"
+                      >
+                        <span className="material-symbols-outlined text-sm">delete</span>
+                      </button>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold text-on-surface truncate">{up.original_name}</p>
-                      <p className="text-xs text-on-surface-variant">
-                        {formatSize(up.file_size)} · {new Date(up.created_at.endsWith('Z') ? up.created_at : up.created_at + 'Z').toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
-                      </p>
-                    </div>
-                    <div className={`flex items-center gap-1 ${scanColor} shrink-0`}>
-                      <span className="material-symbols-outlined text-sm">{scanIcon}</span>
-                      <span className="text-xs font-bold uppercase">{scanLabel}</span>
-                    </div>
-                    <button
-                      onClick={() => deleteUpload(up.id)}
-                      className="w-8 h-8 flex items-center justify-center rounded hover:bg-error/10 text-on-surface-variant hover:text-error cursor-pointer transition-colors opacity-0 group-hover:opacity-100"
-                      title="刪除"
-                    >
-                      <span className="material-symbols-outlined text-sm">delete</span>
-                    </button>
+                    {/* Linked conversation + generated files */}
+                    {(conv || linkedFiles.length > 0) && (
+                      <div className="px-4 pb-3 pt-0 flex items-center gap-3 flex-wrap border-t border-outline-variant/5 mt-0">
+                        {conv && (
+                          <button
+                            onClick={() => router.push(`/chat/${up.conversation_id}`)}
+                            className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 cursor-pointer transition-colors mt-2"
+                          >
+                            <span className="material-symbols-outlined text-xs">chat</span>
+                            <span className="truncate max-w-[200px]">{conv.title}</span>
+                          </button>
+                        )}
+                        {linkedFiles.length > 0 && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="material-symbols-outlined text-xs text-on-surface-variant">arrow_forward</span>
+                            {linkedFiles.map(lf => {
+                              const lfCfg = getTypeConfig(lf.file_type);
+                              return (
+                                <span
+                                  key={lf.id}
+                                  className="flex items-center gap-1 text-xs px-2 py-0.5 bg-surface-container-lowest rounded cursor-pointer hover:bg-surface-container-highest transition-colors"
+                                  onClick={() => setPreviewFile(lf)}
+                                >
+                                  <span className="material-symbols-outlined text-xs" style={{ color: lfCfg.color }}>{lfCfg.icon}</span>
+                                  <span className="text-on-surface truncate max-w-[100px]">{lf.filename}</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
