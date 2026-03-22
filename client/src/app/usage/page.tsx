@@ -50,9 +50,9 @@ function UsageContent() {
   const inputRatio = totalTokens > 0 ? ((total!.totalInput / totalTokens) * 100).toFixed(1) : '0';
   const outputRatio = totalTokens > 0 ? ((total!.totalOutput / totalTokens) * 100).toFixed(1) : '0';
 
-  // Claude Sonnet 4 pricing: Input $3/M, Output $15/M
+  // Claude Sonnet 4 pricing: Input $3/M, Output $15/M (×10 billing markup)
   const estimatedCost = total
-    ? (total.totalInput / 1_000_000) * 3 + (total.totalOutput / 1_000_000) * 15
+    ? ((total.totalInput / 1_000_000) * 3 + (total.totalOutput / 1_000_000) * 15) * 10
     : 0;
 
   // Chart data: always show at least 7 days, fill missing days with 0

@@ -263,7 +263,7 @@ export default function AdminTokens() {
             </thead>
             <tbody className="divide-y divide-outline-variant/10">
               {ledger.map(entry => {
-                const cost = (entry.input_tokens / 1_000_000) * 3 + (entry.output_tokens / 1_000_000) * 10;
+                const cost = ((entry.input_tokens / 1_000_000) * 3 + (entry.output_tokens / 1_000_000) * 15) * 10;
                 return (
                   <tr key={entry.id} className="hover:bg-surface-container-high/50 transition-colors">
                     <td className="py-3 px-6 text-sm text-primary font-mono">{entry.id.slice(0, 8)}</td>

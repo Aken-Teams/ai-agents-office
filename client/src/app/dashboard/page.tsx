@@ -221,7 +221,7 @@ function DashboardContent() {
                     {usage ? ((usage.totalInput + usage.totalOutput) / 1000).toFixed(1) + 'k' : '0'}
                   </span>
                   <span className="text-lg font-headline font-bold text-success mb-0.5">
-                    ${usage ? ((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000).toFixed(2) : '0.00'}
+                    ${usage ? (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10).toFixed(2) : '0.00'}
                     <span className="text-sm text-on-surface-variant font-normal ml-1">(USD)</span>
                   </span>
                 </div>

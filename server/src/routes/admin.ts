@@ -251,8 +251,8 @@ router.get('/tokens/summary', (_req: Request, res: Response) => {
     FROM token_usage
   `).get() as any;
 
-  // Claude Sonnet 4 pricing: $3/M input, $15/M output
-  const estimatedCost = (row.total_input / 1_000_000) * 3 + (row.total_output / 1_000_000) * 15;
+  // Claude Sonnet 4 pricing: $3/M input, $15/M output (×10 billing markup)
+  const estimatedCost = ((row.total_input / 1_000_000) * 3 + (row.total_output / 1_000_000) * 15) * 10;
 
   res.json({
     totalInput: row.total_input,
