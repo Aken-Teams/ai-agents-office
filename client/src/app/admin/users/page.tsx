@@ -146,6 +146,7 @@ export default function AdminUsers() {
             <div className="flex rounded overflow-hidden border border-outline-variant/15">
               {[
                 { value: '', label: '全部' },
+                { value: 'pending', label: '待審核' },
                 { value: 'active', label: '啟用' },
                 { value: 'suspended', label: '停用' },
               ].map(opt => (
@@ -201,9 +202,11 @@ export default function AdminUsers() {
                       <span className={`px-2 py-0.5 text-sm font-bold uppercase tracking-wider rounded ${
                         user.status === 'active'
                           ? 'bg-success/15 text-success'
+                          : user.status === 'pending'
+                          ? 'bg-warning/15 text-warning'
                           : 'bg-error/15 text-error'
                       }`}>
-                        {user.status}
+                        {user.status === 'active' ? 'Active' : user.status === 'pending' ? 'Pending' : 'Suspended'}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right text-sm text-on-surface font-mono">{formatTokens(user.total_tokens)}</td>
@@ -287,8 +290,10 @@ export default function AdminUsers() {
                 <div className="grid grid-cols-2 gap-2">
                   <div className="bg-surface-container-high rounded p-2.5">
                     <p className="text-[9px] uppercase tracking-wider text-on-surface-variant font-bold">狀態</p>
-                    <p className={`text-sm font-black mt-0.5 ${selectedUser.status === 'active' ? 'text-success' : 'text-error'}`}>
-                      {selectedUser.status === 'active' ? 'Active' : 'Suspended'}
+                    <p className={`text-sm font-black mt-0.5 ${
+                      selectedUser.status === 'active' ? 'text-success' : selectedUser.status === 'pending' ? 'text-warning' : 'text-error'
+                    }`}>
+                      {selectedUser.status === 'active' ? 'Active' : selectedUser.status === 'pending' ? 'Pending' : 'Suspended'}
                     </p>
                   </div>
                   <div className="bg-surface-container-high rounded p-2.5">
@@ -336,7 +341,24 @@ export default function AdminUsers() {
             {/* Admin Controls */}
             <div className="px-6 pb-6 mt-auto border-t border-outline-variant/25 pt-5">
               <h4 className="text-sm uppercase tracking-widest text-on-surface-variant font-bold mb-3">管理操作</h4>
-              {selectedUser.status === 'active' ? (
+              {selectedUser.status === 'pending' ? (
+                <div className="space-y-2">
+                  <button
+                    onClick={() => toggleUserStatus(selectedUser.id, 'active')}
+                    disabled={actionLoading}
+                    className="w-full py-2 px-4 bg-success/10 text-success text-sm font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    核准帳號
+                  </button>
+                  <button
+                    onClick={() => toggleUserStatus(selectedUser.id, 'suspended')}
+                    disabled={actionLoading}
+                    className="w-full py-2 px-4 bg-error/10 text-error text-sm font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    拒絕申請
+                  </button>
+                </div>
+              ) : selectedUser.status === 'active' ? (
                 <button
                   onClick={() => toggleUserStatus(selectedUser.id, 'suspended')}
                   disabled={actionLoading}

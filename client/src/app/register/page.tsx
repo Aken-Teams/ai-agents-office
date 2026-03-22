@@ -1,26 +1,27 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
 
 function RegisterForm() {
   const { register } = useAuth();
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await register(email, password, displayName);
-      router.push('/dashboard');
+      const result = await register(email, password, displayName);
+      if (result.pending) {
+        setSuccess(true);
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -49,7 +50,7 @@ function RegisterForm() {
                   AI Agents Office
                 </h1>
                 <p className="font-label text-sm uppercase tracking-[0.2em] text-primary">
-                  智能文件平台
+                  強茂集團 · 智能文件平台
                 </p>
               </div>
             </div>
@@ -96,88 +97,121 @@ function RegisterForm() {
               <span className="font-headline text-xl font-bold tracking-tighter">AI Agents Office</span>
             </div>
 
-            <div className="mb-10">
-              <h3 className="font-headline text-2xl font-bold mb-2">建立帳號</h3>
-              <p className="text-on-surface-variant text-sm">註冊以開始使用 AI 智能文件生成</p>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {error && (
-                <div className="bg-error-container/30 border border-error/20 text-on-error-container px-4 py-3 rounded text-sm">
-                  {error}
+            {success ? (
+              /* ===== Registration Success — Pending Approval ===== */
+              <div className="text-center py-8">
+                <div className="w-20 h-20 mx-auto mb-6 bg-primary/10 rounded-full flex items-center justify-center">
+                  <span className="material-symbols-outlined text-4xl text-primary">hourglass_top</span>
                 </div>
-              )}
-
-              <div className="space-y-1.5">
-                <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
-                  顯示名稱
-                </label>
-                <input
-                  className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
-                  type="text"
-                  value={displayName}
-                  onChange={e => setDisplayName(e.target.value)}
-                  placeholder="你的名字"
-                  required
-                />
+                <h3 className="font-headline text-2xl font-bold mb-3">帳號已建立</h3>
+                <p className="text-on-surface-variant mb-2">您的帳號正在等待管理者審核</p>
+                <p className="text-on-surface-variant text-sm mb-8">
+                  審核通過後即可使用帳號登入系統。<br />如有急需，請聯繫系統管理者。
+                </p>
+                <Link
+                  href="/login"
+                  className="inline-flex items-center gap-2 cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-3 px-8 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 transition-all no-underline"
+                >
+                  返回登入頁面
+                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                </Link>
               </div>
+            ) : (
+              /* ===== Registration Form ===== */
+              <>
+                <div className="mb-10">
+                  <h3 className="font-headline text-2xl font-bold mb-2">建立帳號</h3>
+                  <p className="text-on-surface-variant text-sm">註冊後需經管理者核准才可登入</p>
+                </div>
 
-              <div className="space-y-1.5">
-                <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
-                  電子信箱
-                </label>
-                <input
-                  className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="your@email.com"
-                  required
-                />
-              </div>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {error && (
+                    <div className="bg-error-container/30 border border-error/20 text-on-error-container px-4 py-3 rounded text-sm">
+                      {error}
+                    </div>
+                  )}
 
-              <div className="space-y-1.5">
-                <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
-                  密碼
-                </label>
-                <input
-                  className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="至少 6 個字元"
-                  minLength={6}
-                  required
-                />
-              </div>
+                  <div className="space-y-1.5">
+                    <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
+                      顯示名稱
+                    </label>
+                    <input
+                      className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
+                      type="text"
+                      value={displayName}
+                      onChange={e => setDisplayName(e.target.value)}
+                      placeholder="你的名字"
+                      required
+                      maxLength={50}
+                      autoComplete="name"
+                    />
+                  </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? '建立中...' : '建立帳號'}
-              </button>
-            </form>
+                  <div className="space-y-1.5">
+                    <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
+                      電子信箱
+                    </label>
+                    <input
+                      className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
+                      type="email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      placeholder="your@email.com"
+                      required
+                      autoComplete="email"
+                    />
+                  </div>
 
-            {/* Toggle to Login */}
-            <div className="mt-12 flex flex-col items-center gap-6">
-              <div className="w-full h-px bg-outline-variant/20 relative">
-                <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-container-high px-4 text-sm uppercase tracking-widest text-outline">
-                  已有帳號？
-                </span>
-              </div>
-              <Link
-                href="/login"
-                className="text-sm font-label text-on-surface-variant hover:text-primary transition-colors flex items-center gap-2 group"
-              >
-                返回登入
-                <span className="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">
-                  arrow_forward
-                </span>
-              </Link>
-            </div>
+                  <div className="space-y-1.5">
+                    <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
+                      密碼
+                    </label>
+                    <input
+                      className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
+                      type="password"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="至少 8 個字元"
+                      minLength={8}
+                      required
+                      autoComplete="new-password"
+                    />
+                  </div>
+
+                  {/* Honeypot fields — invisible to humans, bots fill them */}
+                  <div aria-hidden="true" style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
+                    <input type="text" name="website" tabIndex={-1} autoComplete="off" />
+                    <input type="text" name="phone_number" tabIndex={-1} autoComplete="off" />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? '建立中...' : '建立帳號'}
+                  </button>
+                </form>
+
+                {/* Toggle to Login */}
+                <div className="mt-12 flex flex-col items-center gap-6">
+                  <div className="w-full h-px bg-outline-variant/20 relative">
+                    <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-container-high px-4 text-sm uppercase tracking-widest text-outline">
+                      已有帳號？
+                    </span>
+                  </div>
+                  <Link
+                    href="/login"
+                    className="text-sm font-label text-on-surface-variant hover:text-primary transition-colors flex items-center gap-2 group"
+                  >
+                    返回登入
+                    <span className="material-symbols-outlined text-sm group-hover:translate-x-1 transition-transform">
+                      arrow_forward
+                    </span>
+                  </Link>
+                </div>
+              </>
+            )}
           </div>
         </section>
       </main>

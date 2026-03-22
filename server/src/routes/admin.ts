@@ -108,7 +108,7 @@ router.get('/users', (req: Request, res: Response) => {
     const pattern = `%${search}%`;
     params.push(pattern, pattern, pattern);
   }
-  if (status && ['active', 'suspended'].includes(status)) {
+  if (status && ['active', 'pending', 'suspended'].includes(status)) {
     whereClause += ' AND u.status = ?';
     params.push(status);
   }

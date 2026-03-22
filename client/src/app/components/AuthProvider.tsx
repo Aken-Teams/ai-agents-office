@@ -14,7 +14,7 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, displayName: string) => Promise<void>;
+  register: (email: string, password: string, displayName: string) => Promise<{ pending: boolean; message?: string }>;
   logout: () => void;
 }
 
@@ -83,9 +83,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(err.error || 'Registration failed');
     }
     const data = await res.json();
-    localStorage.setItem('token', data.token);
-    setToken(data.token);
-    setUser(data.user);
+    // New flow: registration returns pending status, no auto-login
+    if (data.pending) {
+      return { pending: true, message: data.message };
+    }
+    // Fallback: if server returns token (e.g. admin-created accounts)
+    if (data.token) {
+      localStorage.setItem('token', data.token);
+      setToken(data.token);
+      setUser(data.user);
+    }
+    return { pending: false };
   }, []);
 
   const logout = useCallback(() => {

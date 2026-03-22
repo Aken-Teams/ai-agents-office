@@ -176,6 +176,20 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_uploads_conv ON user_uploads(conversation_id);
   `);
 
+  // System settings (key-value store for admin-configurable values)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS system_settings (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `);
+
+  // Default: per-user usage cap = $50 (in x10 display dollars)
+  const capExists = db.prepare("SELECT key FROM system_settings WHERE key = 'user_usage_limit_usd'").get();
+  if (!capExists) {
+    db.prepare("INSERT INTO system_settings (key, value) VALUES (?, ?)").run('user_usage_limit_usd', '50');
+  }
+
   // Seed admin user
   const adminExists = db.prepare("SELECT id FROM users WHERE email = 'admin@zhaoi.ai'").get();
   if (!adminExists) {

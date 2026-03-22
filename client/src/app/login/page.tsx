@@ -11,11 +11,13 @@ function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [errorType, setErrorType] = useState<'error' | 'warning' | 'info'>('error');
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setErrorType('error');
     setLoading(true);
     try {
       await login(email, password);
@@ -32,7 +34,16 @@ function LoginForm() {
       }
       router.push('/dashboard');
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message;
+      // Set visual style based on error type
+      if (msg.includes('審核') || msg.includes('等待')) {
+        setErrorType('warning');
+      } else if (msg.includes('鎖定') || msg.includes('頻繁')) {
+        setErrorType('info');
+      } else {
+        setErrorType('error');
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -114,7 +125,16 @@ function LoginForm() {
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-6">
               {error && (
-                <div className="bg-error-container/30 border border-error/20 text-on-error-container px-4 py-3 rounded text-sm">
+                <div className={`px-4 py-3 rounded text-sm flex items-start gap-3 ${
+                  errorType === 'warning'
+                    ? 'bg-warning/10 border border-warning/20 text-warning'
+                    : errorType === 'info'
+                    ? 'bg-primary/10 border border-primary/20 text-primary'
+                    : 'bg-error-container/30 border border-error/20 text-on-error-container'
+                }`}>
+                  <span className="material-symbols-outlined text-sm mt-0.5 shrink-0">
+                    {errorType === 'warning' ? 'hourglass_top' : errorType === 'info' ? 'lock' : 'error'}
+                  </span>
                   {error}
                 </div>
               )}

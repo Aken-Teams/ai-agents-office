@@ -4,7 +4,7 @@ export interface User {
   password_hash: string;
   display_name: string | null;
   role: 'user' | 'admin';
-  status: 'active' | 'suspended';
+  status: 'active' | 'pending' | 'suspended';
   created_at: string;
   updated_at: string;
 }
