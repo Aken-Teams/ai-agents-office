@@ -156,7 +156,7 @@ function renderSlide(slide: SlideData, s: StylePreset): string {
 
     case 'two-column': {
       const renderCol = (col: { heading: string; bullets: string[] }) => `
-        <div style="flex:1;padding:0 0.5em;">
+        <div class="slide-col">
           <h3 style="color:${s.headingColor};font-size:0.9em;margin-bottom:0.5em;">${escapeHtml(col.heading)}</h3>
           <ul style="color:${s.bodyColor};font-size:0.65em;line-height:1.8;list-style:none;padding:0;">
             ${col.bullets.map(b => `<li${fragClass} style="margin-bottom:0.3em;padding-left:1em;position:relative;">
@@ -166,7 +166,7 @@ function renderSlide(slide: SlideData, s: StylePreset): string {
       return `
       <section>
         ${slide.title ? `<h2 style="color:${s.headingColor};font-family:${s.headingFontFamily};text-align:left;font-size:1.3em;margin-bottom:0.6em;">${escapeHtml(slide.title)}</h2>` : ''}
-        <div style="display:flex;gap:1em;">
+        <div class="slide-columns">
           ${slide.left ? renderCol(slide.left) : ''}
           ${slide.right ? renderCol(slide.right) : ''}
         </div>
@@ -210,15 +210,86 @@ function generateHtml(input: SlidesInput): string {
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css" id="theme">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
   <style>
+    /* Reset & base */
+    *, *::before, *::after { box-sizing: border-box; }
+    body { ${bgStyle} margin: 0; overflow: hidden; }
+    .reveal-viewport { ${bgStyle} }
     .reveal { font-family: ${s.fontFamily}; }
-    .reveal .slides section { ${bgStyle} padding: 2em; box-sizing: border-box; }
-    .reveal h1, .reveal h2, .reveal h3 { font-family: ${s.headingFontFamily}; font-weight: 700; }
+
+    /* Slide container — prevent overflow */
+    .reveal .slides section {
+      ${bgStyle}
+      padding: 2em 2.5em;
+      box-sizing: border-box;
+      overflow: hidden;
+      display: flex !important;
+      flex-direction: column;
+      justify-content: center;
+      align-items: stretch;
+      max-height: 100%;
+    }
+    .reveal .slides section > * { max-width: 100%; }
+
+    /* Typography */
+    .reveal h1, .reveal h2, .reveal h3 {
+      font-family: ${s.headingFontFamily};
+      font-weight: 700;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
+    .reveal h1 { font-size: clamp(1.4em, 4vw, 2.2em); }
+    .reveal h2 { font-size: clamp(1.1em, 3vw, 1.5em); }
+    .reveal h3 { font-size: clamp(0.9em, 2.5vw, 1.1em); }
+
+    /* Lists — constrain within slide */
+    .reveal ul, .reveal ol {
+      max-height: 65vh;
+      overflow-y: auto;
+      width: 100%;
+    }
+    .reveal li { word-wrap: break-word; overflow-wrap: break-word; }
+
+    /* Code blocks — scrollable */
+    .reveal pre {
+      max-height: 55vh;
+      overflow: auto;
+      width: 100%;
+    }
+    .reveal pre code { white-space: pre-wrap; word-break: break-all; }
+
+    /* Images — constrained */
+    .reveal img { max-width: 100%; max-height: 60vh; height: auto; object-fit: contain; }
+
+    /* Two-column layout — responsive */
+    .slide-columns {
+      display: flex;
+      gap: 1em;
+      width: 100%;
+      overflow: hidden;
+    }
+    .slide-col { flex: 1; min-width: 0; overflow: hidden; }
+
+    /* Theme */
     .reveal .slide-background { ${bgStyle} }
     .reveal .progress { color: ${s.accentColor}; }
     .reveal .controls { color: ${s.accentColor}; }
-    /* Override theme background */
-    body { ${bgStyle} margin: 0; }
-    .reveal-viewport { ${bgStyle} }
+
+    /* RWD: smaller screens */
+    @media (max-width: 768px) {
+      .reveal .slides section { padding: 1em 1.2em; }
+      .reveal h1 { font-size: 1.3em; }
+      .reveal h2 { font-size: 1.1em; }
+      .reveal ul, .reveal ol { font-size: 0.85em; }
+      .slide-columns { flex-direction: column; }
+      .reveal .controls { display: none; }
+    }
+    @media (max-width: 480px) {
+      .reveal .slides section { padding: 0.8em; }
+      .reveal h1 { font-size: 1.1em; }
+      .reveal h2 { font-size: 1em; }
+      .reveal ul, .reveal ol { font-size: 0.8em; }
+    }
+
     ${s.extra || ''}
   </style>
 </head>
@@ -238,7 +309,13 @@ function generateHtml(input: SlidesInput): string {
       plugins: [RevealHighlight],
       width: 1280,
       height: 720,
-      margin: 0.04,
+      margin: 0.06,
+      minScale: 0.2,
+      maxScale: 1.5,
+      center: true,
+      disableLayout: false,
+      embedded: false,
+      respondToHashChanges: true,
     });
   <\/script>
 </body>
