@@ -18,16 +18,29 @@ function resolveClaudeCliPath(cliPath: string): { bin: string; prefix: string[] 
     return { bin: process.execPath, prefix: [cliPath] };
   }
 
-  // Try to find the actual CLI script from the npm global prefix
+  // Try to resolve the actual CLI entry point via `which` or `where`
   try {
-    const npmPrefix = execSync('npm prefix -g', { encoding: 'utf-8' }).trim();
-    const cliScript = path.join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
-    if (fs.existsSync(cliScript)) {
-      return { bin: process.execPath, prefix: [cliScript] };
+    const cmd = process.platform === 'win32' ? 'where claude' : 'which claude';
+    const claudePath = execSync(cmd, { encoding: 'utf-8' }).trim().split('\n')[0];
+    const realPath = fs.realpathSync(claudePath);
+    if (realPath.endsWith('.js') && fs.existsSync(realPath)) {
+      return { bin: process.execPath, prefix: [realPath] };
     }
   } catch { /* fall through */ }
 
-  // Fallback: try common Windows npm global paths
+  // Try to find the actual CLI script from the npm global prefix
+  try {
+    const npmPrefix = execSync('npm prefix -g', { encoding: 'utf-8' }).trim();
+    // Check both {prefix}/node_modules and {prefix}/lib/node_modules (nvm layout)
+    for (const sub of ['node_modules', 'lib/node_modules']) {
+      const cliScript = path.join(npmPrefix, sub, '@anthropic-ai', 'claude-code', 'cli.js');
+      if (fs.existsSync(cliScript)) {
+        return { bin: process.execPath, prefix: [cliScript] };
+      }
+    }
+  } catch { /* fall through */ }
+
+  // Fallback: try common paths
   const home = process.env.USERPROFILE || process.env.HOME || '';
   const candidates = [
     path.join(home, 'AppData', 'Roaming', 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js'),

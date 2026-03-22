@@ -16,14 +16,20 @@ if (fs.existsSync(rootEnvPath)) {
 const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
+    NEXT_PUBLIC_API_URL: '',
   },
   async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'http://localhost:12054/api/:path*',
-      },
-    ];
+    return {
+      beforeFiles: [],
+      afterFiles: [],
+      // fallback rewrites only run when no page or API route matches
+      fallback: [
+        {
+          source: '/api/:path*',
+          destination: 'http://localhost:12054/api/:path*',
+        },
+      ],
+    };
   },
 };
 

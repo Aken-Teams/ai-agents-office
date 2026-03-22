@@ -19,7 +19,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:12053', 'http://localhost:12054'],
+  origin: ['http://localhost:12053', 'http://localhost:12054', 'https://agents-office.zhgpt.org'],
   credentials: true,
 }));
 app.use(express.json({ limit: '1mb' }));

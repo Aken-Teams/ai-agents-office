@@ -131,6 +131,27 @@ export function initializeDatabase(): void {
   try { db.prepare("SELECT oauth_id FROM users LIMIT 1").get(); }
   catch { db.exec("ALTER TABLE users ADD COLUMN oauth_id TEXT"); }
 
+  // User uploads table (must exist before migration below)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_uploads (
+      id              TEXT PRIMARY KEY,
+      user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
+      filename        TEXT NOT NULL,
+      original_name   TEXT NOT NULL,
+      file_type       TEXT NOT NULL,
+      mime_type       TEXT,
+      file_size       INTEGER NOT NULL DEFAULT 0,
+      scan_status     TEXT NOT NULL DEFAULT 'pending',
+      scan_detail     TEXT,
+      storage_path    TEXT NOT NULL,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_uploads_user ON user_uploads(user_id);
+    CREATE INDEX IF NOT EXISTS idx_uploads_scan ON user_uploads(scan_status);
+    CREATE INDEX IF NOT EXISTS idx_uploads_conv ON user_uploads(conversation_id);
+  `);
+
   // Migration: add conversation_id to user_uploads if missing
   try {
     db.prepare("SELECT conversation_id FROM user_uploads LIMIT 1").get();
@@ -167,27 +188,6 @@ export function initializeDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_security_events_user ON security_events(user_id);
     CREATE INDEX IF NOT EXISTS idx_security_events_created ON security_events(created_at);
     CREATE INDEX IF NOT EXISTS idx_security_events_severity ON security_events(severity);
-  `);
-
-  // User uploads table (user-provided files for analysis)
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS user_uploads (
-      id              TEXT PRIMARY KEY,
-      user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL,
-      filename        TEXT NOT NULL,
-      original_name   TEXT NOT NULL,
-      file_type       TEXT NOT NULL,
-      mime_type       TEXT,
-      file_size       INTEGER NOT NULL DEFAULT 0,
-      scan_status     TEXT NOT NULL DEFAULT 'pending',
-      scan_detail     TEXT,
-      storage_path    TEXT NOT NULL,
-      created_at      TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_uploads_user ON user_uploads(user_id);
-    CREATE INDEX IF NOT EXISTS idx_uploads_scan ON user_uploads(scan_status);
-    CREATE INDEX IF NOT EXISTS idx_uploads_conv ON user_uploads(conversation_id);
   `);
 
   // System settings (key-value store for admin-configurable values)

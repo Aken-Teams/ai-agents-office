@@ -9,9 +9,8 @@ import Navbar from '../../components/Navbar';
 import { I18nProvider, useTranslation } from '../../../i18n';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 
-// Direct connection to Express for SSE streaming.
-// Next.js rewrites proxy buffers the entire response, preventing real-time updates.
-const SSE_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:12054';
+// SSE streaming via Next.js rewrites proxy (relative path for production).
+const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 interface Message {
   id: string;
