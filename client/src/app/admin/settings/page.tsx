@@ -113,26 +113,24 @@ export default function AdminSettings() {
       </header>
 
       {/* Content */}
-      <div className="p-8 flex-1 space-y-6 max-w-4xl">
-        {SETTINGS_CONFIG.map(cfg => {
-          const isEditing = editing === cfg.key;
+      <div className="p-8 flex-1 space-y-6">
+        {/* 用戶用量上限 — 滿版 */}
+        {(() => {
+          const cfg = SETTINGS_CONFIG[0];
+          const isEditing0 = editing === cfg.key;
           const value = settings?.[cfg.key];
-          const isSaved = saved === cfg.key;
-
+          const isSaved0 = saved === cfg.key;
           return (
-            <div key={cfg.key} className="bg-surface-container rounded-lg overflow-hidden">
+            <div className="bg-surface-container rounded-lg overflow-hidden">
               <div className="p-6">
                 <div className="flex items-start gap-4">
-                  {/* Icon */}
                   <div className="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0">
                     <span className={`material-symbols-outlined text-2xl ${cfg.iconColor}`}>{cfg.icon}</span>
                   </div>
-
-                  {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="text-base font-headline font-bold text-on-surface">{cfg.title}</h3>
-                      {isSaved && (
+                      {isSaved0 && (
                         <span className="flex items-center gap-1 text-sm text-success font-bold">
                           <span className="material-symbols-outlined text-sm">check_circle</span>
                           已儲存
@@ -140,48 +138,19 @@ export default function AdminSettings() {
                       )}
                     </div>
                     <p className="text-sm text-on-surface-variant leading-relaxed mb-4">{cfg.description}</p>
-
-                    {/* Value / Edit */}
-                    {isEditing ? (
+                    {isEditing0 ? (
                       <div className="flex items-center gap-3">
                         {cfg.prefix && <span className="text-on-surface-variant text-base font-bold">{cfg.prefix}</span>}
-                        <input
-                          type="number"
-                          value={form[cfg.key]}
-                          onChange={e => setForm(prev => ({ ...prev, [cfg.key]: e.target.value }))}
-                          className="w-40 px-4 py-2.5 bg-surface-container-highest text-on-surface text-base rounded border border-outline-variant/20 focus:border-primary focus:outline-none font-mono"
-                          min={cfg.min}
-                          max={cfg.max}
-                          step={cfg.step}
-                        />
+                        <input type="number" value={form[cfg.key]} onChange={e => setForm(prev => ({ ...prev, [cfg.key]: e.target.value }))} className="w-40 px-4 py-2.5 bg-surface-container-highest text-on-surface text-base rounded border border-outline-variant/20 focus:border-primary focus:outline-none font-mono" min={cfg.min} max={cfg.max} step={cfg.step} />
                         <span className="text-sm text-on-surface-variant">{cfg.unit}</span>
-                        <button
-                          onClick={() => saveSetting(cfg.key)}
-                          disabled={saving}
-                          className="px-4 py-2.5 bg-primary text-on-primary text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50"
-                        >
-                          {saving ? '儲存中...' : '儲存'}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditing(null);
-                            if (settings) setForm(prev => ({ ...prev, [cfg.key]: String(settings[cfg.key]) }));
-                          }}
-                          className="px-4 py-2.5 bg-surface-container-high text-on-surface-variant text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer"
-                        >
-                          取消
-                        </button>
+                        <button onClick={() => saveSetting(cfg.key)} disabled={saving} className="px-4 py-2.5 bg-primary text-on-primary text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50">{saving ? '儲存中...' : '儲存'}</button>
+                        <button onClick={() => { setEditing(null); if (settings) setForm(prev => ({ ...prev, [cfg.key]: String(settings[cfg.key]) })); }} className="px-4 py-2.5 bg-surface-container-high text-on-surface-variant text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer">取消</button>
                       </div>
                     ) : (
                       <div className="flex items-center gap-3">
-                        <span className="text-3xl font-headline font-black text-on-surface">
-                          {cfg.prefix}{value ?? '—'}
-                        </span>
+                        <span className="text-3xl font-headline font-black text-on-surface">{cfg.prefix}{value ?? '—'}</span>
                         <span className="text-sm text-on-surface-variant">{cfg.suffix}</span>
-                        <button
-                          onClick={() => setEditing(cfg.key)}
-                          className="ml-4 px-4 py-2 bg-surface-container-high text-on-surface-variant text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer flex items-center gap-1.5"
-                        >
+                        <button onClick={() => setEditing(cfg.key)} className="ml-4 px-4 py-2 bg-surface-container-high text-on-surface-variant text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer flex items-center gap-1.5">
                           <span className="material-symbols-outlined text-sm">edit</span>
                           修改
                         </button>
@@ -192,29 +161,79 @@ export default function AdminSettings() {
               </div>
             </div>
           );
-        })}
+        })()}
 
-        {/* Info Section */}
-        <div className="bg-surface-container-low border border-outline-variant/5 p-6 rounded-lg relative overflow-hidden">
+        {/* 文件儲存 + 上傳儲存 — 併排 */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {SETTINGS_CONFIG.slice(1).map(cfg => {
+            const isEditingCfg = editing === cfg.key;
+            const value = settings?.[cfg.key];
+            const isSavedCfg = saved === cfg.key;
+            return (
+              <div key={cfg.key} className="bg-surface-container rounded-lg overflow-hidden">
+                <div className="p-6">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0">
+                      <span className={`material-symbols-outlined text-2xl ${cfg.iconColor}`}>{cfg.icon}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-base font-headline font-bold text-on-surface">{cfg.title}</h3>
+                        {isSavedCfg && (
+                          <span className="flex items-center gap-1 text-sm text-success font-bold">
+                            <span className="material-symbols-outlined text-sm">check_circle</span>
+                            已儲存
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-on-surface-variant leading-relaxed mb-4">{cfg.description}</p>
+                      {isEditingCfg ? (
+                        <div className="flex items-center gap-3 flex-wrap">
+                          {cfg.prefix && <span className="text-on-surface-variant text-base font-bold">{cfg.prefix}</span>}
+                          <input type="number" value={form[cfg.key]} onChange={e => setForm(prev => ({ ...prev, [cfg.key]: e.target.value }))} className="w-32 px-4 py-2.5 bg-surface-container-highest text-on-surface text-base rounded border border-outline-variant/20 focus:border-primary focus:outline-none font-mono" min={cfg.min} max={cfg.max} step={cfg.step} />
+                          <span className="text-sm text-on-surface-variant">{cfg.unit}</span>
+                          <button onClick={() => saveSetting(cfg.key)} disabled={saving} className="px-4 py-2.5 bg-primary text-on-primary text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50">{saving ? '儲存中...' : '儲存'}</button>
+                          <button onClick={() => { setEditing(null); if (settings) setForm(prev => ({ ...prev, [cfg.key]: String(settings[cfg.key]) })); }} className="px-4 py-2.5 bg-surface-container-high text-on-surface-variant text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer">取消</button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <span className="text-3xl font-headline font-black text-on-surface">{cfg.prefix}{value ?? '—'}</span>
+                          <span className="text-sm text-on-surface-variant">{cfg.suffix}</span>
+                          <button onClick={() => setEditing(cfg.key)} className="ml-4 px-4 py-2 bg-surface-container-high text-on-surface-variant text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-sm">edit</span>
+                            修改
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Info Section — 滿版 */}
+        <div className="bg-surface-container-low border border-outline-variant/5 p-6 relative overflow-hidden">
           <div className="absolute right-4 bottom-4 opacity-[0.04] pointer-events-none">
             <span className="material-symbols-outlined text-[6rem]">info</span>
           </div>
           <div className="relative z-10">
             <h3 className="text-base font-headline font-bold text-on-surface mb-3">設定說明</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-surface-container p-4 rounded border-l-2 border-warning">
+              <div className="bg-surface-container p-4 border-l-2 border-warning">
                 <h4 className="text-sm text-on-surface font-bold mb-1">用量上限</h4>
                 <p className="text-sm text-on-surface-variant">
                   基於 Claude Sonnet 4 定價（$3/M input, $15/M output）乘以 10 倍計費。用戶超過上限後，登入與生成文件都會被阻擋。
                 </p>
               </div>
-              <div className="bg-surface-container p-4 rounded border-l-2 border-primary">
+              <div className="bg-surface-container p-4 border-l-2 border-primary">
                 <h4 className="text-sm text-on-surface font-bold mb-1">文件儲存</h4>
                 <p className="text-sm text-on-surface-variant">
                   限制每位用戶 AI 生成文件的總儲存量。包含 PPTX、DOCX、XLSX、PDF 等所有生成的檔案。
                 </p>
               </div>
-              <div className="bg-surface-container p-4 rounded border-l-2 border-tertiary">
+              <div className="bg-surface-container p-4 border-l-2 border-tertiary">
                 <h4 className="text-sm text-on-surface font-bold mb-1">上傳儲存</h4>
                 <p className="text-sm text-on-surface-variant">
                   限制每位用戶上傳的分析檔案總量。包含 CSV、Excel、JSON 等供 AI 分析的檔案。
