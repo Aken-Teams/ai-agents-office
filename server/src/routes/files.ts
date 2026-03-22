@@ -5,6 +5,7 @@ import db from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { getFileDownloadPath, deleteFile } from '../services/fileManager.js';
 import { convertOfficeFile } from '../services/filePreview.js';
+import { applyWatermark } from '../services/watermark.js';
 import { config } from '../config.js';
 import type { GeneratedFile } from '../types.js';
 
@@ -51,7 +52,7 @@ router.get('/', (req: Request, res: Response) => {
 });
 
 // GET /api/files/:id/download
-router.get('/:id/download', (req: Request, res: Response) => {
+router.get('/:id/download', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const filePath = getFileDownloadPath(userId, req.params.id as string);
 
@@ -61,6 +62,19 @@ router.get('/:id/download', (req: Request, res: Response) => {
   }
 
   const filename = path.basename(filePath);
+
+  try {
+    const watermarked = await applyWatermark(filePath);
+    if (watermarked) {
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+      res.setHeader('Content-Length', watermarked.length);
+      res.end(watermarked);
+      return;
+    }
+  } catch (err) {
+    console.warn('[Download] Watermark failed, serving original:', err);
+  }
+
   res.download(filePath, filename);
 });
 

@@ -275,7 +275,7 @@ function PreviewModal({
             <div className="absolute inset-[-50%] flex flex-wrap gap-24 rotate-[-30deg]">
               {Array.from({ length: 40 }).map((_, i) => (
                 <span key={i} className="text-3xl font-headline font-bold tracking-[0.3em] uppercase whitespace-nowrap" style={{ color: 'rgba(128,128,128,0.18)' }}>
-                  CONFIDENTIAL 機密文件
+                  CONFIDENTIAL 機密文件 · 測試版
                 </span>
               ))}
             </div>

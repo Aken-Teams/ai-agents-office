@@ -12,6 +12,7 @@ import {
   isAllowedSize,
   UPLOAD_QUOTA_BYTES,
 } from '../services/uploadScanner.js';
+import { applyWatermark } from '../services/watermark.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -293,7 +294,7 @@ router.delete('/:id', (req: Request, res: Response) => {
 // GET /api/uploads/:id/download — Download an upload
 // ---------------------------------------------------------------------------
 
-router.get('/:id/download', (req: Request, res: Response) => {
+router.get('/:id/download', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const uploadId = req.params.id;
 
@@ -310,6 +311,19 @@ router.get('/:id/download', (req: Request, res: Response) => {
   if (!fs.existsSync(fullPath)) {
     res.status(404).json({ error: '檔案不存在' });
     return;
+  }
+
+  try {
+    const watermarked = await applyWatermark(fullPath);
+    if (watermarked) {
+      const filename = upload.original_name;
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+      res.setHeader('Content-Length', watermarked.length);
+      res.end(watermarked);
+      return;
+    }
+  } catch (err) {
+    console.warn('[Download] Watermark failed, serving original:', err);
   }
 
   res.download(fullPath, upload.original_name);
