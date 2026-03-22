@@ -94,6 +94,21 @@ router.get('/:id/preview', async (req: Request, res: Response) => {
   // Direct-serve for natively previewable types
   const mime = MIME_MAP[ext];
   if (mime) {
+    // Apply watermark for PDF previews too
+    if (ext === 'pdf') {
+      try {
+        const watermarked = await applyWatermark(filePath);
+        if (watermarked) {
+          res.setHeader('Content-Type', mime);
+          res.setHeader('Content-Disposition', 'inline');
+          res.setHeader('Content-Length', watermarked.length);
+          res.end(watermarked);
+          return;
+        }
+      } catch (err) {
+        console.warn('[Preview] PDF watermark failed, serving original:', err);
+      }
+    }
     const stat = fs.statSync(filePath);
     res.setHeader('Content-Type', mime);
     res.setHeader('Content-Disposition', 'inline');
