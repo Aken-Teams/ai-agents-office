@@ -19,7 +19,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:3001', 'http://localhost:3000'],
+  origin: ['http://localhost:12053', 'http://localhost:12054'],
   credentials: true,
 }));
 app.use(express.json({ limit: '1mb' }));
