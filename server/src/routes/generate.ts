@@ -10,7 +10,7 @@ import { recordTokenUsage } from '../services/tokenTracker.js';
 import { registerNewFiles, getExistingFilePaths } from '../services/fileManager.js';
 import { getUserStorageUsed } from './files.js';
 import { getSkill, buildSystemPrompt, loadSkills, getRouterSkill } from '../skills/loader.js';
-import { getUserUploadsForPrompt } from '../services/uploadContext.js';
+import { getUserUploadsForPrompt, getConversationFilesForPrompt } from '../services/uploadContext.js';
 import { Orchestrator } from '../services/orchestrator.js';
 import { config } from '../config.js';
 import { checkUserUsageLimit, getStorageQuotaGb } from '../services/usageLimit.js';
@@ -318,10 +318,12 @@ function handleDirect(
 
   // Build system prompt with user upload context
   const sandboxPath = getSandboxPath(userId, conversationId);
-  const uploadContext = getUserUploadsForPrompt(userId, sandboxPath, {
-    uploadIds: uploadIds.length > 0 ? uploadIds : undefined,
-    conversationId,
-  });
+  const uploadContext = effectiveSkillId === 'rag-analyst'
+    ? getConversationFilesForPrompt(userId, sandboxPath, conversationId)
+    : getUserUploadsForPrompt(userId, sandboxPath, {
+        uploadIds: uploadIds.length > 0 ? uploadIds : undefined,
+        conversationId,
+      });
   const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + uploadContext;
 
   // Update conversation skill if changed

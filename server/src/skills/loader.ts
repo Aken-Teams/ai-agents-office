@@ -172,6 +172,7 @@ export function buildSystemPrompt(
     '- generate-docx.ts — Generate Word documents from JSON structure',
     '- generate-xlsx.ts — Generate Excel spreadsheets from JSON structure',
     '- generate-pdf.ts — Generate PDF documents from JSON structure',
+    '- generate-slides.ts — Generate interactive web presentations (HTML/Reveal.js) from JSON structure',
     '',
     '## How to Call Generator Scripts',
     `IMPORTANT: Dependencies (tsx, pptxgenjs, docx, exceljs, pdfkit) are installed in: ${serverDir}`,

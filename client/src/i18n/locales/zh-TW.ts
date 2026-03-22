@@ -36,8 +36,12 @@ const zhTW = {
   'nav.docTypes.xlsx.desc': '數據分析',
   'nav.docTypes.pdf.label': 'PDF',
   'nav.docTypes.pdf.desc': '文件輸出',
+  'nav.docTypes.slides.label': '網頁簡報',
+  'nav.docTypes.slides.desc': '互動式 HTML 簡報',
   'nav.docTypes.dataAnalyst.label': '數據分析',
   'nav.docTypes.dataAnalyst.desc': '上傳資料分析',
+  'nav.docTypes.ragAnalyst.label': '知識庫分析',
+  'nav.docTypes.ragAnalyst.desc': '跨檔案交叉分析',
   'nav.docTypes.research.label': '網路研究',
   'nav.docTypes.research.desc': '搜尋與彙整',
 
@@ -123,6 +127,8 @@ const zhTW = {
   'dashboard.samples.docx.template': '幫我撰寫一份產品需求規格文件（PRD），使用 Word 格式，包含以下章節：\n\n1. 產品概述：產品名稱、目標用戶、核心價值主張\n2. 專案背景：市場痛點、競品分析、商業目標\n3. 功能需求清單：依優先級（P0/P1/P2）列出主要功能\n4. 使用者故事：至少 5 個核心使用情境\n5. 非功能性需求：效能、安全性、可用性要求\n6. 技術架構建議：前後端技術選型\n7. 時程規劃：里程碑與交付時間表\n8. 風險評估：潛在風險與應對方案\n\n請使用繁體中文，格式清晰、具專業感',
   'dashboard.samples.xlsx': '建立銷售數據分析表',
   'dashboard.samples.xlsx.template': '幫我建立一份銷售數據分析 Excel 報表，包含以下工作表：\n\n【Sheet 1 - 月度銷售總覽】\n- 欄位：月份、營收、成本、毛利、毛利率、訂單數、客單價\n- 產生 12 個月的模擬數據（2025/01 ~ 2025/12）\n- 加入合計列與平均值\n\n【Sheet 2 - 產品分類分析】\n- 欄位：產品類別、銷售額、佔比、同期比較、成長率\n- 至少 5 個產品類別\n\n【Sheet 3 - 區域業績排行】\n- 欄位：區域、業務員、目標額、實際額、達成率\n- 依達成率排序\n\n請加入適當的格式設定（數字格式、粗體標題、顏色區分）',
+  'dashboard.samples.slides': '製作互動網頁簡報',
+  'dashboard.samples.slides.template': '幫我製作一份互動式網頁簡報（HTML），主題是「2026 AI Agent 技術趨勢」，包含以下投影片：\n1. 封面：標題 + 副標題 + 日期\n2. 目錄概覽\n3. AI Agent 定義與核心概念\n4. 主流框架比較（LangGraph、CrewAI、AutoGen）\n5. 企業導入案例分析\n6. 多代理協作架構設計\n7. 安全性與治理挑戰\n8. 未來展望與預測\n9. Q&A\n\n要求：使用深色科技風格，每頁重點使用動畫效果逐步顯示',
   'dashboard.samples.research': '研究 AI 產業最新趨勢',
   'dashboard.samples.research.template': '請幫我研究 2026 年 AI 產業最新趨勢，並整理成一份完整的研究報告，涵蓋以下面向：\n\n1. 全球 AI 市場規模與投資趨勢\n2. 大型語言模型（LLM）技術突破與新進展\n3. AI Agent 生態系發展現況\n4. 企業 AI 導入率與 ROI 分析\n5. AI 對各產業的影響（製造、金融、醫療、教育）\n6. AI 監管法規最新動態（歐盟 AI Act、美國行政令）\n7. 台灣 AI 產業政策與機會\n8. 值得關注的 AI 新創公司\n\n請提供具體數據與來源，使用繁體中文撰寫',
 
@@ -187,6 +193,20 @@ const zhTW = {
   'templates.pdf.technical': '技術文件',
   'templates.pdf.technical.desc': '程式碼區塊、結構化',
   'templates.pdf.technical.prompt': '技術文件風格：等寬字體程式碼區塊（含語法高亮說明），表格呈現 API 規格，清晰的章節層級，注意和警告使用不同色塊標示，含版本資訊和更新紀錄區塊，適合開發文件。',
+
+  // Slides templates
+  'templates.slides.minimal': '極簡白底',
+  'templates.slides.minimal.desc': '白色背景、灰色調、乾淨俐落',
+  'templates.slides.minimal.prompt': '極簡風格：白色背景，灰色文字，無襯線字體，微妙的滑動過場動畫，每頁一個重點，整體乾淨清爽。',
+  'templates.slides.dark': '科技深色',
+  'templates.slides.dark.desc': '深色背景、霓虹強調色',
+  'templates.slides.dark.prompt': '科技深色風格：深色背景（#1a1a2e），淺色文字，霓虹青色強調色，等寬字體標題，適合科技主題簡報。',
+  'templates.slides.gradient': '漸層現代',
+  'templates.slides.gradient.desc': '藍紫漸層、白色文字',
+  'templates.slides.gradient.prompt': '漸層風格：藍色到紫色漸層背景，白色文字，現代感十足，適合新創公司和產品發表。',
+  'templates.slides.neon': '霓虹發光',
+  'templates.slides.neon.desc': '黑色背景、霓虹發光效果',
+  'templates.slides.neon.prompt': '霓虹風格：純黑背景，霓虹發光文字效果（青色、粉色、綠色），電子感強烈，適合派對、創意活動和科技展示。',
 
   // Chat
   'chat.tool.generatePptx': '生成簡報檔案',

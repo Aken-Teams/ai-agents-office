@@ -34,7 +34,9 @@ const DOC_TYPES = [
   { id: 'docx-gen', labelKey: 'nav.docTypes.docx.label' as const, descKey: 'nav.docTypes.docx.desc' as const, icon: 'description', colorClass: 'text-tertiary' },
   { id: 'xlsx-gen', labelKey: 'nav.docTypes.xlsx.label' as const, descKey: 'nav.docTypes.xlsx.desc' as const, icon: 'table_chart', colorClass: 'text-success' },
   { id: 'pdf-gen', labelKey: 'nav.docTypes.pdf.label' as const, descKey: 'nav.docTypes.pdf.desc' as const, icon: 'picture_as_pdf', colorClass: 'text-error' },
+  { id: 'slides-gen', labelKey: 'nav.docTypes.slides.label' as const, descKey: 'nav.docTypes.slides.desc' as const, icon: 'slideshow', colorClass: 'text-secondary' },
   { id: 'data-analyst', labelKey: 'nav.docTypes.dataAnalyst.label' as const, descKey: 'nav.docTypes.dataAnalyst.desc' as const, icon: 'analytics', colorClass: 'text-primary' },
+  { id: 'rag-analyst', labelKey: 'nav.docTypes.ragAnalyst.label' as const, descKey: 'nav.docTypes.ragAnalyst.desc' as const, icon: 'hub', colorClass: 'text-tertiary' },
   { id: 'research', labelKey: 'nav.docTypes.research.label' as const, descKey: 'nav.docTypes.research.desc' as const, icon: 'travel_explore', colorClass: 'text-on-surface-variant' },
 ];
 
@@ -43,6 +45,8 @@ const SKILL_ICONS: Record<string, string> = {
   'docx-gen': 'description',
   'xlsx-gen': 'table_chart',
   'pdf-gen': 'picture_as_pdf',
+  'slides-gen': 'slideshow',
+  'rag-analyst': 'hub',
 };
 
 const FILE_TYPE_ICONS: Record<string, { icon: string; color: string }> = {
@@ -50,6 +54,7 @@ const FILE_TYPE_ICONS: Record<string, { icon: string; color: string }> = {
   docx: { icon: 'description', color: 'text-tertiary' },
   xlsx: { icon: 'table_chart', color: 'text-success' },
   pdf:  { icon: 'picture_as_pdf', color: 'text-error' },
+  html: { icon: 'slideshow', color: 'text-secondary' },
 };
 
 function formatFileSize(bytes: number): string {
@@ -320,11 +325,12 @@ function DashboardContent() {
                 </div>
                 {/* Sample prompts / templates */}
                 {!smartInput.trim() && (
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mt-4">
                     {[
                       { icon: 'present_to_all', labelKey: 'dashboard.samples.pptx' as const, templateKey: 'dashboard.samples.pptx.template' as const },
                       { icon: 'description', labelKey: 'dashboard.samples.docx' as const, templateKey: 'dashboard.samples.docx.template' as const },
                       { icon: 'table_chart', labelKey: 'dashboard.samples.xlsx' as const, templateKey: 'dashboard.samples.xlsx.template' as const },
+                      { icon: 'slideshow', labelKey: 'dashboard.samples.slides' as const, templateKey: 'dashboard.samples.slides.template' as const },
                       { icon: 'travel_explore', labelKey: 'dashboard.samples.research' as const, templateKey: 'dashboard.samples.research.template' as const },
                     ].map(sample => (
                       <button

@@ -34,8 +34,12 @@ const en = {
   'nav.docTypes.xlsx.desc': 'Data analysis',
   'nav.docTypes.pdf.label': 'PDF',
   'nav.docTypes.pdf.desc': 'Document export',
+  'nav.docTypes.slides.label': 'Web Slides',
+  'nav.docTypes.slides.desc': 'Interactive HTML presentations',
   'nav.docTypes.dataAnalyst.label': 'Data Analysis',
   'nav.docTypes.dataAnalyst.desc': 'Upload data for analysis',
+  'nav.docTypes.ragAnalyst.label': 'Knowledge Base',
+  'nav.docTypes.ragAnalyst.desc': 'Cross-file analysis',
   'nav.docTypes.research.label': 'Web Research',
   'nav.docTypes.research.desc': 'Search & compile',
 
@@ -118,6 +122,8 @@ const en = {
   'dashboard.samples.docx.template': 'Write a Product Requirements Document (PRD) in Word format with the following sections:\n\n1. Product Overview: Product name, target users, core value proposition\n2. Project Background: Market pain points, competitive analysis, business objectives\n3. Feature Requirements: List main features by priority (P0/P1/P2)\n4. User Stories: At least 5 core use cases\n5. Non-functional Requirements: Performance, security, usability requirements\n6. Technical Architecture: Frontend and backend technology recommendations\n7. Timeline: Milestones and delivery schedule\n8. Risk Assessment: Potential risks and mitigation strategies\n\nPlease use clear, professional formatting',
   'dashboard.samples.xlsx': 'Build Sales Data Analysis Sheet',
   'dashboard.samples.xlsx.template': 'Create a Sales Data Analysis Excel report with the following worksheets:\n\n[Sheet 1 - Monthly Sales Overview]\n- Columns: Month, Revenue, Cost, Gross Profit, Margin %, Orders, Avg Order Value\n- Generate 12 months of simulated data (2025/01 ~ 2025/12)\n- Include totals and averages\n\n[Sheet 2 - Product Category Analysis]\n- Columns: Product Category, Sales Amount, Share %, YoY Comparison, Growth Rate\n- At least 5 product categories\n\n[Sheet 3 - Regional Performance Ranking]\n- Columns: Region, Sales Rep, Target, Actual, Achievement Rate\n- Sort by achievement rate\n\nPlease include appropriate formatting (number formats, bold headers, color coding)',
+  'dashboard.samples.slides': 'Create Interactive Web Slides',
+  'dashboard.samples.slides.template': 'Create an interactive web presentation (HTML) about "2026 AI Agent Technology Trends" with these slides:\n1. Cover: title + subtitle + date\n2. Table of Contents\n3. AI Agent definition and core concepts\n4. Framework comparison (LangGraph, CrewAI, AutoGen)\n5. Enterprise adoption case studies\n6. Multi-agent collaboration architecture\n7. Security and governance challenges\n8. Future outlook and predictions\n9. Q&A\n\nRequirements: Use dark tech style, each slide should reveal key points with step-by-step animations',
   'dashboard.samples.research': 'Research Latest AI Industry Trends',
   'dashboard.samples.research.template': 'Research the latest AI industry trends in 2026 and compile a comprehensive research report covering:\n\n1. Global AI Market Size & Investment Trends\n2. Large Language Model (LLM) Technical Breakthroughs & Advances\n3. AI Agent Ecosystem Development Status\n4. Enterprise AI Adoption Rate & ROI Analysis\n5. AI Impact on Industries (Manufacturing, Finance, Healthcare, Education)\n6. AI Regulatory Updates (EU AI Act, US Executive Orders)\n7. Regional AI Industry Policies & Opportunities\n8. Notable AI Startups to Watch\n\nPlease provide specific data and sources',
 
@@ -178,6 +184,20 @@ const en = {
   'templates.pdf.technical': 'Technical Doc',
   'templates.pdf.technical.desc': 'Code blocks, structured',
   'templates.pdf.technical.prompt': 'Technical document style: monospace code blocks (with syntax highlighting notes), tables for API specs, clear section hierarchy, notes and warnings in different colored blocks, version info and changelog sections, suitable for developer documentation.',
+
+  // Slides templates
+  'templates.slides.minimal': 'Clean Minimal',
+  'templates.slides.minimal.desc': 'White background, gray tones, clean look',
+  'templates.slides.minimal.prompt': 'Minimal style: white background, gray text, sans-serif fonts, subtle slide transitions, one key point per slide, clean and sharp overall.',
+  'templates.slides.dark': 'Tech Dark',
+  'templates.slides.dark.desc': 'Dark background, neon accents',
+  'templates.slides.dark.prompt': 'Tech dark style: dark background (#1a1a2e), light text, neon cyan accents, monospace title font, suitable for tech-themed presentations.',
+  'templates.slides.gradient': 'Modern Gradient',
+  'templates.slides.gradient.desc': 'Blue-purple gradient, white text',
+  'templates.slides.gradient.prompt': 'Gradient style: blue-to-purple gradient background, white text, modern feel, great for startups and product launches.',
+  'templates.slides.neon': 'Neon Glow',
+  'templates.slides.neon.desc': 'Black background, neon glow effects',
+  'templates.slides.neon.prompt': 'Neon style: pure black background, neon glow text effects (cyan, pink, green), electric feel, perfect for creative events and tech showcases.',
 
   'chat.tool.generatePptx': 'Generating presentation',
   'chat.tool.generateDocx': 'Generating document',

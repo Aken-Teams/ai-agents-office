@@ -4,7 +4,7 @@ import db from '../db.js';
 import { spawnClaude } from './claudeCli.js';
 import { parsePipelineBlocks, truncateResultForRouter } from './taskParser.js';
 import { getSkill, buildSystemPrompt, getRouterSkill, buildRouterPrompt } from '../skills/loader.js';
-import { getUserUploadsForPrompt } from './uploadContext.js';
+import { getUserUploadsForPrompt, getConversationFilesForPrompt } from './uploadContext.js';
 import { getSandboxPath } from './sandbox.js';
 import { config } from '../config.js';
 import type { SSEEvent, ParsedTask, ParsedPipeline, TaskExecution } from '../types.js';
@@ -22,6 +22,8 @@ const SKILL_TIMEOUT: Record<string, number> = {
   'docx-gen': 480_000,  // 8 min — write code + run node to generate Word
   'xlsx-gen': 300_000,  // 5 min — write code + run node to generate Excel
   'pdf-gen':  300_000,  // 5 min — write code + run node to generate PDF
+  'slides-gen': 300_000,  // 5 min — generate HTML slides
+  'rag-analyst': 300_000, // 5 min — cross-file analysis
 };
 const DEFAULT_TASK_TIMEOUT_MS = 300_000; // 5 min fallback for unknown skills
 
@@ -302,10 +304,12 @@ export class Orchestrator {
 
     // Build system prompt for this skill (with user upload context)
     const sandboxPath = getSandboxPath(this.userId, this.conversationId);
-    const uploadContext = getUserUploadsForPrompt(this.userId, sandboxPath, {
-      uploadIds: this.uploadIds.length > 0 ? this.uploadIds : undefined,
-      conversationId: this.conversationId,
-    });
+    const uploadContext = task.skillId === 'rag-analyst'
+      ? getConversationFilesForPrompt(this.userId, sandboxPath, this.conversationId)
+      : getUserUploadsForPrompt(this.userId, sandboxPath, {
+          uploadIds: this.uploadIds.length > 0 ? this.uploadIds : undefined,
+          conversationId: this.conversationId,
+        });
     const systemPrompt = buildSystemPrompt(skill, config.generatorsDir, this.userLocale) + uploadContext;
 
     // Get or create session for this skill agent

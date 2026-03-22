@@ -36,8 +36,12 @@ const zhCN = {
   'nav.docTypes.xlsx.desc': '数据分析',
   'nav.docTypes.pdf.label': 'PDF',
   'nav.docTypes.pdf.desc': '文档输出',
+  'nav.docTypes.slides.label': '网页演示',
+  'nav.docTypes.slides.desc': '交互式 HTML 演示文稿',
   'nav.docTypes.dataAnalyst.label': '数据分析',
   'nav.docTypes.dataAnalyst.desc': '上传资料分析',
+  'nav.docTypes.ragAnalyst.label': '知识库分析',
+  'nav.docTypes.ragAnalyst.desc': '跨文件交叉分析',
   'nav.docTypes.research.label': '网络研究',
   'nav.docTypes.research.desc': '搜索与汇整',
 
@@ -123,6 +127,8 @@ const zhCN = {
   'dashboard.samples.docx.template': '帮我撰写一份产品需求规格文档（PRD），使用 Word 格式，包含以下章节：\n\n1. 产品概述：产品名称、目标用户、核心价值主张\n2. 项目背景：市场痛点、竞品分析、商业目标\n3. 功能需求清单：依优先级（P0/P1/P2）列出主要功能\n4. 用户故事：至少 5 个核心使用情境\n5. 非功能性需求：性能、安全性、可用性要求\n6. 技术架构建议：前后端技术选型\n7. 时程规划：里程碑与交付时间表\n8. 风险评估：潜在风险与应对方案\n\n请使用简体中文，格式清晰、具专业感',
   'dashboard.samples.xlsx': '建立销售数据分析表',
   'dashboard.samples.xlsx.template': '帮我建立一份销售数据分析 Excel 报表，包含以下工作表：\n\n【Sheet 1 - 月度销售总览】\n- 字段：月份、营收、成本、毛利、毛利率、订单数、客单价\n- 生成 12 个月的模拟数据（2025/01 ~ 2025/12）\n- 加入合计行与平均值\n\n【Sheet 2 - 产品分类分析】\n- 字段：产品类别、销售额、占比、同期比较、增长率\n- 至少 5 个产品类别\n\n【Sheet 3 - 区域业绩排行】\n- 字段：区域、销售员、目标额、实际额、达成率\n- 依达成率排序\n\n请加入适当的格式设定（数字格式、粗体标题、颜色区分）',
+  'dashboard.samples.slides': '制作交互网页演示',
+  'dashboard.samples.slides.template': '帮我制作一份交互式网页演示（HTML），主题是「2026 AI Agent 技术趋势」，包含以下幻灯片：\n1. 封面：标题 + 副标题 + 日期\n2. 目录概览\n3. AI Agent 定义与核心概念\n4. 主流框架比较（LangGraph、CrewAI、AutoGen）\n5. 企业导入案例分析\n6. 多智能体协作架构设计\n7. 安全性与治理挑战\n8. 未来展望与预测\n9. Q&A\n\n要求：使用深色科技风格，每页重点使用动画效果逐步显示',
   'dashboard.samples.research': '研究 AI 产业最新趋势',
   'dashboard.samples.research.template': '请帮我研究 2026 年 AI 产业最新趋势，并整理成一份完整的研究报告，涵盖以下方面：\n\n1. 全球 AI 市场规模与投资趋势\n2. 大型语言模型（LLM）技术突破与新进展\n3. AI Agent 生态系发展现况\n4. 企业 AI 导入率与 ROI 分析\n5. AI 对各产业的影响（制造、金融、医疗、教育）\n6. AI 监管法规最新动态（欧盟 AI Act、美国行政令）\n7. 中国 AI 产业政策与机遇\n8. 值得关注的 AI 初创公司\n\n请提供具体数据与来源，使用简体中文撰写',
 
@@ -183,6 +189,20 @@ const zhCN = {
   'templates.pdf.technical': '技术文档',
   'templates.pdf.technical.desc': '代码区块、结构化',
   'templates.pdf.technical.prompt': '技术文档风格：等宽字体代码区块（含语法高亮说明），表格呈现 API 规格，清晰的章节层级，注意和警告使用不同色块标示，含版本信息和更新记录区块，适合开发文档。',
+
+  // Slides templates
+  'templates.slides.minimal': '极简白底',
+  'templates.slides.minimal.desc': '白色背景、灰色调、干净利落',
+  'templates.slides.minimal.prompt': '极简风格：白色背景，灰色文字，无衬线字体，微妙的滑动过场动画，每页一个重点，整体干净清爽。',
+  'templates.slides.dark': '科技深色',
+  'templates.slides.dark.desc': '深色背景、霓虹强调色',
+  'templates.slides.dark.prompt': '科技深色风格：深色背景（#1a1a2e），浅色文字，霓虹青色强调色，等宽字体标题，适合科技主题演示。',
+  'templates.slides.gradient': '渐变现代',
+  'templates.slides.gradient.desc': '蓝紫渐变、白色文字',
+  'templates.slides.gradient.prompt': '渐变风格：蓝色到紫色渐变背景，白色文字，现代感十足，适合创业公司和产品发布。',
+  'templates.slides.neon': '霓虹发光',
+  'templates.slides.neon.desc': '黑色背景、霓虹发光效果',
+  'templates.slides.neon.prompt': '霓虹风格：纯黑背景，霓虹发光文字效果（青色、粉色、绿色），电子感强烈，适合派对、创意活动和科技展示。',
 
   // Chat
   'chat.tool.generatePptx': '生成演示文稿',

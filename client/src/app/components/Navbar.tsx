@@ -21,7 +21,9 @@ const DOC_TYPES = [
   { id: 'docx-gen', labelKey: 'nav.docTypes.docx.label' as const, descKey: 'nav.docTypes.docx.desc' as const, icon: 'description', colorClass: 'text-tertiary' },
   { id: 'xlsx-gen', labelKey: 'nav.docTypes.xlsx.label' as const, descKey: 'nav.docTypes.xlsx.desc' as const, icon: 'table_chart', colorClass: 'text-success' },
   { id: 'pdf-gen', labelKey: 'nav.docTypes.pdf.label' as const, descKey: 'nav.docTypes.pdf.desc' as const, icon: 'picture_as_pdf', colorClass: 'text-error' },
+  { id: 'slides-gen', labelKey: 'nav.docTypes.slides.label' as const, descKey: 'nav.docTypes.slides.desc' as const, icon: 'slideshow', colorClass: 'text-secondary' },
   { id: 'data-analyst', labelKey: 'nav.docTypes.dataAnalyst.label' as const, descKey: 'nav.docTypes.dataAnalyst.desc' as const, icon: 'analytics', colorClass: 'text-primary' },
+  { id: 'rag-analyst', labelKey: 'nav.docTypes.ragAnalyst.label' as const, descKey: 'nav.docTypes.ragAnalyst.desc' as const, icon: 'hub', colorClass: 'text-tertiary' },
   { id: 'research', labelKey: 'nav.docTypes.research.label' as const, descKey: 'nav.docTypes.research.desc' as const, icon: 'travel_explore', colorClass: 'text-on-surface-variant' },
 ];
 
@@ -49,6 +51,12 @@ const SKILL_TEMPLATES: Record<string, Array<{ id: string; icon: string; labelKey
     { id: 'modern', icon: 'auto_awesome', labelKey: 'templates.pdf.modern' as any, descKey: 'templates.pdf.modern.desc' as any, promptKey: 'templates.pdf.modern.prompt' as any },
     { id: 'magazine', icon: 'menu_book', labelKey: 'templates.pdf.magazine' as any, descKey: 'templates.pdf.magazine.desc' as any, promptKey: 'templates.pdf.magazine.prompt' as any },
     { id: 'technical', icon: 'code', labelKey: 'templates.pdf.technical' as any, descKey: 'templates.pdf.technical.desc' as any, promptKey: 'templates.pdf.technical.prompt' as any },
+  ],
+  'slides-gen': [
+    { id: 'minimal', icon: 'tune', labelKey: 'templates.slides.minimal' as any, descKey: 'templates.slides.minimal.desc' as any, promptKey: 'templates.slides.minimal.prompt' as any },
+    { id: 'dark', icon: 'dark_mode', labelKey: 'templates.slides.dark' as any, descKey: 'templates.slides.dark.desc' as any, promptKey: 'templates.slides.dark.prompt' as any },
+    { id: 'gradient', icon: 'gradient', labelKey: 'templates.slides.gradient' as any, descKey: 'templates.slides.gradient.desc' as any, promptKey: 'templates.slides.gradient.prompt' as any },
+    { id: 'neon', icon: 'flare', labelKey: 'templates.slides.neon' as any, descKey: 'templates.slides.neon.desc' as any, promptKey: 'templates.slides.neon.prompt' as any },
   ],
 };
 
@@ -517,7 +525,7 @@ export default function Navbar() {
 
           {/* Modal */}
           <div
-            className="relative bg-surface-container rounded-xl shadow-2xl border border-outline-variant/10 w-full max-w-lg mx-4 overflow-hidden animate-in"
+            className="relative bg-surface-container rounded-xl shadow-2xl border border-outline-variant/10 w-full max-w-2xl mx-4 overflow-hidden animate-in"
             onClick={e => e.stopPropagation()}
           >
             {!selectedSkill ? (
@@ -535,7 +543,7 @@ export default function Navbar() {
                     <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
                   </button>
                 </div>
-                <div className="p-6 grid grid-cols-3 gap-3">
+                <div className="p-6 grid grid-cols-4 gap-3">
                   {DOC_TYPES.map(doc => (
                     <button
                       key={doc.id}
