@@ -286,6 +286,19 @@ const en = {
   'chat.preview.versionCreated': 'Created at',
   'chat.preview.latestVersion': 'Latest',
 
+  // Charts & Diagrams
+  'chart.status.rendering': 'Rendering chart...',
+  'chart.status.renderingDiagram': 'Rendering diagram...',
+  'chart.error.chart': 'Chart error',
+  'chart.error.diagram': 'Diagram error',
+  'chart.action.expand': 'Expand',
+  'chart.action.downloadPng': 'PNG',
+  'chart.action.downloadSvg': 'SVG',
+  'chart.action.data': 'Data',
+  'chart.action.hide': 'Hide',
+  'chart.action.downloadPngFull': 'Download PNG',
+  'chart.preview.loading': 'Loading preview...',
+
   'files.deleteModal.title': 'Confirm Delete?',
   'files.deleteModal.message': 'About to delete {filename}. This action cannot be undone.',
   'files.deleteModal.cancel': 'Cancel',

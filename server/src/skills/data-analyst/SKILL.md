@@ -109,7 +109,7 @@ Use fenced chart blocks with the `chart` language tag:
 
 When analysis reveals processes, relationships, data flows, or hierarchies, use Mermaid diagrams alongside charts. They render as interactive, downloadable diagrams.
 
-**CRITICAL**: Do NOT use ASCII art, text-based charts, or plain-text flowcharts. ALWAYS use `chart` blocks for numbers and `mermaid` blocks for structure.
+**CRITICAL**: You MUST actually OUTPUT the fenced ` ```mermaid ` code block — do NOT just describe diagrams in text. Do NOT use ASCII art, text-based charts, or plain-text flowcharts. ALWAYS use `chart` blocks for numbers and `mermaid` blocks for structure.
 
 ### Common Use Cases
 

@@ -1,12 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useTranslation } from '../../../i18n/index';
+import { getThemeVars } from './chartTheme';
 
 interface ChatMermaidProps {
   code: string;
 }
 
 export default function ChatMermaid({ code }: ChatMermaidProps) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [svg, setSvg] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +92,7 @@ export default function ChatMermaid({ code }: ChatMermaidProps) {
     const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     img.onload = () => {
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = getThemeVars().bg;
       ctx.fillRect(0, 0, w, h);
       ctx.drawImage(img, 0, 0, w, h);
       URL.revokeObjectURL(url);
@@ -107,7 +110,7 @@ export default function ChatMermaid({ code }: ChatMermaidProps) {
     return (
       <div className="chat-chart-container">
         <div className="chat-chart-body flex items-center justify-center" style={{ minHeight: 120 }}>
-          <span className="text-sm opacity-50 animate-pulse">Rendering diagram...</span>
+          <span className="text-sm opacity-50 animate-pulse">{t('chart.status.renderingDiagram' as any)}</span>
         </div>
       </div>
     );
@@ -118,7 +121,7 @@ export default function ChatMermaid({ code }: ChatMermaidProps) {
       <div className="chat-chart-fallback">
         <div className="chat-chart-fallback-header">
           <span className="material-symbols-outlined" style={{ fontSize: 16 }}>warning</span>
-          <span>Diagram error: {error}</span>
+          <span>{t('chart.error.diagram' as any)}: {error}</span>
         </div>
         <pre><code>{code}</code></pre>
       </div>
@@ -139,18 +142,18 @@ export default function ChatMermaid({ code }: ChatMermaidProps) {
           <button
             onClick={() => setFullscreen(true)}
             className="chat-chart-toggle flex items-center gap-1"
-            title="Fullscreen"
+            title={t('chart.action.expand' as any)}
           >
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>fullscreen</span>
-            <span>Expand</span>
+            <span>{t('chart.action.expand' as any)}</span>
           </button>
-          <button onClick={handleDownload} className="chat-chart-toggle flex items-center gap-1" title="Download SVG">
+          <button onClick={handleDownload} className="chat-chart-toggle flex items-center gap-1" title={t('chart.action.downloadSvg' as any)}>
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>download</span>
-            <span>SVG</span>
+            <span>{t('chart.action.downloadSvg' as any)}</span>
           </button>
-          <button onClick={handleDownloadPng} className="chat-chart-toggle flex items-center gap-1" title="Download PNG">
+          <button onClick={handleDownloadPng} className="chat-chart-toggle flex items-center gap-1" title={t('chart.action.downloadPng' as any)}>
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>image</span>
-            <span>PNG</span>
+            <span>{t('chart.action.downloadPng' as any)}</span>
           </button>
         </div>
       </div>
@@ -174,10 +177,10 @@ export default function ChatMermaid({ code }: ChatMermaidProps) {
             <div dangerouslySetInnerHTML={{ __html: svg }} />
             <div className="flex items-center gap-2 mt-4 pt-3 border-t border-outline-variant/20">
               <button onClick={handleDownload} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
-                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>download</span> SVG
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>download</span> {t('chart.action.downloadSvg' as any)}
               </button>
               <button onClick={handleDownloadPng} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
-                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>image</span> PNG
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>image</span> {t('chart.action.downloadPng' as any)}
               </button>
             </div>
           </div>

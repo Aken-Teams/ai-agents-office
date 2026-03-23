@@ -296,6 +296,19 @@ const zhTW = {
   'chat.preview.versionCreated': '建立於',
   'chat.preview.latestVersion': '最新',
 
+  // Charts & Diagrams
+  'chart.status.rendering': '圖表渲染中...',
+  'chart.status.renderingDiagram': '圖表繪製中...',
+  'chart.error.chart': '圖表錯誤',
+  'chart.error.diagram': '圖表錯誤',
+  'chart.action.expand': '放大',
+  'chart.action.downloadPng': 'PNG',
+  'chart.action.downloadSvg': 'SVG',
+  'chart.action.data': '資料',
+  'chart.action.hide': '隱藏',
+  'chart.action.downloadPngFull': '下載 PNG',
+  'chart.preview.loading': '載入預覽中...',
+
   // Files
   'files.deleteModal.title': '確定刪除？',
   'files.deleteModal.message': '即將刪除 {filename}，此操作無法復原。',

@@ -75,7 +75,11 @@ When your research includes ANY quantitative data (statistics, market share, ran
 
 When your research involves processes, relationships, timelines, hierarchies, or comparisons, you MUST use Mermaid diagrams. They render as interactive, downloadable diagrams in the chat UI.
 
-**CRITICAL**: Do NOT use ASCII art, text-based tables for comparisons, or plain-text flowcharts. ALWAYS use `chart` blocks for numerical data and `mermaid` blocks for structural data.
+**CRITICAL RULES**:
+1. You MUST actually OUTPUT the fenced code block with ` ```mermaid ` — do NOT just describe diagrams in text
+2. Do NOT use ASCII art, text-based tables for comparisons, or plain-text flowcharts
+3. ALWAYS use `chart` blocks for numerical data and `mermaid` blocks for structural data
+4. When user asks for 心智圖/mindmap/流程圖/ERD/甘特圖, you MUST output the actual ```mermaid code block — never just describe it
 
 ### Available Diagram Types
 

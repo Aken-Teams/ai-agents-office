@@ -13,6 +13,7 @@ import {
 import type { ChartData, DataSeries } from './types';
 import { validateChartData } from './types';
 import { getChartColors, getThemeVars } from './chartTheme';
+import { useTranslation } from '../../../i18n/index';
 
 function isIncompleteJson(s: string): boolean {
   const t = s.trim();
@@ -36,6 +37,7 @@ interface ChatChartProps {
 }
 
 export default function ChatChart({ rawJson }: ChatChartProps) {
+  const { t } = useTranslation();
   const [showRaw, setShowRaw] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [themeKey, setThemeKey] = useState(0);
@@ -67,7 +69,7 @@ export default function ChatChart({ rawJson }: ChatChartProps) {
     return (
       <div className="chat-chart-container">
         <div className="chat-chart-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span className="text-sm opacity-50 animate-pulse">Rendering chart...</span>
+          <span className="text-sm opacity-50 animate-pulse">{t('chart.status.rendering' as any)}</span>
         </div>
       </div>
     );
@@ -78,7 +80,7 @@ export default function ChatChart({ rawJson }: ChatChartProps) {
       <div className="chat-chart-fallback">
         <div className="chat-chart-fallback-header">
           <span className="material-symbols-outlined" style={{ fontSize: 16 }}>warning</span>
-          <span>Chart error{parsed.error ? `: ${parsed.error}` : ''}</span>
+          <span>{t('chart.error.chart' as any)}{parsed.error ? `: ${parsed.error}` : ''}</span>
         </div>
         <pre><code>{rawJson}</code></pre>
       </div>
@@ -143,15 +145,15 @@ export default function ChatChart({ rawJson }: ChatChartProps) {
         <div className="flex items-center gap-1 px-3 py-1.5 border-t border-[var(--chart-border)]">
           <button className="chat-chart-toggle flex items-center gap-1" onClick={() => setFullscreen(true)}>
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>fullscreen</span>
-            <span>Expand</span>
+            <span>{t('chart.action.expand' as any)}</span>
           </button>
           <button className="chat-chart-toggle flex items-center gap-1" onClick={handleDownloadPng}>
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>image</span>
-            <span>PNG</span>
+            <span>{t('chart.action.downloadPng' as any)}</span>
           </button>
           <button className="chat-chart-toggle flex items-center gap-1" onClick={() => setShowRaw(!showRaw)}>
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{showRaw ? 'visibility_off' : 'data_object'}</span>
-            <span>{showRaw ? 'Hide' : 'Data'}</span>
+            <span>{showRaw ? t('chart.action.hide' as any) : t('chart.action.data' as any)}</span>
           </button>
         </div>
         {showRaw && (
@@ -181,7 +183,7 @@ export default function ChatChart({ rawJson }: ChatChartProps) {
             </ResponsiveContainer>
             <div className="flex items-center gap-2 mt-4 pt-3 border-t border-outline-variant/20">
               <button onClick={handleDownloadPng} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
-                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>image</span> Download PNG
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>image</span> {t('chart.action.downloadPngFull' as any)}
               </button>
             </div>
           </div>

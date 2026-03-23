@@ -92,7 +92,7 @@ Use fenced chart blocks with the `chart` language tag:
 
 For cross-file relationships, process flows, and data schemas, use Mermaid diagrams. They render as interactive diagrams in the chat UI.
 
-**CRITICAL**: Do NOT use ASCII art. ALWAYS use `chart` for numbers and `mermaid` for structure.
+**CRITICAL**: You MUST actually OUTPUT the fenced ` ```mermaid ` code block — do NOT just describe diagrams in text. Do NOT use ASCII art. ALWAYS use `chart` for numbers and `mermaid` for structure.
 
 ```mermaid
 erDiagram

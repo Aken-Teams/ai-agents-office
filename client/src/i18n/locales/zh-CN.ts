@@ -292,6 +292,19 @@ const zhCN = {
   'chat.preview.versionCreated': '创建于',
   'chat.preview.latestVersion': '最新',
 
+  // Charts & Diagrams
+  'chart.status.rendering': '图表渲染中...',
+  'chart.status.renderingDiagram': '图表绘制中...',
+  'chart.error.chart': '图表错误',
+  'chart.error.diagram': '图表错误',
+  'chart.action.expand': '放大',
+  'chart.action.downloadPng': 'PNG',
+  'chart.action.downloadSvg': 'SVG',
+  'chart.action.data': '数据',
+  'chart.action.hide': '隐藏',
+  'chart.action.downloadPngFull': '下载 PNG',
+  'chart.preview.loading': '加载预览中...',
+
   // Files
   'files.deleteModal.title': '确定删除？',
   'files.deleteModal.message': '即将删除 {filename}，此操作无法恢复。',

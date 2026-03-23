@@ -306,6 +306,7 @@ function getFileColor(type: string): string {
 }
 
 function InlineHtmlPreview({ file, token, onFullscreen }: { file: GeneratedFile; token: string; onFullscreen: () => void }) {
+  const { t } = useTranslation();
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   useEffect(() => {
     let url: string | null = null;
@@ -322,7 +323,7 @@ function InlineHtmlPreview({ file, token, onFullscreen }: { file: GeneratedFile;
   if (!blobUrl) return (
     <div className="h-[360px] flex items-center justify-center text-on-surface-variant text-sm">
       <span className="material-symbols-outlined animate-spin mr-2">progress_activity</span>
-      Loading preview...
+      {t('chart.preview.loading' as any)}
     </div>
   );
 
@@ -351,6 +352,7 @@ function InlineHtmlPreview({ file, token, onFullscreen }: { file: GeneratedFile;
 const PREVIEWABLE_TYPES = new Set(['pdf', 'pptx', 'ppt', 'docx', 'doc', 'xlsx', 'xls']);
 
 function InlineFilePreview({ file, token }: { file: GeneratedFile; token: string }) {
+  const { t } = useTranslation();
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [contentType, setContentType] = useState<string>('');
   const [failed, setFailed] = useState(false);
@@ -377,13 +379,13 @@ function InlineFilePreview({ file, token }: { file: GeneratedFile; token: string
   if (!blobUrl) return (
     <div className="h-[360px] flex items-center justify-center text-on-surface-variant text-sm rounded-t-xl bg-surface-container-lowest">
       <span className="material-symbols-outlined animate-spin mr-2 text-base">progress_activity</span>
-      Loading preview...
+      {t('chart.preview.loading' as any)}
     </div>
   );
 
   const isPdf = contentType.includes('pdf');
   return (
-    <div className="relative rounded-t-xl overflow-hidden bg-white">
+    <div className="relative rounded-t-xl overflow-hidden bg-surface-container-lowest">
       <iframe
         src={isPdf ? `${blobUrl}#toolbar=0&navpanes=0&scrollbar=0` : blobUrl}
         className="w-full h-[360px] border-b border-outline-variant/10"
@@ -432,6 +434,16 @@ function ChatContent() {
 
   // Custom ReactMarkdown components — intercept ```chart and ```mermaid blocks
   const markdownComponents = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    pre({ children, node, ...props }: any) {
+      // Check if this <pre> contains a chart or mermaid code block — unwrap to avoid <pre> wrapper
+      const codeEl = node?.children?.[0];
+      const cls = codeEl?.properties?.className?.[0] || '';
+      if (cls === 'language-chart' || cls === 'language-mermaid') {
+        return <>{children}</>;
+      }
+      return <pre {...props}>{children}</pre>;
+    },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     code({ className, children, ...props }: any) {
       const text = String(children).trim();
@@ -1460,7 +1472,7 @@ function ChatContent() {
                 ) : (
                   <iframe
                     src={previewBlobUrl}
-                    className="w-full h-full rounded-lg border border-outline-variant/20 bg-white"
+                    className="w-full h-full rounded-lg border border-outline-variant/20 bg-surface-container-lowest"
                     title={previewFile.filename}
                   />
                 )}
