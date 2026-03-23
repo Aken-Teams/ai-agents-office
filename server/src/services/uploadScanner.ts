@@ -2,8 +2,15 @@
  * Upload Scanner — Security scanner for user-uploaded files.
  *
  * Validates file type, checks for malicious content (macros, scripts,
- * prompt injection in text files, CSV formula injection), and returns
- * a scan result before the file is accepted.
+ * prompt injection in text files, CSV formula injection, SVG/HTML scripts,
+ * image polyglot detection), and returns a scan result before the file is accepted.
+ *
+ * Supported categories:
+ * - Documents: PDF, DOCX, DOC, TXT, MD
+ * - Data: CSV, XLSX, XLS, JSON, XML, YAML/YML
+ * - Presentations: PPTX, PPT
+ * - Images: PNG, JPG/JPEG, GIF, WEBP, BMP, SVG, TIFF/TIF, ICO
+ * - Web: HTML/HTM
  */
 
 import fs from 'fs';
@@ -25,31 +32,74 @@ export interface ScanResult {
 // ---------------------------------------------------------------------------
 
 const ALLOWED_EXTENSIONS = new Set([
-  '.csv', '.xlsx', '.xls',
-  '.pdf',
-  '.txt', '.md', '.json',
-  '.docx', '.doc',
+  // Data
+  '.csv', '.xlsx', '.xls', '.json', '.xml', '.yaml', '.yml',
+  // Documents
+  '.pdf', '.txt', '.md', '.docx', '.doc',
+  // Presentations
+  '.pptx', '.ppt',
+  // Images
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg', '.tiff', '.tif', '.ico',
+  // Web
+  '.html', '.htm',
 ]);
 
 const MIME_WHITELIST: Record<string, string[]> = {
+  // Data
   '.csv':  ['text/csv', 'text/plain', 'application/vnd.ms-excel'],
   '.xlsx': ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
   '.xls':  ['application/vnd.ms-excel'],
+  '.json': ['application/json', 'text/plain'],
+  '.xml':  ['text/xml', 'application/xml', 'text/plain'],
+  '.yaml': ['text/yaml', 'text/x-yaml', 'application/x-yaml', 'text/plain'],
+  '.yml':  ['text/yaml', 'text/x-yaml', 'application/x-yaml', 'text/plain'],
+  // Documents
   '.pdf':  ['application/pdf'],
   '.txt':  ['text/plain'],
   '.md':   ['text/plain', 'text/markdown'],
-  '.json': ['application/json', 'text/plain'],
   '.docx': ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
   '.doc':  ['application/msword'],
+  // Presentations
+  '.pptx': ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+  '.ppt':  ['application/vnd.ms-powerpoint'],
+  // Images
+  '.png':  ['image/png'],
+  '.jpg':  ['image/jpeg'],
+  '.jpeg': ['image/jpeg'],
+  '.gif':  ['image/gif'],
+  '.webp': ['image/webp'],
+  '.bmp':  ['image/bmp', 'image/x-ms-bmp'],
+  '.svg':  ['image/svg+xml', 'text/xml', 'application/xml'],
+  '.tiff': ['image/tiff'],
+  '.tif':  ['image/tiff'],
+  '.ico':  ['image/x-icon', 'image/vnd.microsoft.icon'],
+  // Web
+  '.html': ['text/html'],
+  '.htm':  ['text/html'],
 };
 
-// Magic bytes for file type verification
-const MAGIC_BYTES: Record<string, number[]> = {
-  '.pdf':  [0x25, 0x50, 0x44, 0x46],           // %PDF
-  '.xlsx': [0x50, 0x4B, 0x03, 0x04],            // PK (ZIP)
-  '.docx': [0x50, 0x4B, 0x03, 0x04],            // PK (ZIP)
-  '.xls':  [0xD0, 0xCF, 0x11, 0xE0],            // OLE2
-  '.doc':  [0xD0, 0xCF, 0x11, 0xE0],            // OLE2
+// Magic bytes for file type verification (binary files only)
+const MAGIC_BYTES: Record<string, number[][]> = {
+  // Documents
+  '.pdf':  [[0x25, 0x50, 0x44, 0x46]],                        // %PDF
+  '.docx': [[0x50, 0x4B, 0x03, 0x04]],                        // PK (ZIP)
+  '.doc':  [[0xD0, 0xCF, 0x11, 0xE0]],                        // OLE2
+  // Data
+  '.xlsx': [[0x50, 0x4B, 0x03, 0x04]],                        // PK (ZIP)
+  '.xls':  [[0xD0, 0xCF, 0x11, 0xE0]],                        // OLE2
+  // Presentations
+  '.pptx': [[0x50, 0x4B, 0x03, 0x04]],                        // PK (ZIP)
+  '.ppt':  [[0xD0, 0xCF, 0x11, 0xE0]],                        // OLE2
+  // Images
+  '.png':  [[0x89, 0x50, 0x4E, 0x47]],                        // .PNG
+  '.jpg':  [[0xFF, 0xD8, 0xFF]],                               // JFIF/EXIF
+  '.jpeg': [[0xFF, 0xD8, 0xFF]],                               // JFIF/EXIF
+  '.gif':  [[0x47, 0x49, 0x46, 0x38]],                        // GIF8
+  '.webp': [[0x52, 0x49, 0x46, 0x46]],                        // RIFF
+  '.bmp':  [[0x42, 0x4D]],                                     // BM
+  '.tiff': [[0x49, 0x49, 0x2A, 0x00], [0x4D, 0x4D, 0x00, 0x2A]], // II or MM
+  '.tif':  [[0x49, 0x49, 0x2A, 0x00], [0x4D, 0x4D, 0x00, 0x2A]],
+  '.ico':  [[0x00, 0x00, 0x01, 0x00]],                        // ICO
 };
 
 // Max file size: 50MB
@@ -87,7 +137,7 @@ function validateMimeType(ext: string, declaredMime: string | undefined): boolea
 }
 
 // ---------------------------------------------------------------------------
-// Validation: magic bytes
+// Validation: magic bytes (supports multiple valid signatures per extension)
 // ---------------------------------------------------------------------------
 
 function validateMagicBytes(ext: string, filePath: string): boolean {
@@ -95,15 +145,19 @@ function validateMagicBytes(ext: string, filePath: string): boolean {
   if (!expected) return true; // no magic bytes to check for text files
 
   try {
+    const maxLen = Math.max(...expected.map(sig => sig.length));
     const fd = fs.openSync(filePath, 'r');
-    const buf = Buffer.alloc(expected.length);
-    fs.readSync(fd, buf, 0, expected.length, 0);
+    const buf = Buffer.alloc(maxLen);
+    fs.readSync(fd, buf, 0, maxLen, 0);
     fs.closeSync(fd);
 
-    for (let i = 0; i < expected.length; i++) {
-      if (buf[i] !== expected[i]) return false;
-    }
-    return true;
+    // Match ANY of the valid signatures
+    return expected.some(sig => {
+      for (let i = 0; i < sig.length; i++) {
+        if (buf[i] !== sig[i]) return false;
+      }
+      return true;
+    });
   } catch {
     return false;
   }
@@ -114,10 +168,9 @@ function validateMagicBytes(ext: string, filePath: string): boolean {
 // ---------------------------------------------------------------------------
 
 function checkOfficeMacros(filePath: string, ext: string): string | null {
-  if (!['.xlsx', '.docx'].includes(ext)) return null;
+  if (!['.xlsx', '.docx', '.pptx'].includes(ext)) return null;
 
   try {
-    // Read ZIP file and search for vbaProject.bin signature
     const content = fs.readFileSync(filePath);
     const vbaSignature = Buffer.from('vbaProject.bin');
     if (content.includes(vbaSignature)) {
@@ -138,7 +191,6 @@ function checkPdfScripts(filePath: string, ext: string): string | null {
 
   try {
     const content = fs.readFileSync(filePath, 'latin1');
-    // Check for JavaScript, Launch actions, embedded files
     const suspicious = [
       /\/JavaScript\s/i,
       /\/JS\s*\(/i,
@@ -160,11 +212,122 @@ function checkPdfScripts(filePath: string, ext: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Scan: SVG scripts (SVG can embed JavaScript, event handlers, external refs)
+// ---------------------------------------------------------------------------
+
+function checkSvgScripts(filePath: string, ext: string): string | null {
+  if (ext !== '.svg') return null;
+
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(200 * 1024); // check first 200KB
+    const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
+    fs.closeSync(fd);
+
+    const content = buf.toString('utf8', 0, bytesRead).toLowerCase();
+
+    // Check for embedded scripts and dangerous patterns
+    const dangerous = [
+      /<script[\s>]/,                  // <script> tags
+      /javascript\s*:/,                // javascript: URIs
+      /on\w+\s*=/,                     // event handlers (onclick, onload, onerror, etc.)
+      /xlink:href\s*=\s*["']data:/,    // data: URI in xlink
+      /<foreignobject[\s>]/,           // foreignObject can embed HTML
+      /<iframe[\s>]/,                  // embedded iframes
+      /<embed[\s>]/,                   // embedded objects
+      /set\s*=\s*["'].*<!\[cdata\[/,   // CDATA injection
+    ];
+
+    for (const p of dangerous) {
+      if (p.test(content)) {
+        return 'svg_script_detected';
+      }
+    }
+  } catch {
+    // skip
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Scan: HTML scripts
+// ---------------------------------------------------------------------------
+
+function checkHtmlScripts(filePath: string, ext: string): string | null {
+  if (!['.html', '.htm'].includes(ext)) return null;
+
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(200 * 1024);
+    const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
+    fs.closeSync(fd);
+
+    const content = buf.toString('utf8', 0, bytesRead).toLowerCase();
+
+    const dangerous = [
+      /<script[\s>]/,                  // <script> tags
+      /javascript\s*:/,                // javascript: URIs
+      /on\w+\s*=\s*["'][^"']*(?:eval|alert|document\.|window\.|fetch|xmlhttp)/,  // dangerous event handlers
+      /<iframe[^>]+src\s*=\s*["'](?!about:blank)/,  // iframes loading external content
+      /<object[\s>]/,                  // embedded objects
+      /<embed[\s>]/,                   // embedded content
+      /<applet[\s>]/,                  // Java applets
+      /<form[^>]+action\s*=\s*["']http/,  // forms posting to external URLs
+    ];
+
+    for (const p of dangerous) {
+      if (p.test(content)) {
+        return 'html_script_detected';
+      }
+    }
+  } catch {
+    // skip
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Scan: Image polyglot detection (image with embedded scripts/executables)
+// ---------------------------------------------------------------------------
+
+function checkImagePolyglot(filePath: string, ext: string): string | null {
+  const imageExts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.tif', '.ico'];
+  if (!imageExts.includes(ext)) return null;
+
+  try {
+    // Read first 64KB to check for embedded dangerous content
+    const fd = fs.openSync(filePath, 'r');
+    const buf = Buffer.alloc(64 * 1024);
+    const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
+    fs.closeSync(fd);
+
+    const content = buf.toString('latin1', 0, bytesRead);
+
+    // Check for polyglot patterns (scripts hidden in image data)
+    const polyglotPatterns = [
+      /<script[\s>]/i,                 // HTML script tag
+      /<%.*%>/,                        // Server-side code (ASP/JSP)
+      /<\?php/i,                       // PHP code
+      /\x00\x00\x00\x00MZ/,           // PE executable after null bytes
+    ];
+
+    for (const p of polyglotPatterns) {
+      if (p.test(content)) {
+        return 'image_polyglot_detected';
+      }
+    }
+  } catch {
+    // skip
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Scan: Text content (prompt injection + CSV formula injection)
 // ---------------------------------------------------------------------------
 
 function checkTextContent(filePath: string, ext: string): { flag: string; detail: string } | null {
-  const textExts = ['.csv', '.txt', '.md', '.json'];
+  const textExts = ['.csv', '.txt', '.md', '.json', '.xml', '.yaml', '.yml'];
   if (!textExts.includes(ext)) return null;
 
   try {
@@ -193,6 +356,20 @@ function checkTextContent(filePath: string, ext: string): { flag: string; detail
       }
     }
 
+    // XML external entity (XXE) detection
+    if (ext === '.xml') {
+      const xxePatterns = [
+        /<!ENTITY\s+\w+\s+SYSTEM/i,       // External entity
+        /<!ENTITY\s+%\s+\w+\s+SYSTEM/i,   // Parameter external entity
+        /<!DOCTYPE[^>]*\[\s*<!ENTITY/i,    // DOCTYPE with entity declaration
+      ];
+      for (const p of xxePatterns) {
+        if (p.test(content)) {
+          return { flag: 'xml_xxe_detected', detail: 'XML External Entity (XXE) pattern detected' };
+        }
+      }
+    }
+
     // Prompt injection in text content
     const guard = analyzeFileContent(content, path.basename(filePath));
     if (guard.blocked) {
@@ -210,6 +387,19 @@ function checkTextContent(filePath: string, ext: string): { flag: string; detail
 // ---------------------------------------------------------------------------
 // Main scan function
 // ---------------------------------------------------------------------------
+
+// Flags that trigger immediate rejection
+const REJECT_FLAGS = new Set([
+  'disallowed_extension',
+  'office_macro_detected',
+  'pdf_script_detected',
+  'svg_script_detected',
+  'html_script_detected',
+  'image_polyglot_detected',
+  'xml_xxe_detected',
+  'csv_formula_injection',
+  'prompt_injection_in_file',
+]);
 
 export function scanUploadedFile(
   filePath: string,
@@ -248,7 +438,7 @@ export function scanUploadedFile(
     details.push('檔案標頭與副檔名不符');
   }
 
-  // 5. Office macro check
+  // 5. Office macro check (XLSX, DOCX, PPTX)
   const macroResult = checkOfficeMacros(filePath, ext);
   if (macroResult) {
     flags.push(macroResult);
@@ -262,7 +452,28 @@ export function scanUploadedFile(
     details.push('偵測到 PDF 內嵌腳本');
   }
 
-  // 7. Text content check (prompt injection + CSV formula)
+  // 7. SVG script check
+  const svgResult = checkSvgScripts(filePath, ext);
+  if (svgResult) {
+    flags.push(svgResult);
+    details.push('偵測到 SVG 內嵌腳本或事件處理器');
+  }
+
+  // 8. HTML script check
+  const htmlResult = checkHtmlScripts(filePath, ext);
+  if (htmlResult) {
+    flags.push(htmlResult);
+    details.push('偵測到 HTML 內嵌腳本或危險元素');
+  }
+
+  // 9. Image polyglot check
+  const polyglotResult = checkImagePolyglot(filePath, ext);
+  if (polyglotResult) {
+    flags.push(polyglotResult);
+    details.push('偵測到圖片檔案中嵌入可疑程式碼');
+  }
+
+  // 10. Text content check (prompt injection + CSV formula + XXE)
   const textResult = checkTextContent(filePath, ext);
   if (textResult) {
     flags.push(textResult.flag);
@@ -270,8 +481,7 @@ export function scanUploadedFile(
   }
 
   // Determine result
-  if (flags.some(f => ['disallowed_extension', 'office_macro_detected', 'pdf_script_detected', 'csv_formula_injection', 'prompt_injection_in_file'].includes(f))) {
-    // Log security event
+  if (flags.some(f => REJECT_FLAGS.has(f))) {
     if (userId) {
       logSecurityEvent(userId, 'suspicious_upload', 'high',
         `Rejected upload: ${originalName} — ${details.join('; ')}`,
@@ -285,7 +495,6 @@ export function scanUploadedFile(
   }
 
   if (flags.length > 0) {
-    // Suspicious but not blocking
     if (userId) {
       logSecurityEvent(userId, 'suspicious_upload', 'medium',
         `Suspicious upload: ${originalName} — ${details.join('; ')}`,

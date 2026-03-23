@@ -298,7 +298,7 @@ function DashboardContent() {
                     ref={smartFileRef}
                     type="file"
                     multiple
-                    accept=".csv,.xlsx,.xls,.pdf,.txt,.md,.json,.docx,.doc"
+                    accept=".csv,.xlsx,.xls,.pdf,.txt,.md,.json,.docx,.doc,.pptx,.ppt,.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.tiff,.tif,.ico,.xml,.yaml,.yml,.html,.htm"
                     className="hidden"
                     onChange={e => { handleSmartFileAttach(e.target.files); e.target.value = ''; }}
                   />

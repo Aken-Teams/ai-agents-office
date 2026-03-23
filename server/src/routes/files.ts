@@ -20,8 +20,12 @@ export function getUserStorageUsed(userId: string): number {
 
 const MIME_MAP: Record<string, string> = {
   pdf: 'application/pdf',
-  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', svg: 'image/svg+xml',
-  txt: 'text/plain', csv: 'text/plain', md: 'text/plain', html: 'text/html', htm: 'text/html',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+  svg: 'image/svg+xml', webp: 'image/webp', bmp: 'image/bmp',
+  tiff: 'image/tiff', tif: 'image/tiff', ico: 'image/x-icon',
+  txt: 'text/plain', csv: 'text/plain', md: 'text/plain',
+  json: 'application/json', xml: 'text/xml', yaml: 'text/plain', yml: 'text/plain',
+  html: 'text/html', htm: 'text/html',
 };
 
 const OFFICE_EXTENSIONS = new Set(['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt']);
