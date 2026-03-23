@@ -140,6 +140,7 @@ function PreviewModal({
   const [error, setError] = useState(false);
   const [versions, setVersions] = useState<FileItem[]>([]);
   const [versionOpen, setVersionOpen] = useState(false);
+  const [infoExpanded, setInfoExpanded] = useState(false);
   const config = FILE_TYPE_CONFIG[file.file_type] || { icon: 'attach_file', color: '#8f9097', bgColor: 'rgba(143,144,151,0.1)' };
   const isText = TEXT_TYPES.has(file.file_type);
   const isImage = IMAGE_TYPES.has(file.file_type);
@@ -337,15 +338,36 @@ function PreviewModal({
         </div>
 
         {/* ===== Right Sidebar (desktop) / Bottom Panel (mobile) ===== */}
-        <aside className="w-full md:w-80 bg-surface-container border-t md:border-t-0 md:border-l border-outline-variant/10 flex flex-col shrink-0 max-h-[40vh] md:max-h-none overflow-y-auto">
-          {/* File info */}
-          <div className="p-4 md:p-6 border-b border-outline-variant/10">
-            <h3 className="text-xs md:text-sm font-headline font-bold uppercase tracking-widest text-primary mb-3 md:mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-sm">info</span> {t('files.preview.fileInfo')}
-            </h3>
-            {/* Mobile: compact row layout */}
-            <div className="md:hidden">
-              <p className="text-sm font-medium text-on-surface break-all mb-2">{file.filename}</p>
+        {/* Mobile: collapsible bottom bar */}
+        <aside className="md:hidden w-full bg-surface-container border-t border-outline-variant/10 flex flex-col shrink-0">
+          {/* Collapsed bar — always visible */}
+          <div
+            onClick={() => setInfoExpanded(e => !e)}
+            className="flex items-center gap-3 px-4 py-3 cursor-pointer w-full text-left"
+            role="button"
+            tabIndex={0}
+          >
+            <span className="material-symbols-outlined text-base" style={{ color: config.color }}>
+              {config.icon}
+            </span>
+            <div className="flex-1 min-w-0">
+              <span className="text-sm font-medium text-on-surface block truncate">{file.filename}</span>
+              <span className="text-xs text-outline">{file.file_type.toUpperCase()} · {formatSize(file.file_size)}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={(e) => { e.stopPropagation(); onDownload(file.id, file.filename); }}
+                className="p-1.5 rounded-lg bg-primary/10 text-primary active:bg-primary/20 transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-sm">download</span>
+              </button>
+              <span className={`material-symbols-outlined text-sm text-on-surface-variant transition-transform ${infoExpanded ? 'rotate-180' : ''}`}>expand_more</span>
+            </div>
+          </div>
+
+          {/* Expanded details */}
+          {infoExpanded && (
+            <div className="px-4 pb-4 space-y-3 border-t border-outline-variant/10 pt-3">
               <div className="flex items-center gap-3 text-xs text-on-surface-variant">
                 <span className="font-bold uppercase" style={{ color: config.color }}>{file.file_type}</span>
                 <span>·</span>
@@ -353,9 +375,77 @@ function PreviewModal({
                 <span>·</span>
                 <span>{new Date(file.created_at).toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
               </div>
+              {/* Version selector */}
+              {versions.length > 1 && (
+                <div>
+                  <p className="text-xs text-on-surface-variant uppercase font-medium mb-1.5 tracking-wider">{t('chat.preview.version' as any)}</p>
+                  <div className="relative" data-version-dropdown>
+                    <button
+                      onClick={() => setVersionOpen(!versionOpen)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-bold transition-colors cursor-pointer ${
+                        versionOpen ? 'bg-primary/20 text-primary' : 'bg-surface-container-low text-on-surface active:bg-primary/10'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-primary text-on-primary text-xs font-bold">v{file.version || 1}</span>
+                        <span className="text-xs text-on-surface-variant">{formatSize(file.file_size)}</span>
+                      </div>
+                      <span className={`material-symbols-outlined text-sm transition-transform ${versionOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                    </button>
+                    {versionOpen && (
+                      <div className="absolute left-0 right-0 bottom-full mb-2 z-50 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl py-1.5 max-h-[7.5rem] overflow-y-auto">
+                        {versions.map((ver, idx) => (
+                          <button
+                            key={ver.id}
+                            onClick={() => switchVersion(ver)}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 text-left active:bg-surface-container-high transition-colors cursor-pointer ${
+                              ver.id === file.id ? 'bg-primary/10' : ''
+                            }`}
+                          >
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                              ver.id === file.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
+                            }`}>
+                              v{ver.version || 1}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-xs text-on-surface-variant block">
+                                {formatSize(ver.file_size)}
+                                {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
+                              </span>
+                              <span className="text-[10px] text-outline block">
+                                {new Date(ver.created_at).toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            {ver.id === file.id && (
+                              <span className="material-symbols-outlined text-primary text-xs">check</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {/* Download button */}
+              <button
+                onClick={() => onDownload(file.id, file.filename)}
+                className="w-full py-2.5 px-4 cyber-gradient text-on-primary font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer active:opacity-90 transition-opacity"
+              >
+                <span className="material-symbols-outlined text-sm">download</span>
+                {t('files.preview.downloadLocal')}
+              </button>
             </div>
-            {/* Desktop: full layout */}
-            <div className="hidden md:block space-y-3">
+          )}
+        </aside>
+
+        {/* Desktop: full sidebar */}
+        <aside className="hidden md:flex w-80 bg-surface-container border-l border-outline-variant/10 flex-col shrink-0 overflow-y-auto">
+          {/* File info */}
+          <div className="p-6 border-b border-outline-variant/10">
+            <h3 className="text-sm font-headline font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-sm">info</span> {t('files.preview.fileInfo')}
+            </h3>
+            <div className="space-y-3">
               <div className="p-3 bg-surface-container-low rounded">
                 <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">{t('files.preview.filename')}</p>
                 <p className="text-sm font-medium text-on-surface break-all">{file.filename}</p>
@@ -386,7 +476,7 @@ function PreviewModal({
 
           {/* Version selector */}
           {versions.length > 1 && (
-            <div className="px-4 md:px-6 pb-3 md:pb-4 border-b border-outline-variant/10">
+            <div className="px-6 pb-4 border-b border-outline-variant/10">
               <p className="text-sm text-on-surface-variant uppercase font-medium mb-2 tracking-wider">{t('chat.preview.version' as any)}</p>
               <div className="relative" data-version-dropdown>
                 <button
@@ -402,16 +492,16 @@ function PreviewModal({
                   <span className={`material-symbols-outlined text-sm transition-transform ${versionOpen ? 'rotate-180' : ''}`}>expand_more</span>
                 </button>
                 {versionOpen && (
-                  <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl py-1 max-h-48 overflow-y-auto">
+                  <div className="absolute left-0 right-0 top-full mt-2 z-50 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl py-1.5 max-h-[7.5rem] overflow-y-auto">
                     {versions.map((ver, idx) => (
                       <button
                         key={ver.id}
                         onClick={() => switchVersion(ver)}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-surface-container-high transition-colors cursor-pointer ${
+                        className={`w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-surface-container-high transition-colors cursor-pointer ${
                           ver.id === file.id ? 'bg-primary/10' : ''
                         }`}
                       >
-                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${
                           ver.id === file.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
                         }`}>
                           v{ver.version || 1}
@@ -437,18 +527,18 @@ function PreviewModal({
           )}
 
           {/* Actions */}
-          <div className="p-4 md:p-6 md:flex-1">
+          <div className="p-6 flex-1">
             <button
               onClick={() => onDownload(file.id, file.filename)}
-              className="w-full py-2.5 px-4 cyber-gradient text-on-primary font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer active:opacity-90 hover:opacity-90 transition-opacity"
+              className="w-full py-2.5 px-4 cyber-gradient text-on-primary font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer hover:opacity-90 transition-opacity"
             >
               <span className="material-symbols-outlined text-sm">download</span>
               {t('files.preview.downloadLocal')}
             </button>
           </div>
 
-          {/* Bottom indicator — hidden on mobile */}
-          <div className="hidden md:flex p-4 bg-primary/5 items-center gap-3 border-t border-outline-variant/10">
+          {/* Bottom indicator */}
+          <div className="flex p-4 bg-primary/5 items-center gap-3 border-t border-outline-variant/10">
             <span className="material-symbols-outlined text-primary text-base">shield</span>
             <div>
               <p className="text-sm font-bold text-on-surface">{t('files.preview.localSandbox')}</p>
