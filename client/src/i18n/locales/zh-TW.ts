@@ -334,6 +334,8 @@ const zhTW = {
   'chart.action.data': '資料',
   'chart.action.hide': '隱藏',
   'chart.action.downloadPngFull': '下載 PNG',
+  'chart.action.expandAll': '全部展開',
+  'chart.action.collapseAll': '全部收合',
   'chart.preview.loading': '載入預覽中...',
   'chart.hint.mindmap': '點擊節點可收合/展開，滾輪縮放，拖曳平移',
 

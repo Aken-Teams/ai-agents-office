@@ -324,6 +324,8 @@ const en = {
   'chart.action.data': 'Data',
   'chart.action.hide': 'Hide',
   'chart.action.downloadPngFull': 'Download PNG',
+  'chart.action.expandAll': 'Expand All',
+  'chart.action.collapseAll': 'Collapse All',
   'chart.preview.loading': 'Loading preview...',
   'chart.hint.mindmap': 'Click nodes to collapse/expand, scroll to zoom, drag to pan',
 

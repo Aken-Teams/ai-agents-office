@@ -16,6 +16,14 @@ function foldTree(node: any, depth: number, maxExpandLevel: number) {
   node.children?.forEach((child: any) => foldTree(child, depth + 1, maxExpandLevel));
 }
 
+// Recursively unfold all nodes
+function unfoldAll(node: any) {
+  if (node.payload?.fold) {
+    node.payload = { ...node.payload, fold: 0 };
+  }
+  node.children?.forEach((child: any) => unfoldAll(child));
+}
+
 export default function ChatMindmap({ code }: ChatMindmapProps) {
   const { t } = useTranslation();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -65,7 +73,8 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
           if (wasFolded && d.children?.length) {
             // Expanding: shift node to left side so children are visible on right
             const vw = mm.svg.node().getBoundingClientRect().width;
-            await mm.centerNode(d, { right: vw * 0.5 });
+            const ratio = vw < 768 ? 0.85 : 0.5;
+            await mm.centerNode(d, { right: vw * ratio });
           } else {
             await mm.centerNode(d);
           }
@@ -116,7 +125,8 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
             await mm.toggleNode(d, recursive);
             if (wasFolded && d.children?.length) {
               const vw = mm.svg.node().getBoundingClientRect().width;
-              await mm.centerNode(d, { right: vw * 0.5 });
+              const ratio = vw < 768 ? 0.85 : 0.5;
+              await mm.centerNode(d, { right: vw * ratio });
             } else {
               await mm.centerNode(d);
             }
@@ -169,7 +179,8 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
           await mm.toggleNode(d, recursive);
           if (wasFolded && d.children?.length) {
             const vw = mm.svg.node().getBoundingClientRect().width;
-            await mm.centerNode(d, { right: vw * 0.5 });
+            const ratio = vw < 768 ? 0.85 : 0.5;
+            await mm.centerNode(d, { right: vw * ratio });
           } else {
             await mm.centerNode(d);
           }
@@ -182,16 +193,98 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [fullscreen, code]);
 
+  const handleExpandAll = useCallback(async (mm: any) => {
+    if (!mm?.state?.data) return;
+    unfoldAll(mm.state.data);
+    await mm.renderData();
+    await mm.fit();
+  }, []);
+
+  const handleCollapseAll = useCallback(async (mm: any) => {
+    if (!mm?.state?.data) return;
+    foldTree(mm.state.data, 0, 1);
+    await mm.renderData();
+    await mm.fit();
+  }, []);
+
   const handleDownloadHtml = useCallback(() => {
+    const escaped = code.replace(/<\//g, '<\\/').replace(/`/g, '\\`');
     const html = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Mindmap</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}html,body,.markmap{width:100%;height:100vh}</style>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100vh;font-family:system-ui,sans-serif}
+svg.markmap{width:100%;height:calc(100vh - 44px);display:block}
+.toolbar{display:flex;align-items:center;gap:8px;padding:6px 12px;background:#f5f5f5;border-bottom:1px solid #ddd}
+.toolbar button{padding:4px 12px;font-size:13px;border:1px solid #ccc;border-radius:6px;background:#fff;cursor:pointer}
+.toolbar button:hover{background:#e8e8e8}
+@media(prefers-color-scheme:dark){
+  body{background:#1a1a1a}
+  .toolbar{background:#2a2a2a;border-color:#444}
+  .toolbar button{background:#333;color:#eee;border-color:#555}
+  .toolbar button:hover{background:#444}
+}
+</style>
 </head><body>
-<div class="markmap"><script type="text/template">
-${code}
-<\/script></div>
-<script src="https://cdn.jsdelivr.net/npm/markmap-autoloader"><\/script>
+<div class="toolbar">
+  <button onclick="expandAll()">&#x25BC; Expand All</button>
+  <button onclick="collapseAll()">&#x25B6; Collapse All</button>
+</div>
+<svg class="markmap"></svg>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"><\/script>
+<script src="https://cdn.jsdelivr.net/npm/markmap-lib"><\/script>
+<script src="https://cdn.jsdelivr.net/npm/markmap-view"><\/script>
+<script>
+var md = \`${escaped}\`;
+var {Transformer} = markmap;
+// markmap-view exports under window.markmap as well
+var MarkmapView = markmap.Markmap || window.markmap.Markmap;
+var transformer = new Transformer();
+var {root} = transformer.transform(md.trim());
+
+function foldTree(node, depth, max) {
+  if (depth >= max && node.children && node.children.length) {
+    node.payload = Object.assign({}, node.payload, {fold: 1});
+  }
+  if (node.children) node.children.forEach(function(c) { foldTree(c, depth+1, max); });
+}
+function unfoldAllTree(node) {
+  if (node.payload && node.payload.fold) {
+    node.payload = Object.assign({}, node.payload, {fold: 0});
+  }
+  if (node.children) node.children.forEach(unfoldAllTree);
+}
+
+foldTree(root, 0, 1);
+
+var svgEl = document.querySelector('svg.markmap');
+var mm = MarkmapView.create(svgEl, {autoFit: false, duration: 300}, root);
+mm.fit();
+
+mm.handleClick = function(e, d) {
+  var wasFolded = d.payload && d.payload.fold;
+  var recursive = (navigator.platform.startsWith('Mac') ? e.metaKey : e.ctrlKey) && mm.options.toggleRecursively;
+  mm.toggleNode(d, recursive).then(function() {
+    if (wasFolded && d.children && d.children.length) {
+      var vw = mm.svg.node().getBoundingClientRect().width;
+      var ratio = vw < 768 ? 0.85 : 0.5;
+      mm.centerNode(d, {right: vw * ratio});
+    } else {
+      mm.centerNode(d);
+    }
+  });
+};
+
+function expandAll() {
+  unfoldAllTree(mm.state.data);
+  mm.renderData().then(function() { mm.fit(); });
+}
+function collapseAll() {
+  foldTree(mm.state.data, 0, 1);
+  mm.renderData().then(function() { mm.fit(); });
+}
+<\/script>
 </body></html>`;
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
@@ -288,6 +381,15 @@ ${code}
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>image</span>
             <span>{t('chart.action.downloadPng' as any)}</span>
           </button>
+          <span className="w-px h-4 bg-[var(--chart-border)] mx-0.5" />
+          <button onClick={() => handleExpandAll(mmRef.current)} className="chat-chart-toggle flex items-center gap-1" title={t('chart.action.expandAll' as any)}>
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>unfold_more</span>
+            <span>{t('chart.action.expandAll' as any)}</span>
+          </button>
+          <button onClick={() => handleCollapseAll(mmRef.current)} className="chat-chart-toggle flex items-center gap-1" title={t('chart.action.collapseAll' as any)}>
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>unfold_less</span>
+            <span>{t('chart.action.collapseAll' as any)}</span>
+          </button>
         </div>
       </div>
 
@@ -315,7 +417,14 @@ ${code}
                 <span className="material-symbols-outlined" style={{ fontSize: 13 }}>touch_app</span>
                 <span className="truncate">{t('chart.hint.mindmap' as any)}</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center flex-wrap gap-2">
+                <button onClick={() => handleExpandAll(fullscreenMmRef.current)} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
+                  <span className="material-symbols-outlined" style={{ fontSize: 14 }}>unfold_more</span> <span className="hidden md:inline">{t('chart.action.expandAll' as any)}</span><span className="md:hidden">{t('chart.action.expandAll' as any)}</span>
+                </button>
+                <button onClick={() => handleCollapseAll(fullscreenMmRef.current)} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
+                  <span className="material-symbols-outlined" style={{ fontSize: 14 }}>unfold_less</span> <span className="hidden md:inline">{t('chart.action.collapseAll' as any)}</span><span className="md:hidden">{t('chart.action.collapseAll' as any)}</span>
+                </button>
+                <span className="w-px h-4 bg-outline-variant/30" />
                 <button onClick={handleDownloadHtml} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
                   <span className="material-symbols-outlined" style={{ fontSize: 14 }}>code</span> <span className="hidden md:inline">{t('chart.action.downloadHtml' as any)}</span><span className="md:hidden">HTML</span>
                 </button>
