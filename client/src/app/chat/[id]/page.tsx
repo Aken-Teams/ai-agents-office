@@ -12,6 +12,7 @@ import { I18nProvider, useTranslation } from '../../../i18n';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 
 const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { ssr: false });
+const ChatMermaid = dynamic(() => import('../../components/charts/ChatMermaid'), { ssr: false });
 
 // Direct connection to Express for SSE streaming.
 // Next.js rewrites proxy buffers the entire response, preventing real-time updates.
@@ -429,12 +430,16 @@ function ChatContent() {
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Custom ReactMarkdown components — intercept ```chart blocks
+  // Custom ReactMarkdown components — intercept ```chart and ```mermaid blocks
   const markdownComponents = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     code({ className, children, ...props }: any) {
+      const text = String(children).trim();
       if (className === 'language-chart') {
-        return <ChatChart rawJson={String(children).trim()} />;
+        return <ChatChart rawJson={text} />;
+      }
+      if (className === 'language-mermaid') {
+        return <ChatMermaid code={text} />;
       }
       return <code className={className} {...props}>{children}</code>;
     },

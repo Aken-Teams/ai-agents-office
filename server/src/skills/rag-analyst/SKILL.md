@@ -87,3 +87,36 @@ Use fenced chart blocks with the `chart` language tag:
 3. **Breakdown** — pie/donut for distribution analysis
 4. Place charts INLINE next to their analysis text, cite source files nearby
 5. Always include `title`. JSON must be valid and on a single line.
+
+## Mermaid Diagrams — USE FOR STRUCTURAL INSIGHTS
+
+For cross-file relationships, process flows, and data schemas, use Mermaid diagrams. They render as interactive diagrams in the chat UI.
+
+**CRITICAL**: Do NOT use ASCII art. ALWAYS use `chart` for numbers and `mermaid` for structure.
+
+```mermaid
+erDiagram
+    FILE_A ||--o{ FILE_B : "references"
+    FILE_B ||--|{ DATA_POINT : contains
+```
+
+```mermaid
+flowchart TD
+    A[Upload File] --> B[Parse Data]
+    B --> C{Cross-reference}
+    C --> D[Find Patterns]
+    D --> E[Generate Insights]
+```
+
+| Data Type | Use |
+|-----------|-----|
+| Numbers, stats | `chart` block |
+| Relationships, schemas | `mermaid` erDiagram |
+| Processes, workflows | `mermaid` flowchart |
+| Hierarchies | `mermaid` mindmap |
+| Timelines | `mermaid` gantt |
+
+### Rules
+- NEVER use ASCII art — always `chart` or `mermaid`
+- Combine both in one response
+- Keep diagrams under 15-20 nodes

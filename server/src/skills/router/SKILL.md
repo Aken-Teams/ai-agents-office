@@ -70,12 +70,16 @@ When the user message mentions attached files (you'll see a `[System: The user h
 
 When the user asks for analysis, charts, or data insights, you MUST distinguish between:
 
-### → Route to `research` or `data-analyst` (TEXT response with inline charts in chat):
+### → Route to `research` or `data-analyst` (TEXT response with inline charts + diagrams):
+These agents can render: interactive Recharts (bar/line/pie/radar/scatter), Mermaid diagrams (flowchart/mindmap/gantt/ERD/sequence), all embedded inline in the chat.
+
 - "分析..." / "做分析" / "做圖表分析" / "幫我分析" — analysis WITHOUT a specific file format
 - "做一個圖表" / "畫圖表" / "show me a chart" — chart WITHOUT requesting a downloadable file
 - "比較 X 和 Y" / "比較分析" — comparison analysis
 - "summarize" / "總結" / "摘要" — text summary
 - "趨勢" / "trend" / "insights" — trend/insight analysis
+- "心智圖" / "mindmap" / "流程圖" / "flowchart" / "甘特圖" / "ERD" / "架構圖" — diagrams
+- "資料庫關聯" / "schema" / "ER diagram" — ERD diagrams
 - Any request that says "不需要檔案" / "在聊天中顯示" / "no file needed"
 - Any analysis request that does NOT mention pptx/docx/xlsx/pdf/slides/word/excel/powerpoint
 
@@ -93,7 +97,10 @@ When the user asks for analysis, charts, or data insights, you MUST distinguish 
 | "幫我做一個銷售分析 PPT" | `pptx-gen` | Explicitly mentions PPT |
 | "把這些數據做成 Excel" | `xlsx-gen` | Explicitly mentions Excel |
 | "分析趨勢並給我看圖表" | `research` | "看圖表" = view in chat |
-| "研究 AI 最新趨勢" | `research` | Research task |
+| "研究 AI 最新趨勢" | `research` | Research task, inline charts + diagrams |
+| "畫一個心智圖" | `research` | Mermaid mindmap in chat |
+| "資料庫 ERD 圖" | `research` | Mermaid ERD in chat |
+| "比較 React vs Vue" | `research` | Radar chart + mindmap |
 
 **Default rule**: When ambiguous and no file format is mentioned, prefer `research` (with inline charts) over file generators. Users who want files will explicitly say so.
 

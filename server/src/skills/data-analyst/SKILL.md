@@ -104,3 +104,54 @@ Use fenced chart blocks with the `chart` language tag:
 - Add `"smooth":true` for curved line charts
 - The JSON must be valid and on a single line within the code block
 - Always describe the chart in surrounding text
+
+## Mermaid Diagrams — USE FOR STRUCTURAL INSIGHTS
+
+When analysis reveals processes, relationships, data flows, or hierarchies, use Mermaid diagrams alongside charts. They render as interactive, downloadable diagrams.
+
+**CRITICAL**: Do NOT use ASCII art, text-based charts, or plain-text flowcharts. ALWAYS use `chart` blocks for numbers and `mermaid` blocks for structure.
+
+### Common Use Cases
+
+**ERD — Database/data relationships:**
+```mermaid
+erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ LINE_ITEM : contains
+    PRODUCT ||--o{ LINE_ITEM : "ordered in"
+```
+
+**Flowchart — Data processing pipeline:**
+```mermaid
+flowchart LR
+    A[Raw Data] --> B[Clean] --> C[Transform] --> D[Analyze] --> E[Report]
+```
+
+**Mind Map — Analysis dimensions:**
+```mermaid
+mindmap
+  root((Sales Analysis))
+    By Region
+      North
+      South
+    By Product
+      Product A
+      Product B
+    By Time
+      Quarterly
+      Monthly
+```
+
+### When to Use Which
+| Data Type | Use |
+|-----------|-----|
+| Numbers, stats, trends | `chart` block |
+| Data relationships, schemas | `mermaid` erDiagram |
+| Process flows | `mermaid` flowchart |
+| Hierarchical breakdowns | `mermaid` mindmap |
+| Time-based plans | `mermaid` gantt |
+
+### Rules
+- NEVER use ASCII art — always `chart` or `mermaid`
+- Combine both in one response: charts for data, mermaid for structure
+- Keep diagrams under 15-20 nodes for readability

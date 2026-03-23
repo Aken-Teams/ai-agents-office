@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import {
   ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -37,7 +37,9 @@ interface ChatChartProps {
 
 export default function ChatChart({ rawJson }: ChatChartProps) {
   const [showRaw, setShowRaw] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const [themeKey, setThemeKey] = useState(0);
+  const chartRef = useRef<HTMLDivElement>(null);
 
   // Re-render on theme change
   useEffect(() => {
@@ -97,21 +99,95 @@ export default function ChatChart({ rawJson }: ChatChartProps) {
   const axisStyle = { tick: { fill: theme.subtext, fontSize: 12 }, axisLine: { stroke: theme.grid } };
   const gridStyle = { strokeDasharray: '3 3', stroke: theme.grid, opacity: 0.5 };
 
+  const handleDownloadPng = useCallback(() => {
+    const el = chartRef.current;
+    if (!el) return;
+    const svgEl = el.querySelector('svg');
+    if (!svgEl) return;
+    const svgData = new XMLSerializer().serializeToString(svgEl);
+    const canvas = document.createElement('canvas');
+    const scale = 2;
+    const w = svgEl.clientWidth || 600;
+    const h = svgEl.clientHeight || 280;
+    canvas.width = w * scale;
+    canvas.height = h * scale;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.scale(scale, scale);
+    const img = new Image();
+    const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      ctx.fillStyle = theme.bg;
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = `${chart.title || 'chart'}.png`;
+      a.click();
+    };
+    img.src = url;
+  }, [chart.title, theme.bg]);
+
   return (
-    <div className="chat-chart-container">
-      {chart.title && <div className="chat-chart-title">{chart.title}</div>}
-      <div className="chat-chart-body">
-        <ResponsiveContainer width="100%" height={280}>
-          {renderChart(chart, colors, theme, axisStyle, gridStyle, tooltipStyle)}
-        </ResponsiveContainer>
+    <>
+      <div className="chat-chart-container">
+        {chart.title && <div className="chat-chart-title">{chart.title}</div>}
+        <div className="chat-chart-body" ref={chartRef}>
+          <ResponsiveContainer width="100%" height={280}>
+            {renderChart(chart, colors, theme, axisStyle, gridStyle, tooltipStyle)}
+          </ResponsiveContainer>
+        </div>
+        {/* Toolbar */}
+        <div className="flex items-center gap-1 px-3 py-1.5 border-t border-[var(--chart-border)]">
+          <button className="chat-chart-toggle flex items-center gap-1" onClick={() => setFullscreen(true)}>
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>fullscreen</span>
+            <span>Expand</span>
+          </button>
+          <button className="chat-chart-toggle flex items-center gap-1" onClick={handleDownloadPng}>
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>image</span>
+            <span>PNG</span>
+          </button>
+          <button className="chat-chart-toggle flex items-center gap-1" onClick={() => setShowRaw(!showRaw)}>
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{showRaw ? 'visibility_off' : 'data_object'}</span>
+            <span>{showRaw ? 'Hide' : 'Data'}</span>
+          </button>
+        </div>
+        {showRaw && (
+          <pre className="chat-chart-raw"><code>{JSON.stringify(chart, null, 2)}</code></pre>
+        )}
       </div>
-      <button className="chat-chart-toggle" onClick={() => setShowRaw(!showRaw)}>
-        {showRaw ? '▲ Hide data' : '▼ Show data'}
-      </button>
-      {showRaw && (
-        <pre className="chat-chart-raw"><code>{JSON.stringify(chart, null, 2)}</code></pre>
+
+      {/* Fullscreen modal */}
+      {fullscreen && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center"
+          onClick={() => setFullscreen(false)}
+        >
+          <div
+            className="bg-surface rounded-xl shadow-2xl w-[85vw] max-h-[90vh] overflow-auto p-8 relative"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setFullscreen(false)}
+              className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant cursor-pointer transition-colors"
+            >
+              <span className="material-symbols-outlined text-sm">close</span>
+            </button>
+            {chart.title && <div className="text-lg font-bold text-on-surface mb-4">{chart.title}</div>}
+            <ResponsiveContainer width="100%" height={500}>
+              {renderChart(chart, colors, theme, axisStyle, gridStyle, tooltipStyle)}
+            </ResponsiveContainer>
+            <div className="flex items-center gap-2 mt-4 pt-3 border-t border-outline-variant/20">
+              <button onClick={handleDownloadPng} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>image</span> Download PNG
+              </button>
+            </div>
+          </div>
+        </div>
       )}
-    </div>
+    </>
   );
 }
 
