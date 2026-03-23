@@ -1,7 +1,7 @@
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { EventEmitter } from 'events';
-import db from '../db.js';
+import { dbGet, dbRun } from '../db.js';
 import { spawnClaude } from './claudeCli.js';
 import { parsePipelineBlocks, truncateResultForRouter } from './taskParser.js';
 import { getSkill, buildSystemPrompt, getRouterSkill, buildRouterPrompt } from '../skills/loader.js';
@@ -79,7 +79,7 @@ export class Orchestrator {
     let allAssistantText = '';
 
     // Get or create Router's session for this conversation
-    const { sessionId: routerSessionId, initialized: routerInitialized } = this.getOrCreateAgentSession('router');
+    const { sessionId: routerSessionId, initialized: routerInitialized } = await this.getOrCreateAgentSession('router');
 
     const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale);
 
@@ -87,7 +87,7 @@ export class Orchestrator {
     let messageWithFileContext = message;
     if (this.uploadIds.length > 0) {
       const baseSandbox = getSandboxPath(this.userId, this.conversationId);
-      const fileContext = getUserUploadsForPrompt(this.userId, baseSandbox, { uploadIds: this.uploadIds });
+      const fileContext = await getUserUploadsForPrompt(this.userId, baseSandbox, { uploadIds: this.uploadIds });
       if (fileContext) {
         messageWithFileContext = message + '\n\n[System: The user has attached files for this request.]\n' + fileContext;
       }
@@ -127,7 +127,7 @@ export class Orchestrator {
       } catch (routerErr) {
         // Retry once with a fresh session on transient failure (exit code 1)
         console.warn(`[Orchestrator] Router failed, retrying with fresh session:`, routerErr);
-        const freshSession = this.getOrCreateAgentSession('router');
+        const freshSession = await this.getOrCreateAgentSession('router');
         try {
           routerResult = await this.spawnAgent(
             currentMessage,
@@ -317,10 +317,11 @@ export class Orchestrator {
     this.tasks.push(execution);
 
     // Save to DB
-    db.prepare(
+    await dbRun(
       `INSERT INTO task_executions (id, conversation_id, pipeline_id, skill_id, description, status, started_at)
-       VALUES (?, ?, ?, ?, ?, 'dispatched', datetime('now'))`
-    ).run(taskId, this.conversationId, pipelineId || null, task.skillId, task.description.substring(0, 500));
+       VALUES (?, ?, ?, ?, ?, 'dispatched', NOW())`,
+      taskId, this.conversationId, pipelineId || null, task.skillId, task.description.substring(0, 500)
+    );
 
     const taskStartTime = Date.now();
 
@@ -334,7 +335,7 @@ export class Orchestrator {
       const error = `Unknown skill: ${task.skillId}`;
       execution.status = 'failed';
       execution.result = error;
-      this.updateTaskInDb(taskId, 'failed', error);
+      await this.updateTaskInDb(taskId, 'failed', error);
       this.sseWriter({ type: 'task_failed', data: { taskId, skillId: task.skillId, error } });
       return `Error: ${error}`;
     }
@@ -344,18 +345,18 @@ export class Orchestrator {
     const baseSandboxPath = getSandboxPath(this.userId, this.conversationId);
     const agentCwd = path.join(baseSandboxPath, '_agents', task.skillId);
     const uploadContext = task.skillId === 'rag-analyst'
-      ? getConversationFilesForPrompt(this.userId, agentCwd, this.conversationId)
-      : getUserUploadsForPrompt(this.userId, agentCwd, {
+      ? await getConversationFilesForPrompt(this.userId, agentCwd, this.conversationId)
+      : await getUserUploadsForPrompt(this.userId, agentCwd, {
           uploadIds: this.uploadIds.length > 0 ? this.uploadIds : undefined,
           conversationId: this.conversationId,
         });
     const systemPrompt = buildSystemPrompt(skill, config.generatorsDir, this.userLocale) + uploadContext;
 
     // Get or create session for this skill agent
-    const { sessionId: agentSessionId, initialized: agentInitialized } = this.getOrCreateAgentSession(task.skillId);
+    const { sessionId: agentSessionId, initialized: agentInitialized } = await this.getOrCreateAgentSession(task.skillId);
 
     execution.status = 'running';
-    this.updateTaskInDb(taskId, 'running');
+    await this.updateTaskInDb(taskId, 'running');
 
     try {
       // Stream agent activity to client under agent_stream
@@ -375,7 +376,7 @@ export class Orchestrator {
       execution.result = result.text;
       execution.tokenUsage = { inputTokens: result.inputTokens, outputTokens: result.outputTokens };
 
-      this.updateTaskInDb(taskId, 'completed', result.text.substring(0, 2000), result.inputTokens, result.outputTokens);
+      await this.updateTaskInDb(taskId, 'completed', result.text.substring(0, 2000), result.inputTokens, result.outputTokens);
 
       const elapsedMs = Date.now() - taskStartTime;
       this.sseWriter({
@@ -388,7 +389,7 @@ export class Orchestrator {
       const error = err instanceof Error ? err.message : String(err);
       execution.status = 'failed';
       execution.result = error;
-      this.updateTaskInDb(taskId, 'failed', error);
+      await this.updateTaskInDb(taskId, 'failed', error);
       this.sseWriter({ type: 'task_failed', data: { taskId, skillId: task.skillId, error } });
       return `Error executing ${task.skillId}: ${error}`;
     }
@@ -487,10 +488,11 @@ export class Orchestrator {
         if (event.type === 'session_id') {
           const sid = event.data as string;
           if (sid) {
-            // Update agent session in DB
-            db.prepare(
-              `UPDATE agent_sessions SET session_uuid = ?, initialized = 1 WHERE conversation_id = ? AND skill_id = ?`
-            ).run(sid, this.conversationId, opts.skillId);
+            // Update agent session in DB (fire and forget)
+            dbRun(
+              `UPDATE agent_sessions SET session_uuid = ?, initialized = 1 WHERE conversation_id = ? AND skill_id = ?`,
+              sid, this.conversationId, opts.skillId
+            ).catch(e => console.error('Failed to update agent session:', e));
           }
         }
 
@@ -524,17 +526,19 @@ export class Orchestrator {
    * Get or create a persistent session ID for an agent in this conversation.
    * Returns sessionId and whether it was already initialized (used for resume logic).
    */
-  private getOrCreateAgentSession(skillId: string): { sessionId: string; initialized: boolean } {
-    const existing = db.prepare(
-      'SELECT session_uuid, initialized FROM agent_sessions WHERE conversation_id = ? AND skill_id = ?'
-    ).get(this.conversationId, skillId) as { session_uuid: string; initialized: number } | undefined;
+  private async getOrCreateAgentSession(skillId: string): Promise<{ sessionId: string; initialized: boolean }> {
+    const existing = await dbGet<{ session_uuid: string; initialized: number }>(
+      'SELECT session_uuid, initialized FROM agent_sessions WHERE conversation_id = ? AND skill_id = ?',
+      this.conversationId, skillId
+    );
 
     if (existing) return { sessionId: existing.session_uuid, initialized: existing.initialized === 1 };
 
     const sessionUuid = uuidv4();
-    db.prepare(
-      'INSERT INTO agent_sessions (id, conversation_id, skill_id, session_uuid) VALUES (?, ?, ?, ?)'
-    ).run(uuidv4(), this.conversationId, skillId, sessionUuid);
+    await dbRun(
+      'INSERT INTO agent_sessions (id, conversation_id, skill_id, session_uuid) VALUES (?, ?, ?, ?)',
+      uuidv4(), this.conversationId, skillId, sessionUuid
+    );
 
     return { sessionId: sessionUuid, initialized: false };
   }
@@ -542,21 +546,22 @@ export class Orchestrator {
   /**
    * Update task execution status in DB.
    */
-  private updateTaskInDb(
+  private async updateTaskInDb(
     taskId: string,
     status: string,
     resultSummary?: string,
     inputTokens?: number,
     outputTokens?: number,
-  ): void {
+  ): Promise<void> {
     if (status === 'completed' || status === 'failed') {
-      db.prepare(
+      await dbRun(
         `UPDATE task_executions
-         SET status = ?, result_summary = ?, input_tokens = ?, output_tokens = ?, completed_at = datetime('now')
-         WHERE id = ?`
-      ).run(status, resultSummary || null, inputTokens || 0, outputTokens || 0, taskId);
+         SET status = ?, result_summary = ?, input_tokens = ?, output_tokens = ?, completed_at = NOW()
+         WHERE id = ?`,
+        status, resultSummary || null, inputTokens || 0, outputTokens || 0, taskId
+      );
     } else {
-      db.prepare('UPDATE task_executions SET status = ? WHERE id = ?').run(status, taskId);
+      await dbRun('UPDATE task_executions SET status = ? WHERE id = ?', status, taskId);
     }
   }
 

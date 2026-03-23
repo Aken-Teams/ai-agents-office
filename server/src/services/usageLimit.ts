@@ -1,30 +1,34 @@
-import db from '../db.js';
+import { dbGet, dbRun } from '../db.js';
 
 /**
  * Get the per-user usage limit in display dollars (x10 markup).
  * Configurable by admin via system_settings table.
  */
-export function getUserUsageLimitUsd(): number {
-  const row = db.prepare("SELECT value FROM system_settings WHERE key = 'user_usage_limit_usd'").get() as { value: string } | undefined;
+export async function getUserUsageLimitUsd(): Promise<number> {
+  const row = await dbGet<{ value: string }>("SELECT value FROM system_settings WHERE `key` = 'user_usage_limit_usd'");
   return row ? parseFloat(row.value) : 50;
 }
 
 /**
  * Set the per-user usage limit.
  */
-export function setUserUsageLimitUsd(value: number): void {
-  db.prepare("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)").run('user_usage_limit_usd', String(value));
+export async function setUserUsageLimitUsd(value: number): Promise<void> {
+  await dbRun(
+    "REPLACE INTO system_settings (`key`, value) VALUES (?, ?)",
+    'user_usage_limit_usd', String(value)
+  );
 }
 
 /**
  * Calculate user's total cost in display dollars (x10 markup).
  * Claude Sonnet 4 pricing: $3/M input, $15/M output, then x10 billing markup.
  */
-export function getUserDisplayCost(userId: string): number {
-  const row = db.prepare(
-    'SELECT COALESCE(SUM(input_tokens), 0) AS total_input, COALESCE(SUM(output_tokens), 0) AS total_output FROM token_usage WHERE user_id = ?'
-  ).get(userId) as { total_input: number; total_output: number };
-
+export async function getUserDisplayCost(userId: string): Promise<number> {
+  const row = await dbGet<{ total_input: number; total_output: number }>(
+    'SELECT COALESCE(SUM(input_tokens), 0) AS total_input, COALESCE(SUM(output_tokens), 0) AS total_output FROM token_usage WHERE user_id = ?',
+    userId
+  );
+  if (!row) return 0;
   return ((row.total_input / 1_000_000) * 3 + (row.total_output / 1_000_000) * 15) * 10;
 }
 
@@ -32,28 +36,34 @@ export function getUserDisplayCost(userId: string): number {
  * Check if user has exceeded their usage limit.
  * Returns { exceeded, cost, limit }
  */
-export function checkUserUsageLimit(userId: string): { exceeded: boolean; cost: number; limit: number } {
-  const limit = getUserUsageLimitUsd();
-  const cost = getUserDisplayCost(userId);
+export async function checkUserUsageLimit(userId: string): Promise<{ exceeded: boolean; cost: number; limit: number }> {
+  const limit = await getUserUsageLimitUsd();
+  const cost = await getUserDisplayCost(userId);
   return { exceeded: cost >= limit, cost, limit };
 }
 
 // --- Storage Quota Settings ---
 
-export function getStorageQuotaGb(): number {
-  const row = db.prepare("SELECT value FROM system_settings WHERE key = 'storage_quota_gb'").get() as { value: string } | undefined;
+export async function getStorageQuotaGb(): Promise<number> {
+  const row = await dbGet<{ value: string }>("SELECT value FROM system_settings WHERE `key` = 'storage_quota_gb'");
   return row ? parseFloat(row.value) : 2;
 }
 
-export function setStorageQuotaGb(value: number): void {
-  db.prepare("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)").run('storage_quota_gb', String(value));
+export async function setStorageQuotaGb(value: number): Promise<void> {
+  await dbRun(
+    "REPLACE INTO system_settings (`key`, value) VALUES (?, ?)",
+    'storage_quota_gb', String(value)
+  );
 }
 
-export function getUploadQuotaMb(): number {
-  const row = db.prepare("SELECT value FROM system_settings WHERE key = 'upload_quota_mb'").get() as { value: string } | undefined;
+export async function getUploadQuotaMb(): Promise<number> {
+  const row = await dbGet<{ value: string }>("SELECT value FROM system_settings WHERE `key` = 'upload_quota_mb'");
   return row ? parseFloat(row.value) : 500;
 }
 
-export function setUploadQuotaMb(value: number): void {
-  db.prepare("INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)").run('upload_quota_mb', String(value));
+export async function setUploadQuotaMb(value: number): Promise<void> {
+  await dbRun(
+    "REPLACE INTO system_settings (`key`, value) VALUES (?, ?)",
+    'upload_quota_mb', String(value)
+  );
 }

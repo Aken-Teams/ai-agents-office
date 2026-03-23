@@ -5,7 +5,7 @@
  * the user has uploaded and where to find them.
  */
 
-import db from '../db.js';
+import { dbAll } from '../db.js';
 import path from 'path';
 import { config } from '../config.js';
 
@@ -28,11 +28,11 @@ interface UploadRow {
  *                    If empty/undefined, falls back to conversation-level scope.
  * @param conversationId - Fallback: include all uploads in this conversation.
  */
-export function getUserUploadsForPrompt(
+export async function getUserUploadsForPrompt(
   userId: string,
   sandboxPath: string,
   options?: { uploadIds?: string[]; conversationId?: string },
-): string {
+): Promise<string> {
   const { uploadIds, conversationId } = options || {};
 
   let uploads: UploadRow[];
@@ -40,14 +40,16 @@ export function getUserUploadsForPrompt(
   if (uploadIds && uploadIds.length > 0) {
     // Message-level: only include specific files
     const placeholders = uploadIds.map(() => '?').join(',');
-    uploads = db.prepare(
-      `SELECT id, filename, original_name, file_type, file_size, storage_path FROM user_uploads WHERE user_id = ? AND id IN (${placeholders}) AND scan_status IN ('clean', 'suspicious') ORDER BY created_at DESC`
-    ).all(userId, ...uploadIds) as UploadRow[];
+    uploads = await dbAll<UploadRow>(
+      `SELECT id, filename, original_name, file_type, file_size, storage_path FROM user_uploads WHERE user_id = ? AND id IN (${placeholders}) AND scan_status IN ('clean', 'suspicious') ORDER BY created_at DESC`,
+      userId, ...uploadIds
+    );
   } else if (conversationId) {
     // Conversation-level fallback
-    uploads = db.prepare(
-      "SELECT id, filename, original_name, file_type, file_size, storage_path FROM user_uploads WHERE user_id = ? AND conversation_id = ? AND scan_status IN ('clean', 'suspicious') ORDER BY created_at DESC"
-    ).all(userId, conversationId) as UploadRow[];
+    uploads = await dbAll<UploadRow>(
+      "SELECT id, filename, original_name, file_type, file_size, storage_path FROM user_uploads WHERE user_id = ? AND conversation_id = ? AND scan_status IN ('clean', 'suspicious') ORDER BY created_at DESC",
+      userId, conversationId
+    );
   } else {
     uploads = [];
   }
@@ -107,20 +109,22 @@ function formatSize(bytes: number): string {
  *
  * Used by rag-analyst skill for cross-referencing.
  */
-export function getConversationFilesForPrompt(
+export async function getConversationFilesForPrompt(
   userId: string,
   sandboxPath: string,
   conversationId: string,
-): string {
+): Promise<string> {
   // 1. All uploads in this conversation
-  const uploads = db.prepare(
-    "SELECT id, filename, original_name, file_type, file_size, storage_path FROM user_uploads WHERE user_id = ? AND conversation_id = ? AND scan_status IN ('clean', 'suspicious') ORDER BY created_at DESC"
-  ).all(userId, conversationId) as UploadRow[];
+  const uploads = await dbAll<UploadRow>(
+    "SELECT id, filename, original_name, file_type, file_size, storage_path FROM user_uploads WHERE user_id = ? AND conversation_id = ? AND scan_status IN ('clean', 'suspicious') ORDER BY created_at DESC",
+    userId, conversationId
+  );
 
   // 2. All generated files in this conversation
-  const generated = db.prepare(
-    "SELECT id, filename, file_path, file_type, file_size FROM generated_files WHERE user_id = ? AND conversation_id = ? ORDER BY created_at DESC"
-  ).all(userId, conversationId) as GeneratedFileRow[];
+  const generated = await dbAll<GeneratedFileRow>(
+    "SELECT id, filename, file_path, file_type, file_size FROM generated_files WHERE user_id = ? AND conversation_id = ? ORDER BY created_at DESC",
+    userId, conversationId
+  );
 
   if (uploads.length === 0 && generated.length === 0) return '';
 

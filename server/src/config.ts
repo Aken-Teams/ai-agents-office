@@ -25,9 +25,15 @@ export const config = {
   // Paths
   rootDir: ROOT_DIR,
   workspaceRoot: path.resolve(ROOT_DIR, process.env.WORKSPACE_ROOT || './workspace'),
-  dbPath: path.resolve(ROOT_DIR, 'data.db'),
   skillsDir: path.resolve(__dirname, 'skills'),
   generatorsDir: path.resolve(__dirname, 'generators'),
+
+  // MySQL
+  mysqlHost: process.env.MYSQL_HOST || '127.0.0.1',
+  mysqlPort: parseInt(process.env.MYSQL_PORT || '3306', 10),
+  mysqlDb: process.env.MYSQL_DB || 'db_ai_agents',
+  mysqlUser: process.env.MYSQL_USER || 'root',
+  mysqlPassword: process.env.MYSQL_PASSWORD || '',
 
   // Claude CLI
   claudeCliPath: process.env.CLAUDE_CLI_PATH || 'claude',

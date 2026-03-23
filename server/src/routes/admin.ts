@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
-import db from '../db.js';
+import { dbGet, dbAll, dbRun } from '../db.js';
 import { adminMiddleware } from '../middleware/adminAuth.js';
 import { loadSkills } from '../skills/loader.js';
 import { config } from '../config.js';
@@ -14,47 +14,47 @@ router.use(adminMiddleware);
 // ==================== Overview ====================
 
 // GET /api/admin/overview/stats
-router.get('/overview/stats', (_req: Request, res: Response) => {
-  const totalUsers = (db.prepare(
+router.get('/overview/stats', async (_req: Request, res: Response) => {
+  const totalUsersRow = await dbGet<{ count: number }>(
     "SELECT COUNT(*) as count FROM users WHERE role != 'admin'"
-  ).get() as any).count;
+  );
 
   const activeSkills = loadSkills().length;
 
-  const tokenRow = db.prepare(
+  const tokenRow = await dbGet<{ total: number }>(
     'SELECT COALESCE(SUM(input_tokens + output_tokens), 0) as total FROM token_usage'
-  ).get() as any;
+  );
 
-  const totalFiles = (db.prepare(
+  const totalFilesRow = await dbGet<{ count: number }>(
     'SELECT COUNT(*) as count FROM generated_files'
-  ).get() as any).count;
+  );
 
   res.json({
-    totalUsers,
+    totalUsers: totalUsersRow?.count ?? 0,
     activeSkills,
-    totalTokens: tokenRow.total,
-    totalFiles,
+    totalTokens: tokenRow?.total ?? 0,
+    totalFiles: totalFilesRow?.count ?? 0,
     systemUptime: Math.floor(process.uptime()),
     systemHealth: 'operational',
   });
 });
 
 // GET /api/admin/overview/token-velocity?period=7d|30d
-router.get('/overview/token-velocity', (req: Request, res: Response) => {
+router.get('/overview/token-velocity', async (req: Request, res: Response) => {
   const period = (req.query.period as string) || '7d';
   const days = period === '30d' ? 30 : 7;
 
-  const rows = db.prepare(`
+  const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`
     SELECT
-      date(created_at) as date,
+      DATE(created_at) as date,
       SUM(input_tokens) as total_input,
       SUM(output_tokens) as total_output,
       COUNT(*) as invocation_count
     FROM token_usage
-    WHERE created_at >= datetime('now', '-${days} days')
-    GROUP BY date(created_at)
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY DATE(created_at)
     ORDER BY date ASC
-  `).all() as { date: string; total_input: number; total_output: number; invocation_count: number }[];
+  `);
 
   // Fill missing dates with zeros
   const dataMap = new Map(rows.map(r => [r.date, r]));
@@ -72,10 +72,10 @@ router.get('/overview/token-velocity', (req: Request, res: Response) => {
 });
 
 // GET /api/admin/overview/recent-activity?limit=20
-router.get('/overview/recent-activity', (req: Request, res: Response) => {
+router.get('/overview/recent-activity', async (req: Request, res: Response) => {
   const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
 
-  const rows = db.prepare(`
+  const rows = await dbAll(`
     SELECT 'user_registered' as event_type, u.id as entity_id, u.email as description, u.created_at
     FROM users u WHERE u.role != 'admin'
     UNION ALL
@@ -86,7 +86,7 @@ router.get('/overview/recent-activity', (req: Request, res: Response) => {
     FROM conversations c
     ORDER BY created_at DESC
     LIMIT ?
-  `).all(limit);
+  `, limit);
 
   res.json(rows);
 });
@@ -94,7 +94,7 @@ router.get('/overview/recent-activity', (req: Request, res: Response) => {
 // ==================== User Management ====================
 
 // GET /api/admin/users?page=1&limit=20&search=&status=
-router.get('/users', (req: Request, res: Response) => {
+router.get('/users', async (req: Request, res: Response) => {
   const page = Math.max(parseInt(req.query.page as string) || 1, 1);
   const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
   const offset = (page - 1) * limit;
@@ -114,11 +114,12 @@ router.get('/users', (req: Request, res: Response) => {
     params.push(status);
   }
 
-  const countRow = db.prepare(
-    `SELECT COUNT(*) as total FROM users u ${whereClause}`
-  ).get(...params) as any;
+  const countRow = await dbGet<{ total: number }>(
+    `SELECT COUNT(*) as total FROM users u ${whereClause}`,
+    ...params
+  );
 
-  const rows = db.prepare(`
+  const rows = await dbAll(`
     SELECT
       u.id, u.email, u.display_name, u.status, u.role, u.created_at,
       COALESCE(t.total_tokens, 0) as total_tokens,
@@ -140,56 +141,56 @@ router.get('/users', (req: Request, res: Response) => {
     ${whereClause}
     ORDER BY u.created_at DESC
     LIMIT ? OFFSET ?
-  `).all(...params, limit, offset);
+  `, ...params, limit, offset);
 
   res.json({
     users: rows,
-    total: countRow.total,
+    total: countRow?.total ?? 0,
     page,
     limit,
-    totalPages: Math.ceil(countRow.total / limit),
+    totalPages: Math.ceil((countRow?.total ?? 0) / limit),
   });
 });
 
 // GET /api/admin/users/:id
-router.get('/users/:id', (req: Request, res: Response) => {
+router.get('/users/:id', async (req: Request, res: Response) => {
   const userId = req.params.id;
 
-  const user = db.prepare(`
+  const user = await dbGet<any>(`
     SELECT id, email, display_name, status, role, created_at, updated_at
     FROM users WHERE id = ?
-  `).get(userId) as any;
+  `, userId);
 
   if (!user) {
     res.status(404).json({ error: 'User not found' });
     return;
   }
 
-  const tokenStats = db.prepare(`
+  const tokenStats = await dbGet(`
     SELECT
       COALESCE(SUM(input_tokens), 0) as total_input,
       COALESCE(SUM(output_tokens), 0) as total_output,
       COUNT(*) as invocation_count
     FROM token_usage WHERE user_id = ?
-  `).get(userId);
+  `, userId);
 
-  const recentFiles = db.prepare(`
+  const recentFiles = await dbAll(`
     SELECT id, filename, file_type, file_size, created_at
     FROM generated_files WHERE user_id = ?
     ORDER BY created_at DESC LIMIT 5
-  `).all(userId);
+  `, userId);
 
-  const recentConversations = db.prepare(`
+  const recentConversations = await dbAll(`
     SELECT id, title, skill_id, status, created_at
     FROM conversations WHERE user_id = ?
     ORDER BY created_at DESC LIMIT 5
-  `).all(userId);
+  `, userId);
 
   res.json({ ...user, tokenStats, recentFiles, recentConversations });
 });
 
 // PATCH /api/admin/users/:id/status
-router.patch('/users/:id/status', (req: Request, res: Response) => {
+router.patch('/users/:id/status', async (req: Request, res: Response) => {
   const userId = req.params.id;
   const { status } = req.body;
 
@@ -198,7 +199,7 @@ router.patch('/users/:id/status', (req: Request, res: Response) => {
     return;
   }
 
-  const user = db.prepare('SELECT id, email, role FROM users WHERE id = ?').get(userId) as any;
+  const user = await dbGet<any>('SELECT id, email, role FROM users WHERE id = ?', userId);
   if (!user) {
     res.status(404).json({ error: 'User not found' });
     return;
@@ -208,18 +209,19 @@ router.patch('/users/:id/status', (req: Request, res: Response) => {
     return;
   }
 
-  db.prepare('UPDATE users SET status = ?, updated_at = datetime(\'now\') WHERE id = ?').run(status, userId);
+  await dbRun('UPDATE users SET status = ?, updated_at = NOW() WHERE id = ?', status, userId);
 
   // Audit log
-  db.prepare(
-    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(uuidv4(), req.user!.userId, status === 'suspended' ? 'suspend_user' : 'activate_user', 'user', userId, JSON.stringify({ email: user.email }));
+  await dbRun(
+    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+    uuidv4(), req.user!.userId, status === 'suspended' ? 'suspend_user' : 'activate_user', 'user', userId, JSON.stringify({ email: user.email })
+  );
 
   res.json({ success: true, status });
 });
 
 // PATCH /api/admin/users/:id/role
-router.patch('/users/:id/role', (req: Request, res: Response) => {
+router.patch('/users/:id/role', async (req: Request, res: Response) => {
   const userId = req.params.id;
   const { role } = req.body;
 
@@ -228,7 +230,7 @@ router.patch('/users/:id/role', (req: Request, res: Response) => {
     return;
   }
 
-  const user = db.prepare('SELECT id, email, role FROM users WHERE id = ?').get(userId) as any;
+  const user = await dbGet<any>('SELECT id, email, role FROM users WHERE id = ?', userId);
   if (!user) {
     res.status(404).json({ error: 'User not found' });
     return;
@@ -241,22 +243,23 @@ router.patch('/users/:id/role', (req: Request, res: Response) => {
   }
 
   const oldRole = user.role;
-  db.prepare("UPDATE users SET role = ?, updated_at = datetime('now') WHERE id = ?").run(role, userId);
+  await dbRun("UPDATE users SET role = ?, updated_at = NOW() WHERE id = ?", role, userId);
 
   // Audit log
-  db.prepare(
-    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(uuidv4(), req.user!.userId, 'change_role', 'user', userId, JSON.stringify({ email: user.email, from: oldRole, to: role }));
+  await dbRun(
+    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+    uuidv4(), req.user!.userId, 'change_role', 'user', userId, JSON.stringify({ email: user.email, from: oldRole, to: role })
+  );
 
   res.json({ success: true, role });
 });
 
 // PATCH /api/admin/users/:id
-router.patch('/users/:id', (req: Request, res: Response) => {
+router.patch('/users/:id', async (req: Request, res: Response) => {
   const userId = req.params.id;
   const { displayName } = req.body;
 
-  const user = db.prepare('SELECT id, role FROM users WHERE id = ?').get(userId) as any;
+  const user = await dbGet<any>('SELECT id, role FROM users WHERE id = ?', userId);
   if (!user) {
     res.status(404).json({ error: 'User not found' });
     return;
@@ -267,17 +270,17 @@ router.patch('/users/:id', (req: Request, res: Response) => {
   }
 
   if (displayName !== undefined) {
-    db.prepare('UPDATE users SET display_name = ?, updated_at = datetime(\'now\') WHERE id = ?').run(displayName, userId);
+    await dbRun('UPDATE users SET display_name = ?, updated_at = NOW() WHERE id = ?', displayName, userId);
   }
 
   res.json({ success: true });
 });
 
 // DELETE /api/admin/users/:id — Permanently delete user + workspace
-router.delete('/users/:id', (req: Request, res: Response) => {
+router.delete('/users/:id', async (req: Request, res: Response) => {
   const userId = req.params.id as string;
 
-  const user = db.prepare('SELECT id, email, role FROM users WHERE id = ?').get(userId) as any;
+  const user = await dbGet<any>('SELECT id, email, role FROM users WHERE id = ?', userId);
   if (!user) {
     res.status(404).json({ error: 'User not found' });
     return;
@@ -306,17 +309,18 @@ router.delete('/users/:id', (req: Request, res: Response) => {
   } catch { /* ignore */ }
 
   // Delete from DB (cascading: conversations, messages, files, token_usage, etc.)
-  db.prepare('DELETE FROM generated_files WHERE user_id = ?').run(userId);
-  db.prepare('DELETE FROM token_usage WHERE user_id = ?').run(userId);
-  db.prepare('DELETE FROM user_uploads WHERE user_id = ?').run(userId);
-  db.prepare('DELETE FROM security_events WHERE user_id = ?').run(userId);
-  db.prepare('DELETE FROM conversations WHERE user_id = ?').run(userId);
-  db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+  await dbRun('DELETE FROM generated_files WHERE user_id = ?', userId);
+  await dbRun('DELETE FROM token_usage WHERE user_id = ?', userId);
+  await dbRun('DELETE FROM user_uploads WHERE user_id = ?', userId);
+  await dbRun('DELETE FROM security_events WHERE user_id = ?', userId);
+  await dbRun('DELETE FROM conversations WHERE user_id = ?', userId);
+  await dbRun('DELETE FROM users WHERE id = ?', userId);
 
   // Audit log
-  db.prepare(
-    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(uuidv4(), req.user!.userId, 'delete_user', 'user', userId, JSON.stringify({ email: user.email }));
+  await dbRun(
+    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+    uuidv4(), req.user!.userId, 'delete_user', 'user', userId, JSON.stringify({ email: user.email })
+  );
 
   res.json({ success: true });
 });
@@ -324,42 +328,44 @@ router.delete('/users/:id', (req: Request, res: Response) => {
 // ==================== Token Ledger ====================
 
 // GET /api/admin/tokens/summary
-router.get('/tokens/summary', (_req: Request, res: Response) => {
-  const row = db.prepare(`
+router.get('/tokens/summary', async (_req: Request, res: Response) => {
+  const row = await dbGet<{ total_input: number; total_output: number; total_invocations: number }>(`
     SELECT
       COALESCE(SUM(input_tokens), 0) as total_input,
       COALESCE(SUM(output_tokens), 0) as total_output,
       COUNT(*) as total_invocations
     FROM token_usage
-  `).get() as any;
+  `);
 
   // Claude Sonnet 4 pricing: $3/M input, $15/M output (×10 billing markup)
-  const estimatedCost = ((row.total_input / 1_000_000) * 3 + (row.total_output / 1_000_000) * 15) * 10;
+  const totalInput = row?.total_input ?? 0;
+  const totalOutput = row?.total_output ?? 0;
+  const estimatedCost = ((totalInput / 1_000_000) * 3 + (totalOutput / 1_000_000) * 15) * 10;
 
   res.json({
-    totalInput: row.total_input,
-    totalOutput: row.total_output,
-    totalInvocations: row.total_invocations,
+    totalInput,
+    totalOutput,
+    totalInvocations: row?.total_invocations ?? 0,
     estimatedCost: Math.round(estimatedCost * 10000) / 10000,
   });
 });
 
 // GET /api/admin/tokens/chart?period=7d|30d
-router.get('/tokens/chart', (req: Request, res: Response) => {
+router.get('/tokens/chart', async (req: Request, res: Response) => {
   const period = (req.query.period as string) || '7d';
   const days = period === '30d' ? 30 : 7;
 
-  const rows = db.prepare(`
+  const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`
     SELECT
-      date(created_at) as date,
+      DATE(created_at) as date,
       SUM(input_tokens) as total_input,
       SUM(output_tokens) as total_output,
       COUNT(*) as invocation_count
     FROM token_usage
-    WHERE created_at >= datetime('now', '-${days} days')
-    GROUP BY date(created_at)
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY DATE(created_at)
     ORDER BY date ASC
-  `).all() as { date: string; total_input: number; total_output: number; invocation_count: number }[];
+  `);
 
   const dataMap = new Map(rows.map(r => [r.date, r]));
   const result = [];
@@ -376,10 +382,10 @@ router.get('/tokens/chart', (req: Request, res: Response) => {
 });
 
 // GET /api/admin/tokens/by-user?limit=10
-router.get('/tokens/by-user', (req: Request, res: Response) => {
+router.get('/tokens/by-user', async (req: Request, res: Response) => {
   const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
 
-  const rows = db.prepare(`
+  const rows = await dbAll(`
     SELECT
       u.id, u.email, u.display_name,
       SUM(tu.input_tokens) as total_input,
@@ -391,20 +397,20 @@ router.get('/tokens/by-user', (req: Request, res: Response) => {
     GROUP BY tu.user_id
     ORDER BY (SUM(tu.input_tokens) + SUM(tu.output_tokens)) DESC
     LIMIT ?
-  `).all(limit);
+  `, limit);
 
   res.json(rows);
 });
 
 // GET /api/admin/tokens/ledger?page=1&limit=20
-router.get('/tokens/ledger', (req: Request, res: Response) => {
+router.get('/tokens/ledger', async (req: Request, res: Response) => {
   const page = Math.max(parseInt(req.query.page as string) || 1, 1);
   const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
   const offset = (page - 1) * limit;
 
-  const countRow = db.prepare('SELECT COUNT(*) as total FROM token_usage').get() as any;
+  const countRow = await dbGet<{ total: number }>('SELECT COUNT(*) as total FROM token_usage');
 
-  const rows = db.prepare(`
+  const rows = await dbAll(`
     SELECT
       tu.id, tu.user_id, u.email, u.display_name,
       tu.conversation_id, c.title as conversation_title,
@@ -414,14 +420,14 @@ router.get('/tokens/ledger', (req: Request, res: Response) => {
     LEFT JOIN conversations c ON c.id = tu.conversation_id
     ORDER BY tu.created_at DESC
     LIMIT ? OFFSET ?
-  `).all(limit, offset);
+  `, limit, offset);
 
   res.json({
     entries: rows,
-    total: countRow.total,
+    total: countRow?.total ?? 0,
     page,
     limit,
-    totalPages: Math.ceil(countRow.total / limit),
+    totalPages: Math.ceil((countRow?.total ?? 0) / limit),
   });
 });
 
@@ -429,23 +435,23 @@ router.get('/tokens/ledger', (req: Request, res: Response) => {
 
 // GET /api/admin/security/audit-log?page=1&limit=10
 // Unified system activity log: user registrations, conversations, file generations, admin actions
-router.get('/security/audit-log', (req: Request, res: Response) => {
+router.get('/security/audit-log', async (req: Request, res: Response) => {
   const page = Math.max(parseInt(req.query.page as string) || 1, 1);
   const limit = Math.min(parseInt(req.query.limit as string) || 10, 100);
   const offset = (page - 1) * limit;
 
   // Count total across all sources
-  const counts = db.prepare(`
+  const counts = await dbGet<{ total: number }>(`
     SELECT
       (SELECT COUNT(*) FROM users WHERE role != 'admin') +
       (SELECT COUNT(*) FROM conversations) +
       (SELECT COUNT(*) FROM generated_files) +
       (SELECT COUNT(*) FROM admin_audit_log)
     as total
-  `).get() as any;
+  `);
 
   // Unified query across all activity sources
-  const rows = db.prepare(`
+  const rows = await dbAll(`
     SELECT
       'user_registered' as event_type,
       u.id as event_id,
@@ -476,7 +482,7 @@ router.get('/security/audit-log', (req: Request, res: Response) => {
     LEFT JOIN users u ON u.id = gf.user_id
     UNION ALL
     SELECT
-      'admin_' || al.action,
+      CONCAT('admin_', al.action),
       al.id,
       adm.email,
       adm.display_name,
@@ -486,20 +492,20 @@ router.get('/security/audit-log', (req: Request, res: Response) => {
     LEFT JOIN users adm ON adm.id = al.admin_id
     ORDER BY created_at DESC
     LIMIT ? OFFSET ?
-  `).all(limit, offset);
+  `, limit, offset);
 
   res.json({
     entries: rows,
-    total: counts.total,
+    total: counts?.total ?? 0,
     page,
     limit,
-    totalPages: Math.ceil(counts.total / limit),
+    totalPages: Math.ceil((counts?.total ?? 0) / limit),
   });
 });
 
 // GET /api/admin/security/sandbox-status
-router.get('/security/sandbox-status', (_req: Request, res: Response) => {
-  const rows = db.prepare(`
+router.get('/security/sandbox-status', async (_req: Request, res: Response) => {
+  const rows = await dbAll(`
     SELECT
       u.id, u.email, u.display_name, u.status,
       COALESCE(s.active_sessions, 0) as active_sessions,
@@ -517,20 +523,20 @@ router.get('/security/sandbox-status', (_req: Request, res: Response) => {
     ) f ON f.user_id = u.id
     WHERE u.role != 'admin'
     ORDER BY active_sessions DESC
-  `).all();
+  `);
 
   res.json(rows);
 });
 
 // GET /api/admin/security/stats
-router.get('/security/stats', (_req: Request, res: Response) => {
-  const auditCount = (db.prepare('SELECT COUNT(*) as count FROM admin_audit_log').get() as any).count;
-  const userCount = (db.prepare("SELECT COUNT(*) as count FROM users WHERE role != 'admin'").get() as any).count;
-  const suspendedCount = (db.prepare("SELECT COUNT(*) as count FROM users WHERE status = 'suspended'").get() as any).count;
-  const totalConversations = (db.prepare('SELECT COUNT(*) as count FROM conversations').get() as any).count;
-  const totalFiles = (db.prepare('SELECT COUNT(*) as count FROM generated_files').get() as any).count;
-  const securityEventsCount = (db.prepare('SELECT COUNT(*) as count FROM security_events').get() as any).count;
-  const blockedThreats = (db.prepare("SELECT COUNT(*) as count FROM security_events WHERE severity IN ('high','critical')").get() as any).count;
+router.get('/security/stats', async (_req: Request, res: Response) => {
+  const auditCount = (await dbGet<{ count: number }>('SELECT COUNT(*) as count FROM admin_audit_log'))?.count ?? 0;
+  const userCount = (await dbGet<{ count: number }>("SELECT COUNT(*) as count FROM users WHERE role != 'admin'"))?.count ?? 0;
+  const suspendedCount = (await dbGet<{ count: number }>("SELECT COUNT(*) as count FROM users WHERE status = 'suspended'"))?.count ?? 0;
+  const totalConversations = (await dbGet<{ count: number }>('SELECT COUNT(*) as count FROM conversations'))?.count ?? 0;
+  const totalFiles = (await dbGet<{ count: number }>('SELECT COUNT(*) as count FROM generated_files'))?.count ?? 0;
+  const securityEventsCount = (await dbGet<{ count: number }>('SELECT COUNT(*) as count FROM security_events'))?.count ?? 0;
+  const blockedThreats = (await dbGet<{ count: number }>("SELECT COUNT(*) as count FROM security_events WHERE severity IN ('high','critical')"))?.count ?? 0;
 
   res.json({
     totalAuditEntries: auditCount,
@@ -545,7 +551,7 @@ router.get('/security/stats', (_req: Request, res: Response) => {
 });
 
 // GET /api/admin/security/workspace-scan — real filesystem scan
-router.get('/security/workspace-scan', (_req: Request, res: Response) => {
+router.get('/security/workspace-scan', async (_req: Request, res: Response) => {
   const workspaceRoot = config.workspaceRoot;
   const results: { userId: string; email: string; displayName: string | null; dirCount: number; fileCount: number; totalSize: number }[] = [];
 
@@ -558,8 +564,8 @@ router.get('/security/workspace-scan', (_req: Request, res: Response) => {
       .filter(d => d.isDirectory());
 
     // Map user IDs to user info
-    const users = db.prepare("SELECT id, email, display_name FROM users WHERE role != 'admin'").all() as any[];
-    const userMap = new Map(users.map(u => [u.id, u]));
+    const users = await dbAll<any>("SELECT id, email, display_name FROM users WHERE role != 'admin'");
+    const userMap = new Map(users.map((u: any) => [u.id, u]));
 
     for (const dir of userDirs) {
       const userPath = path.join(workspaceRoot, dir.name);
@@ -609,7 +615,7 @@ router.get('/security/workspace-scan', (_req: Request, res: Response) => {
 });
 
 // GET /api/admin/security/events — security events from inputGuard
-router.get('/security/events', (req: Request, res: Response) => {
+router.get('/security/events', async (req: Request, res: Response) => {
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 20;
   const offset = (page - 1) * limit;
@@ -622,33 +628,34 @@ router.get('/security/events', (req: Request, res: Response) => {
     params.push(severity);
   }
 
-  const total = (db.prepare(
-    `SELECT COUNT(*) as count FROM security_events se ${where}`
-  ).get(...params) as any).count;
+  const totalRow = await dbGet<{ count: number }>(
+    `SELECT COUNT(*) as count FROM security_events se ${where}`,
+    ...params
+  );
 
-  const rows = db.prepare(`
+  const rows = await dbAll(`
     SELECT se.*, u.email as user_email, u.display_name as user_name
     FROM security_events se
     LEFT JOIN users u ON u.id = se.user_id
     ${where}
     ORDER BY se.created_at DESC
     LIMIT ? OFFSET ?
-  `).all(...params, limit, offset);
+  `, ...params, limit, offset);
 
   res.json({
     events: rows,
-    total,
+    total: totalRow?.count ?? 0,
     page,
     limit,
-    totalPages: Math.ceil(total / limit),
+    totalPages: Math.ceil((totalRow?.count ?? 0) / limit),
   });
 });
 
 // GET /api/admin/security/events/stats — security events summary
-router.get('/security/events/stats', (_req: Request, res: Response) => {
-  const total = (db.prepare('SELECT COUNT(*) as count FROM security_events').get() as any).count;
-  const blocked = (db.prepare("SELECT COUNT(*) as count FROM security_events WHERE severity IN ('high','critical')").get() as any).count;
-  const last24h = (db.prepare("SELECT COUNT(*) as count FROM security_events WHERE created_at >= datetime('now','-1 day')").get() as any).count;
+router.get('/security/events/stats', async (_req: Request, res: Response) => {
+  const total = (await dbGet<{ count: number }>('SELECT COUNT(*) as count FROM security_events'))?.count ?? 0;
+  const blocked = (await dbGet<{ count: number }>("SELECT COUNT(*) as count FROM security_events WHERE severity IN ('high','critical')"))?.count ?? 0;
+  const last24h = (await dbGet<{ count: number }>("SELECT COUNT(*) as count FROM security_events WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)"))?.count ?? 0;
 
   res.json({ total, blocked, last24h });
 });
@@ -656,32 +663,32 @@ router.get('/security/events/stats', (_req: Request, res: Response) => {
 // ==================== Settings ====================
 
 // GET /api/admin/settings — All system settings
-router.get('/settings', (_req: Request, res: Response) => {
+router.get('/settings', async (_req: Request, res: Response) => {
   res.json({
-    usageLimitUsd: getUserUsageLimitUsd(),
-    storageQuotaGb: getStorageQuotaGb(),
-    uploadQuotaMb: getUploadQuotaMb(),
+    usageLimitUsd: await getUserUsageLimitUsd(),
+    storageQuotaGb: await getStorageQuotaGb(),
+    uploadQuotaMb: await getUploadQuotaMb(),
   });
 });
 
 // PATCH /api/admin/settings — Update system settings
-router.patch('/settings', (req: Request, res: Response) => {
+router.patch('/settings', async (req: Request, res: Response) => {
   const { usageLimitUsd, storageQuotaGb, uploadQuotaMb } = req.body;
   const changes: string[] = [];
 
   if (typeof usageLimitUsd === 'number' && usageLimitUsd >= 0 && usageLimitUsd <= 100000) {
-    const old = getUserUsageLimitUsd();
-    setUserUsageLimitUsd(usageLimitUsd);
+    const old = await getUserUsageLimitUsd();
+    await setUserUsageLimitUsd(usageLimitUsd);
     changes.push(`usageLimitUsd: ${old} → ${usageLimitUsd}`);
   }
   if (typeof storageQuotaGb === 'number' && storageQuotaGb >= 0 && storageQuotaGb <= 100) {
-    const old = getStorageQuotaGb();
-    setStorageQuotaGb(storageQuotaGb);
+    const old = await getStorageQuotaGb();
+    await setStorageQuotaGb(storageQuotaGb);
     changes.push(`storageQuotaGb: ${old} → ${storageQuotaGb}`);
   }
   if (typeof uploadQuotaMb === 'number' && uploadQuotaMb >= 0 && uploadQuotaMb <= 10000) {
-    const old = getUploadQuotaMb();
-    setUploadQuotaMb(uploadQuotaMb);
+    const old = await getUploadQuotaMb();
+    await setUploadQuotaMb(uploadQuotaMb);
     changes.push(`uploadQuotaMb: ${old} → ${uploadQuotaMb}`);
   }
 
@@ -691,37 +698,42 @@ router.patch('/settings', (req: Request, res: Response) => {
   }
 
   // Audit log
-  db.prepare(
-    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(uuidv4(), req.user!.userId, 'update_settings', 'system', 'system_settings',
-    JSON.stringify({ changes }));
+  await dbRun(
+    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+    uuidv4(), req.user!.userId, 'update_settings', 'system', 'system_settings',
+    JSON.stringify({ changes })
+  );
 
   res.json({
     success: true,
-    usageLimitUsd: getUserUsageLimitUsd(),
-    storageQuotaGb: getStorageQuotaGb(),
-    uploadQuotaMb: getUploadQuotaMb(),
+    usageLimitUsd: await getUserUsageLimitUsd(),
+    storageQuotaGb: await getStorageQuotaGb(),
+    uploadQuotaMb: await getUploadQuotaMb(),
   });
 });
 
 // GET /api/admin/settings/usage-limit (backwards compat)
-router.get('/settings/usage-limit', (_req: Request, res: Response) => {
-  res.json({ limit: getUserUsageLimitUsd() });
+router.get('/settings/usage-limit', async (_req: Request, res: Response) => {
+  res.json({ limit: await getUserUsageLimitUsd() });
 });
 
 // GET /api/admin/settings/users-usage — all users' usage costs
-router.get('/settings/users-usage', (_req: Request, res: Response) => {
-  const limit = getUserUsageLimitUsd();
-  const users = db.prepare(
+router.get('/settings/users-usage', async (_req: Request, res: Response) => {
+  const limit = await getUserUsageLimitUsd();
+  const users = await dbAll<{ id: string; email: string; display_name: string | null; status: string }>(
     "SELECT id, email, display_name, status FROM users WHERE role != 'admin'"
-  ).all() as { id: string; email: string; display_name: string | null; status: string }[];
+  );
 
-  const result = users.map(u => ({
-    ...u,
-    cost: getUserDisplayCost(u.id),
-    limit,
-    exceeded: getUserDisplayCost(u.id) >= limit,
-  }));
+  const result = [];
+  for (const u of users) {
+    const cost = await getUserDisplayCost(u.id);
+    result.push({
+      ...u,
+      cost,
+      limit,
+      exceeded: cost >= limit,
+    });
+  }
 
   // Sort by cost descending
   result.sort((a, b) => b.cost - a.cost);

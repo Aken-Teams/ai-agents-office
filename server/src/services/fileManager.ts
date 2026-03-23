@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import db from '../db.js';
+import { dbGet, dbAll, dbRun } from '../db.js';
 import { config } from '../config.js';
 import { scanSandboxFiles, validateFilePath } from './sandbox.js';
 import type { GeneratedFile } from '../types.js';
@@ -11,12 +11,12 @@ import type { GeneratedFile } from '../types.js';
  * Supports versioning: if a file with the same path exists and file size changed,
  * a new version record is created.
  */
-export function registerNewFiles(
+export async function registerNewFiles(
   userId: string,
   conversationId: string,
   sandboxPath: string,
   existingFilePaths: Set<string>
-): GeneratedFile[] {
+): Promise<GeneratedFile[]> {
   const scannedFiles = scanSandboxFiles(sandboxPath);
   const newFiles: GeneratedFile[] = [];
 
@@ -31,9 +31,10 @@ export function registerNewFiles(
 
     if (existingFilePaths.has(file.filePath)) {
       // File path already registered — check if content changed (by size)
-      const existing = db.prepare(
-        'SELECT * FROM generated_files WHERE conversation_id = ? AND file_path = ? ORDER BY version DESC LIMIT 1'
-      ).get(conversationId, file.filePath) as GeneratedFile | undefined;
+      const existing = await dbGet<GeneratedFile>(
+        'SELECT * FROM generated_files WHERE conversation_id = ? AND file_path = ? ORDER BY version DESC LIMIT 1',
+        conversationId, file.filePath
+      );
 
       if (!existing || existing.file_size === file.fileSize) continue;
 
@@ -41,10 +42,11 @@ export function registerNewFiles(
       const newVersion = (existing.version || 1) + 1;
       const id = uuidv4();
 
-      db.prepare(`
-        INSERT INTO generated_files (id, user_id, conversation_id, filename, file_path, file_type, file_size, version)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(id, userId, conversationId, file.filename, file.filePath, file.fileType, file.fileSize, newVersion);
+      await dbRun(
+        `INSERT INTO generated_files (id, user_id, conversation_id, filename, file_path, file_type, file_size, version)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, userId, conversationId, file.filename, file.filePath, file.fileType, file.fileSize, newVersion
+      );
 
       newFiles.push({
         id,
@@ -63,10 +65,11 @@ export function registerNewFiles(
 
     // Brand new file — version 1
     const id = uuidv4();
-    db.prepare(`
-      INSERT INTO generated_files (id, user_id, conversation_id, filename, file_path, file_type, file_size, version)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-    `).run(id, userId, conversationId, file.filename, file.filePath, file.fileType, file.fileSize);
+    await dbRun(
+      `INSERT INTO generated_files (id, user_id, conversation_id, filename, file_path, file_type, file_size, version)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+      id, userId, conversationId, file.filename, file.filePath, file.fileType, file.fileSize
+    );
 
     newFiles.push({
       id,
@@ -87,10 +90,11 @@ export function registerNewFiles(
 /**
  * Get the set of already-registered file paths for a conversation.
  */
-export function getExistingFilePaths(conversationId: string): Set<string> {
-  const files = db.prepare(
-    'SELECT file_path FROM generated_files WHERE conversation_id = ?'
-  ).all(conversationId) as Array<{ file_path: string }>;
+export async function getExistingFilePaths(conversationId: string): Promise<Set<string>> {
+  const files = await dbAll<{ file_path: string }>(
+    'SELECT file_path FROM generated_files WHERE conversation_id = ?',
+    conversationId
+  );
 
   return new Set(files.map(f => f.file_path));
 }
@@ -98,10 +102,11 @@ export function getExistingFilePaths(conversationId: string): Set<string> {
 /**
  * Get the absolute path for downloading a file, with security validation.
  */
-export function getFileDownloadPath(userId: string, fileId: string): string | null {
-  const file = db.prepare(
-    'SELECT * FROM generated_files WHERE id = ? AND user_id = ?'
-  ).get(fileId, userId) as GeneratedFile | undefined;
+export async function getFileDownloadPath(userId: string, fileId: string): Promise<string | null> {
+  const file = await dbGet<GeneratedFile>(
+    'SELECT * FROM generated_files WHERE id = ? AND user_id = ?',
+    fileId, userId
+  );
 
   if (!file) return null;
 
@@ -117,41 +122,45 @@ export function getFileDownloadPath(userId: string, fileId: string): string | nu
 /**
  * Get all versions of a file (same filename + conversation).
  */
-export function getFileVersions(userId: string, fileId: string): GeneratedFile[] {
-  const file = db.prepare(
-    'SELECT * FROM generated_files WHERE id = ? AND user_id = ?'
-  ).get(fileId, userId) as GeneratedFile | undefined;
+export async function getFileVersions(userId: string, fileId: string): Promise<GeneratedFile[]> {
+  const file = await dbGet<GeneratedFile>(
+    'SELECT * FROM generated_files WHERE id = ? AND user_id = ?',
+    fileId, userId
+  );
 
   if (!file || !file.conversation_id) return [];
 
-  return db.prepare(
+  return await dbAll<GeneratedFile>(
     `SELECT * FROM generated_files
      WHERE user_id = ? AND conversation_id = ? AND filename = ?
-     ORDER BY version DESC`
-  ).all(userId, file.conversation_id, file.filename) as GeneratedFile[];
+     ORDER BY version DESC`,
+    userId, file.conversation_id, file.filename
+  );
 }
 
 /**
  * Delete a file from disk and database.
  */
-export function deleteFile(userId: string, fileId: string): boolean {
-  const file = db.prepare(
-    'SELECT * FROM generated_files WHERE id = ? AND user_id = ?'
-  ).get(fileId, userId) as GeneratedFile | undefined;
+export async function deleteFile(userId: string, fileId: string): Promise<boolean> {
+  const file = await dbGet<GeneratedFile>(
+    'SELECT * FROM generated_files WHERE id = ? AND user_id = ?',
+    fileId, userId
+  );
 
   if (!file) return false;
 
   const fullPath = path.join(config.workspaceRoot, file.file_path);
   if (validateFilePath(userId, fullPath) && fs.existsSync(fullPath)) {
     // Only delete from disk if no other version uses this path
-    const otherVersions = db.prepare(
-      'SELECT COUNT(*) as cnt FROM generated_files WHERE file_path = ? AND id != ?'
-    ).get(file.file_path, fileId) as { cnt: number };
-    if (otherVersions.cnt === 0) {
+    const otherVersions = await dbGet<{ cnt: number }>(
+      'SELECT COUNT(*) as cnt FROM generated_files WHERE file_path = ? AND id != ?',
+      file.file_path, fileId
+    );
+    if (!otherVersions || otherVersions.cnt === 0) {
       fs.unlinkSync(fullPath);
     }
   }
 
-  db.prepare('DELETE FROM generated_files WHERE id = ?').run(fileId);
+  await dbRun('DELETE FROM generated_files WHERE id = ?', fileId);
   return true;
 }
