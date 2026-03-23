@@ -17,6 +17,7 @@ const FILE_TYPE_LABELS: Record<string, string> = {
   docx: 'Word (.docx)',
   xlsx: 'Excel (.xlsx)',
   pdf: 'PDF (.pdf)',
+  html: 'Web Slides (.html)',
 };
 
 export default function AdminSkillsPage() {
@@ -33,7 +34,10 @@ export default function AdminSkillsPage() {
     'router':   { icon: 'route', iconColor: 'text-primary', bgColor: 'bg-primary/10', tag: t('admin.skills.tag.systemCore'), tagColor: 'text-tertiary' },
     'research': { icon: 'travel_explore', iconColor: 'text-tertiary', bgColor: 'bg-tertiary/10', tag: t('admin.skills.tag.assistantAgent'), tagColor: 'text-secondary' },
     'planner':  { icon: 'account_tree', iconColor: 'text-secondary', bgColor: 'bg-secondary/10', tag: t('admin.skills.tag.assistantAgent'), tagColor: 'text-secondary' },
-    'reviewer': { icon: 'rate_review', iconColor: 'text-primary', bgColor: 'bg-primary/10', tag: t('admin.skills.tag.assistantAgent'), tagColor: 'text-secondary' },
+    'reviewer':     { icon: 'rate_review', iconColor: 'text-primary', bgColor: 'bg-primary/10', tag: t('admin.skills.tag.assistantAgent'), tagColor: 'text-secondary' },
+    'data-analyst': { icon: 'query_stats', iconColor: 'text-tertiary', bgColor: 'bg-tertiary/10', tag: 'Agent', tagColor: 'text-on-surface-variant' },
+    'slides-gen':   { icon: 'slideshow', iconColor: 'text-secondary', bgColor: 'bg-secondary/10', tag: t('admin.skills.tag.docGen'), tagColor: 'text-primary' },
+    'rag-analyst':  { icon: 'hub', iconColor: 'text-tertiary', bgColor: 'bg-tertiary/10', tag: t('admin.skills.tag.assistantAgent'), tagColor: 'text-secondary' },
   };
 
   const DEFAULT_META = { icon: 'smart_toy', iconColor: 'text-on-surface-variant', bgColor: 'bg-surface-container-highest', tag: 'Agent', tagColor: 'text-on-surface-variant' };
