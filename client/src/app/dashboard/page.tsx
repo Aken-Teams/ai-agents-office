@@ -333,243 +333,156 @@ function DashboardContent() {
           </div>
         </div>
 
-        {/* ===== Desktop Dashboard (hidden md:grid) ===== */}
-        <div className="hidden md:grid p-8 grid-cols-12 gap-6">
-          {/* ===== Left Column (8 cols) ===== */}
-          <div className="col-span-8 flex flex-col gap-6">
-            {/* Bento Stats Row */}
-            <div className="grid grid-cols-3 gap-6">
-              <div className="bg-surface-container p-6 rounded-lg">
-                <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-1">{t('dashboard.stats.invocationsTitle')}</p>
-                <div className="flex items-end gap-2">
-                  <span className="text-3xl font-headline font-bold text-on-surface">
-                    {usage?.totalInvocations ?? 0}
-                  </span>
-                  <span className="text-sm text-primary mb-1">{t('dashboard.stats.invocationsUnit')}</span>
-                </div>
-                <p className="text-sm text-on-surface-variant mt-3 font-mono">
-                  {t('dashboard.stats.invocationsFormats')}
-                </p>
+        {/* ===== Desktop Dashboard ===== */}
+        <div className="hidden md:flex flex-col h-[calc(100vh-3.5rem)]">
+          {/* Stats bar — compact card strip */}
+          <div className="grid grid-cols-3 gap-4 px-8 py-4 shrink-0">
+            <div className="flex items-center gap-4 bg-surface-container rounded-lg px-5 py-3">
+              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-primary text-lg">description</span>
               </div>
-              <div className="bg-surface-container p-6 rounded-lg">
-                <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-1">{t('dashboard.stats.tokenTitle')}</p>
-                <div className="flex items-end gap-3">
-                  <span className="text-3xl font-headline font-bold text-on-surface">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-on-surface-variant">{t('dashboard.stats.invocationsTitle')}</p>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xl font-headline font-bold text-on-surface">{usage?.totalInvocations ?? 0}</span>
+                  <span className="text-xs text-primary font-bold">{t('dashboard.stats.invocationsUnit')}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 bg-surface-container rounded-lg px-5 py-3">
+              <div className="w-9 h-9 rounded-lg bg-success/10 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-success text-lg">token</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] uppercase tracking-widest text-on-surface-variant">{t('dashboard.stats.tokenTitle')}</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl font-headline font-bold text-on-surface">
                     {usage ? ((usage.totalInput + usage.totalOutput) / 1000).toFixed(1) + 'k' : '0'}
                   </span>
-                  <span className="text-lg font-headline font-bold text-success mb-0.5">
+                  <span className="text-sm font-headline font-bold text-success">
                     ${usage ? (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10).toFixed(2) : '0.00'}
-                    <span className="text-sm text-on-surface-variant font-normal ml-1">(USD)</span>
+                    <span className="text-xs text-on-surface-variant font-normal ml-0.5">(USD)</span>
                   </span>
                 </div>
-                <p className="text-sm text-on-surface-variant mt-3 font-mono">
-                  {t('dashboard.stats.tokenInputLabel')}: {usage ? (usage.totalInput / 1000).toFixed(1) + 'k' : '0'} | {t('dashboard.stats.tokenOutputLabel')}: {usage ? (usage.totalOutput / 1000).toFixed(1) + 'k' : '0'}
-                </p>
               </div>
-              <div className="bg-surface-container p-6 rounded-lg">
-                <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-1">{t('dashboard.stats.conversationsTitle')}</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-3xl font-headline font-bold text-on-surface">
-                    {conversations.length}
-                  </span>
-                  <span className="material-symbols-outlined text-on-surface-variant">chat</span>
-                </div>
-                <p className="text-sm text-on-surface-variant mt-3 font-mono">
-                  {t('dashboard.stats.conversationsActive')}: {conversations.filter(c => c.status === 'active').length} | {t('dashboard.stats.conversationsMode')}
-                </p>
+              <div className="text-right shrink-0">
+                <p className="text-xs text-on-surface-variant font-mono">{t('dashboard.stats.tokenInputLabel')}: <span className="text-on-surface font-bold">{usage ? (usage.totalInput / 1000).toFixed(1) + 'k' : '0'}</span></p>
+                <p className="text-xs text-on-surface-variant font-mono">{t('dashboard.stats.tokenOutputLabel')}: <span className="text-on-surface font-bold">{usage ? (usage.totalOutput / 1000).toFixed(1) + 'k' : '0'}</span></p>
               </div>
             </div>
-
-            {/* Smart Input */}
-            <div className="bg-surface-container rounded-lg overflow-hidden flex flex-col flex-1 min-h-[400px]">
-              <div className="px-6 py-4 bg-surface-container-high flex items-center gap-3">
-                <span className="material-symbols-outlined text-primary">forum</span>
-                <span className="text-sm font-bold uppercase tracking-widest">{t('dashboard.smartInput.title')}</span>
-                <span className="ml-auto text-sm px-2 py-0.5 bg-primary/10 text-primary rounded font-bold tracking-widest uppercase">
-                  {t('dashboard.smartInput.badge')}
-                </span>
+            <div className="flex items-center gap-4 bg-surface-container rounded-lg px-5 py-3">
+              <div className="w-9 h-9 rounded-lg bg-tertiary/10 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-tertiary text-lg">chat</span>
               </div>
-              <div className="p-6 flex flex-col flex-1">
-                <p className="text-sm text-on-surface-variant mb-4">
-                  {t('dashboard.smartInput.description')}
-                </p>
-                {/* Attached files chips */}
-                {smartAttached.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {smartAttached.map(file => (
-                      <div key={file.id} className="flex items-center gap-1.5 px-2.5 py-1 rounded text-sm bg-primary/10 border border-primary/20 text-primary">
-                        {file.uploading ? (
-                          <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-                        ) : (
-                          <span className="material-symbols-outlined text-sm">attach_file</span>
-                        )}
-                        <span className="max-w-[120px] truncate">{file.name}</span>
-                        {!file.uploading && (
-                          <button
-                            onClick={() => setSmartAttached(prev => prev.filter(f => f.id !== file.id))}
-                            className="hover:text-error transition-colors cursor-pointer ml-0.5"
-                          >
-                            <span className="material-symbols-outlined text-sm">close</span>
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="relative flex-1 flex flex-col">
-                  <input
-                    ref={smartFileRef}
-                    type="file"
-                    multiple
-                    accept=".csv,.xlsx,.xls,.pdf,.txt,.md,.json,.docx,.doc,.pptx,.ppt,.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.tiff,.tif,.ico,.xml,.yaml,.yml,.html,.htm"
-                    className="hidden"
-                    onChange={e => { handleSmartFileAttach(e.target.files); e.target.value = ''; }}
-                  />
-                  <textarea
-                    className="w-full flex-1 bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 rounded py-4 pl-12 pr-16 text-sm text-on-surface placeholder:text-outline font-body resize-none"
-                    value={smartInput}
-                    onChange={e => setSmartInput(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                        e.preventDefault();
-                        handleSmartSubmit();
-                      }
-                    }}
-                    placeholder={t('dashboard.smartInput.placeholder')}
-                    disabled={creating}
-                  />
-                  <button
-                    className="absolute left-3 bottom-3 w-9 h-9 flex items-center justify-center rounded hover:bg-surface-container text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
-                    onClick={() => smartFileRef.current?.click()}
-                    title={t('dashboard.smartInput.uploadTooltip')}
-                  >
-                    <span className="material-symbols-outlined text-lg">attach_file</span>
-                  </button>
-                  <button
-                    className="absolute right-3 bottom-3 w-10 h-10 cyber-gradient rounded flex items-center justify-center text-on-primary disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-95 transition-all"
-                    onClick={handleSmartSubmit}
-                    disabled={!smartInput.trim() || creating}
-                  >
-                    <span className="material-symbols-outlined">send</span>
-                  </button>
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-on-surface-variant">{t('dashboard.stats.conversationsTitle')}</p>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xl font-headline font-bold text-on-surface">{conversations.length}</span>
+                  <span className="text-xs text-on-surface-variant">{t('dashboard.stats.conversationsMode')}</span>
                 </div>
-                {/* Sample prompts / templates — horizontal scroll */}
-                {!smartInput.trim() && (
-                  <div className="flex gap-2 mt-4 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-outline-variant/20 scrollbar-track-transparent">
-                    {[
-                      { icon: 'present_to_all', labelKey: 'dashboard.samples.pptx' as const, templateKey: 'dashboard.samples.pptx.template' as const },
-                      { icon: 'description', labelKey: 'dashboard.samples.docx' as const, templateKey: 'dashboard.samples.docx.template' as const },
-                      { icon: 'table_chart', labelKey: 'dashboard.samples.xlsx' as const, templateKey: 'dashboard.samples.xlsx.template' as const },
-                      { icon: 'picture_as_pdf', labelKey: 'dashboard.samples.pdf' as const, templateKey: 'dashboard.samples.pdf.template' as const },
-                      { icon: 'slideshow', labelKey: 'dashboard.samples.slides' as const, templateKey: 'dashboard.samples.slides.template' as const },
-                      { icon: 'bar_chart', labelKey: 'dashboard.samples.chart' as const, templateKey: 'dashboard.samples.chart.template' as const },
-                      { icon: 'upload_file', labelKey: 'dashboard.samples.data' as const, templateKey: 'dashboard.samples.data.template' as const },
-                      { icon: 'travel_explore', labelKey: 'dashboard.samples.research' as const, templateKey: 'dashboard.samples.research.template' as const },
-                    ].map(sample => (
-                      <button
-                        key={sample.labelKey}
-                        onClick={() => setSmartInput(t(sample.templateKey))}
-                        className="flex items-center gap-2 px-3 py-2 bg-surface-container-highest/50 border border-outline-variant/10 rounded-lg text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest hover:border-primary/20 transition-all cursor-pointer whitespace-nowrap shrink-0"
-                      >
-                        <span className="material-symbols-outlined text-sm text-primary/60">{sample.icon}</span>
-                        {t(sample.labelKey)}
-                      </button>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
-
           </div>
 
-          {/* ===== Right Column (4 cols) ===== */}
-          <div className="col-span-4 flex flex-col gap-6">
-            {/* Recent Files */}
-            <div className="bg-surface-container-high p-6 rounded-lg overflow-hidden flex flex-col">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-bold uppercase tracking-widest">{t('dashboard.recentFiles.title')}</h3>
-                <span className="text-sm font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-full">{t('dashboard.recentFiles.count', { count: files.length })}</span>
-              </div>
-              <div className="space-y-2 font-mono text-sm">
-                {files.length === 0 ? (
-                  <p className="text-on-surface-variant text-center py-4">{t('dashboard.recentFiles.empty')}</p>
-                ) : (
-                  files.slice(0, 4).map(file => {
-                    const ext = file.file_type?.toLowerCase() || '';
-                    const meta = FILE_TYPE_ICONS[ext] || { icon: 'draft', color: 'text-on-surface-variant' };
-                    return (
-                      <div
-                        key={file.id}
-                        className="flex items-center gap-3 p-2 bg-surface-container/50 rounded group cursor-pointer hover:bg-surface-container-highest transition-colors"
-                        onClick={() => {
-                          window.open(`/api/files/${file.id}/download`, '_blank');
-                        }}
-                      >
-                        <span className={`material-symbols-outlined text-sm ${meta.color}`}>{meta.icon}</span>
-                        <span className="flex-1 text-on-surface truncate">{file.filename}</span>
-                        <span className="text-sm text-on-surface-variant shrink-0">{formatFileSize(file.file_size)}</span>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-              <div className="mt-4 pt-4 border-t border-outline-variant/10">
-                <button
-                  onClick={() => router.push('/files')}
-                  className="w-full py-2 text-sm font-bold text-on-surface-variant hover:text-on-surface bg-surface-container-highest/50 rounded transition-all flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-sm">folder_open</span>
-                  {t('dashboard.recentFiles.browseAll')}
-                </button>
-              </div>
+          {/* Center content — greeting + template cards */}
+          <div className="flex-1 flex flex-col items-center justify-center px-8 gap-8">
+            <div className="text-center">
+              <h2 className="text-3xl font-headline font-bold text-on-surface">
+                {t('dashboard.mobile.greeting', { name: user.displayName || user.email?.split('@')[0] || '' })}
+              </h2>
+              <p className="text-sm text-on-surface-variant mt-2">
+                {t('dashboard.mobile.guidance')}
+              </p>
             </div>
 
-            {/* Recent Conversations */}
-            <div className="bg-surface-container rounded-lg overflow-hidden flex flex-col">
-              <div className="px-6 py-4 bg-surface-container-high flex items-center gap-3">
-                <span className="material-symbols-outlined text-on-surface-variant">history</span>
-                <span className="text-sm font-bold uppercase tracking-widest">{t('dashboard.recentConversations.title')}</span>
-                <span className="ml-auto text-sm font-mono text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                  {t('dashboard.recentConversations.count', { count: conversations.length })}
-                </span>
-              </div>
+            {/* 4x2 Template cards */}
+            <div className="grid grid-cols-4 gap-4 w-full max-w-4xl">
+              {[
+                { icon: 'present_to_all', color: 'text-warning', bg: 'bg-warning/10', labelKey: 'dashboard.samples.pptx' as const, templateKey: 'dashboard.samples.pptx.template' as const },
+                { icon: 'description', color: 'text-tertiary', bg: 'bg-tertiary/10', labelKey: 'dashboard.samples.docx' as const, templateKey: 'dashboard.samples.docx.template' as const },
+                { icon: 'table_chart', color: 'text-success', bg: 'bg-success/10', labelKey: 'dashboard.samples.xlsx' as const, templateKey: 'dashboard.samples.xlsx.template' as const },
+                { icon: 'picture_as_pdf', color: 'text-error', bg: 'bg-error/10', labelKey: 'dashboard.samples.pdf' as const, templateKey: 'dashboard.samples.pdf.template' as const },
+                { icon: 'slideshow', color: 'text-secondary', bg: 'bg-secondary/10', labelKey: 'dashboard.samples.slides' as const, templateKey: 'dashboard.samples.slides.template' as const },
+                { icon: 'bar_chart', color: 'text-primary', bg: 'bg-primary/10', labelKey: 'dashboard.samples.chart' as const, templateKey: 'dashboard.samples.chart.template' as const },
+                { icon: 'upload_file', color: 'text-tertiary', bg: 'bg-tertiary/10', labelKey: 'dashboard.samples.data' as const, templateKey: 'dashboard.samples.data.template' as const },
+                { icon: 'travel_explore', color: 'text-on-surface-variant', bg: 'bg-on-surface-variant/10', labelKey: 'dashboard.samples.research' as const, templateKey: 'dashboard.samples.research.template' as const },
+              ].map(sample => (
+                <button
+                  key={sample.labelKey}
+                  onClick={() => setSmartInput(t(sample.templateKey))}
+                  className="flex flex-col gap-3 p-5 bg-surface-container rounded-xl text-left hover:bg-surface-container-high hover:border-primary/20 border border-transparent transition-all cursor-pointer group"
+                >
+                  <span className={`material-symbols-outlined text-2xl ${sample.color}`}>{sample.icon}</span>
+                  <span className="text-sm font-headline font-bold text-on-surface leading-snug group-hover:text-primary transition-colors">{t(sample.labelKey)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
 
-              {conversations.length === 0 ? (
-                <div className="p-8 text-center">
-                  <span className="material-symbols-outlined text-4xl text-outline-variant block mb-2">chat_bubble_outline</span>
-                  <p className="text-sm text-on-surface-variant">{t('dashboard.recentConversations.empty')}</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-outline-variant/10">
-                  {conversations.slice(0, 4).map(conv => (
-                    <div
-                      key={conv.id}
-                      className="flex items-center gap-3 px-5 py-3 hover:bg-surface-container-high/50 cursor-pointer transition-colors group"
-                      onClick={() => router.push(`/chat/${conv.id}`)}
-                    >
-                      <div className="w-7 h-7 rounded bg-surface-container-highest flex items-center justify-center shrink-0">
-                        <span className="material-symbols-outlined text-sm text-on-surface-variant">
-                          {conv.skill_id ? (SKILL_ICONS[conv.skill_id] || 'smart_toy') : 'smart_toy'}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-on-surface truncate">{conv.title}</p>
-                        <p className="text-sm text-on-surface-variant mt-0.5">
-                          {new Date(conv.created_at).toLocaleDateString('zh-TW')}
-                        </p>
-                      </div>
-                      {conv.skill_id && (
-                        <span className="text-sm px-1.5 py-0.5 bg-primary/10 text-primary rounded font-bold tracking-wider uppercase">
-                          {conv.skill_id.replace('-gen', '')}
-                        </span>
+          {/* Bottom input bar — fixed to bottom */}
+          <div className="shrink-0 px-8 pb-6 pt-3">
+            <div className="max-w-4xl mx-auto">
+              {/* Attached files chips */}
+              {smartAttached.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {smartAttached.map(file => (
+                    <div key={file.id} className="flex items-center gap-1.5 px-2.5 py-1 rounded text-sm bg-primary/10 border border-primary/20 text-primary">
+                      {file.uploading ? (
+                        <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                      ) : (
+                        <span className="material-symbols-outlined text-sm">attach_file</span>
                       )}
-                      <span className="material-symbols-outlined text-sm text-outline-variant group-hover:text-primary transition-colors">
-                        arrow_forward
-                      </span>
+                      <span className="max-w-[120px] truncate">{file.name}</span>
+                      {!file.uploading && (
+                        <button
+                          onClick={() => setSmartAttached(prev => prev.filter(f => f.id !== file.id))}
+                          className="hover:text-error transition-colors cursor-pointer ml-0.5"
+                        >
+                          <span className="material-symbols-outlined text-sm">close</span>
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
               )}
+              <div className="relative bg-surface-container rounded-xl border border-outline-variant/20 focus-within:border-primary/40 transition-all">
+                <input
+                  ref={smartFileRef}
+                  type="file"
+                  multiple
+                  accept=".csv,.xlsx,.xls,.pdf,.txt,.md,.json,.docx,.doc,.pptx,.ppt,.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.tiff,.tif,.ico,.xml,.yaml,.yml,.html,.htm"
+                  className="hidden"
+                  onChange={e => { handleSmartFileAttach(e.target.files); e.target.value = ''; }}
+                />
+                <textarea
+                  className="w-full bg-transparent border-none focus:ring-0 py-4 pl-14 pr-16 text-sm text-on-surface placeholder:text-outline font-body resize-none min-h-[52px] max-h-[120px]"
+                  value={smartInput}
+                  onChange={e => setSmartInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault();
+                      handleSmartSubmit();
+                    }
+                  }}
+                  rows={1}
+                  placeholder={t('dashboard.smartInput.placeholder')}
+                  disabled={creating}
+                />
+                <button
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+                  onClick={() => smartFileRef.current?.click()}
+                  title={t('dashboard.smartInput.uploadTooltip')}
+                >
+                  <span className="material-symbols-outlined text-lg">attach_file</span>
+                </button>
+                <button
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 cyber-gradient rounded-lg flex items-center justify-center text-on-primary disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-95 transition-all"
+                  onClick={handleSmartSubmit}
+                  disabled={!smartInput.trim() || creating}
+                >
+                  <span className="material-symbols-outlined">send</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
