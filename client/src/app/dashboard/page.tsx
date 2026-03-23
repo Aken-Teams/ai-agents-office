@@ -421,7 +421,7 @@ function DashboardContent() {
 
           {/* Bottom input bar */}
           <div className="flex-1 flex flex-col justify-end px-8 pb-6 pt-3">
-            <div className="w-full">
+            <div className="w-full max-w-5xl mx-auto">
               {/* Attached files chips */}
               {smartAttached.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-2">
