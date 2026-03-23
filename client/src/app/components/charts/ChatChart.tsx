@@ -169,7 +169,7 @@ new Chart(document.getElementById('c'),cfg(d));
           </ResponsiveContainer>
         </div>
         {/* Toolbar */}
-        <div className="flex items-center gap-1 px-3 py-1.5 border-t border-[var(--chart-border)]">
+        <div className="flex items-center flex-wrap gap-1 px-2 md:px-3 py-1.5 border-t border-[var(--chart-border)]">
           <button className="chat-chart-toggle flex items-center gap-1" onClick={() => setFullscreen(true)}>
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>fullscreen</span>
             <span>{t('chart.action.expand' as any)}</span>

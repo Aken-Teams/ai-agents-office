@@ -165,7 +165,7 @@ ${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
           dangerouslySetInnerHTML={{ __html: svg }}
         />
         {/* Toolbar */}
-        <div className="flex items-center gap-1 px-3 py-1.5 border-t border-[var(--chart-border)]">
+        <div className="flex items-center flex-wrap gap-1 px-2 md:px-3 py-1.5 border-t border-[var(--chart-border)]">
           <button
             onClick={() => setFullscreen(true)}
             className="chat-chart-toggle flex items-center gap-1"
