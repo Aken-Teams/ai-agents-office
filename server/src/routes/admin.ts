@@ -563,8 +563,8 @@ router.get('/security/workspace-scan', async (_req: Request, res: Response) => {
     const userDirs = fs.readdirSync(workspaceRoot, { withFileTypes: true })
       .filter(d => d.isDirectory());
 
-    // Map user IDs to user info
-    const users = await dbAll<any>("SELECT id, email, display_name FROM users WHERE role != 'admin'");
+    // Map user IDs to user info (include all users so admin dirs also resolve)
+    const users = await dbAll<any>("SELECT id, email, display_name FROM users");
     const userMap = new Map(users.map((u: any) => [u.id, u]));
 
     for (const dir of userDirs) {
