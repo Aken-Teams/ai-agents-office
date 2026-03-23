@@ -135,6 +135,7 @@ export default function Navbar() {
 
   const [saved, setSaved] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileUserExpanded, setMobileUserExpanded] = useState(false);
 
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -154,6 +155,7 @@ export default function Navbar() {
   // Close mobile menu on route change
   useEffect(() => {
     setMobileMenuOpen(false);
+    setMobileUserExpanded(false);
   }, [pathname]);
 
   // Sync to localStorage + dispatch event for other components
@@ -299,7 +301,7 @@ export default function Navbar() {
           <span className="font-headline text-base font-bold tracking-tighter text-on-surface">AI Agents Office</span>
         </Link>
         <button
-          onClick={() => setMobileMenuOpen(v => !v)}
+          onClick={() => { setMobileMenuOpen(v => !v); if (!mobileMenuOpen) setMobileUserExpanded(false); }}
           className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface-variant cursor-pointer"
         >
           <span className="material-symbols-outlined">{mobileMenuOpen ? 'close' : 'menu'}</span>
@@ -310,9 +312,10 @@ export default function Navbar() {
       {mobileMenuOpen && (
         <div className="md:hidden fixed inset-0 z-40" onClick={() => setMobileMenuOpen(false)}>
           <div
-            className="absolute top-14 left-0 right-0 bg-surface-dim border-b border-outline-variant/10 shadow-lg animate-[slideDown_0.2s_ease-out]"
+            className="absolute top-14 left-0 right-0 bg-surface-dim border-b border-outline-variant/10 shadow-lg animate-[slideDown_0.2s_ease-out] max-h-[calc(100svh-3.5rem)] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
+            {/* Nav Links */}
             <nav className="py-2">
               {NAV_LINKS.map(link => {
                 const isActive = pathname === link.href;
@@ -332,7 +335,192 @@ export default function Navbar() {
                   </Link>
                 );
               })}
+              {user.role === 'admin' && (
+                <Link
+                  href="/admin/overview"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-3 px-5 py-3.5 no-underline text-primary active:bg-primary/10 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-xl">admin_panel_settings</span>
+                  <span className="text-sm font-headline font-bold">{t('nav.switchToAdmin' as any)}</span>
+                </Link>
+              )}
             </nav>
+
+            {/* User Row: avatar + name | expand chevron | logout */}
+            <div className="border-t border-outline-variant/10">
+              <div className="flex items-center px-4 py-3 gap-2">
+                {/* Avatar + Name + edit (tap chevron to expand settings) */}
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-9 h-9 bg-primary/15 flex items-center justify-center rounded-full shrink-0">
+                    <span className="material-symbols-outlined text-primary text-sm">person</span>
+                  </div>
+                  <div className="min-w-0 flex-1 text-left">
+                    {editingName ? (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={nameInput}
+                          onChange={e => setNameInput(e.target.value)}
+                          maxLength={50}
+                          placeholder={t('userMenu.changeName.placeholder' as any)}
+                          className="flex-1 min-w-0 px-2 py-1 bg-surface-container-high border border-primary/40 rounded text-base text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
+                          autoFocus
+                          onKeyDown={e => { if (e.key === 'Enter') handleNameSave(); if (e.key === 'Escape') setEditingName(false); }}
+                        />
+                        <button onClick={handleNameSave} disabled={savingName} className="w-7 h-7 flex items-center justify-center rounded-md bg-primary text-on-primary cursor-pointer disabled:opacity-50">
+                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>check</span>
+                        </button>
+                        <button onClick={() => { setEditingName(false); setNameError(''); }} className="w-7 h-7 flex items-center justify-center rounded-md bg-surface-container-high text-on-surface-variant cursor-pointer">
+                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => { setEditingName(true); setNameInput(user.displayName || ''); setNameError(''); }}
+                        className="group flex items-center gap-1 bg-transparent cursor-pointer p-0 text-left"
+                      >
+                        <span className="text-sm font-bold text-on-surface truncate">{user.displayName || '—'}</span>
+                        <span className="material-symbols-outlined text-on-surface-variant/40 group-active:text-primary transition-colors" style={{ fontSize: 14 }}>edit</span>
+                      </button>
+                    )}
+                    {nameError && <p className="text-xs text-error mt-0.5">{nameError}</p>}
+                    {!editingName && <p className="text-[11px] text-on-surface-variant truncate">{user.email}</p>}
+                  </div>
+                </div>
+                {/* Expand chevron */}
+                <button
+                  onClick={() => setMobileUserExpanded(v => !v)}
+                  className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant active:bg-surface-container transition-colors cursor-pointer shrink-0"
+                >
+                  <span className={`material-symbols-outlined text-lg transition-transform duration-200 ${mobileUserExpanded ? 'rotate-180' : ''}`}>
+                    expand_more
+                  </span>
+                </button>
+                {/* Logout button */}
+                <button
+                  onClick={() => { setMobileMenuOpen(false); logout(); }}
+                  className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant active:text-error active:bg-error/10 transition-colors cursor-pointer shrink-0"
+                  title={t('userMenu.logout')}
+                >
+                  <span className="material-symbols-outlined text-xl">logout</span>
+                </button>
+              </div>
+
+              {/* Expandable Settings */}
+              {mobileUserExpanded && (
+                <div className="border-t border-outline-variant/10 animate-[slideDown_0.15s_ease-out]">
+                  {/* Change Password */}
+                  <div className="px-5 py-3 border-b border-outline-variant/10">
+                    {!showPasswordForm ? (
+                      <button
+                        onClick={() => setShowPasswordForm(true)}
+                        className="flex items-center gap-2 text-sm text-on-surface-variant active:text-on-surface transition-colors w-full bg-transparent cursor-pointer py-1"
+                      >
+                        <span className="material-symbols-outlined text-sm">lock</span>
+                        {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
+                      </button>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-sm font-bold text-on-surface mb-2">
+                          {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
+                        </p>
+                        {!isOAuthOnly && (
+                          <input
+                            type="password"
+                            placeholder={t('userMenu.changePassword.current')}
+                            value={currentPassword}
+                            onChange={e => setCurrentPassword(e.target.value)}
+                            className="w-full px-3 py-2 bg-surface-container-high border border-outline-variant/20 rounded text-base text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
+                          />
+                        )}
+                        <input type="password" placeholder={t('userMenu.changePassword.new')} value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full px-3 py-2 bg-surface-container-high border border-outline-variant/20 rounded text-base text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary" />
+                        <input type="password" placeholder={t('userMenu.changePassword.confirm')} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full px-3 py-2 bg-surface-container-high border border-outline-variant/20 rounded text-base text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary" />
+                        {passwordError && <p className="text-xs text-error">{passwordError}</p>}
+                        {passwordSuccess && <p className="text-xs text-success">{t('userMenu.changePassword.success')}</p>}
+                        <div className="flex gap-2 pt-1">
+                          <button onClick={handlePasswordChange} disabled={changingPassword || (!isOAuthOnly && !currentPassword) || !newPassword || !confirmPassword} className="flex-1 px-3 py-1.5 bg-primary text-on-primary text-xs font-medium rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                            {t('userMenu.changePassword.submit')}
+                          </button>
+                          <button onClick={() => { setShowPasswordForm(false); setPasswordError(''); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }} className="px-3 py-1.5 bg-surface-container-high text-on-surface-variant text-xs font-medium rounded cursor-pointer border border-outline-variant/20">
+                            {t('common.cancel')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Language */}
+                  <div className="px-5 py-3 border-b border-outline-variant/10">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="material-symbols-outlined text-sm text-on-surface-variant">language</span>
+                      <span className="text-sm font-medium text-on-surface">{t('userMenu.language')}</span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      {LOCALE_OPTIONS.map(opt => (
+                        <button
+                          key={opt.value}
+                          onClick={() => handleLocaleChange(opt.value)}
+                          className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all cursor-pointer ${
+                            locale === opt.value
+                              ? 'bg-primary/15 text-primary border border-primary/30'
+                              : 'bg-surface-container-high text-on-surface-variant active:text-on-surface border border-transparent'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Theme */}
+                  <div className="px-5 py-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="material-symbols-outlined text-sm text-on-surface-variant">palette</span>
+                      <span className="text-sm font-medium text-on-surface">{t('userMenu.theme')}</span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => handleThemeChange('light')}
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-all cursor-pointer ${
+                          theme === 'light'
+                            ? 'bg-primary/15 text-primary border border-primary/30'
+                            : 'bg-surface-container-high text-on-surface-variant active:text-on-surface border border-transparent'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-sm">light_mode</span>
+                        {t('userMenu.theme.light')}
+                      </button>
+                      <button
+                        onClick={() => handleThemeChange('dark')}
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-all cursor-pointer ${
+                          theme === 'dark'
+                            ? 'bg-primary/15 text-primary border border-primary/30'
+                            : 'bg-surface-container-high text-on-surface-variant active:text-on-surface border border-transparent'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-sm">dark_mode</span>
+                        {t('userMenu.theme.dark')}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Saved toast */}
+                  {saved && (
+                    <div className="px-5 py-2 bg-success/10 text-success text-xs font-medium text-center">
+                      {t('userMenu.saved')}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Developer Footer */}
+            <div className="py-3 border-t border-outline-variant/10">
+              <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className="text-[11px] text-outline hover:text-on-surface-variant transition-colors no-underline block text-center">
+                {t('nav.poweredBy')} &copy; 2026
+              </a>
+            </div>
           </div>
         </div>
       )}

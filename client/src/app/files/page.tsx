@@ -624,7 +624,7 @@ function FilesContent() {
         />
       )}
 
-      <main className={`${sidebarMargin} pt-8 pb-12 px-10 transition-all duration-300`}>
+      <main className={`${sidebarMargin} pt-8 md:pt-10 pb-12 px-10 transition-all duration-300`}>
         {/* Header Section */}
         <div className="flex justify-between items-end mb-10">
           <div className="max-w-2xl">
