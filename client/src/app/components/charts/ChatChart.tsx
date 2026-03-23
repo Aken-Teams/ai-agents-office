@@ -164,11 +164,9 @@ new Chart(document.getElementById('c'),cfg(d));
       <div className="chat-chart-container">
         {chart.title && <div className="chat-chart-title">{chart.title}</div>}
         <div className="chat-chart-body" ref={chartRef}>
-          <div style={{ minWidth: ['pie', 'donut', 'radar'].includes(chart.type) ? 360 : undefined }}>
-            <ResponsiveContainer width="100%" height={280}>
-              {renderChart(chart, colors, theme, axisStyle, gridStyle, tooltipStyle)}
-            </ResponsiveContainer>
-          </div>
+          <ResponsiveContainer width="100%" height={280}>
+            {renderChart(chart, colors, theme, axisStyle, gridStyle, tooltipStyle, true)}
+          </ResponsiveContainer>
         </div>
         {/* Toolbar */}
         <div className="flex items-center flex-wrap gap-1 px-2 md:px-3 py-1.5 border-t border-[var(--chart-border)]">
@@ -212,7 +210,7 @@ new Chart(document.getElementById('c'),cfg(d));
             </button>
             {chart.title && <div className="text-base md:text-lg font-bold text-on-surface mb-3 md:mb-4 pr-10">{chart.title}</div>}
             <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 320 : 500}>
-              {renderChart(chart, colors, theme, axisStyle, gridStyle, tooltipStyle)}
+              {renderChart(chart, colors, theme, axisStyle, gridStyle, tooltipStyle, false)}
             </ResponsiveContainer>
             <div className="flex items-center flex-wrap gap-2 mt-3 md:mt-4 pt-3 border-t border-outline-variant/20">
               <button onClick={handleDownloadHtml} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
@@ -236,7 +234,9 @@ function renderChart(
   axisStyle: Record<string, unknown>,
   gridStyle: Record<string, unknown>,
   tooltipStyle: Record<string, unknown>,
+  compact = false,
 ) {
+  const isMobile = compact && typeof window !== 'undefined' && window.innerWidth < 768;
   switch (chart.type) {
     case 'bar': {
       return (
@@ -302,19 +302,26 @@ function renderChart(
 
     case 'pie':
     case 'donut': {
-      const innerR = chart.type === 'donut' ? (chart.innerRadius ?? 60) : 0;
+      const outerR = isMobile ? 70 : 100;
+      const innerR = chart.type === 'donut' ? (chart.innerRadius ?? (isMobile ? 40 : 60)) : 0;
       return (
         <PieChart>
           <Pie data={chart.data} dataKey="value" nameKey="name" cx="50%" cy="50%"
-            innerRadius={innerR} outerRadius={100} paddingAngle={2}
+            innerRadius={innerR} outerRadius={outerR} paddingAngle={2}
             label={({ name, percent }: // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              any) => `${name || ''} ${((percent || 0) * 100).toFixed(0)}%`}
-            labelLine={{ stroke: theme.subtext }}>
+              any) => {
+              const pct = `${((percent || 0) * 100).toFixed(0)}%`;
+              if (isMobile) return pct;
+              return `${name || ''} ${pct}`;
+            }}
+            labelLine={{ stroke: theme.subtext }}
+            {...(isMobile ? { fontSize: 11 } : {})}>
             {chart.data.map((entry, i) => (
               <Cell key={i} fill={entry.color || colors[i % colors.length]} />
             ))}
           </Pie>
           <Tooltip {...tooltipStyle} />
+          {isMobile && <Legend wrapperStyle={{ fontSize: 11 }} />}
         </PieChart>
       );
     }
@@ -326,17 +333,17 @@ function renderChart(
         return point;
       });
       return (
-        <RadarChart data={radarData} cx="50%" cy="50%" outerRadius={100}>
+        <RadarChart data={radarData} cx="50%" cy="50%" outerRadius={isMobile ? 65 : 100}>
           <PolarGrid stroke={theme.grid} />
-          <PolarAngleAxis dataKey="axis" tick={{ fill: theme.subtext, fontSize: 11 }} />
-          <PolarRadiusAxis tick={{ fill: theme.subtext, fontSize: 10 }} />
+          <PolarAngleAxis dataKey="axis" tick={{ fill: theme.subtext, fontSize: isMobile ? 9 : 11 }} />
+          <PolarRadiusAxis tick={{ fill: theme.subtext, fontSize: isMobile ? 8 : 10 }} />
           {chart.series.map((s, i) => (
             <Radar key={s.name} name={s.name} dataKey={s.name}
               stroke={s.color || colors[i % colors.length]}
               fill={s.color || colors[i % colors.length]}
               fillOpacity={0.2} />
           ))}
-          {chart.series.length > 1 && <Legend />}
+          {chart.series.length > 1 && <Legend wrapperStyle={isMobile ? { fontSize: 11 } : undefined} />}
           <Tooltip {...tooltipStyle} />
         </RadarChart>
       );
