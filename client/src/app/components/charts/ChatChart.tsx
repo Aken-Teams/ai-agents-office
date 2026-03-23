@@ -239,18 +239,19 @@ function renderChart(
   const isMobile = compact && typeof window !== 'undefined' && window.innerWidth < 768;
   switch (chart.type) {
     case 'bar': {
+      const xTickProps = isMobile ? { angle: -30, textAnchor: 'end' as const, fontSize: 10 } : {};
       return (
         <BarChart data={chart.data} layout={chart.horizontal ? 'vertical' : 'horizontal'}>
           <CartesianGrid {...gridStyle} />
           {chart.horizontal ? (
             <>
-              <YAxis dataKey="name" type="category" {...axisStyle} width={80} />
-              <XAxis type="number" {...axisStyle} />
+              <YAxis dataKey="name" type="category" {...axisStyle} width={isMobile ? 60 : 80} tick={{ ...axisStyle.tick as object, fontSize: isMobile ? 10 : 12 }} />
+              <XAxis type="number" {...axisStyle} tick={{ ...axisStyle.tick as object, fontSize: isMobile ? 10 : 12 }} />
             </>
           ) : (
             <>
-              <XAxis dataKey="name" {...axisStyle} />
-              <YAxis {...axisStyle} />
+              <XAxis dataKey="name" {...axisStyle} tick={{ ...axisStyle.tick as object, ...xTickProps }} height={isMobile ? 50 : undefined} />
+              <YAxis {...axisStyle} tick={{ ...axisStyle.tick as object, fontSize: isMobile ? 10 : 12 }} width={isMobile ? 35 : undefined} />
             </>
           )}
           <Tooltip {...tooltipStyle} />
@@ -265,17 +266,18 @@ function renderChart(
 
     case 'line': {
       const merged = mergeSeriesData(chart.series);
+      const mobileAxis = isMobile ? { tick: { ...axisStyle.tick as object, fontSize: 10 } } : {};
       return (
         <LineChart data={merged}>
           <CartesianGrid {...gridStyle} />
-          <XAxis dataKey="name" {...axisStyle} />
-          <YAxis {...axisStyle} />
+          <XAxis dataKey="name" {...axisStyle} {...mobileAxis} />
+          <YAxis {...axisStyle} {...mobileAxis} width={isMobile ? 35 : undefined} />
           <Tooltip {...tooltipStyle} />
-          {chart.series.length > 1 && <Legend />}
+          {chart.series.length > 1 && <Legend wrapperStyle={isMobile ? { fontSize: 11 } : undefined} />}
           {chart.series.map((s, i) => (
             <Line key={s.name} type={chart.smooth ? 'monotone' : 'linear'}
               dataKey={s.name} stroke={s.color || colors[i % colors.length]}
-              strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+              strokeWidth={2} dot={{ r: isMobile ? 2 : 3 }} activeDot={{ r: isMobile ? 3 : 5 }} />
           ))}
         </LineChart>
       );
@@ -283,13 +285,14 @@ function renderChart(
 
     case 'area': {
       const merged = mergeSeriesData(chart.series);
+      const mobileAxis = isMobile ? { tick: { ...axisStyle.tick as object, fontSize: 10 } } : {};
       return (
         <AreaChart data={merged}>
           <CartesianGrid {...gridStyle} />
-          <XAxis dataKey="name" {...axisStyle} />
-          <YAxis {...axisStyle} />
+          <XAxis dataKey="name" {...axisStyle} {...mobileAxis} />
+          <YAxis {...axisStyle} {...mobileAxis} width={isMobile ? 35 : undefined} />
           <Tooltip {...tooltipStyle} />
-          {chart.series.length > 1 && <Legend />}
+          {chart.series.length > 1 && <Legend wrapperStyle={isMobile ? { fontSize: 11 } : undefined} />}
           {chart.series.map((s, i) => (
             <Area key={s.name} type="monotone" dataKey={s.name}
               fill={s.color || colors[i % colors.length]}
