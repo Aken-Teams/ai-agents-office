@@ -146,6 +146,11 @@ html.dark {
   --md-th-bg: #222a3d;
   --md-hr: #44474d;
 
+  /* Chart inline */
+  --chart-bg: #131b2e;
+  --chart-border: #2d3449;
+  --chart-title: #dae2fd;
+
   /* Glass */
   --glass-bg: rgba(45, 52, 73, 0.6);
 
@@ -237,6 +242,11 @@ html, html.light {
   --md-table-border: #c4c7d0;
   --md-th-bg: #e5e8ed;
   --md-hr: #c4c7d0;
+
+  /* Chart inline */
+  --chart-bg: #ffffff;
+  --chart-border: #dde0e6;
+  --chart-title: #1a1c2e;
 
   /* Glass */
   --glass-bg: rgba(255, 255, 255, 0.7);
@@ -490,6 +500,81 @@ html.locale-zh-CN {
   border: none;
   border-top: 1px solid var(--md-hr);
   margin: 8px 0;
+}
+
+/* === Chat Inline Charts === */
+.chat-chart-container {
+  margin: 12px 0;
+  background: var(--chart-bg);
+  border: 1px solid var(--chart-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.chat-chart-title {
+  padding: 12px 16px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--chart-title);
+}
+
+.chat-chart-body {
+  padding: 8px 8px 4px;
+  height: 280px;
+}
+
+.chat-chart-toggle {
+  display: block;
+  width: 100%;
+  padding: 6px 16px;
+  border: none;
+  border-top: 1px solid var(--chart-border);
+  background: transparent;
+  color: var(--md-text);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.chat-chart-toggle:hover {
+  opacity: 1;
+}
+
+.chat-chart-raw {
+  margin: 0;
+  padding: 8px 16px 12px;
+  font-size: 11px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--md-pre-bg);
+  border-top: 1px solid var(--chart-border);
+}
+
+.chat-chart-fallback {
+  margin: 8px 0;
+  border: 1px dashed var(--warning, #b77400);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.chat-chart-fallback-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(183, 116, 0, 0.08);
+  font-size: 12px;
+  color: var(--warning, #b77400);
+}
+
+.chat-chart-fallback pre {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 11px;
+  max-height: 150px;
+  overflow: auto;
 }
 
 /* Custom scrollbar (theme-aware) */

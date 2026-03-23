@@ -4,10 +4,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import dynamic from 'next/dynamic';
 import { AuthProvider, useAuth } from '../../components/AuthProvider';
 import Navbar from '../../components/Navbar';
 import { I18nProvider, useTranslation } from '../../../i18n';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
+
+const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { ssr: false });
 
 // Direct connection to Express for SSE streaming.
 // Next.js rewrites proxy buffers the entire response, preventing real-time updates.
@@ -308,6 +311,17 @@ function ChatContent() {
   const sidebarMargin = useSidebarMargin();
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Custom ReactMarkdown components — intercept ```chart blocks
+  const markdownComponents = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    code({ className, children, ...props }: any) {
+      if (className === 'language-chart') {
+        return <ChatChart rawJson={String(children).trim()} />;
+      }
+      return <code className={className} {...props}>{children}</code>;
+    },
+  };
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
@@ -857,7 +871,7 @@ function ChatContent() {
                     ) : (
                       <div className="bg-surface-container-low px-5 py-4 rounded-xl rounded-tl-sm border border-outline-variant/10">
                         <div className="chat-markdown text-sm leading-relaxed text-on-surface-variant">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{msg.content}</ReactMarkdown>
                         </div>
                         {sources.length > 0 && (
                           <details className="mt-3 border-t border-outline-variant/10 pt-2">
@@ -892,7 +906,7 @@ function ChatContent() {
                 <div className="max-w-[85%]">
                   <div className="bg-surface-container-low px-5 py-4 rounded-xl rounded-tl-sm border border-primary/20 border-dashed">
                     <div className="chat-markdown text-sm leading-relaxed text-on-surface-variant">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamText}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{streamText}</ReactMarkdown>
                       <span className="inline-block w-0.5 h-4 bg-primary ml-0.5 align-text-bottom animate-pulse" />
                     </div>
                   </div>

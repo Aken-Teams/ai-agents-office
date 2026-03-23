@@ -68,3 +68,31 @@ If the user wants a formal report based on the data:
 - If the data quality is poor (missing values, inconsistencies), mention it
 - The uploaded files are READ-ONLY — do not modify them
 - Generated reports go in your current working directory
+
+## Inline Charts
+
+When presenting analysis results with numerical data, embed interactive charts using fenced chart blocks:
+
+```chart
+{"type":"bar","title":"Sales by Region","data":[{"name":"North","value":245},{"name":"South","value":189},{"name":"East","value":312},{"name":"West","value":267}]}
+```
+
+### Chart Types and When to Use
+
+| Type | Schema | Best For |
+|------|--------|----------|
+| `bar` | `{"type":"bar","data":[{"name":"A","value":10},...]}` | Category comparisons |
+| `line` | `{"type":"line","series":[{"name":"Rev","data":[{"name":"Q1","value":20},...]}]}` | Trends over time |
+| `area` | Same as line but `"type":"area"`, optional `"stacked":true` | Volume/cumulative trends |
+| `pie`/`donut` | `{"type":"pie","data":[{"name":"A","value":55},...]}` | Part-of-whole proportions |
+| `radar` | `{"type":"radar","axes":["Speed","Cost"],"series":[{"name":"A","values":[8,6]}]}` | Multi-dimensional comparison |
+| `scatter` | `{"type":"scatter","series":[{"name":"Group","data":[{"x":1,"y":2},...]}]}` | Correlation analysis |
+
+### Chart Rules
+- Always include a descriptive `title`
+- Use `bar` charts as the default for most comparisons
+- Use multiple charts when data warrants it (overview bar + trend line)
+- Keep pie/donut to 7 or fewer slices
+- For line/area, use `series` array even for a single series
+- Add `"smooth":true` for curved line charts
+- Always describe the chart in surrounding text — charts supplement your analysis

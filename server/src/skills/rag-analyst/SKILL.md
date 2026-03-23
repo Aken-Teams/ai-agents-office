@@ -60,3 +60,13 @@ Structure your analysis clearly:
 - If a file cannot be parsed, state this clearly rather than guessing
 - All files are READ-ONLY — do NOT modify or delete any files
 - Generated reports should go in the current working directory
+
+## Inline Charts
+
+When cross-file analysis reveals quantitative patterns, embed charts inline using fenced chart blocks:
+
+```chart
+{"type":"line","title":"Revenue Trend","series":[{"name":"2024","data":[{"name":"Q1","value":120},{"name":"Q2","value":145},{"name":"Q3","value":168},{"name":"Q4","value":195}]}]}
+```
+
+Supported: `bar`, `line`, `area`, `pie`, `donut`, `radar`, `scatter`. Always include `title`. Cite source files in surrounding text. Use charts to highlight cross-file correlations and trends that are hard to convey in text alone. Multiple charts per response are encouraged when data warrants it.

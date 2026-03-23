@@ -376,9 +376,9 @@ function renderBarChart(chart: ChartData, s: StylePreset): string {
   const barHtml = bars.map((b, i) => {
     const color = b.color || s.chartColors[i % s.chartColors.length];
     const pct = Math.min((b.value / maxVal) * 100, 100);
-    return `<div class="bar-row">
+    return `<div class="bar-row" data-label="${escapeHtml(b.label)}" data-value="${b.value}">
       <span class="bar-label">${escapeHtml(b.label)}</span>
-      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color};"></div></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color};" data-pct="${pct.toFixed(0)}"></div></div>
       <span class="bar-value">${b.value}</span>
     </div>`;
   }).join('');
@@ -402,8 +402,9 @@ function renderPieChart(chart: ChartData, s: StylePreset): string {
     const color = sl.color || s.chartColors[i % s.chartColors.length];
     return `<div class="chart-legend-item"><span class="chart-dot" style="background:${color};"></span><span>${escapeHtml(sl.label)} (${sl.value}%)</span></div>`;
   }).join('');
+  const sliceData = slices.map(sl => ({ label: sl.label, value: sl.value, pct: ((sl.value / total) * 100).toFixed(1) }));
   return `<div class="chart-pie-wrap">
-    <div class="chart-pie${isDonut ? ' donut' : ''}" style="background:conic-gradient(${stops});"></div>
+    <div class="chart-pie${isDonut ? ' donut' : ''}" style="background:conic-gradient(${stops});" data-slices='${JSON.stringify(sliceData)}'></div>
     <div class="chart-legend">${legend}</div>
   </div>`;
 }
@@ -446,7 +447,7 @@ function renderLineChart(chart: ChartData, s: StylePreset): string {
     const dots = sr.points.map((p, pi) => {
       const x = PL + (cW / Math.max(sr.points.length - 1, 1)) * pi;
       const y = PT + cH - ((p.value - minVal) / (maxVal - minVal)) * cH;
-      return `<circle cx="${x}" cy="${y}" r="3.5" fill="${color}" stroke="var(--slide-bg)" stroke-width="2"/>`;
+      return `<circle cx="${x}" cy="${y}" r="3.5" fill="${color}" stroke="var(--slide-bg)" stroke-width="2" data-label="${escapeHtml(p.label)}" data-value="${p.value}" data-series="${escapeHtml(sr.name)}"/>`;
     }).join('');
     return `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}`;
@@ -935,6 +936,39 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
 .fragment.scale-in { transform: scale(0.85); opacity: 0; transition: all 0.4s ease; }
 .fragment.scale-in.visible { transform: scale(1); opacity: 1; }
 
+/* ── Interactive Hover Effects ── */
+.glass-card { transition: transform 0.25s ease, box-shadow 0.25s ease; cursor: default; }
+.glass-card:hover { transform: translateY(-4px); box-shadow: 0 8px 30px rgba(0,0,0,${s.isDark ? '0.3' : '0.12'}); }
+.stats-card:hover { transform: translateY(-5px) scale(1.02); }
+.icon-card:hover .icon-card-icon .material-symbols-outlined { transform: scale(1.15); }
+.icon-card-icon .material-symbols-outlined { transition: transform 0.2s ease; }
+
+/* Bar chart hover */
+.bar-fill { transition: width 0.8s ease, filter 0.2s; }
+.bar-row { cursor: pointer; transition: background 0.15s; border-radius: 4px; padding: 2px 4px; margin: 0 -4px; }
+.bar-row:hover { background: ${s.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'}; }
+.bar-row:hover .bar-fill { filter: brightness(1.2); }
+.bar-row:hover .bar-value { font-weight: 800; color: var(--title-color); }
+
+/* Pie chart legend hover */
+.chart-legend-item { cursor: pointer; transition: all 0.2s; padding: 2px 8px; border-radius: 6px; }
+.chart-legend-item:hover { background: ${s.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}; }
+
+/* Line chart dot hover */
+.chart-line-svg circle { cursor: pointer; }
+.chart-line-svg circle:hover { r: 6; stroke-width: 3; }
+
+/* Timeline hover */
+.tl-item { transition: transform 0.2s; }
+.tl-item:hover { transform: translateY(-2px); }
+.tl-dot { transition: transform 0.2s, box-shadow 0.2s; }
+.tl-item:hover .tl-dot { transform: scale(1.15); box-shadow: 0 0 0 6px ${s.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}; }
+
+/* Tooltip */
+#slide-tooltip { position: fixed; pointer-events: none; z-index: 9999; display: none; padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); background: ${s.isDark ? 'rgba(30,30,50,0.9)' : 'rgba(255,255,255,0.95)'}; color: ${s.isDark ? '#e0e0ff' : '#333'}; border: 1px solid ${s.isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'}; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+#slide-tooltip .tt-label { font-size: 11px; font-weight: 400; opacity: 0.7; display: block; }
+#slide-tooltip .tt-value { font-size: 16px; }
+
 /* ── Theme Overrides ── */
 /* Override Reveal.js white theme defaults */
 .reveal .slide-background { ${bgRule} }
@@ -1011,6 +1045,111 @@ function generateHtml(input: SlidesInput): string {
       slideNumber: 'c/t',
       disableLayout: false,
     });
+  <\/script>
+
+  <!-- Tooltip element -->
+  <div id="slide-tooltip"></div>
+
+  <!-- Interactive chart & card JS -->
+  <script>
+  (function() {
+    var tip = document.getElementById('slide-tooltip');
+    function showTip(e, html) {
+      tip.innerHTML = html;
+      tip.style.display = 'block';
+      moveTip(e);
+    }
+    function moveTip(e) {
+      var x = e.clientX + 12, y = e.clientY - 40;
+      if (x + 180 > window.innerWidth) x = e.clientX - 180;
+      if (y < 8) y = e.clientY + 16;
+      tip.style.left = x + 'px';
+      tip.style.top = y + 'px';
+    }
+    function hideTip() { tip.style.display = 'none'; }
+
+    // Bar chart tooltip
+    document.querySelectorAll('.bar-row').forEach(function(row) {
+      row.addEventListener('mouseenter', function(e) {
+        var label = row.getAttribute('data-label');
+        var value = row.getAttribute('data-value');
+        showTip(e, '<span class="tt-label">' + label + '</span><span class="tt-value">' + value + '</span>');
+      });
+      row.addEventListener('mousemove', moveTip);
+      row.addEventListener('mouseleave', hideTip);
+    });
+
+    // SVG line chart circle tooltip
+    document.querySelectorAll('.chart-line-svg circle[data-label]').forEach(function(c) {
+      c.addEventListener('mouseenter', function(e) {
+        var label = c.getAttribute('data-label');
+        var value = c.getAttribute('data-value');
+        var series = c.getAttribute('data-series');
+        var html = '<span class="tt-label">' + (series ? series + ' — ' : '') + label + '</span><span class="tt-value">' + value + '</span>';
+        showTip(e, html);
+      });
+      c.addEventListener('mousemove', moveTip);
+      c.addEventListener('mouseleave', hideTip);
+    });
+
+    // Pie chart tooltip on hover (angle-based)
+    document.querySelectorAll('.chart-pie[data-slices]').forEach(function(pie) {
+      var slices;
+      try { slices = JSON.parse(pie.getAttribute('data-slices')); } catch(e) { return; }
+      pie.style.cursor = 'crosshair';
+      pie.addEventListener('mousemove', function(e) {
+        var rect = pie.getBoundingClientRect();
+        var cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+        var angle = Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI + 90;
+        if (angle < 0) angle += 360;
+        var cum = 0, total = slices.reduce(function(s, sl) { return s + sl.value; }, 0);
+        for (var i = 0; i < slices.length; i++) {
+          cum += (slices[i].value / total) * 360;
+          if (angle <= cum) {
+            showTip(e, '<span class="tt-label">' + slices[i].label + '</span><span class="tt-value">' + slices[i].pct + '%</span>');
+            return;
+          }
+        }
+      });
+      pie.addEventListener('mouseleave', hideTip);
+    });
+
+    // Stats number count-up animation on slide change
+    function animateNumbers(section) {
+      section.querySelectorAll('.stats-value').forEach(function(el) {
+        var text = el.textContent || '';
+        var match = text.match(/([\\d,.]+)/);
+        if (!match) return;
+        var target = parseFloat(match[1].replace(/,/g, ''));
+        if (isNaN(target)) return;
+        var prefix = text.substring(0, text.indexOf(match[1]));
+        var suffix = text.substring(text.indexOf(match[1]) + match[1].length);
+        var duration = 800, start = performance.now();
+        function tick(now) {
+          var p = Math.min((now - start) / duration, 1);
+          p = 1 - Math.pow(1 - p, 3); // ease-out cubic
+          var current = Math.round(target * p);
+          el.textContent = prefix + current.toLocaleString() + suffix;
+          if (p < 1) requestAnimationFrame(tick);
+          else el.textContent = text; // restore original (preserves formatting)
+        }
+        el.textContent = prefix + '0' + suffix;
+        requestAnimationFrame(tick);
+      });
+    }
+
+    Reveal.on('slidechanged', function(event) {
+      if (event.currentSlide.querySelector('.stats-grid')) {
+        animateNumbers(event.currentSlide);
+      }
+    });
+    // Also animate the first slide if it has stats
+    Reveal.on('ready', function(event) {
+      if (event.currentSlide && event.currentSlide.querySelector('.stats-grid')) {
+        animateNumbers(event.currentSlide);
+      }
+    });
+  })();
   <\/script>
 </body>
 </html>`;
