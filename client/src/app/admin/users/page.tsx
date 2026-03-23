@@ -41,6 +41,21 @@ function formatFileSize(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+function StatusBadge({ status }: { status: string }) {
+  const cls = status === 'active'
+    ? 'bg-success/15 text-success'
+    : status === 'pending'
+    ? 'bg-warning/15 text-warning'
+    : 'bg-error/15 text-error';
+  const label = status === 'active' ? 'Active' : status === 'pending' ? 'Pending' : 'Suspended';
+  return <span className={`px-2 py-0.5 text-xs font-bold uppercase tracking-wider rounded ${cls}`}>{label}</span>;
+}
+
+function RoleBadge({ role }: { role: string }) {
+  const cls = role === 'admin' ? 'bg-primary/15 text-primary' : 'bg-surface-container text-on-surface-variant';
+  return <span className={`px-2 py-0.5 text-xs font-bold uppercase tracking-wider rounded ${cls}`}>{role === 'admin' ? 'Admin' : 'User'}</span>;
+}
+
 export default function AdminUsers() {
   const { token } = useAdminAuth();
   const { t } = useTranslation();
@@ -158,27 +173,161 @@ export default function AdminUsers() {
     }
   }
 
+  /* ---- Detail Panel Content (shared between mobile overlay & desktop sidebar) ---- */
+  function renderDetail(detail: UserDetail, onClose: () => void) {
+    return (
+      <>
+        {/* Header: Avatar + Name + Close */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-outline-variant/10">
+          <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center text-sm font-black text-primary shrink-0">
+            {(detail.display_name || detail.email).slice(0, 2).toUpperCase()}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-bold text-on-surface truncate">{detail.display_name || detail.email.split('@')[0]}</h3>
+            <p className="text-xs text-on-surface-variant truncate">{detail.email}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-container-high transition-colors bg-transparent cursor-pointer shrink-0"
+          >
+            <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
+          </button>
+        </div>
+
+        {/* Info Row: Status + Role + Registered */}
+        <div className="px-4 py-3 flex items-center gap-2 text-xs border-b border-outline-variant/10">
+          <StatusBadge status={detail.status} />
+          <RoleBadge role={detail.role} />
+          <span className="text-on-surface-variant ml-auto">{new Date(detail.created_at).toLocaleDateString('zh-TW')}</span>
+        </div>
+
+        {/* Role Toggle */}
+        <div className="px-4 py-3 border-b border-outline-variant/10">
+          <div className="flex items-center gap-2">
+            <span className="text-xs uppercase tracking-wider text-on-surface-variant font-bold">{t('admin.users.detail.roleLabel')}</span>
+            <div className="flex rounded overflow-hidden border border-outline-variant/15 ml-auto">
+              {(['user', 'admin'] as const).map(r => (
+                <button
+                  key={r}
+                  onClick={() => changeRole(detail.id, r)}
+                  disabled={actionLoading || detail.role === r}
+                  className={`px-3 py-1 text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors disabled:cursor-default ${
+                    detail.role === r
+                      ? r === 'admin' ? 'bg-primary/15 text-primary' : 'bg-surface-container-high text-on-surface'
+                      : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                  }`}
+                >
+                  {r === 'admin' ? 'Admin' : 'User'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Token Stats */}
+        <div className="px-4 py-3 border-b border-outline-variant/10">
+          <div className="flex items-center justify-between text-xs">
+            <span className="uppercase tracking-wider text-on-surface-variant font-bold">{t('admin.users.detail.tokenUsage')}</span>
+            <span className="text-on-surface-variant">{detail.tokenStats.invocation_count} calls</span>
+          </div>
+          <div className="flex gap-4 mt-2">
+            <div>
+              <span className="text-xs text-on-surface-variant">{t('admin.users.detail.tokenInput')} </span>
+              <span className="text-sm font-bold text-on-surface">{formatTokens(detail.tokenStats.total_input)}</span>
+            </div>
+            <div>
+              <span className="text-xs text-on-surface-variant">{t('admin.users.detail.tokenOutput')} </span>
+              <span className="text-sm font-bold text-on-surface">{formatTokens(detail.tokenStats.total_output)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Files */}
+        <div className="px-4 py-3 border-b border-outline-variant/10 flex-1 min-h-0 overflow-y-auto">
+          <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold mb-2">{t('admin.users.detail.recentFiles')}</p>
+          {detail.recentFiles.length === 0 ? (
+            <p className="text-xs text-on-surface-variant">{t('admin.users.detail.noFiles')}</p>
+          ) : (
+            <div className="space-y-0.5">
+              {detail.recentFiles.slice(0, 5).map(f => (
+                <div key={f.id} className="flex items-center gap-1.5 text-xs py-1 rounded">
+                  <span className="material-symbols-outlined text-xs text-on-surface-variant shrink-0">draft</span>
+                  <span className="flex-1 text-on-surface truncate">{f.filename}</span>
+                  <span className="text-on-surface-variant shrink-0">{formatFileSize(f.file_size)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="px-4 py-3">
+          {detail.status === 'pending' ? (
+            <div className="flex gap-2">
+              <button
+                onClick={() => toggleUserStatus(detail.id, 'active')}
+                disabled={actionLoading}
+                className="flex-1 py-1.5 bg-success/10 text-success text-xs font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {t('admin.users.detail.approve')}
+              </button>
+              <button
+                onClick={() => toggleUserStatus(detail.id, 'suspended')}
+                disabled={actionLoading}
+                className="flex-1 py-1.5 bg-error/10 text-error text-xs font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {t('admin.users.detail.reject')}
+              </button>
+            </div>
+          ) : detail.status === 'active' ? (
+            <button
+              onClick={() => toggleUserStatus(detail.id, 'suspended')}
+              disabled={actionLoading}
+              className="w-full py-1.5 bg-error/10 text-error text-xs font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {t('admin.users.detail.suspend')}
+            </button>
+          ) : (
+            <button
+              onClick={() => toggleUserStatus(detail.id, 'active')}
+              disabled={actionLoading}
+              className="w-full py-1.5 bg-success/10 text-success text-xs font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {t('admin.users.detail.activate')}
+            </button>
+          )}
+          <button
+            onClick={() => setDeleteConfirm({ id: detail.id, email: detail.email })}
+            className="w-full mt-2 py-1.5 border border-error/30 text-error/70 text-xs font-bold uppercase tracking-wider rounded hover:bg-error/10 hover:text-error transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-xs">delete_forever</span>
+            {t('admin.users.detail.delete')}
+          </button>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       {/* Header */}
-      <header className="sticky top-0 h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
-        <div className="flex items-center gap-4">
-          <span className="text-lg font-black text-on-surface font-headline">{t('admin.users.title')}</span>
-          <span className="text-sm text-on-surface-variant font-mono">{t('admin.users.count', { count: total })}</span>
+      <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
+        <div className="flex items-center gap-2 md:gap-4">
+          <span className="text-base md:text-lg font-black text-on-surface font-headline">{t('admin.users.title')}</span>
+          <span className="text-xs md:text-sm text-on-surface-variant font-mono">{t('admin.users.count', { count: total })}</span>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
-            <span className="material-symbols-outlined text-sm">download</span>
-            {t('admin.users.exportCsv')}
-          </button>
-        </div>
+        <button className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
+          <span className="material-symbols-outlined text-sm">download</span>
+          <span className="hidden md:inline">{t('admin.users.exportCsv')}</span>
+          <span className="md:hidden">CSV</span>
+        </button>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Main Table Area */}
-        <div className="flex-1 flex flex-col p-8 overflow-hidden">
+        <div className="flex-1 flex flex-col p-4 md:p-8 overflow-hidden">
           {/* Filters */}
-          <div className="flex items-center gap-4 mb-6">
+          <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4 md:mb-6">
             <form onSubmit={handleSearch} className="flex-1 relative">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm">search</span>
               <input
@@ -188,7 +337,7 @@ export default function AdminUsers() {
                 onChange={e => setSearch(e.target.value)}
               />
             </form>
-            <div className="flex rounded overflow-hidden border border-outline-variant/15">
+            <div className="flex rounded overflow-hidden border border-outline-variant/15 shrink-0">
               {[
                 { value: '', label: t('admin.users.filter.all') },
                 { value: 'pending', label: t('admin.users.filter.pending') },
@@ -198,7 +347,7 @@ export default function AdminUsers() {
                 <button
                   key={opt.value}
                   onClick={() => { setStatusFilter(opt.value); setPage(1); }}
-                  className={`px-4 py-2 text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
+                  className={`flex-1 md:flex-none px-3 md:px-4 py-2 text-xs md:text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
                     statusFilter === opt.value
                       ? 'bg-primary/15 text-primary'
                       : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
@@ -210,8 +359,8 @@ export default function AdminUsers() {
             </div>
           </div>
 
-          {/* Table */}
-          <div className="flex-1 overflow-y-auto">
+          {/* Desktop Table */}
+          <div className="hidden md:block flex-1 overflow-y-auto">
             <table className="w-full">
               <thead className="sticky top-0 bg-surface-container-lowest">
                 <tr className="text-left text-sm uppercase tracking-widest text-on-surface-variant">
@@ -244,24 +393,8 @@ export default function AdminUsers() {
                     <td className="py-3 px-4 text-sm text-on-surface-variant font-mono">
                       {new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                     </td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 text-sm font-bold uppercase tracking-wider rounded ${
-                        user.role === 'admin' ? 'bg-primary/15 text-primary' : 'bg-surface-container text-on-surface-variant'
-                      }`}>
-                        {user.role === 'admin' ? 'Admin' : 'User'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-0.5 text-sm font-bold uppercase tracking-wider rounded ${
-                        user.status === 'active'
-                          ? 'bg-success/15 text-success'
-                          : user.status === 'pending'
-                          ? 'bg-warning/15 text-warning'
-                          : 'bg-error/15 text-error'
-                      }`}>
-                        {user.status === 'active' ? 'Active' : user.status === 'pending' ? 'Pending' : 'Suspended'}
-                      </span>
-                    </td>
+                    <td className="py-3 px-4"><RoleBadge role={user.role} /></td>
+                    <td className="py-3 px-4"><StatusBadge status={user.status} /></td>
                     <td className="py-3 px-4 text-right text-sm text-on-surface font-mono">{formatTokens(user.total_tokens)}</td>
                     <td className="py-3 px-4 text-right text-sm text-on-surface-variant">{user.file_count}</td>
                   </tr>
@@ -275,17 +408,51 @@ export default function AdminUsers() {
             </table>
           </div>
 
+          {/* Mobile Card List */}
+          <div className="md:hidden flex-1 overflow-y-auto -mx-4 px-4 space-y-2">
+            {users.map(user => (
+              <div
+                key={user.id}
+                className={`bg-surface-container rounded-lg p-3 active:bg-surface-container-high transition-colors cursor-pointer ${selectedUser?.id === user.id ? 'ring-1 ring-primary/30' : ''}`}
+                onClick={() => selectUser(user.id)}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center text-sm font-black text-primary shrink-0">
+                    {(user.display_name || user.email)[0].toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-on-surface truncate">{user.display_name || user.email.split('@')[0]}</p>
+                      <RoleBadge role={user.role} />
+                    </div>
+                    <p className="text-xs text-on-surface-variant font-mono truncate">{user.email}</p>
+                  </div>
+                  <StatusBadge status={user.status} />
+                </div>
+                <div className="flex items-center gap-4 mt-2 ml-[52px] text-[11px] text-on-surface-variant">
+                  <span className="font-mono">{formatTokens(user.total_tokens)} tokens</span>
+                  <span>{user.file_count} {t('admin.users.table.files')}</span>
+                  <span className="ml-auto font-mono">{new Date(user.created_at).toLocaleDateString('zh-TW')}</span>
+                </div>
+              </div>
+            ))}
+            {users.length === 0 && (
+              <div className="py-12 text-center text-on-surface-variant text-sm">{t('admin.users.table.empty')}</div>
+            )}
+          </div>
+
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between pt-4 border-t border-outline-variant/10 mt-4">
-              <span className="text-sm text-on-surface-variant">
+              <span className="text-xs md:text-sm text-on-surface-variant hidden md:block">
                 {t('admin.users.pagination.summary', { start: (page - 1) * limit + 1, end: Math.min(page * limit, total), total })}
               </span>
+              <span className="text-xs text-on-surface-variant md:hidden">{page}/{totalPages}</span>
               <div className="flex gap-1">
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="px-3 py-1.5 text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer hover:bg-surface-container-high transition-colors"
+                  className="px-2.5 md:px-3 py-1.5 text-xs md:text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer hover:bg-surface-container-high transition-colors"
                 >
                   {t('common.prev')}
                 </button>
@@ -293,7 +460,7 @@ export default function AdminUsers() {
                   <button
                     key={p}
                     onClick={() => setPage(p)}
-                    className={`px-3 py-1.5 text-sm rounded cursor-pointer transition-colors ${
+                    className={`px-2.5 md:px-3 py-1.5 text-xs md:text-sm rounded cursor-pointer transition-colors ${
                       page === p
                         ? 'bg-primary/15 text-primary font-bold'
                         : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
@@ -305,7 +472,7 @@ export default function AdminUsers() {
                 <button
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="px-3 py-1.5 text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer hover:bg-surface-container-high transition-colors"
+                  className="px-2.5 md:px-3 py-1.5 text-xs md:text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer hover:bg-surface-container-high transition-colors"
                 >
                   {t('common.next')}
                 </button>
@@ -314,169 +481,54 @@ export default function AdminUsers() {
           )}
         </div>
 
-        {/* User Detail Sidebar */}
+        {/* Desktop User Detail Sidebar */}
         {selectedUser && (
-          <div className="w-[320px] bg-surface-container-low border-l border-outline-variant/10 flex flex-col">
-            {/* Header: Avatar + Name + Close */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-outline-variant/10">
-              <div className="w-9 h-9 rounded-lg bg-primary/15 flex items-center justify-center text-sm font-black text-primary shrink-0">
-                {(selectedUser.display_name || selectedUser.email).slice(0, 2).toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-bold text-on-surface truncate">{selectedUser.display_name || selectedUser.email.split('@')[0]}</h3>
-                <p className="text-xs text-on-surface-variant truncate">{selectedUser.email}</p>
-              </div>
-              <button
-                onClick={() => setSelectedUser(null)}
-                className="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-container-high transition-colors bg-transparent cursor-pointer shrink-0"
-              >
-                <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
-              </button>
-            </div>
-
-            {/* Info Row: Status + Role + Registered */}
-            <div className="px-4 py-3 flex items-center gap-2 text-xs border-b border-outline-variant/10">
-              <span className={`px-2 py-0.5 rounded font-bold uppercase ${
-                selectedUser.status === 'active' ? 'bg-success/10 text-success' : selectedUser.status === 'pending' ? 'bg-warning/10 text-warning' : 'bg-error/10 text-error'
-              }`}>
-                {selectedUser.status === 'active' ? 'Active' : selectedUser.status === 'pending' ? 'Pending' : 'Suspended'}
-              </span>
-              <span className={`px-2 py-0.5 rounded font-bold uppercase ${
-                selectedUser.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-surface-container-high text-on-surface-variant'
-              }`}>
-                {selectedUser.role === 'admin' ? 'Admin' : 'User'}
-              </span>
-              <span className="text-on-surface-variant ml-auto">{new Date(selectedUser.created_at).toLocaleDateString('zh-TW')}</span>
-            </div>
-
-            {/* Role Toggle */}
-            <div className="px-4 py-3 border-b border-outline-variant/10">
-              <div className="flex items-center gap-2">
-                <span className="text-xs uppercase tracking-wider text-on-surface-variant font-bold">{t('admin.users.detail.roleLabel')}</span>
-                <div className="flex rounded overflow-hidden border border-outline-variant/15 ml-auto">
-                  {(['user', 'admin'] as const).map(r => (
-                    <button
-                      key={r}
-                      onClick={() => changeRole(selectedUser.id, r)}
-                      disabled={actionLoading || selectedUser.role === r}
-                      className={`px-3 py-1 text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors disabled:cursor-default ${
-                        selectedUser.role === r
-                          ? r === 'admin' ? 'bg-primary/15 text-primary' : 'bg-surface-container-high text-on-surface'
-                          : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
-                      }`}
-                    >
-                      {r === 'admin' ? 'Admin' : 'User'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Token Stats — Compact */}
-            <div className="px-4 py-3 border-b border-outline-variant/10">
-              <div className="flex items-center justify-between text-xs">
-                <span className="uppercase tracking-wider text-on-surface-variant font-bold">{t('admin.users.detail.tokenUsage')}</span>
-                <span className="text-on-surface-variant">{selectedUser.tokenStats.invocation_count} calls</span>
-              </div>
-              <div className="flex gap-4 mt-2">
-                <div>
-                  <span className="text-xs text-on-surface-variant">{t('admin.users.detail.tokenInput')} </span>
-                  <span className="text-sm font-bold text-on-surface">{formatTokens(selectedUser.tokenStats.total_input)}</span>
-                </div>
-                <div>
-                  <span className="text-xs text-on-surface-variant">{t('admin.users.detail.tokenOutput')} </span>
-                  <span className="text-sm font-bold text-on-surface">{formatTokens(selectedUser.tokenStats.total_output)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Recent Files — Max 3 */}
-            <div className="px-4 py-3 border-b border-outline-variant/10 flex-1 min-h-0">
-              <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold mb-2">{t('admin.users.detail.recentFiles')}</p>
-              {selectedUser.recentFiles.length === 0 ? (
-                <p className="text-xs text-on-surface-variant">{t('admin.users.detail.noFiles')}</p>
-              ) : (
-                <div className="space-y-0.5">
-                  {selectedUser.recentFiles.slice(0, 5).map(f => (
-                    <div key={f.id} className="flex items-center gap-1.5 text-xs py-1 rounded">
-                      <span className="material-symbols-outlined text-xs text-on-surface-variant shrink-0">draft</span>
-                      <span className="flex-1 text-on-surface truncate">{f.filename}</span>
-                      <span className="text-on-surface-variant shrink-0">{formatFileSize(f.file_size)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Actions — Compact */}
-            <div className="px-4 py-3">
-              {selectedUser.status === 'pending' ? (
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => toggleUserStatus(selectedUser.id, 'active')}
-                    disabled={actionLoading}
-                    className="flex-1 py-1.5 bg-success/10 text-success text-xs font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    {t('admin.users.detail.approve')}
-                  </button>
-                  <button
-                    onClick={() => toggleUserStatus(selectedUser.id, 'suspended')}
-                    disabled={actionLoading}
-                    className="flex-1 py-1.5 bg-error/10 text-error text-xs font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    {t('admin.users.detail.reject')}
-                  </button>
-                </div>
-              ) : selectedUser.status === 'active' ? (
-                <button
-                  onClick={() => toggleUserStatus(selectedUser.id, 'suspended')}
-                  disabled={actionLoading}
-                  className="w-full py-1.5 bg-error/10 text-error text-xs font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {t('admin.users.detail.suspend')}
-                </button>
-              ) : (
-                <button
-                  onClick={() => toggleUserStatus(selectedUser.id, 'active')}
-                  disabled={actionLoading}
-                  className="w-full py-1.5 bg-success/10 text-success text-xs font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {t('admin.users.detail.activate')}
-                </button>
-              )}
-              <button
-                onClick={() => setDeleteConfirm({ id: selectedUser.id, email: selectedUser.email })}
-                className="w-full mt-2 py-1.5 border border-error/30 text-error/70 text-xs font-bold uppercase tracking-wider rounded hover:bg-error/10 hover:text-error transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <span className="material-symbols-outlined text-xs">delete_forever</span>
-                {t('admin.users.detail.delete')}
-              </button>
-            </div>
+          <div className="hidden md:flex w-[320px] bg-surface-container-low border-l border-outline-variant/10 flex-col">
+            {renderDetail(selectedUser, () => setSelectedUser(null))}
           </div>
         )}
       </div>
+
+      {/* Mobile User Detail Overlay */}
+      {selectedUser && (
+        <div className="md:hidden fixed inset-0 z-50 flex flex-col bg-surface-container-lowest animate-[slideDown_0.2s_ease-out]">
+          {/* Mobile detail top bar */}
+          <div className="h-14 flex items-center gap-3 px-4 border-b border-outline-variant/10 bg-surface-dim shrink-0">
+            <button
+              onClick={() => setSelectedUser(null)}
+              className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface-variant cursor-pointer"
+            >
+              <span className="material-symbols-outlined">arrow_back</span>
+            </button>
+            <span className="text-sm font-bold text-on-surface font-headline">{t('admin.users.detail.title' as any) || t('admin.users.title')}</span>
+          </div>
+          <div className="flex-1 overflow-y-auto flex flex-col">
+            {renderDetail(selectedUser, () => setSelectedUser(null))}
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-surface-container w-full max-w-md mx-4 rounded-lg shadow-2xl border border-outline-variant/10 overflow-hidden">
-            <div className="p-6">
+            <div className="p-4 md:p-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-error/15 flex items-center justify-center shrink-0">
                   <span className="material-symbols-outlined text-error">warning</span>
                 </div>
-                <h3 className="text-lg font-headline font-bold text-on-surface">{t('admin.users.deleteModal.title')}</h3>
+                <h3 className="text-base md:text-lg font-headline font-bold text-on-surface">{t('admin.users.deleteModal.title')}</h3>
               </div>
               <p className="text-sm text-on-surface-variant mb-2">
                 {t('admin.users.deleteModal.warning')}
               </p>
               <div className="bg-surface-container-highest rounded p-3 mb-4">
                 <p className="text-sm font-mono text-on-surface font-bold">{deleteConfirm.email}</p>
-                <p className="text-sm text-on-surface-variant mt-0.5">ID: {deleteConfirm.id.slice(0, 8)}...</p>
+                <p className="text-xs text-on-surface-variant mt-0.5">ID: {deleteConfirm.id.slice(0, 8)}...</p>
               </div>
-              <div className="bg-error/5 border border-error/15 rounded p-3 text-sm text-error/90">
+              <div className="bg-error/5 border border-error/15 rounded p-3 text-xs md:text-sm text-error/90">
                 <p className="font-bold mb-1">{t('admin.users.deleteModal.irreversible')}</p>
-                <ul className="list-disc list-inside space-y-0.5 text-sm">
+                <ul className="list-disc list-inside space-y-0.5">
                   <li>{t('admin.users.deleteModal.itemAccount')}</li>
                   <li>{t('admin.users.deleteModal.itemConversations')}</li>
                   <li>{t('admin.users.deleteModal.itemFiles')}</li>
@@ -485,18 +537,18 @@ export default function AdminUsers() {
                 </ul>
               </div>
             </div>
-            <div className="flex gap-3 px-6 pb-6">
+            <div className="flex gap-3 px-4 pb-4 md:px-6 md:pb-6">
               <button
                 onClick={() => setDeleteConfirm(null)}
                 disabled={deleteLoading}
-                className="flex-1 py-2.5 px-4 bg-surface-container-high text-on-surface-variant text-sm font-bold uppercase tracking-wider rounded hover:bg-surface-variant transition-colors cursor-pointer disabled:opacity-50"
+                className="flex-1 py-2 md:py-2.5 px-4 bg-surface-container-high text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider rounded hover:bg-surface-variant transition-colors cursor-pointer disabled:opacity-50"
               >
                 {t('common.cancel')}
               </button>
               <button
                 onClick={() => deleteUser(deleteConfirm.id)}
                 disabled={deleteLoading}
-                className="flex-1 py-2.5 px-4 bg-error text-on-error text-sm font-bold uppercase tracking-wider rounded hover:bg-error/90 transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 py-2 md:py-2.5 px-4 bg-error text-on-error text-xs md:text-sm font-bold uppercase tracking-wider rounded hover:bg-error/90 transition-colors cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {deleteLoading ? (
                   t('admin.users.deleteModal.deleting')

@@ -60,7 +60,7 @@ export default function AdminSidebar() {
 
       {/* ===== Mobile Dropdown Nav ===== */}
       {mobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-40" onClick={() => setMobileMenuOpen(false)}>
+        <div className="md:hidden fixed inset-0 z-[45]" onClick={() => setMobileMenuOpen(false)}>
           <div
             className="absolute top-14 left-0 right-0 bg-surface-dim border-b border-outline-variant/10 shadow-lg animate-[slideDown_0.2s_ease-out] max-h-[calc(100svh-3.5rem)] overflow-y-auto"
             onClick={e => e.stopPropagation()}
