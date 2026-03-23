@@ -437,6 +437,7 @@ function ChatContent() {
   const [thinkingText, setThinkingText] = useState('');
   const [tools, setTools] = useState<ToolActivity[]>([]);
   const [files, setFiles] = useState<GeneratedFile[]>([]);
+  const [latestFiles, setLatestFiles] = useState<GeneratedFile[]>([]);
   const [title, setTitle] = useState('');
   const [skillId, setSkillId] = useState('');
   const [elapsed, setElapsed] = useState(0);
@@ -634,6 +635,7 @@ function ChatContent() {
     setPanelCollapsed(false);
     setAgentTasks([]);
     setAttachedFiles([]);
+    setLatestFiles([]);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -718,6 +720,8 @@ function ChatContent() {
             }
             if (event.type === 'file_generated') {
               const newFiles = event.data as GeneratedFile[];
+              // Track latest generation for inline preview
+              setLatestFiles(prev => [...prev, ...newFiles]);
               // Deduplicate: replace older versions of same file_path, keep latest
               setFiles(prev => {
                 const updated = [...prev];
@@ -1329,10 +1333,10 @@ function ChatContent() {
               </div>
             )}
 
-            {/* Inline File Preview */}
-            {files.length > 0 && !streaming && (
+            {/* Inline File Preview — only show files from latest generation */}
+            {latestFiles.length > 0 && !streaming && (
               <div className="max-w-full md:max-w-[85%] space-y-3 ml-0 md:ml-13">
-                {files.map(file => (
+                {latestFiles.map(file => (
                   <div key={file.id} className="bg-surface-container-low rounded-xl border border-outline-variant/10 overflow-visible">
                     {/* HTML slides — iframe preview */}
                     {file.file_type === 'html' && (
