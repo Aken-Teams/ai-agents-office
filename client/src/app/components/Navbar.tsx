@@ -295,8 +295,8 @@ export default function Navbar() {
       {/* Mobile Top Bar */}
       <header className="md:hidden fixed top-0 left-0 right-0 h-14 bg-surface-dim border-b border-outline-variant/10 flex items-center justify-between px-4 z-50">
         <Link href="/dashboard" className="flex items-center gap-2 no-underline">
-          <div className="w-7 h-7 bg-primary/20 flex items-center justify-center rounded-lg">
-            <span className="material-symbols-outlined text-primary text-sm">terminal</span>
+          <div className="w-8 h-8 bg-primary/20 flex items-center justify-center rounded-lg">
+            <span className="material-symbols-outlined text-primary" style={{ fontSize: 16 }}>terminal</span>
           </div>
           <span className="font-headline text-base font-bold tracking-tighter text-on-surface">AI Agents Office</span>
         </Link>
@@ -376,145 +376,149 @@ export default function Navbar() {
               </div>
 
               {/* Expandable Settings */}
-              {mobileUserExpanded && (
-                <div className="border-t border-outline-variant/10 animate-[slideDown_0.15s_ease-out]">
-                  {/* Change Password */}
-                  <div className="px-5 py-2.5 border-b border-outline-variant/10">
-                    {!showPasswordForm ? (
-                      <button
-                        onClick={() => setShowPasswordForm(true)}
-                        className="flex items-center gap-2 text-sm text-on-surface-variant active:text-on-surface transition-colors w-full bg-transparent cursor-pointer py-1"
-                      >
-                        <span className="material-symbols-outlined text-sm">lock</span>
-                        {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
-                      </button>
-                    ) : (
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between mb-1">
-                          <p className="text-xs font-bold text-on-surface">
-                            {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
-                          </p>
-                          <button onClick={() => { setShowPasswordForm(false); setPasswordError(''); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }} className="text-on-surface-variant active:text-on-surface cursor-pointer bg-transparent p-0">
-                            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+              <div className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${mobileUserExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                <div className="overflow-hidden">
+                  <div className="border-t border-outline-variant/10">
+                    {/* Change Password */}
+                    <div className="px-5 py-2.5 border-b border-outline-variant/10">
+                      {!showPasswordForm ? (
+                        <button
+                          onClick={() => setShowPasswordForm(true)}
+                          className="flex items-center gap-2 text-sm text-on-surface-variant active:text-on-surface transition-colors w-full bg-transparent cursor-pointer py-1"
+                        >
+                          <span className="material-symbols-outlined text-sm">lock</span>
+                          {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
+                        </button>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-xs font-bold text-on-surface">
+                              {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
+                            </p>
+                            <button onClick={() => { setShowPasswordForm(false); setPasswordError(''); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }} className="text-on-surface-variant active:text-on-surface cursor-pointer bg-transparent p-0">
+                              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+                            </button>
+                          </div>
+                          {!isOAuthOnly && (
+                            <input
+                              type="password"
+                              placeholder={t('userMenu.changePassword.current')}
+                              value={currentPassword}
+                              onChange={e => setCurrentPassword(e.target.value)}
+                              className="w-full px-2.5 py-1.5 bg-surface-container-high border border-outline-variant/20 rounded text-[13px] text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
+                            />
+                          )}
+                          <input type="password" placeholder={t('userMenu.changePassword.new')} value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full px-2.5 py-1.5 bg-surface-container-high border border-outline-variant/20 rounded text-[13px] text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary" />
+                          <input type="password" placeholder={t('userMenu.changePassword.confirm')} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full px-2.5 py-1.5 bg-surface-container-high border border-outline-variant/20 rounded text-[13px] text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary" />
+                          {passwordError && <p className="text-xs text-error">{passwordError}</p>}
+                          {passwordSuccess && <p className="text-xs text-success">{t('userMenu.changePassword.success')}</p>}
+                          <button onClick={handlePasswordChange} disabled={changingPassword || (!isOAuthOnly && !currentPassword) || !newPassword || !confirmPassword} className="w-full px-3 py-1.5 bg-primary text-on-primary text-xs font-medium rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                            {t('userMenu.changePassword.submit')}
                           </button>
                         </div>
-                        {!isOAuthOnly && (
-                          <input
-                            type="password"
-                            placeholder={t('userMenu.changePassword.current')}
-                            value={currentPassword}
-                            onChange={e => setCurrentPassword(e.target.value)}
-                            className="w-full px-2.5 py-1.5 bg-surface-container-high border border-outline-variant/20 rounded text-[13px] text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
-                          />
-                        )}
-                        <input type="password" placeholder={t('userMenu.changePassword.new')} value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full px-2.5 py-1.5 bg-surface-container-high border border-outline-variant/20 rounded text-[13px] text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary" />
-                        <input type="password" placeholder={t('userMenu.changePassword.confirm')} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full px-2.5 py-1.5 bg-surface-container-high border border-outline-variant/20 rounded text-[13px] text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary" />
-                        {passwordError && <p className="text-xs text-error">{passwordError}</p>}
-                        {passwordSuccess && <p className="text-xs text-success">{t('userMenu.changePassword.success')}</p>}
-                        <button onClick={handlePasswordChange} disabled={changingPassword || (!isOAuthOnly && !currentPassword) || !newPassword || !confirmPassword} className="w-full px-3 py-1.5 bg-primary text-on-primary text-xs font-medium rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                          {t('userMenu.changePassword.submit')}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Language */}
-                  <div className="px-5 py-3 border-b border-outline-variant/10">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="material-symbols-outlined text-sm text-on-surface-variant">language</span>
-                      <span className="text-sm font-medium text-on-surface">{t('userMenu.language')}</span>
+                      )}
                     </div>
-                    <div className="flex gap-1.5">
-                      {LOCALE_OPTIONS.map(opt => (
+
+                    {/* Language */}
+                    <div className="px-5 py-3 border-b border-outline-variant/10">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="material-symbols-outlined text-sm text-on-surface-variant">language</span>
+                        <span className="text-sm font-medium text-on-surface">{t('userMenu.language')}</span>
+                      </div>
+                      <div className="flex gap-1.5">
+                        {LOCALE_OPTIONS.map(opt => (
+                          <button
+                            key={opt.value}
+                            onClick={() => handleLocaleChange(opt.value)}
+                            className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all cursor-pointer ${
+                              locale === opt.value
+                                ? 'bg-primary/15 text-primary border border-primary/30'
+                                : 'bg-surface-container-high text-on-surface-variant active:text-on-surface border border-transparent'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Theme */}
+                    <div className="px-5 py-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="material-symbols-outlined text-sm text-on-surface-variant">palette</span>
+                        <span className="text-sm font-medium text-on-surface">{t('userMenu.theme')}</span>
+                      </div>
+                      <div className="flex gap-1.5">
                         <button
-                          key={opt.value}
-                          onClick={() => handleLocaleChange(opt.value)}
-                          className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all cursor-pointer ${
-                            locale === opt.value
+                          onClick={() => handleThemeChange('light')}
+                          className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-all cursor-pointer ${
+                            theme === 'light'
                               ? 'bg-primary/15 text-primary border border-primary/30'
                               : 'bg-surface-container-high text-on-surface-variant active:text-on-surface border border-transparent'
                           }`}
                         >
-                          {opt.label}
+                          <span className="material-symbols-outlined text-sm">light_mode</span>
+                          {t('userMenu.theme.light')}
                         </button>
-                      ))}
+                        <button
+                          onClick={() => handleThemeChange('dark')}
+                          className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-all cursor-pointer ${
+                            theme === 'dark'
+                              ? 'bg-primary/15 text-primary border border-primary/30'
+                              : 'bg-surface-container-high text-on-surface-variant active:text-on-surface border border-transparent'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-sm">dark_mode</span>
+                          {t('userMenu.theme.dark')}
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Theme */}
-                  <div className="px-5 py-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="material-symbols-outlined text-sm text-on-surface-variant">palette</span>
-                      <span className="text-sm font-medium text-on-surface">{t('userMenu.theme')}</span>
-                    </div>
-                    <div className="flex gap-1.5">
-                      <button
-                        onClick={() => handleThemeChange('light')}
-                        className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-all cursor-pointer ${
-                          theme === 'light'
-                            ? 'bg-primary/15 text-primary border border-primary/30'
-                            : 'bg-surface-container-high text-on-surface-variant active:text-on-surface border border-transparent'
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-sm">light_mode</span>
-                        {t('userMenu.theme.light')}
-                      </button>
-                      <button
-                        onClick={() => handleThemeChange('dark')}
-                        className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-all cursor-pointer ${
-                          theme === 'dark'
-                            ? 'bg-primary/15 text-primary border border-primary/30'
-                            : 'bg-surface-container-high text-on-surface-variant active:text-on-surface border border-transparent'
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-sm">dark_mode</span>
-                        {t('userMenu.theme.dark')}
-                      </button>
-                    </div>
+                    {/* Saved toast */}
+                    {saved && (
+                      <div className="px-5 py-2 bg-success/10 text-success text-xs font-medium text-center">
+                        {t('userMenu.saved')}
+                      </div>
+                    )}
                   </div>
-
-                  {/* Saved toast */}
-                  {saved && (
-                    <div className="px-5 py-2 bg-success/10 text-success text-xs font-medium text-center">
-                      {t('userMenu.saved')}
-                    </div>
-                  )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Nav Links — collapses when user settings expanded */}
-            <div className={`overflow-hidden transition-all duration-200 ease-in-out ${mobileUserExpanded ? 'max-h-0 opacity-0' : 'max-h-[500px] opacity-100'}`}>
-              <nav className="py-1 border-t border-outline-variant/10">
-                {NAV_LINKS.map(link => {
-                  const isActive = pathname === link.href;
-                  return (
+            <div className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${mobileUserExpanded ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'}`}>
+              <div className="overflow-hidden">
+                <nav className="py-1 border-t border-outline-variant/10">
+                  {NAV_LINKS.map(link => {
+                    const isActive = pathname === link.href;
+                    return (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={`flex items-center gap-3 px-5 py-3.5 no-underline transition-colors ${
+                          isActive
+                            ? 'text-primary bg-primary/5'
+                            : 'text-on-surface-variant active:bg-surface-container'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-xl">{link.icon}</span>
+                        <span className="text-sm font-headline font-bold">{t(link.labelKey)}</span>
+                      </Link>
+                    );
+                  })}
+                  {user.role === 'admin' && (
                     <Link
-                      key={link.href}
-                      href={link.href}
+                      href="/admin/overview"
                       onClick={() => setMobileMenuOpen(false)}
-                      className={`flex items-center gap-3 px-5 py-3.5 no-underline transition-colors ${
-                        isActive
-                          ? 'text-primary bg-primary/5'
-                          : 'text-on-surface-variant active:bg-surface-container'
-                      }`}
+                      className="flex items-center gap-3 px-5 py-3.5 no-underline text-primary active:bg-primary/10 transition-colors"
                     >
-                      <span className="material-symbols-outlined text-xl">{link.icon}</span>
-                      <span className="text-sm font-headline font-bold">{t(link.labelKey)}</span>
+                      <span className="material-symbols-outlined text-xl">admin_panel_settings</span>
+                      <span className="text-sm font-headline font-bold">{t('nav.switchToAdmin' as any)}</span>
                     </Link>
-                  );
-                })}
-                {user.role === 'admin' && (
-                  <Link
-                    href="/admin/overview"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-5 py-3.5 no-underline text-primary active:bg-primary/10 transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-xl">admin_panel_settings</span>
-                    <span className="text-sm font-headline font-bold">{t('nav.switchToAdmin' as any)}</span>
-                  </Link>
-                )}
-              </nav>
+                  )}
+                </nav>
+              </div>
             </div>
 
             {/* Developer Footer */}
