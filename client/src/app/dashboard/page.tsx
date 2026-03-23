@@ -231,7 +231,7 @@ function DashboardContent() {
         </header>
 
         {/* ===== Mobile Dashboard (md:hidden) ===== */}
-        <div className="md:hidden px-4 pt-5 pb-24 space-y-5">
+        <div className="md:hidden px-4 pt-5 pb-36 space-y-5">
           {/* Greeting */}
           <div className="px-1">
             <h2 className="text-2xl font-headline font-bold text-on-surface leading-tight">
@@ -267,7 +267,7 @@ function DashboardContent() {
         </div>
 
         {/* Mobile fixed bottom input bar */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-outline-variant/10 bg-surface-container-lowest px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-outline-variant/10 bg-surface-container-lowest px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <input
             ref={mobileFileRef}
             type="file"

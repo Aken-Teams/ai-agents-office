@@ -19,7 +19,7 @@ export function useSidebarCollapsed() {
   return collapsed;
 }
 
-/** Tailwind class for main content margin (hidden on mobile, top bar offset) */
+/** Tailwind class for main content margin (top bar on mobile, sidebar on desktop) */
 export function useSidebarMargin() {
   const collapsed = useSidebarCollapsed();
   return collapsed ? 'ml-0 md:ml-[68px] pt-14 md:pt-0' : 'ml-0 md:ml-64 pt-14 md:pt-0';

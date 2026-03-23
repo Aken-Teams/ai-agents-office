@@ -291,30 +291,53 @@ export default function Navbar() {
   return (
     <>
       {/* Mobile Top Bar */}
-      <header className="md:hidden fixed top-0 left-0 right-0 h-14 bg-surface-dim border-b border-outline-variant/10 flex items-center px-4 gap-3 z-50">
-        <button
-          onClick={() => setMobileMenuOpen(v => !v)}
-          className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface-variant cursor-pointer"
-        >
-          <span className="material-symbols-outlined">{mobileMenuOpen ? 'close' : 'menu'}</span>
-        </button>
+      <header className="md:hidden fixed top-0 left-0 right-0 h-14 bg-surface-dim border-b border-outline-variant/10 flex items-center justify-between px-4 z-50">
         <Link href="/dashboard" className="flex items-center gap-2 no-underline">
           <div className="w-7 h-7 bg-primary/20 flex items-center justify-center rounded-lg">
             <span className="material-symbols-outlined text-primary text-sm">terminal</span>
           </div>
           <span className="font-headline text-base font-bold tracking-tighter text-on-surface">AI Agents Office</span>
         </Link>
+        <button
+          onClick={() => setMobileMenuOpen(v => !v)}
+          className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface-variant cursor-pointer"
+        >
+          <span className="material-symbols-outlined">{mobileMenuOpen ? 'close' : 'menu'}</span>
+        </button>
       </header>
 
-      {/* Mobile Backdrop */}
+      {/* Mobile Dropdown Nav */}
       {mobileMenuOpen && (
-        <div
-          className="md:hidden fixed inset-0 bg-black/40 z-40"
-          onClick={() => setMobileMenuOpen(false)}
-        />
+        <div className="md:hidden fixed inset-0 z-40" onClick={() => setMobileMenuOpen(false)}>
+          <div
+            className="absolute top-14 left-0 right-0 bg-surface-dim border-b border-outline-variant/10 shadow-lg animate-[slideDown_0.2s_ease-out]"
+            onClick={e => e.stopPropagation()}
+          >
+            <nav className="py-2">
+              {NAV_LINKS.map(link => {
+                const isActive = pathname === link.href;
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex items-center gap-3 px-5 py-3.5 no-underline transition-colors ${
+                      isActive
+                        ? 'text-primary bg-primary/5'
+                        : 'text-on-surface-variant active:bg-surface-container'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-xl">{link.icon}</span>
+                    <span className="text-sm font-headline font-bold">{t(link.labelKey)}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+        </div>
       )}
 
-      <aside className={`h-screen fixed left-0 top-0 bg-surface-dim flex flex-col py-6 font-headline text-sm tracking-tight z-50 border-r border-outline-variant/10 transition-all duration-300 ${collapsed ? 'w-[68px]' : 'w-64'} max-md:w-64 ${mobileMenuOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'}`}>
+      <aside className={`hidden md:flex h-screen fixed left-0 top-0 bg-surface-dim flex-col py-6 font-headline text-sm tracking-tight z-50 border-r border-outline-variant/10 transition-all duration-300 ${collapsed ? 'w-[68px]' : 'w-64'}`}>
         {/* Logo */}
         <div className={`mb-8 ${collapsed ? 'px-3' : 'px-6'}`}>
           <Link href="/dashboard" className="flex items-center gap-3 no-underline">
