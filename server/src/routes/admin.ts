@@ -46,13 +46,13 @@ router.get('/overview/token-velocity', async (req: Request, res: Response) => {
 
   const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`
     SELECT
-      DATE(created_at) as date,
+      DATE_FORMAT(created_at, '%Y-%m-%d') as date,
       SUM(input_tokens) as total_input,
       SUM(output_tokens) as total_output,
       COUNT(*) as invocation_count
     FROM token_usage
     WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
-    GROUP BY DATE(created_at)
+    GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
     ORDER BY date ASC
   `);
 
@@ -357,13 +357,13 @@ router.get('/tokens/chart', async (req: Request, res: Response) => {
 
   const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`
     SELECT
-      DATE(created_at) as date,
+      DATE_FORMAT(created_at, '%Y-%m-%d') as date,
       SUM(input_tokens) as total_input,
       SUM(output_tokens) as total_output,
       COUNT(*) as invocation_count
     FROM token_usage
     WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
-    GROUP BY DATE(created_at)
+    GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
     ORDER BY date ASC
   `);
 

@@ -38,7 +38,7 @@ export async function getUserUsageSummary(
 }>> {
   let query = `
     SELECT
-      DATE(created_at) as date,
+      DATE_FORMAT(created_at, '%Y-%m-%d') as date,
       SUM(input_tokens) as total_input,
       SUM(output_tokens) as total_output,
       COUNT(*) as invocation_count
@@ -56,7 +56,7 @@ export async function getUserUsageSummary(
     params.push(to);
   }
 
-  query += ' GROUP BY DATE(created_at) ORDER BY date DESC';
+  query += ' GROUP BY DATE_FORMAT(created_at, \'%Y-%m-%d\') ORDER BY date DESC';
 
   return await dbAll(query, ...params);
 }

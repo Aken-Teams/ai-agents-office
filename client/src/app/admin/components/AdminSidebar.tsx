@@ -25,14 +25,32 @@ export default function AdminSidebar() {
     if (typeof window !== 'undefined') return localStorage.getItem(ADMIN_SIDEBAR_KEY) === '1';
     return false;
   });
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(ADMIN_SIDEBAR_KEY, collapsed ? '1' : '0');
     window.dispatchEvent(new CustomEvent('admin-sidebar-toggle', { detail: collapsed }));
   }, [collapsed]);
 
+  // Listen for mobile sidebar toggle
+  useEffect(() => {
+    const handler = () => setMobileOpen(v => !v);
+    window.addEventListener('admin-mobile-sidebar-toggle', handler);
+    return () => window.removeEventListener('admin-mobile-sidebar-toggle', handler);
+  }, []);
+
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
   return (
-    <aside className={`h-screen fixed left-0 top-0 bg-surface-container-lowest flex flex-col py-6 font-headline text-sm tracking-tight z-50 border-r border-outline-variant/10 transition-all duration-300 ${collapsed ? 'w-[68px]' : 'w-64'}`}>
+    <>
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setMobileOpen(false)} />
+      )}
+      <aside className={`h-screen fixed left-0 top-0 bg-surface-container-lowest flex flex-col py-6 font-headline text-sm tracking-tight z-50 border-r border-outline-variant/10 transition-all duration-300 ${collapsed ? 'w-[68px]' : 'w-64'} max-md:w-64 ${mobileOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'}`}>
       {/* Header */}
       <div className={`mb-2 ${collapsed ? 'px-3' : 'px-6'}`}>
         <Link href="/admin/overview" className="flex items-center gap-3 no-underline">
@@ -145,5 +163,6 @@ export default function AdminSidebar() {
         </div>
       </div>
     </aside>
+    </>
   );
 }

@@ -35,7 +35,7 @@ function AdminShell({ children }: { children: React.ReactNode }) {
     <I18nProvider initialLocale={user?.locale} initialTheme={user?.theme}>
       <div className="min-h-screen bg-surface-container-lowest">
         <AdminSidebar />
-        <main className={`min-h-screen flex flex-col transition-all duration-300 ${collapsed ? 'ml-[68px]' : 'ml-64'}`}>
+        <main className={`min-h-screen flex flex-col transition-all duration-300 ${collapsed ? 'md:ml-[68px]' : 'md:ml-64'}`}>
           {children}
         </main>
       </div>

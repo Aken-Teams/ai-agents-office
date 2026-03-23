@@ -183,31 +183,41 @@ export default function AdminTokens() {
                 ))}
               </div>
             </div>
-            <div className="p-6">
+            <div className="p-4 md:p-6">
               {chart.length === 0 ? (
-                <div className="h-48 flex items-center justify-center text-on-surface-variant text-sm">
+                <div className="h-40 flex items-center justify-center text-on-surface-variant text-sm">
                   <span className="material-symbols-outlined mr-2">info</span>{t('admin.tokens.chart.noData')}
                 </div>
               ) : (
-                <div className="flex items-end gap-2 h-48">
-                  {chart.map((v, i) => {
-                    const total = v.total_input + v.total_output;
-                    const pct = (total / maxChart) * 100;
-                    const barHeight = Math.max(pct, 4);
-                    return (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full group/bar">
-                        <span className="text-sm text-on-surface-variant opacity-0 group-hover/bar:opacity-100 transition-opacity font-mono font-bold">
-                          {formatTokens(total)}
-                        </span>
-                        <div className="flex-1 w-full flex items-end">
-                          <div className="w-full bg-primary/60 rounded-t transition-all" style={{ height: `${barHeight}%` }} />
+                <div>
+                  {/* Bars */}
+                  <div className={`flex items-end h-40 ${period === '30d' ? 'gap-px' : 'gap-1.5'}`}>
+                    {chart.map((v, i) => {
+                      const total = v.total_input + v.total_output;
+                      const pct = (total / maxChart) * 100;
+                      const barHeight = Math.max(pct, 3);
+                      return (
+                        <div key={i} className="flex-1 min-w-0 h-full flex items-end group/bar relative">
+                          <div className="w-full bg-primary/60 rounded-t transition-all group-hover/bar:brightness-125" style={{ height: `${barHeight}%` }} />
+                          {/* Tooltip inside chart area */}
+                          <span className="absolute top-0 left-1/2 -translate-x-1/2 text-[10px] bg-surface-container-highest text-on-surface px-1.5 py-0.5 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity font-mono font-bold whitespace-nowrap pointer-events-none z-10">
+                            {v.date.slice(5)} · {formatTokens(total)}
+                          </span>
                         </div>
-                        <span className="text-sm text-outline truncate w-full text-center">
-                          {v.date.split(' ')[0]?.slice(5) || v.date.slice(5)}
+                      );
+                    })}
+                  </div>
+                  {/* Date labels */}
+                  <div className={`flex mt-1.5 ${period === '30d' ? 'gap-px' : 'gap-1.5'}`}>
+                    {chart.map((v, i) => {
+                      const showLabel = period === '7d' || i % 3 === 0 || i === chart.length - 1;
+                      return (
+                        <span key={i} className={`flex-1 min-w-0 text-center ${period === '30d' ? 'text-[8px]' : 'text-xs'} text-outline font-mono truncate`}>
+                          {showLabel ? v.date.slice(5) : ''}
                         </span>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>

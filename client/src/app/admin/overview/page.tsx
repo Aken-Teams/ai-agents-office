@@ -90,16 +90,24 @@ export default function AdminOverview() {
   return (
     <>
       {/* Header */}
-      <header className="sticky top-0 h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
-        <div className="flex items-center gap-4">
-          <span className="text-lg font-black text-on-surface font-headline">{t('admin.overview.title')}</span>
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-primary/10 rounded-full">
+      <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
+        <div className="flex items-center gap-3">
+          <button
+            className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer"
+            onClick={() => window.dispatchEvent(new CustomEvent('admin-mobile-sidebar-toggle'))}
+          >
+            <span className="material-symbols-outlined">menu</span>
+          </button>
+          <span className="text-base md:text-lg font-black text-on-surface font-headline">{t('admin.overview.title')}</span>
+          <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-primary/10 rounded-full">
             <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
             <span className="text-sm text-primary font-bold tracking-widest uppercase">{t('admin.overview.allNodesNormal')}</span>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
+        <div className="flex items-center gap-2">
+          {/* Mobile: status dot only */}
+          <div className="md:hidden w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
+          <button className="hidden md:flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
             <span className="material-symbols-outlined text-sm">download</span>
             {t('admin.overview.exportReport')}
           </button>
@@ -107,71 +115,67 @@ export default function AdminOverview() {
       </header>
 
       {/* Content */}
-      <div className="p-8 flex-1 space-y-6">
+      <div className="p-4 md:p-8 flex-1 space-y-4 md:space-y-6">
         {/* Stat Cards */}
-        <div className="grid grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-6">
           {/* Total Users */}
-          <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>group</span>
-            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">{t('admin.overview.stats.totalUsers')}</p>
-            <div className="flex items-end gap-2">
-              <span className="text-4xl font-headline font-black text-on-surface">{stats?.totalUsers ?? '\u2014'}</span>
-            </div>
-            <p className="text-sm text-on-surface-variant mt-3 font-mono">{t('admin.overview.stats.totalUsersDesc')}</p>
+          <div className="bg-surface-container p-3 md:p-6 rounded-lg group relative overflow-hidden">
+            <span className="material-symbols-outlined absolute -bottom-2 -right-1 md:-bottom-4 md:-right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none text-[56px] md:text-[100px]">group</span>
+            <p className="text-[10px] md:text-sm uppercase tracking-widest text-on-surface-variant mb-1 md:mb-2">{t('admin.overview.stats.totalUsers')}</p>
+            <span className="text-xl md:text-4xl font-headline font-black text-on-surface">{stats?.totalUsers ?? '\u2014'}</span>
+            <p className="text-xs md:text-sm text-on-surface-variant mt-2 md:mt-3 font-mono hidden md:block">{t('admin.overview.stats.totalUsersDesc')}</p>
           </div>
 
           {/* Active Agents */}
-          <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>smart_toy</span>
-            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">{t('admin.overview.stats.activeAgents')}</p>
-            <div className="flex items-end gap-2">
-              <span className="text-4xl font-headline font-black text-on-surface">{stats?.activeSkills ?? '\u2014'}</span>
-              <div className="flex items-center gap-1 mb-1.5">
+          <div className="bg-surface-container p-3 md:p-6 rounded-lg group relative overflow-hidden">
+            <span className="material-symbols-outlined absolute -bottom-2 -right-1 md:-bottom-4 md:-right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none text-[56px] md:text-[100px]">smart_toy</span>
+            <p className="text-[10px] md:text-sm uppercase tracking-widest text-on-surface-variant mb-1 md:mb-2">{t('admin.overview.stats.activeAgents')}</p>
+            <div className="flex items-end gap-1.5">
+              <span className="text-xl md:text-4xl font-headline font-black text-on-surface">{stats?.activeSkills ?? '\u2014'}</span>
+              <div className="flex items-center gap-1 mb-0.5 md:mb-1.5">
                 <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
-                <span className="text-sm text-success font-bold">{t('admin.overview.stats.activeAgentsRunning')}</span>
+                <span className="text-xs md:text-sm text-success font-bold hidden md:inline">{t('admin.overview.stats.activeAgentsRunning')}</span>
               </div>
             </div>
-            <p className="text-sm text-on-surface-variant mt-3 font-mono">{t('admin.overview.stats.activeAgentsDesc')}</p>
+            <p className="text-xs md:text-sm text-on-surface-variant mt-2 md:mt-3 font-mono hidden md:block">{t('admin.overview.stats.activeAgentsDesc')}</p>
           </div>
 
           {/* Tokens Consumed */}
-          <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>token</span>
-            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">{t('admin.overview.stats.tokenConsumed')}</p>
-            <div className="flex items-end gap-2">
-              <span className="text-4xl font-headline font-black text-on-surface">{stats ? formatTokens(stats.totalTokens) : '\u2014'}</span>
-            </div>
-            <div className="mt-3 w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+          <div className="bg-surface-container p-3 md:p-6 rounded-lg group relative overflow-hidden">
+            <span className="material-symbols-outlined absolute -bottom-2 -right-1 md:-bottom-4 md:-right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none text-[56px] md:text-[100px]">token</span>
+            <p className="text-[10px] md:text-sm uppercase tracking-widest text-on-surface-variant mb-1 md:mb-2">{t('admin.overview.stats.tokenConsumed')}</p>
+            <span className="text-xl md:text-4xl font-headline font-black text-on-surface">{stats ? formatTokens(stats.totalTokens) : '\u2014'}</span>
+            <div className="mt-1.5 md:mt-3 w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
               <div className="h-full bg-gradient-to-r from-primary to-tertiary rounded-full" style={{ width: `${Math.min((stats?.totalTokens ?? 0) / 10_000_000 * 100, 100)}%` }} />
             </div>
           </div>
 
           {/* System Health */}
-          <div className="bg-surface-container p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>monitor_heart</span>
-            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">{t('admin.overview.stats.systemHealth')}</p>
-            <div className="flex items-end gap-2">
-              <span className="text-4xl font-headline font-black text-success">99.8%</span>
-            </div>
-            <p className="text-sm text-on-surface-variant mt-3 font-mono">{t('admin.overview.stats.uptime')} {stats ? formatUptime(stats.systemUptime) : '\u2014'}</p>
+          <div className="bg-surface-container p-3 md:p-6 rounded-lg group relative overflow-hidden">
+            <span className="material-symbols-outlined absolute -bottom-2 -right-1 md:-bottom-4 md:-right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none text-[56px] md:text-[100px]">monitor_heart</span>
+            <p className="text-[10px] md:text-sm uppercase tracking-widest text-on-surface-variant mb-1 md:mb-2">{t('admin.overview.stats.systemHealth')}</p>
+            <span className="text-xl md:text-4xl font-headline font-black text-success">99.8%</span>
+            <p className="text-[10px] md:text-sm text-on-surface-variant mt-1 md:mt-3 font-mono">{t('admin.overview.stats.uptime')} {stats ? formatUptime(stats.systemUptime) : '\u2014'}</p>
           </div>
         </div>
 
         {/* Two columns: Chart + Activity */}
-        <div className="grid grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
           {/* Token Velocity Chart */}
-          <div className="col-span-8 bg-surface-container rounded-lg overflow-hidden">
-            <div className="px-6 py-4 bg-surface-container-high flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-tertiary">show_chart</span>
-                <span className="text-sm font-bold uppercase tracking-widest">{t('admin.overview.chart.title')}</span>
+          <div className="md:col-span-8 bg-surface-container rounded-lg overflow-hidden">
+            <div className="px-4 md:px-6 py-3 md:py-4 bg-surface-container-high flex items-center justify-between">
+              <div className="flex items-center gap-2 md:gap-3">
+                <span className="material-symbols-outlined text-tertiary text-base md:text-[24px]">show_chart</span>
+                <span className="text-xs md:text-sm font-bold uppercase tracking-widest">{t('admin.overview.chart.title')}</span>
               </div>
               <div className="flex gap-1">
                 {(['7d', '30d'] as const).map(p => (
                   <button
                     key={p}
                     onClick={() => setPeriod(p)}
-                    className={`px-3 py-1 text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
+                    className={`px-2 md:px-3 py-0.5 md:py-1 text-xs md:text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
+                      p === '30d' ? 'hidden md:inline-block' : ''
+                    } ${
                       period === p
                         ? 'text-primary border-b-2 border-primary'
                         : 'text-on-surface-variant hover:text-on-surface'
@@ -182,66 +186,88 @@ export default function AdminOverview() {
                 ))}
               </div>
             </div>
-            <div className="p-6">
+            <div className="p-4 md:p-6">
               {velocity.length === 0 ? (
-                <div className="h-48 flex items-center justify-center text-on-surface-variant text-sm">
+                <div className="h-40 flex items-center justify-center text-on-surface-variant text-sm">
                   <span className="material-symbols-outlined mr-2">info</span>
                   {t('admin.overview.chart.noData')}
                 </div>
               ) : (
-                <div className="flex items-end gap-2 h-48">
-                  {velocity.map((v, i) => {
-                    const total = v.total_input + v.total_output;
-                    const pct = (total / maxTokens) * 100;
-                    const inputPct = total > 0 ? (v.total_input / total) * 100 : 0;
-                    const barHeight = Math.max(pct, 4);
-                    return (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full group/bar">
-                        <span className="text-sm text-on-surface-variant opacity-0 group-hover/bar:opacity-100 transition-opacity font-mono font-bold">
-                          {formatTokens(total)}
-                        </span>
-                        <div className="flex-1 w-full flex items-end">
-                          <div className="w-full rounded-t overflow-hidden relative" style={{ height: `${barHeight}%` }}>
+                <div>
+                  {/* Bars */}
+                  <div className={`flex items-end h-52 ${period === '30d' ? 'gap-px' : 'gap-1.5'}`}>
+                    {velocity.map((v, i) => {
+                      const total = v.total_input + v.total_output;
+                      const pct = (total / maxTokens) * 100;
+                      const inputPct = total > 0 ? (v.total_input / total) * 100 : 0;
+                      const barHeight = Math.max(pct, 3);
+                      return (
+                        <div key={i} className="flex-1 min-w-0 h-full flex items-end group/bar relative">
+                          <div className="w-full rounded-t overflow-hidden relative transition-all group-hover/bar:brightness-125" style={{ height: `${barHeight}%` }}>
                             <div className="absolute inset-0 bg-primary/70" style={{ top: `${100 - inputPct}%` }} />
                             <div className="absolute inset-0 bg-tertiary/50" style={{ bottom: `${inputPct}%` }} />
                           </div>
+                          {/* Tooltip inside chart area */}
+                          <span className="absolute top-0 left-1/2 -translate-x-1/2 text-[10px] bg-surface-container-highest text-on-surface px-1.5 py-0.5 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity font-mono font-bold whitespace-nowrap pointer-events-none z-10">
+                            {v.date.slice(5)} · {formatTokens(total)}
+                          </span>
                         </div>
-                        <span className="text-sm text-outline truncate w-full text-center">
-                          {v.date.split(' ')[0]?.slice(5) || v.date.slice(5)}
+                      );
+                    })}
+                  </div>
+                  {/* Date labels */}
+                  {period === '30d' ? (
+                    <div className="flex gap-px mt-4 h-14">
+                      {velocity.map((v, i) => (
+                        <div key={i} className="flex-1 min-w-0 relative">
+                          <span className="absolute top-0 left-1/2 -translate-x-1/2 origin-top -rotate-55 text-[11px] text-outline font-mono whitespace-nowrap">
+                            {v.date.slice(5)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex gap-1.5 mt-1.5">
+                      {velocity.map((v, i) => (
+                        <span key={i} className="flex-1 min-w-0 text-xs text-center text-outline font-mono truncate">
+                          {v.date.slice(5)}
                         </span>
-                      </div>
-                    );
-                  })}
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           </div>
 
           {/* Recent Activity */}
-          <div className="col-span-4 bg-surface-container rounded-lg overflow-hidden flex flex-col">
-            <div className="px-6 py-4 bg-surface-container-high flex items-center gap-3">
-              <span className="material-symbols-outlined text-on-surface-variant">history</span>
-              <span className="text-sm font-bold uppercase tracking-widest">{t('admin.overview.activity.title')}</span>
+          <div className="md:col-span-4 bg-surface-container rounded-lg overflow-hidden flex flex-col">
+            <div className="px-4 md:px-6 py-3 md:py-4 bg-surface-container-high flex items-center gap-2 md:gap-3">
+              <span className="material-symbols-outlined text-on-surface-variant text-base md:text-[24px]">history</span>
+              <span className="text-xs md:text-sm font-bold uppercase tracking-widest">{t('admin.overview.activity.title')}</span>
             </div>
             <div className="flex-1 overflow-y-auto">
               {activity.length === 0 ? (
-                <div className="p-6 text-center text-on-surface-variant text-sm">{t('admin.overview.activity.empty')}</div>
+                <div className="p-4 md:p-6 text-center text-on-surface-variant text-sm">{t('admin.overview.activity.empty')}</div>
               ) : (
-                <div className="p-4 space-y-0">
+                <div className="p-3 md:p-4 space-y-0">
                   {activity.map((evt, i) => {
                     const meta = EVENT_META[evt.event_type] || { icon: 'info', color: 'text-on-surface-variant', label: evt.event_type };
                     return (
-                      <div key={i} className="flex gap-3 py-3 border-b border-outline-variant/10 last:border-0">
+                      <div key={i} className="flex gap-2.5 md:gap-3 py-2 md:py-3 border-b border-outline-variant/10 last:border-0">
                         <div className="flex flex-col items-center">
-                          <div className={`w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center shrink-0`}>
+                          <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-surface-container-highest flex items-center justify-center shrink-0">
                             <span className={`material-symbols-outlined text-sm ${meta.color}`}>{meta.icon}</span>
                           </div>
-                          {i < activity.length - 1 && <div className="w-px flex-1 bg-outline-variant/10 mt-1" />}
+                          {i < activity.length - 1 && <div className="w-px flex-1 bg-outline-variant/10 mt-1 hidden md:block" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-on-surface">{meta.label}</p>
-                          <p className="text-sm text-on-surface-variant truncate">{evt.description}</p>
-                          <p className="text-sm text-outline mt-0.5 font-mono">{timeAgo(evt.created_at)}</p>
+                          <div className="flex items-baseline gap-2">
+                            <p className="text-xs md:text-sm font-bold text-on-surface">{meta.label}</p>
+                            <p className="text-[10px] text-outline font-mono md:hidden">{timeAgo(evt.created_at)}</p>
+                          </div>
+                          <p className="text-xs md:text-sm text-on-surface-variant truncate">{evt.description}</p>
+                          <p className="text-sm text-outline mt-0.5 font-mono hidden md:block">{timeAgo(evt.created_at)}</p>
                         </div>
                       </div>
                     );
@@ -253,36 +279,36 @@ export default function AdminOverview() {
         </div>
 
         {/* System Info + Files Summary */}
-        <div className="grid grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
           {/* System Info */}
-          <div className="col-span-8 bg-surface-container-low border border-outline-variant/5 p-8 relative overflow-hidden">
+          <div className="md:col-span-8 bg-surface-container-low border border-outline-variant/5 p-4 md:p-8 relative overflow-hidden">
             <div className="absolute right-6 bottom-6 opacity-[0.04] pointer-events-none">
               <span className="material-symbols-outlined text-[8rem]">security</span>
             </div>
             <div className="relative z-10">
-              <h2 className="text-2xl font-headline font-bold text-on-surface mb-4">{t('admin.overview.systemInfo.title')}</h2>
-              <p className="text-on-surface-variant max-w-2xl mb-6">
+              <h2 className="text-lg md:text-2xl font-headline font-bold text-on-surface mb-2 md:mb-4">{t('admin.overview.systemInfo.title')}</h2>
+              <p className="text-xs md:text-base text-on-surface-variant max-w-2xl mb-4 md:mb-6">
                 {t('admin.overview.systemInfo.description')}
               </p>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-surface-container p-4 border-l-2 border-primary">
-                  <h4 className="text-on-surface font-bold text-sm mb-1">{t('admin.overview.systemInfo.protectionTitle')}</h4>
-                  <p className="text-sm text-on-surface-variant">{t('admin.overview.systemInfo.protectionDesc')}</p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+                <div className="bg-surface-container p-3 md:p-4 border-l-2 border-primary">
+                  <h4 className="text-on-surface font-bold text-xs md:text-sm mb-0.5 md:mb-1">{t('admin.overview.systemInfo.protectionTitle')}</h4>
+                  <p className="text-xs md:text-sm text-on-surface-variant">{t('admin.overview.systemInfo.protectionDesc')}</p>
                 </div>
-                <div className="bg-surface-container p-4 border-l-2 border-tertiary">
-                  <h4 className="text-on-surface font-bold text-sm mb-1">{t('admin.overview.systemInfo.filesTitle')}</h4>
-                  <p className="text-sm text-on-surface-variant">{t('admin.overview.systemInfo.filesDesc', { count: stats?.totalFiles ?? 0 })}</p>
+                <div className="bg-surface-container p-3 md:p-4 border-l-2 border-tertiary">
+                  <h4 className="text-on-surface font-bold text-xs md:text-sm mb-0.5 md:mb-1">{t('admin.overview.systemInfo.filesTitle')}</h4>
+                  <p className="text-xs md:text-sm text-on-surface-variant">{t('admin.overview.systemInfo.filesDesc', { count: stats?.totalFiles ?? 0 })}</p>
                 </div>
-                <div className="bg-surface-container p-4 border-l-2 border-success">
-                  <h4 className="text-on-surface font-bold text-sm mb-1">{t('admin.overview.systemInfo.runtimeTitle')}</h4>
-                  <p className="text-sm text-on-surface-variant font-mono">Node.js Runtime</p>
+                <div className="bg-surface-container p-3 md:p-4 border-l-2 border-success">
+                  <h4 className="text-on-surface font-bold text-xs md:text-sm mb-0.5 md:mb-1">{t('admin.overview.systemInfo.runtimeTitle')}</h4>
+                  <p className="text-xs md:text-sm text-on-surface-variant font-mono">Node.js Runtime</p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="col-span-4 bg-surface-container p-6 rounded-lg flex flex-col justify-between">
+          {/* Quick Actions — desktop only */}
+          <div className="hidden md:flex md:col-span-4 bg-surface-container p-4 md:p-6 rounded-lg flex-col justify-between">
             <div>
               <h3 className="text-sm font-bold uppercase tracking-widest mb-4">{t('admin.overview.quickActions.title')}</h3>
               <div className="space-y-2">
