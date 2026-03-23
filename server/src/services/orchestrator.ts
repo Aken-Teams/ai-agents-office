@@ -23,7 +23,7 @@ const SKILL_TIMEOUT: Record<string, number> = {
   'docx-gen': 480_000,  // 8 min — write code + run node to generate Word
   'xlsx-gen': 300_000,  // 5 min — write code + run node to generate Excel
   'pdf-gen':  300_000,  // 5 min — write code + run node to generate PDF
-  'slides-gen': 300_000,  // 5 min — generate HTML slides
+  'slides-gen': 480_000,  // 8 min — generate HTML slides
   'data-analyst': 480_000, // 8 min — data analysis (files can be large)
   'rag-analyst': 480_000, // 8 min — cross-file analysis (multiple files)
 };

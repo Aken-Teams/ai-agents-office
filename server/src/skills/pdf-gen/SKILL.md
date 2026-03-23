@@ -47,6 +47,16 @@ Use the `"style"` field to apply a built-in visual theme. **Always use these pre
 
 If the user mentions a style preference (e.g. "formal report", "technical manual", "magazine style"), pick the closest matching style. If no style is mentioned, use `"modern"`.
 
+## CRITICAL: Default Quality Standards
+
+**ALWAYS** produce visually professional PDFs, even without explicit user style requests:
+
+1. **Structure content with clear sections** — Use headings to break up long text. Every 2-3 paragraphs should have a heading.
+2. **Use bullet points** for lists, key takeaways, or action items — don't bury them in paragraph text.
+3. **Keep paragraphs focused** — 3-5 sentences max per paragraph. Split longer content.
+4. **Include an author name** — Use "AI Agents Office" if none specified.
+5. The `"modern"` style produces a **premium business look**: colored top banner, accent sidebar bars on headings, styled bullet dots, page numbers with separator line, and clean typography. It is NOT a plain white document.
+
 ## Features
 
 All styles include:

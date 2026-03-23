@@ -61,6 +61,17 @@ Use the `"style"` field to apply a built-in visual theme. **Always use these pre
 
 If the user mentions a style preference (e.g. "dark theme", "professional", "colorful"), pick the closest matching style. If no style is mentioned, use `"corporate"`.
 
+## CRITICAL: Default Quality Standards
+
+**ALWAYS** produce visually impressive presentations, even without explicit user style requests:
+
+1. **Use variety in slide types** — Don't create 10 content slides in a row. Mix: title → content → two-column → section → content → two-column. Use `"section"` slides as chapter dividers between major topics.
+2. **Keep bullet points concise** — Max 4-5 bullets per slide, each under 50 characters. If you have more content, split across multiple slides.
+3. **Use two-column slides** for comparisons, pros/cons, before/after, or any paired concepts.
+4. **Aim for 8-15 slides** for a standard presentation. More content = more slides (not more text per slide).
+5. **Write a compelling subtitle** on the title slide — include date, audience, or context.
+6. The `"corporate"` style produces a **premium dark title slide** with navy background, accent sidebar on content slides, and footer with page numbers. It is NOT a plain white template.
+
 ## Slide Types
 
 - `"title"` — Title slide with main title, subtitle, and accent line
