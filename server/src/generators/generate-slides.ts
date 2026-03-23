@@ -416,7 +416,7 @@ function renderLineChart(chart: ChartData, s: StylePreset): string {
   const maxVal = Math.ceil(Math.max(...allVals) * 1.15) || 100;
   const minVal = 0;
   const labels = chart.labels || series[0]?.points.map(p => p.label) || [];
-  const W = 600, H = 280, PL = 50, PR = 20, PT = 20, PB = 40;
+  const W = 900, H = 380, PL = 60, PR = 30, PT = 25, PB = 45;
   const cW = W - PL - PR, cH = H - PT - PB;
 
   // Grid lines
@@ -425,15 +425,15 @@ function renderLineChart(chart: ChartData, s: StylePreset): string {
   for (let i = 0; i <= gridCount; i++) {
     const y = PT + (cH / gridCount) * i;
     const val = Math.round(maxVal - (maxVal - minVal) * (i / gridCount));
-    gridSvg += `<line x1="${PL}" y1="${y}" x2="${W - PR}" y2="${y}" stroke="var(--body-color)" stroke-opacity="0.15" stroke-width="0.5"/>`;
-    gridSvg += `<text x="${PL - 8}" y="${y + 4}" text-anchor="end" fill="var(--body-color)" font-size="10" opacity="0.6">${val}</text>`;
+    gridSvg += `<line x1="${PL}" y1="${y}" x2="${W - PR}" y2="${y}" stroke="var(--body-color)" stroke-opacity="0.15" stroke-width="0.7"/>`;
+    gridSvg += `<text x="${PL - 10}" y="${y + 5}" text-anchor="end" fill="var(--body-color)" font-size="13" opacity="0.6">${val}</text>`;
   }
 
   // X labels
   let xLabelSvg = '';
   labels.forEach((lbl, i) => {
     const x = PL + (cW / Math.max(labels.length - 1, 1)) * i;
-    xLabelSvg += `<text x="${x}" y="${H - 8}" text-anchor="middle" fill="var(--body-color)" font-size="10" opacity="0.6">${escapeHtml(lbl)}</text>`;
+    xLabelSvg += `<text x="${x}" y="${H - 8}" text-anchor="middle" fill="var(--body-color)" font-size="13" opacity="0.6">${escapeHtml(lbl)}</text>`;
   });
 
   // Series lines
@@ -447,21 +447,21 @@ function renderLineChart(chart: ChartData, s: StylePreset): string {
     const dots = sr.points.map((p, pi) => {
       const x = PL + (cW / Math.max(sr.points.length - 1, 1)) * pi;
       const y = PT + cH - ((p.value - minVal) / (maxVal - minVal)) * cH;
-      return `<circle cx="${x}" cy="${y}" r="3.5" fill="${color}" stroke="var(--slide-bg)" stroke-width="2" data-label="${escapeHtml(p.label)}" data-value="${p.value}" data-series="${escapeHtml(sr.name)}"/>`;
+      return `<circle cx="${x}" cy="${y}" r="4.5" fill="${color}" stroke="var(--slide-bg)" stroke-width="2.5" data-label="${escapeHtml(p.label)}" data-value="${p.value}" data-series="${escapeHtml(sr.name)}"/>`;
     }).join('');
-    return `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    return `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots}`;
   }).join('');
 
   // Legend
   const legendSvg = series.length > 1 ? series.map((sr, si) => {
     const color = sr.color || s.chartColors[si % s.chartColors.length];
-    const x = PL + si * 120;
-    return `<circle cx="${x}" cy="${H + 16}" r="4" fill="${color}"/>
-    <text x="${x + 10}" y="${H + 20}" fill="var(--body-color)" font-size="11">${escapeHtml(sr.name)}</text>`;
+    const x = PL + si * 140;
+    return `<circle cx="${x}" cy="${H + 20}" r="5" fill="${color}"/>
+    <text x="${x + 12}" y="${H + 25}" fill="var(--body-color)" font-size="13">${escapeHtml(sr.name)}</text>`;
   }).join('') : '';
 
-  const svgH = series.length > 1 ? H + 30 : H;
+  const svgH = series.length > 1 ? H + 40 : H;
   return `<svg class="chart-line-svg" viewBox="0 0 ${W} ${svgH}" xmlns="http://www.w3.org/2000/svg">
   ${gridSvg}${xLabelSvg}${linesSvg}${legendSvg}
 </svg>`;
@@ -919,7 +919,7 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
 .chart-legend-item { display: flex; align-items: center; gap: 0.5em; font-size: 0.6em; color: var(--body-color); }
 .chart-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 
-.chart-line-svg { width: 100%; max-width: 700px; height: auto; margin: 0 auto; display: block; }
+.chart-line-svg { width: 100%; max-width: 95%; height: auto; margin: 0 auto; display: block; }
 
 /* ── Image + Text ── */
 .image-text-layout { display: flex; gap: 2em; align-items: center; width: 100%; }

@@ -172,6 +172,22 @@ function parseToolInput(tool: string, rawInput: string | undefined, t: (key: any
   }
   if (baseTool === 'Glob') return `${t('chat.toolInfo.searchFiles')} ${input.pattern || ''}`.trim();
   if (baseTool === 'Grep') return `${t('chat.toolInfo.searchCode')} "${input.pattern || ''}"`;
+  if (baseTool === 'Task') {
+    // Show human-readable task description from Task tool input
+    try {
+      const parsed = JSON.parse(rawInput);
+      const desc = parsed?.description || parsed?.prompt || '';
+      if (desc) return desc.length > 80 ? desc.substring(0, 80) + '…' : desc;
+    } catch {
+      // Try regex extraction for truncated JSON
+      const descMatch = rawInput.match(/"(?:description|prompt)"\s*:\s*"((?:[^"\\]|\\.)*)(?:"|$)/);
+      if (descMatch) {
+        const desc = descMatch[1].replace(/\\"/g, '"');
+        return desc.length > 80 ? desc.substring(0, 80) + '…' : desc;
+      }
+    }
+    return t('chat.toolInfo.executeCommand');
+  }
   if (baseTool === 'TodoWrite') {
     // Parse the todos array and show human-readable task descriptions
     try {
@@ -190,6 +206,33 @@ function parseToolInput(tool: string, rawInput: string | undefined, t: (key: any
     } catch {
       return t('chat.toolInfo.updateTask');
     }
+  }
+  if (baseTool === 'Skill') {
+    // Show which skill is being invoked
+    const skillName = input.skill || '';
+    if (skillName) return `${t('chat.toolInfo.invokeSkill')} ${skillName}`;
+    return t('chat.toolInfo.invokeSkill');
+  }
+  if (baseTool === 'AskUserQuestion') {
+    // Show the question being asked
+    try {
+      const parsed = JSON.parse(rawInput);
+      const questions = parsed?.questions;
+      if (Array.isArray(questions) && questions.length > 0) {
+        const q = questions[0].question || '';
+        return q.length > 80 ? q.substring(0, 80) + '…' : q;
+      }
+    } catch {
+      const qMatch = rawInput.match(/"question"\s*:\s*"((?:[^"\\]|\\.)*)(?:"|$)/);
+      if (qMatch) {
+        const q = qMatch[1].replace(/\\"/g, '"');
+        return q.length > 80 ? q.substring(0, 80) + '…' : q;
+      }
+    }
+    return t('chat.toolInfo.askQuestion');
+  }
+  if (baseTool === 'EnterPlanMode' || baseTool === 'ExitPlanMode') {
+    return t('chat.toolInfo.planMode');
   }
   // Fallback
   return rawInput.length > 80 ? rawInput.substring(0, 80) + '…' : rawInput;
@@ -212,7 +255,11 @@ function getToolInfo(tool: string, t: (key: any, params?: Record<string, string 
   if (tool === 'Grep') return { icon: 'search', label: t('chat.toolInfo.searchCode') };
   if (tool === 'WebSearch') return { icon: 'travel_explore', label: t('chat.toolInfo.webSearch') };
   if (tool === 'WebFetch') return { icon: 'language', label: t('chat.toolInfo.fetchWeb') };
+  if (tool === 'Task') return { icon: 'account_tree', label: t('chat.toolInfo.delegateTask') };
   if (tool === 'TodoWrite') return { icon: 'checklist', label: t('chat.toolInfo.updateTask') };
+  if (tool === 'Skill') return { icon: 'extension', label: t('chat.toolInfo.invokeSkill') };
+  if (tool === 'AskUserQuestion') return { icon: 'help', label: t('chat.toolInfo.askQuestion') };
+  if (tool === 'EnterPlanMode' || tool === 'ExitPlanMode') return { icon: 'architecture', label: t('chat.toolInfo.planMode') };
   if (tool === 'tool_result') return { icon: 'check_circle', label: t('chat.toolInfo.toolComplete') };
   return { icon: 'settings', label: tool };
 }

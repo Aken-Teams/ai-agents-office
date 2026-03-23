@@ -64,6 +64,39 @@ const SKILL_TEMPLATES: Record<string, Array<{ id: string; icon: string; labelKey
   ],
 };
 
+// Style preview colors for template hover preview
+const TEMPLATE_PREVIEW: Record<string, { bg: string; accent: string; text: string; card: string }> = {
+  // PPTX
+  'pptx-gen:minimal-pro': { bg: '#ffffff', accent: '#6b7280', text: '#1f2937', card: '#f3f4f6' },
+  'pptx-gen:tech-dark': { bg: '#0f172a', accent: '#22d3ee', text: '#f1f5f9', card: '#1e293b' },
+  'pptx-gen:corporate': { bg: '#ffffff', accent: '#2563eb', text: '#1e3a5f', card: '#eff6ff' },
+  'pptx-gen:creative': { bg: '#fef3c7', accent: '#f59e0b', text: '#78350f', card: '#fffbeb' },
+  // DOCX
+  'docx-gen:formal': { bg: '#ffffff', accent: '#1e40af', text: '#111827', card: '#f9fafb' },
+  'docx-gen:modern': { bg: '#ffffff', accent: '#7c3aed', text: '#1f2937', card: '#f5f3ff' },
+  'docx-gen:academic': { bg: '#fffbeb', accent: '#92400e', text: '#1c1917', card: '#fef3c7' },
+  'docx-gen:compact': { bg: '#f8fafc', accent: '#475569', text: '#0f172a', card: '#e2e8f0' },
+  // XLSX
+  'xlsx-gen:dashboard': { bg: '#0f172a', accent: '#3b82f6', text: '#f1f5f9', card: '#1e293b' },
+  'xlsx-gen:clean': { bg: '#ffffff', accent: '#64748b', text: '#334155', card: '#f1f5f9' },
+  'xlsx-gen:financial': { bg: '#ffffff', accent: '#166534', text: '#14532d', card: '#f0fdf4' },
+  'xlsx-gen:colorful': { bg: '#fdf4ff', accent: '#c026d3', text: '#581c87', card: '#fae8ff' },
+  // PDF
+  'pdf-gen:formal': { bg: '#ffffff', accent: '#1e40af', text: '#111827', card: '#eff6ff' },
+  'pdf-gen:modern': { bg: '#ffffff', accent: '#8b5cf6', text: '#1f2937', card: '#ede9fe' },
+  'pdf-gen:magazine': { bg: '#fef2f2', accent: '#dc2626', text: '#1f2937', card: '#fee2e2' },
+  'pdf-gen:technical': { bg: '#1e293b', accent: '#22d3ee', text: '#e2e8f0', card: '#0f172a' },
+  // Slides
+  'slides-gen:minimal': { bg: '#ffffff', accent: '#9ca3af', text: '#1f2937', card: '#f9fafb' },
+  'slides-gen:dark': { bg: '#0a0a0a', accent: '#a855f7', text: '#fafafa', card: '#1a1a2e' },
+  'slides-gen:gradient': { bg: 'linear-gradient(135deg, #667eea, #764ba2)', accent: '#a78bfa', text: '#ffffff', card: 'rgba(255,255,255,0.1)' },
+  'slides-gen:neon': { bg: '#000000', accent: '#00ff88', text: '#ffffff', card: '#0a0a0a' },
+  'slides-gen:corporate': { bg: '#ffffff', accent: '#2563eb', text: '#1e3a5f', card: '#f0f7ff' },
+  'slides-gen:creative': { bg: '#fff7ed', accent: '#f97316', text: '#431407', card: '#ffedd5' },
+  'slides-gen:elegant': { bg: '#faf5ef', accent: '#b8860b', text: '#2d2006', card: '#f5ead6' },
+  'slides-gen:tech': { bg: '#0d1117', accent: '#3fb950', text: '#c9d1d9', card: '#161b22' },
+};
+
 const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
   { value: 'zh-TW', label: '繁體中文' },
   { value: 'zh-CN', label: '简体中文' },
@@ -78,6 +111,7 @@ export default function Navbar() {
   const [showModal, setShowModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
+  const [hoveredTemplate, setHoveredTemplate] = useState<string | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem(SIDEBAR_KEY) === '1';
@@ -138,6 +172,7 @@ export default function Navbar() {
       }
       setShowModal(false);
       setSelectedSkill(null);
+      setHoveredTemplate(null);
       router.push(`/chat/${conv.id}`);
     } finally {
       setCreating(false);
@@ -522,7 +557,7 @@ export default function Navbar() {
       {showModal && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center"
-          onClick={() => { setShowModal(false); setSelectedSkill(null); }}
+          onClick={() => { setShowModal(false); setSelectedSkill(null); setHoveredTemplate(null); }}
         >
           {/* Backdrop */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
@@ -541,7 +576,7 @@ export default function Navbar() {
                     <h2 className="text-sm font-headline font-bold">{t('nav.modalTitle')}</h2>
                   </div>
                   <button
-                    onClick={() => { setShowModal(false); setSelectedSkill(null); }}
+                    onClick={() => { setShowModal(false); setSelectedSkill(null); setHoveredTemplate(null); }}
                     className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors bg-transparent cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
@@ -572,10 +607,10 @@ export default function Navbar() {
             ) : (
               <>
                 {/* Step 2: Template Selection */}
-                <div className="px-6 py-5 flex items-center justify-between border-b border-outline-variant/10">
+                <div className="px-6 py-4 flex items-center justify-between border-b border-outline-variant/10">
                   <div className="flex items-center gap-3">
                     <button
-                      onClick={() => setSelectedSkill(null)}
+                      onClick={() => { setSelectedSkill(null); setHoveredTemplate(null); }}
                       className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors bg-transparent cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-on-surface-variant text-sm">arrow_back</span>
@@ -588,33 +623,94 @@ export default function Navbar() {
                     </h2>
                   </div>
                   <button
-                    onClick={() => { setShowModal(false); setSelectedSkill(null); }}
+                    onClick={() => { setShowModal(false); setSelectedSkill(null); setHoveredTemplate(null); }}
                     className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors bg-transparent cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
                   </button>
                 </div>
-                <div className="p-6 grid grid-cols-2 gap-3">
-                  {(SKILL_TEMPLATES[selectedSkill] || []).map(tmpl => (
-                    <button
-                      key={tmpl.id}
-                      onClick={() => handleCreate(selectedSkill, t(tmpl.promptKey as any))}
-                      disabled={creating}
-                      className="bg-surface-container-high p-5 rounded-lg flex flex-col gap-2 hover:bg-surface-variant transition-all text-left disabled:opacity-50 cursor-pointer group border border-transparent hover:border-primary/20"
-                    >
-                      <span className="material-symbols-outlined text-2xl text-primary group-hover:scale-110 transition-transform">
-                        {tmpl.icon}
-                      </span>
-                      <span className="text-sm font-bold text-on-surface">{t(tmpl.labelKey as any)}</span>
-                      <span className="text-sm text-on-surface-variant leading-snug">{t(tmpl.descKey as any)}</span>
-                    </button>
-                  ))}
+                <div className="relative">
+                  {/* Template Grid */}
+                  <div className={`p-4 grid gap-2 ${(SKILL_TEMPLATES[selectedSkill] || []).length > 4 ? 'grid-cols-4' : 'grid-cols-2'}`}>
+                    {(SKILL_TEMPLATES[selectedSkill] || []).map(tmpl => {
+                      const previewKey = `${selectedSkill}:${tmpl.id}`;
+                      const preview = TEMPLATE_PREVIEW[previewKey];
+                      return (
+                        <button
+                          key={tmpl.id}
+                          onClick={() => handleCreate(selectedSkill, t(tmpl.promptKey as any))}
+                          onMouseEnter={() => setHoveredTemplate(tmpl.id)}
+                          onMouseLeave={() => setHoveredTemplate(null)}
+                          disabled={creating}
+                          className="bg-surface-container-high px-3 py-3 rounded-lg flex flex-col items-center gap-1.5 hover:bg-surface-variant transition-all text-center disabled:opacity-50 cursor-pointer group border border-transparent hover:border-primary/30 hover:shadow-md"
+                        >
+                          {/* Mini style preview swatch */}
+                          <div
+                            className="w-full h-10 rounded-md border border-outline-variant/10 overflow-hidden flex items-end gap-0.5 p-1"
+                            style={{ background: preview?.bg || '#f3f4f6' }}
+                          >
+                            <div className="h-3 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.8 }} />
+                            <div className="h-5 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.6 }} />
+                            <div className="h-4 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.7 }} />
+                          </div>
+                          <span className="text-xs font-bold text-on-surface leading-tight">{t(tmpl.labelKey as any)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Hover Preview Overlay */}
+                  {hoveredTemplate && (() => {
+                    const tmpl = (SKILL_TEMPLATES[selectedSkill] || []).find(t => t.id === hoveredTemplate);
+                    if (!tmpl) return null;
+                    const previewKey = `${selectedSkill}:${tmpl.id}`;
+                    const preview = TEMPLATE_PREVIEW[previewKey];
+                    if (!preview) return null;
+                    return (
+                      <div className="absolute inset-0 z-10 bg-surface-container/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 pointer-events-none animate-in" style={{ animationDuration: '150ms' }}>
+                        {/* Slide mockup */}
+                        <div
+                          className="w-full max-w-md aspect-video rounded-lg shadow-xl border border-outline-variant/20 overflow-hidden flex flex-col p-5 gap-3"
+                          style={{ background: preview.bg }}
+                        >
+                          {/* Title bar */}
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-md" style={{ background: preview.accent }} />
+                            <div className="h-4 w-32 rounded" style={{ background: preview.text, opacity: 0.8 }} />
+                          </div>
+                          {/* Content mockup */}
+                          <div className="flex-1 flex gap-3">
+                            <div className="flex-1 flex flex-col gap-2">
+                              <div className="h-2.5 w-full rounded" style={{ background: preview.text, opacity: 0.15 }} />
+                              <div className="h-2.5 w-4/5 rounded" style={{ background: preview.text, opacity: 0.12 }} />
+                              <div className="h-2.5 w-3/5 rounded" style={{ background: preview.text, opacity: 0.1 }} />
+                              <div className="flex-1" />
+                              <div className="flex gap-2">
+                                <div className="h-8 flex-1 rounded-md" style={{ background: preview.card }} />
+                                <div className="h-8 flex-1 rounded-md" style={{ background: preview.card }} />
+                              </div>
+                            </div>
+                            <div className="w-24 rounded-md flex flex-col gap-2 p-2" style={{ background: preview.card }}>
+                              <div className="h-6 w-full rounded" style={{ background: preview.accent, opacity: 0.4 }} />
+                              <div className="h-2 w-full rounded" style={{ background: preview.text, opacity: 0.1 }} />
+                              <div className="h-2 w-3/4 rounded" style={{ background: preview.text, opacity: 0.08 }} />
+                            </div>
+                          </div>
+                        </div>
+                        {/* Label */}
+                        <div className="mt-4 text-center">
+                          <p className="text-sm font-bold text-on-surface">{t(tmpl.labelKey as any)}</p>
+                          <p className="text-xs text-on-surface-variant mt-1">{t(tmpl.descKey as any)}</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
-                <div className="px-6 pb-5">
+                <div className="px-4 pb-4">
                   <button
                     onClick={() => handleCreate(selectedSkill)}
                     disabled={creating}
-                    className="w-full py-2.5 text-sm font-bold text-on-surface-variant hover:text-on-surface bg-surface-container-highest/50 hover:bg-surface-container-highest rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="w-full py-2 text-xs font-bold text-on-surface-variant hover:text-on-surface bg-surface-container-highest/50 hover:bg-surface-container-highest rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     <span className="material-symbols-outlined text-sm">skip_next</span>
                     {t('templates.skip' as any)}

@@ -1,3 +1,4 @@
+import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { EventEmitter } from 'events';
 import db from '../db.js';
@@ -14,8 +15,8 @@ const ORCHESTRATION_TIMEOUT_MS = 900_000; // 15 minutes total orchestration limi
 
 // Per-skill timeout (ms) — text-only agents are fast, generators need more time
 const SKILL_TIMEOUT: Record<string, number> = {
-  router:    120_000,   // 2 min — just analyze and delegate
-  research:  180_000,   // 3 min — web search
+  router:    90_000,    // 1.5 min — analyze and delegate (no tools, just text)
+  research:  300_000,   // 5 min — web search
   planner:   300_000,   // 5 min — text planning (complex outlines need time)
   reviewer:  120_000,   // 2 min — text review
   'pptx-gen': 600_000,  // 10 min — write code + run node to generate PPT
@@ -97,19 +98,44 @@ export class Orchestrator {
       }
       depth++;
 
-      // Step 1: Send to Router Agent
+      // Step 1: Send to Router Agent (with retry on transient failure)
       this.sseWriter({ type: 'agent_status', data: { agent: 'router', status: 'thinking' } });
 
-      const routerResult = await this.spawnAgent(
-        currentMessage,
-        routerSystemPrompt,
-        {
-          sessionId: routerSessionId,
-          isResume: routerResumed, // Resume if session was already initialized
-          role: 'router' as const,
-          skillId: 'router',
+      let routerResult: { text: string; inputTokens: number; outputTokens: number; model: string };
+      try {
+        routerResult = await this.spawnAgent(
+          currentMessage,
+          routerSystemPrompt,
+          {
+            sessionId: routerSessionId,
+            isResume: routerResumed,
+            role: 'router' as const,
+            skillId: 'router',
+          }
+        );
+      } catch (routerErr) {
+        // Retry once with a fresh session on transient failure (exit code 1)
+        console.warn(`[Orchestrator] Router failed, retrying with fresh session:`, routerErr);
+        const freshSession = this.getOrCreateAgentSession('router');
+        try {
+          routerResult = await this.spawnAgent(
+            currentMessage,
+            routerSystemPrompt,
+            {
+              sessionId: freshSession.sessionId,
+              isResume: false,
+              role: 'router' as const,
+              skillId: 'router',
+            }
+          );
+        } catch (retryErr) {
+          // Both attempts failed — bail out
+          const errMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+          allAssistantText += `\n\nRouter agent failed: ${errMsg}`;
+          this.sseWriter({ type: 'text', data: `\n\nRouter agent failed: ${errMsg}` });
+          break;
         }
-      );
+      }
       routerResumed = true; // After first call in this run, always resume
 
       if (this.aborted) break;
@@ -303,10 +329,12 @@ export class Orchestrator {
     }
 
     // Build system prompt for this skill (with user upload context)
-    const sandboxPath = getSandboxPath(this.userId, this.conversationId);
+    // Use the actual agent CWD (including _agents/{skillId} subdirectory) for relative path calculation
+    const baseSandboxPath = getSandboxPath(this.userId, this.conversationId);
+    const agentCwd = path.join(baseSandboxPath, '_agents', task.skillId);
     const uploadContext = task.skillId === 'rag-analyst'
-      ? getConversationFilesForPrompt(this.userId, sandboxPath, this.conversationId)
-      : getUserUploadsForPrompt(this.userId, sandboxPath, {
+      ? getConversationFilesForPrompt(this.userId, agentCwd, this.conversationId)
+      : getUserUploadsForPrompt(this.userId, agentCwd, {
           uploadIds: this.uploadIds.length > 0 ? this.uploadIds : undefined,
           conversationId: this.conversationId,
         });
@@ -391,7 +419,11 @@ export class Orchestrator {
 
       // Per-skill timeout: text agents get short limits, generators get long ones
       const timeoutMs = SKILL_TIMEOUT[opts.skillId] ?? DEFAULT_TASK_TIMEOUT_MS;
+      let settled = false; // Guard against race between timeout and done event
+
       const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
         console.warn(`[Orchestrator] Agent ${opts.skillId} timed out after ${timeoutMs / 1000}s`);
         abort();
         // Remove abort fn
@@ -407,7 +439,7 @@ export class Orchestrator {
       }, timeoutMs);
 
       emitter.on('event', (event: SSEEvent) => {
-        if (this.aborted) return;
+        if (this.aborted || settled) return;
 
         // Forward worker agent's streaming events to client (prefixed with taskId)
         if (taskId) {
@@ -458,6 +490,8 @@ export class Orchestrator {
 
         if (event.type === 'done') {
           clearTimeout(timeout);
+          if (settled) return; // Already resolved by timeout
+          settled = true;
           // Remove abort fn
           this.activeAbortFns = this.activeAbortFns.filter(fn => fn !== abort);
 
