@@ -326,6 +326,7 @@ const en = {
   'chart.action.downloadPngFull': 'Download PNG',
   'chart.action.expandAll': 'Expand All',
   'chart.action.collapseAll': 'Collapse All',
+  'chart.action.fitView': 'Fit View',
   'chart.preview.loading': 'Loading preview...',
   'chart.hint.mindmap': 'Click nodes to collapse/expand, scroll to zoom, drag to pan',
 

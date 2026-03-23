@@ -207,6 +207,11 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
     await mm.fit();
   }, []);
 
+  const handleFitView = useCallback(async (mm: any) => {
+    if (!mm) return;
+    await mm.fit();
+  }, []);
+
   const handleDownloadHtml = useCallback(() => {
     const escaped = code.replace(/<\//g, '<\\/').replace(/`/g, '\\`');
     const html = `<!DOCTYPE html>
@@ -230,6 +235,7 @@ svg.markmap{width:100%;height:calc(100vh - 44px);display:block}
 <div class="toolbar">
   <button onclick="expandAll()">&#x25BC; Expand All</button>
   <button onclick="collapseAll()">&#x25B6; Collapse All</button>
+  <button onclick="fitView()">&#x26F6; Fit View</button>
 </div>
 <svg class="markmap"></svg>
 <script src="https://cdn.jsdelivr.net/npm/d3@7"><\/script>
@@ -284,6 +290,7 @@ function collapseAll() {
   foldTree(mm.state.data, 0, 1);
   mm.renderData().then(function() { mm.fit(); });
 }
+function fitView() { mm.fit(); }
 <\/script>
 </body></html>`;
     const blob = new Blob([html], { type: 'text/html' });
@@ -390,6 +397,10 @@ function collapseAll() {
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>unfold_less</span>
             <span>{t('chart.action.collapseAll' as any)}</span>
           </button>
+          <button onClick={() => handleFitView(mmRef.current)} className="chat-chart-toggle flex items-center gap-1" title={t('chart.action.fitView' as any)}>
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>fit_screen</span>
+            <span>{t('chart.action.fitView' as any)}</span>
+          </button>
         </div>
       </div>
 
@@ -423,6 +434,9 @@ function collapseAll() {
                 </button>
                 <button onClick={() => handleCollapseAll(fullscreenMmRef.current)} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
                   <span className="material-symbols-outlined" style={{ fontSize: 14 }}>unfold_less</span> <span className="hidden md:inline">{t('chart.action.collapseAll' as any)}</span><span className="md:hidden">{t('chart.action.collapseAll' as any)}</span>
+                </button>
+                <button onClick={() => handleFitView(fullscreenMmRef.current)} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
+                  <span className="material-symbols-outlined" style={{ fontSize: 14 }}>fit_screen</span> <span className="hidden md:inline">{t('chart.action.fitView' as any)}</span><span className="md:hidden">{t('chart.action.fitView' as any)}</span>
                 </button>
                 <span className="w-px h-4 bg-outline-variant/30" />
                 <button onClick={handleDownloadHtml} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">

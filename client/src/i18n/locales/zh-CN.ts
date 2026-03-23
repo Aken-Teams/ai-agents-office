@@ -332,6 +332,7 @@ const zhCN = {
   'chart.action.downloadPngFull': '下载 PNG',
   'chart.action.expandAll': '全部展开',
   'chart.action.collapseAll': '全部收合',
+  'chart.action.fitView': '适应画面',
   'chart.preview.loading': '加载预览中...',
   'chart.hint.mindmap': '点击节点可收合/展开，滚轮缩放，拖拽平移',
 
