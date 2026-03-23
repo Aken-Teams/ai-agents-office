@@ -197,7 +197,7 @@ export default function AdminTokens() {
                 </div>
               ) : (
                 <div>
-                  <div className={`flex items-end h-40 md:h-48 ${period === '30d' ? 'gap-px' : 'gap-1.5'}`}>
+                  <div className={`flex items-end ${period === '30d' ? 'h-52 gap-px' : 'h-40 md:h-48 gap-1.5'}`}>
                     {chart.map((v, i) => {
                       const total = v.total_input + v.total_output;
                       const pct = (total / maxChart) * 100;
@@ -212,16 +212,26 @@ export default function AdminTokens() {
                       );
                     })}
                   </div>
-                  <div className={`flex mt-1.5 ${period === '30d' ? 'gap-px' : 'gap-1.5'}`}>
-                    {chart.map((v, i) => {
-                      const showLabel = period === '7d' || i % 3 === 0 || i === chart.length - 1;
-                      return (
-                        <span key={i} className={`flex-1 min-w-0 text-center ${period === '30d' ? 'text-[8px]' : 'text-[10px] md:text-xs'} text-outline font-mono truncate`}>
-                          {showLabel ? v.date.slice(5) : ''}
+                  {/* Date labels */}
+                  {period === '30d' ? (
+                    <div className="flex gap-px mt-4 h-14">
+                      {chart.map((v, i) => (
+                        <div key={i} className="flex-1 min-w-0 relative">
+                          <span className="absolute top-0 left-1/2 -translate-x-1/2 origin-top -rotate-55 text-[11px] text-outline font-mono whitespace-nowrap">
+                            {v.date.slice(5)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex gap-1.5 mt-1.5">
+                      {chart.map((v, i) => (
+                        <span key={i} className="flex-1 min-w-0 text-xs text-center text-outline font-mono truncate">
+                          {v.date.slice(5)}
                         </span>
-                      );
-                    })}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
