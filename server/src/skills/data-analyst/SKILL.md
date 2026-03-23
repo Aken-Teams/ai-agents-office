@@ -109,7 +109,7 @@ Use fenced chart blocks with the `chart` language tag:
 
 When analysis reveals processes, relationships, data flows, or hierarchies, use Mermaid diagrams alongside charts. They render as interactive, downloadable diagrams.
 
-**CRITICAL**: You MUST actually OUTPUT the fenced ` ```mermaid ` code block — do NOT just describe diagrams in text. Do NOT use ASCII art, text-based charts, or plain-text flowcharts. ALWAYS use `chart` blocks for numbers and `mermaid` blocks for structure.
+**CRITICAL**: You MUST actually OUTPUT the fenced code blocks — do NOT just describe diagrams in text. Do NOT use ASCII art, text-based charts, or plain-text flowcharts. Use `chart` blocks for numbers, `mermaid` blocks for diagrams, `mindmap` blocks for mind maps.
 
 ### Common Use Cases
 
@@ -127,20 +127,20 @@ flowchart LR
     A[Raw Data] --> B[Clean] --> C[Transform] --> D[Analyze] --> E[Report]
 ```
 
-**Mind Map — Analysis dimensions:**
-```mermaid
-mindmap
-  root((Sales Analysis))
-    By Region
-      North
-      South
-    By Product
-      Product A
-      Product B
-    By Time
-      Quarterly
-      Monthly
+**Mind Map (Interactive)** — Analysis dimensions. Uses ` ```mindmap ` block (**NOT** mermaid), format is markdown headings:
+```mindmap
+# Sales Analysis
+## By Region
+### North
+### South
+## By Product
+### Product A
+### Product B
+## By Time
+### Quarterly
+### Monthly
 ```
+This renders as an interactive tree — users can click to collapse/expand nodes, scroll to zoom, drag to pan.
 
 ### When to Use Which
 | Data Type | Use |
@@ -148,10 +148,11 @@ mindmap
 | Numbers, stats, trends | `chart` block |
 | Data relationships, schemas | `mermaid` erDiagram |
 | Process flows | `mermaid` flowchart |
-| Hierarchical breakdowns | `mermaid` mindmap |
+| Hierarchical breakdowns | `mindmap` block (**NOT** mermaid) |
 | Time-based plans | `mermaid` gantt |
 
 ### Rules
-- NEVER use ASCII art — always `chart` or `mermaid`
-- Combine both in one response: charts for data, mermaid for structure
+- NEVER use ASCII art — always `chart`, `mermaid`, or `mindmap`
+- For mind maps: ALWAYS use ` ```mindmap ` — NEVER use mermaid mindmap
+- Combine multiple in one response: charts for data, mermaid for diagrams, mindmap for hierarchies
 - Keep diagrams under 15-20 nodes for readability

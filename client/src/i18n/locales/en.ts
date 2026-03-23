@@ -298,6 +298,7 @@ const en = {
   'chart.action.hide': 'Hide',
   'chart.action.downloadPngFull': 'Download PNG',
   'chart.preview.loading': 'Loading preview...',
+  'chart.hint.mindmap': 'Click nodes to collapse/expand, scroll to zoom, drag to pan',
 
   'files.deleteModal.title': 'Confirm Delete?',
   'files.deleteModal.message': 'About to delete {filename}. This action cannot be undone.',

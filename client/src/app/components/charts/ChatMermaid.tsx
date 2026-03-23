@@ -78,9 +78,29 @@ export default function ChatMermaid({ code }: ChatMermaidProps) {
 
   const handleDownloadPng = useCallback(() => {
     if (!svg) return;
-    const svgEl = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
-    const w = parseInt(svgEl.getAttribute('width') || '800');
-    const h = parseInt(svgEl.getAttribute('height') || '600');
+    // Read dimensions from the actual DOM SVG element (not parsed string)
+    const domSvg = containerRef.current?.querySelector('svg');
+    const parsedSvg = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement;
+    // Prefer viewBox dimensions > DOM rendered size > attribute values > fallback
+    const vb = parsedSvg.getAttribute('viewBox')?.split(/[\s,]+/).map(Number);
+    const vbW = vb && vb.length === 4 ? vb[2] : 0;
+    const vbH = vb && vb.length === 4 ? vb[3] : 0;
+    const domW = domSvg?.clientWidth || 0;
+    const domH = domSvg?.clientHeight || 0;
+    const attrW = parseInt(parsedSvg.getAttribute('width') || '0');
+    const attrH = parseInt(parsedSvg.getAttribute('height') || '0');
+    const w = Math.max(vbW, domW, attrW, 800);
+    const h = Math.max(vbH, domH, attrH, 400);
+
+    // Clone SVG and set proper width/height for export
+    const cloned = parsedSvg.cloneNode(true) as Element;
+    cloned.setAttribute('width', String(w));
+    cloned.setAttribute('height', String(h));
+    if (!cloned.getAttribute('viewBox') && vbW > 0) {
+      cloned.setAttribute('viewBox', `0 0 ${vbW} ${vbH}`);
+    }
+    const svgStr = new XMLSerializer().serializeToString(cloned);
+
     const canvas = document.createElement('canvas');
     const scale = 2;
     canvas.width = w * scale;
@@ -89,20 +109,18 @@ export default function ChatMermaid({ code }: ChatMermaidProps) {
     if (!ctx) return;
     ctx.scale(scale, scale);
     const img = new Image();
-    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
+    const svgData = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgStr)))}`;
     img.onload = () => {
       ctx.fillStyle = getThemeVars().bg;
       ctx.fillRect(0, 0, w, h);
       ctx.drawImage(img, 0, 0, w, h);
-      URL.revokeObjectURL(url);
       const pngUrl = canvas.toDataURL('image/png');
       const a = document.createElement('a');
       a.href = pngUrl;
       a.download = 'diagram.png';
       a.click();
     };
-    img.src = url;
+    img.src = svgData;
   }, [svg]);
 
   // Streaming: incomplete mermaid code
@@ -173,7 +191,10 @@ export default function ChatMermaid({ code }: ChatMermaidProps) {
             >
               <span className="material-symbols-outlined text-sm">close</span>
             </button>
-            <div dangerouslySetInnerHTML={{ __html: svg }} />
+            <div
+              className="chat-mermaid-fullscreen"
+              dangerouslySetInnerHTML={{ __html: svg }}
+            />
             <div className="flex items-center gap-2 mt-4 pt-3 border-t border-outline-variant/20">
               <button onClick={handleDownload} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
                 <span className="material-symbols-outlined" style={{ fontSize: 14 }}>download</span> {t('chart.action.downloadSvg' as any)}

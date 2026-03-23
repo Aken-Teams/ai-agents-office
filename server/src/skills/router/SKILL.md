@@ -71,7 +71,7 @@ When the user message mentions attached files (you'll see a `[System: The user h
 When the user asks for analysis, charts, or data insights, you MUST distinguish between:
 
 ### → Route to `research` or `data-analyst` (TEXT response with inline charts + diagrams):
-These agents can render: interactive Recharts (bar/line/pie/radar/scatter), Mermaid diagrams (flowchart/mindmap/gantt/ERD/sequence), all embedded inline in the chat.
+These agents can render: interactive Recharts (bar/line/pie/radar/scatter), Mermaid diagrams (flowchart/gantt/ERD/sequence), interactive mind maps (collapsible/expandable tree), all embedded inline in the chat.
 
 - "分析..." / "做分析" / "做圖表分析" / "幫我分析" — analysis WITHOUT a specific file format
 - "做一個圖表" / "畫圖表" / "show me a chart" — chart WITHOUT requesting a downloadable file
@@ -98,7 +98,7 @@ These agents can render: interactive Recharts (bar/line/pie/radar/scatter), Merm
 | "把這些數據做成 Excel" | `xlsx-gen` | Explicitly mentions Excel |
 | "分析趨勢並給我看圖表" | `research` | "看圖表" = view in chat |
 | "研究 AI 最新趨勢" | `research` | Research task, inline charts + diagrams |
-| "畫一個心智圖" | `research` | Mermaid mindmap in chat |
+| "畫一個心智圖" | `research` | Interactive mindmap in chat |
 | "資料庫 ERD 圖" | `research` | Mermaid ERD in chat |
 | "比較 React vs Vue" | `research` | Radar chart + mindmap |
 

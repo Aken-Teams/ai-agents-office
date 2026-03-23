@@ -117,19 +117,18 @@ export default function ChatChart({ rawJson }: ChatChartProps) {
     if (!ctx) return;
     ctx.scale(scale, scale);
     const img = new Image();
-    const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
+    // Use data URL instead of blob URL to avoid tainted canvas SecurityError
+    const dataUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgData)))}`;
     img.onload = () => {
       ctx.fillStyle = theme.bg;
       ctx.fillRect(0, 0, w, h);
       ctx.drawImage(img, 0, 0, w, h);
-      URL.revokeObjectURL(url);
       const a = document.createElement('a');
       a.href = canvas.toDataURL('image/png');
       a.download = `${chart.title || 'chart'}.png`;
       a.click();
     };
-    img.src = url;
+    img.src = dataUrl;
   }, [chart.title, theme.bg]);
 
   return (

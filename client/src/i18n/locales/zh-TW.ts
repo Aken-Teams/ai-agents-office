@@ -308,6 +308,7 @@ const zhTW = {
   'chart.action.hide': '隱藏',
   'chart.action.downloadPngFull': '下載 PNG',
   'chart.preview.loading': '載入預覽中...',
+  'chart.hint.mindmap': '點擊節點可收合/展開，滾輪縮放，拖曳平移',
 
   // Files
   'files.deleteModal.title': '確定刪除？',

@@ -304,6 +304,7 @@ const zhCN = {
   'chart.action.hide': '隐藏',
   'chart.action.downloadPngFull': '下载 PNG',
   'chart.preview.loading': '加载预览中...',
+  'chart.hint.mindmap': '点击节点可收合/展开，滚轮缩放，拖拽平移',
 
   // Files
   'files.deleteModal.title': '确定删除？',

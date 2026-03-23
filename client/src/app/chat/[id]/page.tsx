@@ -13,6 +13,7 @@ import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 
 const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { ssr: false });
 const ChatMermaid = dynamic(() => import('../../components/charts/ChatMermaid'), { ssr: false });
+const ChatMindmap = dynamic(() => import('../../components/charts/ChatMindmap'), { ssr: false });
 
 // Direct connection to Express for SSE streaming.
 // Next.js rewrites proxy buffers the entire response, preventing real-time updates.
@@ -439,7 +440,7 @@ function ChatContent() {
       // Check if this <pre> contains a chart or mermaid code block — unwrap to avoid <pre> wrapper
       const codeEl = node?.children?.[0];
       const cls = codeEl?.properties?.className?.[0] || '';
-      if (cls === 'language-chart' || cls === 'language-mermaid') {
+      if (cls === 'language-chart' || cls === 'language-mermaid' || cls === 'language-mindmap') {
         return <>{children}</>;
       }
       return <pre {...props}>{children}</pre>;
@@ -452,6 +453,9 @@ function ChatContent() {
       }
       if (className === 'language-mermaid') {
         return <ChatMermaid code={text} />;
+      }
+      if (className === 'language-mindmap') {
+        return <ChatMindmap code={text} />;
       }
       return <code className={className} {...props}>{children}</code>;
     },

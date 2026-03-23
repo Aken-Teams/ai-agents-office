@@ -92,7 +92,7 @@ Use fenced chart blocks with the `chart` language tag:
 
 For cross-file relationships, process flows, and data schemas, use Mermaid diagrams. They render as interactive diagrams in the chat UI.
 
-**CRITICAL**: You MUST actually OUTPUT the fenced ` ```mermaid ` code block — do NOT just describe diagrams in text. Do NOT use ASCII art. ALWAYS use `chart` for numbers and `mermaid` for structure.
+**CRITICAL**: You MUST actually OUTPUT the fenced code blocks — do NOT just describe diagrams in text. Do NOT use ASCII art. Use `chart` for numbers, `mermaid` for diagrams, `mindmap` for mind maps.
 
 ```mermaid
 erDiagram
@@ -108,15 +108,28 @@ flowchart TD
     D --> E[Generate Insights]
 ```
 
+**Mind Map (Interactive)** — Uses ` ```mindmap ` block (NOT mermaid), format is markdown headings:
+```mindmap
+# Cross-File Analysis
+## Data Sources
+### File A
+### File B
+## Key Findings
+### Correlations
+### Outliers
+## Recommendations
+```
+
 | Data Type | Use |
 |-----------|-----|
 | Numbers, stats | `chart` block |
 | Relationships, schemas | `mermaid` erDiagram |
 | Processes, workflows | `mermaid` flowchart |
-| Hierarchies | `mermaid` mindmap |
+| Hierarchies, brainstorming | `mindmap` block (**NOT** mermaid) |
 | Timelines | `mermaid` gantt |
 
 ### Rules
-- NEVER use ASCII art — always `chart` or `mermaid`
-- Combine both in one response
+- NEVER use ASCII art — always `chart`, `mermaid`, or `mindmap`
+- For mind maps: ALWAYS use ` ```mindmap ` — NEVER use mermaid mindmap
+- Combine multiple in one response
 - Keep diagrams under 15-20 nodes

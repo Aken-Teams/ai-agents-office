@@ -78,8 +78,8 @@ When your research involves processes, relationships, timelines, hierarchies, or
 **CRITICAL RULES**:
 1. You MUST actually OUTPUT the fenced code block with ` ```mermaid ` — do NOT just describe diagrams in text
 2. Do NOT use ASCII art, text-based tables for comparisons, or plain-text flowcharts
-3. ALWAYS use `chart` blocks for numerical data and `mermaid` blocks for structural data
-4. When user asks for 心智圖/mindmap/流程圖/ERD/甘特圖, you MUST output the actual ```mermaid code block — never just describe it
+3. ALWAYS use `chart` blocks for numerical data, `mermaid` blocks for structural diagrams, `mindmap` blocks for mind maps
+4. When user asks for 心智圖/mindmap, you MUST use ` ```mindmap ` block (NOT mermaid). For 流程圖/ERD/甘特圖, use ` ```mermaid ` block. ALWAYS output the actual code block — never just describe it.
 
 ### Available Diagram Types
 
@@ -93,19 +93,21 @@ flowchart TD
     D --> E
 ```
 
-**Mind Map** — topic exploration, brainstorming:
-```mermaid
-mindmap
-  root((AI Trends))
-    LLMs
-      GPT
-      Claude
-      Gemini
-    Computer Vision
-      Object Detection
-      Image Generation
-    Robotics
+**Mind Map (Interactive)** — topic exploration, brainstorming. Uses ` ```mindmap ` block (NOT mermaid). Format is markdown headings:
+```mindmap
+# AI Trends
+## LLMs
+### GPT
+### Claude
+### Gemini
+## Computer Vision
+### Object Detection
+### Image Generation
+## Robotics
+### Humanoid
+### Industrial
 ```
+This renders as an **interactive tree** — users can click nodes to collapse/expand, scroll to zoom, and drag to pan.
 
 **Gantt Chart** — timelines, project schedules:
 ```mermaid
@@ -149,14 +151,15 @@ pie title Market Share
 |-----------|-----|
 | Numbers, statistics, trends | `chart` block (Recharts) |
 | Processes, workflows | `mermaid` flowchart |
-| Comparisons (non-numeric) | `mermaid` mindmap or flowchart |
+| Comparisons (non-numeric) | `mindmap` block or `mermaid` flowchart |
 | Timelines, schedules | `mermaid` gantt |
 | Relationships, DB schemas | `mermaid` erDiagram |
 | API/system interactions | `mermaid` sequenceDiagram |
-| Topic hierarchies | `mermaid` mindmap |
+| Topic hierarchies, brainstorming | `mindmap` block (**NOT** mermaid mindmap) |
 
 ### Rules
-- NEVER output ASCII art — always use `chart` or `mermaid` blocks
-- Combine both: use charts for data + mermaid for structure in the same response
+- NEVER output ASCII art — always use `chart`, `mermaid`, or `mindmap` blocks
+- For mind maps: ALWAYS use ` ```mindmap ` with markdown headings — NEVER use mermaid mindmap
+- Combine multiple: use charts for data + mermaid for diagrams + mindmap for hierarchies
 - Keep diagrams focused — max 15-20 nodes per diagram for readability
 - Always describe the diagram in surrounding text
