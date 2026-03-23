@@ -104,7 +104,7 @@ const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
 ];
 
 export default function Navbar() {
-  const { user, token, logout } = useAuth();
+  const { user, token, logout, updateUser } = useAuth();
   const { locale, theme, setLocale, setTheme, t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
@@ -117,6 +117,12 @@ export default function Navbar() {
     if (typeof window !== 'undefined') return localStorage.getItem(SIDEBAR_KEY) === '1';
     return false;
   });
+
+  // Display name edit state
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [nameError, setNameError] = useState('');
 
   // Password change state
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -245,6 +251,34 @@ export default function Navbar() {
       setPasswordError(t('userMenu.changePassword.failed'));
     } finally {
       setChangingPassword(false);
+    }
+  }
+
+  async function handleNameSave() {
+    const trimmed = nameInput.trim();
+    if (trimmed.length > 50) {
+      setNameError(t('userMenu.changeName.tooLong' as any));
+      return;
+    }
+    setSavingName(true);
+    setNameError('');
+    try {
+      const res = await fetch('/api/auth/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ displayName: trimmed }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        setNameError(err.error || t('userMenu.changeName.failed' as any));
+        return;
+      }
+      updateUser({ displayName: trimmed || null });
+      setEditingName(false);
+    } catch {
+      setNameError(t('userMenu.changeName.failed' as any));
+    } finally {
+      setSavingName(false);
     }
   }
 
@@ -396,6 +430,49 @@ export default function Navbar() {
                       </span>
                     )}
                   </div>
+                </div>
+
+                {/* Change Display Name */}
+                <div className="px-5 py-3 border-b border-outline-variant/10">
+                  {!editingName ? (
+                    <button
+                      onClick={() => { setEditingName(true); setNameInput(user.displayName || ''); setNameError(''); }}
+                      className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors w-full bg-transparent cursor-pointer py-1"
+                    >
+                      <span className="material-symbols-outlined text-sm">badge</span>
+                      {t('userMenu.changeName' as any)}
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-sm font-bold text-on-surface mb-2">{t('userMenu.changeName' as any)}</p>
+                      <input
+                        type="text"
+                        placeholder={t('userMenu.changeName.placeholder' as any)}
+                        value={nameInput}
+                        onChange={e => setNameInput(e.target.value)}
+                        maxLength={50}
+                        className="w-full px-3 py-2 bg-surface-container-high border border-outline-variant/20 rounded text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
+                        autoFocus
+                        onKeyDown={e => { if (e.key === 'Enter') handleNameSave(); if (e.key === 'Escape') setEditingName(false); }}
+                      />
+                      {nameError && <p className="text-xs text-error">{nameError}</p>}
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={handleNameSave}
+                          disabled={savingName}
+                          className="flex-1 px-3 py-1.5 bg-primary text-on-primary text-xs font-medium rounded hover:bg-primary-hover transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {t('common.save' as any)}
+                        </button>
+                        <button
+                          onClick={() => { setEditingName(false); setNameError(''); }}
+                          className="px-3 py-1.5 bg-surface-container-high text-on-surface-variant text-xs font-medium rounded hover:bg-surface-variant transition-colors cursor-pointer border border-outline-variant/20"
+                        >
+                          {t('common.cancel')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Change Password */}

@@ -165,20 +165,19 @@ ${code}
 
   const handleDownloadPng = useCallback(() => {
     if (!svgRef.current) return;
-    // Try getBBox for tight crop; fall back to client dimensions
-    let w: number, h: number;
-    const clone = svgRef.current.cloneNode(true) as SVGSVGElement;
-    try {
-      const bbox = svgRef.current.getBBox();
-      const pad = 20;
-      w = Math.ceil(bbox.width + pad * 2);
-      h = Math.ceil(bbox.height + pad * 2);
-      clone.setAttribute('viewBox', `${bbox.x - pad} ${bbox.y - pad} ${w} ${h}`);
-    } catch {
-      w = svgRef.current.clientWidth || 800;
-      h = svgRef.current.clientHeight || 600;
-      clone.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    const svg = svgRef.current;
+    // Read the viewBox that markmap already computed (avoids getBBox SVGLength errors)
+    const vb = svg.getAttribute('viewBox')?.split(/[\s,]+/).map(Number);
+    let vx: number, vy: number, w: number, h: number;
+    if (vb && vb.length === 4 && vb[2] > 0 && vb[3] > 0) {
+      vx = vb[0]; vy = vb[1]; w = Math.ceil(vb[2]); h = Math.ceil(vb[3]);
+    } else {
+      vx = 0; vy = 0;
+      w = svg.clientWidth || 800;
+      h = svg.clientHeight || 600;
     }
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute('viewBox', `${vx} ${vy} ${w} ${h}`);
     clone.setAttribute('width', String(w));
     clone.setAttribute('height', String(h));
     const svgData = new XMLSerializer().serializeToString(clone);

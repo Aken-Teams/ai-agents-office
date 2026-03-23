@@ -446,6 +446,29 @@ router.patch('/preferences', authMiddleware, (req: Request, res: Response) => {
 });
 
 /* ============================================================
+   PATCH /api/auth/profile  — update display name
+   ============================================================ */
+router.patch('/profile', authMiddleware, (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const { displayName } = req.body;
+
+  if (typeof displayName !== 'string') {
+    res.status(400).json({ error: 'displayName is required' });
+    return;
+  }
+  const trimmed = displayName.trim();
+  if (trimmed.length > 50) {
+    res.status(400).json({ error: 'Display name must be at most 50 characters' });
+    return;
+  }
+
+  db.prepare("UPDATE users SET display_name = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(trimmed || null, userId);
+
+  res.json({ success: true, displayName: trimmed || null });
+});
+
+/* ============================================================
    PATCH /api/auth/password
    ============================================================ */
 router.patch('/password', authMiddleware, async (req: Request, res: Response) => {
