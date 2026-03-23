@@ -8,6 +8,14 @@ interface ChatMindmapProps {
   code: string;
 }
 
+// Collapse nodes deeper than maxLevel so the mindmap starts compact
+function foldTree(node: any, depth: number, maxExpandLevel: number) {
+  if (depth >= maxExpandLevel && node.children?.length) {
+    node.payload = { ...node.payload, fold: 1 };
+  }
+  node.children?.forEach((child: any) => foldTree(child, depth + 1, maxExpandLevel));
+}
+
 export default function ChatMindmap({ code }: ChatMindmapProps) {
   const { t } = useTranslation();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -30,6 +38,9 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
         const transformer = new Transformer();
         const { root } = transformer.transform(code.trim());
 
+        // Collapse to 2 levels by default so large mindmaps stay readable
+        foldTree(root, 0, 2);
+
         // Clear previous content
         svgRef.current.innerHTML = '';
         const isDark = document.documentElement.classList.contains('dark');
@@ -48,6 +59,7 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
         mmRef.current = mm;
         if (!cancelled) setReady(true);
       } catch (e) {
+        console.error('Mindmap render error:', e);
         if (!cancelled) setError((e as Error).message || 'Mindmap render error');
       }
     }
@@ -60,7 +72,6 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
     const observer = new MutationObserver(() => {
       setReady(false);
       setError(null);
-      // Re-trigger render by resetting state
       async function rerender() {
         try {
           const { Transformer } = await import('markmap-lib');
@@ -69,6 +80,7 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
 
           const transformer = new Transformer();
           const { root } = transformer.transform(code.trim());
+          foldTree(root, 0, 2);
           svgRef.current.innerHTML = '';
           const isDark = document.documentElement.classList.contains('dark');
 
@@ -84,7 +96,7 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
           }, root);
           mmRef.current = mm;
           setReady(true);
-        } catch { /* ignore */ }
+        } catch { /* ignore theme re-render errors */ }
       }
       rerender();
     });
@@ -109,6 +121,7 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
 
         const transformer = new Transformer();
         const { root } = transformer.transform(code.trim());
+        foldTree(root, 0, 3); // Show one more level in fullscreen
         fullscreenSvgRef.current.innerHTML = '';
         const isDark = document.documentElement.classList.contains('dark');
 
@@ -168,17 +181,6 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
     img.src = dataUrl;
   }, []);
 
-  // Loading state
-  if (!ready && !error) {
-    return (
-      <div className="chat-chart-container">
-        <div className="chat-chart-body flex items-center justify-center" style={{ minHeight: 120 }}>
-          <span className="text-sm opacity-50 animate-pulse">{t('chart.status.renderingDiagram' as any)}</span>
-        </div>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="chat-chart-fallback">
@@ -195,7 +197,14 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
     <>
       <div className="chat-chart-container group">
         <div className="chat-mindmap-body">
+          {/* SVG is ALWAYS in the DOM so markmap can render into it */}
           <svg ref={svgRef} className="chat-mindmap-svg" />
+          {/* Loading overlay shown until markmap finishes */}
+          {!ready && (
+            <div className="absolute inset-0 flex items-center justify-center bg-[var(--chart-bg,transparent)]">
+              <span className="text-sm opacity-50 animate-pulse">{t('chart.status.renderingDiagram' as any)}</span>
+            </div>
+          )}
         </div>
         <div className="chat-mindmap-hint">
           <span className="material-symbols-outlined" style={{ fontSize: 13 }}>touch_app</span>
