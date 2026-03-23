@@ -261,20 +261,20 @@ export default function AdminUsers() {
         </div>
 
         {/* Actions */}
-        <div className="px-4 py-3">
+        <div className="px-4 py-3 space-y-2">
           {detail.status === 'pending' ? (
             <div className="flex gap-2">
               <button
                 onClick={() => toggleUserStatus(detail.id, 'active')}
                 disabled={actionLoading}
-                className="flex-1 py-1.5 bg-success/10 text-success text-xs font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
+                className="flex-1 h-9 flex items-center justify-center bg-success/10 text-success text-xs font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
               >
                 {t('admin.users.detail.approve')}
               </button>
               <button
                 onClick={() => toggleUserStatus(detail.id, 'suspended')}
                 disabled={actionLoading}
-                className="flex-1 py-1.5 bg-error/10 text-error text-xs font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
+                className="flex-1 h-9 flex items-center justify-center bg-error/10 text-error text-xs font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
               >
                 {t('admin.users.detail.reject')}
               </button>
@@ -283,7 +283,7 @@ export default function AdminUsers() {
             <button
               onClick={() => toggleUserStatus(detail.id, 'suspended')}
               disabled={actionLoading}
-              className="w-full py-1.5 bg-error/10 text-error text-xs font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
+              className="w-full h-9 flex items-center justify-center bg-error/10 text-error text-xs font-bold uppercase tracking-wider rounded hover:bg-error/20 transition-colors cursor-pointer disabled:opacity-50"
             >
               {t('admin.users.detail.suspend')}
             </button>
@@ -291,14 +291,14 @@ export default function AdminUsers() {
             <button
               onClick={() => toggleUserStatus(detail.id, 'active')}
               disabled={actionLoading}
-              className="w-full py-1.5 bg-success/10 text-success text-xs font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
+              className="w-full h-9 flex items-center justify-center bg-success/10 text-success text-xs font-bold uppercase tracking-wider rounded hover:bg-success/20 transition-colors cursor-pointer disabled:opacity-50"
             >
               {t('admin.users.detail.activate')}
             </button>
           )}
           <button
             onClick={() => setDeleteConfirm({ id: detail.id, email: detail.email })}
-            className="w-full mt-2 py-1.5 border border-error/30 text-error/70 text-xs font-bold uppercase tracking-wider rounded hover:bg-error/10 hover:text-error transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+            className="w-full h-9 flex items-center justify-center gap-1.5 border border-error/30 text-error/70 text-xs font-bold uppercase tracking-wider rounded hover:bg-error/10 hover:text-error transition-colors cursor-pointer"
           >
             <span className="material-symbols-outlined text-xs">delete_forever</span>
             {t('admin.users.detail.delete')}

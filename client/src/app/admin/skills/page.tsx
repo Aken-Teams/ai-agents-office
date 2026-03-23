@@ -65,16 +65,14 @@ export default function AdminSkillsPage() {
   return (
     <>
       {/* Header */}
-      <header className="sticky top-0 h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
-        <div className="flex items-center gap-4">
-          <span className="text-lg font-black text-on-surface font-headline">{t('admin.skills.title')}</span>
-        </div>
-        <div className="flex gap-1 rounded overflow-hidden border border-outline-variant/15">
+      <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
+        <span className="text-base md:text-lg font-black text-on-surface font-headline shrink-0">{t('admin.skills.title')}</span>
+        <div className="flex gap-px md:gap-1 rounded overflow-hidden border border-outline-variant/15 shrink-0">
           {(['all', 'generator', 'agent'] as const).map(f => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-4 py-2 text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
+              className={`px-2.5 md:px-4 py-1.5 md:py-2 text-xs md:text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
                 filter === f
                   ? 'bg-primary/15 text-primary'
                   : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
@@ -87,67 +85,66 @@ export default function AdminSkillsPage() {
       </header>
 
       {/* Content */}
-      <div className="p-8 flex-1 space-y-8">
+      <div className="p-4 md:p-8 flex-1 space-y-4 md:space-y-8">
         {/* Hero Banner */}
-        <section className="relative overflow-hidden bg-surface-container p-8 rounded-lg border border-outline-variant/10">
+        <section className="relative overflow-hidden bg-surface-container p-4 md:p-8 rounded-lg border border-outline-variant/10">
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none" />
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-            <div>
-              <h3 className="text-2xl font-headline font-bold text-on-surface mb-2">
-                {t('admin.skills.hero.loaded', { count: skills.length }).split(String(skills.length)).map((part, i, arr) =>
-                  i < arr.length - 1 ? (
-                    <span key={i}>{part}<span className="text-primary">{skills.length}</span></span>
-                  ) : (
-                    <span key={i}>{part}</span>
-                  )
-                )}
-              </h3>
-              <p className="text-sm text-on-surface-variant">
-                {t('admin.skills.hero.summary', { generatorCount: generators.length, agentCount: agents.length })}
-              </p>
-            </div>
+          <div className="relative z-10">
+            <h3 className="text-lg md:text-2xl font-headline font-bold text-on-surface mb-1 md:mb-2">
+              {t('admin.skills.hero.loaded', { count: skills.length }).split(String(skills.length)).map((part, i, arr) =>
+                i < arr.length - 1 ? (
+                  <span key={i}>{part}<span className="text-primary">{skills.length}</span></span>
+                ) : (
+                  <span key={i}>{part}</span>
+                )
+              )}
+            </h3>
+            <p className="text-xs md:text-sm text-on-surface-variant">
+              {t('admin.skills.hero.summary', { generatorCount: generators.length, agentCount: agents.length })}
+            </p>
           </div>
         </section>
 
         {/* Skills Grid */}
-        <section className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
+        <section className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3 md:gap-6">
           {filtered.map(skill => {
             const meta = SKILL_META[skill.id] || DEFAULT_META;
             return (
               <div
                 key={skill.id}
-                className="group bg-surface-container hover:bg-surface-container-high transition-all duration-300 p-6 rounded-lg border border-transparent hover:border-primary/10 flex flex-col justify-between"
+                className="group bg-surface-container hover:bg-surface-container-high transition-all duration-300 p-4 md:p-6 rounded-lg border border-transparent hover:border-primary/10 flex flex-col justify-between"
               >
                 <div>
-                  <div className="flex justify-between items-start mb-5">
-                    <div className={`w-12 h-12 rounded flex items-center justify-center ${meta.bgColor}`}>
-                      <span className={`material-symbols-outlined text-3xl ${meta.iconColor}`}>{meta.icon}</span>
+                  <div className="flex justify-between items-start mb-3 md:mb-5">
+                    <div className={`w-10 h-10 md:w-12 md:h-12 rounded flex items-center justify-center ${meta.bgColor}`}>
+                      <span className={`material-symbols-outlined text-2xl md:text-3xl ${meta.iconColor}`}>{meta.icon}</span>
                     </div>
-                    <span className={`px-2 py-0.5 bg-surface-container-highest text-sm font-bold tracking-widest uppercase ${meta.tagColor}`}>
+                    <span className={`px-2 py-0.5 bg-surface-container-highest text-xs md:text-sm font-bold tracking-widest uppercase ${meta.tagColor}`}>
                       {meta.tag}
                     </span>
                   </div>
 
-                  <h3 className="text-xl font-headline font-semibold text-on-surface mb-1">{skill.name}</h3>
-                  <p className="text-sm text-on-surface-variant mb-3 font-medium">
+                  <h3 className="text-base md:text-xl font-headline font-semibold text-on-surface mb-1">{skill.name}</h3>
+                  <p className="text-xs md:text-sm text-on-surface-variant mb-2 md:mb-3 font-medium">
                     ID: <span className="font-mono text-primary/80">{skill.id}</span>
                   </p>
-                  <p className="text-sm text-on-surface-variant/80 mb-6 leading-relaxed">{skill.description}</p>
+                  <p className="text-xs md:text-sm text-on-surface-variant/80 mb-4 md:mb-6 leading-relaxed">{skill.description}</p>
                 </div>
 
-                <div className="flex items-center justify-between text-sm text-on-surface-variant bg-surface-container-low p-3 rounded">
+                <div className="flex items-center justify-between text-xs md:text-sm text-on-surface-variant bg-surface-container-low p-2.5 md:p-3 rounded">
                   <span className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-sm">smart_toy</span>
+                    <span className="material-symbols-outlined text-xs md:text-sm">smart_toy</span>
                     {ROLE_LABELS[skill.role] || skill.role}
                   </span>
                   {skill.fileType ? (
                     <span className="flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-sm">output</span>
-                      {FILE_TYPE_LABELS[skill.fileType] || `.${skill.fileType}`}
+                      <span className="material-symbols-outlined text-xs md:text-sm">output</span>
+                      <span className="hidden md:inline">{FILE_TYPE_LABELS[skill.fileType] || `.${skill.fileType}`}</span>
+                      <span className="md:hidden">.{skill.fileType}</span>
                     </span>
                   ) : (
                     <span className="flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-sm">psychology</span>
+                      <span className="material-symbols-outlined text-xs md:text-sm">psychology</span>
                       {t('admin.skills.noFileType')}
                     </span>
                   )}
@@ -161,27 +158,27 @@ export default function AdminSkillsPage() {
         </section>
 
         {/* Architecture Info */}
-        <section className="bg-surface-container-low border border-outline-variant/5 p-8 relative overflow-hidden rounded-lg">
+        <section className="bg-surface-container-low border border-outline-variant/5 p-4 md:p-8 relative overflow-hidden rounded-lg">
           <div className="absolute right-6 bottom-6 opacity-[0.04] pointer-events-none">
             <span className="material-symbols-outlined text-[8rem]">hub</span>
           </div>
           <div className="relative z-10">
-            <h2 className="text-2xl font-headline font-bold text-on-surface mb-4">{t('admin.skills.architecture.title')}</h2>
-            <p className="text-on-surface-variant max-w-2xl mb-6">
+            <h2 className="text-lg md:text-2xl font-headline font-bold text-on-surface mb-2 md:mb-4">{t('admin.skills.architecture.title')}</h2>
+            <p className="text-xs md:text-base text-on-surface-variant max-w-2xl mb-4 md:mb-6">
               {t('admin.skills.architecture.description')}
             </p>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="bg-surface-container p-4 border-l-2 border-primary">
-                <h4 className="text-on-surface font-bold text-sm mb-1">{t('admin.skills.architecture.routingTitle')}</h4>
-                <p className="text-sm text-on-surface-variant">{t('admin.skills.architecture.routingDesc')}</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+              <div className="bg-surface-container p-3 md:p-4 border-l-2 border-primary">
+                <h4 className="text-on-surface font-bold text-xs md:text-sm mb-0.5 md:mb-1">{t('admin.skills.architecture.routingTitle')}</h4>
+                <p className="text-xs md:text-sm text-on-surface-variant">{t('admin.skills.architecture.routingDesc')}</p>
               </div>
-              <div className="bg-surface-container p-4 border-l-2 border-tertiary">
-                <h4 className="text-on-surface font-bold text-sm mb-1">{t('admin.skills.architecture.sandboxTitle')}</h4>
-                <p className="text-sm text-on-surface-variant">{t('admin.skills.architecture.sandboxDesc')}</p>
+              <div className="bg-surface-container p-3 md:p-4 border-l-2 border-tertiary">
+                <h4 className="text-on-surface font-bold text-xs md:text-sm mb-0.5 md:mb-1">{t('admin.skills.architecture.sandboxTitle')}</h4>
+                <p className="text-xs md:text-sm text-on-surface-variant">{t('admin.skills.architecture.sandboxDesc')}</p>
               </div>
-              <div className="bg-surface-container p-4 border-l-2 border-secondary">
-                <h4 className="text-on-surface font-bold text-sm mb-1">{t('admin.skills.architecture.pipelineTitle')}</h4>
-                <p className="text-sm text-on-surface-variant">{t('admin.skills.architecture.pipelineDesc')}</p>
+              <div className="bg-surface-container p-3 md:p-4 border-l-2 border-secondary">
+                <h4 className="text-on-surface font-bold text-xs md:text-sm mb-0.5 md:mb-1">{t('admin.skills.architecture.pipelineTitle')}</h4>
+                <p className="text-xs md:text-sm text-on-surface-variant">{t('admin.skills.architecture.pipelineDesc')}</p>
               </div>
             </div>
           </div>
