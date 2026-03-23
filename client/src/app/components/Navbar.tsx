@@ -296,7 +296,7 @@ export default function Navbar() {
       <header className="md:hidden fixed top-0 left-0 right-0 h-14 bg-surface-dim border-b border-outline-variant/10 flex items-center justify-between px-4 z-50">
         <Link href="/dashboard" className="flex items-center gap-2 no-underline">
           <div className="w-8 h-8 bg-primary/20 flex items-center justify-center rounded-lg">
-            <span className="material-symbols-outlined text-primary" style={{ fontSize: 16 }}>terminal</span>
+            <span className="material-symbols-outlined text-primary" style={{ fontSize: 18 }}>terminal</span>
           </div>
           <span className="font-headline text-base font-bold tracking-tighter text-on-surface">AI Agents Office</span>
         </Link>
