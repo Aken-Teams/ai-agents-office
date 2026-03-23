@@ -79,6 +79,46 @@ router.patch('/:id', (req: Request, res: Response) => {
   res.json(updated);
 });
 
+// GET /api/conversations/:id/usage — aggregated token usage for a conversation
+router.get('/:id/usage', (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const conversationId = req.params.id;
+
+  // Verify ownership
+  const conversation = db.prepare(
+    'SELECT id FROM conversations WHERE id = ? AND user_id = ?'
+  ).get(conversationId, userId);
+  if (!conversation) {
+    res.status(404).json({ error: 'Conversation not found' });
+    return;
+  }
+
+  // Aggregate from token_usage table
+  const usage = db.prepare(`
+    SELECT
+      COALESCE(SUM(input_tokens), 0) AS totalInput,
+      COALESCE(SUM(output_tokens), 0) AS totalOutput,
+      COUNT(*) AS callCount
+    FROM token_usage
+    WHERE conversation_id = ?
+  `).get(conversationId) as { totalInput: number; totalOutput: number; callCount: number };
+
+  // Also aggregate from task_executions (multi-agent mode)
+  const taskUsage = db.prepare(`
+    SELECT
+      COALESCE(SUM(input_tokens), 0) AS totalInput,
+      COALESCE(SUM(output_tokens), 0) AS totalOutput
+    FROM task_executions
+    WHERE conversation_id = ?
+  `).get(conversationId) as { totalInput: number; totalOutput: number };
+
+  res.json({
+    inputTokens: usage.totalInput + taskUsage.totalInput,
+    outputTokens: usage.totalOutput + taskUsage.totalOutput,
+    callCount: usage.callCount,
+  });
+});
+
 // DELETE /api/conversations/:id
 router.delete('/:id', (req: Request, res: Response) => {
   const userId = req.user!.userId;

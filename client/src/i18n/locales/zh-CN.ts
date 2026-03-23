@@ -203,6 +203,18 @@ const zhCN = {
   'templates.slides.neon': '霓虹发光',
   'templates.slides.neon.desc': '黑色背景、霓虹发光效果',
   'templates.slides.neon.prompt': '霓虹风格：纯黑背景，霓虹发光文字效果（青色、粉色、绿色），电子感强烈，适合派对、创意活动和科技展示。',
+  'templates.slides.corporate': '商务专业',
+  'templates.slides.corporate.desc': '白色背景、蓝灰配色、干净线条',
+  'templates.slides.corporate.prompt': '商务专业风格：白色背景，Inter 字体，蓝灰色强调色，清晰的层级结构，适合投资人演示、企业报告和正式商务场合。请搭配 stats、chart 等数据可视化幻灯片类型。',
+  'templates.slides.creative': '活泼创意',
+  'templates.slides.creative.desc': '暖色调、圆角设计、活泼配色',
+  'templates.slides.creative.prompt': '活泼创意风格：暖奶油色背景（#FFFBF5），Poppins 字体，珊瑚橘和薄荷绿配色，圆角设计，SVG 装饰图形，适合营销策划、设计提案和工作坊。',
+  'templates.slides.elegant': '典雅奢华',
+  'templates.slides.elegant.desc': '衬线字体、金色调、精致排版',
+  'templates.slides.elegant.prompt': '典雅奢华风格：暖白色背景（#FAF8F5），Playfair Display 衬线字体，金色和深棕色调，精致排版，适合高端品牌、晚宴活动和正式场合。',
+  'templates.slides.tech': '工程师风',
+  'templates.slides.tech.desc': 'GitHub 暗色主题、绿色强调、等宽字体',
+  'templates.slides.tech.prompt': '工程师风格：GitHub 暗色背景（#0D1117），JetBrains Mono 等宽字体，绿色强调色（#3FB950），适合工程技术分享、开源项目和 DevOps 主题。搭配 code 和 chart 幻灯片类型。',
 
   // Chat
   'chat.tool.generatePptx': '生成演示文稿',
@@ -260,6 +272,8 @@ const zhCN = {
   'chat.sidebar.uploadedFiles': '上传的文件',
   'chat.sidebar.agentTasks': '代理任务',
   'chat.sidebar.safe': '安全',
+  'chat.preview.fullscreen': '全屏预览',
+  'chat.preview.download': '下载',
 
   // Files
   'files.deleteModal.title': '确定删除？',

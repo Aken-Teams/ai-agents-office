@@ -57,6 +57,10 @@ const SKILL_TEMPLATES: Record<string, Array<{ id: string; icon: string; labelKey
     { id: 'dark', icon: 'dark_mode', labelKey: 'templates.slides.dark' as any, descKey: 'templates.slides.dark.desc' as any, promptKey: 'templates.slides.dark.prompt' as any },
     { id: 'gradient', icon: 'gradient', labelKey: 'templates.slides.gradient' as any, descKey: 'templates.slides.gradient.desc' as any, promptKey: 'templates.slides.gradient.prompt' as any },
     { id: 'neon', icon: 'flare', labelKey: 'templates.slides.neon' as any, descKey: 'templates.slides.neon.desc' as any, promptKey: 'templates.slides.neon.prompt' as any },
+    { id: 'corporate', icon: 'business', labelKey: 'templates.slides.corporate' as any, descKey: 'templates.slides.corporate.desc' as any, promptKey: 'templates.slides.corporate.prompt' as any },
+    { id: 'creative', icon: 'palette', labelKey: 'templates.slides.creative' as any, descKey: 'templates.slides.creative.desc' as any, promptKey: 'templates.slides.creative.prompt' as any },
+    { id: 'elegant', icon: 'diamond', labelKey: 'templates.slides.elegant' as any, descKey: 'templates.slides.elegant.desc' as any, promptKey: 'templates.slides.elegant.prompt' as any },
+    { id: 'tech', icon: 'terminal', labelKey: 'templates.slides.tech' as any, descKey: 'templates.slides.tech.desc' as any, promptKey: 'templates.slides.tech.prompt' as any },
   ],
 };
 

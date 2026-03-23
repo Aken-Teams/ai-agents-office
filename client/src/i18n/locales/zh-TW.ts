@@ -207,6 +207,18 @@ const zhTW = {
   'templates.slides.neon': '霓虹發光',
   'templates.slides.neon.desc': '黑色背景、霓虹發光效果',
   'templates.slides.neon.prompt': '霓虹風格：純黑背景，霓虹發光文字效果（青色、粉色、綠色），電子感強烈，適合派對、創意活動和科技展示。',
+  'templates.slides.corporate': '商務專業',
+  'templates.slides.corporate.desc': '白色背景、藍灰配色、乾淨線條',
+  'templates.slides.corporate.prompt': '商務專業風格：白色背景，Inter 字體，藍灰色強調色，清晰的層級結構，適合投資人簡報、企業報告和正式商務場合。請搭配 stats、chart 等資料視覺化投影片類型。',
+  'templates.slides.creative': '活潑創意',
+  'templates.slides.creative.desc': '暖色調、圓角設計、活潑配色',
+  'templates.slides.creative.prompt': '活潑創意風格：暖奶油色背景（#FFFBF5），Poppins 字體，珊瑚橘和薄荷綠配色，圓角設計，SVG 裝飾圖形，適合行銷企劃、設計提案和工作坊。',
+  'templates.slides.elegant': '典雅奢華',
+  'templates.slides.elegant.desc': '襯線字體、金色調、精緻排版',
+  'templates.slides.elegant.prompt': '典雅奢華風格：暖白色背景（#FAF8F5），Playfair Display 襯線字體，金色和深棕色調，精緻排版，適合高端品牌、晚宴活動和正式場合。',
+  'templates.slides.tech': '工程師風',
+  'templates.slides.tech.desc': 'GitHub 暗色主題、綠色強調、等寬字體',
+  'templates.slides.tech.prompt': '工程師風格：GitHub 暗色背景（#0D1117），JetBrains Mono 等寬字體，綠色強調色（#3FB950），適合工程技術分享、開源專案和 DevOps 主題。搭配 code 和 chart 投影片類型。',
 
   // Chat
   'chat.tool.generatePptx': '生成簡報檔案',
@@ -264,6 +276,8 @@ const zhTW = {
   'chat.sidebar.uploadedFiles': '上傳的檔案',
   'chat.sidebar.agentTasks': '代理任務',
   'chat.sidebar.safe': '安全',
+  'chat.preview.fullscreen': '全螢幕預覽',
+  'chat.preview.download': '下載',
 
   // Files
   'files.deleteModal.title': '確定刪除？',

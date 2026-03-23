@@ -40,6 +40,7 @@ export interface GeneratedFile {
   file_path: string;
   file_type: string;
   file_size: number;
+  version: number;
   created_at: string;
 }
 

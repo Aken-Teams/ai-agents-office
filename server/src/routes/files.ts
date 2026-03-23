@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import db from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { getFileDownloadPath, deleteFile } from '../services/fileManager.js';
+import { getFileDownloadPath, deleteFile, getFileVersions } from '../services/fileManager.js';
 import { convertOfficeFile } from '../services/filePreview.js';
 import { applyWatermark } from '../services/watermark.js';
 import { config } from '../config.js';
@@ -164,6 +164,13 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
+
+// GET /api/files/:id/versions — list all versions of a file
+router.get('/:id/versions', (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const versions = getFileVersions(userId, req.params.id as string);
+  res.json(versions);
+});
 
 // DELETE /api/files/:id
 router.delete('/:id', (req: Request, res: Response) => {

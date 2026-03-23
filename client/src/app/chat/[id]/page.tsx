@@ -25,6 +25,7 @@ interface GeneratedFile {
   filename: string;
   file_type: string;
   file_size: number;
+  version?: number;
 }
 
 interface AttachedFile {
@@ -199,6 +200,7 @@ function getFileIcon(type: string): string {
     xlsx: 'table_chart', xls: 'table_chart',
     pptx: 'present_to_all', ppt: 'present_to_all',
     pdf: 'picture_as_pdf',
+    html: 'slideshow',
   };
   return icons[type] || 'attach_file';
 }
@@ -209,8 +211,49 @@ function getFileColor(type: string): string {
     xlsx: 'text-success', xls: 'text-success',
     pptx: 'text-warning', ppt: 'text-warning',
     pdf: 'text-error',
+    html: 'text-secondary',
   };
   return colors[type] || 'text-primary';
+}
+
+function InlineHtmlPreview({ file, token, onFullscreen }: { file: GeneratedFile; token: string; onFullscreen: () => void }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let url: string | null = null;
+    fetch(`/api/files/${file.id}/download`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.text() : Promise.reject('fetch failed'))
+      .then(html => {
+        url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+        setBlobUrl(url);
+      })
+      .catch(console.error);
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [file.id, token]);
+
+  if (!blobUrl) return (
+    <div className="h-[360px] flex items-center justify-center text-on-surface-variant text-sm">
+      <span className="material-symbols-outlined animate-spin mr-2">progress_activity</span>
+      Loading preview...
+    </div>
+  );
+
+  return (
+    <div className="relative group">
+      <iframe
+        src={blobUrl}
+        sandbox="allow-scripts allow-same-origin"
+        className="w-full h-[360px] border-b border-outline-variant/10"
+        title={file.filename}
+      />
+      <button
+        onClick={onFullscreen}
+        className="absolute top-3 right-3 p-2 rounded-lg bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-black/70"
+        title="Fullscreen"
+      >
+        <span className="material-symbols-outlined text-lg">fullscreen</span>
+      </button>
+    </div>
+  );
 }
 
 function ChatContent() {
@@ -236,6 +279,9 @@ function ChatContent() {
   const [agentTasks, setAgentTasks] = useState<AgentTask[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [pendingTemplate, setPendingTemplate] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<GeneratedFile | null>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [totalUsage, setTotalUsage] = useState<{ inputTokens: number; outputTokens: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sidebarMargin = useSidebarMargin();
   const abortRef = useRef<AbortController | null>(null);
@@ -275,6 +321,24 @@ function ChatContent() {
       .then(setFiles)
       .catch(console.error);
   }, [token, conversationId]);
+
+  // Load persisted token usage
+  const fetchUsage = useCallback(() => {
+    if (!token || !conversationId) return;
+    fetch(`/api/conversations/${conversationId}/usage`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setTotalUsage(data); })
+      .catch(console.error);
+  }, [token, conversationId]);
+
+  useEffect(() => { fetchUsage(); }, [fetchUsage]);
+
+  // Refresh usage when streaming completes
+  useEffect(() => {
+    if (!streaming && lastUsage) fetchUsage();
+  }, [streaming, lastUsage, fetchUsage]);
 
   // Load conversation's uploaded files for the right sidebar display
   const [conversationUploads, setConversationUploads] = useState<AttachedFile[]>([]);
@@ -652,6 +716,29 @@ function ChatContent() {
     }
   }
 
+  async function openPreview(file: GeneratedFile) {
+    try {
+      const res = await fetch(`/api/files/${file.id}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Preview fetch failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(
+        file.file_type === 'html' ? new Blob([await blob.text()], { type: 'text/html' }) : blob
+      );
+      setPreviewBlobUrl(url);
+      setPreviewFile(file);
+    } catch (err) {
+      console.error('Preview error:', err);
+    }
+  }
+
+  function closePreview() {
+    if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+    setPreviewBlobUrl(null);
+    setPreviewFile(null);
+  }
+
   function formatElapsed(s: number): string {
     if (s < 60) return `${s}s`;
     return `${Math.floor(s / 60)}m ${s % 60}s`;
@@ -931,8 +1018,109 @@ function ChatContent() {
               </div>
             )}
 
+            {/* Inline File Preview */}
+            {files.length > 0 && !streaming && (
+              <div className="max-w-[85%] space-y-3 ml-13">
+                {files.map(file => (
+                  <div key={file.id} className="bg-surface-container-low rounded-xl border border-outline-variant/10 overflow-hidden">
+                    {/* HTML slides — iframe preview */}
+                    {file.file_type === 'html' && (
+                      <InlineHtmlPreview file={file} token={token!} onFullscreen={() => openPreview(file)} />
+                    )}
+                    {/* Other file types — card only */}
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        file.file_type === 'html' ? 'bg-secondary/10' :
+                        file.file_type === 'pdf' ? 'bg-error/10' :
+                        file.file_type === 'pptx' ? 'bg-warning/10' :
+                        file.file_type === 'xlsx' ? 'bg-success/10' :
+                        'bg-tertiary/10'
+                      }`}>
+                        <span className={`material-symbols-outlined ${getFileColor(file.file_type)} text-xl`}>
+                          {getFileIcon(file.file_type)}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium text-on-surface block truncate">{file.filename}</span>
+                        <span className="text-sm text-outline">
+                          {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
+                          {file.version && file.version > 1 && (
+                            <span className="ml-1 px-1 py-0.5 bg-primary/10 text-primary rounded text-xs font-bold">v{file.version}</span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {file.file_type === 'html' && (
+                          <button
+                            onClick={() => openPreview(file)}
+                            className="p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+                            title={t('chat.preview.fullscreen' as any)}
+                          >
+                            <span className="material-symbols-outlined text-lg">fullscreen</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDownload(file.id, file.filename)}
+                          className="p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+                          title={t('chat.preview.download' as any)}
+                        >
+                          <span className="material-symbols-outlined text-lg">download</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
+
+          {/* Fullscreen Preview Modal */}
+          {previewFile && previewBlobUrl && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col">
+              <div className="flex items-center justify-between px-6 py-3 bg-surface/90 border-b border-outline-variant/20">
+                <div className="flex items-center gap-3">
+                  <span className={`material-symbols-outlined ${getFileColor(previewFile.file_type)} text-xl`}>
+                    {getFileIcon(previewFile.file_type)}
+                  </span>
+                  <span className="text-on-surface font-medium">{previewFile.filename}</span>
+                  <span className="text-sm text-outline">{formatSize(previewFile.file_size)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleDownload(previewFile.id, previewFile.filename)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer text-sm font-bold"
+                  >
+                    <span className="material-symbols-outlined text-sm">download</span>
+                    {t('chat.preview.download' as any)}
+                  </button>
+                  <button
+                    onClick={closePreview}
+                    className="p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 p-4">
+                {previewFile.file_type === 'html' ? (
+                  <iframe
+                    src={previewBlobUrl}
+                    sandbox="allow-scripts allow-same-origin"
+                    className="w-full h-full rounded-lg border border-outline-variant/20"
+                    title={previewFile.filename}
+                  />
+                ) : (
+                  <iframe
+                    src={previewBlobUrl}
+                    className="w-full h-full rounded-lg border border-outline-variant/20 bg-white"
+                    title={previewFile.filename}
+                  />
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Input Area */}
           <div className="p-6 pt-0">
@@ -1041,10 +1229,19 @@ function ChatContent() {
                   {skillId ? `${SKILL_LABELS[skillId] || skillId}` : t('chat.input.autoDetect')}
                 </span>
               </div>
-              {lastUsage && (
+              {(totalUsage || lastUsage) && (
                 <div className="text-sm font-mono text-on-secondary-container/60 bg-surface-container-low px-3 py-1 rounded-full">
-                  Session: <span className="text-primary">{((lastUsage.inputTokens + lastUsage.outputTokens) / 1000).toFixed(1)}k Tokens</span>
-                  <span className="text-primary/60 ml-1">(${(((lastUsage.inputTokens / 1_000_000) * 3 + (lastUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)})</span>
+                  {totalUsage ? (
+                    <>
+                      <span className="text-primary">{((totalUsage.inputTokens + totalUsage.outputTokens) / 1000).toFixed(1)}k</span>
+                      <span className="text-primary/60 ml-1">(${(((totalUsage.inputTokens / 1_000_000) * 3 + (totalUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)})</span>
+                    </>
+                  ) : lastUsage ? (
+                    <>
+                      <span className="text-primary">{((lastUsage.inputTokens + lastUsage.outputTokens) / 1000).toFixed(1)}k</span>
+                      <span className="text-primary/60 ml-1">(${(((lastUsage.inputTokens / 1_000_000) * 3 + (lastUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)})</span>
+                    </>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -1094,6 +1291,9 @@ function ChatContent() {
                         <span className="text-sm text-on-surface font-medium block truncate">{file.filename}</span>
                         <span className="text-sm text-outline">
                           {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
+                          {file.version && file.version > 1 && (
+                            <span className="ml-1 px-1 py-0.5 bg-primary/10 text-primary rounded text-xs font-bold">v{file.version}</span>
+                          )}
                         </span>
                       </div>
                     </div>

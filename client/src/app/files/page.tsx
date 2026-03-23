@@ -12,6 +12,7 @@ interface FileItem {
   filename: string;
   file_type: string;
   file_size: number;
+  version?: number;
   conversation_id: string | null;
   created_at: string;
 }
@@ -698,9 +699,14 @@ function FilesContent() {
                         {config.icon}
                       </span>
                     </div>
-                    <span className="text-sm font-bold tracking-widest uppercase" style={{ color: config.color }}>
-                      {file.file_type.toUpperCase()}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold tracking-widest uppercase" style={{ color: config.color }}>
+                        {file.file_type.toUpperCase()}
+                      </span>
+                      {file.version && file.version > 1 && (
+                        <span className="px-1.5 py-0.5 bg-primary/10 text-primary rounded text-xs font-bold">v{file.version}</span>
+                      )}
+                    </div>
                   </div>
 
                   {/* File name + date */}

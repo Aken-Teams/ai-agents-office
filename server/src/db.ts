@@ -131,6 +131,10 @@ export function initializeDatabase(): void {
   try { db.prepare("SELECT oauth_id FROM users LIMIT 1").get(); }
   catch { db.exec("ALTER TABLE users ADD COLUMN oauth_id TEXT"); }
 
+  // Migration: add version column to generated_files
+  try { db.prepare("SELECT version FROM generated_files LIMIT 1").get(); }
+  catch { db.exec("ALTER TABLE generated_files ADD COLUMN version INTEGER NOT NULL DEFAULT 1"); }
+
   // Migration: add conversation_id to user_uploads if missing
   try {
     db.prepare("SELECT conversation_id FROM user_uploads LIMIT 1").get();
