@@ -118,6 +118,8 @@ const zhTW = {
   'dashboard.smartInput.uploadTooltip': '上傳檔案',
   'dashboard.mobile.greeting': '嗨，{name}',
   'dashboard.mobile.guidance': '告訴我你需要什麼，AI 代理會自動幫你完成',
+  'dashboard.templateWizard': '範本精靈',
+  'dashboard.templateWizard.desc': '選擇文件類型與風格範本，快速生成',
   'dashboard.mobile.typePicker': '選擇文件類型',
   'dashboard.mobile.typePickerHint': '或直接輸入，AI 自動判斷',
   'dashboard.recentFiles.title': '最近文件',

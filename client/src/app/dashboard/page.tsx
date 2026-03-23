@@ -242,6 +242,21 @@ function DashboardContent() {
             </p>
           </div>
 
+          {/* Template Wizard button */}
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('open-template-wizard'))}
+            className="flex items-center gap-3 w-full px-4 py-3.5 bg-surface-container rounded-2xl active:bg-surface-container-high transition-colors cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-xl cyber-gradient flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-on-primary text-xl">auto_fix_high</span>
+            </div>
+            <div className="text-left">
+              <span className="text-sm font-headline font-bold text-on-surface">{t('dashboard.templateWizard' as any)}</span>
+              <p className="text-xs text-on-surface-variant mt-0.5">{t('dashboard.templateWizard.desc' as any)}</p>
+            </div>
+            <span className="material-symbols-outlined text-on-surface-variant ml-auto">chevron_right</span>
+          </button>
+
           {/* Sample Prompt Cards — 2 per row, fills input on tap */}
           <div className="grid grid-cols-2 gap-3">
             {[

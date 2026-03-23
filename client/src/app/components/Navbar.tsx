@@ -158,6 +158,13 @@ export default function Navbar() {
     setMobileUserExpanded(false);
   }, [pathname]);
 
+  // Listen for open-template-wizard event from other components (e.g. dashboard)
+  useEffect(() => {
+    const handler = () => setShowModal(true);
+    window.addEventListener('open-template-wizard', handler);
+    return () => window.removeEventListener('open-template-wizard', handler);
+  }, []);
+
   // Sync to localStorage + dispatch event for other components
   useEffect(() => {
     localStorage.setItem(SIDEBAR_KEY, collapsed ? '1' : '0');
@@ -883,7 +890,7 @@ export default function Navbar() {
 
           {/* Modal */}
           <div
-            className="relative bg-surface-container rounded-xl shadow-2xl border border-outline-variant/10 w-full max-w-2xl mx-4 overflow-hidden animate-in"
+            className="relative bg-surface-container rounded-xl shadow-2xl border border-outline-variant/10 w-full max-w-2xl mx-4 overflow-hidden overflow-y-auto max-h-[90vh] animate-in"
             onClick={e => e.stopPropagation()}
           >
             {!selectedSkill ? (
@@ -901,7 +908,7 @@ export default function Navbar() {
                     <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
                   </button>
                 </div>
-                <div className="p-6 grid grid-cols-4 gap-3">
+                <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-3">
                   {DOC_TYPES.map(doc => (
                     <button
                       key={doc.id}
@@ -950,7 +957,7 @@ export default function Navbar() {
                 </div>
                 <div>
                   {/* Template Grid */}
-                  <div className={`p-4 grid gap-3 ${(SKILL_TEMPLATES[selectedSkill] || []).length > 4 ? 'grid-cols-4' : 'grid-cols-2'}`}>
+                  <div className={`p-4 grid gap-3 ${(SKILL_TEMPLATES[selectedSkill] || []).length > 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2'}`}>
                     {(SKILL_TEMPLATES[selectedSkill] || []).map(tmpl => {
                       const previewKey = `${selectedSkill}:${tmpl.id}`;
                       const preview = TEMPLATE_PREVIEW[previewKey];

@@ -113,6 +113,8 @@ const en = {
   'dashboard.smartInput.uploadTooltip': 'Upload File',
   'dashboard.mobile.greeting': 'Hi, {name}',
   'dashboard.mobile.guidance': 'Tell me what you need — AI agents will handle the rest',
+  'dashboard.templateWizard': 'Template Wizard',
+  'dashboard.templateWizard.desc': 'Pick a document type & style template for quick generation',
   'dashboard.mobile.typePicker': 'Choose document type',
   'dashboard.mobile.typePickerHint': 'Or just type — AI auto-detects',
   'dashboard.recentFiles.title': 'Recent Files',

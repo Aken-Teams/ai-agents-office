@@ -118,6 +118,8 @@ const zhCN = {
   'dashboard.smartInput.uploadTooltip': '上传文件',
   'dashboard.mobile.greeting': '嗨，{name}',
   'dashboard.mobile.guidance': '告诉我你需要什么，AI 代理会自动帮你完成',
+  'dashboard.templateWizard': '模板精灵',
+  'dashboard.templateWizard.desc': '选择文件类型与风格模板，快速生成',
   'dashboard.mobile.typePicker': '选择文件类型',
   'dashboard.mobile.typePickerHint': '或直接输入，AI 自动判断',
   'dashboard.recentFiles.title': '最近文件',
