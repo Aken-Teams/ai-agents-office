@@ -174,6 +174,14 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
     ? uploadIds.filter((id: unknown) => typeof id === 'string')
     : [];
 
+  // Link uploads to this conversation (dashboard uploads have conversation_id=null)
+  if (validUploadIds.length > 0) {
+    const placeholders = validUploadIds.map(() => '?').join(',');
+    db.prepare(
+      `UPDATE user_uploads SET conversation_id = ? WHERE id IN (${placeholders}) AND user_id = ? AND conversation_id IS NULL`
+    ).run(conversationId, ...validUploadIds, userId);
+  }
+
   // Read user locale for AI language instruction
   const userRow = db.prepare('SELECT locale FROM users WHERE id = ?').get(userId) as { locale: string } | undefined;
   const userLocale = userRow?.locale || 'zh-TW';

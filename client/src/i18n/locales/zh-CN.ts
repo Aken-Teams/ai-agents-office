@@ -650,6 +650,16 @@ const zhCN = {
   'admin.skills.architecture.sandboxDesc': '每个 Agent 在隔离环境中运行，确保系统安全',
   'admin.skills.architecture.pipelineTitle': '管线处理',
   'admin.skills.architecture.pipelineDesc': '支持多步骤串联与并行任务，自动汇整结果',
+
+  // Upload Alert Modal
+  'uploadAlert.title': '文件安全扫描结果',
+  'uploadAlert.rejectedSummary': '{count} 个文件被拦截',
+  'uploadAlert.suspiciousSummary': '{count} 个文件有疑虑（已允许上传）',
+  'uploadAlert.statusRejected': '拦截',
+  'uploadAlert.statusSuspicious': '警告',
+  'uploadAlert.statusError': '错误',
+  'uploadAlert.statusQuota': '空间不足',
+  'uploadAlert.close': '我知道了',
 } as const;
 
 export default zhCN;

@@ -61,12 +61,29 @@ Structure your analysis clearly:
 - All files are READ-ONLY — do NOT modify or delete any files
 - Generated reports should go in the current working directory
 
-## Inline Charts
+## Inline Charts — MANDATORY
 
-When cross-file analysis reveals quantitative patterns, embed charts inline using fenced chart blocks:
+**CRITICAL**: You MUST embed at least 2-3 charts in EVERY analysis response that involves numerical data. Charts are rendered as interactive visualizations in the chat UI. Users expect visual summaries — text-only analysis is insufficient.
+
+Use fenced chart blocks with the `chart` language tag:
 
 ```chart
 {"type":"line","title":"Revenue Trend","series":[{"name":"2024","data":[{"name":"Q1","value":120},{"name":"Q2","value":145},{"name":"Q3","value":168},{"name":"Q4","value":195}]}]}
 ```
 
-Supported: `bar`, `line`, `area`, `pie`, `donut`, `radar`, `scatter`. Always include `title`. Cite source files in surrounding text. Use charts to highlight cross-file correlations and trends that are hard to convey in text alone. Multiple charts per response are encouraged when data warrants it.
+### Chart Types
+| Type | Format | Use for |
+|------|--------|---------|
+| `bar` | `{"type":"bar","title":"...","data":[{"name":"A","value":10}]}` | Comparisons |
+| `line` | `{"type":"line","title":"...","series":[{"name":"S","data":[{"name":"Q1","value":20}]}]}` | Trends |
+| `area` | Same as line, `"type":"area"` | Volume trends |
+| `pie`/`donut` | `{"type":"pie","title":"...","data":[{"name":"A","value":55}]}` | Proportions |
+| `radar` | `{"type":"radar","title":"...","axes":[...],"series":[{"name":"A","values":[...]}]}` | Multi-axis |
+| `scatter` | `{"type":"scatter","title":"...","series":[{"name":"G","data":[{"x":1,"y":2}]}]}` | Correlations |
+
+### Chart Strategy
+1. **Cross-file comparison** — bar chart comparing metrics across different source files
+2. **Trend/timeline** — line chart for temporal data found across files
+3. **Breakdown** — pie/donut for distribution analysis
+4. Place charts INLINE next to their analysis text, cite source files nearby
+5. Always include `title`. JSON must be valid and on a single line.

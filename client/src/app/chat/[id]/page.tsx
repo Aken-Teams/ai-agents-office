@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm';
 import dynamic from 'next/dynamic';
 import { AuthProvider, useAuth } from '../../components/AuthProvider';
 import Navbar from '../../components/Navbar';
+import UploadAlertModal, { type UploadAlertItem } from '../../components/UploadAlertModal';
 import { I18nProvider, useTranslation } from '../../../i18n';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 
@@ -38,6 +39,7 @@ interface AttachedFile {
   fileType: string;
   fileSize: number;
   scanStatus: string;
+  scanDetail?: string;
   uploading?: boolean;
 }
 
@@ -267,10 +269,14 @@ function getToolInfo(tool: string, t: (key: any, params?: Record<string, string 
 function getFileIcon(type: string): string {
   const icons: Record<string, string> = {
     docx: 'description', doc: 'description',
-    xlsx: 'table_chart', xls: 'table_chart',
+    xlsx: 'table_chart', xls: 'table_chart', csv: 'table_chart',
     pptx: 'present_to_all', ppt: 'present_to_all',
     pdf: 'picture_as_pdf',
-    html: 'slideshow',
+    html: 'slideshow', htm: 'slideshow',
+    png: 'image', jpg: 'image', jpeg: 'image', gif: 'image',
+    webp: 'image', bmp: 'image', svg: 'image', tiff: 'image', tif: 'image', ico: 'image',
+    json: 'data_object', xml: 'code', yaml: 'code', yml: 'code',
+    txt: 'text_snippet', md: 'text_snippet',
   };
   return icons[type] || 'attach_file';
 }
@@ -278,10 +284,15 @@ function getFileIcon(type: string): string {
 function getFileColor(type: string): string {
   const colors: Record<string, string> = {
     docx: 'text-tertiary', doc: 'text-tertiary',
-    xlsx: 'text-success', xls: 'text-success',
+    xlsx: 'text-success', xls: 'text-success', csv: 'text-success',
     pptx: 'text-warning', ppt: 'text-warning',
     pdf: 'text-error',
-    html: 'text-secondary',
+    html: 'text-secondary', htm: 'text-secondary',
+    png: 'text-purple-400', jpg: 'text-purple-400', jpeg: 'text-purple-400',
+    gif: 'text-purple-400', webp: 'text-purple-400', bmp: 'text-purple-400',
+    svg: 'text-purple-400', tiff: 'text-purple-400', tif: 'text-purple-400', ico: 'text-purple-400',
+    json: 'text-amber-400', xml: 'text-amber-400', yaml: 'text-amber-400', yml: 'text-amber-400',
+    txt: 'text-on-surface-variant', md: 'text-on-surface-variant',
   };
   return colors[type] || 'text-primary';
 }
@@ -350,6 +361,7 @@ function ChatContent() {
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [agentTasks, setAgentTasks] = useState<AgentTask[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [uploadAlerts, setUploadAlerts] = useState<UploadAlertItem[]>([]);
   const [pendingTemplate, setPendingTemplate] = useState<string | null>(null);
   const [previewFile, setPreviewFile] = useState<GeneratedFile | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
@@ -685,8 +697,10 @@ function ChatContent() {
     } finally {
       setStreaming(false);
       abortRef.current = null;
+      // Reload sidebar uploads — dashboard uploads now linked to this conversation
+      reloadConversationUploads();
     }
-  }, [input, streaming, token, conversationId, skillId, attachedFiles, pendingTemplate, t]);
+  }, [input, streaming, token, conversationId, skillId, attachedFiles, pendingTemplate, t, reloadConversationUploads]);
 
   // Load pending template from sessionStorage (set by Navbar modal)
   useEffect(() => {
@@ -760,7 +774,11 @@ function ChatContent() {
       const data = await resp.json();
 
       if (!resp.ok) {
-        alert(data.error || t('chat.error.uploadFailed'));
+        setUploadAlerts([{
+          fileName: '',
+          status: data.code === 'UPLOAD_QUOTA_EXCEEDED' ? 'quota' : 'error',
+          detail: data.error || t('chat.error.uploadFailed'),
+        }]);
         setAttachedFiles(prev => prev.filter(f => !f.uploading));
         return;
       }
@@ -772,6 +790,7 @@ function ChatContent() {
         fileType: u.fileType,
         fileSize: u.fileSize,
         scanStatus: u.scanStatus,
+        scanDetail: u.scanDetail,
         uploading: false,
       }));
 
@@ -784,15 +803,21 @@ function ChatContent() {
       // Refresh sidebar upload list
       reloadConversationUploads();
 
-      // Notify about rejected files
-      const rejected = uploaded.filter(u => u.scanStatus === 'rejected');
-      if (rejected.length > 0) {
-        alert(t('chat.error.scanBlocked', { count: rejected.length }));
+      // Show modal for rejected/suspicious files with details
+      const alertItems: UploadAlertItem[] = uploaded
+        .filter(u => u.scanStatus === 'rejected' || u.scanStatus === 'suspicious')
+        .map(u => ({
+          fileName: u.originalName,
+          status: u.scanStatus as 'rejected' | 'suspicious',
+          detail: u.scanDetail || '',
+        }));
+      if (alertItems.length > 0) {
+        setUploadAlerts(alertItems);
       }
     } catch (err) {
       console.error('Upload error:', err);
       setAttachedFiles(prev => prev.filter(f => !f.uploading));
-      alert(t('chat.error.uploadRetry'));
+      setUploadAlerts([{ fileName: '', status: 'error', detail: t('chat.error.uploadRetry') }]);
     }
   }
 
@@ -882,6 +907,11 @@ function ChatContent() {
   return (
     <div className="h-screen bg-surface-container-lowest overflow-hidden">
       <Navbar />
+
+      {/* Upload Security Alert Modal */}
+      {uploadAlerts.length > 0 && (
+        <UploadAlertModal items={uploadAlerts} onClose={() => setUploadAlerts([])} />
+      )}
 
       <div className={`${sidebarMargin} h-screen flex overflow-hidden transition-all duration-300`}>
         {/* === Central Chat Area === */}

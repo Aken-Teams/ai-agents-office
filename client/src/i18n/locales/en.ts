@@ -631,6 +631,16 @@ const en = {
   'admin.skills.architecture.sandboxDesc': 'Each agent runs in an isolated environment for system security',
   'admin.skills.architecture.pipelineTitle': 'Pipeline Processing',
   'admin.skills.architecture.pipelineDesc': 'Supports multi-step serial and parallel tasks with auto-aggregation',
+
+  // Upload Alert Modal
+  'uploadAlert.title': 'File Security Scan Results',
+  'uploadAlert.rejectedSummary': '{count} file(s) blocked',
+  'uploadAlert.suspiciousSummary': '{count} file(s) flagged (upload allowed)',
+  'uploadAlert.statusRejected': 'Blocked',
+  'uploadAlert.statusSuspicious': 'Warning',
+  'uploadAlert.statusError': 'Error',
+  'uploadAlert.statusQuota': 'No Space',
+  'uploadAlert.close': 'Got it',
 } as const;
 
 export default en;

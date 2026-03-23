@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
+import UploadAlertModal, { type UploadAlertItem } from '../components/UploadAlertModal';
 import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
@@ -73,6 +74,7 @@ function DashboardContent() {
   const [smartInput, setSmartInput] = useState('');
   const [creating, setCreating] = useState(false);
   const [smartAttached, setSmartAttached] = useState<Array<{ id: string; name: string; uploading?: boolean }>>([]);
+  const [uploadAlerts, setUploadAlerts] = useState<UploadAlertItem[]>([]);
   const smartFileRef = useRef<HTMLInputElement>(null);
   const sidebarMargin = useSidebarMargin();
 
@@ -167,19 +169,31 @@ function DashboardContent() {
       });
       const data = await resp.json();
       if (!resp.ok) {
-        alert(data.error || '上傳失敗');
+        setUploadAlerts([{
+          fileName: '',
+          status: data.code === 'UPLOAD_QUOTA_EXCEEDED' ? 'quota' : 'error',
+          detail: data.error || t('chat.error.uploadFailed'),
+        }]);
         setSmartAttached(prev => prev.filter(f => !f.uploading));
         return;
       }
-      const uploaded = (data.uploads || [])
+      const allUploads = data.uploads || [];
+      const uploaded = allUploads
         .filter((u: any) => u.scanStatus !== 'rejected')
         .map((u: any) => ({ id: u.id, name: u.originalName, uploading: false }));
-      const rejected = (data.uploads || []).filter((u: any) => u.scanStatus === 'rejected');
-      if (rejected.length > 0) alert(`安全掃描攔截了 ${rejected.length} 個檔案`);
+      // Show modal for rejected/suspicious files
+      const alertItems: UploadAlertItem[] = allUploads
+        .filter((u: any) => u.scanStatus === 'rejected' || u.scanStatus === 'suspicious')
+        .map((u: any) => ({
+          fileName: u.originalName,
+          status: u.scanStatus as 'rejected' | 'suspicious',
+          detail: u.scanDetail || '',
+        }));
+      if (alertItems.length > 0) setUploadAlerts(alertItems);
       setSmartAttached(prev => [...prev.filter(f => !f.uploading), ...uploaded]);
     } catch {
       setSmartAttached(prev => prev.filter(f => !f.uploading));
-      alert('上傳失敗');
+      setUploadAlerts([{ fileName: '', status: 'error', detail: t('chat.error.uploadRetry') }]);
     }
   }
 
@@ -188,6 +202,11 @@ function DashboardContent() {
   return (
     <div className="min-h-screen bg-surface-container-lowest">
       <Navbar />
+
+      {/* Upload Security Alert Modal */}
+      {uploadAlerts.length > 0 && (
+        <UploadAlertModal items={uploadAlerts} onClose={() => setUploadAlerts([])} />
+      )}
 
       <main className={`${sidebarMargin} transition-all duration-300`}>
         {/* Top Header */}

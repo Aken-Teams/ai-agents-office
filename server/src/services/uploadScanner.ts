@@ -264,8 +264,46 @@ function checkHtmlScripts(filePath: string, ext: string): string | null {
 
     const content = buf.toString('utf8', 0, bytesRead).toLowerCase();
 
+    // Trusted CDN patterns — allow <script src="https://cdn.jsdelivr.net/..."> etc.
+    const trustedCdns = [
+      'cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'unpkg.com',
+      'fonts.googleapis.com', 'fonts.gstatic.com',
+    ];
+
+    // Check for inline scripts with dangerous content (not just any <script> tag)
+    // Extract all inline script blocks (not external <script src="...">)
+    const scriptBlocks = content.match(/<script(?:\s[^>]*)?>[\s\S]*?<\/script>/gi) || [];
+    for (const block of scriptBlocks) {
+      // Skip external CDN scripts
+      const srcMatch = block.match(/src\s*=\s*["']([^"']+)["']/i);
+      if (srcMatch) {
+        const src = srcMatch[1];
+        if (trustedCdns.some(cdn => src.includes(cdn))) continue;
+        // External script from unknown source — suspicious but not necessarily dangerous
+        continue; // Let other checks catch truly dangerous patterns
+      }
+
+      // Inline script — check for dangerous API calls
+      const dangerousInline = [
+        /document\.cookie/,
+        /document\.write\s*\(/,
+        /\.innerHTML\s*=/,
+        /eval\s*\(/,
+        /new\s+function\s*\(/i,
+        /window\.location\s*=/,
+        /fetch\s*\(\s*["']http/,
+        /xmlhttprequest/i,
+        /navigator\.sendbeacon/i,
+      ];
+      for (const p of dangerousInline) {
+        if (p.test(block)) {
+          return 'html_script_detected';
+        }
+      }
+    }
+
+    // Check non-script dangerous patterns
     const dangerous = [
-      /<script[\s>]/,                  // <script> tags
       /javascript\s*:/,                // javascript: URIs
       /on\w+\s*=\s*["'][^"']*(?:eval|alert|document\.|window\.|fetch|xmlhttp)/,  // dangerous event handlers
       /<iframe[^>]+src\s*=\s*["'](?!about:blank)/,  // iframes loading external content

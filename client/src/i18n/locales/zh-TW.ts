@@ -654,6 +654,16 @@ const zhTW = {
   'admin.skills.architecture.sandboxDesc': '每個 Agent 在隔離環境中運行，確保系統安全',
   'admin.skills.architecture.pipelineTitle': '管線處理',
   'admin.skills.architecture.pipelineDesc': '支援多步驟串連與並行任務，自動彙整結果',
+
+  // Upload Alert Modal
+  'uploadAlert.title': '檔案安全掃描結果',
+  'uploadAlert.rejectedSummary': '{count} 個檔案被攔截',
+  'uploadAlert.suspiciousSummary': '{count} 個檔案有疑慮（已允許上傳）',
+  'uploadAlert.statusRejected': '攔截',
+  'uploadAlert.statusSuspicious': '警告',
+  'uploadAlert.statusError': '錯誤',
+  'uploadAlert.statusQuota': '空間不足',
+  'uploadAlert.close': '我知道了',
 } as const;
 
 export default zhTW;

@@ -69,30 +69,38 @@ If the user wants a formal report based on the data:
 - The uploaded files are READ-ONLY — do not modify them
 - Generated reports go in your current working directory
 
-## Inline Charts
+## Inline Charts — MANDATORY
 
-When presenting analysis results with numerical data, embed interactive charts using fenced chart blocks:
+**CRITICAL**: You MUST embed at least 2-3 charts in EVERY data analysis response. Charts are rendered as interactive visualizations in the chat UI. Users expect visual data representation — text-only analysis is unacceptable.
+
+Use fenced chart blocks with the `chart` language tag:
 
 ```chart
 {"type":"bar","title":"Sales by Region","data":[{"name":"North","value":245},{"name":"South","value":189},{"name":"East","value":312},{"name":"West","value":267}]}
 ```
 
-### Chart Types and When to Use
+### Chart Types
 
 | Type | Schema | Best For |
 |------|--------|----------|
-| `bar` | `{"type":"bar","data":[{"name":"A","value":10},...]}` | Category comparisons |
-| `line` | `{"type":"line","series":[{"name":"Rev","data":[{"name":"Q1","value":20},...]}]}` | Trends over time |
+| `bar` | `{"type":"bar","title":"...","data":[{"name":"A","value":10}]}` | Category comparisons |
+| `line` | `{"type":"line","title":"...","series":[{"name":"Rev","data":[{"name":"Q1","value":20}]}]}` | Trends over time |
 | `area` | Same as line but `"type":"area"`, optional `"stacked":true` | Volume/cumulative trends |
-| `pie`/`donut` | `{"type":"pie","data":[{"name":"A","value":55},...]}` | Part-of-whole proportions |
-| `radar` | `{"type":"radar","axes":["Speed","Cost"],"series":[{"name":"A","values":[8,6]}]}` | Multi-dimensional comparison |
-| `scatter` | `{"type":"scatter","series":[{"name":"Group","data":[{"x":1,"y":2},...]}]}` | Correlation analysis |
+| `pie`/`donut` | `{"type":"pie","title":"...","data":[{"name":"A","value":55}]}` | Part-of-whole proportions |
+| `radar` | `{"type":"radar","title":"...","axes":["Speed","Cost"],"series":[{"name":"A","values":[8,6]}]}` | Multi-dimensional comparison |
+| `scatter` | `{"type":"scatter","title":"...","series":[{"name":"Group","data":[{"x":1,"y":2}]}]}` | Correlation analysis |
+
+### Chart Strategy
+1. **Overview chart** — Start with a bar chart showing the most important comparison
+2. **Trend chart** — Add a line/area chart if data has time-series dimensions
+3. **Distribution chart** — Add a pie/donut chart for proportional breakdowns
+4. Place charts INLINE next to their textual explanations — not all at the end
 
 ### Chart Rules
-- Always include a descriptive `title`
-- Use `bar` charts as the default for most comparisons
-- Use multiple charts when data warrants it (overview bar + trend line)
+- ALWAYS include a descriptive `title`
+- Use `bar` charts as default for comparisons
 - Keep pie/donut to 7 or fewer slices
-- For line/area, use `series` array even for a single series
+- For line/area, always use `series` array even for a single series
 - Add `"smooth":true` for curved line charts
-- Always describe the chart in surrounding text — charts supplement your analysis
+- The JSON must be valid and on a single line within the code block
+- Always describe the chart in surrounding text
