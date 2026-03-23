@@ -13,7 +13,9 @@ if (fs.existsSync(rootEnvPath)) {
   }
 }
 
-const apiUrl = process.env.API_URL || `http://localhost:${process.env.PORT || '12054'}`;
+// API_URL for proxy: must NOT use process.env.PORT (Next.js sets it to its own port)
+const backendPort = (process.env.BACKEND_PORT || '12054').trim();
+const apiUrl = (process.env.API_URL || `http://localhost:${backendPort}`).trim();
 
 const nextConfig: NextConfig = {
   env: {
