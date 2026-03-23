@@ -6,6 +6,7 @@
  * Supports "style" field: "formal" | "modern" | "magazine" | "technical"
  */
 
+// @ts-ignore -- pdfkit lacks type declarations
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 
@@ -103,7 +104,7 @@ async function generatePdf(inputPath: string, outputPath: string) {
 
   return new Promise<void>((resolve, reject) => {
     const doc = new PDFDocument({
-      size: (input.pageSize || 'A4') as PDFKit.PDFDocumentOptions['size'],
+      size: (input.pageSize || 'A4') as any,
       margins: s.margins,
       info: {
         Title: input.title,

@@ -103,10 +103,10 @@ async function generateXlsx(inputPath: string, outputPath: string) {
       sheet.eachRow((row) => {
         row.eachCell((cell) => {
           cell.border = {
-            top: { style: s.borderStyle },
-            left: { style: s.borderStyle },
-            bottom: { style: s.borderStyle },
-            right: { style: s.borderStyle },
+            top: { style: s.borderStyle as any },
+            left: { style: s.borderStyle as any },
+            bottom: { style: s.borderStyle as any },
+            right: { style: s.borderStyle as any },
           };
         });
       });

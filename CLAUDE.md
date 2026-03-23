@@ -3,7 +3,7 @@
 AI-powered document generation service. Users describe requirements via web UI, the system calls local Claude CLI agents to generate PPT, Word, Excel, PDF files.
 
 ## Tech Stack
-- **Backend**: Express 5 + TypeScript + SQLite (better-sqlite3)
+- **Backend**: Express 5 + TypeScript + MySQL (mysql2)
 - **Frontend**: Next.js 15 (App Router) + TypeScript
 - **Auth**: Simple email/password + bcrypt + JWT
 - **AI Engine**: Claude CLI (local spawn process)
@@ -22,7 +22,7 @@ AI-powered document generation service. Users describe requirements via web UI, 
 - Input sanitization against prompt injection
 
 ## Commands
-- `npm run dev` — Start both server and client
-- `npm run dev:server` — Start server only
-- `npm run dev:client` — Start client only
-- `npm run init-db` — Initialize database
+- `pnpm run dev` — Start both server and client
+- `pnpm run dev:server` — Start server only
+- `pnpm run dev:client` — Start client only
+- `pnpm run init-db` — Initialize database

@@ -4,6 +4,5 @@ packages:
 
 onlyBuiltDependencies:
   - bcrypt
-  - better-sqlite3
   - esbuild
   - sharp

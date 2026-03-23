@@ -19,8 +19,11 @@ async function main() {
   const app = express();
 
   // Middleware
+  const corsOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+    : [`http://localhost:${config.port - 1}`, `http://localhost:${config.port}`];
   app.use(cors({
-    origin: ['http://localhost:12053', 'http://localhost:12054'],
+    origin: corsOrigins,
     credentials: true,
   }));
   app.use(express.json({ limit: '1mb' }));

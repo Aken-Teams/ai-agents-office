@@ -13,15 +13,18 @@ if (fs.existsSync(rootEnvPath)) {
   }
 }
 
+const apiUrl = process.env.API_URL || `http://localhost:${process.env.PORT || '12054'}`;
+
 const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
+    NEXT_PUBLIC_API_URL: apiUrl,
   },
   async rewrites() {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:12054/api/:path*',
+        destination: `${apiUrl}/api/:path*`,
       },
     ];
   },

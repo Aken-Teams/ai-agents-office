@@ -106,11 +106,11 @@ async function generateDocx(inputPath: string, outputPath: string) {
       };
       // Accent left border for modern style
       if (s.accentBorder) {
-        headingParagraph.border = {
+        (headingParagraph as any).border = {
           left: { style: BorderStyle.SINGLE, size: 12, color: s.accentColor, space: 8 },
         };
-        headingParagraph.shading = { type: ShadingType.CLEAR, fill: 'F0F4F8' };
-        headingParagraph.indent = { left: 120 };
+        (headingParagraph as any).shading = { type: ShadingType.CLEAR, fill: 'F0F4F8' };
+        (headingParagraph as any).indent = { left: 120 };
       }
       children.push(new Paragraph(headingParagraph));
     }
