@@ -580,19 +580,19 @@ export default function Navbar() {
           })}
         </nav>
 
-        {/* New Document Button */}
+        {/* Template Wizard Button */}
         <div className={`mt-6 ${collapsed ? 'px-2' : 'px-6'}`}>
           <div className="relative group">
             <button
               onClick={() => setShowModal(true)}
               className={`w-full cyber-gradient py-3 text-on-primary font-bold rounded flex items-center justify-center gap-2 text-sm uppercase tracking-widest active:scale-[0.99] transition-all cursor-pointer ${collapsed ? 'px-0' : ''}`}
             >
-              <span className="material-symbols-outlined text-sm">add</span>
-              {!collapsed && t('nav.newDocument')}
+              <span className="material-symbols-outlined text-sm">auto_fix_high</span>
+              {!collapsed && t('dashboard.templateWizard' as any)}
             </button>
             {collapsed && (
               <span className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
-                {t('nav.newDocument')}
+                {t('dashboard.templateWizard' as any)}
               </span>
             )}
           </div>
@@ -898,8 +898,8 @@ export default function Navbar() {
                 {/* Step 1: Agent Options */}
                 <div className="px-6 py-5 flex items-center justify-between border-b border-outline-variant/10">
                   <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-primary">add_circle</span>
-                    <h2 className="text-sm font-headline font-bold">{t('nav.modalTitle')}</h2>
+                    <span className="material-symbols-outlined text-primary">auto_fix_high</span>
+                    <h2 className="text-sm font-headline font-bold">{t('dashboard.templateWizard' as any)}</h2>
                   </div>
                   <button
                     onClick={() => { setShowModal(false); setSelectedSkill(null); setHoveredTemplate(null); }}

@@ -410,6 +410,21 @@ function DashboardContent() {
               </p>
             </div>
 
+            {/* Template Wizard button */}
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('open-template-wizard'))}
+              className="flex items-center gap-4 px-5 py-3.5 bg-surface-container rounded-xl hover:bg-surface-container-high border border-transparent hover:border-primary/20 transition-all cursor-pointer group max-w-4xl w-full"
+            >
+              <div className="w-10 h-10 rounded-xl cyber-gradient flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <span className="material-symbols-outlined text-on-primary text-xl">auto_fix_high</span>
+              </div>
+              <div className="text-left">
+                <span className="text-sm font-headline font-bold text-on-surface group-hover:text-primary transition-colors">{t('dashboard.templateWizard' as any)}</span>
+                <p className="text-xs text-on-surface-variant mt-0.5">{t('dashboard.templateWizard.desc' as any)}</p>
+              </div>
+              <span className="material-symbols-outlined text-on-surface-variant ml-auto group-hover:text-primary transition-colors">chevron_right</span>
+            </button>
+
             {/* 4x2 Template cards */}
             <div className="grid grid-cols-4 gap-4 w-full max-w-4xl">
               {[
