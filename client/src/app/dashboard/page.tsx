@@ -243,7 +243,7 @@ function DashboardContent() {
           </div>
 
           {/* Sample Prompt Cards — 2 per row, fills input on tap */}
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-2 gap-3">
             {[
               { icon: 'present_to_all', color: 'text-warning', labelKey: 'dashboard.samples.pptx' as const, templateKey: 'dashboard.samples.pptx.template' as const },
               { icon: 'description', color: 'text-tertiary', labelKey: 'dashboard.samples.docx' as const, templateKey: 'dashboard.samples.docx.template' as const },
@@ -257,17 +257,17 @@ function DashboardContent() {
               <button
                 key={sample.labelKey}
                 onClick={() => setSmartInput(t(sample.templateKey))}
-                className="flex items-center gap-3 p-3.5 bg-surface-container rounded-2xl text-left active:bg-surface-container-high transition-colors cursor-pointer"
+                className="flex flex-col gap-2.5 p-4 bg-surface-container rounded-2xl text-left active:bg-surface-container-high transition-colors cursor-pointer"
               >
-                <span className={`material-symbols-outlined text-xl ${sample.color}`}>{sample.icon}</span>
-                <span className="text-sm font-headline font-bold text-on-surface truncate">{t(sample.labelKey)}</span>
+                <span className={`material-symbols-outlined text-2xl ${sample.color}`}>{sample.icon}</span>
+                <span className="text-[13px] font-headline font-bold text-on-surface leading-snug">{t(sample.labelKey)}</span>
               </button>
             ))}
           </div>
         </div>
 
         {/* Mobile fixed bottom input bar */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-outline-variant/10 bg-surface-container-lowest px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-outline-variant/10 bg-surface-container-lowest px-3 pt-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <input
             ref={mobileFileRef}
             type="file"
@@ -301,14 +301,14 @@ function DashboardContent() {
           )}
           <div className="flex items-end gap-2">
             <button
-              className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-on-surface-variant active:bg-surface-container transition-colors cursor-pointer mb-0.5"
+              className="shrink-0 w-9 h-9 flex items-center justify-center rounded-full text-on-surface-variant active:bg-surface-container transition-colors cursor-pointer mb-px"
               onClick={() => mobileFileRef.current?.click()}
             >
-              <span className="material-symbols-outlined text-lg">attach_file</span>
+              <span className="material-symbols-outlined text-[20px]">attach_file</span>
             </button>
             <div className="flex-1">
               <textarea
-                className="w-full bg-surface-container border-none focus:ring-1 focus:ring-primary/30 rounded-2xl py-2.5 px-4 text-base text-on-surface placeholder:text-outline font-body resize-none max-h-[120px]"
+                className="w-full bg-surface-container border-none focus:ring-1 focus:ring-primary/30 rounded-2xl py-3 px-4 text-sm text-on-surface placeholder:text-outline font-body resize-none min-h-[90px] max-h-[120px] leading-snug"
                 value={smartInput}
                 onChange={e => setSmartInput(e.target.value)}
                 onKeyDown={e => {
@@ -319,16 +319,16 @@ function DashboardContent() {
                 }}
                 placeholder={t('dashboard.smartInput.placeholder')}
                 disabled={creating}
-                rows={1}
+                rows={2}
                 style={{ fieldSizing: 'content' } as React.CSSProperties}
               />
             </div>
             <button
-              className="shrink-0 w-8 h-8 cyber-gradient rounded-full flex items-center justify-center text-on-primary disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all mb-0.5"
+              className="shrink-0 w-9 h-9 cyber-gradient rounded-full flex items-center justify-center text-on-primary disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all mb-px"
               onClick={handleSmartSubmit}
               disabled={!smartInput.trim() || creating}
             >
-              <span className="material-symbols-outlined text-lg">arrow_upward</span>
+              <span className="material-symbols-outlined text-[20px]">arrow_upward</span>
             </button>
           </div>
         </div>
