@@ -79,16 +79,16 @@ function UsageContent() {
     <div className="min-h-screen bg-surface-container-lowest">
       <Navbar />
 
-      <main className={`${sidebarMargin} pt-8 md:pt-10 pb-12 px-10 transition-all duration-300`}>
+      <main className={`${sidebarMargin} md:pt-10 pb-12 px-4 md:px-10 transition-all duration-300`}>
           {/* Page Header */}
-          <header className="mb-10 flex justify-between items-end">
+          <header className="mt-4 md:mt-0 mb-6 md:mb-10 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
             <div>
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-tertiary text-sm font-bold tracking-[0.3em] uppercase">{t('usage.header.subtitle')}</span>
-                <div className="h-px w-12 bg-tertiary/30" />
+                <span className="text-tertiary text-xs md:text-sm font-bold tracking-[0.3em] uppercase">{t('usage.header.subtitle')}</span>
+                <div className="h-px w-8 md:w-12 bg-tertiary/30" />
               </div>
-              <h2 className="text-4xl font-headline font-bold text-on-surface tracking-tight mb-2">{t('usage.header.title')}</h2>
-              <p className="text-on-surface-variant leading-relaxed max-w-xl">
+              <h2 className="text-2xl md:text-4xl font-headline font-bold text-on-surface tracking-tight mb-1 md:mb-2">{t('usage.header.title')}</h2>
+              <p className="text-sm md:text-base text-on-surface-variant leading-relaxed max-w-xl">
                 {t('usage.header.description')}
               </p>
             </div>
@@ -104,7 +104,7 @@ function UsageContent() {
                 document.body.appendChild(a); a.click(); a.remove();
                 URL.revokeObjectURL(url);
               }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors text-sm font-bold uppercase tracking-widest shrink-0"
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-surface-container-high text-on-surface-variant hover:text-primary active:bg-surface-container-highest transition-colors text-sm font-bold uppercase tracking-widest shrink-0 w-full md:w-auto"
             >
               <span className="material-symbols-outlined text-sm">download</span>
               {t('usage.header.exportCsv')}
@@ -112,70 +112,70 @@ function UsageContent() {
           </header>
 
           {/* ===== Top Bento: Stats + Chart ===== */}
-          <div className="grid grid-cols-12 gap-6 mb-10">
+          <div className="grid grid-cols-12 gap-4 md:gap-6 mb-6 md:mb-10">
 
             {/* Left: Overview Card */}
-            <div className="col-span-12 lg:col-span-4 bg-surface-container p-8 relative overflow-hidden flex flex-col justify-between">
+            <div className="col-span-12 lg:col-span-4 bg-surface-container p-5 md:p-8 relative overflow-hidden flex flex-col justify-between gap-5 md:gap-0">
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-10 -mt-10 blur-3xl" />
               <div>
-                <span className="text-sm uppercase tracking-[0.2em] text-primary font-bold mb-3 block">{t('usage.overview.title')}</span>
-                <h3 className="text-on-surface-variant text-sm mb-1">{t('usage.overview.totalTokenUsage')}</h3>
-                <div className="text-5xl font-bold text-on-surface font-headline">{totalTokens.toLocaleString()}</div>
-                <p className="text-sm text-on-surface-variant mt-2">
-                  {t('usage.overview.estimatedCost')} <span className="text-primary font-bold font-headline text-lg">${estimatedCost.toFixed(4)}</span> <span className="text-sm uppercase tracking-wider">USD</span>
+                <span className="text-xs md:text-sm uppercase tracking-[0.2em] text-primary font-bold mb-2 md:mb-3 block">{t('usage.overview.title')}</span>
+                <h3 className="text-on-surface-variant text-xs md:text-sm mb-1">{t('usage.overview.totalTokenUsage')}</h3>
+                <div className="text-3xl md:text-5xl font-bold text-on-surface font-headline">{totalTokens.toLocaleString()}</div>
+                <p className="text-xs md:text-sm text-on-surface-variant mt-1.5 md:mt-2">
+                  {t('usage.overview.estimatedCost')} <span className="text-primary font-bold font-headline text-base md:text-lg">${estimatedCost.toFixed(4)}</span> <span className="text-xs md:text-sm uppercase tracking-wider">USD</span>
                 </p>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-3 md:gap-4">
                 <div>
-                  <p className="text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.generations')}</p>
-                  <p className="text-2xl font-headline font-bold text-primary">{total?.totalInvocations ?? 0}</p>
+                  <p className="text-xs md:text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.generations')}</p>
+                  <p className="text-xl md:text-2xl font-headline font-bold text-primary">{total?.totalInvocations ?? 0}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.input')}</p>
-                  <p className="text-2xl font-headline font-bold text-tertiary">{total?.totalInput.toLocaleString() ?? 0}</p>
+                  <p className="text-xs md:text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.input')}</p>
+                  <p className="text-xl md:text-2xl font-headline font-bold text-tertiary">{total?.totalInput.toLocaleString() ?? 0}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.output')}</p>
-                  <p className="text-2xl font-headline font-bold text-secondary">{total?.totalOutput.toLocaleString() ?? 0}</p>
+                  <p className="text-xs md:text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.output')}</p>
+                  <p className="text-xl md:text-2xl font-headline font-bold text-secondary">{total?.totalOutput.toLocaleString() ?? 0}</p>
                 </div>
               </div>
             </div>
 
             {/* Right: Bar Chart */}
-            <div className="col-span-12 lg:col-span-8 bg-surface-container p-8">
-              <div className="flex justify-between items-center mb-8">
+            <div className="col-span-12 lg:col-span-8 bg-surface-container p-4 md:p-8">
+              <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 md:gap-0 mb-4 md:mb-8">
                 <div>
-                  <span className="text-sm uppercase tracking-[0.2em] text-tertiary font-bold block mb-1">{t('usage.chart.title')}</span>
-                  <h3 className="text-xl font-bold font-headline text-on-surface">{t('usage.chart.subtitle')}</h3>
+                  <span className="text-xs md:text-sm uppercase tracking-[0.2em] text-tertiary font-bold block mb-1">{t('usage.chart.title')}</span>
+                  <h3 className="text-base md:text-xl font-bold font-headline text-on-surface">{t('usage.chart.subtitle')}</h3>
                 </div>
-                <div className="flex items-center gap-4 text-sm">
+                <div className="flex items-center gap-3 md:gap-4 text-xs md:text-sm">
                   <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 bg-primary inline-block" />
+                    <span className="w-2 h-2 md:w-2.5 md:h-2.5 bg-primary inline-block" />
                     <span className="text-on-surface-variant uppercase tracking-wider">Input</span>
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 bg-tertiary inline-block" />
+                    <span className="w-2 h-2 md:w-2.5 md:h-2.5 bg-tertiary inline-block" />
                     <span className="text-on-surface-variant uppercase tracking-wider">Output</span>
                   </span>
                 </div>
               </div>
 
               {chartData.length === 0 ? (
-                <div className="h-40 flex items-center justify-center">
-                  <p className="text-sm text-on-surface-variant/60 uppercase tracking-widest">{t('usage.chart.noData')}</p>
+                <div className="h-32 md:h-40 flex items-center justify-center">
+                  <p className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">{t('usage.chart.noData')}</p>
                 </div>
               ) : (
-                <div className="flex items-end gap-1.5 px-1">
+                <div className="flex items-end gap-1 md:gap-1.5 px-1 overflow-x-auto no-scrollbar">
                   {chartData.map(day => {
                     const dayTotal = day.total_input + day.total_output;
                     const pct = (dayTotal / maxTokens) * 100;
                     const inputPct = dayTotal > 0 ? (day.total_input / dayTotal) * 100 : 0;
                     return (
-                      <div key={day.date} className="flex-1 flex flex-col items-center group">
+                      <div key={day.date} className="flex-1 min-w-[28px] flex flex-col items-center group">
                         {/* Bar area */}
-                        <div className="w-full h-40 flex flex-col justify-end relative">
+                        <div className="w-full h-28 md:h-40 flex flex-col justify-end relative">
                           {/* Tooltip */}
-                          <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-surface-container-highest text-on-surface px-2.5 py-1 text-sm font-mono whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
+                          <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-surface-container-highest text-on-surface px-2 py-0.5 md:px-2.5 md:py-1 text-xs md:text-sm font-mono whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
                             {dayTotal.toLocaleString()}
                           </div>
                           <div
@@ -186,8 +186,9 @@ function UsageContent() {
                             <div className="bg-primary" style={{ height: `${inputPct}%` }} />
                           </div>
                         </div>
-                        {/* Date label */}
-                        <span className="mt-2 text-sm text-on-surface-variant/60 font-mono">{day.date}</span>
+                        {/* Date label — show MM/DD on mobile, full date on desktop */}
+                        <span className="mt-1.5 md:mt-2 text-[10px] md:text-sm text-on-surface-variant/60 font-mono md:hidden">{day.date.slice(5)}</span>
+                        <span className="mt-2 text-sm text-on-surface-variant/60 font-mono hidden md:block">{day.date}</span>
                       </div>
                     );
                   })}
@@ -197,20 +198,20 @@ function UsageContent() {
           </div>
 
           {/* ===== Bottom: Breakdown + Table ===== */}
-          <div className="grid grid-cols-12 gap-6">
+          <div className="grid grid-cols-12 gap-4 md:gap-6">
 
             {/* Left Column: Token Ratio + Quick Stats */}
-            <div className="col-span-12 lg:col-span-4 space-y-6">
+            <div className="col-span-12 lg:col-span-4 space-y-4 md:space-y-6">
 
               {/* Token Ratio */}
-              <section className="bg-surface-container p-6">
-                <h4 className="text-sm font-bold font-headline uppercase tracking-widest mb-6 text-on-surface flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary text-lg">donut_large</span>
+              <section className="bg-surface-container p-4 md:p-6">
+                <h4 className="text-xs md:text-sm font-bold font-headline uppercase tracking-widest mb-4 md:mb-6 text-on-surface flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-base md:text-lg">donut_large</span>
                   {t('usage.distribution.title')}
                 </h4>
-                <div className="space-y-5">
+                <div className="space-y-4 md:space-y-5">
                   <div>
-                    <div className="flex justify-between text-sm mb-2">
+                    <div className="flex justify-between text-xs md:text-sm mb-2">
                       <span className="text-on-surface-variant">{t('usage.distribution.inputToken')}</span>
                       <span className="text-on-surface font-mono">{inputRatio}%</span>
                     </div>
@@ -219,7 +220,7 @@ function UsageContent() {
                     </div>
                   </div>
                   <div>
-                    <div className="flex justify-between text-sm mb-2">
+                    <div className="flex justify-between text-xs md:text-sm mb-2">
                       <span className="text-on-surface-variant">{t('usage.distribution.outputToken')}</span>
                       <span className="text-on-surface font-mono">{outputRatio}%</span>
                     </div>
@@ -231,88 +232,119 @@ function UsageContent() {
               </section>
 
               {/* Activity Summary */}
-              <section className="bg-surface-container p-6">
-                <h4 className="text-sm font-bold font-headline uppercase tracking-widest mb-6 text-on-surface flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary text-lg">insights</span>
+              <section className="bg-surface-container p-4 md:p-6">
+                <h4 className="text-xs md:text-sm font-bold font-headline uppercase tracking-widest mb-4 md:mb-6 text-on-surface flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-base md:text-lg">insights</span>
                   {t('usage.activity.title')}
                 </h4>
-                <div className="space-y-4">
+                <div className="space-y-3 md:space-y-4">
                   {daily.slice(0, 3).map(day => (
-                    <div key={day.date} className="flex justify-between items-center bg-surface-container-low p-3 hover:bg-surface-container-high transition-colors">
-                      <div>
-                        <p className="text-sm font-bold text-on-surface">{day.date}</p>
-                        <p className="text-sm text-on-surface-variant">
+                    <div key={day.date} className="flex justify-between items-center bg-surface-container-low p-2.5 md:p-3 active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs md:text-sm font-bold text-on-surface">{day.date}</p>
+                        <p className="text-xs md:text-sm text-on-surface-variant truncate">
                           {t('usage.activity.generationCount', { count: day.invocation_count })} · {(day.total_input + day.total_output).toLocaleString()} tokens
                         </p>
                       </div>
-                      <span className="text-sm font-mono text-primary">{day.total_output.toLocaleString()}</span>
+                      <span className="text-xs md:text-sm font-mono text-primary ml-2 shrink-0">{day.total_output.toLocaleString()}</span>
                     </div>
                   ))}
                   {daily.length === 0 && (
-                    <p className="text-sm text-on-surface-variant/60 text-center py-4 uppercase tracking-widest">{t('usage.activity.noRecords')}</p>
+                    <p className="text-xs md:text-sm text-on-surface-variant/60 text-center py-4 uppercase tracking-widest">{t('usage.activity.noRecords')}</p>
                   )}
                 </div>
               </section>
             </div>
 
-            {/* Right Column: Session Ledger Table */}
+            {/* Right Column: Session Ledger */}
             <div className="col-span-12 lg:col-span-8 bg-surface-container overflow-hidden">
-              <div className="p-6 border-b border-white/5 flex justify-between items-center">
-                <h4 className="text-sm font-bold font-headline uppercase tracking-widest text-on-surface">{t('usage.ledger.title')}</h4>
-                <span className="text-sm text-on-surface-variant/60 uppercase tracking-widest">
+              <div className="p-4 md:p-6 border-b border-white/5 flex justify-between items-center">
+                <h4 className="text-xs md:text-sm font-bold font-headline uppercase tracking-widest text-on-surface">{t('usage.ledger.title')}</h4>
+                <span className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">
                   {t('usage.ledger.totalRecords', { count: daily.length })}
                 </span>
               </div>
 
               {daily.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16">
-                  <span className="material-symbols-outlined text-3xl text-on-surface-variant/30 mb-3">analytics</span>
-                  <p className="text-sm text-on-surface-variant/60 uppercase tracking-widest">{t('usage.ledger.noData')}</p>
+                <div className="flex flex-col items-center justify-center py-12 md:py-16">
+                  <span className="material-symbols-outlined text-2xl md:text-3xl text-on-surface-variant/30 mb-3">analytics</span>
+                  <p className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">{t('usage.ledger.noData')}</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="bg-surface-container-high/50 text-sm uppercase tracking-widest text-on-surface-variant">
-                        <th className="px-6 py-4 font-bold">{t('usage.ledger.date')}</th>
-                        <th className="px-6 py-4 font-bold">{t('usage.ledger.generations')}</th>
-                        <th className="px-6 py-4 font-bold">{t('usage.ledger.inputTokens')}</th>
-                        <th className="px-6 py-4 font-bold">{t('usage.ledger.outputTokens')}</th>
-                        <th className="px-6 py-4 font-bold text-right">{t('usage.ledger.total')}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {(showAllRows ? daily : daily.slice(0, LEDGER_DEFAULT_ROWS)).map((day, i) => (
-                        <tr
-                          key={day.date}
-                          className={`hover:bg-primary/5 transition-colors ${i % 2 === 1 ? 'bg-surface-container-high/20' : ''}`}
-                        >
-                          <td className="px-6 py-4 text-sm font-mono text-on-surface-variant">{day.date}</td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-2">
-                              <span className="material-symbols-outlined text-sm text-tertiary">bolt</span>
-                              <span className="text-sm text-on-surface font-medium">{day.invocation_count}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-sm font-mono text-on-surface">{day.total_input.toLocaleString()}</td>
-                          <td className="px-6 py-4 text-sm font-mono text-on-surface">{day.total_output.toLocaleString()}</td>
-                          <td className="px-6 py-4 text-sm font-mono text-primary font-bold text-right">
-                            {(day.total_input + day.total_output).toLocaleString()}
-                          </td>
+                <>
+                  {/* Desktop Table */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-surface-container-high/50 text-sm uppercase tracking-widest text-on-surface-variant">
+                          <th className="px-6 py-4 font-bold">{t('usage.ledger.date')}</th>
+                          <th className="px-6 py-4 font-bold">{t('usage.ledger.generations')}</th>
+                          <th className="px-6 py-4 font-bold">{t('usage.ledger.inputTokens')}</th>
+                          <th className="px-6 py-4 font-bold">{t('usage.ledger.outputTokens')}</th>
+                          <th className="px-6 py-4 font-bold text-right">{t('usage.ledger.total')}</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {(showAllRows ? daily : daily.slice(0, LEDGER_DEFAULT_ROWS)).map((day, i) => (
+                          <tr
+                            key={day.date}
+                            className={`hover:bg-primary/5 transition-colors ${i % 2 === 1 ? 'bg-surface-container-high/20' : ''}`}
+                          >
+                            <td className="px-6 py-4 text-sm font-mono text-on-surface-variant">{day.date}</td>
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-2">
+                                <span className="material-symbols-outlined text-sm text-tertiary">bolt</span>
+                                <span className="text-sm text-on-surface font-medium">{day.invocation_count}</span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm font-mono text-on-surface">{day.total_input.toLocaleString()}</td>
+                            <td className="px-6 py-4 text-sm font-mono text-on-surface">{day.total_output.toLocaleString()}</td>
+                            <td className="px-6 py-4 text-sm font-mono text-primary font-bold text-right">
+                              {(day.total_input + day.total_output).toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Card List */}
+                  <div className="md:hidden divide-y divide-white/5">
+                    {(showAllRows ? daily : daily.slice(0, LEDGER_DEFAULT_ROWS)).map((day, i) => (
+                      <div
+                        key={day.date}
+                        className={`p-3.5 active:bg-primary/5 transition-colors ${i % 2 === 1 ? 'bg-surface-container-high/20' : ''}`}
+                      >
+                        {/* Row 1: Date + Total */}
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="text-xs font-mono text-on-surface-variant">{day.date}</span>
+                          <span className="text-sm font-mono text-primary font-bold">
+                            {(day.total_input + day.total_output).toLocaleString()}
+                          </span>
+                        </div>
+                        {/* Row 2: Generations + Input/Output breakdown */}
+                        <div className="flex items-center gap-3 text-xs text-on-surface-variant">
+                          <span className="flex items-center gap-1">
+                            <span className="material-symbols-outlined text-xs text-tertiary">bolt</span>
+                            {day.invocation_count}
+                          </span>
+                          <span className="text-on-surface-variant/40">|</span>
+                          <span>In: <span className="font-mono text-on-surface">{day.total_input.toLocaleString()}</span></span>
+                          <span>Out: <span className="font-mono text-on-surface">{day.total_output.toLocaleString()}</span></span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
               {daily.length > LEDGER_DEFAULT_ROWS && (
-                <div className="p-4 border-t border-white/5 flex justify-center">
+                <div className="p-3 md:p-4 border-t border-white/5 flex justify-center">
                   <button
                     onClick={() => setShowAllRows(v => !v)}
-                    className="text-sm font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary transition-colors cursor-pointer flex items-center gap-1"
+                    className="text-xs md:text-sm font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary active:text-primary transition-colors cursor-pointer flex items-center gap-1"
                   >
                     {showAllRows ? t('usage.ledger.collapse') : t('usage.ledger.showAll', { count: daily.length })}
-                    <span className={`material-symbols-outlined text-sm transition-transform ${showAllRows ? 'rotate-180' : ''}`}>expand_more</span>
+                    <span className={`material-symbols-outlined text-xs md:text-sm transition-transform ${showAllRows ? 'rotate-180' : ''}`}>expand_more</span>
                   </button>
                 </div>
               )}
@@ -320,12 +352,12 @@ function UsageContent() {
           </div>
 
           {/* ===== Bottom Info Banner ===== */}
-          <div className="mt-10 bg-surface-variant/20 backdrop-blur-sm p-6 border-l-2 border-tertiary">
-            <div className="flex items-start gap-4">
-              <span className="material-symbols-outlined text-tertiary">info</span>
+          <div className="mt-6 md:mt-10 bg-surface-variant/20 backdrop-blur-sm p-4 md:p-6 border-l-2 border-tertiary">
+            <div className="flex items-start gap-3 md:gap-4">
+              <span className="material-symbols-outlined text-tertiary text-lg md:text-2xl shrink-0">info</span>
               <div>
-                <h5 className="text-on-surface text-sm font-bold font-headline mb-1">{t('usage.info.title')}</h5>
-                <p className="text-sm text-on-surface-variant leading-relaxed">
+                <h5 className="text-on-surface text-xs md:text-sm font-bold font-headline mb-1">{t('usage.info.title')}</h5>
+                <p className="text-xs md:text-sm text-on-surface-variant leading-relaxed">
                   {t('usage.info.description')}
                 </p>
               </div>
