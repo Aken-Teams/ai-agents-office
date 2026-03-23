@@ -340,7 +340,7 @@ function InlineHtmlPreview({ file, token, onFullscreen }: { file: GeneratedFile;
       <button
         onClick={onFullscreen}
         className="absolute top-3 right-3 p-2 rounded-lg bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-black/70"
-        title="Fullscreen"
+        title={t('chat.preview.fullscreen' as any)}
       >
         <span className="material-symbols-outlined text-lg">fullscreen</span>
       </button>

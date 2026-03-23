@@ -523,6 +523,18 @@ html.locale-zh-CN {
   height: 280px;
 }
 
+.chat-mermaid-body {
+  padding: 12px 16px 8px;
+  min-height: 200px;
+}
+
+.chat-mermaid-body svg {
+  width: 100% !important;
+  max-width: 100%;
+  height: auto !important;
+  min-height: 280px;
+}
+
 .chat-chart-toggle {
   display: block;
   width: 100%;

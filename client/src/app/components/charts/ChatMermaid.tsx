@@ -133,9 +133,8 @@ export default function ChatMermaid({ code }: ChatMermaidProps) {
       <div className="chat-chart-container group">
         <div
           ref={containerRef}
-          className="chat-chart-body overflow-x-auto"
+          className="chat-mermaid-body overflow-x-auto"
           dangerouslySetInnerHTML={{ __html: svg }}
-          style={{ minHeight: 80 }}
         />
         {/* Toolbar */}
         <div className="flex items-center gap-1 px-3 py-1.5 border-t border-[var(--chart-border)]">
