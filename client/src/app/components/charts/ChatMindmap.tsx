@@ -72,7 +72,7 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
           await mm.toggleNode(d, recursive);
           if (wasFolded && d.children?.length) {
             // Expanding: shift node to left side so children are visible on right
-            const vw = mm.svg.node().getBoundingClientRect().width;
+            const vw = mm.svg.node()?.getBoundingClientRect().width ?? 800;
             const ratio = vw < 768 ? 0.85 : 0.5;
             await mm.centerNode(d, { right: vw * ratio });
           } else {
@@ -124,7 +124,7 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
             const recursive = (navigator.platform.startsWith('Mac') ? e.metaKey : e.ctrlKey) && mm.options.toggleRecursively;
             await mm.toggleNode(d, recursive);
             if (wasFolded && d.children?.length) {
-              const vw = mm.svg.node().getBoundingClientRect().width;
+              const vw = mm.svg.node()?.getBoundingClientRect().width ?? 800;
               const ratio = vw < 768 ? 0.85 : 0.5;
               await mm.centerNode(d, { right: vw * ratio });
             } else {
@@ -178,7 +178,7 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
           const recursive = (navigator.platform.startsWith('Mac') ? e.metaKey : e.ctrlKey) && mm.options.toggleRecursively;
           await mm.toggleNode(d, recursive);
           if (wasFolded && d.children?.length) {
-            const vw = mm.svg.node().getBoundingClientRect().width;
+            const vw = mm.svg.node()?.getBoundingClientRect().width ?? 800;
             const ratio = vw < 768 ? 0.85 : 0.5;
             await mm.centerNode(d, { right: vw * ratio });
           } else {
