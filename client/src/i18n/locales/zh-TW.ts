@@ -245,6 +245,8 @@ const zhTW = {
   'chat.toolInfo.webSearch': '網路搜尋',
   'chat.toolInfo.fetchWeb': '擷取網頁',
   'chat.toolInfo.updateTask': '更新任務',
+  'chat.toolInfo.tasksCompleted': '項完成',
+  'chat.toolInfo.tasksPending': '項待處理',
   'chat.toolInfo.toolComplete': '工具完成',
   'chat.error.unknown': '發生未知錯誤',
   'chat.error.uploadFailed': '上傳失敗',

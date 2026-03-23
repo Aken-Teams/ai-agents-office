@@ -168,6 +168,25 @@ function parseToolInput(tool: string, rawInput: string | undefined, t: (key: any
   }
   if (baseTool === 'Glob') return `${t('chat.toolInfo.searchFiles')} ${input.pattern || ''}`.trim();
   if (baseTool === 'Grep') return `${t('chat.toolInfo.searchCode')} "${input.pattern || ''}"`;
+  if (baseTool === 'TodoWrite') {
+    // Parse the todos array and show human-readable task descriptions
+    try {
+      const parsed = JSON.parse(rawInput);
+      const todos: Array<{ content?: string; status?: string; activeForm?: string }> = parsed?.todos || [];
+      if (todos.length === 0) return t('chat.toolInfo.updateTask');
+      const inProgress = todos.find(td => td.status === 'in_progress');
+      if (inProgress) {
+        const label = inProgress.activeForm || inProgress.content || '';
+        return label.length > 80 ? label.substring(0, 80) + '…' : label;
+      }
+      // No in_progress: show count summary
+      const completed = todos.filter(td => td.status === 'completed').length;
+      const pending = todos.filter(td => td.status === 'pending').length;
+      return `${completed}/${todos.length} ${t('chat.toolInfo.tasksCompleted')}${pending > 0 ? ` · ${pending} ${t('chat.toolInfo.tasksPending')}` : ''}`;
+    } catch {
+      return t('chat.toolInfo.updateTask');
+    }
+  }
   // Fallback
   return rawInput.length > 80 ? rawInput.substring(0, 80) + '…' : rawInput;
 }

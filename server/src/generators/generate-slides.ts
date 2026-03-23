@@ -695,20 +695,19 @@ function generateCSS(s: StylePreset): string {
 
 /* ── Reset & Base ── */
 *, *::before, *::after { box-sizing: border-box; }
-html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; ${bgRule} }
+html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; }
 .reveal-viewport { ${bgRule} }
 .reveal { font-family: var(--font-body); }
 
 /* ── Sections ── */
+/* IMPORTANT: Do NOT set overflow, display, or height on section — Reveal.js 5 manages these for centering/scaling */
 .reveal .slides section {
   ${bgRule}
-  padding: 2em 3em;
-  overflow: hidden;
-  position: relative;
+  padding: 40px 60px !important;
   text-align: left;
 }
-.reveal .slides section > *:not(.deco-svg) { position: relative; z-index: 1; max-width: 100%; }
-/* Reveal.js 5 uses its own flex centering via center:true config — do not override display/flex on section */
+.reveal .slides section .deco-svg { position: absolute; pointer-events: none; z-index: 0; }
+.reveal .slides section > *:not(.deco-svg) { position: relative; z-index: 1; }
 
 /* ── Typography ── */
 .reveal h1, .reveal h2, .reveal h3, .reveal h4 {
@@ -748,22 +747,21 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
 .bullet-list li { display: flex; align-items: flex-start; gap: 0.5em; margin-bottom: 0.35em; }
 .bullet-icon { flex-shrink: 0; }
 .bullet-sym { font-size: 1em; color: var(--accent); }
-.reveal ul, .reveal ol { max-height: 65vh; overflow-y: auto; }
+.reveal ul, .reveal ol { max-height: 420px; overflow-y: auto; }
 .reveal li { word-wrap: break-word; overflow-wrap: break-word; }
 
 /* ── Code ── */
-.code-block { background: var(--code-bg); border-radius: 12px; padding: 1em 1.2em; text-align: left; max-height: 55vh; overflow: auto; width: 100%; border: 1px solid var(--card-border); }
+.code-block { background: var(--code-bg); border-radius: 12px; padding: 1em 1.2em; text-align: left; max-height: 380px; overflow: auto; width: 100%; border: 1px solid var(--card-border); }
 .code-block code { color: var(--code-color); font-size: 0.58em; line-height: 1.7; white-space: pre-wrap; word-break: break-all; }
 
 /* ── Images ── */
-.slide-image { max-width: 85%; max-height: 58vh; height: auto; object-fit: contain; border-radius: 12px; margin: 0 auto; display: block; }
+.slide-image { max-width: 85%; max-height: 400px; height: auto; object-fit: contain; border-radius: 12px; margin: 0 auto; display: block; }
 
 /* ── Two-Column ── */
 .slide-columns { display: flex; gap: 1em; width: 100%; }
 .slide-col { flex: 1; min-width: 0; }
 
 /* ── Decorative SVG ── */
-.deco-svg { position: absolute; pointer-events: none; z-index: 0; }
 .deco-blob { top: -80px; right: -80px; opacity: 0.5; }
 .deco-circles-pos { bottom: -60px; left: -60px; opacity: 0.4; }
 .deco-wave { bottom: 0; left: 0; width: 100%; height: auto; opacity: 0.6; }
@@ -834,7 +832,7 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
 .image-text-layout { display: flex; gap: 2em; align-items: center; width: 100%; }
 .image-text-layout.img-right { flex-direction: row-reverse; }
 .it-image { flex: 1; min-width: 0; }
-.it-image img { width: 100%; height: auto; max-height: 55vh; object-fit: cover; border-radius: 16px; }
+.it-image img { width: 100%; height: auto; max-height: 380px; object-fit: cover; border-radius: 16px; }
 .it-text { flex: 1; min-width: 0; }
 
 /* ── Fragment Animations ── */
@@ -846,7 +844,9 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
 .fragment.scale-in.visible { transform: scale(1); opacity: 1; }
 
 /* ── Theme Overrides ── */
+/* Override Reveal.js white theme defaults */
 .reveal .slide-background { ${bgRule} }
+.reveal .slides > section { margin: 0; }
 .reveal .progress { color: var(--accent); height: 4px; }
 .reveal .controls { color: var(--accent); }
 .reveal .controls button { opacity: 0.6; transition: opacity 0.2s; }

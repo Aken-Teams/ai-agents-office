@@ -235,6 +235,8 @@ const en = {
   'chat.toolInfo.webSearch': 'Web search',
   'chat.toolInfo.fetchWeb': 'Fetching web page',
   'chat.toolInfo.updateTask': 'Updating task',
+  'chat.toolInfo.tasksCompleted': 'completed',
+  'chat.toolInfo.tasksPending': 'pending',
   'chat.toolInfo.toolComplete': 'Tool complete',
   'chat.error.unknown': 'Unknown error occurred',
   'chat.error.uploadFailed': 'Upload failed',

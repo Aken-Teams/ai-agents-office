@@ -241,6 +241,8 @@ const zhCN = {
   'chat.toolInfo.webSearch': '网络搜索',
   'chat.toolInfo.fetchWeb': '获取网页',
   'chat.toolInfo.updateTask': '更新任务',
+  'chat.toolInfo.tasksCompleted': '项完成',
+  'chat.toolInfo.tasksPending': '项待处理',
   'chat.toolInfo.toolComplete': '工具完成',
   'chat.error.unknown': '发生未知错误',
   'chat.error.uploadFailed': '上传失败',
