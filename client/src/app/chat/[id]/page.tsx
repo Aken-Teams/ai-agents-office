@@ -451,6 +451,7 @@ function ChatContent() {
   const [totalUsage, setTotalUsage] = useState<{ inputTokens: number; outputTokens: number } | null>(null);
   const [versionDropdown, setVersionDropdown] = useState<string | null>(null); // file ID whose dropdown is open
   const [versionCache, setVersionCache] = useState<Record<string, GeneratedFile[]>>({});
+  const [mobileFilesOpen, setMobileFilesOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sidebarMargin = useSidebarMargin();
   const abortRef = useRef<AbortController | null>(null);
@@ -1084,8 +1085,23 @@ function ChatContent() {
                 {skillId.replace('-gen', '')}
               </span>
             )}
+            <span className="flex-1" />
+            {/* Mobile: file drawer toggle */}
+            {(files.length > 0 || conversationUploads.length > 0) && (
+              <button
+                onClick={() => setMobileFilesOpen(true)}
+                className="lg:hidden relative p-1 text-on-surface-variant active:text-primary transition-colors bg-transparent cursor-pointer shrink-0"
+              >
+                <span className="material-symbols-outlined text-base">folder_open</span>
+                {files.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-primary text-on-primary text-[9px] font-bold rounded-full flex items-center justify-center">
+                    {files.length}
+                  </span>
+                )}
+              </button>
+            )}
             {streaming && (
-              <span className="ml-auto text-xs md:text-sm px-1.5 md:px-2 py-0.5 bg-surface-container-high text-primary rounded font-mono shrink-0">
+              <span className="text-xs md:text-sm px-1.5 md:px-2 py-0.5 bg-surface-container-high text-primary rounded font-mono shrink-0">
                 {formatElapsed(elapsed)}
               </span>
             )}
@@ -1634,6 +1650,126 @@ function ChatContent() {
             </div>
           </div>
         </section>
+
+        {/* === Mobile Files Drawer === */}
+        {mobileFilesOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setMobileFilesOpen(false)}>
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-black/50" />
+            {/* Drawer */}
+            <div
+              className="absolute bottom-0 left-0 right-0 bg-surface-container rounded-t-2xl max-h-[70vh] flex flex-col animate-in slide-in-from-bottom duration-200"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Handle bar */}
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 bg-outline-variant/30 rounded-full" />
+              </div>
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 pb-3 border-b border-outline-variant/10">
+                <h3 className="text-sm font-headline font-bold text-on-surface">{t('chat.sidebar.generatedFiles')}</h3>
+                <button onClick={() => setMobileFilesOpen(false)} className="p-1 text-on-surface-variant active:text-on-surface bg-transparent cursor-pointer">
+                  <span className="material-symbols-outlined text-lg">close</span>
+                </button>
+              </div>
+              {/* Content */}
+              <div className="overflow-y-auto p-4 space-y-4">
+                {/* Generated files */}
+                {files.length === 0 ? (
+                  <p className="text-xs text-on-surface-variant text-center py-4">{t('chat.sidebar.noFiles')}</p>
+                ) : (
+                  <div className="space-y-1">
+                    {files.map(file => {
+                      const fc = getFileColor(file.file_type);
+                      return (
+                        <div key={file.id} className="group">
+                          <div
+                            className="flex items-center justify-between p-3 active:bg-surface-container-high rounded-lg cursor-pointer transition-colors"
+                            onClick={() => { handleDownload(file.id, file.filename); setMobileFilesOpen(false); }}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className={`material-symbols-outlined ${fc} text-base`}>
+                                {getFileIcon(file.file_type)}
+                              </span>
+                              <div className="min-w-0">
+                                <span className="text-sm text-on-surface font-medium block truncate">{file.filename}</span>
+                                <span className="text-xs text-outline">
+                                  {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0" data-version-dropdown>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleVersionDropdown(`mobile-${file.id}`); }}
+                                className="px-1.5 py-0.5 text-xs font-bold bg-primary/10 text-primary rounded active:bg-primary/20 transition-colors cursor-pointer"
+                              >
+                                v{file.version || 1}
+                              </button>
+                              <span className="material-symbols-outlined text-sm text-outline">download</span>
+                            </div>
+                          </div>
+                          {/* Mobile version dropdown */}
+                          {versionDropdown === `mobile-${file.id}` && versionCache[file.id] && (
+                            <div className="mx-3 mb-2 bg-surface-container-high border border-outline-variant/20 rounded-lg shadow-lg py-1 max-h-40 overflow-y-auto">
+                              {versionCache[file.id].map((ver, idx) => (
+                                <button
+                                  key={ver.id}
+                                  onClick={() => { switchToVersion(ver); setMobileFilesOpen(false); }}
+                                  className={`w-full flex items-center gap-2 px-3 py-2 text-left active:bg-surface-container transition-colors cursor-pointer text-xs ${
+                                    ver.id === file.id ? 'bg-primary/10' : ''
+                                  }`}
+                                >
+                                  <span className={`font-bold px-1 py-0.5 rounded ${
+                                    ver.id === file.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
+                                  }`}>
+                                    v{ver.version || 1}
+                                  </span>
+                                  <span className="text-on-surface-variant flex-1">
+                                    {formatSize(ver.file_size)}
+                                    {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
+                                  </span>
+                                  {ver.id === file.id && (
+                                    <span className="material-symbols-outlined text-primary text-xs">check</span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Uploaded files */}
+                {conversationUploads.length > 0 && (
+                  <div className="border-t border-outline-variant/10 pt-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-headline font-bold text-outline tracking-widest uppercase">{t('chat.sidebar.uploadedFiles')}</h4>
+                      <span className="text-xs font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">{conversationUploads.length}</span>
+                    </div>
+                    <div className="space-y-1">
+                      {conversationUploads.map(file => (
+                        <div key={file.id} className="flex items-center gap-3 p-3 rounded-lg">
+                          <span className={`material-symbols-outlined ${getFileColor(file.fileType)} text-base`}>
+                            {getFileIcon(file.fileType)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-sm text-on-surface font-medium block truncate">{file.originalName}</span>
+                            <span className="text-xs text-outline">{file.fileType.toUpperCase()} · {formatSize(file.fileSize)}</span>
+                          </div>
+                          {file.scanStatus === 'clean' && (
+                            <span className="material-symbols-outlined text-green-400 text-sm shrink-0">verified_user</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* === Right Sidebar === */}
         <aside className="w-72 bg-surface-container-low border-l border-outline-variant/10 overflow-y-auto p-5 hidden lg:flex flex-col gap-6 shrink-0">
