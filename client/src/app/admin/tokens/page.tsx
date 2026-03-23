@@ -108,73 +108,80 @@ export default function AdminTokens() {
   return (
     <>
       {/* Header */}
-      <header className="sticky top-0 h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
-        <div className="flex items-center gap-4">
-          <span className="text-lg font-black text-on-surface font-headline">{t('admin.tokens.title')}</span>
-          <span className="text-sm px-2 py-0.5 bg-success/10 text-success rounded font-bold tracking-wider uppercase">{t('admin.tokens.syncStatus')}</span>
+      <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
+        <div className="flex items-center gap-2 md:gap-4 min-w-0">
+          <span className="text-base md:text-lg font-black text-on-surface font-headline truncate">{t('admin.tokens.title')}</span>
+          <span className="text-[10px] md:text-sm px-1.5 md:px-2 py-0.5 bg-success/10 text-success rounded font-bold tracking-wider uppercase shrink-0">{t('admin.tokens.syncStatus')}</span>
         </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
-            <span className="material-symbols-outlined text-sm">download</span>
-            {t('admin.tokens.exportCsv')}
-          </button>
-        </div>
+        <button className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer shrink-0">
+          <span className="material-symbols-outlined text-sm">download</span>
+          <span className="hidden md:inline">{t('admin.tokens.exportCsv')}</span>
+          <span className="md:hidden">CSV</span>
+        </button>
       </header>
 
-      <div className="p-8 flex-1 space-y-6 overflow-y-auto">
+      <div className="p-4 md:p-8 flex-1 space-y-4 md:space-y-6 overflow-y-auto">
         {/* Summary Cards */}
-        <div className="grid grid-cols-4 gap-6">
-          <div className="bg-surface-container p-6 rounded-lg col-span-1 group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>token</span>
-            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">{t('admin.tokens.summary.totalUsage')}</p>
-            <span className="text-3xl font-headline font-black text-on-surface">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-6">
+          {/* Total Usage */}
+          <div className="bg-surface-container p-3 md:p-6 rounded-lg group relative overflow-hidden">
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 max-md:-bottom-2 max-md:-right-1 max-md:!text-[56px] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: 100 }}>token</span>
+            <p className="text-[10px] md:text-sm uppercase tracking-widest text-on-surface-variant mb-1 md:mb-2">{t('admin.tokens.summary.totalUsage')}</p>
+            <span className="text-xl md:text-3xl font-headline font-black text-on-surface">
               {summary ? formatTokens(summary.totalInput + summary.totalOutput) : '\u2014'}
             </span>
-            <p className="text-sm text-on-surface-variant mt-2 font-mono">
-              {t('admin.users.detail.tokenInput')}: {summary ? formatTokens(summary.totalInput) : '0'} | {t('admin.users.detail.tokenOutput')}: {summary ? formatTokens(summary.totalOutput) : '0'}
+            <p className="text-[10px] md:text-sm text-on-surface-variant mt-1 md:mt-2 font-mono">
+              <span className="hidden md:inline">{t('admin.users.detail.tokenInput')}: {summary ? formatTokens(summary.totalInput) : '0'} | {t('admin.users.detail.tokenOutput')}: {summary ? formatTokens(summary.totalOutput) : '0'}</span>
+              <span className="md:hidden">In: {summary ? formatTokens(summary.totalInput) : '0'} · Out: {summary ? formatTokens(summary.totalOutput) : '0'}</span>
             </p>
           </div>
-          <div className="bg-surface-container p-6 rounded-lg col-span-1 group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>attach_money</span>
-            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">{t('admin.tokens.summary.estimatedCost')}</p>
-            <span className="text-3xl font-headline font-black text-primary">
+
+          {/* Estimated Cost */}
+          <div className="bg-surface-container p-3 md:p-6 rounded-lg group relative overflow-hidden">
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 max-md:-bottom-2 max-md:-right-1 max-md:!text-[56px] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: 100 }}>attach_money</span>
+            <p className="text-[10px] md:text-sm uppercase tracking-widest text-on-surface-variant mb-1 md:mb-2">{t('admin.tokens.summary.estimatedCost')}</p>
+            <span className="text-xl md:text-3xl font-headline font-black text-primary">
               ${summary?.estimatedCost.toFixed(4) ?? '0'}
             </span>
-            <p className="text-sm text-on-surface-variant mt-2 font-mono">{t('admin.tokens.summary.pricingNote')}</p>
+            <p className="text-[10px] md:text-sm text-on-surface-variant mt-1 md:mt-2 font-mono">{t('admin.tokens.summary.pricingNote')}</p>
           </div>
-          <div className="bg-surface-container p-6 rounded-lg col-span-1 group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>api</span>
-            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">{t('admin.tokens.summary.totalInvocations')}</p>
-            <span className="text-3xl font-headline font-black text-on-surface">
+
+          {/* Total Invocations */}
+          <div className="bg-surface-container p-3 md:p-6 rounded-lg group relative overflow-hidden">
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 max-md:-bottom-2 max-md:-right-1 max-md:!text-[56px] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: 100 }}>api</span>
+            <p className="text-[10px] md:text-sm uppercase tracking-widest text-on-surface-variant mb-1 md:mb-2">{t('admin.tokens.summary.totalInvocations')}</p>
+            <span className="text-xl md:text-3xl font-headline font-black text-on-surface">
               {summary?.totalInvocations ?? 0}
             </span>
-            <p className="text-sm text-on-surface-variant mt-2 font-mono">{t('admin.tokens.summary.apiCalls')}</p>
+            <p className="text-[10px] md:text-sm text-on-surface-variant mt-1 md:mt-2 font-mono">{t('admin.tokens.summary.apiCalls')}</p>
           </div>
-          <div className="bg-surface-container p-6 rounded-lg col-span-1 group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-4 -right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: '100px' }}>check_circle</span>
-            <p className="text-sm uppercase tracking-widest text-on-surface-variant mb-2">{t('admin.tokens.summary.billingStatus')}</p>
-            <div className="flex items-center gap-2">
-              <span className="text-3xl font-headline font-black text-success">{t('admin.tokens.summary.billingActive')}</span>
-            </div>
-            <p className="text-sm text-on-surface-variant mt-2 font-mono">{t('admin.tokens.summary.billingPaygo')}</p>
+
+          {/* Billing Status */}
+          <div className="bg-surface-container p-3 md:p-6 rounded-lg group relative overflow-hidden">
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 max-md:-bottom-2 max-md:-right-1 max-md:!text-[56px] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: 100 }}>check_circle</span>
+            <p className="text-[10px] md:text-sm uppercase tracking-widest text-on-surface-variant mb-1 md:mb-2">{t('admin.tokens.summary.billingStatus')}</p>
+            <span className="text-xl md:text-3xl font-headline font-black text-success">{t('admin.tokens.summary.billingActive')}</span>
+            <p className="text-[10px] md:text-sm text-on-surface-variant mt-1 md:mt-2 font-mono">{t('admin.tokens.summary.billingPaygo')}</p>
           </div>
         </div>
 
         {/* Chart + User Breakdown */}
-        <div className="grid grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
           {/* Token Chart */}
-          <div className="col-span-8 bg-surface-container rounded-lg overflow-hidden">
-            <div className="px-6 py-4 bg-surface-container-high flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-tertiary">show_chart</span>
-                <span className="text-sm font-bold uppercase tracking-widest">{t('admin.tokens.chart.title')}</span>
+          <div className="md:col-span-8 bg-surface-container rounded-lg overflow-hidden">
+            <div className="px-4 md:px-6 py-3 md:py-4 bg-surface-container-high flex items-center justify-between">
+              <div className="flex items-center gap-2 md:gap-3">
+                <span className="material-symbols-outlined text-tertiary text-base md:text-[24px]">show_chart</span>
+                <span className="text-xs md:text-sm font-bold uppercase tracking-widest">{t('admin.tokens.chart.title')}</span>
               </div>
               <div className="flex gap-1">
                 {(['7d', '30d'] as const).map(p => (
                   <button
                     key={p}
                     onClick={() => setPeriod(p)}
-                    className={`px-3 py-1 text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
+                    className={`px-2 md:px-3 py-0.5 md:py-1 text-xs md:text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
+                      p === '30d' ? 'hidden md:inline-block' : ''
+                    } ${
                       period === p ? 'text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:text-on-surface'
                     }`}
                   >
@@ -190,8 +197,7 @@ export default function AdminTokens() {
                 </div>
               ) : (
                 <div>
-                  {/* Bars */}
-                  <div className={`flex items-end h-40 ${period === '30d' ? 'gap-px' : 'gap-1.5'}`}>
+                  <div className={`flex items-end h-40 md:h-48 ${period === '30d' ? 'gap-px' : 'gap-1.5'}`}>
                     {chart.map((v, i) => {
                       const total = v.total_input + v.total_output;
                       const pct = (total / maxChart) * 100;
@@ -199,7 +205,6 @@ export default function AdminTokens() {
                       return (
                         <div key={i} className="flex-1 min-w-0 h-full flex items-end group/bar relative">
                           <div className="w-full bg-primary/60 rounded-t transition-all group-hover/bar:brightness-125" style={{ height: `${barHeight}%` }} />
-                          {/* Tooltip inside chart area */}
                           <span className="absolute top-0 left-1/2 -translate-x-1/2 text-[10px] bg-surface-container-highest text-on-surface px-1.5 py-0.5 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity font-mono font-bold whitespace-nowrap pointer-events-none z-10">
                             {v.date.slice(5)} · {formatTokens(total)}
                           </span>
@@ -207,12 +212,11 @@ export default function AdminTokens() {
                       );
                     })}
                   </div>
-                  {/* Date labels */}
                   <div className={`flex mt-1.5 ${period === '30d' ? 'gap-px' : 'gap-1.5'}`}>
                     {chart.map((v, i) => {
                       const showLabel = period === '7d' || i % 3 === 0 || i === chart.length - 1;
                       return (
-                        <span key={i} className={`flex-1 min-w-0 text-center ${period === '30d' ? 'text-[8px]' : 'text-xs'} text-outline font-mono truncate`}>
+                        <span key={i} className={`flex-1 min-w-0 text-center ${period === '30d' ? 'text-[8px]' : 'text-[10px] md:text-xs'} text-outline font-mono truncate`}>
                           {showLabel ? v.date.slice(5) : ''}
                         </span>
                       );
@@ -224,12 +228,12 @@ export default function AdminTokens() {
           </div>
 
           {/* User Breakdown */}
-          <div className="col-span-4 bg-surface-container rounded-lg overflow-hidden">
-            <div className="px-6 py-4 bg-surface-container-high flex items-center gap-3">
-              <span className="material-symbols-outlined text-on-surface-variant">pie_chart</span>
-              <span className="text-sm font-bold uppercase tracking-widest">{t('admin.tokens.userBreakdown.title')}</span>
+          <div className="md:col-span-4 bg-surface-container rounded-lg overflow-hidden">
+            <div className="px-4 md:px-6 py-3 md:py-4 bg-surface-container-high flex items-center gap-2 md:gap-3">
+              <span className="material-symbols-outlined text-on-surface-variant text-base md:text-[24px]">pie_chart</span>
+              <span className="text-xs md:text-sm font-bold uppercase tracking-widest">{t('admin.tokens.userBreakdown.title')}</span>
             </div>
-            <div className="p-6 space-y-3">
+            <div className="p-4 md:p-6 space-y-3">
               {byUser.length === 0 ? (
                 <p className="text-sm text-on-surface-variant text-center py-4">{t('admin.tokens.userBreakdown.empty')}</p>
               ) : (
@@ -238,7 +242,7 @@ export default function AdminTokens() {
                   const pct = ((total / totalByUserTokens) * 100).toFixed(1);
                   return (
                     <div key={u.id}>
-                      <div className="flex justify-between text-sm mb-1">
+                      <div className="flex justify-between text-xs md:text-sm mb-1">
                         <span className="text-on-surface truncate max-w-[60%]">{u.display_name || u.email}</span>
                         <span className="text-on-surface-variant font-mono">{pct}%</span>
                       </div>
@@ -255,14 +259,16 @@ export default function AdminTokens() {
 
         {/* Session Ledger */}
         <div className="bg-surface-container rounded-lg overflow-hidden">
-          <div className="px-6 py-4 bg-surface-container-high flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="material-symbols-outlined text-on-surface-variant">receipt_long</span>
-              <span className="text-sm font-bold uppercase tracking-widest">{t('admin.tokens.ledger.title')}</span>
+          <div className="px-4 md:px-6 py-3 md:py-4 bg-surface-container-high flex items-center justify-between">
+            <div className="flex items-center gap-2 md:gap-3">
+              <span className="material-symbols-outlined text-on-surface-variant text-base md:text-[24px]">receipt_long</span>
+              <span className="text-xs md:text-sm font-bold uppercase tracking-widest">{t('admin.tokens.ledger.title')}</span>
             </div>
-            <span className="text-sm text-on-surface-variant">{t('admin.tokens.ledger.count', { count: ledgerTotal })}</span>
+            <span className="text-xs md:text-sm text-on-surface-variant">{t('admin.tokens.ledger.count', { count: ledgerTotal })}</span>
           </div>
-          <table className="w-full">
+
+          {/* Desktop Table */}
+          <table className="w-full hidden md:table">
             <thead>
               <tr className="text-left text-sm uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
                 <th className="py-3 px-6 font-bold">{t('admin.tokens.ledger.sessionId')}</th>
@@ -304,24 +310,49 @@ export default function AdminTokens() {
             </tbody>
           </table>
 
+          {/* Mobile Card List */}
+          <div className="md:hidden divide-y divide-outline-variant/10">
+            {ledger.map(entry => {
+              const cost = ((entry.input_tokens / 1_000_000) * 3 + (entry.output_tokens / 1_000_000) * 15) * 10;
+              return (
+                <div key={entry.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-primary font-mono">{entry.id.slice(0, 8)}</span>
+                    <span className="text-[10px] text-on-surface-variant">{timeAgo(entry.created_at)}</span>
+                  </div>
+                  <p className="text-sm text-on-surface font-medium truncate">{entry.conversation_title || '\u2014'}</p>
+                  <p className="text-xs text-on-surface-variant truncate">{entry.display_name || entry.email.split('@')[0]}</p>
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-on-surface-variant font-mono">
+                    <span>{formatTokens(entry.input_tokens + entry.output_tokens)} tokens</span>
+                    <span>${cost.toFixed(3)}</span>
+                  </div>
+                </div>
+              );
+            })}
+            {ledger.length === 0 && (
+              <div className="py-12 text-center text-on-surface-variant text-sm">{t('admin.tokens.ledger.empty')}</div>
+            )}
+          </div>
+
           {/* Pagination */}
           {ledgerTotalPages > 1 && (
-            <div className="flex items-center justify-between px-6 py-4 border-t border-outline-variant/10">
-              <span className="text-sm text-on-surface-variant">
+            <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-t border-outline-variant/10">
+              <span className="text-xs text-on-surface-variant md:hidden">{ledgerPage}/{ledgerTotalPages}</span>
+              <span className="text-sm text-on-surface-variant hidden md:block">
                 {t('admin.tokens.ledger.paginationSummary', { start: (ledgerPage - 1) * 10 + 1, end: Math.min(ledgerPage * 10, ledgerTotal), total: ledgerTotal })}
               </span>
               <div className="flex gap-1">
                 <button
                   onClick={() => setLedgerPage(p => Math.max(1, p - 1))}
                   disabled={ledgerPage === 1}
-                  className="px-3 py-1.5 text-sm bg-surface-container-high text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
+                  className="px-2.5 md:px-3 py-1.5 text-xs md:text-sm bg-surface-container-high text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
                 >
                   {t('common.prev')}
                 </button>
                 <button
                   onClick={() => setLedgerPage(p => Math.min(ledgerTotalPages, p + 1))}
                   disabled={ledgerPage === ledgerTotalPages}
-                  className="px-3 py-1.5 text-sm bg-surface-container-high text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
+                  className="px-2.5 md:px-3 py-1.5 text-xs md:text-sm bg-surface-container-high text-on-surface-variant rounded disabled:opacity-30 cursor-pointer"
                 >
                   {t('common.next')}
                 </button>
