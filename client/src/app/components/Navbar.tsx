@@ -580,23 +580,6 @@ export default function Navbar() {
           })}
         </nav>
 
-        {/* Template Wizard Button */}
-        <div className={`mt-6 ${collapsed ? 'px-2' : 'px-6'}`}>
-          <div className="relative group">
-            <button
-              onClick={() => setShowModal(true)}
-              className={`w-full cyber-gradient py-3 text-on-primary font-bold rounded flex items-center justify-center gap-2 text-sm uppercase tracking-widest active:scale-[0.99] transition-all cursor-pointer ${collapsed ? 'px-0' : ''}`}
-            >
-              <span className="material-symbols-outlined text-sm">auto_fix_high</span>
-              {!collapsed && t('dashboard.templateWizard' as any)}
-            </button>
-            {collapsed && (
-              <span className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
-                {t('dashboard.templateWizard' as any)}
-              </span>
-            )}
-          </div>
-        </div>
 
         {/* Bottom */}
         <div className={`mt-auto pt-6 space-y-1 ${collapsed ? 'px-2' : 'px-4'}`}>
