@@ -46,7 +46,7 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
         const isDark = document.documentElement.classList.contains('dark');
 
         const mm = Markmap.create(svgRef.current, {
-          autoFit: true,
+          autoFit: false,
           duration: 300,
           color: (node: any) => {
             const colors = isDark
@@ -55,6 +55,21 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
             return colors[(node.state?.depth ?? 0) % colors.length];
           },
         }, root);
+        // Fit once for initial view, then let user pan/zoom freely
+        mm.fit();
+        // Override click: toggle node then pan to show expanded children
+        mm.handleClick = async (e: MouseEvent, d: any) => {
+          const wasFolded = d.payload?.fold;
+          const recursive = (navigator.platform.startsWith('Mac') ? e.metaKey : e.ctrlKey) && mm.options.toggleRecursively;
+          await mm.toggleNode(d, recursive);
+          if (wasFolded && d.children?.length) {
+            // Expanding: shift node to left side so children are visible on right
+            const vw = mm.svg.node().getBoundingClientRect().width;
+            await mm.centerNode(d, { right: vw * 0.5 });
+          } else {
+            await mm.centerNode(d);
+          }
+        };
 
         mmRef.current = mm;
         if (!cancelled) setReady(true);
@@ -85,7 +100,7 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
           const isDark = document.documentElement.classList.contains('dark');
 
           const mm = Markmap.create(svgRef.current, {
-            autoFit: true,
+            autoFit: false,
             duration: 300,
             color: (node: any) => {
               const colors = isDark
@@ -94,6 +109,18 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
               return colors[(node.state?.depth ?? 0) % colors.length];
             },
           }, root);
+          mm.fit();
+          mm.handleClick = async (e: MouseEvent, d: any) => {
+            const wasFolded = d.payload?.fold;
+            const recursive = (navigator.platform.startsWith('Mac') ? e.metaKey : e.ctrlKey) && mm.options.toggleRecursively;
+            await mm.toggleNode(d, recursive);
+            if (wasFolded && d.children?.length) {
+              const vw = mm.svg.node().getBoundingClientRect().width;
+              await mm.centerNode(d, { right: vw * 0.5 });
+            } else {
+              await mm.centerNode(d);
+            }
+          };
           mmRef.current = mm;
           setReady(true);
         } catch { /* ignore theme re-render errors */ }
@@ -126,7 +153,7 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
         const isDark = document.documentElement.classList.contains('dark');
 
         const mm = Markmap.create(fullscreenSvgRef.current, {
-          autoFit: true,
+          autoFit: false,
           duration: 300,
           color: (node: any) => {
             const colors = isDark
@@ -135,6 +162,18 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
             return colors[(node.state?.depth ?? 0) % colors.length];
           },
         }, root);
+        mm.fit();
+        mm.handleClick = async (e: MouseEvent, d: any) => {
+          const wasFolded = d.payload?.fold;
+          const recursive = (navigator.platform.startsWith('Mac') ? e.metaKey : e.ctrlKey) && mm.options.toggleRecursively;
+          await mm.toggleNode(d, recursive);
+          if (wasFolded && d.children?.length) {
+            const vw = mm.svg.node().getBoundingClientRect().width;
+            await mm.centerNode(d, { right: vw * 0.5 });
+          } else {
+            await mm.centerNode(d);
+          }
+        };
         fullscreenMmRef.current = mm;
       } catch { /* ignore */ }
     }
