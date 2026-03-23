@@ -1018,7 +1018,7 @@ function ChatContent() {
     }
     setVersionDropdown(dropdownKey);
     // Extract real file ID (strip "preview-" or "sidebar-" prefix if present)
-    const realFileId = dropdownKey.replace(/^(preview|sidebar)-/, '');
+    const realFileId = dropdownKey.replace(/^(preview|sidebar|mobile)-/, '');
     if (!versionCache[realFileId]) {
       try {
         const res = await fetch(`/api/files/${realFileId}/versions`, {
@@ -1725,7 +1725,7 @@ function ChatContent() {
                               <span className="material-symbols-outlined text-sm text-outline">download</span>
                               {/* Mobile version dropdown — absolute overlay */}
                               {versionDropdown === `mobile-${file.id}` && versionCache[file.id] && (
-                                <div className="absolute right-0 bottom-full mb-1 z-50 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl min-w-[220px] py-1 max-h-48 overflow-y-auto">
+                                <div className="absolute right-0 top-full mt-1 z-50 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl min-w-[220px] py-1 max-h-48 overflow-y-auto">
                                   {versionCache[file.id].map((ver, idx) => (
                                     <button
                                       key={ver.id}
