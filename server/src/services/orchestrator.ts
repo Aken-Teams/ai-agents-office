@@ -82,8 +82,18 @@ export class Orchestrator {
 
     const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale);
 
+    // If user attached files, prepend file info to message so Router knows to delegate to data-analyst/rag-analyst
+    let messageWithFileContext = message;
+    if (this.uploadIds.length > 0) {
+      const baseSandbox = getSandboxPath(this.userId, this.conversationId);
+      const fileContext = getUserUploadsForPrompt(this.userId, baseSandbox, { uploadIds: this.uploadIds });
+      if (fileContext) {
+        messageWithFileContext = message + '\n\n[System: The user has attached files for this request.]\n' + fileContext;
+      }
+    }
+
     // Recursive orchestration loop
-    let currentMessage = message;
+    let currentMessage = messageWithFileContext;
     let depth = 0;
     let routerResumed = routerInitialized; // Track if we should resume within this run
     const orchestrationStart = Date.now();

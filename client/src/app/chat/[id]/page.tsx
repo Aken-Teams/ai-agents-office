@@ -469,7 +469,7 @@ function ChatContent() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [streaming]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sendMessage = useCallback(async (directMessage?: string) => {
+  const sendMessage = useCallback(async (directMessage?: string, extraUploadIds?: string[]) => {
     const messageToSend = directMessage || input.trim();
     if (!messageToSend || streaming || !token) return;
 
@@ -480,7 +480,9 @@ function ChatContent() {
     if (pendingTemplate) setPendingTemplate(null);
     // Capture attached file names for display in the message
     const currentAttached = attachedFiles.filter(f => !f.uploading && f.scanStatus !== 'rejected');
-    const currentUploadIds = currentAttached.map(f => f.id);
+    const currentUploadIds = extraUploadIds && extraUploadIds.length > 0
+      ? extraUploadIds
+      : currentAttached.map(f => f.id);
     const attachmentNote = currentAttached.length > 0
       ? `\n\n📎 ${currentAttached.map(f => f.originalName).join(', ')}`
       : '';
@@ -705,6 +707,19 @@ function ChatContent() {
     if (pending) {
       sessionStorage.removeItem(key);
       pendingHandled.current = true;
+
+      // Restore uploaded files from dashboard smart input
+      const uploadsKey = `pending_uploads_${conversationId}`;
+      const pendingUploads = sessionStorage.getItem(uploadsKey);
+      if (pendingUploads) {
+        sessionStorage.removeItem(uploadsKey);
+        try {
+          const files = JSON.parse(pendingUploads) as Array<{ id: string; name: string }>;
+          const uploadIds = files.map(f => f.id);
+          sendMessage(pending, uploadIds);
+          return;
+        } catch { /* ignore parse errors */ }
+      }
       sendMessage(pending);
     }
   }, [conversationLoaded, token, conversationId, streaming, sendMessage]);

@@ -127,6 +127,13 @@ function DashboardContent() {
       if (initialMessage) {
         sessionStorage.setItem(`pending_message_${conv.id}`, initialMessage);
       }
+      // Pass upload IDs from smart input to chat page
+      if (smartAttached.length > 0) {
+        const validFiles = smartAttached.filter(f => !f.uploading);
+        if (validFiles.length > 0) {
+          sessionStorage.setItem(`pending_uploads_${conv.id}`, JSON.stringify(validFiles));
+        }
+      }
       router.push(`/chat/${conv.id}`);
     } finally {
       setCreating(false);
