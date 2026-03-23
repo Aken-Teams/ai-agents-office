@@ -192,12 +192,12 @@ ${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
           onClick={() => setFullscreen(false)}
         >
           <div
-            className="bg-surface rounded-xl shadow-2xl max-w-[90vw] max-h-[90vh] overflow-auto p-8 relative"
+            className="bg-surface rounded-xl shadow-2xl max-w-[95vw] md:max-w-[90vw] max-h-[90vh] overflow-auto p-4 md:p-8 relative"
             onClick={e => e.stopPropagation()}
           >
             <button
               onClick={() => setFullscreen(false)}
-              className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant cursor-pointer transition-colors"
+              className="absolute top-3 right-3 z-10 w-8 h-8 flex items-center justify-center rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant cursor-pointer transition-colors"
             >
               <span className="material-symbols-outlined text-sm">close</span>
             </button>
@@ -205,7 +205,7 @@ ${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
               className="chat-mermaid-fullscreen"
               dangerouslySetInnerHTML={{ __html: svg }}
             />
-            <div className="flex items-center gap-2 mt-4 pt-3 border-t border-outline-variant/20">
+            <div className="flex items-center flex-wrap gap-2 mt-3 md:mt-4 pt-3 border-t border-outline-variant/20">
               <button onClick={handleDownloadHtml} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
                 <span className="material-symbols-outlined" style={{ fontSize: 14 }}>code</span> {t('chart.action.downloadHtml' as any)}
               </button>

@@ -259,7 +259,7 @@ ${code}
           onClick={() => setFullscreen(false)}
         >
           <div
-            className="bg-surface rounded-xl shadow-2xl w-[90vw] h-[85vh] overflow-hidden p-4 relative flex flex-col"
+            className="bg-surface rounded-xl shadow-2xl w-[95vw] md:w-[90vw] h-[90vh] md:h-[85vh] overflow-hidden p-3 md:p-4 relative flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             <button
@@ -271,17 +271,19 @@ ${code}
             <div className="flex-1 min-h-0">
               <svg ref={fullscreenSvgRef} className="w-full h-full" />
             </div>
-            <div className="flex items-center gap-2 pt-3 border-t border-outline-variant/20">
-              <div className="chat-mindmap-hint flex-1">
+            <div className="flex items-center flex-wrap gap-2 pt-3 border-t border-outline-variant/20">
+              <div className="chat-mindmap-hint flex-1 min-w-0">
                 <span className="material-symbols-outlined" style={{ fontSize: 13 }}>touch_app</span>
-                <span>{t('chart.hint.mindmap' as any)}</span>
+                <span className="truncate">{t('chart.hint.mindmap' as any)}</span>
               </div>
-              <button onClick={handleDownloadHtml} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
-                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>code</span> {t('chart.action.downloadHtml' as any)}
-              </button>
-              <button onClick={handleDownloadPng} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
-                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>image</span> {t('chart.action.downloadPng' as any)}
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={handleDownloadHtml} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
+                  <span className="material-symbols-outlined" style={{ fontSize: 14 }}>code</span> <span className="hidden md:inline">{t('chart.action.downloadHtml' as any)}</span><span className="md:hidden">HTML</span>
+                </button>
+                <button onClick={handleDownloadPng} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
+                  <span className="material-symbols-outlined" style={{ fontSize: 14 }}>image</span> <span className="hidden md:inline">{t('chart.action.downloadPng' as any)}</span><span className="md:hidden">PNG</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

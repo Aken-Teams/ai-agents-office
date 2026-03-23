@@ -164,9 +164,11 @@ new Chart(document.getElementById('c'),cfg(d));
       <div className="chat-chart-container">
         {chart.title && <div className="chat-chart-title">{chart.title}</div>}
         <div className="chat-chart-body" ref={chartRef}>
-          <ResponsiveContainer width="100%" height={280}>
-            {renderChart(chart, colors, theme, axisStyle, gridStyle, tooltipStyle)}
-          </ResponsiveContainer>
+          <div style={{ minWidth: ['pie', 'donut', 'radar'].includes(chart.type) ? 360 : undefined }}>
+            <ResponsiveContainer width="100%" height={280}>
+              {renderChart(chart, colors, theme, axisStyle, gridStyle, tooltipStyle)}
+            </ResponsiveContainer>
+          </div>
         </div>
         {/* Toolbar */}
         <div className="flex items-center flex-wrap gap-1 px-2 md:px-3 py-1.5 border-t border-[var(--chart-border)]">
@@ -199,20 +201,20 @@ new Chart(document.getElementById('c'),cfg(d));
           onClick={() => setFullscreen(false)}
         >
           <div
-            className="bg-surface rounded-xl shadow-2xl w-[85vw] max-h-[90vh] overflow-auto p-8 relative"
+            className="bg-surface rounded-xl shadow-2xl w-[95vw] md:w-[85vw] max-h-[90vh] overflow-auto p-4 md:p-8 relative"
             onClick={e => e.stopPropagation()}
           >
             <button
               onClick={() => setFullscreen(false)}
-              className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant cursor-pointer transition-colors"
+              className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant cursor-pointer transition-colors z-10"
             >
               <span className="material-symbols-outlined text-sm">close</span>
             </button>
-            {chart.title && <div className="text-lg font-bold text-on-surface mb-4">{chart.title}</div>}
-            <ResponsiveContainer width="100%" height={500}>
+            {chart.title && <div className="text-base md:text-lg font-bold text-on-surface mb-3 md:mb-4 pr-10">{chart.title}</div>}
+            <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 320 : 500}>
               {renderChart(chart, colors, theme, axisStyle, gridStyle, tooltipStyle)}
             </ResponsiveContainer>
-            <div className="flex items-center gap-2 mt-4 pt-3 border-t border-outline-variant/20">
+            <div className="flex items-center flex-wrap gap-2 mt-3 md:mt-4 pt-3 border-t border-outline-variant/20">
               <button onClick={handleDownloadHtml} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
                 <span className="material-symbols-outlined" style={{ fontSize: 14 }}>code</span> {t('chart.action.downloadHtml' as any)}
               </button>

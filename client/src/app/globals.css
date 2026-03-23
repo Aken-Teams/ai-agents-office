@@ -540,6 +540,13 @@ html.locale-zh-CN {
   height: 280px;
 }
 
+@media (max-width: 767px) {
+  .chat-chart-body {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 .chat-mermaid-body {
   padding: 12px 16px 8px;
   min-height: 200px;
