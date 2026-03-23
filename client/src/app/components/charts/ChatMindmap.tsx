@@ -38,8 +38,8 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
         const transformer = new Transformer();
         const { root } = transformer.transform(code.trim());
 
-        // Collapse to 2 levels by default so large mindmaps stay readable
-        foldTree(root, 0, 2);
+        // Start collapsed, let user expand manually
+        foldTree(root, 0, 1);
 
         // Clear previous content
         svgRef.current.innerHTML = '';
@@ -80,7 +80,7 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
 
           const transformer = new Transformer();
           const { root } = transformer.transform(code.trim());
-          foldTree(root, 0, 2);
+          foldTree(root, 0, 1);
           svgRef.current.innerHTML = '';
           const isDark = document.documentElement.classList.contains('dark');
 
@@ -121,7 +121,7 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
 
         const transformer = new Transformer();
         const { root } = transformer.transform(code.trim());
-        foldTree(root, 0, 3); // Show one more level in fullscreen
+        foldTree(root, 0, 1); // Start collapsed, let user expand manually
         fullscreenSvgRef.current.innerHTML = '';
         const isDark = document.documentElement.classList.contains('dark');
 
