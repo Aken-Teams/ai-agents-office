@@ -60,7 +60,7 @@ function UsageContent() {
   // Chart data: always show at least 7 days, fill missing days with 0
   const CHART_MIN_DAYS = 7;
   const chartData = (() => {
-    const dataMap = new Map(daily.map(d => [d.date, d]));
+    const dataMap = new Map(daily.map(d => [d.date.slice(0, 10), d]));
     const days: DailyUsage[] = [];
     const today = new Date();
     // Determine how many days to show: max(7, actual data range)
@@ -165,7 +165,7 @@ function UsageContent() {
                   <p className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">{t('usage.chart.noData')}</p>
                 </div>
               ) : (
-                <div className="flex items-end gap-1 md:gap-1.5 px-1 overflow-x-auto no-scrollbar">
+                <div className="flex items-end gap-1 md:gap-1.5 px-1 pt-8 overflow-x-auto no-scrollbar">
                   {chartData.map(day => {
                     const dayTotal = day.total_input + day.total_output;
                     const pct = (dayTotal / maxTokens) * 100;
@@ -187,8 +187,8 @@ function UsageContent() {
                           </div>
                         </div>
                         {/* Date label — show MM/DD on mobile, full date on desktop */}
-                        <span className="mt-1.5 md:mt-2 text-[10px] md:text-sm text-on-surface-variant/60 font-mono md:hidden">{day.date.slice(5)}</span>
-                        <span className="mt-2 text-sm text-on-surface-variant/60 font-mono hidden md:block">{day.date}</span>
+                        <span className="mt-1.5 md:mt-2 text-[10px] md:text-sm text-on-surface-variant/60 font-mono md:hidden">{day.date.slice(0, 10).slice(5)}</span>
+                        <span className="mt-2 text-sm text-on-surface-variant/60 font-mono hidden md:block">{day.date.slice(0, 10)}</span>
                       </div>
                     );
                   })}
@@ -290,7 +290,7 @@ function UsageContent() {
                             key={day.date}
                             className={`hover:bg-primary/5 transition-colors ${i % 2 === 1 ? 'bg-surface-container-high/20' : ''}`}
                           >
-                            <td className="px-6 py-4 text-sm font-mono text-on-surface-variant">{day.date}</td>
+                            <td className="px-6 py-4 text-sm font-mono text-on-surface-variant">{day.date.slice(0, 10)}</td>
                             <td className="px-6 py-4">
                               <div className="flex items-center gap-2">
                                 <span className="material-symbols-outlined text-sm text-tertiary">bolt</span>
@@ -317,7 +317,7 @@ function UsageContent() {
                       >
                         {/* Row 1: Date + Total */}
                         <div className="flex justify-between items-center mb-1.5">
-                          <span className="text-xs font-mono text-on-surface-variant">{day.date}</span>
+                          <span className="text-xs font-mono text-on-surface-variant">{day.date.slice(0, 10)}</span>
                           <span className="text-sm font-mono text-primary font-bold">
                             {(day.total_input + day.total_output).toLocaleString()}
                           </span>

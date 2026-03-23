@@ -252,7 +252,7 @@ function PreviewModal({
         </button>
 
         {/* ===== Preview Area ===== */}
-        <div className="flex-1 flex items-center justify-center p-3 pb-0 md:p-8 relative overflow-hidden">
+        <div className="flex-1 flex items-center justify-center p-4 md:p-8 relative overflow-hidden">
           {/* Background grid */}
           <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-pattern" />
 
@@ -280,7 +280,7 @@ function PreviewModal({
               /* Native HTML (Reveal.js slides) — embedded with scripts enabled */
               <iframe
                 src={blobUrl!}
-                className="w-full h-[calc(100svh-10rem)] md:h-[calc(100vh-8rem)] bg-white rounded"
+                className="w-full h-[calc(100svh-14rem)] md:h-[calc(100vh-8rem)] bg-white rounded"
                 title={file.filename}
                 sandbox="allow-scripts allow-same-origin"
                 style={{ border: 'none' }}
@@ -289,7 +289,7 @@ function PreviewModal({
               /* PDF (native or LibreOffice converted) */
               <iframe
                 src={`${blobUrl}#toolbar=0`}
-                className="w-full h-[calc(100svh-10rem)] md:h-[calc(100vh-8rem)] bg-white rounded"
+                className="w-full h-[calc(100svh-14rem)] md:h-[calc(100vh-8rem)] bg-white rounded"
                 title={file.filename}
               />
             ) : isImage && blobUrl ? (
@@ -299,22 +299,22 @@ function PreviewModal({
                 <img
                   src={blobUrl}
                   alt={file.filename}
-                  className="max-w-full max-h-[calc(100svh-10rem)] md:max-h-[calc(100vh-8rem)] object-contain rounded"
+                  className="max-w-full max-h-[calc(100svh-14rem)] md:max-h-[calc(100vh-8rem)] object-contain rounded"
                 />
               </div>
             ) : isHtmlContent ? (
               /* HTML from Office JS-fallback conversion */
-              <div className="bg-surface-container rounded border border-outline-variant/10 overflow-auto max-h-[calc(100svh-10rem)] md:max-h-[calc(100vh-8rem)]">
+              <div className="bg-surface-container rounded border border-outline-variant/10 overflow-auto max-h-[calc(100svh-14rem)] md:max-h-[calc(100vh-8rem)]">
                 <iframe
                   srcDoc={textContent!}
-                  className="w-full h-[calc(100svh-10rem)] md:h-[calc(100vh-8rem)] rounded"
+                  className="w-full h-[calc(100svh-14rem)] md:h-[calc(100vh-8rem)] rounded"
                   title={file.filename}
                   sandbox="allow-same-origin"
                 />
               </div>
             ) : isText && textContent !== null ? (
               /* Plain text / CSV / Markdown */
-              <div className="bg-surface-container rounded border border-outline-variant/10 overflow-auto max-h-[calc(100svh-10rem)] md:max-h-[calc(100vh-8rem)]">
+              <div className="bg-surface-container rounded border border-outline-variant/10 overflow-auto max-h-[calc(100svh-14rem)] md:max-h-[calc(100vh-8rem)]">
                 <div className="p-4 md:p-6">
                   <pre className="text-xs md:text-sm text-on-surface-variant leading-relaxed whitespace-pre-wrap font-body break-words">
                     {textContent}
@@ -336,52 +336,26 @@ function PreviewModal({
           </div>
         </div>
 
-        {/* ===== Mobile: Compact bottom bar ===== */}
-        <div className="md:hidden bg-surface-container border-t border-outline-variant/10 px-3 py-2.5 shrink-0">
-          <div className="flex items-center gap-3">
-            {/* File info icon */}
-            <div
-              className="w-8 h-8 rounded flex items-center justify-center shrink-0"
-              style={{ background: config.bgColor }}
-            >
-              <span className="material-symbols-outlined text-sm" style={{ color: config.color }}>{config.icon}</span>
-            </div>
-            {/* File name + meta */}
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-on-surface truncate">{file.filename}</p>
-              <div className="flex items-center gap-2 text-[10px] text-on-surface-variant">
+        {/* ===== Right Sidebar (desktop) / Bottom Panel (mobile) ===== */}
+        <aside className="w-full md:w-80 bg-surface-container border-t md:border-t-0 md:border-l border-outline-variant/10 flex flex-col shrink-0 max-h-[40vh] md:max-h-none overflow-y-auto">
+          {/* File info */}
+          <div className="p-4 md:p-6 border-b border-outline-variant/10">
+            <h3 className="text-xs md:text-sm font-headline font-bold uppercase tracking-widest text-primary mb-3 md:mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-sm">info</span> {t('files.preview.fileInfo')}
+            </h3>
+            {/* Mobile: compact row layout */}
+            <div className="md:hidden">
+              <p className="text-sm font-medium text-on-surface break-all mb-2">{file.filename}</p>
+              <div className="flex items-center gap-3 text-xs text-on-surface-variant">
                 <span className="font-bold uppercase" style={{ color: config.color }}>{file.file_type}</span>
                 <span>·</span>
                 <span>{formatSize(file.file_size)}</span>
-                {file.version && file.version > 1 && (
-                  <>
-                    <span>·</span>
-                    <span className="text-primary font-bold">v{file.version}</span>
-                  </>
-                )}
                 <span>·</span>
-                <span>{new Date(file.created_at).toLocaleString(locale, { month: 'numeric', day: 'numeric' })}</span>
+                <span>{new Date(file.created_at).toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
               </div>
             </div>
-            {/* Download button */}
-            <button
-              onClick={() => onDownload(file.id, file.filename)}
-              className="shrink-0 flex items-center gap-1.5 px-3 py-2 cyber-gradient text-on-primary font-bold text-[10px] uppercase tracking-widest active:opacity-90 transition-opacity"
-            >
-              <span className="material-symbols-outlined text-xs">download</span>
-              {t('files.preview.downloadLocal')}
-            </button>
-          </div>
-        </div>
-
-        {/* ===== Desktop: Right Sidebar ===== */}
-        <aside className="hidden md:flex w-80 bg-surface-container border-l border-outline-variant/10 flex-col shrink-0 overflow-y-auto">
-          {/* File info */}
-          <div className="p-6 border-b border-outline-variant/10">
-            <h3 className="text-sm font-headline font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-sm">info</span> {t('files.preview.fileInfo')}
-            </h3>
-            <div className="space-y-3">
+            {/* Desktop: full layout */}
+            <div className="hidden md:block space-y-3">
               <div className="p-3 bg-surface-container-low rounded">
                 <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">{t('files.preview.filename')}</p>
                 <p className="text-sm font-medium text-on-surface break-all">{file.filename}</p>
@@ -412,7 +386,7 @@ function PreviewModal({
 
           {/* Version selector */}
           {versions.length > 1 && (
-            <div className="px-6 pb-4 border-b border-outline-variant/10">
+            <div className="px-4 md:px-6 pb-3 md:pb-4 border-b border-outline-variant/10">
               <p className="text-sm text-on-surface-variant uppercase font-medium mb-2 tracking-wider">{t('chat.preview.version' as any)}</p>
               <div className="relative" data-version-dropdown>
                 <button
@@ -463,18 +437,18 @@ function PreviewModal({
           )}
 
           {/* Actions */}
-          <div className="p-6 flex-1">
+          <div className="p-4 md:p-6 md:flex-1">
             <button
               onClick={() => onDownload(file.id, file.filename)}
-              className="w-full py-2.5 px-4 cyber-gradient text-on-primary font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer hover:opacity-90 transition-opacity"
+              className="w-full py-2.5 px-4 cyber-gradient text-on-primary font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer active:opacity-90 hover:opacity-90 transition-opacity"
             >
               <span className="material-symbols-outlined text-sm">download</span>
               {t('files.preview.downloadLocal')}
             </button>
           </div>
 
-          {/* Bottom indicator */}
-          <div className="flex p-4 bg-primary/5 items-center gap-3 border-t border-outline-variant/10">
+          {/* Bottom indicator — hidden on mobile */}
+          <div className="hidden md:flex p-4 bg-primary/5 items-center gap-3 border-t border-outline-variant/10">
             <span className="material-symbols-outlined text-primary text-base">shield</span>
             <div>
               <p className="text-sm font-bold text-on-surface">{t('files.preview.localSandbox')}</p>
@@ -805,10 +779,10 @@ function FilesContent() {
                   {/* Top: Icon + Type badge */}
                   <div className="flex justify-between items-start">
                     <div
-                      className="w-7 h-7 md:w-10 md:h-10 rounded flex items-center justify-center"
+                      className="w-5 h-5 md:w-10 md:h-10 rounded flex items-center justify-center"
                       style={{ background: config.bgColor }}
                     >
-                      <span className="material-symbols-outlined text-xs md:text-base" style={{ color: config.color }}>
+                      <span className="material-symbols-outlined text-[10px] md:text-base" style={{ color: config.color }}>
                         {config.icon}
                       </span>
                     </div>

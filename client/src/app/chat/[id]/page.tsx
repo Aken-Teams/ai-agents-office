@@ -1345,47 +1345,47 @@ function ChatContent() {
                           {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-0.5 md:gap-1">
                         {/* Version selector */}
                         <div className="relative" data-version-dropdown>
                           <button
                             onClick={() => toggleVersionDropdown(file.id)}
-                            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                            className={`flex items-center gap-0.5 md:gap-1 px-1.5 md:px-2 py-1 rounded-lg text-[10px] md:text-xs font-bold transition-colors cursor-pointer ${
                               versionDropdown === file.id
                                 ? 'bg-primary/20 text-primary'
-                                : 'bg-primary/10 text-primary hover:bg-primary/20'
+                                : 'bg-primary/10 text-primary active:bg-primary/20 md:hover:bg-primary/20'
                             }`}
                             title={t('chat.preview.versions' as any)}
                           >
                             <span>v{file.version || 1}</span>
-                            <span className="material-symbols-outlined text-xs">expand_more</span>
+                            <span className="material-symbols-outlined text-[10px] md:text-xs">expand_more</span>
                           </button>
                           {versionDropdown === file.id && versionCache[file.id] && (
-                            <div className="absolute right-0 top-full mt-1 z-50 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl min-w-[260px] py-1 max-h-48 overflow-y-auto">
+                            <div className="absolute right-0 top-full mt-1 z-50 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl min-w-[200px] md:min-w-[260px] py-1 max-h-48 overflow-y-auto">
                               {versionCache[file.id].map((ver, idx) => (
                                 <button
                                   key={ver.id}
                                   onClick={() => switchToVersion(ver)}
-                                  className={`w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-surface-container-high transition-colors cursor-pointer ${
+                                  className={`w-full flex items-center gap-2 md:gap-3 px-2.5 md:px-3 py-1.5 md:py-2 text-left active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors cursor-pointer ${
                                     ver.id === file.id ? 'bg-primary/10' : ''
                                   }`}
                                 >
-                                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                                  <span className={`text-[10px] md:text-xs font-bold px-1 md:px-1.5 py-0.5 rounded ${
                                     ver.id === file.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
                                   }`}>
                                     v{ver.version || 1}
                                   </span>
                                   <div className="flex-1 min-w-0">
-                                    <span className="text-xs text-on-surface-variant block">
+                                    <span className="text-[10px] md:text-xs text-on-surface-variant block">
                                       {formatSize(ver.file_size)}
                                       {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
                                     </span>
-                                    <span className="text-xs text-outline block">
+                                    <span className="text-[10px] md:text-xs text-outline block">
                                       {new Date(ver.created_at || '').toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                     </span>
                                   </div>
                                   {ver.id === file.id && (
-                                    <span className="material-symbols-outlined text-primary text-sm">check</span>
+                                    <span className="material-symbols-outlined text-primary text-xs md:text-sm">check</span>
                                   )}
                                 </button>
                               ))}
@@ -1395,18 +1395,18 @@ function ChatContent() {
                         {file.file_type === 'html' && (
                           <button
                             onClick={() => openPreview(file)}
-                            className="p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+                            className="p-1.5 md:p-2 rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-primary md:hover:text-primary transition-colors cursor-pointer"
                             title={t('chat.preview.fullscreen' as any)}
                           >
-                            <span className="material-symbols-outlined text-lg">fullscreen</span>
+                            <span className="material-symbols-outlined text-base md:text-lg">fullscreen</span>
                           </button>
                         )}
                         <button
                           onClick={() => handleDownload(file.id, file.filename)}
-                          className="p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+                          className="p-1.5 md:p-2 rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-primary md:hover:text-primary transition-colors cursor-pointer"
                           title={t('chat.preview.download' as any)}
                         >
-                          <span className="material-symbols-outlined text-lg">download</span>
+                          <span className="material-symbols-outlined text-base md:text-lg">download</span>
                         </button>
                       </div>
                     </div>
@@ -1432,41 +1432,41 @@ function ChatContent() {
                   <div className="relative" data-version-dropdown>
                     <button
                       onClick={() => toggleVersionDropdown(`preview-${previewFile.id}`)}
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                      className={`flex items-center gap-0.5 md:gap-1 px-1.5 md:px-2.5 py-1 rounded-lg text-[10px] md:text-xs font-bold transition-colors cursor-pointer ${
                         versionDropdown === `preview-${previewFile.id}`
                           ? 'bg-primary/30 text-primary'
-                          : 'bg-primary/15 text-primary hover:bg-primary/25'
+                          : 'bg-primary/15 text-primary active:bg-primary/25 md:hover:bg-primary/25'
                       }`}
                     >
                       <span>v{previewFile.version || 1}</span>
-                      <span className="material-symbols-outlined text-xs">expand_more</span>
+                      <span className="material-symbols-outlined text-[10px] md:text-xs">expand_more</span>
                     </button>
                     {versionDropdown === `preview-${previewFile.id}` && (versionCache[previewFile.id] || versionCache[`preview-${previewFile.id}`]) && (
-                      <div className="absolute left-0 top-full mt-1 z-50 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl min-w-[220px] py-1 max-h-48 overflow-y-auto">
+                      <div className="absolute left-0 top-full mt-1 z-50 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl min-w-[180px] md:min-w-[220px] py-1 max-h-48 overflow-y-auto">
                         {(versionCache[previewFile.id] || []).map((ver, idx) => (
                           <button
                             key={ver.id}
                             onClick={() => { switchToVersion(ver); openPreview(ver); }}
-                            className={`w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-surface-container-high transition-colors cursor-pointer ${
+                            className={`w-full flex items-center gap-2 md:gap-3 px-2.5 md:px-3 py-1.5 md:py-2 text-left active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors cursor-pointer ${
                               ver.id === previewFile.id ? 'bg-primary/10' : ''
                             }`}
                           >
-                            <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                            <span className={`text-[10px] md:text-xs font-bold px-1 md:px-1.5 py-0.5 rounded ${
                               ver.id === previewFile.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
                             }`}>
                               v{ver.version || 1}
                             </span>
                             <div className="flex-1 min-w-0">
-                              <span className="text-xs text-on-surface-variant block">
+                              <span className="text-[10px] md:text-xs text-on-surface-variant block">
                                 {formatSize(ver.file_size)}
                                 {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
                               </span>
-                              <span className="text-xs text-outline block">
+                              <span className="text-[10px] md:text-xs text-outline block">
                                 {new Date(ver.created_at || '').toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                               </span>
                             </div>
                             {ver.id === previewFile.id && (
-                              <span className="material-symbols-outlined text-primary text-sm">check</span>
+                              <span className="material-symbols-outlined text-primary text-xs md:text-sm">check</span>
                             )}
                           </button>
                         ))}
