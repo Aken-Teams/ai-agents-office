@@ -629,12 +629,13 @@ export default function Navbar() {
                     <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
                   </button>
                 </div>
-                <div className="relative">
+                <div>
                   {/* Template Grid */}
-                  <div className={`p-4 grid gap-2 ${(SKILL_TEMPLATES[selectedSkill] || []).length > 4 ? 'grid-cols-4' : 'grid-cols-2'}`}>
+                  <div className={`p-4 grid gap-3 ${(SKILL_TEMPLATES[selectedSkill] || []).length > 4 ? 'grid-cols-4' : 'grid-cols-2'}`}>
                     {(SKILL_TEMPLATES[selectedSkill] || []).map(tmpl => {
                       const previewKey = `${selectedSkill}:${tmpl.id}`;
                       const preview = TEMPLATE_PREVIEW[previewKey];
+                      const isHovered = hoveredTemplate === tmpl.id;
                       return (
                         <button
                           key={tmpl.id}
@@ -642,69 +643,62 @@ export default function Navbar() {
                           onMouseEnter={() => setHoveredTemplate(tmpl.id)}
                           onMouseLeave={() => setHoveredTemplate(null)}
                           disabled={creating}
-                          className="bg-surface-container-high px-3 py-3 rounded-lg flex flex-col items-center gap-1.5 hover:bg-surface-variant transition-all text-center disabled:opacity-50 cursor-pointer group border border-transparent hover:border-primary/30 hover:shadow-md"
+                          className={`bg-surface-container-high rounded-lg flex flex-col items-center text-center disabled:opacity-50 cursor-pointer group border transition-all duration-200 overflow-hidden ${
+                            isHovered ? 'border-primary/40 shadow-lg scale-[1.02]' : 'border-transparent hover:border-primary/20'
+                          }`}
                         >
-                          {/* Mini style preview swatch */}
+                          {/* Slide mockup preview */}
                           <div
-                            className="w-full h-10 rounded-md border border-outline-variant/10 overflow-hidden flex items-end gap-0.5 p-1"
+                            className={`w-full overflow-hidden flex flex-col gap-1.5 transition-all duration-200 ${
+                              isHovered ? 'p-3 aspect-[16/10]' : 'p-2 h-12'
+                            }`}
                             style={{ background: preview?.bg || '#f3f4f6' }}
                           >
-                            <div className="h-3 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.8 }} />
-                            <div className="h-5 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.6 }} />
-                            <div className="h-4 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.7 }} />
+                            {isHovered ? (
+                              <>
+                                {/* Full slide mockup on hover */}
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-4 h-4 rounded-sm" style={{ background: preview?.accent || '#6b7280' }} />
+                                  <div className="h-2.5 w-16 rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.7 }} />
+                                </div>
+                                <div className="flex-1 flex gap-2">
+                                  <div className="flex-1 flex flex-col gap-1">
+                                    <div className="h-1.5 w-full rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.15 }} />
+                                    <div className="h-1.5 w-4/5 rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.12 }} />
+                                    <div className="h-1.5 w-3/5 rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.1 }} />
+                                    <div className="flex-1" />
+                                    <div className="flex gap-1">
+                                      <div className="h-5 flex-1 rounded-sm" style={{ background: preview?.card || '#f3f4f6' }} />
+                                      <div className="h-5 flex-1 rounded-sm" style={{ background: preview?.card || '#f3f4f6' }} />
+                                    </div>
+                                  </div>
+                                  <div className="w-14 rounded-sm flex flex-col gap-1 p-1" style={{ background: preview?.card || '#f3f4f6' }}>
+                                    <div className="h-4 w-full rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.4 }} />
+                                    <div className="h-1 w-full rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.1 }} />
+                                    <div className="h-1 w-3/4 rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.08 }} />
+                                  </div>
+                                </div>
+                              </>
+                            ) : (
+                              /* Mini color bars when not hovered */
+                              <div className="flex items-end gap-0.5 h-full">
+                                <div className="h-3/5 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.8 }} />
+                                <div className="h-4/5 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.6 }} />
+                                <div className="h-3/4 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.7 }} />
+                              </div>
+                            )}
                           </div>
-                          <span className="text-xs font-bold text-on-surface leading-tight">{t(tmpl.labelKey as any)}</span>
+                          {/* Label + description */}
+                          <div className={`px-2 pb-2 pt-1.5 transition-all duration-200 ${isHovered ? 'pb-3' : ''}`}>
+                            <span className="text-xs font-bold text-on-surface leading-tight block">{t(tmpl.labelKey as any)}</span>
+                            {isHovered && (
+                              <span className="text-[10px] text-on-surface-variant leading-snug mt-0.5 block">{t(tmpl.descKey as any)}</span>
+                            )}
+                          </div>
                         </button>
                       );
                     })}
                   </div>
-
-                  {/* Hover Preview Overlay */}
-                  {hoveredTemplate && (() => {
-                    const tmpl = (SKILL_TEMPLATES[selectedSkill] || []).find(t => t.id === hoveredTemplate);
-                    if (!tmpl) return null;
-                    const previewKey = `${selectedSkill}:${tmpl.id}`;
-                    const preview = TEMPLATE_PREVIEW[previewKey];
-                    if (!preview) return null;
-                    return (
-                      <div className="absolute inset-0 z-10 bg-surface-container/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 pointer-events-none animate-in" style={{ animationDuration: '150ms' }}>
-                        {/* Slide mockup */}
-                        <div
-                          className="w-full max-w-md aspect-video rounded-lg shadow-xl border border-outline-variant/20 overflow-hidden flex flex-col p-5 gap-3"
-                          style={{ background: preview.bg }}
-                        >
-                          {/* Title bar */}
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-md" style={{ background: preview.accent }} />
-                            <div className="h-4 w-32 rounded" style={{ background: preview.text, opacity: 0.8 }} />
-                          </div>
-                          {/* Content mockup */}
-                          <div className="flex-1 flex gap-3">
-                            <div className="flex-1 flex flex-col gap-2">
-                              <div className="h-2.5 w-full rounded" style={{ background: preview.text, opacity: 0.15 }} />
-                              <div className="h-2.5 w-4/5 rounded" style={{ background: preview.text, opacity: 0.12 }} />
-                              <div className="h-2.5 w-3/5 rounded" style={{ background: preview.text, opacity: 0.1 }} />
-                              <div className="flex-1" />
-                              <div className="flex gap-2">
-                                <div className="h-8 flex-1 rounded-md" style={{ background: preview.card }} />
-                                <div className="h-8 flex-1 rounded-md" style={{ background: preview.card }} />
-                              </div>
-                            </div>
-                            <div className="w-24 rounded-md flex flex-col gap-2 p-2" style={{ background: preview.card }}>
-                              <div className="h-6 w-full rounded" style={{ background: preview.accent, opacity: 0.4 }} />
-                              <div className="h-2 w-full rounded" style={{ background: preview.text, opacity: 0.1 }} />
-                              <div className="h-2 w-3/4 rounded" style={{ background: preview.text, opacity: 0.08 }} />
-                            </div>
-                          </div>
-                        </div>
-                        {/* Label */}
-                        <div className="mt-4 text-center">
-                          <p className="text-sm font-bold text-on-surface">{t(tmpl.labelKey as any)}</p>
-                          <p className="text-xs text-on-surface-variant mt-1">{t(tmpl.descKey as any)}</p>
-                        </div>
-                      </div>
-                    );
-                  })()}
                 </div>
                 <div className="px-4 pb-4">
                   <button
