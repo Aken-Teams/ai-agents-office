@@ -350,52 +350,28 @@ function DashboardContent() {
 
         {/* ===== Desktop Dashboard ===== */}
         <div className="hidden md:flex flex-col h-[calc(100vh-3.5rem)]">
-          {/* Stats bar — compact card strip */}
-          <div className="grid grid-cols-3 gap-4 px-8 py-4 shrink-0">
-            <div className="flex items-center gap-4 bg-surface-container rounded-lg px-5 py-3.5">
-              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-primary text-lg">description</span>
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-widest text-on-surface-variant font-medium">{t('dashboard.stats.invocationsTitle')}</p>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-headline font-bold text-on-surface">{usage?.totalInvocations ?? 0}</span>
-                  <span className="text-sm text-primary font-bold">{t('dashboard.stats.invocationsUnit')}</span>
-                </div>
-              </div>
+          {/* Stats bar — flat inline strip */}
+          <div className="flex items-center gap-6 px-8 py-3 shrink-0 text-sm text-on-surface-variant border-b border-outline-variant/10">
+            <div className="flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-primary text-base">description</span>
+              <span className="font-medium">{t('dashboard.stats.invocationsTitle')}</span>
+              <span className="font-headline font-bold text-on-surface">{usage?.totalInvocations ?? 0}</span>
+              <span className="text-primary font-bold">{t('dashboard.stats.invocationsUnit')}</span>
             </div>
-            <div className="flex items-center gap-4 bg-surface-container rounded-lg px-5 py-3.5">
-              <div className="w-9 h-9 rounded-lg bg-success/10 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-success text-lg">token</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs uppercase tracking-widest text-on-surface-variant font-medium">{t('dashboard.stats.tokenTitle')}</p>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-headline font-bold text-on-surface">
-                    {usage ? ((usage.totalInput + usage.totalOutput) / 1000).toFixed(1) + 'k' : '0'}
-                  </span>
-                  <span className="text-base font-headline font-bold text-success">
-                    ${usage ? (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10).toFixed(2) : '0.00'}
-                    <span className="text-xs text-on-surface-variant font-normal ml-0.5">(USD)</span>
-                  </span>
-                </div>
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-xs text-on-surface-variant font-mono">{t('dashboard.stats.tokenInputLabel')}: <span className="text-on-surface font-bold">{usage ? (usage.totalInput / 1000).toFixed(1) + 'k' : '0'}</span></p>
-                <p className="text-xs text-on-surface-variant font-mono">{t('dashboard.stats.tokenOutputLabel')}: <span className="text-on-surface font-bold">{usage ? (usage.totalOutput / 1000).toFixed(1) + 'k' : '0'}</span></p>
-              </div>
+            <div className="w-px h-4 bg-outline-variant/20" />
+            <div className="flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-success text-base">token</span>
+              <span className="font-medium">{t('dashboard.stats.tokenTitle')}</span>
+              <span className="font-headline font-bold text-on-surface">{usage ? ((usage.totalInput + usage.totalOutput) / 1000).toFixed(1) + 'k' : '0'}</span>
+              <span className="font-bold text-success">${usage ? (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10).toFixed(2) : '0.00'}</span>
+              <span className="text-xs text-on-surface-variant/60 font-mono">{t('dashboard.stats.tokenInputLabel')}: {usage ? (usage.totalInput / 1000).toFixed(1) + 'k' : '0'} / {t('dashboard.stats.tokenOutputLabel')}: {usage ? (usage.totalOutput / 1000).toFixed(1) + 'k' : '0'}</span>
             </div>
-            <div className="flex items-center gap-4 bg-surface-container rounded-lg px-5 py-3.5">
-              <div className="w-9 h-9 rounded-lg bg-tertiary/10 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-tertiary text-lg">chat</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs uppercase tracking-widest text-on-surface-variant font-medium">{t('dashboard.stats.conversationsTitle')}</p>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-headline font-bold text-on-surface">{conversations.length}</span>
-                </div>
-              </div>
-              <span className="text-xs text-on-surface-variant bg-surface-container-high px-2.5 py-1 rounded-full font-medium shrink-0">{t('dashboard.stats.conversationsMode')}</span>
+            <div className="w-px h-4 bg-outline-variant/20" />
+            <div className="flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-tertiary text-base">chat</span>
+              <span className="font-medium">{t('dashboard.stats.conversationsTitle')}</span>
+              <span className="font-headline font-bold text-on-surface">{conversations.length}</span>
+              <span className="text-xs bg-surface-container-high px-2 py-0.5 rounded-full">{t('dashboard.stats.conversationsMode')}</span>
             </div>
           </div>
 
