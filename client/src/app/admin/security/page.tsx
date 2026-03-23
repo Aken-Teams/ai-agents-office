@@ -218,14 +218,10 @@ export default function AdminSecurity() {
                 <div className="px-4 md:px-6 py-2 md:py-3 border-b border-outline-variant/10 flex items-center justify-between">
                   <span className="text-xs md:text-sm text-on-surface-variant">
                     {t('admin.security.workspace.sandboxCount', { count: workspace.length })} · {t('admin.security.workspace.fileCount', { count: totalFiles })}
+                    {lastScan && <span className="hidden md:inline text-outline ml-2">({t('admin.security.workspace.lastScan')} {lastScan})</span>}
                   </span>
                   <span className="text-xs md:text-sm font-mono font-bold text-on-surface">{formatFileSize(totalDisk)}</span>
                 </div>
-                {lastScan && (
-                  <div className="px-4 md:px-6 py-1.5 text-xs md:text-sm text-outline">
-                    {t('admin.security.workspace.lastScan')} {lastScan}
-                  </div>
-                )}
                 <div className="divide-y divide-outline-variant/10">
                   {workspace.slice(0, 5).map(w => {
                     const pct = (w.totalSize / maxSize) * 100;
