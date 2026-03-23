@@ -157,7 +157,7 @@ export default function Navbar() {
     setCreating(true);
     try {
       const docType = DOC_TYPES.find(s => s.id === skillId);
-      const title = docType?.labelKey ? `New ${t(docType.labelKey)}` : 'New Conversation';
+      const title = docType?.labelKey ? t('nav.newDocTitle', { type: t(docType.labelKey) } as any) : t('nav.newConversation');
       const res = await fetch('/api/conversations', {
         method: 'POST',
         headers: {

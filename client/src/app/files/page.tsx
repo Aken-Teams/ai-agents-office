@@ -58,13 +58,7 @@ const TEXT_TYPES = new Set(['md', 'txt', 'csv']);
 // Types that render as images
 const IMAGE_TYPES = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg']);
 
-const FILTER_TABS = [
-  { value: '', label: '' },
-  { value: 'pptx', label: 'PPT' },
-  { value: 'docx', label: 'Word' },
-  { value: 'xlsx', label: 'Excel' },
-  { value: 'pdf', label: 'PDF' },
-];
+const FILTER_TAB_VALUES = ['', 'pptx', 'docx', 'xlsx', 'pdf'] as const;
 
 const PAGE_SIZE = 12;
 
@@ -137,7 +131,7 @@ function PreviewModal({
   onClose: () => void;
   onDownload: (id: string, name: string) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const [currentFile, setCurrentFile] = useState(initialFile);
   const file = currentFile;
   const [textContent, setTextContent] = useState<string | null>(null);
@@ -335,7 +329,7 @@ function PreviewModal({
             <div className="absolute inset-[-50%] flex flex-wrap gap-24 rotate-[-30deg]">
               {Array.from({ length: 40 }).map((_, i) => (
                 <span key={i} className="text-3xl font-headline font-bold tracking-[0.3em] uppercase whitespace-nowrap" style={{ color: 'rgba(128,128,128,0.18)' }}>
-                  CONFIDENTIAL 機密文件 · 測試版
+                  {t('files.watermark' as any)}
                 </span>
               ))}
             </div>
@@ -366,7 +360,7 @@ function PreviewModal({
               </div>
               <div className="p-3 bg-surface-container-low rounded">
                 <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">{t('files.preview.createdDate')}</p>
-                <p className="text-sm text-on-surface">{new Date(file.created_at).toLocaleString('zh-TW')}</p>
+                <p className="text-sm text-on-surface">{new Date(file.created_at).toLocaleString(locale)}</p>
               </div>
               <div className="p-3 bg-surface-container-low rounded">
                 <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">{t('files.preview.securityLevel')}</p>
@@ -416,7 +410,7 @@ function PreviewModal({
                             {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
                           </span>
                           <span className="text-xs text-outline block">
-                            {new Date(ver.created_at).toLocaleString('zh-TW', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            {new Date(ver.created_at).toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
                         {ver.id === file.id && (
@@ -470,7 +464,7 @@ interface StorageInfo {
 
 function FilesContent() {
   const { user, token, isLoading } = useAuth();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const router = useRouter();
   const [files, setFiles] = useState<FileItem[]>([]);
   const [filter, setFilter] = useState('');
@@ -713,17 +707,17 @@ function FilesContent() {
         {/* Filter Tabs + Search */}
         <div className="flex items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-3">
-            {FILTER_TABS.map(tab => (
+            {FILTER_TAB_VALUES.map(val => (
               <button
-                key={tab.value}
-                onClick={() => setFilter(tab.value)}
+                key={val}
+                onClick={() => setFilter(val)}
                 className={`px-4 py-2 rounded text-sm font-bold tracking-widest uppercase transition-colors cursor-pointer ${
-                  filter === tab.value
+                  filter === val
                     ? 'bg-surface-container text-on-surface border-b-2 border-primary'
                     : 'bg-transparent text-on-surface-variant hover:bg-surface-container'
                 }`}
               >
-                {tab.value === '' ? t('files.filter.all') : tab.label}
+                {val === '' ? t('files.filter.all') : t(`files.filter.${val}` as any)}
               </button>
             ))}
           </div>
@@ -798,7 +792,7 @@ function FilesContent() {
                       {file.filename}
                     </h3>
                     <p className="text-sm text-on-surface-variant uppercase tracking-widest">
-                      {new Date(file.created_at).toLocaleDateString('zh-TW')}
+                      {new Date(file.created_at).toLocaleDateString(locale)}
                     </p>
                   </div>
 
@@ -922,7 +916,7 @@ function FilesContent() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-on-surface truncate">{up.original_name}</p>
                         <p className="text-sm text-on-surface-variant">
-                          {formatSize(up.file_size)} · {new Date(up.created_at.endsWith('Z') ? up.created_at : up.created_at + 'Z').toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
+                          {formatSize(up.file_size)} · {new Date(up.created_at.endsWith('Z') ? up.created_at : up.created_at + 'Z').toLocaleString(locale)}
                         </p>
                       </div>
                       <div className={`flex flex-col items-end gap-0.5 shrink-0`}>
@@ -931,7 +925,7 @@ function FilesContent() {
                           <span className="text-sm font-bold uppercase">{scanLabel}</span>
                         </div>
                         <span className="text-sm text-on-surface-variant/60 max-w-[200px] text-right leading-tight">
-                          {up.scan_status === 'clean' ? '通過所有安全檢查' : up.scan_status === 'suspicious' ? (up.scan_detail || '發現可疑內容') : (up.scan_detail || '已被系統拒絕')}
+                          {up.scan_status === 'clean' ? t('files.scan.clean' as any) : up.scan_status === 'suspicious' ? (up.scan_detail || t('files.scan.suspicious' as any)) : (up.scan_detail || t('files.scan.rejected' as any))}
                         </span>
                       </div>
                       <button

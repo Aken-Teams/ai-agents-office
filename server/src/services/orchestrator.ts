@@ -226,7 +226,7 @@ export class Orchestrator {
           .map((r, i) => `### Task ${i + 1} Result:\n${truncateResultForRouter(r)}`)
           .join('\n\n');
 
-        let instruction = 'Please summarize the results for the user. If more tasks are needed, dispatch them. Otherwise, provide a final response.';
+        let instruction = 'Please summarize the results for the user. If more tasks are needed, dispatch them. Otherwise, provide a final response.\n\nIMPORTANT: If the results contain fenced code blocks (```chart, ```mermaid, ```mindmap), you MUST include them VERBATIM in your response — do NOT describe them in text, do NOT omit them, do NOT paraphrase them. These code blocks render as interactive visualizations for the user.';
         if (hasFailures) {
           instruction = 'Some tasks failed or were skipped. Summarize what succeeded and what failed for the user. Do NOT retry failed tasks — just report the status clearly. Provide a final response.';
         }

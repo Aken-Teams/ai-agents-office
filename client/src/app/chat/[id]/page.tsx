@@ -15,6 +15,38 @@ const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { s
 const ChatMermaid = dynamic(() => import('../../components/charts/ChatMermaid'), { ssr: false });
 const ChatMindmap = dynamic(() => import('../../components/charts/ChatMindmap'), { ssr: false });
 
+// Convert mermaid mindmap syntax to markdown headings for markmap
+function convertMermaidMindmapToMarkdown(mermaidCode: string): string {
+  const lines = mermaidCode.split('\n');
+  const result: string[] = [];
+  let baseIndent = -1;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || /^mindmap\b/i.test(trimmed)) continue;
+
+    // Detect indentation level
+    const match = line.match(/^(\s*)/);
+    const indent = match ? match[1].length : 0;
+    if (baseIndent < 0) baseIndent = indent;
+
+    const level = Math.max(1, Math.floor((indent - baseIndent) / 2) + 1);
+
+    // Clean node text: remove root((..)), ((..)),(..),[[..]],..[..] etc.
+    let text = trimmed
+      .replace(/^root\(\((.+?)\)\)$/, '$1')
+      .replace(/^\(\((.+?)\)\)$/, '$1')
+      .replace(/^\((.+?)\)$/, '$1')
+      .replace(/^\[(.+?)\]$/, '$1')
+      .replace(/^"(.+?)"$/, '$1');
+
+    if (!text) continue;
+    result.push(`${'#'.repeat(Math.min(level, 6))} ${text}`);
+  }
+
+  return result.join('\n');
+}
+
 // Direct connection to Express for SSE streaming.
 // Next.js rewrites proxy buffers the entire response, preventing real-time updates.
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:12054';
@@ -61,19 +93,10 @@ interface AgentTask {
   error?: string;
 }
 
-const SKILL_LABELS: Record<string, string> = {
-  'pptx-gen': 'PowerPoint',
-  'docx-gen': 'Word',
-  'xlsx-gen': 'Excel',
-  'pdf-gen': 'PDF',
-  'slides-gen': 'Slides',
-  'research': 'Research',
-  'data-analyst': 'Data Analyst',
-  'rag-analyst': 'RAG Analyst',
-  'planner': 'Planner',
-  'reviewer': 'Reviewer',
-  'router': 'Router',
-};
+const SKILL_IDS = [
+  'pptx-gen', 'docx-gen', 'xlsx-gen', 'pdf-gen', 'slides-gen',
+  'research', 'data-analyst', 'rag-analyst', 'planner', 'reviewer', 'router',
+] as const;
 
 const SKILL_ICONS: Record<string, string> = {
   'pptx-gen': 'present_to_all',
@@ -253,7 +276,7 @@ function parseToolInput(tool: string, rawInput: string | undefined, t: (key: any
 function getToolInfo(tool: string, t: (key: any, params?: Record<string, string | number>) => string): { icon: string; label: string } {
   if (tool.includes(':')) {
     const [agentId, baseTool] = tool.split(':');
-    const agentLabel = SKILL_LABELS[agentId] || agentId;
+    const agentLabel = t(`skill.${agentId}` as any) || agentId;
     const baseInfo = getToolInfo(baseTool, t);
     return { icon: baseInfo.icon, label: `${agentLabel}: ${baseInfo.label}` };
   }
@@ -452,6 +475,10 @@ function ChatContent() {
         return <ChatChart rawJson={text} />;
       }
       if (className === 'language-mermaid') {
+        // Auto-detect mermaid mindmap → convert to interactive markmap
+        if (/^\s*mindmap\b/i.test(text)) {
+          return <ChatMindmap code={convertMermaidMindmapToMarkdown(text)} />;
+        }
         return <ChatMermaid code={text} />;
       }
       if (className === 'language-mindmap') {
@@ -764,7 +791,7 @@ function ChatContent() {
             }
             if (event.type === 'error') {
               const errMsg = typeof event.data === 'string' ? event.data : 'Unknown error';
-              fullText += `\n\n> **Error:** ${errMsg}`;
+              fullText += `\n\n> **${t('chat.error.prefix')}:** ${errMsg}`;
               setStreamText(fullText);
             }
             if (event.type === 'done') {
@@ -1003,8 +1030,8 @@ function ChatContent() {
   }
 
   function formatElapsed(s: number): string {
-    if (s < 60) return `${s}s`;
-    return `${Math.floor(s / 60)}m ${s % 60}s`;
+    if (s < 60) return t('chat.time.seconds', { n: s } as any);
+    return t('chat.time.minutes', { m: Math.floor(s / 60), s: s % 60 } as any);
   }
 
   if (isLoading || !user) return null;
@@ -1230,10 +1257,10 @@ function ChatContent() {
                             : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
                           }
                           <span className="material-symbols-outlined text-sm">smart_toy</span>
-                          <span>{SKILL_LABELS[task.skillId] || task.skillId}</span>
+                          <span>{t(`skill.${task.skillId}` as any) || task.skillId}</span>
                           <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[400px]">
                             {task.status === 'failed'
-                              ? (task.error || 'Timed out').substring(0, 50)
+                              ? (task.error || t('chat.error.timedOut')).substring(0, 50)
                               : task.description.substring(0, 60)}
                           </span>
                         </div>
@@ -1259,7 +1286,7 @@ function ChatContent() {
                     {/* Token usage */}
                     {lastUsage && !streaming && (
                       <div className="flex items-center justify-between px-4 py-2 border-t border-outline-variant/10 text-sm text-outline">
-                        <span>Tokens: {lastUsage.inputTokens.toLocaleString()} in / {lastUsage.outputTokens.toLocaleString()} out
+                        <span>{t('chat.token.usage', { input: lastUsage.inputTokens.toLocaleString(), output: lastUsage.outputTokens.toLocaleString() } as any)}
                           <span className="ml-2 text-primary/70">${(((lastUsage.inputTokens / 1_000_000) * 3 + (lastUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)}</span>
                         </span>
                         {lastUsage.model && (
@@ -1588,7 +1615,7 @@ function ChatContent() {
             <div className="mt-2 flex justify-between items-center px-2">
               <div className="flex gap-4">
                 <span className="text-sm text-outline uppercase tracking-widest">
-                  {skillId ? `${SKILL_LABELS[skillId] || skillId}` : t('chat.input.autoDetect')}
+                  {skillId ? (t(`skill.${skillId}` as any) || skillId) : t('chat.input.autoDetect')}
                 </span>
               </div>
               {(totalUsage || lastUsage) && (
@@ -1751,7 +1778,7 @@ function ChatContent() {
                       : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
                     }
                     <span className="text-sm text-on-surface-variant truncate">
-                      {SKILL_LABELS[task.skillId] || task.skillId}
+                      {t(`skill.${task.skillId}` as any) || task.skillId}
                     </span>
                   </div>
                 ))}
