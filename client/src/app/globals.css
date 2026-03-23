@@ -486,10 +486,17 @@ html.locale-zh-CN {
   color: var(--md-text);
 }
 
+.chat-markdown .table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 6px 0;
+  max-width: calc(100vw - 6rem);
+}
+
 .chat-markdown table {
   border-collapse: collapse;
-  margin: 6px 0;
   width: 100%;
+  min-width: max-content;
 }
 
 .chat-markdown th,

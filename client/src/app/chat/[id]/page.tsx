@@ -345,7 +345,7 @@ function InlineHtmlPreview({ file, token, onFullscreen }: { file: GeneratedFile;
   }, [file.id, token]);
 
   if (!blobUrl) return (
-    <div className="h-[360px] flex items-center justify-center text-on-surface-variant text-sm">
+    <div className="h-[240px] md:h-[360px] flex items-center justify-center text-on-surface-variant text-sm">
       <span className="material-symbols-outlined animate-spin mr-2">progress_activity</span>
       {t('chart.preview.loading' as any)}
     </div>
@@ -357,7 +357,7 @@ function InlineHtmlPreview({ file, token, onFullscreen }: { file: GeneratedFile;
         src={blobUrl}
         sandbox="allow-scripts allow-same-origin"
         scrolling="no"
-        className="w-full h-[360px] border-b border-outline-variant/10 overflow-hidden"
+        className="w-full h-[240px] md:h-[360px] border-b border-outline-variant/10 overflow-hidden"
         style={{ overflow: 'hidden' }}
         title={file.filename}
       />
@@ -401,7 +401,7 @@ function InlineFilePreview({ file, token }: { file: GeneratedFile; token: string
 
   if (failed) return null; // Silently skip — file card still shows below
   if (!blobUrl) return (
-    <div className="h-[360px] flex items-center justify-center text-on-surface-variant text-sm rounded-t-xl bg-surface-container-lowest">
+    <div className="h-[240px] md:h-[360px] flex items-center justify-center text-on-surface-variant text-sm rounded-t-xl bg-surface-container-lowest">
       <span className="material-symbols-outlined animate-spin mr-2 text-base">progress_activity</span>
       {t('chart.preview.loading' as any)}
     </div>
@@ -412,7 +412,7 @@ function InlineFilePreview({ file, token }: { file: GeneratedFile; token: string
     <div className="relative rounded-t-xl overflow-hidden bg-surface-container-lowest">
       <iframe
         src={isPdf ? `${blobUrl}#toolbar=0&navpanes=0&scrollbar=0` : blobUrl}
-        className="w-full h-[360px] border-b border-outline-variant/10"
+        className="w-full h-[240px] md:h-[360px] border-b border-outline-variant/10"
         scrolling="no"
         title={file.filename}
         sandbox={isPdf ? undefined : 'allow-same-origin'}
@@ -487,6 +487,10 @@ function ChatContent() {
         return <ChatMindmap code={text} />;
       }
       return <code className={className} {...props}>{children}</code>;
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    table({ children, ...props }: any) {
+      return <div className="table-wrapper"><table {...props}>{children}</table></div>;
     },
   };
 
@@ -1086,7 +1090,7 @@ function ChatContent() {
 
       <div className={`${sidebarMargin} h-[100svh] md:h-screen flex overflow-hidden transition-all duration-300`}>
         {/* === Central Chat Area === */}
-        <section className="flex flex-col flex-1 min-h-0">
+        <section className="flex flex-col flex-1 min-h-0 min-w-0">
           {/* Title Bar */}
           <header className="flex items-center gap-2 md:gap-4 px-3 md:px-8 h-11 md:h-14 bg-surface/80 backdrop-blur-xl shrink-0 border-b border-outline-variant/10">
             <button
@@ -1124,7 +1128,7 @@ function ChatContent() {
           </header>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-3 md:px-8 py-4 md:py-8 space-y-4 md:space-y-8">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 md:px-8 py-4 md:py-8 space-y-4 md:space-y-8">
             {messages.map(msg => {
               const sources = msg.role === 'assistant' ? extractSources(msg.content) : [];
               return (
@@ -1137,7 +1141,7 @@ function ChatContent() {
                   <div className={
                     msg.role === 'user'
                       ? 'max-w-[85%] md:max-w-[70%] bg-surface-container px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tr-sm text-on-surface shadow-lg'
-                      : 'max-w-[90%] md:max-w-[85%]'
+                      : 'max-w-[90%] md:max-w-[85%] min-w-0'
                   }>
                     {msg.role === 'user' ? (
                       <>
@@ -1147,7 +1151,7 @@ function ChatContent() {
                         </span>
                       </>
                     ) : (
-                      <div className="bg-surface-container-low px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tl-sm border border-outline-variant/10">
+                      <div className="bg-surface-container-low px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tl-sm border border-outline-variant/10 overflow-hidden">
                         <div className="chat-markdown text-sm leading-relaxed text-on-surface-variant">
                           <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{msg.content}</ReactMarkdown>
                         </div>
@@ -1181,8 +1185,8 @@ function ChatContent() {
                 <div className="w-7 h-7 md:w-9 md:h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
                   <span className="material-symbols-outlined text-primary text-xs md:text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
                 </div>
-                <div className="max-w-[90%] md:max-w-[85%]">
-                  <div className="bg-surface-container-low px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tl-sm border border-primary/20 border-dashed">
+                <div className="max-w-[90%] md:max-w-[85%] min-w-0">
+                  <div className="bg-surface-container-low px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tl-sm border border-primary/20 border-dashed overflow-hidden">
                     <div className="chat-markdown text-sm leading-relaxed text-on-surface-variant">
                       <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{streamText}</ReactMarkdown>
                       <span className="inline-block w-0.5 h-4 bg-primary ml-0.5 align-text-bottom animate-pulse" />
