@@ -19,8 +19,8 @@ export function useSidebarCollapsed() {
   return collapsed;
 }
 
-/** Tailwind class for main content margin */
+/** Tailwind class for main content margin (hidden on mobile, top bar offset) */
 export function useSidebarMargin() {
   const collapsed = useSidebarCollapsed();
-  return collapsed ? 'ml-[68px]' : 'ml-64';
+  return collapsed ? 'ml-0 md:ml-[68px] pt-14 md:pt-0' : 'ml-0 md:ml-64 pt-14 md:pt-0';
 }

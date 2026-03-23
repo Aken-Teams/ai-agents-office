@@ -387,6 +387,15 @@ html.locale-zh-CN {
   }
 }
 
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
 /* === Chat Markdown (theme-aware) === */
 .chat-markdown h1,
 .chat-markdown h2,

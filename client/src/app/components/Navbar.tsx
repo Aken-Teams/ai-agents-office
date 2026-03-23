@@ -134,6 +134,7 @@ export default function Navbar() {
   const [changingPassword, setChangingPassword] = useState(false);
 
   const [saved, setSaved] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -149,6 +150,11 @@ export default function Navbar() {
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showUserMenu]);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
 
   // Sync to localStorage + dispatch event for other components
   useEffect(() => {
@@ -284,7 +290,31 @@ export default function Navbar() {
 
   return (
     <>
-      <aside className={`h-screen fixed left-0 top-0 bg-surface-dim flex flex-col py-6 font-headline text-sm tracking-tight z-50 border-r border-outline-variant/10 transition-all duration-300 ${collapsed ? 'w-[68px]' : 'w-64'}`}>
+      {/* Mobile Top Bar */}
+      <header className="md:hidden fixed top-0 left-0 right-0 h-14 bg-surface-dim border-b border-outline-variant/10 flex items-center px-4 gap-3 z-50">
+        <button
+          onClick={() => setMobileMenuOpen(v => !v)}
+          className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface-variant cursor-pointer"
+        >
+          <span className="material-symbols-outlined">{mobileMenuOpen ? 'close' : 'menu'}</span>
+        </button>
+        <Link href="/dashboard" className="flex items-center gap-2 no-underline">
+          <div className="w-7 h-7 bg-primary/20 flex items-center justify-center rounded-lg">
+            <span className="material-symbols-outlined text-primary text-sm">terminal</span>
+          </div>
+          <span className="font-headline text-base font-bold tracking-tighter text-on-surface">AI Agents Office</span>
+        </Link>
+      </header>
+
+      {/* Mobile Backdrop */}
+      {mobileMenuOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/40 z-40"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      <aside className={`h-screen fixed left-0 top-0 bg-surface-dim flex flex-col py-6 font-headline text-sm tracking-tight z-50 border-r border-outline-variant/10 transition-all duration-300 ${collapsed ? 'w-[68px]' : 'w-64'} max-md:w-64 ${mobileMenuOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'}`}>
         {/* Logo */}
         <div className={`mb-8 ${collapsed ? 'px-3' : 'px-6'}`}>
           <Link href="/dashboard" className="flex items-center gap-3 no-underline">

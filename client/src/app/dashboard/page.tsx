@@ -76,6 +76,7 @@ function DashboardContent() {
   const [smartAttached, setSmartAttached] = useState<Array<{ id: string; name: string; uploading?: boolean }>>([]);
   const [uploadAlerts, setUploadAlerts] = useState<UploadAlertItem[]>([]);
   const smartFileRef = useRef<HTMLInputElement>(null);
+  const mobileFileRef = useRef<HTMLInputElement>(null);
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
@@ -209,8 +210,8 @@ function DashboardContent() {
       )}
 
       <main className={`${sidebarMargin} transition-all duration-300`}>
-        {/* Top Header */}
-        <header className="sticky top-0 h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
+        {/* Top Header — desktop only as sticky bar, mobile as simple inline header */}
+        <header className="sticky top-0 h-16 bg-surface/80 backdrop-blur-xl hidden md:flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
           <div className="flex items-center gap-8">
             <span className="text-lg font-black text-on-surface font-headline">{t('dashboard.title')}</span>
             <div className="flex items-center gap-6 font-headline font-medium text-sm uppercase tracking-widest">
@@ -229,8 +230,111 @@ function DashboardContent() {
           </div>
         </header>
 
-        {/* Content Canvas */}
-        <div className="p-8 grid grid-cols-12 gap-6">
+        {/* ===== Mobile Dashboard (md:hidden) ===== */}
+        <div className="md:hidden px-4 pt-5 pb-24 space-y-5">
+          {/* Greeting */}
+          <div className="px-1">
+            <h2 className="text-2xl font-headline font-bold text-on-surface leading-tight">
+              {t('dashboard.mobile.greeting', { name: user.displayName || user.email?.split('@')[0] || '' })}
+            </h2>
+            <p className="text-sm text-on-surface-variant mt-1">
+              {t('dashboard.mobile.guidance')}
+            </p>
+          </div>
+
+          {/* Sample Prompt Cards — 2 per row, fills input on tap */}
+          <div className="grid grid-cols-2 gap-2.5">
+            {[
+              { icon: 'present_to_all', color: 'text-warning', labelKey: 'dashboard.samples.pptx' as const, templateKey: 'dashboard.samples.pptx.template' as const },
+              { icon: 'description', color: 'text-tertiary', labelKey: 'dashboard.samples.docx' as const, templateKey: 'dashboard.samples.docx.template' as const },
+              { icon: 'table_chart', color: 'text-success', labelKey: 'dashboard.samples.xlsx' as const, templateKey: 'dashboard.samples.xlsx.template' as const },
+              { icon: 'picture_as_pdf', color: 'text-error', labelKey: 'dashboard.samples.pdf' as const, templateKey: 'dashboard.samples.pdf.template' as const },
+              { icon: 'slideshow', color: 'text-secondary', labelKey: 'dashboard.samples.slides' as const, templateKey: 'dashboard.samples.slides.template' as const },
+              { icon: 'bar_chart', color: 'text-primary', labelKey: 'dashboard.samples.chart' as const, templateKey: 'dashboard.samples.chart.template' as const },
+              { icon: 'upload_file', color: 'text-tertiary', labelKey: 'dashboard.samples.data' as const, templateKey: 'dashboard.samples.data.template' as const },
+              { icon: 'travel_explore', color: 'text-on-surface-variant', labelKey: 'dashboard.samples.research' as const, templateKey: 'dashboard.samples.research.template' as const },
+            ].map(sample => (
+              <button
+                key={sample.labelKey}
+                onClick={() => setSmartInput(t(sample.templateKey))}
+                className="flex items-center gap-3 p-3.5 bg-surface-container rounded-2xl text-left active:bg-surface-container-high transition-colors cursor-pointer"
+              >
+                <span className={`material-symbols-outlined text-xl ${sample.color}`}>{sample.icon}</span>
+                <span className="text-sm font-headline font-bold text-on-surface truncate">{t(sample.labelKey)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Mobile fixed bottom input bar */}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-outline-variant/10 bg-surface-container-lowest px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          <input
+            ref={mobileFileRef}
+            type="file"
+            multiple
+            accept=".csv,.xlsx,.xls,.pdf,.txt,.md,.json,.docx,.doc,.pptx,.ppt,.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.tiff,.tif,.ico,.xml,.yaml,.yml,.html,.htm"
+            className="hidden"
+            onChange={e => { handleSmartFileAttach(e.target.files); e.target.value = ''; }}
+          />
+          {/* Attached files */}
+          {smartAttached.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {smartAttached.map(file => (
+                <div key={file.id} className="flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-primary/10 border border-primary/20 text-primary">
+                  {file.uploading ? (
+                    <span className="material-symbols-outlined text-xs animate-spin">progress_activity</span>
+                  ) : (
+                    <span className="material-symbols-outlined text-xs">attach_file</span>
+                  )}
+                  <span className="max-w-[100px] truncate">{file.name}</span>
+                  {!file.uploading && (
+                    <button
+                      onClick={() => setSmartAttached(prev => prev.filter(f => f.id !== file.id))}
+                      className="cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-xs">close</span>
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-end gap-2">
+            <button
+              className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full text-on-surface-variant active:bg-surface-container transition-colors cursor-pointer mb-0.5"
+              onClick={() => mobileFileRef.current?.click()}
+            >
+              <span className="material-symbols-outlined text-lg">attach_file</span>
+            </button>
+            <div className="flex-1">
+              <textarea
+                className="w-full bg-surface-container border-none focus:ring-1 focus:ring-primary/30 rounded-2xl py-2.5 px-4 text-base text-on-surface placeholder:text-outline font-body resize-none max-h-[120px]"
+                value={smartInput}
+                onChange={e => setSmartInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    handleSmartSubmit();
+                  }
+                }}
+                placeholder={t('dashboard.smartInput.placeholder')}
+                disabled={creating}
+                rows={1}
+                style={{ fieldSizing: 'content' } as React.CSSProperties}
+              />
+            </div>
+            <button
+              className="shrink-0 w-8 h-8 cyber-gradient rounded-full flex items-center justify-center text-on-primary disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all mb-0.5"
+              onClick={handleSmartSubmit}
+              disabled={!smartInput.trim() || creating}
+            >
+              <span className="material-symbols-outlined text-lg">arrow_upward</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ===== Desktop Dashboard (hidden md:grid) ===== */}
+        <div className="hidden md:grid p-8 grid-cols-12 gap-6">
           {/* ===== Left Column (8 cols) ===== */}
           <div className="col-span-8 flex flex-col gap-6">
             {/* Bento Stats Row */}
