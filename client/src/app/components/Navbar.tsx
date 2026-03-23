@@ -315,42 +315,10 @@ export default function Navbar() {
             className="absolute top-14 left-0 right-0 bg-surface-dim border-b border-outline-variant/10 shadow-lg animate-[slideDown_0.2s_ease-out] max-h-[calc(100svh-3.5rem)] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
-            {/* Nav Links */}
-            <nav className="py-2">
-              {NAV_LINKS.map(link => {
-                const isActive = pathname === link.href;
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={`flex items-center gap-3 px-5 py-3.5 no-underline transition-colors ${
-                      isActive
-                        ? 'text-primary bg-primary/5'
-                        : 'text-on-surface-variant active:bg-surface-container'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-xl">{link.icon}</span>
-                    <span className="text-sm font-headline font-bold">{t(link.labelKey)}</span>
-                  </Link>
-                );
-              })}
-              {user.role === 'admin' && (
-                <Link
-                  href="/admin/overview"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex items-center gap-3 px-5 py-3.5 no-underline text-primary active:bg-primary/10 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-xl">admin_panel_settings</span>
-                  <span className="text-sm font-headline font-bold">{t('nav.switchToAdmin' as any)}</span>
-                </Link>
-              )}
-            </nav>
-
             {/* User Row: avatar + name | expand chevron | logout */}
-            <div className="border-t border-outline-variant/10">
-              <div className="flex items-center px-4 py-3 gap-2">
-                {/* Avatar + Name + edit (tap chevron to expand settings) */}
+            <div>
+              <div className="flex items-center px-4 py-2.5 gap-2">
+                {/* Avatar + Name + edit */}
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <div className="w-9 h-9 bg-primary/15 flex items-center justify-center rounded-full shrink-0">
                     <span className="material-symbols-outlined text-primary text-sm">person</span>
@@ -411,7 +379,7 @@ export default function Navbar() {
               {mobileUserExpanded && (
                 <div className="border-t border-outline-variant/10 animate-[slideDown_0.15s_ease-out]">
                   {/* Change Password */}
-                  <div className="px-5 py-3 border-b border-outline-variant/10">
+                  <div className="px-5 py-2.5 border-b border-outline-variant/10">
                     {!showPasswordForm ? (
                       <button
                         onClick={() => setShowPasswordForm(true)}
@@ -421,31 +389,31 @@ export default function Navbar() {
                         {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
                       </button>
                     ) : (
-                      <div className="space-y-2">
-                        <p className="text-sm font-bold text-on-surface mb-2">
-                          {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
-                        </p>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between mb-1">
+                          <p className="text-xs font-bold text-on-surface">
+                            {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
+                          </p>
+                          <button onClick={() => { setShowPasswordForm(false); setPasswordError(''); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }} className="text-on-surface-variant active:text-on-surface cursor-pointer bg-transparent p-0">
+                            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+                          </button>
+                        </div>
                         {!isOAuthOnly && (
                           <input
                             type="password"
                             placeholder={t('userMenu.changePassword.current')}
                             value={currentPassword}
                             onChange={e => setCurrentPassword(e.target.value)}
-                            className="w-full px-3 py-2 bg-surface-container-high border border-outline-variant/20 rounded text-base text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
+                            className="w-full px-2.5 py-1.5 bg-surface-container-high border border-outline-variant/20 rounded text-[13px] text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
                           />
                         )}
-                        <input type="password" placeholder={t('userMenu.changePassword.new')} value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full px-3 py-2 bg-surface-container-high border border-outline-variant/20 rounded text-base text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary" />
-                        <input type="password" placeholder={t('userMenu.changePassword.confirm')} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full px-3 py-2 bg-surface-container-high border border-outline-variant/20 rounded text-base text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary" />
+                        <input type="password" placeholder={t('userMenu.changePassword.new')} value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full px-2.5 py-1.5 bg-surface-container-high border border-outline-variant/20 rounded text-[13px] text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary" />
+                        <input type="password" placeholder={t('userMenu.changePassword.confirm')} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full px-2.5 py-1.5 bg-surface-container-high border border-outline-variant/20 rounded text-[13px] text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary" />
                         {passwordError && <p className="text-xs text-error">{passwordError}</p>}
                         {passwordSuccess && <p className="text-xs text-success">{t('userMenu.changePassword.success')}</p>}
-                        <div className="flex gap-2 pt-1">
-                          <button onClick={handlePasswordChange} disabled={changingPassword || (!isOAuthOnly && !currentPassword) || !newPassword || !confirmPassword} className="flex-1 px-3 py-1.5 bg-primary text-on-primary text-xs font-medium rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                            {t('userMenu.changePassword.submit')}
-                          </button>
-                          <button onClick={() => { setShowPasswordForm(false); setPasswordError(''); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }} className="px-3 py-1.5 bg-surface-container-high text-on-surface-variant text-xs font-medium rounded cursor-pointer border border-outline-variant/20">
-                            {t('common.cancel')}
-                          </button>
-                        </div>
+                        <button onClick={handlePasswordChange} disabled={changingPassword || (!isOAuthOnly && !currentPassword) || !newPassword || !confirmPassword} className="w-full px-3 py-1.5 bg-primary text-on-primary text-xs font-medium rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                          {t('userMenu.changePassword.submit')}
+                        </button>
                       </div>
                     )}
                   </div>
@@ -513,6 +481,40 @@ export default function Navbar() {
                   )}
                 </div>
               )}
+            </div>
+
+            {/* Nav Links — collapses when user settings expanded */}
+            <div className={`overflow-hidden transition-all duration-200 ease-in-out ${mobileUserExpanded ? 'max-h-0 opacity-0' : 'max-h-[500px] opacity-100'}`}>
+              <nav className="py-1 border-t border-outline-variant/10">
+                {NAV_LINKS.map(link => {
+                  const isActive = pathname === link.href;
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={`flex items-center gap-3 px-5 py-3.5 no-underline transition-colors ${
+                        isActive
+                          ? 'text-primary bg-primary/5'
+                          : 'text-on-surface-variant active:bg-surface-container'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-xl">{link.icon}</span>
+                      <span className="text-sm font-headline font-bold">{t(link.labelKey)}</span>
+                    </Link>
+                  );
+                })}
+                {user.role === 'admin' && (
+                  <Link
+                    href="/admin/overview"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-5 py-3.5 no-underline text-primary active:bg-primary/10 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-xl">admin_panel_settings</span>
+                    <span className="text-sm font-headline font-bold">{t('nav.switchToAdmin' as any)}</span>
+                  </Link>
+                )}
+              </nav>
             </div>
 
             {/* Developer Footer */}
