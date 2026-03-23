@@ -521,7 +521,19 @@ function ChatContent() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then(setFiles)
+      .then((allFiles: GeneratedFile[]) => {
+        setFiles(allFiles);
+        // Restore latestFiles: files from the most recent generation batch (within 60s of newest)
+        if (allFiles.length > 0) {
+          const sorted = [...allFiles].sort((a, b) =>
+            new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+          );
+          const latestTime = new Date(sorted[0].created_at || 0).getTime();
+          setLatestFiles(sorted.filter(f =>
+            latestTime - new Date(f.created_at || 0).getTime() < 60000
+          ));
+        }
+      })
       .catch(console.error);
   }, [token, conversationId]);
 
@@ -1702,43 +1714,49 @@ function ChatContent() {
                                 </span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-1.5 shrink-0" data-version-dropdown>
+                            <div className="flex items-center gap-1.5 shrink-0 relative" data-version-dropdown>
                               <button
                                 onClick={(e) => { e.stopPropagation(); toggleVersionDropdown(`mobile-${file.id}`); }}
-                                className="px-1.5 py-0.5 text-xs font-bold bg-primary/10 text-primary rounded active:bg-primary/20 transition-colors cursor-pointer"
+                                className="flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold bg-primary/10 text-primary rounded active:bg-primary/20 transition-colors cursor-pointer"
                               >
                                 v{file.version || 1}
+                                <span className="material-symbols-outlined text-[10px]">expand_more</span>
                               </button>
                               <span className="material-symbols-outlined text-sm text-outline">download</span>
+                              {/* Mobile version dropdown — absolute overlay */}
+                              {versionDropdown === `mobile-${file.id}` && versionCache[file.id] && (
+                                <div className="absolute right-0 bottom-full mb-1 z-50 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl min-w-[220px] py-1 max-h-48 overflow-y-auto">
+                                  {versionCache[file.id].map((ver, idx) => (
+                                    <button
+                                      key={ver.id}
+                                      onClick={() => { switchToVersion(ver); setMobileFilesOpen(false); }}
+                                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-left active:bg-surface-container-high transition-colors cursor-pointer ${
+                                        ver.id === file.id ? 'bg-primary/10' : ''
+                                      }`}
+                                    >
+                                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                                        ver.id === file.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
+                                      }`}>
+                                        v{ver.version || 1}
+                                      </span>
+                                      <div className="flex-1 min-w-0">
+                                        <span className="text-xs text-on-surface-variant block">
+                                          {formatSize(ver.file_size)}
+                                          {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
+                                        </span>
+                                        <span className="text-[10px] text-outline block">
+                                          {new Date(ver.created_at || '').toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                      </div>
+                                      {ver.id === file.id && (
+                                        <span className="material-symbols-outlined text-primary text-xs shrink-0">check</span>
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
-                          {/* Mobile version dropdown */}
-                          {versionDropdown === `mobile-${file.id}` && versionCache[file.id] && (
-                            <div className="mx-3 mb-2 bg-surface-container-high border border-outline-variant/20 rounded-lg shadow-lg py-1 max-h-40 overflow-y-auto">
-                              {versionCache[file.id].map((ver, idx) => (
-                                <button
-                                  key={ver.id}
-                                  onClick={() => { switchToVersion(ver); setMobileFilesOpen(false); }}
-                                  className={`w-full flex items-center gap-2 px-3 py-2 text-left active:bg-surface-container transition-colors cursor-pointer text-xs ${
-                                    ver.id === file.id ? 'bg-primary/10' : ''
-                                  }`}
-                                >
-                                  <span className={`font-bold px-1 py-0.5 rounded ${
-                                    ver.id === file.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
-                                  }`}>
-                                    v{ver.version || 1}
-                                  </span>
-                                  <span className="text-on-surface-variant flex-1">
-                                    {formatSize(ver.file_size)}
-                                    {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
-                                  </span>
-                                  {ver.id === file.id && (
-                                    <span className="material-symbols-outlined text-primary text-xs">check</span>
-                                  )}
-                                </button>
-                              ))}
-                            </div>
-                          )}
                         </div>
                       );
                     })}
@@ -1803,7 +1821,7 @@ function ChatContent() {
             ) : (
               <div className="space-y-1.5">
                 {files.map(file => (
-                  <div key={file.id} className="group">
+                  <div key={file.id} className="group relative">
                     <div
                       className="flex items-center justify-between p-3 hover:bg-surface-container rounded-lg cursor-pointer transition-colors border border-transparent hover:border-primary/20"
                       onClick={() => handleDownload(file.id, file.filename)}
@@ -1821,46 +1839,52 @@ function ChatContent() {
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0" data-version-dropdown>
+                      <div className="flex items-center gap-1 shrink-0 relative" data-version-dropdown>
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleVersionDropdown(`sidebar-${file.id}`); }}
-                          className="px-1.5 py-0.5 text-xs font-bold bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors cursor-pointer"
+                          className="flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors cursor-pointer"
                           title={t('chat.preview.versions' as any)}
                         >
                           v{file.version || 1}
+                          <span className="material-symbols-outlined text-[10px]">expand_more</span>
                         </button>
                         <span className="material-symbols-outlined text-sm text-outline group-hover:text-primary transition-colors">
                           download
                         </span>
+                        {/* Sidebar version dropdown — absolute overlay */}
+                        {versionDropdown === `sidebar-${file.id}` && versionCache[file.id] && (
+                          <div className="absolute right-0 top-full mt-1 z-50 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl min-w-[220px] py-1 max-h-48 overflow-y-auto">
+                            {versionCache[file.id].map((ver, idx) => (
+                              <button
+                                key={ver.id}
+                                onClick={() => switchToVersion(ver)}
+                                className={`w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-surface-container-high transition-colors cursor-pointer ${
+                                  ver.id === file.id ? 'bg-primary/10' : ''
+                                }`}
+                              >
+                                <span className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                                  ver.id === file.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
+                                }`}>
+                                  v{ver.version || 1}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-xs text-on-surface-variant block">
+                                    {formatSize(ver.file_size)}
+                                    {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
+                                  </span>
+                                  <span className="text-[10px] text-outline block">
+                                    {new Date(ver.created_at || '').toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                                {ver.id === file.id && (
+                                  <span className="material-symbols-outlined text-primary text-xs">check</span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    {/* Sidebar version dropdown */}
-                    {versionDropdown === `sidebar-${file.id}` && versionCache[file.id] && (
-                      <div className="mx-3 mb-2 bg-surface-container border border-outline-variant/20 rounded-lg shadow-lg py-1 max-h-40 overflow-y-auto">
-                        {versionCache[file.id].map((ver, idx) => (
-                          <button
-                            key={ver.id}
-                            onClick={() => switchToVersion(ver)}
-                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-surface-container-high transition-colors cursor-pointer text-xs ${
-                              ver.id === file.id ? 'bg-primary/10' : ''
-                            }`}
-                          >
-                            <span className={`font-bold px-1 py-0.5 rounded ${
-                              ver.id === file.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
-                            }`}>
-                              v{ver.version || 1}
-                            </span>
-                            <span className="text-on-surface-variant flex-1">
-                              {formatSize(ver.file_size)}
-                              {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
-                            </span>
-                            {ver.id === file.id && (
-                              <span className="material-symbols-outlined text-primary text-xs">check</span>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
