@@ -409,14 +409,52 @@ export default function Navbar() {
             {/* User Menu Popup */}
             {showUserMenu && (
               <div className={`absolute bottom-full mb-2 bg-surface-container border border-outline-variant/10 rounded-xl shadow-2xl overflow-hidden animate-in z-[60] ${collapsed ? 'left-full ml-2 w-80' : 'left-0 w-full min-w-[300px]'}`}>
-                {/* Profile Info */}
+                {/* Profile Info — click name to edit inline */}
                 <div className="px-5 py-4 border-b border-outline-variant/10">
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-10 h-10 bg-primary/20 flex items-center justify-center rounded-full">
                       <span className="material-symbols-outlined text-primary">person</span>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-on-surface truncate">{user.displayName || '—'}</p>
+                      {editingName ? (
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={nameInput}
+                            onChange={e => setNameInput(e.target.value)}
+                            maxLength={50}
+                            placeholder={t('userMenu.changeName.placeholder' as any)}
+                            className="flex-1 min-w-0 px-2 py-1 bg-surface-container-high border border-primary/40 rounded text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
+                            autoFocus
+                            onKeyDown={e => { if (e.key === 'Enter') handleNameSave(); if (e.key === 'Escape') setEditingName(false); }}
+                          />
+                          <button
+                            onClick={handleNameSave}
+                            disabled={savingName}
+                            className="w-7 h-7 flex items-center justify-center rounded-md bg-primary text-on-primary hover:bg-primary-hover transition-colors cursor-pointer disabled:opacity-50"
+                            title={t('common.save' as any)}
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>check</span>
+                          </button>
+                          <button
+                            onClick={() => { setEditingName(false); setNameError(''); }}
+                            className="w-7 h-7 flex items-center justify-center rounded-md bg-surface-container-high text-on-surface-variant hover:bg-surface-variant transition-colors cursor-pointer"
+                            title={t('common.cancel')}
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setEditingName(true); setNameInput(user.displayName || ''); setNameError(''); }}
+                          className="group flex items-center gap-1 bg-transparent cursor-pointer p-0 text-left"
+                          title={t('userMenu.changeName' as any)}
+                        >
+                          <span className="text-sm font-bold text-on-surface truncate">{user.displayName || '—'}</span>
+                          <span className="material-symbols-outlined text-on-surface-variant/40 group-hover:text-primary transition-colors" style={{ fontSize: 14 }}>edit</span>
+                        </button>
+                      )}
+                      {nameError && <p className="text-xs text-error mt-1">{nameError}</p>}
                       <p className="text-xs text-on-surface-variant truncate">{user.email}</p>
                     </div>
                   </div>
@@ -430,49 +468,6 @@ export default function Navbar() {
                       </span>
                     )}
                   </div>
-                </div>
-
-                {/* Change Display Name */}
-                <div className="px-5 py-3 border-b border-outline-variant/10">
-                  {!editingName ? (
-                    <button
-                      onClick={() => { setEditingName(true); setNameInput(user.displayName || ''); setNameError(''); }}
-                      className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors w-full bg-transparent cursor-pointer py-1"
-                    >
-                      <span className="material-symbols-outlined text-sm">badge</span>
-                      {t('userMenu.changeName' as any)}
-                    </button>
-                  ) : (
-                    <div className="space-y-2">
-                      <p className="text-sm font-bold text-on-surface mb-2">{t('userMenu.changeName' as any)}</p>
-                      <input
-                        type="text"
-                        placeholder={t('userMenu.changeName.placeholder' as any)}
-                        value={nameInput}
-                        onChange={e => setNameInput(e.target.value)}
-                        maxLength={50}
-                        className="w-full px-3 py-2 bg-surface-container-high border border-outline-variant/20 rounded text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
-                        autoFocus
-                        onKeyDown={e => { if (e.key === 'Enter') handleNameSave(); if (e.key === 'Escape') setEditingName(false); }}
-                      />
-                      {nameError && <p className="text-xs text-error">{nameError}</p>}
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={handleNameSave}
-                          disabled={savingName}
-                          className="flex-1 px-3 py-1.5 bg-primary text-on-primary text-xs font-medium rounded hover:bg-primary-hover transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {t('common.save' as any)}
-                        </button>
-                        <button
-                          onClick={() => { setEditingName(false); setNameError(''); }}
-                          className="px-3 py-1.5 bg-surface-container-high text-on-surface-variant text-xs font-medium rounded hover:bg-surface-variant transition-colors cursor-pointer border border-outline-variant/20"
-                        >
-                          {t('common.cancel')}
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Change Password */}
