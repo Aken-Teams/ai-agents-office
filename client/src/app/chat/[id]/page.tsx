@@ -1393,7 +1393,7 @@ function ChatContent() {
                             <span className="material-symbols-outlined text-[10px] md:text-xs">expand_more</span>
                           </button>
                           {versionDropdown === file.id && versionCache[file.id] && (
-                            <div className="absolute right-0 top-full mt-1 z-50 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl min-w-[200px] md:min-w-[260px] py-1 max-h-48 overflow-y-auto">
+                            <div className="absolute right-0 top-full mt-2 z-50 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl min-w-[200px] md:min-w-[260px] py-1.5 max-h-[7.5rem] overflow-y-auto">
                               {versionCache[file.id].map((ver, idx) => (
                                 <button
                                   key={ver.id}
@@ -1474,7 +1474,7 @@ function ChatContent() {
                       <span className="material-symbols-outlined text-[10px] md:text-xs">expand_more</span>
                     </button>
                     {versionDropdown === `preview-${previewFile.id}` && (versionCache[previewFile.id] || versionCache[`preview-${previewFile.id}`]) && (
-                      <div className="absolute left-0 top-full mt-1 z-50 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl min-w-[180px] md:min-w-[220px] py-1 max-h-48 overflow-y-auto">
+                      <div className="absolute left-0 top-full mt-2 z-50 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl min-w-[180px] md:min-w-[220px] py-1.5 max-h-[7.5rem] overflow-y-auto">
                         {(versionCache[previewFile.id] || []).map((ver, idx) => (
                           <button
                             key={ver.id}
@@ -1725,12 +1725,12 @@ function ChatContent() {
                               <span className="material-symbols-outlined text-sm text-outline">download</span>
                               {/* Mobile version dropdown — absolute overlay */}
                               {versionDropdown === `mobile-${file.id}` && versionCache[file.id] && (
-                                <div className="absolute right-0 top-full mt-1 z-50 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl min-w-[220px] py-1 max-h-48 overflow-y-auto">
+                                <div className="absolute right-0 top-full mt-2 z-50 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl min-w-[230px] py-1.5 max-h-[7.5rem] overflow-y-auto">
                                   {versionCache[file.id].map((ver, idx) => (
                                     <button
                                       key={ver.id}
                                       onClick={() => { switchToVersion(ver); setMobileFilesOpen(false); }}
-                                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-left active:bg-surface-container-high transition-colors cursor-pointer ${
+                                      className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-left active:bg-surface-container-high transition-colors cursor-pointer ${
                                         ver.id === file.id ? 'bg-primary/10' : ''
                                       }`}
                                     >
@@ -1853,7 +1853,7 @@ function ChatContent() {
                         </span>
                         {/* Sidebar version dropdown — absolute overlay */}
                         {versionDropdown === `sidebar-${file.id}` && versionCache[file.id] && (
-                          <div className="absolute right-0 top-full mt-1 z-50 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl min-w-[220px] py-1 max-h-48 overflow-y-auto">
+                          <div className="absolute right-0 top-full mt-2 z-50 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl min-w-[220px] py-1.5 max-h-[7.5rem] overflow-y-auto">
                             {versionCache[file.id].map((ver, idx) => (
                               <button
                                 key={ver.id}

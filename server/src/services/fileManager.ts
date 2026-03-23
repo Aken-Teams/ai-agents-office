@@ -39,6 +39,25 @@ export async function registerNewFiles(
       if (!existing || existing.file_size === file.fileSize) continue;
 
       // File was overwritten with different content — create new version
+      // First, backup the old version so it remains downloadable
+      const oldFullPath = path.join(config.workspaceRoot, existing.file_path);
+      if (fs.existsSync(oldFullPath)) {
+        const ext = path.extname(existing.file_path);
+        const base = existing.file_path.slice(0, -ext.length);
+        const versionedPath = `${base}.v${existing.version}${ext}`;
+        const versionedFullPath = path.join(config.workspaceRoot, versionedPath);
+        try {
+          fs.copyFileSync(oldFullPath, versionedFullPath);
+          // Update old DB record to point to the backed-up file
+          await dbRun(
+            'UPDATE generated_files SET file_path = ? WHERE id = ?',
+            versionedPath, existing.id
+          );
+        } catch (err) {
+          console.error(`[FileManager] Failed to backup version ${existing.version}:`, err);
+        }
+      }
+
       const newVersion = (existing.version || 1) + 1;
       const id = uuidv4();
 
