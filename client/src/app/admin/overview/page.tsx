@@ -120,7 +120,7 @@ export default function AdminOverview() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-6">
           {/* Total Users */}
           <div className="bg-surface-container p-3 md:p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-2 -right-1 md:-bottom-4 md:-right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none text-[56px] md:text-[100px]">group</span>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 max-md:-bottom-2 max-md:-right-1 max-md:!text-[56px] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: 100 }}>group</span>
             <p className="text-[10px] md:text-sm uppercase tracking-widest text-on-surface-variant mb-1 md:mb-2">{t('admin.overview.stats.totalUsers')}</p>
             <span className="text-xl md:text-4xl font-headline font-black text-on-surface">{stats?.totalUsers ?? '\u2014'}</span>
             <p className="text-xs md:text-sm text-on-surface-variant mt-2 md:mt-3 font-mono hidden md:block">{t('admin.overview.stats.totalUsersDesc')}</p>
@@ -128,7 +128,7 @@ export default function AdminOverview() {
 
           {/* Active Agents */}
           <div className="bg-surface-container p-3 md:p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-2 -right-1 md:-bottom-4 md:-right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none text-[56px] md:text-[100px]">smart_toy</span>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 max-md:-bottom-2 max-md:-right-1 max-md:!text-[56px] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: 100 }}>smart_toy</span>
             <p className="text-[10px] md:text-sm uppercase tracking-widest text-on-surface-variant mb-1 md:mb-2">{t('admin.overview.stats.activeAgents')}</p>
             <div className="flex items-end gap-1.5">
               <span className="text-xl md:text-4xl font-headline font-black text-on-surface">{stats?.activeSkills ?? '\u2014'}</span>
@@ -142,7 +142,7 @@ export default function AdminOverview() {
 
           {/* Tokens Consumed */}
           <div className="bg-surface-container p-3 md:p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-2 -right-1 md:-bottom-4 md:-right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none text-[56px] md:text-[100px]">token</span>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 max-md:-bottom-2 max-md:-right-1 max-md:!text-[56px] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: 100 }}>token</span>
             <p className="text-[10px] md:text-sm uppercase tracking-widest text-on-surface-variant mb-1 md:mb-2">{t('admin.overview.stats.tokenConsumed')}</p>
             <span className="text-xl md:text-4xl font-headline font-black text-on-surface">{stats ? formatTokens(stats.totalTokens) : '\u2014'}</span>
             <div className="mt-1.5 md:mt-3 w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
@@ -152,7 +152,7 @@ export default function AdminOverview() {
 
           {/* System Health */}
           <div className="bg-surface-container p-3 md:p-6 rounded-lg group relative overflow-hidden">
-            <span className="material-symbols-outlined absolute -bottom-2 -right-1 md:-bottom-4 md:-right-2 text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none text-[56px] md:text-[100px]">monitor_heart</span>
+            <span className="material-symbols-outlined absolute -bottom-4 -right-2 max-md:-bottom-2 max-md:-right-1 max-md:!text-[56px] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: 100 }}>monitor_heart</span>
             <p className="text-[10px] md:text-sm uppercase tracking-widest text-on-surface-variant mb-1 md:mb-2">{t('admin.overview.stats.systemHealth')}</p>
             <span className="text-xl md:text-4xl font-headline font-black text-success">99.8%</span>
             <p className="text-[10px] md:text-sm text-on-surface-variant mt-1 md:mt-3 font-mono">{t('admin.overview.stats.uptime')} {stats ? formatUptime(stats.systemUptime) : '\u2014'}</p>
