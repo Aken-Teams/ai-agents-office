@@ -18,6 +18,17 @@ const pool = mysql.createPool({
   queueLimit: 0,
   charset: 'utf8mb4',
   timezone: '+00:00',
+  // MySQL SUM/COUNT returns DECIMAL/LONGLONG as strings by default.
+  // Convert them to JavaScript numbers so the API returns proper numeric values.
+  typeCast: function (field: any, next: any) {
+    if (field.type === 'NEWDECIMAL' || field.type === 'DECIMAL'
+      || field.type === 'LONGLONG' || field.type === 'LONG'
+      || field.type === 'INT24' || field.type === 'SHORT' || field.type === 'TINY') {
+      const val = field.string();
+      return val === null ? null : Number(val);
+    }
+    return next();
+  },
 });
 
 // ---------------------------------------------------------------------------

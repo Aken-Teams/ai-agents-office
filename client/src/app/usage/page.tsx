@@ -22,7 +22,7 @@ interface UsageTotal {
 
 function UsageContent() {
   const { user, token, isLoading } = useAuth();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const router = useRouter();
   const [daily, setDaily] = useState<DailyUsage[]>([]);
   const [total, setTotal] = useState<UsageTotal | null>(null);
@@ -241,7 +241,7 @@ function UsageContent() {
                   {daily.slice(0, 3).map(day => (
                     <div key={day.date} className="flex justify-between items-center bg-surface-container-low p-2.5 md:p-3 active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors">
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs md:text-sm font-bold text-on-surface">{day.date}</p>
+                        <p className="text-xs md:text-sm font-bold text-on-surface">{new Date(day.date).toLocaleDateString(locale === 'en' ? 'en-US' : 'zh-TW', { month: 'short', day: 'numeric', weekday: 'short' })}</p>
                         <p className="text-xs md:text-sm text-on-surface-variant truncate">
                           {t('usage.activity.generationCount', { count: day.invocation_count })} · {(day.total_input + day.total_output).toLocaleString()} tokens
                         </p>

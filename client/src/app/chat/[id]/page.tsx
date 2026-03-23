@@ -1067,70 +1067,70 @@ function ChatContent() {
         <UploadAlertModal items={uploadAlerts} onClose={() => setUploadAlerts([])} />
       )}
 
-      <div className={`${sidebarMargin} h-screen flex overflow-hidden transition-all duration-300`}>
+      <div className={`${sidebarMargin} h-[100svh] md:h-screen flex overflow-hidden transition-all duration-300`}>
         {/* === Central Chat Area === */}
         <section className="flex flex-col flex-1 min-h-0">
           {/* Title Bar */}
-          <header className="flex items-center gap-4 px-8 h-14 bg-surface/80 backdrop-blur-xl shrink-0 border-b border-outline-variant/10">
+          <header className="flex items-center gap-2 md:gap-4 px-3 md:px-8 h-11 md:h-14 bg-surface/80 backdrop-blur-xl shrink-0 border-b border-outline-variant/10">
             <button
               onClick={() => router.push('/conversations')}
-              className="text-on-surface-variant hover:text-on-surface transition-colors bg-transparent cursor-pointer"
+              className="text-on-surface-variant hover:text-on-surface active:text-on-surface transition-colors bg-transparent cursor-pointer p-1"
             >
               <span className="material-symbols-outlined text-sm">arrow_back</span>
             </button>
-            <h2 className="text-sm font-headline font-bold text-on-surface truncate">{title}</h2>
+            <h2 className="text-xs md:text-sm font-headline font-bold text-on-surface truncate">{title}</h2>
             {skillId && (
-              <span className="text-sm px-2 py-0.5 bg-primary/10 text-primary rounded font-bold tracking-wider uppercase shrink-0">
+              <span className="text-[10px] md:text-sm px-1.5 md:px-2 py-0.5 bg-primary/10 text-primary rounded font-bold tracking-wider uppercase shrink-0">
                 {skillId.replace('-gen', '')}
               </span>
             )}
             {streaming && (
-              <span className="ml-auto text-sm px-2 py-0.5 bg-surface-container-high text-primary rounded font-mono shrink-0">
+              <span className="ml-auto text-xs md:text-sm px-1.5 md:px-2 py-0.5 bg-surface-container-high text-primary rounded font-mono shrink-0">
                 {formatElapsed(elapsed)}
               </span>
             )}
           </header>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-8 py-8 space-y-8">
+          <div className="flex-1 overflow-y-auto px-3 md:px-8 py-4 md:py-8 space-y-4 md:space-y-8">
             {messages.map(msg => {
               const sources = msg.role === 'assistant' ? extractSources(msg.content) : [];
               return (
-                <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : 'flex gap-4'}>
+                <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : 'flex gap-2 md:gap-4'}>
                   {msg.role === 'assistant' && (
-                    <div className="w-9 h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
-                      <span className="material-symbols-outlined text-primary text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
+                    <div className="w-7 h-7 md:w-9 md:h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
+                      <span className="material-symbols-outlined text-primary text-xs md:text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
                     </div>
                   )}
                   <div className={
                     msg.role === 'user'
-                      ? 'max-w-[70%] bg-surface-container px-5 py-4 rounded-xl rounded-tr-sm text-on-surface shadow-lg'
-                      : 'max-w-[85%]'
+                      ? 'max-w-[85%] md:max-w-[70%] bg-surface-container px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tr-sm text-on-surface shadow-lg'
+                      : 'max-w-[90%] md:max-w-[85%]'
                   }>
                     {msg.role === 'user' ? (
                       <>
                         <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                        <span className="block mt-2 text-sm text-outline">
+                        <span className="block mt-1.5 md:mt-2 text-xs md:text-sm text-outline">
                           {new Date(msg.created_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </>
                     ) : (
-                      <div className="bg-surface-container-low px-5 py-4 rounded-xl rounded-tl-sm border border-outline-variant/10">
+                      <div className="bg-surface-container-low px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tl-sm border border-outline-variant/10">
                         <div className="chat-markdown text-sm leading-relaxed text-on-surface-variant">
                           <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{msg.content}</ReactMarkdown>
                         </div>
                         {sources.length > 0 && (
-                          <details className="mt-3 border-t border-outline-variant/10 pt-2">
-                            <summary className="text-sm text-primary cursor-pointer font-bold uppercase tracking-wider">
+                          <details className="mt-2 md:mt-3 border-t border-outline-variant/10 pt-2">
+                            <summary className="text-xs md:text-sm text-primary cursor-pointer font-bold uppercase tracking-wider">
                               {t('chat.sources', { count: sources.length })}
                             </summary>
                             <div className="flex flex-col gap-1.5 mt-2">
                               {sources.map((src, i) => (
                                 <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
-                                  className="flex items-center gap-2 px-3 py-2 bg-surface-container rounded text-sm hover:bg-surface-container-high transition-colors no-underline">
-                                  <span className="material-symbols-outlined text-primary text-sm">link</span>
+                                  className="flex items-center gap-2 px-2 md:px-3 py-1.5 md:py-2 bg-surface-container rounded text-xs md:text-sm active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors no-underline">
+                                  <span className="material-symbols-outlined text-primary text-xs md:text-sm">link</span>
                                   <span className="text-on-surface truncate flex-1">{src.title}</span>
-                                  <span className="text-outline text-sm shrink-0">{new URL(src.url).hostname}</span>
+                                  <span className="text-outline text-xs md:text-sm shrink-0 hidden md:inline">{new URL(src.url).hostname}</span>
                                 </a>
                               ))}
                             </div>
@@ -1145,12 +1145,12 @@ function ChatContent() {
 
             {/* Streaming text preview */}
             {streamText && streamText.trim() && (
-              <div className="flex gap-4">
-                <div className="w-9 h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
-                  <span className="material-symbols-outlined text-primary text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
+              <div className="flex gap-2 md:gap-4">
+                <div className="w-7 h-7 md:w-9 md:h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
+                  <span className="material-symbols-outlined text-primary text-xs md:text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
                 </div>
-                <div className="max-w-[85%]">
-                  <div className="bg-surface-container-low px-5 py-4 rounded-xl rounded-tl-sm border border-primary/20 border-dashed">
+                <div className="max-w-[90%] md:max-w-[85%]">
+                  <div className="bg-surface-container-low px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tl-sm border border-primary/20 border-dashed">
                     <div className="chat-markdown text-sm leading-relaxed text-on-surface-variant">
                       <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{streamText}</ReactMarkdown>
                       <span className="inline-block w-0.5 h-4 bg-primary ml-0.5 align-text-bottom animate-pulse" />
@@ -1162,9 +1162,9 @@ function ChatContent() {
 
             {/* Processing Panel */}
             {(hasActivity || showCompletedPanel) && (
-              <div className="bg-surface-container-low rounded-lg border-l-2 border-primary/40 max-w-[85%] overflow-hidden">
+              <div className="bg-surface-container-low rounded-lg border-l-2 border-primary/40 max-w-full md:max-w-[85%] overflow-hidden">
                 <div
-                  className="flex items-center gap-3 px-4 py-3 bg-surface-container cursor-pointer select-none hover:bg-surface-container-high transition-colors"
+                  className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-3 bg-surface-container cursor-pointer select-none active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors"
                   onClick={() => setPanelCollapsed(c => !c)}
                   role="button"
                   tabIndex={0}
@@ -1173,16 +1173,16 @@ function ChatContent() {
                     ? <span className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
                     : <span className="material-symbols-outlined text-sm text-green-400">check_circle</span>
                   }
-                  <span className="text-sm font-headline font-bold text-on-surface uppercase tracking-wider flex-1">
+                  <span className="text-xs md:text-sm font-headline font-bold text-on-surface uppercase tracking-wider flex-1 truncate">
                     {streaming ? t('chat.processing.title') : t('chat.processing.completed')}
                     {panelCollapsed && tools.length > 0 && (
-                      <span className="font-normal text-on-surface-variant ml-2">
+                      <span className="font-normal text-on-surface-variant ml-1.5 md:ml-2">
                         {completedTools}/{tools.length}
                         {webSearchTools.length > 0 && ` · ${webSearchTools.length}`}
                       </span>
                     )}
                   </span>
-                  <span className="text-sm font-mono text-primary">{formatElapsed(elapsed)}</span>
+                  <span className="text-xs md:text-sm font-mono text-primary shrink-0">{formatElapsed(elapsed)}</span>
                   <span className={`material-symbols-outlined text-sm text-on-surface-variant transition-transform ${panelCollapsed ? '-rotate-90' : ''}`}>
                     expand_more
                   </span>
@@ -1190,7 +1190,7 @@ function ChatContent() {
 
                 {!panelCollapsed && (
                   <>
-                    <div className="px-4 py-2 space-y-1 font-mono text-sm">
+                    <div className="px-3 md:px-4 py-2 space-y-1 font-mono text-xs md:text-sm">
                       {/* Connected */}
                       <div className="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant">
                         <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
@@ -1232,7 +1232,7 @@ function ChatContent() {
                             <span className="material-symbols-outlined text-sm">{info.icon}</span>
                             <span className={isDone ? 'line-through opacity-60' : ''}>{info.label}</span>
                             {detail && (
-                              <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[400px]">
+                              <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[150px] md:max-w-[400px]">
                                 {detail}
                               </span>
                             )}
@@ -1258,7 +1258,7 @@ function ChatContent() {
                           }
                           <span className="material-symbols-outlined text-sm">smart_toy</span>
                           <span>{t(`skill.${task.skillId}` as any) || task.skillId}</span>
-                          <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[400px]">
+                          <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[150px] md:max-w-[400px]">
                             {task.status === 'failed'
                               ? (task.error || t('chat.error.timedOut')).substring(0, 50)
                               : task.description.substring(0, 60)}
@@ -1285,12 +1285,12 @@ function ChatContent() {
 
                     {/* Token usage */}
                     {lastUsage && !streaming && (
-                      <div className="flex items-center justify-between px-4 py-2 border-t border-outline-variant/10 text-sm text-outline">
-                        <span>{t('chat.token.usage', { input: lastUsage.inputTokens.toLocaleString(), output: lastUsage.outputTokens.toLocaleString() } as any)}
-                          <span className="ml-2 text-primary/70">${(((lastUsage.inputTokens / 1_000_000) * 3 + (lastUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)}</span>
+                      <div className="flex items-center justify-between px-3 md:px-4 py-2 border-t border-outline-variant/10 text-xs md:text-sm text-outline gap-2">
+                        <span className="truncate">{t('chat.token.usage', { input: lastUsage.inputTokens.toLocaleString(), output: lastUsage.outputTokens.toLocaleString() } as any)}
+                          <span className="ml-1 md:ml-2 text-primary/70">${(((lastUsage.inputTokens / 1_000_000) * 3 + (lastUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)}</span>
                         </span>
                         {lastUsage.model && (
-                          <span className="px-2 py-0.5 bg-primary/10 text-primary rounded text-sm">
+                          <span className="px-1.5 md:px-2 py-0.5 bg-primary/10 text-primary rounded text-xs md:text-sm shrink-0">
                             {lastUsage.model.split('-').slice(0, 2).join('-')}
                           </span>
                         )}
@@ -1315,7 +1315,7 @@ function ChatContent() {
 
             {/* Inline File Preview */}
             {files.length > 0 && !streaming && (
-              <div className="max-w-[85%] space-y-3 ml-13">
+              <div className="max-w-full md:max-w-[85%] space-y-3 ml-0 md:ml-13">
                 {files.map(file => (
                   <div key={file.id} className="bg-surface-container-low rounded-xl border border-outline-variant/10 overflow-visible">
                     {/* HTML slides — iframe preview */}
@@ -1327,21 +1327,21 @@ function ChatContent() {
                       <InlineFilePreview file={file} token={token!} />
                     )}
                     {/* Other file types — card only */}
-                    <div className="flex items-center gap-3 px-4 py-3">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                    <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-3">
+                      <div className={`w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0 ${
                         file.file_type === 'html' ? 'bg-secondary/10' :
                         file.file_type === 'pdf' ? 'bg-error/10' :
                         file.file_type === 'pptx' ? 'bg-warning/10' :
                         file.file_type === 'xlsx' ? 'bg-success/10' :
                         'bg-tertiary/10'
                       }`}>
-                        <span className={`material-symbols-outlined ${getFileColor(file.file_type)} text-xl`}>
+                        <span className={`material-symbols-outlined ${getFileColor(file.file_type)} text-base md:text-xl`}>
                           {getFileIcon(file.file_type)}
                         </span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium text-on-surface block truncate">{file.filename}</span>
-                        <span className="text-sm text-outline">
+                        <span className="text-xs md:text-sm font-medium text-on-surface block truncate">{file.filename}</span>
+                        <span className="text-xs md:text-sm text-outline">
                           {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
                         </span>
                       </div>
@@ -1421,13 +1421,13 @@ function ChatContent() {
           {/* Fullscreen Preview Modal */}
           {previewFile && previewBlobUrl && (
             <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col">
-              <div className="flex items-center justify-between px-6 py-3 bg-surface/90 border-b border-outline-variant/20">
-                <div className="flex items-center gap-3">
-                  <span className={`material-symbols-outlined ${getFileColor(previewFile.file_type)} text-xl`}>
+              <div className="flex items-center justify-between px-3 md:px-6 py-2 md:py-3 bg-surface/90 border-b border-outline-variant/20 gap-2">
+                <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+                  <span className={`material-symbols-outlined ${getFileColor(previewFile.file_type)} text-base md:text-xl shrink-0`}>
                     {getFileIcon(previewFile.file_type)}
                   </span>
-                  <span className="text-on-surface font-medium">{previewFile.filename}</span>
-                  <span className="text-sm text-outline">{formatSize(previewFile.file_size)}</span>
+                  <span className="text-xs md:text-base text-on-surface font-medium truncate">{previewFile.filename}</span>
+                  <span className="text-xs md:text-sm text-outline shrink-0 hidden md:inline">{formatSize(previewFile.file_size)}</span>
                   {/* Version selector in fullscreen */}
                   <div className="relative" data-version-dropdown>
                     <button
@@ -1474,23 +1474,23 @@ function ChatContent() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 md:gap-2 shrink-0">
                   <button
                     onClick={() => handleDownload(previewFile.id, previewFile.filename)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer text-sm font-bold"
+                    className="flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1.5 rounded-lg bg-primary/10 text-primary active:bg-primary/20 md:hover:bg-primary/20 transition-colors cursor-pointer text-xs md:text-sm font-bold"
                   >
-                    <span className="material-symbols-outlined text-sm">download</span>
-                    {t('chat.preview.download' as any)}
+                    <span className="material-symbols-outlined text-xs md:text-sm">download</span>
+                    <span className="hidden md:inline">{t('chat.preview.download' as any)}</span>
                   </button>
                   <button
                     onClick={closePreview}
-                    className="p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer"
+                    className="p-1.5 md:p-2 rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-on-surface md:hover:text-on-surface transition-colors cursor-pointer"
                   >
-                    <span className="material-symbols-outlined">close</span>
+                    <span className="material-symbols-outlined text-lg md:text-2xl">close</span>
                   </button>
                 </div>
               </div>
-              <div className="flex-1 p-4">
+              <div className="flex-1 p-2 md:p-4">
                 {previewFile.file_type === 'html' ? (
                   <iframe
                     src={previewBlobUrl}
@@ -1512,29 +1512,29 @@ function ChatContent() {
           )}
 
           {/* Input Area */}
-          <div className="p-6 pt-0">
+          <div className="p-2 md:p-6 md:pt-0">
             {/* Template banner */}
             {pendingTemplate && (
-              <div className="mb-2 flex items-center gap-2 px-3 py-2 bg-primary/10 border border-primary/20 rounded-lg text-sm text-primary">
-                <span className="material-symbols-outlined text-sm">style</span>
+              <div className="mb-2 flex items-center gap-2 px-2.5 md:px-3 py-1.5 md:py-2 bg-primary/10 border border-primary/20 rounded-lg text-xs md:text-sm text-primary">
+                <span className="material-symbols-outlined text-xs md:text-sm">style</span>
                 <span className="font-bold">{t('templates.active' as any)}:</span>
                 <span className="flex-1 truncate">{pendingTemplate}</span>
                 <button
                   onClick={() => setPendingTemplate(null)}
                   className="hover:text-error transition-colors cursor-pointer shrink-0"
                 >
-                  <span className="material-symbols-outlined text-sm">close</span>
+                  <span className="material-symbols-outlined text-xs md:text-sm">close</span>
                 </button>
               </div>
             )}
-            <div className="bg-surface-container rounded-lg border border-outline-variant/20 focus-within:border-primary/40 transition-all p-2">
+            <div className="bg-surface-container rounded-lg border border-outline-variant/20 focus-within:border-primary/40 transition-all p-1.5 md:p-2">
               {/* Attached files chips */}
               {attachedFiles.length > 0 && (
-                <div className="flex flex-wrap gap-2 px-2 pt-2 pb-1">
+                <div className="flex flex-wrap gap-1.5 md:gap-2 px-1.5 md:px-2 pt-1.5 md:pt-2 pb-0.5 md:pb-1">
                   {attachedFiles.map(file => (
                     <div
                       key={file.id}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-sm border ${
+                      className={`flex items-center gap-1 md:gap-1.5 px-2 md:px-2.5 py-0.5 md:py-1 rounded text-xs md:text-sm border ${
                         file.uploading ? 'bg-surface-container-high border-outline-variant/20 text-on-surface-variant' :
                         file.scanStatus === 'rejected' ? 'bg-error/10 border-error/30 text-error' :
                         file.scanStatus === 'suspicious' ? 'bg-warning/10 border-warning/30 text-warning' :
@@ -1542,26 +1542,26 @@ function ChatContent() {
                       }`}
                     >
                       {file.uploading ? (
-                        <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                        <span className="material-symbols-outlined text-xs md:text-sm animate-spin">progress_activity</span>
                       ) : file.scanStatus === 'rejected' ? (
-                        <span className="material-symbols-outlined text-sm">gpp_bad</span>
+                        <span className="material-symbols-outlined text-xs md:text-sm">gpp_bad</span>
                       ) : (
-                        <span className="material-symbols-outlined text-sm">attach_file</span>
+                        <span className="material-symbols-outlined text-xs md:text-sm">attach_file</span>
                       )}
-                      <span className="max-w-[120px] truncate">{file.originalName}</span>
+                      <span className="max-w-[80px] md:max-w-[120px] truncate">{file.originalName}</span>
                       {!file.uploading && (
                         <button
                           onClick={() => removeAttachedFile(file.id)}
                           className="hover:text-error transition-colors cursor-pointer ml-0.5"
                         >
-                          <span className="material-symbols-outlined text-sm">close</span>
+                          <span className="material-symbols-outlined text-xs md:text-sm">close</span>
                         </button>
                       )}
                     </div>
                   ))}
                 </div>
               )}
-              <div className="flex items-center gap-3 px-2 py-1">
+              <div className="flex items-center gap-1.5 md:gap-3 px-1 md:px-2 py-0.5 md:py-1">
                 {/* Attach file button */}
                 <input
                   ref={fileInputRef}
@@ -1574,13 +1574,13 @@ function ChatContent() {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={streaming}
-                  className="w-9 h-9 flex items-center justify-center rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  className="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-primary md:hover:text-primary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                   title={t('chat.input.uploadFile')}
                 >
-                  <span className="material-symbols-outlined text-lg">attach_file</span>
+                  <span className="material-symbols-outlined text-base md:text-lg">attach_file</span>
                 </button>
                 <textarea
-                  className="bg-transparent border-none focus:ring-0 text-sm flex-1 text-on-surface placeholder:text-outline/50 font-body resize-none min-h-[40px] max-h-[120px]"
+                  className="bg-transparent border-none focus:ring-0 text-base md:text-sm flex-1 text-on-surface placeholder:text-outline/50 font-body resize-none min-h-[36px] md:min-h-[40px] max-h-[100px] md:max-h-[120px]"
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => {
@@ -1595,14 +1595,14 @@ function ChatContent() {
                 />
                 {streaming ? (
                   <button
-                    className="bg-error/20 text-error font-headline font-bold text-sm uppercase px-5 py-2.5 rounded tracking-widest hover:bg-error/30 active:scale-95 transition-all cursor-pointer"
+                    className="bg-error/20 text-error font-headline font-bold text-xs md:text-sm uppercase px-3 md:px-5 py-2 md:py-2.5 rounded tracking-widest active:bg-error/30 md:hover:bg-error/30 active:scale-95 transition-all cursor-pointer shrink-0"
                     onClick={handleAbort}
                   >
                     {t('chat.input.stop')}
                   </button>
                 ) : (
                   <button
-                    className="cyber-gradient text-on-primary font-headline font-bold text-sm uppercase px-5 py-2.5 rounded tracking-widest shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    className="cyber-gradient text-on-primary font-headline font-bold text-xs md:text-sm uppercase px-3 md:px-5 py-2 md:py-2.5 rounded tracking-widest shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shrink-0"
                     onClick={() => sendMessage()}
                     disabled={!input.trim()}
                   >
@@ -1612,23 +1612,21 @@ function ChatContent() {
               </div>
             </div>
             {/* Input footer info */}
-            <div className="mt-2 flex justify-between items-center px-2">
-              <div className="flex gap-4">
-                <span className="text-sm text-outline uppercase tracking-widest">
-                  {skillId ? (t(`skill.${skillId}` as any) || skillId) : t('chat.input.autoDetect')}
-                </span>
-              </div>
+            <div className="mt-1.5 md:mt-2 flex justify-between items-center px-1 md:px-2">
+              <span className="text-[10px] md:text-sm text-outline uppercase tracking-widest truncate">
+                {skillId ? (t(`skill.${skillId}` as any) || skillId) : t('chat.input.autoDetect')}
+              </span>
               {(totalUsage || lastUsage) && (
-                <div className="text-sm font-mono text-on-secondary-container/60 bg-surface-container-low px-3 py-1 rounded-full">
+                <div className="text-[10px] md:text-sm font-mono text-on-secondary-container/60 bg-surface-container-low px-2 md:px-3 py-0.5 md:py-1 rounded-full shrink-0">
                   {totalUsage ? (
                     <>
                       <span className="text-primary">{((totalUsage.inputTokens + totalUsage.outputTokens) / 1000).toFixed(1)}k</span>
-                      <span className="text-primary/60 ml-1">(${(((totalUsage.inputTokens / 1_000_000) * 3 + (totalUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)})</span>
+                      <span className="text-primary/60 ml-1 hidden md:inline">(${(((totalUsage.inputTokens / 1_000_000) * 3 + (totalUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)})</span>
                     </>
                   ) : lastUsage ? (
                     <>
                       <span className="text-primary">{((lastUsage.inputTokens + lastUsage.outputTokens) / 1000).toFixed(1)}k</span>
-                      <span className="text-primary/60 ml-1">(${(((lastUsage.inputTokens / 1_000_000) * 3 + (lastUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)})</span>
+                      <span className="text-primary/60 ml-1 hidden md:inline">(${(((lastUsage.inputTokens / 1_000_000) * 3 + (lastUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)})</span>
                     </>
                   ) : null}
                 </div>
