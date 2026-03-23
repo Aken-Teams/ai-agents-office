@@ -376,12 +376,12 @@ function DashboardContent() {
           </div>
 
           {/* Center content — greeting + template cards */}
-          <div className="flex flex-col items-center px-8 gap-6 pt-14">
+          <div className="flex-1 flex flex-col items-center justify-center px-8 gap-5">
             <div className="text-center">
-              <h2 className="text-3xl font-headline font-bold text-on-surface">
+              <h2 className="text-2xl font-headline font-bold text-on-surface">
                 {t('dashboard.mobile.greeting', { name: user.displayName || user.email?.split('@')[0] || '' })}
               </h2>
-              <p className="text-sm text-on-surface-variant mt-2">
+              <p className="text-[13px] text-on-surface-variant mt-1.5">
                 {t('dashboard.mobile.guidance')}
               </p>
             </div>
@@ -389,7 +389,7 @@ function DashboardContent() {
             {/* Template Wizard button */}
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('open-template-wizard'))}
-              className="flex items-center gap-4 px-5 py-3.5 bg-surface-container rounded-xl hover:bg-surface-container-high border border-transparent hover:border-primary/20 transition-all cursor-pointer group max-w-4xl w-full"
+              className="flex items-center gap-3 px-4 py-3 bg-surface-container rounded-xl hover:bg-surface-container-high border border-transparent hover:border-primary/20 transition-all cursor-pointer group max-w-4xl w-full"
             >
               <div className="w-10 h-10 rounded-xl cyber-gradient flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                 <span className="material-symbols-outlined text-on-primary text-xl">auto_fix_high</span>
@@ -402,7 +402,7 @@ function DashboardContent() {
             </button>
 
             {/* 4x2 Template cards */}
-            <div className="grid grid-cols-4 gap-4 w-full max-w-4xl">
+            <div className="grid grid-cols-4 gap-3 w-full max-w-4xl">
               {[
                 { icon: 'present_to_all', color: 'text-warning', bg: 'bg-warning/10', labelKey: 'dashboard.samples.pptx' as const, templateKey: 'dashboard.samples.pptx.template' as const },
                 { icon: 'description', color: 'text-tertiary', bg: 'bg-tertiary/10', labelKey: 'dashboard.samples.docx' as const, templateKey: 'dashboard.samples.docx.template' as const },
@@ -416,18 +416,18 @@ function DashboardContent() {
                 <button
                   key={sample.labelKey}
                   onClick={() => setSmartInput(t(sample.templateKey))}
-                  className="flex flex-col gap-3 p-5 bg-surface-container rounded-xl text-left hover:bg-surface-container-high hover:border-primary/20 border border-transparent transition-all cursor-pointer group"
+                  className="flex flex-col gap-2 p-4 bg-surface-container rounded-xl text-left hover:bg-surface-container-high hover:border-primary/20 border border-transparent transition-all cursor-pointer group"
                 >
-                  <span className={`material-symbols-outlined text-2xl ${sample.color}`}>{sample.icon}</span>
-                  <span className="text-sm font-headline font-bold text-on-surface leading-snug group-hover:text-primary transition-colors">{t(sample.labelKey)}</span>
+                  <span className={`material-symbols-outlined text-xl ${sample.color}`}>{sample.icon}</span>
+                  <span className="text-[13px] font-headline font-bold text-on-surface leading-snug group-hover:text-primary transition-colors">{t(sample.labelKey)}</span>
                 </button>
               ))}
             </div>
           </div>
 
           {/* Bottom input bar */}
-          <div className="flex-1 flex flex-col justify-end px-8 pb-6 pt-3">
-            <div className="w-full max-w-5xl mx-auto">
+          <div className="shrink-0 px-8 pb-6 pt-4">
+            <div className="w-full max-w-4xl mx-auto">
               {/* Attached files chips */}
               {smartAttached.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-2">
@@ -461,7 +461,7 @@ function DashboardContent() {
                   onChange={e => { handleSmartFileAttach(e.target.files); e.target.value = ''; }}
                 />
                 <textarea
-                  className="w-full bg-transparent border-none focus:ring-0 py-4 pl-14 pr-16 text-sm text-on-surface placeholder:text-outline font-body resize-none min-h-[140px] max-h-[240px]"
+                  className="w-full bg-transparent border-none focus:ring-0 py-3 pl-12 pr-14 text-sm text-on-surface placeholder:text-outline font-body resize-none min-h-[80px] max-h-[160px] min-[1920px]:min-h-[140px] min-[1920px]:max-h-[240px]"
                   value={smartInput}
                   onChange={e => setSmartInput(e.target.value)}
                   onKeyDown={e => {
