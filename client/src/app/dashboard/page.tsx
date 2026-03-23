@@ -349,20 +349,23 @@ function DashboardContent() {
                     <span className="material-symbols-outlined">send</span>
                   </button>
                 </div>
-                {/* Sample prompts / templates */}
+                {/* Sample prompts / templates — horizontal scroll */}
                 {!smartInput.trim() && (
-                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mt-4">
+                  <div className="flex gap-2 mt-4 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-outline-variant/20 scrollbar-track-transparent">
                     {[
                       { icon: 'present_to_all', labelKey: 'dashboard.samples.pptx' as const, templateKey: 'dashboard.samples.pptx.template' as const },
                       { icon: 'description', labelKey: 'dashboard.samples.docx' as const, templateKey: 'dashboard.samples.docx.template' as const },
                       { icon: 'table_chart', labelKey: 'dashboard.samples.xlsx' as const, templateKey: 'dashboard.samples.xlsx.template' as const },
+                      { icon: 'picture_as_pdf', labelKey: 'dashboard.samples.pdf' as const, templateKey: 'dashboard.samples.pdf.template' as const },
                       { icon: 'slideshow', labelKey: 'dashboard.samples.slides' as const, templateKey: 'dashboard.samples.slides.template' as const },
+                      { icon: 'bar_chart', labelKey: 'dashboard.samples.chart' as const, templateKey: 'dashboard.samples.chart.template' as const },
+                      { icon: 'upload_file', labelKey: 'dashboard.samples.data' as const, templateKey: 'dashboard.samples.data.template' as const },
                       { icon: 'travel_explore', labelKey: 'dashboard.samples.research' as const, templateKey: 'dashboard.samples.research.template' as const },
                     ].map(sample => (
                       <button
                         key={sample.labelKey}
                         onClick={() => setSmartInput(t(sample.templateKey))}
-                        className="flex items-center gap-2 px-3 py-2 bg-surface-container-highest/50 border border-outline-variant/10 rounded-lg text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest hover:border-primary/20 transition-all cursor-pointer whitespace-nowrap overflow-hidden"
+                        className="flex items-center gap-2 px-3 py-2 bg-surface-container-highest/50 border border-outline-variant/10 rounded-lg text-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest hover:border-primary/20 transition-all cursor-pointer whitespace-nowrap shrink-0"
                       >
                         <span className="material-symbols-outlined text-sm text-primary/60">{sample.icon}</span>
                         {t(sample.labelKey)}

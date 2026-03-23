@@ -31,6 +31,7 @@ interface GeneratedFile {
   file_type: string;
   file_size: number;
   version?: number;
+  created_at?: string;
 }
 
 interface AttachedFile {
@@ -63,7 +64,10 @@ const SKILL_LABELS: Record<string, string> = {
   'docx-gen': 'Word',
   'xlsx-gen': 'Excel',
   'pdf-gen': 'PDF',
+  'slides-gen': 'Slides',
   'research': 'Research',
+  'data-analyst': 'Data Analyst',
+  'rag-analyst': 'RAG Analyst',
   'planner': 'Planner',
   'reviewer': 'Reviewer',
   'router': 'Router',
@@ -74,6 +78,9 @@ const SKILL_ICONS: Record<string, string> = {
   'docx-gen': 'description',
   'xlsx-gen': 'table_chart',
   'pdf-gen': 'picture_as_pdf',
+  'slides-gen': 'slideshow',
+  'data-analyst': 'analytics',
+  'rag-analyst': 'search_insights',
 };
 
 /** Parse tool_use input JSON into a friendly, human-readable one-liner */
@@ -366,6 +373,8 @@ function ChatContent() {
   const [previewFile, setPreviewFile] = useState<GeneratedFile | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [totalUsage, setTotalUsage] = useState<{ inputTokens: number; outputTokens: number } | null>(null);
+  const [versionDropdown, setVersionDropdown] = useState<string | null>(null); // file ID whose dropdown is open
+  const [versionCache, setVersionCache] = useState<Record<string, GeneratedFile[]>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sidebarMargin = useSidebarMargin();
   const abortRef = useRef<AbortController | null>(null);
@@ -456,6 +465,19 @@ function ChatContent() {
       .catch(console.error);
   }, [token, conversationId]);
   useEffect(() => { reloadConversationUploads(); }, [reloadConversationUploads]);
+
+  // Close version dropdown on outside click
+  useEffect(() => {
+    if (!versionDropdown) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-version-dropdown]')) {
+        setVersionDropdown(null);
+      }
+    };
+    document.addEventListener('click', handler, true);
+    return () => document.removeEventListener('click', handler, true);
+  }, [versionDropdown]);
 
   // Auto-scroll
   useEffect(() => {
@@ -875,6 +897,41 @@ function ChatContent() {
     setPreviewFile(null);
   }
 
+  async function toggleVersionDropdown(dropdownKey: string) {
+    if (versionDropdown === dropdownKey) {
+      setVersionDropdown(null);
+      return;
+    }
+    setVersionDropdown(dropdownKey);
+    // Extract real file ID (strip "preview-" or "sidebar-" prefix if present)
+    const realFileId = dropdownKey.replace(/^(preview|sidebar)-/, '');
+    if (!versionCache[realFileId]) {
+      try {
+        const res = await fetch(`/api/files/${realFileId}/versions`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const versions = await res.json() as GeneratedFile[];
+          setVersionCache(prev => ({ ...prev, [realFileId]: versions }));
+        }
+      } catch (err) {
+        console.error('Fetch versions error:', err);
+      }
+    }
+  }
+
+  function switchToVersion(versionFile: GeneratedFile) {
+    // Replace the file in our files list with this version
+    setFiles(prev => prev.map(f =>
+      f.filename === versionFile.filename ? versionFile : f
+    ));
+    setVersionDropdown(null);
+    // If previewing, switch preview too
+    if (previewFile && previewFile.filename === versionFile.filename) {
+      openPreview(versionFile);
+    }
+  }
+
   function formatElapsed(s: number): string {
     if (s < 60) return `${s}s`;
     return `${Math.floor(s / 60)}m ${s % 60}s`;
@@ -1185,12 +1242,55 @@ function ChatContent() {
                         <span className="text-sm font-medium text-on-surface block truncate">{file.filename}</span>
                         <span className="text-sm text-outline">
                           {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
-                          {file.version && file.version > 1 && (
-                            <span className="ml-1 px-1 py-0.5 bg-primary/10 text-primary rounded text-xs font-bold">v{file.version}</span>
-                          )}
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
+                        {/* Version selector */}
+                        <div className="relative" data-version-dropdown>
+                          <button
+                            onClick={() => toggleVersionDropdown(file.id)}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                              versionDropdown === file.id
+                                ? 'bg-primary/20 text-primary'
+                                : 'bg-primary/10 text-primary hover:bg-primary/20'
+                            }`}
+                            title={t('chat.preview.versions' as any)}
+                          >
+                            <span>v{file.version || 1}</span>
+                            <span className="material-symbols-outlined text-xs">expand_more</span>
+                          </button>
+                          {versionDropdown === file.id && versionCache[file.id] && (
+                            <div className="absolute right-0 top-full mt-1 z-20 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl min-w-[200px] py-1 max-h-48 overflow-y-auto">
+                              {versionCache[file.id].map((ver, idx) => (
+                                <button
+                                  key={ver.id}
+                                  onClick={() => switchToVersion(ver)}
+                                  className={`w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-surface-container-high transition-colors cursor-pointer ${
+                                    ver.id === file.id ? 'bg-primary/10' : ''
+                                  }`}
+                                >
+                                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                                    ver.id === file.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
+                                  }`}>
+                                    v{ver.version || 1}
+                                  </span>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-xs text-on-surface-variant block">
+                                      {formatSize(ver.file_size)}
+                                      {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
+                                    </span>
+                                    <span className="text-xs text-outline block">
+                                      {new Date(ver.created_at || '').toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </div>
+                                  {ver.id === file.id && (
+                                    <span className="material-symbols-outlined text-primary text-sm">check</span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                         {file.file_type === 'html' && (
                           <button
                             onClick={() => openPreview(file)}
@@ -1227,6 +1327,51 @@ function ChatContent() {
                   </span>
                   <span className="text-on-surface font-medium">{previewFile.filename}</span>
                   <span className="text-sm text-outline">{formatSize(previewFile.file_size)}</span>
+                  {/* Version selector in fullscreen */}
+                  <div className="relative" data-version-dropdown>
+                    <button
+                      onClick={() => toggleVersionDropdown(`preview-${previewFile.id}`)}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                        versionDropdown === `preview-${previewFile.id}`
+                          ? 'bg-primary/30 text-primary'
+                          : 'bg-primary/15 text-primary hover:bg-primary/25'
+                      }`}
+                    >
+                      <span>v{previewFile.version || 1}</span>
+                      <span className="material-symbols-outlined text-xs">expand_more</span>
+                    </button>
+                    {versionDropdown === `preview-${previewFile.id}` && (versionCache[previewFile.id] || versionCache[`preview-${previewFile.id}`]) && (
+                      <div className="absolute left-0 top-full mt-1 z-50 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl min-w-[220px] py-1 max-h-48 overflow-y-auto">
+                        {(versionCache[previewFile.id] || []).map((ver, idx) => (
+                          <button
+                            key={ver.id}
+                            onClick={() => { switchToVersion(ver); openPreview(ver); }}
+                            className={`w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-surface-container-high transition-colors cursor-pointer ${
+                              ver.id === previewFile.id ? 'bg-primary/10' : ''
+                            }`}
+                          >
+                            <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                              ver.id === previewFile.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
+                            }`}>
+                              v{ver.version || 1}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-xs text-on-surface-variant block">
+                                {formatSize(ver.file_size)}
+                                {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
+                              </span>
+                              <span className="text-xs text-outline block">
+                                {new Date(ver.created_at || '').toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            {ver.id === previewFile.id && (
+                              <span className="material-symbols-outlined text-primary text-sm">check</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1419,30 +1564,64 @@ function ChatContent() {
             ) : (
               <div className="space-y-1.5">
                 {files.map(file => (
-                  <div
-                    key={file.id}
-                    className="flex items-center justify-between p-3 hover:bg-surface-container rounded-lg group cursor-pointer transition-colors border border-transparent hover:border-primary/20"
-                    onClick={() => handleDownload(file.id, file.filename)}
-                    role="button"
-                    tabIndex={0}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className={`material-symbols-outlined ${getFileColor(file.file_type)} text-lg`}>
-                        {getFileIcon(file.file_type)}
-                      </span>
-                      <div className="min-w-0">
-                        <span className="text-sm text-on-surface font-medium block truncate">{file.filename}</span>
-                        <span className="text-sm text-outline">
-                          {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
-                          {file.version && file.version > 1 && (
-                            <span className="ml-1 px-1 py-0.5 bg-primary/10 text-primary rounded text-xs font-bold">v{file.version}</span>
-                          )}
+                  <div key={file.id} className="group">
+                    <div
+                      className="flex items-center justify-between p-3 hover:bg-surface-container rounded-lg cursor-pointer transition-colors border border-transparent hover:border-primary/20"
+                      onClick={() => handleDownload(file.id, file.filename)}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`material-symbols-outlined ${getFileColor(file.file_type)} text-lg`}>
+                          {getFileIcon(file.file_type)}
+                        </span>
+                        <div className="min-w-0">
+                          <span className="text-sm text-on-surface font-medium block truncate">{file.filename}</span>
+                          <span className="text-sm text-outline">
+                            {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0" data-version-dropdown>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleVersionDropdown(`sidebar-${file.id}`); }}
+                          className="px-1.5 py-0.5 text-xs font-bold bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors cursor-pointer"
+                          title={t('chat.preview.versions' as any)}
+                        >
+                          v{file.version || 1}
+                        </button>
+                        <span className="material-symbols-outlined text-sm text-outline group-hover:text-primary transition-colors">
+                          download
                         </span>
                       </div>
                     </div>
-                    <span className="material-symbols-outlined text-sm text-outline group-hover:text-primary transition-colors shrink-0">
-                      download
-                    </span>
+                    {/* Sidebar version dropdown */}
+                    {versionDropdown === `sidebar-${file.id}` && versionCache[file.id] && (
+                      <div className="mx-3 mb-2 bg-surface-container border border-outline-variant/20 rounded-lg shadow-lg py-1 max-h-40 overflow-y-auto">
+                        {versionCache[file.id].map((ver, idx) => (
+                          <button
+                            key={ver.id}
+                            onClick={() => switchToVersion(ver)}
+                            className={`w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-surface-container-high transition-colors cursor-pointer text-xs ${
+                              ver.id === file.id ? 'bg-primary/10' : ''
+                            }`}
+                          >
+                            <span className={`font-bold px-1 py-0.5 rounded ${
+                              ver.id === file.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
+                            }`}>
+                              v{ver.version || 1}
+                            </span>
+                            <span className="text-on-surface-variant flex-1">
+                              {formatSize(ver.file_size)}
+                              {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
+                            </span>
+                            {ver.id === file.id && (
+                              <span className="material-symbols-outlined text-primary text-xs">check</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

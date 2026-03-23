@@ -131,6 +131,12 @@ const zhTW = {
   'dashboard.samples.slides.template': '幫我製作一份互動式網頁簡報（HTML），主題是「2026 AI Agent 技術趨勢」，包含以下投影片：\n1. 封面：標題 + 副標題 + 日期\n2. 目錄概覽\n3. AI Agent 定義與核心概念\n4. 主流框架比較（LangGraph、CrewAI、AutoGen）\n5. 企業導入案例分析\n6. 多代理協作架構設計\n7. 安全性與治理挑戰\n8. 未來展望與預測\n9. Q&A\n\n要求：使用深色科技風格，每頁重點使用動畫效果逐步顯示',
   'dashboard.samples.research': '研究 AI 產業最新趨勢',
   'dashboard.samples.research.template': '請幫我研究 2026 年 AI 產業最新趨勢，並整理成一份完整的研究報告，涵蓋以下面向：\n\n1. 全球 AI 市場規模與投資趨勢\n2. 大型語言模型（LLM）技術突破與新進展\n3. AI Agent 生態系發展現況\n4. 企業 AI 導入率與 ROI 分析\n5. AI 對各產業的影響（製造、金融、醫療、教育）\n6. AI 監管法規最新動態（歐盟 AI Act、美國行政令）\n7. 台灣 AI 產業政策與機會\n8. 值得關注的 AI 新創公司\n\n請提供具體數據與來源，使用繁體中文撰寫',
+  'dashboard.samples.pdf': '產生 PDF 商業報告',
+  'dashboard.samples.pdf.template': '幫我產生一份 PDF 格式的商業分析報告，主題是「2026 年 AI SaaS 市場分析」，包含以下章節：\n\n1. 執行摘要\n2. 市場規模與成長預測\n3. 主要競爭者分析（前 10 大 AI SaaS 廠商）\n4. 技術趨勢：AI Agent、RAG、多模態整合\n5. 客戶需求與痛點分析\n6. 商業模式比較（訂閱制 vs 用量制 vs 混合）\n7. 投資建議與風險評估\n8. 結論與行動方案\n\n風格：專業商務報告，包含數據引用與來源',
+  'dashboard.samples.chart': '圖表數據分析',
+  'dashboard.samples.chart.template': '請直接在聊天中用圖表分析以下數據，不需要產生檔案：\n\n2025 年各季度營收（萬元）：Q1: 1,250、Q2: 1,480、Q3: 1,720、Q4: 2,100\n\n產品線佔比：企業方案 45%、個人方案 30%、API 服務 15%、諮詢服務 10%\n\n請用長條圖呈現季度趨勢，圓餅圖呈現產品佔比，並分析成長動能與建議',
+  'dashboard.samples.data': '上傳檔案智能分析',
+  'dashboard.samples.data.template': '請分析我上傳的資料檔案，自動識別數據結構，並產生完整的數據分析報告，包含：\n\n1. 資料集概覽（欄位、筆數、資料類型）\n2. 關鍵統計摘要（平均值、中位數、分佈）\n3. 趨勢分析與異常值檢測\n4. 資料視覺化圖表（至少 3 張圖表）\n5. 洞察與建議\n\n請用圖表直接在聊天中呈現分析結果',
 
   // Templates
   'templates.selectTitle': '選擇範本',
@@ -284,6 +290,11 @@ const zhTW = {
   'chat.sidebar.safe': '安全',
   'chat.preview.fullscreen': '全螢幕預覽',
   'chat.preview.download': '下載',
+  'chat.preview.version': '版本',
+  'chat.preview.versions': '所有版本',
+  'chat.preview.currentVersion': '目前版本',
+  'chat.preview.versionCreated': '建立於',
+  'chat.preview.latestVersion': '最新',
 
   // Files
   'files.deleteModal.title': '確定刪除？',

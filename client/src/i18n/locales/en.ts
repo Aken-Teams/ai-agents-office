@@ -126,6 +126,12 @@ const en = {
   'dashboard.samples.slides.template': 'Create an interactive web presentation (HTML) about "2026 AI Agent Technology Trends" with these slides:\n1. Cover: title + subtitle + date\n2. Table of Contents\n3. AI Agent definition and core concepts\n4. Framework comparison (LangGraph, CrewAI, AutoGen)\n5. Enterprise adoption case studies\n6. Multi-agent collaboration architecture\n7. Security and governance challenges\n8. Future outlook and predictions\n9. Q&A\n\nRequirements: Use dark tech style, each slide should reveal key points with step-by-step animations',
   'dashboard.samples.research': 'Research Latest AI Industry Trends',
   'dashboard.samples.research.template': 'Research the latest AI industry trends in 2026 and compile a comprehensive research report covering:\n\n1. Global AI Market Size & Investment Trends\n2. Large Language Model (LLM) Technical Breakthroughs & Advances\n3. AI Agent Ecosystem Development Status\n4. Enterprise AI Adoption Rate & ROI Analysis\n5. AI Impact on Industries (Manufacturing, Finance, Healthcare, Education)\n6. AI Regulatory Updates (EU AI Act, US Executive Orders)\n7. Regional AI Industry Policies & Opportunities\n8. Notable AI Startups to Watch\n\nPlease provide specific data and sources',
+  'dashboard.samples.pdf': 'Generate PDF Business Report',
+  'dashboard.samples.pdf.template': 'Generate a PDF business analysis report on "2026 AI SaaS Market Analysis" with these sections:\n\n1. Executive Summary\n2. Market Size & Growth Forecast\n3. Competitive Analysis (Top 10 AI SaaS Vendors)\n4. Technology Trends: AI Agents, RAG, Multimodal Integration\n5. Customer Needs & Pain Point Analysis\n6. Business Model Comparison (Subscription vs Usage-based vs Hybrid)\n7. Investment Recommendations & Risk Assessment\n8. Conclusions & Action Items\n\nStyle: Professional business report with data citations',
+  'dashboard.samples.chart': 'Chart Data Analysis',
+  'dashboard.samples.chart.template': 'Please analyze the following data directly in the chat with charts (no file download needed):\n\n2025 Quarterly Revenue: Q1: $1.25M, Q2: $1.48M, Q3: $1.72M, Q4: $2.10M\n\nProduct Mix: Enterprise 45%, Personal 30%, API Services 15%, Consulting 10%\n\nPlease use a bar chart for quarterly trends, a pie chart for product mix, and analyze growth drivers with recommendations',
+  'dashboard.samples.data': 'Upload & Analyze Data',
+  'dashboard.samples.data.template': 'Please analyze my uploaded data file, auto-detect the data structure, and produce a complete analysis report including:\n\n1. Dataset Overview (columns, rows, data types)\n2. Key Statistical Summary (mean, median, distribution)\n3. Trend Analysis & Outlier Detection\n4. Data Visualizations (at least 3 charts)\n5. Insights & Recommendations\n\nPlease show the analysis with inline charts directly in the chat',
 
   // Templates
   'templates.selectTitle': 'Select Template',
@@ -274,6 +280,11 @@ const en = {
   'chat.sidebar.safe': 'Safe',
   'chat.preview.fullscreen': 'Fullscreen Preview',
   'chat.preview.download': 'Download',
+  'chat.preview.version': 'Version',
+  'chat.preview.versions': 'All Versions',
+  'chat.preview.currentVersion': 'Current',
+  'chat.preview.versionCreated': 'Created at',
+  'chat.preview.latestVersion': 'Latest',
 
   'files.deleteModal.title': 'Confirm Delete?',
   'files.deleteModal.message': 'About to delete {filename}. This action cannot be undone.',

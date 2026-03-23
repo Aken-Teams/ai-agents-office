@@ -131,6 +131,12 @@ const zhCN = {
   'dashboard.samples.slides.template': '帮我制作一份交互式网页演示（HTML），主题是「2026 AI Agent 技术趋势」，包含以下幻灯片：\n1. 封面：标题 + 副标题 + 日期\n2. 目录概览\n3. AI Agent 定义与核心概念\n4. 主流框架比较（LangGraph、CrewAI、AutoGen）\n5. 企业导入案例分析\n6. 多智能体协作架构设计\n7. 安全性与治理挑战\n8. 未来展望与预测\n9. Q&A\n\n要求：使用深色科技风格，每页重点使用动画效果逐步显示',
   'dashboard.samples.research': '研究 AI 产业最新趋势',
   'dashboard.samples.research.template': '请帮我研究 2026 年 AI 产业最新趋势，并整理成一份完整的研究报告，涵盖以下方面：\n\n1. 全球 AI 市场规模与投资趋势\n2. 大型语言模型（LLM）技术突破与新进展\n3. AI Agent 生态系发展现况\n4. 企业 AI 导入率与 ROI 分析\n5. AI 对各产业的影响（制造、金融、医疗、教育）\n6. AI 监管法规最新动态（欧盟 AI Act、美国行政令）\n7. 中国 AI 产业政策与机遇\n8. 值得关注的 AI 初创公司\n\n请提供具体数据与来源，使用简体中文撰写',
+  'dashboard.samples.pdf': '生成 PDF 商业报告',
+  'dashboard.samples.pdf.template': '帮我生成一份 PDF 格式的商业分析报告，主题是「2026 年 AI SaaS 市场分析」，包含以下章节：\n\n1. 执行摘要\n2. 市场规模与增长预测\n3. 主要竞争者分析（前 10 大 AI SaaS 厂商）\n4. 技术趋势：AI Agent、RAG、多模态整合\n5. 客户需求与痛点分析\n6. 商业模式比较（订阅制 vs 用量制 vs 混合）\n7. 投资建议与风险评估\n8. 结论与行动方案\n\n风格：专业商务报告，包含数据引用与来源',
+  'dashboard.samples.chart': '图表数据分析',
+  'dashboard.samples.chart.template': '请直接在聊天中用图表分析以下数据，不需要生成文件：\n\n2025 年各季度营收（万元）：Q1: 1,250、Q2: 1,480、Q3: 1,720、Q4: 2,100\n\n产品线占比：企业方案 45%、个人方案 30%、API 服务 15%、咨询服务 10%\n\n请用柱状图呈现季度趋势，饼图呈现产品占比，并分析增长动能与建议',
+  'dashboard.samples.data': '上传文件智能分析',
+  'dashboard.samples.data.template': '请分析我上传的数据文件，自动识别数据结构，并生成完整的数据分析报告，包含：\n\n1. 数据集概览（字段、行数、数据类型）\n2. 关键统计摘要（平均值、中位数、分布）\n3. 趋势分析与异常值检测\n4. 数据可视化图表（至少 3 张图表）\n5. 洞察与建议\n\n请用图表直接在聊天中呈现分析结果',
 
   // Templates
   'templates.selectTitle': '选择模板',
@@ -280,6 +286,11 @@ const zhCN = {
   'chat.sidebar.safe': '安全',
   'chat.preview.fullscreen': '全屏预览',
   'chat.preview.download': '下载',
+  'chat.preview.version': '版本',
+  'chat.preview.versions': '所有版本',
+  'chat.preview.currentVersion': '当前版本',
+  'chat.preview.versionCreated': '创建于',
+  'chat.preview.latestVersion': '最新',
 
   // Files
   'files.deleteModal.title': '确定删除？',
