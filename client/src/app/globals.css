@@ -648,6 +648,10 @@ html.locale-zh-CN {
   overflow: auto;
 }
 
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
 /* Custom scrollbar (theme-aware) */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
