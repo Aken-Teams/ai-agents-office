@@ -320,6 +320,7 @@ const zhCN = {
   'chart.action.expand': '放大',
   'chart.action.downloadPng': 'PNG',
   'chart.action.downloadSvg': 'SVG',
+  'chart.action.downloadHtml': '互动 HTML',
   'chart.action.data': '数据',
   'chart.action.hide': '隐藏',
   'chart.action.downloadPngFull': '下载 PNG',

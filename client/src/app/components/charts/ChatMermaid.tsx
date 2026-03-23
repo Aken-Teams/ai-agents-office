@@ -65,16 +65,26 @@ export default function ChatMermaid({ code }: ChatMermaidProps) {
     return () => observer.disconnect();
   }, [code]);
 
-  const handleDownload = useCallback(() => {
-    if (!svg) return;
-    const blob = new Blob([svg], { type: 'image/svg+xml' });
+  const handleDownloadHtml = useCallback(() => {
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Diagram</title>
+<style>body{display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;padding:40px;font-family:Inter,system-ui,sans-serif;background:#f8f9fa}.mermaid{max-width:95vw}</style>
+</head><body>
+<pre class="mermaid">
+${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+</pre>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"><\/script>
+<script>mermaid.initialize({startOnLoad:true,theme:'default',fontFamily:'Inter,system-ui,sans-serif'});<\/script>
+</body></html>`;
+    const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'diagram.svg';
+    a.download = 'diagram.html';
     a.click();
     URL.revokeObjectURL(url);
-  }, [svg]);
+  }, [code]);
 
   const handleDownloadPng = useCallback(() => {
     if (!svg) return;
@@ -164,9 +174,9 @@ export default function ChatMermaid({ code }: ChatMermaidProps) {
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>fullscreen</span>
             <span>{t('chart.action.expand' as any)}</span>
           </button>
-          <button onClick={handleDownload} className="chat-chart-toggle flex items-center gap-1" title={t('chart.action.downloadSvg' as any)}>
-            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>download</span>
-            <span>{t('chart.action.downloadSvg' as any)}</span>
+          <button onClick={handleDownloadHtml} className="chat-chart-toggle flex items-center gap-1" title={t('chart.action.downloadHtml' as any)}>
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>code</span>
+            <span>{t('chart.action.downloadHtml' as any)}</span>
           </button>
           <button onClick={handleDownloadPng} className="chat-chart-toggle flex items-center gap-1" title={t('chart.action.downloadPng' as any)}>
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>image</span>
@@ -196,8 +206,8 @@ export default function ChatMermaid({ code }: ChatMermaidProps) {
               dangerouslySetInnerHTML={{ __html: svg }}
             />
             <div className="flex items-center gap-2 mt-4 pt-3 border-t border-outline-variant/20">
-              <button onClick={handleDownload} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
-                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>download</span> {t('chart.action.downloadSvg' as any)}
+              <button onClick={handleDownloadHtml} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>code</span> {t('chart.action.downloadHtml' as any)}
               </button>
               <button onClick={handleDownloadPng} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
                 <span className="material-symbols-outlined" style={{ fontSize: 14 }}>image</span> {t('chart.action.downloadPng' as any)}

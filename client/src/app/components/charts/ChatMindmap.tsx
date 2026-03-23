@@ -143,23 +143,38 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [fullscreen, code]);
 
-  const handleDownloadSvg = useCallback(() => {
-    if (!svgRef.current) return;
-    const svgData = new XMLSerializer().serializeToString(svgRef.current);
-    const blob = new Blob([svgData], { type: 'image/svg+xml' });
+  const handleDownloadHtml = useCallback(() => {
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Mindmap</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}html,body,.markmap{width:100%;height:100vh}</style>
+</head><body>
+<div class="markmap"><script type="text/template">
+${code}
+<\/script></div>
+<script src="https://cdn.jsdelivr.net/npm/markmap-autoloader"><\/script>
+</body></html>`;
+    const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'mindmap.svg';
+    a.download = 'mindmap.html';
     a.click();
     URL.revokeObjectURL(url);
-  }, []);
+  }, [code]);
 
   const handleDownloadPng = useCallback(() => {
     if (!svgRef.current) return;
-    const svgData = new XMLSerializer().serializeToString(svgRef.current);
-    const w = svgRef.current.clientWidth || 800;
-    const h = svgRef.current.clientHeight || 600;
+    // Use getBBox to crop to actual content area (no empty whitespace)
+    const bbox = svgRef.current.getBBox();
+    const pad = 20;
+    const w = Math.ceil(bbox.width + pad * 2);
+    const h = Math.ceil(bbox.height + pad * 2);
+    const clone = svgRef.current.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute('viewBox', `${bbox.x - pad} ${bbox.y - pad} ${w} ${h}`);
+    clone.setAttribute('width', String(w));
+    clone.setAttribute('height', String(h));
+    const svgData = new XMLSerializer().serializeToString(clone);
     const canvas = document.createElement('canvas');
     const scale = 2;
     canvas.width = w * scale;
@@ -220,9 +235,9 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>fullscreen</span>
             <span>{t('chart.action.expand' as any)}</span>
           </button>
-          <button onClick={handleDownloadSvg} className="chat-chart-toggle flex items-center gap-1" title={t('chart.action.downloadSvg' as any)}>
-            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>download</span>
-            <span>{t('chart.action.downloadSvg' as any)}</span>
+          <button onClick={handleDownloadHtml} className="chat-chart-toggle flex items-center gap-1" title={t('chart.action.downloadHtml' as any)}>
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>code</span>
+            <span>{t('chart.action.downloadHtml' as any)}</span>
           </button>
           <button onClick={handleDownloadPng} className="chat-chart-toggle flex items-center gap-1" title={t('chart.action.downloadPng' as any)}>
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>image</span>
@@ -255,8 +270,8 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
                 <span className="material-symbols-outlined" style={{ fontSize: 13 }}>touch_app</span>
                 <span>{t('chart.hint.mindmap' as any)}</span>
               </div>
-              <button onClick={handleDownloadSvg} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
-                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>download</span> {t('chart.action.downloadSvg' as any)}
+              <button onClick={handleDownloadHtml} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>code</span> {t('chart.action.downloadHtml' as any)}
               </button>
               <button onClick={handleDownloadPng} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">
                 <span className="material-symbols-outlined" style={{ fontSize: 14 }}>image</span> {t('chart.action.downloadPng' as any)}

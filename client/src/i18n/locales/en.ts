@@ -314,6 +314,7 @@ const en = {
   'chart.action.expand': 'Expand',
   'chart.action.downloadPng': 'PNG',
   'chart.action.downloadSvg': 'SVG',
+  'chart.action.downloadHtml': 'Interactive HTML',
   'chart.action.data': 'Data',
   'chart.action.hide': 'Hide',
   'chart.action.downloadPngFull': 'Download PNG',

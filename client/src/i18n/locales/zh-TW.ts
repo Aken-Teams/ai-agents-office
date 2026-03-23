@@ -324,6 +324,7 @@ const zhTW = {
   'chart.action.expand': '放大',
   'chart.action.downloadPng': 'PNG',
   'chart.action.downloadSvg': 'SVG',
+  'chart.action.downloadHtml': '互動 HTML',
   'chart.action.data': '資料',
   'chart.action.hide': '隱藏',
   'chart.action.downloadPngFull': '下載 PNG',
