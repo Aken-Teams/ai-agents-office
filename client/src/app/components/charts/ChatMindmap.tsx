@@ -165,13 +165,20 @@ ${code}
 
   const handleDownloadPng = useCallback(() => {
     if (!svgRef.current) return;
-    // Use getBBox to crop to actual content area (no empty whitespace)
-    const bbox = svgRef.current.getBBox();
-    const pad = 20;
-    const w = Math.ceil(bbox.width + pad * 2);
-    const h = Math.ceil(bbox.height + pad * 2);
+    // Try getBBox for tight crop; fall back to client dimensions
+    let w: number, h: number;
     const clone = svgRef.current.cloneNode(true) as SVGSVGElement;
-    clone.setAttribute('viewBox', `${bbox.x - pad} ${bbox.y - pad} ${w} ${h}`);
+    try {
+      const bbox = svgRef.current.getBBox();
+      const pad = 20;
+      w = Math.ceil(bbox.width + pad * 2);
+      h = Math.ceil(bbox.height + pad * 2);
+      clone.setAttribute('viewBox', `${bbox.x - pad} ${bbox.y - pad} ${w} ${h}`);
+    } catch {
+      w = svgRef.current.clientWidth || 800;
+      h = svgRef.current.clientHeight || 600;
+      clone.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    }
     clone.setAttribute('width', String(w));
     clone.setAttribute('height', String(h));
     const svgData = new XMLSerializer().serializeToString(clone);
