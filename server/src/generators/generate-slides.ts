@@ -797,6 +797,23 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
 .reveal .slides section .deco-svg { position: absolute; pointer-events: none; z-index: 0; }
 .reveal .slides section > *:not(.deco-svg) { position: relative; z-index: 1; }
 
+/* ── Watermark ── */
+.reveal .slides section::after {
+  content: '測試版 TEST VERSION';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%) rotate(-35deg);
+  font-size: 4.5vw;
+  font-family: Arial, "Microsoft JhengHei", sans-serif;
+  font-weight: 700;
+  color: ${s.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'};
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 9999;
+  user-select: none;
+  letter-spacing: 0.15em;
+}
+
 /* ── Typography ── */
 .reveal h1, .reveal h2, .reveal h3, .reveal h4 {
   font-family: var(--font-heading);
