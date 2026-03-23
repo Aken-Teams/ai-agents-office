@@ -111,6 +111,23 @@ interface PptxInput {
   slides: SlideData[];
 }
 
+// ── Content Limits (prevent overflow in .pptx) ────────────────
+const LIMITS = { bullets: 6, bulletsCompact: 4 };
+
+function sanitizeSlide(slide: SlideData): SlideData {
+  const s = { ...slide };
+  if (s.bullets && s.bullets.length > LIMITS.bullets) {
+    s.bullets = s.bullets.slice(0, LIMITS.bullets);
+  }
+  if (s.left && s.left.bullets.length > LIMITS.bulletsCompact) {
+    s.left = { ...s.left, bullets: s.left.bullets.slice(0, LIMITS.bulletsCompact) };
+  }
+  if (s.right && s.right.bullets.length > LIMITS.bulletsCompact) {
+    s.right = { ...s.right, bullets: s.right.bullets.slice(0, LIMITS.bulletsCompact) };
+  }
+  return s;
+}
+
 async function generatePptx(inputPath: string, outputPath: string) {
   const input: PptxInput = JSON.parse(fs.readFileSync(inputPath, 'utf-8'));
   const s = STYLES[input.style || ''] || DEFAULT_STYLE;
@@ -119,7 +136,8 @@ async function generatePptx(inputPath: string, outputPath: string) {
   pptx.title = input.title;
   if (input.author) pptx.author = input.author;
 
-  for (const slideData of input.slides) {
+  for (const rawSlideData of input.slides) {
+    const slideData = sanitizeSlide(rawSlideData);
     const slide = pptx.addSlide();
     slide.background = { color: s.bg };
 
@@ -178,6 +196,7 @@ async function generatePptx(inputPath: string, outputPath: string) {
               x: '5%', y: '22%', w: '90%', h: '68%',
               fontSize: s.bodyFontSize, color: s.bodyColor,
               fontFace: s.fontFace, lineSpacingMultiple: 1.3,
+              autoFit: true,
             }
           );
         }
@@ -185,7 +204,7 @@ async function generatePptx(inputPath: string, outputPath: string) {
           slide.addText(slideData.text, {
             x: '5%', y: '22%', w: '90%', h: '68%',
             fontSize: s.bodyFontSize, color: s.bodyColor,
-            fontFace: s.fontFace,
+            fontFace: s.fontFace, autoFit: true,
           });
         }
         break;
@@ -216,6 +235,7 @@ async function generatePptx(inputPath: string, outputPath: string) {
               x: '5%', y: '32%', w: '42%', h: '58%',
               fontSize: s.bodyFontSize, color: s.bodyColor,
               fontFace: s.fontFace, lineSpacingMultiple: 1.3,
+              autoFit: true,
             }
           );
         }
@@ -231,6 +251,7 @@ async function generatePptx(inputPath: string, outputPath: string) {
               x: '53%', y: '32%', w: '42%', h: '58%',
               fontSize: s.bodyFontSize, color: s.bodyColor,
               fontFace: s.fontFace, lineSpacingMultiple: 1.3,
+              autoFit: true,
             }
           );
         }

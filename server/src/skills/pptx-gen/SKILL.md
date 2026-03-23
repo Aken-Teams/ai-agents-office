@@ -68,6 +68,15 @@ If the user mentions a style preference (e.g. "dark theme", "professional", "col
 - `"two-column"` — Heading + two columns with sub-headings and bullets
 - `"section"` — Section divider slide
 
+## CRITICAL: Content Limits — Prevent Overflow
+
+Content that exceeds these limits will be auto-truncated by the generator, but you should respect them in your JSON:
+
+- **Bullet points per slide**: max 6
+- **Two-column bullets**: max 4 per column
+- **Text per bullet**: keep under 60 characters — use short phrases, not sentences
+- **Split long content** across multiple slides rather than cramming into one
+
 ## Custom Generation
 For complex requirements (charts, images, special layouts), write custom Node.js code using `pptxgenjs`:
 

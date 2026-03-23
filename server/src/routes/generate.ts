@@ -272,8 +272,10 @@ async function handleOrchestrated(
         data: newFiles.map(f => ({
           id: f.id,
           filename: f.filename,
+          file_path: f.file_path,
           file_type: f.file_type,
           file_size: f.file_size,
+          version: f.version,
         })),
       });
     }
@@ -465,8 +467,10 @@ function handleDirect(
               data: newFiles.map(f => ({
                 id: f.id,
                 filename: f.filename,
+                file_path: f.file_path,
                 file_type: f.file_type,
                 file_size: f.file_size,
+                version: f.version,
               })),
             })}\n\n`);
           } catch { /* connection closed */ }

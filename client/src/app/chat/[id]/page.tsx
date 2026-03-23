@@ -23,6 +23,7 @@ interface Message {
 interface GeneratedFile {
   id: string;
   filename: string;
+  file_path: string;
   file_type: string;
   file_size: number;
   version?: number;
@@ -261,7 +262,9 @@ function InlineHtmlPreview({ file, token, onFullscreen }: { file: GeneratedFile;
       <iframe
         src={blobUrl}
         sandbox="allow-scripts allow-same-origin"
-        className="w-full h-[360px] border-b border-outline-variant/10"
+        scrolling="no"
+        className="w-full h-[360px] border-b border-outline-variant/10 overflow-hidden"
+        style={{ overflow: 'hidden' }}
         title={file.filename}
       />
       <button
@@ -520,7 +523,20 @@ function ChatContent() {
             }
             if (event.type === 'file_generated') {
               const newFiles = event.data as GeneratedFile[];
-              setFiles(prev => [...prev, ...newFiles]);
+              // Deduplicate: replace older versions of same file_path, keep latest
+              setFiles(prev => {
+                const updated = [...prev];
+                for (const nf of newFiles) {
+                  const existingIdx = updated.findIndex(f => f.file_path === nf.file_path);
+                  if (existingIdx >= 0) {
+                    // Replace old version with new version
+                    updated[existingIdx] = nf;
+                  } else {
+                    updated.push(nf);
+                  }
+                }
+                return updated;
+              });
             }
             if (event.type === 'task_dispatched') {
               const task = event.data as { taskId: string; skillId: string; description: string };
@@ -1127,7 +1143,9 @@ function ChatContent() {
                   <iframe
                     src={previewBlobUrl}
                     sandbox="allow-scripts allow-same-origin"
+                    scrolling="no"
                     className="w-full h-full rounded-lg border border-outline-variant/20"
+                    style={{ overflow: 'hidden' }}
                     title={previewFile.filename}
                   />
                 ) : (

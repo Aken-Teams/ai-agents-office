@@ -29,26 +29,40 @@ const OFFICE_EXTENSIONS = new Set(['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt'])
 const router = Router();
 router.use(authMiddleware);
 
-// GET /api/files
+// GET /api/files — returns only the LATEST version of each file
 router.get('/', (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const { type, conversationId } = req.query;
 
-  let query = 'SELECT * FROM generated_files WHERE user_id = ?';
+  // Build WHERE clause for filters
+  let where = 'WHERE gf.user_id = ?';
   const params: unknown[] = [userId];
 
   if (type) {
-    query += ' AND file_type = ?';
+    where += ' AND gf.file_type = ?';
     params.push(type);
   }
   if (conversationId) {
-    query += ' AND conversation_id = ?';
+    where += ' AND gf.conversation_id = ?';
     params.push(conversationId);
   }
 
-  query += ' ORDER BY created_at DESC';
+  // Only return the latest version per (file_path, conversation_id)
+  const query = `
+    SELECT gf.* FROM generated_files gf
+    INNER JOIN (
+      SELECT file_path, conversation_id, MAX(version) AS max_ver
+      FROM generated_files
+      WHERE user_id = ?
+      GROUP BY file_path, conversation_id
+    ) latest ON gf.file_path = latest.file_path
+      AND gf.conversation_id = latest.conversation_id
+      AND gf.version = latest.max_ver
+    ${where}
+    ORDER BY gf.created_at DESC
+  `;
 
-  const files = db.prepare(query).all(...params) as GeneratedFile[];
+  const files = db.prepare(query).all(userId, ...params) as GeneratedFile[];
   res.json(files);
 });
 
