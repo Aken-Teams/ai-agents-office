@@ -102,7 +102,7 @@ const zhTW = {
   'dashboard.engineLabel': 'AI 引擎: Claude',
   'dashboard.modeLabel': '模式: 多代理協作',
   'dashboard.statusRunning': '運行中',
-  'dashboard.stats.invocationsTitle': '本月生成次數',
+  'dashboard.stats.invocationsTitle': '本月文件生成',
   'dashboard.stats.invocationsUnit': '次',
   'dashboard.stats.invocationsFormats': '支援: PPTX / DOCX / XLSX / PDF',
   'dashboard.stats.tokenTitle': 'Token 用量',

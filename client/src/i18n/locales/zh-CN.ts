@@ -102,7 +102,7 @@ const zhCN = {
   'dashboard.engineLabel': 'AI 引擎: Claude',
   'dashboard.modeLabel': '模式: 多代理协作',
   'dashboard.statusRunning': '运行中',
-  'dashboard.stats.invocationsTitle': '本月生成次数',
+  'dashboard.stats.invocationsTitle': '本月文件生成',
   'dashboard.stats.invocationsUnit': '次',
   'dashboard.stats.invocationsFormats': '支持: PPTX / DOCX / XLSX / PDF',
   'dashboard.stats.tokenTitle': 'Token 用量',

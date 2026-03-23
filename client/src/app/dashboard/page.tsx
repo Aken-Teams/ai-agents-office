@@ -337,29 +337,29 @@ function DashboardContent() {
         <div className="hidden md:flex flex-col h-[calc(100vh-3.5rem)]">
           {/* Stats bar — compact card strip */}
           <div className="grid grid-cols-3 gap-4 px-8 py-4 shrink-0">
-            <div className="flex items-center gap-4 bg-surface-container rounded-lg px-5 py-3">
+            <div className="flex items-center gap-4 bg-surface-container rounded-lg px-5 py-3.5">
               <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                 <span className="material-symbols-outlined text-primary text-lg">description</span>
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-on-surface-variant">{t('dashboard.stats.invocationsTitle')}</p>
+                <p className="text-xs uppercase tracking-widest text-on-surface-variant font-medium">{t('dashboard.stats.invocationsTitle')}</p>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-xl font-headline font-bold text-on-surface">{usage?.totalInvocations ?? 0}</span>
-                  <span className="text-xs text-primary font-bold">{t('dashboard.stats.invocationsUnit')}</span>
+                  <span className="text-2xl font-headline font-bold text-on-surface">{usage?.totalInvocations ?? 0}</span>
+                  <span className="text-sm text-primary font-bold">{t('dashboard.stats.invocationsUnit')}</span>
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-4 bg-surface-container rounded-lg px-5 py-3">
+            <div className="flex items-center gap-4 bg-surface-container rounded-lg px-5 py-3.5">
               <div className="w-9 h-9 rounded-lg bg-success/10 flex items-center justify-center shrink-0">
                 <span className="material-symbols-outlined text-success text-lg">token</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-widest text-on-surface-variant">{t('dashboard.stats.tokenTitle')}</p>
+                <p className="text-xs uppercase tracking-widest text-on-surface-variant font-medium">{t('dashboard.stats.tokenTitle')}</p>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-xl font-headline font-bold text-on-surface">
+                  <span className="text-2xl font-headline font-bold text-on-surface">
                     {usage ? ((usage.totalInput + usage.totalOutput) / 1000).toFixed(1) + 'k' : '0'}
                   </span>
-                  <span className="text-sm font-headline font-bold text-success">
+                  <span className="text-base font-headline font-bold text-success">
                     ${usage ? (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10).toFixed(2) : '0.00'}
                     <span className="text-xs text-on-surface-variant font-normal ml-0.5">(USD)</span>
                   </span>
@@ -370,22 +370,22 @@ function DashboardContent() {
                 <p className="text-xs text-on-surface-variant font-mono">{t('dashboard.stats.tokenOutputLabel')}: <span className="text-on-surface font-bold">{usage ? (usage.totalOutput / 1000).toFixed(1) + 'k' : '0'}</span></p>
               </div>
             </div>
-            <div className="flex items-center gap-4 bg-surface-container rounded-lg px-5 py-3">
+            <div className="flex items-center gap-4 bg-surface-container rounded-lg px-5 py-3.5">
               <div className="w-9 h-9 rounded-lg bg-tertiary/10 flex items-center justify-center shrink-0">
                 <span className="material-symbols-outlined text-tertiary text-lg">chat</span>
               </div>
-              <div>
-                <p className="text-[10px] uppercase tracking-widest text-on-surface-variant">{t('dashboard.stats.conversationsTitle')}</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs uppercase tracking-widest text-on-surface-variant font-medium">{t('dashboard.stats.conversationsTitle')}</p>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-xl font-headline font-bold text-on-surface">{conversations.length}</span>
-                  <span className="text-xs text-on-surface-variant">{t('dashboard.stats.conversationsMode')}</span>
+                  <span className="text-2xl font-headline font-bold text-on-surface">{conversations.length}</span>
                 </div>
               </div>
+              <span className="text-xs text-on-surface-variant bg-surface-container-high px-2.5 py-1 rounded-full font-medium shrink-0">{t('dashboard.stats.conversationsMode')}</span>
             </div>
           </div>
 
           {/* Center content — greeting + template cards */}
-          <div className="flex-1 flex flex-col items-center justify-center px-8 gap-8">
+          <div className="flex flex-col items-center px-8 gap-6 pt-14">
             <div className="text-center">
               <h2 className="text-3xl font-headline font-bold text-on-surface">
                 {t('dashboard.mobile.greeting', { name: user.displayName || user.email?.split('@')[0] || '' })}
@@ -419,9 +419,9 @@ function DashboardContent() {
             </div>
           </div>
 
-          {/* Bottom input bar — fixed to bottom */}
-          <div className="shrink-0 px-8 pb-6 pt-3">
-            <div className="max-w-4xl mx-auto">
+          {/* Bottom input bar */}
+          <div className="flex-1 flex flex-col justify-end px-8 pb-6 pt-3">
+            <div className="w-full">
               {/* Attached files chips */}
               {smartAttached.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-2">
@@ -455,7 +455,7 @@ function DashboardContent() {
                   onChange={e => { handleSmartFileAttach(e.target.files); e.target.value = ''; }}
                 />
                 <textarea
-                  className="w-full bg-transparent border-none focus:ring-0 py-4 pl-14 pr-16 text-sm text-on-surface placeholder:text-outline font-body resize-none min-h-[52px] max-h-[120px]"
+                  className="w-full bg-transparent border-none focus:ring-0 py-4 pl-14 pr-16 text-sm text-on-surface placeholder:text-outline font-body resize-none min-h-[140px] max-h-[240px]"
                   value={smartInput}
                   onChange={e => setSmartInput(e.target.value)}
                   onKeyDown={e => {
@@ -469,14 +469,14 @@ function DashboardContent() {
                   disabled={creating}
                 />
                 <button
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+                  className="absolute left-3 bottom-3 w-9 h-9 flex items-center justify-center rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
                   onClick={() => smartFileRef.current?.click()}
                   title={t('dashboard.smartInput.uploadTooltip')}
                 >
                   <span className="material-symbols-outlined text-lg">attach_file</span>
                 </button>
                 <button
-                  className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 cyber-gradient rounded-lg flex items-center justify-center text-on-primary disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-95 transition-all"
+                  className="absolute right-3 bottom-3 w-10 h-10 cyber-gradient rounded-lg flex items-center justify-center text-on-primary disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-95 transition-all"
                   onClick={handleSmartSubmit}
                   disabled={!smartInput.trim() || creating}
                 >

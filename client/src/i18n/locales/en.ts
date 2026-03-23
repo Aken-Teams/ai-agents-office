@@ -97,7 +97,7 @@ const en = {
   'dashboard.engineLabel': 'AI Engine: Claude',
   'dashboard.modeLabel': 'Mode: Multi-Agent',
   'dashboard.statusRunning': 'Running',
-  'dashboard.stats.invocationsTitle': 'Monthly Generations',
+  'dashboard.stats.invocationsTitle': 'Document Generations',
   'dashboard.stats.invocationsUnit': 'times',
   'dashboard.stats.invocationsFormats': 'Supports: PPTX / DOCX / XLSX / PDF',
   'dashboard.stats.tokenTitle': 'Token Usage',
