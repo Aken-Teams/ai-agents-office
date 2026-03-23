@@ -79,14 +79,14 @@ function RegisterForm() {
   }
 
   return (
-    <div className="bg-surface-container-lowest text-on-surface font-body min-h-screen flex flex-col items-center justify-center p-6 overflow-hidden relative selection:bg-primary/30">
+    <div className="bg-surface-container-lowest text-on-surface font-body min-h-[100svh] flex flex-col items-center justify-center p-5 md:p-6 overflow-hidden relative selection:bg-primary/30">
       {/* Background Decoration */}
       <div className="absolute inset-0 bg-pattern pointer-events-none opacity-40" />
       <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-5%] left-[-5%] w-[30%] h-[30%] bg-tertiary/5 rounded-full blur-[100px] pointer-events-none" />
 
       {/* Main Container */}
-      <main className="w-full max-w-6xl flex flex-col md:flex-row gap-0 shadow-2xl z-10">
+      <main className="w-full max-w-6xl flex flex-col md:flex-row gap-0 shadow-xl md:shadow-2xl z-10">
         {/* Left Side: Branding */}
         <section className="hidden md:flex flex-col justify-between p-12 w-1/2 bg-surface-container-low relative overflow-hidden">
           <div className="space-y-8">
@@ -139,11 +139,14 @@ function RegisterForm() {
         <section className="flex-1 bg-surface-container-high p-8 md:p-16 flex flex-col justify-center">
           <div className="max-w-md mx-auto w-full">
             {/* Mobile Logo */}
-            <div className="md:hidden flex items-center gap-3 mb-10">
-              <div className="w-8 h-8 cyber-gradient flex items-center justify-center rounded">
-                <span className="material-symbols-outlined text-on-primary text-sm">terminal</span>
+            <div className="md:hidden flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 cyber-gradient flex items-center justify-center rounded">
+                <span className="material-symbols-outlined text-on-primary">terminal</span>
               </div>
-              <span className="font-headline text-xl font-bold tracking-tighter">{t('common.appName')}</span>
+              <div>
+                <h1 className="font-headline text-xl font-bold tracking-tighter leading-tight">{t('common.appName')}</h1>
+                <p className="font-label text-[11px] uppercase tracking-[0.15em] text-primary">{t('register.brandSubtitle')}</p>
+              </div>
             </div>
 
             {success ? (
@@ -168,8 +171,8 @@ function RegisterForm() {
             ) : (
               /* ===== Registration Form ===== */
               <>
-                <div className="mb-10">
-                  <h3 className="font-headline text-2xl font-bold mb-2">{t('register.title')}</h3>
+                <div className="mb-8 md:mb-10">
+                  <h3 className="font-headline text-2xl font-bold mb-1.5">{t('register.title')}</h3>
                   <p className="text-on-surface-variant text-sm">{t('register.subtitle')}</p>
                 </div>
 
@@ -185,7 +188,7 @@ function RegisterForm() {
                       {t('register.displayNameLabel')}
                     </label>
                     <input
-                      className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
+                      className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-base md:text-sm font-body rounded placeholder:text-outline"
                       type="text"
                       value={displayName}
                       onChange={e => setDisplayName(e.target.value)}
@@ -201,7 +204,7 @@ function RegisterForm() {
                       {t('register.emailLabel')}
                     </label>
                     <input
-                      className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
+                      className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-base md:text-sm font-body rounded placeholder:text-outline"
                       type="email"
                       value={email}
                       onChange={e => setEmail(e.target.value)}
@@ -216,7 +219,7 @@ function RegisterForm() {
                       {t('register.passwordLabel')}
                     </label>
                     <input
-                      className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-sm font-body rounded placeholder:text-outline"
+                      className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-base md:text-sm font-body rounded placeholder:text-outline"
                       type="password"
                       value={password}
                       onChange={e => setPassword(e.target.value)}
