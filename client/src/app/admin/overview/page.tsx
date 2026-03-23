@@ -92,26 +92,16 @@ export default function AdminOverview() {
       {/* Header */}
       <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
         <div className="flex items-center gap-3">
-          <button
-            className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer"
-            onClick={() => window.dispatchEvent(new CustomEvent('admin-mobile-sidebar-toggle'))}
-          >
-            <span className="material-symbols-outlined">menu</span>
-          </button>
           <span className="text-base md:text-lg font-black text-on-surface font-headline">{t('admin.overview.title')}</span>
           <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-primary/10 rounded-full">
             <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
             <span className="text-sm text-primary font-bold tracking-widest uppercase">{t('admin.overview.allNodesNormal')}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Mobile: status dot only */}
-          <div className="md:hidden w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
-          <button className="hidden md:flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
-            <span className="material-symbols-outlined text-sm">download</span>
-            {t('admin.overview.exportReport')}
-          </button>
-        </div>
+        <button className="hidden md:flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
+          <span className="material-symbols-outlined text-sm">download</span>
+          {t('admin.overview.exportReport')}
+        </button>
       </header>
 
       {/* Content */}

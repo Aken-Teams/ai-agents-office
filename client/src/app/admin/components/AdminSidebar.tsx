@@ -25,32 +25,113 @@ export default function AdminSidebar() {
     if (typeof window !== 'undefined') return localStorage.getItem(ADMIN_SIDEBAR_KEY) === '1';
     return false;
   });
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(ADMIN_SIDEBAR_KEY, collapsed ? '1' : '0');
     window.dispatchEvent(new CustomEvent('admin-sidebar-toggle', { detail: collapsed }));
   }, [collapsed]);
 
-  // Listen for mobile sidebar toggle
+  // Close mobile menu on route change
   useEffect(() => {
-    const handler = () => setMobileOpen(v => !v);
-    window.addEventListener('admin-mobile-sidebar-toggle', handler);
-    return () => window.removeEventListener('admin-mobile-sidebar-toggle', handler);
-  }, []);
-
-  // Close mobile sidebar on route change
-  useEffect(() => {
-    setMobileOpen(false);
+    setMobileMenuOpen(false);
   }, [pathname]);
 
   return (
     <>
-      {/* Mobile backdrop */}
-      {mobileOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setMobileOpen(false)} />
+      {/* ===== Mobile Top Bar ===== */}
+      <header className="md:hidden fixed top-0 left-0 right-0 h-14 bg-surface-dim border-b border-outline-variant/10 flex items-center justify-between px-4 z-50">
+        <Link href="/admin/overview" className="flex items-center gap-2 no-underline">
+          <div className="w-8 h-8 bg-primary/20 flex items-center justify-center rounded-lg">
+            <span className="material-symbols-outlined text-primary" style={{ fontSize: 18 }}>admin_panel_settings</span>
+          </div>
+          <div>
+            <span className="font-headline text-base font-bold tracking-tighter text-on-surface">AI Agents Office</span>
+            <span className="ml-1.5 text-[10px] uppercase tracking-[0.2em] text-primary font-bold">Admin</span>
+          </div>
+        </Link>
+        <button
+          onClick={() => setMobileMenuOpen(v => !v)}
+          className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface-variant cursor-pointer"
+        >
+          <span className="material-symbols-outlined">{mobileMenuOpen ? 'close' : 'menu'}</span>
+        </button>
+      </header>
+
+      {/* ===== Mobile Dropdown Nav ===== */}
+      {mobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-40" onClick={() => setMobileMenuOpen(false)}>
+          <div
+            className="absolute top-14 left-0 right-0 bg-surface-dim border-b border-outline-variant/10 shadow-lg animate-[slideDown_0.2s_ease-out] max-h-[calc(100svh-3.5rem)] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* User Row */}
+            <div className="flex items-center px-4 py-2.5 gap-2">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-9 h-9 bg-primary/15 flex items-center justify-center rounded-full shrink-0">
+                  <span className="material-symbols-outlined text-primary text-sm">person</span>
+                </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="text-sm font-bold text-on-surface truncate">{user?.displayName || user?.email || 'Admin'}</p>
+                  <p className="text-[11px] text-on-surface-variant truncate">{user?.email}</p>
+                </div>
+              </div>
+              <span className="text-[10px] uppercase tracking-widest text-primary font-bold bg-primary/10 px-2 py-0.5 rounded-full shrink-0">
+                {t('admin.sidebar.roleLabel')}
+              </span>
+              <button
+                onClick={() => { setMobileMenuOpen(false); logout(); }}
+                className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant active:text-error active:bg-error/10 transition-colors cursor-pointer shrink-0"
+                title={t('admin.sidebar.logout')}
+              >
+                <span className="material-symbols-outlined text-xl">logout</span>
+              </button>
+            </div>
+
+            {/* Nav Links */}
+            <nav className="py-1 border-t border-outline-variant/10">
+              {ADMIN_NAV.map(link => {
+                const isActive = pathname.startsWith(link.href);
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex items-center gap-3 px-5 py-3.5 no-underline transition-colors ${
+                      isActive
+                        ? 'text-primary bg-primary/5'
+                        : 'text-on-surface-variant active:bg-surface-container'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-xl">{link.icon}</span>
+                    <span className="text-sm font-headline font-bold">{t(link.labelKey)}</span>
+                  </Link>
+                );
+              })}
+
+              {/* Switch to User View */}
+              <Link
+                href="/dashboard"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-3 px-5 py-3.5 no-underline text-primary active:bg-primary/10 transition-colors"
+              >
+                <span className="material-symbols-outlined text-xl">swap_horiz</span>
+                <span className="text-sm font-headline font-bold">{t('admin.sidebar.switchToUser' as any)}</span>
+              </Link>
+            </nav>
+
+            {/* Footer */}
+            <div className="py-3 border-t border-outline-variant/10">
+              <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className="text-[11px] text-outline hover:text-on-surface-variant transition-colors no-underline block text-center">
+                {t('admin.sidebar.poweredBy')} &copy; 2026
+              </a>
+            </div>
+          </div>
+        </div>
       )}
-      <aside className={`h-screen fixed left-0 top-0 bg-surface-container-lowest flex flex-col py-6 font-headline text-sm tracking-tight z-50 border-r border-outline-variant/10 transition-all duration-300 ${collapsed ? 'w-[68px]' : 'w-64'} max-md:w-64 ${mobileOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'}`}>
+
+      {/* ===== Desktop Sidebar ===== */}
+      <aside className={`hidden md:flex h-screen fixed left-0 top-0 bg-surface-container-lowest flex-col py-6 font-headline text-sm tracking-tight z-50 border-r border-outline-variant/10 transition-all duration-300 ${collapsed ? 'w-[68px]' : 'w-64'}`}>
       {/* Header */}
       <div className={`mb-2 ${collapsed ? 'px-3' : 'px-6'}`}>
         <Link href="/admin/overview" className="flex items-center gap-3 no-underline">
