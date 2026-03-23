@@ -326,7 +326,7 @@ function InlineHtmlPreview({ file, token, onFullscreen }: { file: GeneratedFile;
   );
 
   return (
-    <div className="relative group">
+    <div className="relative group rounded-t-xl overflow-hidden">
       <iframe
         src={blobUrl}
         sandbox="allow-scripts allow-same-origin"
@@ -342,6 +342,55 @@ function InlineHtmlPreview({ file, token, onFullscreen }: { file: GeneratedFile;
       >
         <span className="material-symbols-outlined text-lg">fullscreen</span>
       </button>
+    </div>
+  );
+}
+
+/** Inline preview for office/PDF files — shows first page via /preview endpoint */
+const PREVIEWABLE_TYPES = new Set(['pdf', 'pptx', 'ppt', 'docx', 'doc', 'xlsx', 'xls']);
+
+function InlineFilePreview({ file, token }: { file: GeneratedFile; token: string }) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [contentType, setContentType] = useState<string>('');
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let url: string | null = null;
+    fetch(`/api/files/${file.id}/preview`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => {
+        if (!r.ok) throw new Error('preview failed');
+        const ct = r.headers.get('Content-Type') || '';
+        setContentType(ct);
+        return r.blob().then(blob => ({ blob, ct }));
+      })
+      .then(({ blob, ct }) => {
+        const type = ct.includes('pdf') ? 'application/pdf' : ct.includes('html') ? 'text/html' : ct;
+        url = URL.createObjectURL(new Blob([blob], { type }));
+        setBlobUrl(url);
+      })
+      .catch(() => setFailed(true));
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [file.id, token]);
+
+  if (failed) return null; // Silently skip — file card still shows below
+  if (!blobUrl) return (
+    <div className="h-[360px] flex items-center justify-center text-on-surface-variant text-sm rounded-t-xl bg-surface-container-lowest">
+      <span className="material-symbols-outlined animate-spin mr-2 text-base">progress_activity</span>
+      Loading preview...
+    </div>
+  );
+
+  const isPdf = contentType.includes('pdf');
+  return (
+    <div className="relative rounded-t-xl overflow-hidden bg-white">
+      <iframe
+        src={isPdf ? `${blobUrl}#toolbar=0&navpanes=0&scrollbar=0` : blobUrl}
+        className="w-full h-[360px] border-b border-outline-variant/10"
+        scrolling="no"
+        title={file.filename}
+        sandbox={isPdf ? undefined : 'allow-same-origin'}
+        style={{ overflow: 'hidden', pointerEvents: 'none' }}
+      />
     </div>
   );
 }
@@ -1220,10 +1269,14 @@ function ChatContent() {
             {files.length > 0 && !streaming && (
               <div className="max-w-[85%] space-y-3 ml-13">
                 {files.map(file => (
-                  <div key={file.id} className="bg-surface-container-low rounded-xl border border-outline-variant/10 overflow-hidden">
+                  <div key={file.id} className="bg-surface-container-low rounded-xl border border-outline-variant/10 overflow-visible">
                     {/* HTML slides — iframe preview */}
                     {file.file_type === 'html' && (
                       <InlineHtmlPreview file={file} token={token!} onFullscreen={() => openPreview(file)} />
+                    )}
+                    {/* Office/PDF — first page preview */}
+                    {PREVIEWABLE_TYPES.has(file.file_type) && (
+                      <InlineFilePreview file={file} token={token!} />
                     )}
                     {/* Other file types — card only */}
                     <div className="flex items-center gap-3 px-4 py-3">
@@ -1260,7 +1313,7 @@ function ChatContent() {
                             <span className="material-symbols-outlined text-xs">expand_more</span>
                           </button>
                           {versionDropdown === file.id && versionCache[file.id] && (
-                            <div className="absolute right-0 top-full mt-1 z-20 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl min-w-[200px] py-1 max-h-48 overflow-y-auto">
+                            <div className="absolute right-0 top-full mt-1 z-50 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl min-w-[260px] py-1 max-h-48 overflow-y-auto">
                               {versionCache[file.id].map((ver, idx) => (
                                 <button
                                   key={ver.id}

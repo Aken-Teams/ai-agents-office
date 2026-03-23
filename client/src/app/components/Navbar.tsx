@@ -643,57 +643,64 @@ export default function Navbar() {
                           onMouseEnter={() => setHoveredTemplate(tmpl.id)}
                           onMouseLeave={() => setHoveredTemplate(null)}
                           disabled={creating}
-                          className={`bg-surface-container-high rounded-lg flex flex-col items-center text-center disabled:opacity-50 cursor-pointer group border transition-all duration-200 overflow-hidden ${
-                            isHovered ? 'border-primary/40 shadow-lg scale-[1.02]' : 'border-transparent hover:border-primary/20'
+                          className={`bg-surface-container-high rounded-lg flex flex-col items-center text-center disabled:opacity-50 cursor-pointer group border transition-all duration-300 ease-out overflow-hidden ${
+                            isHovered ? 'border-primary/40 shadow-lg' : 'border-transparent hover:border-primary/20'
                           }`}
                         >
-                          {/* Slide mockup preview */}
+                          {/* Slide mockup preview — both layers always rendered, crossfade via opacity */}
                           <div
-                            className={`w-full overflow-hidden flex flex-col gap-1.5 transition-all duration-200 ${
-                              isHovered ? 'p-3 aspect-[16/10]' : 'p-2 h-12'
-                            }`}
-                            style={{ background: preview?.bg || '#f3f4f6' }}
+                            className="w-full overflow-hidden relative transition-all duration-300 ease-out"
+                            style={{
+                              background: preview?.bg || '#f3f4f6',
+                              height: isHovered ? '120px' : '48px',
+                            }}
                           >
-                            {isHovered ? (
-                              <>
-                                {/* Full slide mockup on hover */}
-                                <div className="flex items-center gap-1.5">
-                                  <div className="w-4 h-4 rounded-sm" style={{ background: preview?.accent || '#6b7280' }} />
-                                  <div className="h-2.5 w-16 rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.7 }} />
-                                </div>
-                                <div className="flex-1 flex gap-2">
-                                  <div className="flex-1 flex flex-col gap-1">
-                                    <div className="h-1.5 w-full rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.15 }} />
-                                    <div className="h-1.5 w-4/5 rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.12 }} />
-                                    <div className="h-1.5 w-3/5 rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.1 }} />
-                                    <div className="flex-1" />
-                                    <div className="flex gap-1">
-                                      <div className="h-5 flex-1 rounded-sm" style={{ background: preview?.card || '#f3f4f6' }} />
-                                      <div className="h-5 flex-1 rounded-sm" style={{ background: preview?.card || '#f3f4f6' }} />
-                                    </div>
-                                  </div>
-                                  <div className="w-14 rounded-sm flex flex-col gap-1 p-1" style={{ background: preview?.card || '#f3f4f6' }}>
-                                    <div className="h-4 w-full rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.4 }} />
-                                    <div className="h-1 w-full rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.1 }} />
-                                    <div className="h-1 w-3/4 rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.08 }} />
-                                  </div>
-                                </div>
-                              </>
-                            ) : (
-                              /* Mini color bars when not hovered */
-                              <div className="flex items-end gap-0.5 h-full">
-                                <div className="h-3/5 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.8 }} />
-                                <div className="h-4/5 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.6 }} />
-                                <div className="h-3/4 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.7 }} />
+                            {/* Layer 1: Mini color bars (default) */}
+                            <div
+                              className="absolute inset-0 p-2 flex items-end gap-0.5 transition-opacity duration-300 ease-out"
+                              style={{ opacity: isHovered ? 0 : 1 }}
+                            >
+                              <div className="h-3/5 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.8 }} />
+                              <div className="h-4/5 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.6 }} />
+                              <div className="h-3/4 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.7 }} />
+                            </div>
+                            {/* Layer 2: Full slide mockup (hover) */}
+                            <div
+                              className="absolute inset-0 p-3 flex flex-col gap-1.5 transition-opacity duration-300 ease-out"
+                              style={{ opacity: isHovered ? 1 : 0 }}
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-4 h-4 rounded-sm" style={{ background: preview?.accent || '#6b7280' }} />
+                                <div className="h-2.5 w-16 rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.7 }} />
                               </div>
-                            )}
+                              <div className="flex-1 flex gap-2">
+                                <div className="flex-1 flex flex-col gap-1">
+                                  <div className="h-1.5 w-full rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.15 }} />
+                                  <div className="h-1.5 w-4/5 rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.12 }} />
+                                  <div className="h-1.5 w-3/5 rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.1 }} />
+                                  <div className="flex-1" />
+                                  <div className="flex gap-1">
+                                    <div className="h-5 flex-1 rounded-sm" style={{ background: preview?.card || '#f3f4f6' }} />
+                                    <div className="h-5 flex-1 rounded-sm" style={{ background: preview?.card || '#f3f4f6' }} />
+                                  </div>
+                                </div>
+                                <div className="w-14 rounded-sm flex flex-col gap-1 p-1" style={{ background: preview?.card || '#f3f4f6' }}>
+                                  <div className="h-4 w-full rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.4 }} />
+                                  <div className="h-1 w-full rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.1 }} />
+                                  <div className="h-1 w-3/4 rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.08 }} />
+                                </div>
+                              </div>
+                            </div>
                           </div>
                           {/* Label + description */}
-                          <div className={`px-2 pb-2 pt-1.5 transition-all duration-200 ${isHovered ? 'pb-3' : ''}`}>
+                          <div className="px-2 pb-2 pt-1.5">
                             <span className="text-xs font-bold text-on-surface leading-tight block">{t(tmpl.labelKey as any)}</span>
-                            {isHovered && (
+                            <div
+                              className="overflow-hidden transition-all duration-300 ease-out"
+                              style={{ maxHeight: isHovered ? '40px' : '0px', opacity: isHovered ? 1 : 0 }}
+                            >
                               <span className="text-[10px] text-on-surface-variant leading-snug mt-0.5 block">{t(tmpl.descKey as any)}</span>
-                            )}
+                            </div>
                           </div>
                         </button>
                       );

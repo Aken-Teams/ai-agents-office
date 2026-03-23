@@ -130,7 +130,7 @@ function DeleteConfirmModal({
    Preview Modal
    ============================================================ */
 function PreviewModal({
-  file, token, onClose, onDownload,
+  file: initialFile, token, onClose, onDownload,
 }: {
   file: FileItem;
   token: string;
@@ -138,14 +138,45 @@ function PreviewModal({
   onDownload: (id: string, name: string) => void;
 }) {
   const { t } = useTranslation();
+  const [currentFile, setCurrentFile] = useState(initialFile);
+  const file = currentFile;
   const [textContent, setTextContent] = useState<string | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [versions, setVersions] = useState<FileItem[]>([]);
+  const [versionOpen, setVersionOpen] = useState(false);
   const config = FILE_TYPE_CONFIG[file.file_type] || { icon: 'attach_file', color: '#8f9097', bgColor: 'rgba(143,144,151,0.1)' };
   const isText = TEXT_TYPES.has(file.file_type);
   const isImage = IMAGE_TYPES.has(file.file_type);
   const isNativeHtml = file.file_type === 'html'; // e.g. Reveal.js slides
+
+  // Fetch versions
+  useEffect(() => {
+    fetch(`/api/files/${initialFile.id}/versions`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then(setVersions)
+      .catch(() => setVersions([]));
+  }, [initialFile.id, token]);
+
+  // Close version dropdown on click outside
+  useEffect(() => {
+    if (!versionOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('[data-version-dropdown]')) setVersionOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [versionOpen]);
+
+  function switchVersion(ver: FileItem) {
+    setCurrentFile(ver);
+    setVersionOpen(false);
+    setLoading(true);
+    setError(false);
+    setTextContent(null);
+    setBlobUrl(null);
+  }
 
   useEffect(() => {
     let revoke: string | null = null;
@@ -346,6 +377,58 @@ function PreviewModal({
               </div>
             </div>
           </div>
+
+          {/* Version selector */}
+          {versions.length > 1 && (
+            <div className="px-6 pb-4 border-b border-outline-variant/10">
+              <p className="text-sm text-on-surface-variant uppercase font-medium mb-2 tracking-wider">{t('chat.preview.version' as any)}</p>
+              <div className="relative" data-version-dropdown>
+                <button
+                  onClick={() => setVersionOpen(!versionOpen)}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-bold transition-colors cursor-pointer ${
+                    versionOpen ? 'bg-primary/20 text-primary' : 'bg-surface-container-low text-on-surface hover:bg-primary/10'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-primary text-on-primary text-xs font-bold">v{file.version || 1}</span>
+                    <span className="text-xs text-on-surface-variant">{formatSize(file.file_size)}</span>
+                  </div>
+                  <span className={`material-symbols-outlined text-sm transition-transform ${versionOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                </button>
+                {versionOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-surface-container border border-outline-variant/20 rounded-lg shadow-xl py-1 max-h-48 overflow-y-auto">
+                    {versions.map((ver, idx) => (
+                      <button
+                        key={ver.id}
+                        onClick={() => switchVersion(ver)}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-surface-container-high transition-colors cursor-pointer ${
+                          ver.id === file.id ? 'bg-primary/10' : ''
+                        }`}
+                      >
+                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                          ver.id === file.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
+                        }`}>
+                          v{ver.version || 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs text-on-surface-variant block">
+                            {formatSize(ver.file_size)}
+                            {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
+                          </span>
+                          <span className="text-xs text-outline block">
+                            {new Date(ver.created_at).toLocaleString('zh-TW', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        {ver.id === file.id && (
+                          <span className="material-symbols-outlined text-primary text-sm">check</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="p-6 flex-1">
