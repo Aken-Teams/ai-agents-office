@@ -7,7 +7,7 @@ import { spawnClaude } from '../services/claudeCli.js';
 import { getSandboxPath } from '../services/sandbox.js';
 import { analyzeInput, logSecurityEvent, WARN_THRESHOLD } from '../services/inputGuard.js';
 import { recordTokenUsage } from '../services/tokenTracker.js';
-import { registerNewFiles, getExistingFilePaths } from '../services/fileManager.js';
+import { registerNewFiles, getExistingFilePaths, snapshotExistingFiles } from '../services/fileManager.js';
 import { getUserStorageUsed } from './files.js';
 import { getSkill, buildSystemPrompt, loadSkills, getRouterSkill } from '../skills/loader.js';
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from '../services/uploadContext.js';
@@ -156,6 +156,7 @@ async function handleOrchestrated(
   });
 
   const existingFiles = await getExistingFilePaths(conversationId);
+  await snapshotExistingFiles(userId, conversationId);
   await dbRun("UPDATE conversations SET mode = 'orchestrated' WHERE id = ?", conversationId);
 
   const keepaliveTimer = setInterval(() => {
@@ -241,6 +242,7 @@ async function handleDirect(
   });
 
   const existingFiles = await getExistingFilePaths(conversationId);
+  await snapshotExistingFiles(userId, conversationId);
 
   const isExistingSession = !!conversation.session_id;
   const sessionId = conversation.session_id || uuidv4();

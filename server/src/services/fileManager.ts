@@ -39,22 +39,31 @@ export async function registerNewFiles(
       if (!existing || existing.file_size === file.fileSize) continue;
 
       // File was overwritten with different content — create new version
-      // First, backup the old version so it remains downloadable
-      const oldFullPath = path.join(config.workspaceRoot, existing.file_path);
-      if (fs.existsSync(oldFullPath)) {
-        const ext = path.extname(existing.file_path);
-        const base = existing.file_path.slice(0, -ext.length);
-        const versionedPath = `${base}.v${existing.version}${ext}`;
-        const versionedFullPath = path.join(config.workspaceRoot, versionedPath);
-        try {
-          fs.copyFileSync(oldFullPath, versionedFullPath);
-          // Update old DB record to point to the backed-up file
-          await dbRun(
-            'UPDATE generated_files SET file_path = ? WHERE id = ?',
-            versionedPath, existing.id
-          );
-        } catch (err) {
-          console.error(`[FileManager] Failed to backup version ${existing.version}:`, err);
+      // Point old DB record to the versioned backup (created by snapshotExistingFiles)
+      const ext = path.extname(existing.file_path);
+      const base = existing.file_path.slice(0, -ext.length);
+      const versionedPath = `${base}.v${existing.version}${ext}`;
+      const versionedFullPath = path.join(config.workspaceRoot, versionedPath);
+
+      if (fs.existsSync(versionedFullPath)) {
+        // Snapshot backup exists — just update DB to point to it
+        await dbRun(
+          'UPDATE generated_files SET file_path = ? WHERE id = ?',
+          versionedPath, existing.id
+        );
+      } else {
+        // Fallback: try to copy (backup wasn't pre-created)
+        const oldFullPath = path.join(config.workspaceRoot, existing.file_path);
+        if (fs.existsSync(oldFullPath)) {
+          try {
+            fs.copyFileSync(oldFullPath, versionedFullPath);
+            await dbRun(
+              'UPDATE generated_files SET file_path = ? WHERE id = ?',
+              versionedPath, existing.id
+            );
+          } catch (err) {
+            console.error(`[FileManager] Failed to backup version ${existing.version}:`, err);
+          }
         }
       }
 
@@ -104,6 +113,45 @@ export async function registerNewFiles(
   }
 
   return newFiles;
+}
+
+/**
+ * Pre-snapshot existing files before an agent runs, so old versions are preserved
+ * even if the agent overwrites files with the same name.
+ * Must be called BEFORE the agent executes.
+ */
+export async function snapshotExistingFiles(
+  userId: string,
+  conversationId: string,
+): Promise<void> {
+  // Get latest version of each filename in this conversation
+  const files = await dbAll<GeneratedFile>(
+    `SELECT gf.* FROM generated_files gf
+     WHERE gf.conversation_id = ? AND gf.version = (
+       SELECT MAX(gf2.version) FROM generated_files gf2
+       WHERE gf2.conversation_id = gf.conversation_id AND gf2.filename = gf.filename
+     )`,
+    conversationId
+  );
+
+  for (const file of files) {
+    const fullPath = path.join(config.workspaceRoot, file.file_path);
+    if (!fs.existsSync(fullPath)) continue;
+
+    // Skip if already at a versioned path (e.g., file.v1.html)
+    const ext = path.extname(file.file_path);
+    const base = file.file_path.slice(0, -ext.length);
+    if (/\.v\d+$/.test(base)) continue;
+
+    const versionedPath = `${base}.v${file.version}${ext}`;
+    const versionedFullPath = path.join(config.workspaceRoot, versionedPath);
+
+    try {
+      fs.copyFileSync(fullPath, versionedFullPath);
+    } catch (err) {
+      console.error(`[FileManager] Failed to snapshot ${file.filename} v${file.version}:`, err);
+    }
+  }
 }
 
 /**

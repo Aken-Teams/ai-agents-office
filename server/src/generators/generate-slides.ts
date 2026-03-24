@@ -1279,6 +1279,15 @@ body { margin: 0; padding: 0; font-family: var(--font-body); color: var(--body-c
   transition: opacity 0.3s;
 }
 .slide-counter:hover { opacity: 0.9; }
+.watermark {
+  position: fixed; bottom: 24px; left: 24px; z-index: 200;
+  font-size: 11px; font-family: var(--font-body); letter-spacing: 0.06em;
+  color: var(--body-color); opacity: 0.3;
+  display: flex; align-items: center; gap: 6px;
+  pointer-events: none; user-select: none;
+}
+.watermark img { width: 14px; height: 14px; opacity: 0.5; }
+@media print { .watermark { position: absolute; bottom: 12px; left: 12px; } }
 .fullscreen-btn {
   position: fixed; bottom: 24px; right: 24px; z-index: 200;
   width: 44px; height: 44px; border-radius: 12px;
@@ -2099,6 +2108,7 @@ function generateHtml(input: SlidesInput): string {
     <div class="nav-progress"></div>
     <nav class="slide-nav" aria-label="Slide navigation"></nav>
     <div class="slide-counter"><span class="current-slide">1</span> / <span class="total-slides">${totalSlides}</span></div>
+    <div class="watermark">Powered by AI Agents Office</div>
     <button class="fullscreen-btn" aria-label="Toggle fullscreen">
       <span class="material-symbols-outlined">fullscreen</span>
     </button>
