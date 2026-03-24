@@ -104,6 +104,9 @@ const ROUTER_DISALLOWED_TOOLS = [
   'Edit',
   'WebSearch',
   'WebFetch',
+  'ToolSearch',
+  'TodoWrite',
+  'NotebookEdit',
 ];
 
 /**
