@@ -1519,7 +1519,20 @@ function generateHtml(input: SlidesInput): string {
       var el = document.getElementById(cfg.id);
       if (el) el.textContent = cfg.code;
     });
-    Reveal.on('ready', function() { mermaid.run({ querySelector: '.mermaid' }); });
+    function runMermaid() {
+      mermaid.run({ querySelector: '.mermaid' }).catch(function(e) { console.warn('Mermaid render:', e); });
+    }
+    // Handle race condition: Reveal may already be ready
+    if (typeof Reveal !== 'undefined' && Reveal.isReady && Reveal.isReady()) {
+      runMermaid();
+    } else {
+      Reveal.on('ready', runMermaid);
+    }
+    // Re-render unprocessed diagrams on slide change (hidden slides can't render)
+    Reveal.on('slidechanged', function(e) {
+      var els = e.currentSlide.querySelectorAll('.mermaid:not([data-processed])');
+      if (els.length) mermaid.run({ nodes: Array.from(els) }).catch(function() {});
+    });
   })();
   <\/script>`;
   }
