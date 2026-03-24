@@ -278,7 +278,7 @@ interface ChartLineSeries { name: string; points: ChartLinePoint[]; color?: stri
 interface TreemapNode { name: string; value: number; children?: TreemapNode[]; }
 
 interface ChartData {
-  type: 'bar' | 'pie' | 'donut' | 'line' | 'radar' | 'funnel' | 'gauge' | 'treemap' | 'waterfall' | 'scatter';
+  type: 'bar' | 'pie' | 'donut' | 'line' | 'radar' | 'funnel' | 'gauge' | 'treemap' | 'waterfall' | 'scatter' | 'map';
   bars?: ChartBarItem[];
   maxValue?: number;
   slices?: ChartPieSlice[];
@@ -299,6 +299,10 @@ interface ChartData {
   waterfallData?: { label: string; value: number; type?: 'increase' | 'decrease' | 'total' }[];
   // Scatter
   scatterSeries?: { name: string; data: [number, number][] }[];
+  // Map
+  mapType?: 'world' | 'china';
+  mapRegions?: { name: string; value: number }[];
+  mapLabel?: string;  // legend label e.g. "Revenue ($M)"
 }
 
 interface StatItem { value: string; label: string; icon?: string; trend?: 'up' | 'down' | 'neutral'; }
@@ -671,6 +675,36 @@ function buildEChartsOption(chart: ChartData, s: StylePreset): object {
         animationDuration: 1200,
       };
     }
+    case 'map': {
+      const regions = chart.mapRegions || [];
+      const mapName = chart.mapType || 'world';
+      const maxVal = Math.max(...regions.map(r => r.value), 1);
+      return {
+        tooltip: { ...baseTooltip, trigger: 'item', formatter: (p: any) => p.name + ': ' + (p.value || 'N/A') },
+        visualMap: {
+          min: 0, max: maxVal, left: 'left', top: 'bottom',
+          text: [chart.mapLabel || 'High', 'Low'],
+          textStyle: { color: textColor, fontSize: 12 },
+          inRange: { color: [isDark ? '#1a2a4a' : '#e0ecf4', isDark ? '#0af' : colors[0]] },
+          calculable: true,
+        },
+        series: [{
+          type: 'map', map: mapName, roam: true,
+          label: { show: false },
+          emphasis: {
+            label: { show: true, color: isDark ? '#fff' : '#333', fontSize: 13, fontWeight: 600 },
+            itemStyle: { areaColor: colors[0], shadowColor: 'rgba(0,0,0,0.3)', shadowBlur: 10 },
+          },
+          itemStyle: {
+            areaColor: isDark ? '#2a2a4a' : '#e8edf2',
+            borderColor: isDark ? '#444' : '#ccc',
+            borderWidth: 0.5,
+          },
+          data: regions,
+          animationDurationUpdate: 1000,
+        }],
+      };
+    }
     default:
       return {};
   }
@@ -759,6 +793,7 @@ function sanitizeSlide(slide: SlideData): SlideData {
 let echartsUsed = false;
 let mermaidUsed = false;
 let markmapUsed = false;
+const echartsMapTypes = new Set<string>();  // Track map GeoJSON needs
 const echartsConfigs: { id: string; option: object }[] = [];
 const mindmapConfigs: { id: string; code: string }[] = [];
 const mermaidConfigs: { id: string; code: string }[] = [];
@@ -931,6 +966,7 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
 
     case 'chart': {
       echartsUsed = true;
+      if (slide.chart?.type === 'map') echartsMapTypes.add(slide.chart.mapType || 'world');
       const chartId = `echart-${idx}`;
       echartsConfigs.push({ id: chartId, option: buildEChartsOption(slide.chart || { type: 'bar' }, s) });
       const visualHtml = `<div id="${chartId}" class="echart-container"></div>`;
@@ -1047,6 +1083,7 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
       let chartHtml = '';
       if (slide.dashboardChart) {
         echartsUsed = true;
+        if (slide.dashboardChart.type === 'map') echartsMapTypes.add(slide.dashboardChart.mapType || 'world');
         const chartId = `echart-dash-${idx}`;
         echartsConfigs.push({ id: chartId, option: buildEChartsOption(slide.dashboardChart, s) });
         chartHtml = `<div id="${chartId}" class="echart-container echart-compact"></div>`;
@@ -1141,7 +1178,7 @@ body { margin: 0; padding: 0; font-family: var(--font-body); color: var(--body-c
   min-height: 100vh;
   scroll-snap-align: start;
   display: flex; align-items: center; justify-content: center;
-  position: relative; overflow: hidden;
+  position: relative; overflow: clip;
   text-align: left;
 }
 /* Section background cycling */
@@ -1160,7 +1197,7 @@ body { margin: 0; padding: 0; font-family: var(--font-body); color: var(--body-c
   margin: 60px auto;
   padding: 56px 56px;
   display: flex; flex-direction: column; justify-content: center;
-  min-height: calc(100vh - 120px);
+  min-height: min(680px, calc(100vh - 120px));
   background: ${s.isDark ? 'rgba(255,255,255,0.04)' : '#ffffff'};
   border-radius: 24px;
   box-shadow: ${s.isDark
@@ -1784,6 +1821,27 @@ function generateHtml(input: SlidesInput): string {
     const configs = echartsConfigs.map(c =>
       `{ id: '${c.id}', option: ${JSON.stringify(c.option)} }`
     ).join(',\n      ');
+    // Map GeoJSON URLs
+    const mapUrls: Record<string, string> = {
+      world: 'https://cdn.jsdelivr.net/npm/echarts@4.9.0/map/json/world.json',
+      china: 'https://cdn.jsdelivr.net/npm/echarts@4.9.0/map/json/china.json',
+    };
+    const mapLoadCode = echartsMapTypes.size > 0 ? `
+    var mapUrls = ${JSON.stringify(Object.fromEntries([...echartsMapTypes].map(m => [m, mapUrls[m] || mapUrls.world])))};
+    function loadMaps(cb) {
+      var keys = Object.keys(mapUrls);
+      var loaded = 0;
+      if (keys.length === 0) return cb();
+      keys.forEach(function(name) {
+        fetch(mapUrls[name]).then(function(r) { return r.json(); }).then(function(geo) {
+          echarts.registerMap(name, geo);
+          loaded++;
+          if (loaded === keys.length) cb();
+        }).catch(function() { loaded++; if (loaded === keys.length) cb(); });
+      });
+    }` : `
+    function loadMaps(cb) { cb(); }`;
+
     echartsInitCode = `
   <script>
   (function() {
@@ -1791,6 +1849,7 @@ function generateHtml(input: SlidesInput): string {
       ${configs}
     ];
     var instances = {};
+    ${mapLoadCode}
     function initChart(cfg) {
       var el = document.getElementById(cfg.id);
       if (!el || instances[cfg.id]) return;
@@ -1799,20 +1858,23 @@ function generateHtml(input: SlidesInput): string {
       instances[cfg.id] = chart;
       setTimeout(function() { chart.resize(); }, 100);
     }
-    // Init charts — use scrollable container as IntersectionObserver root
-    var sc = document.querySelector('.slides-container');
-    var obs = new IntersectionObserver(function(entries) {
-      entries.forEach(function(entry) {
-        if (entry.isIntersecting) {
-          configs.forEach(function(cfg) {
-            if (entry.target.querySelector('#' + cfg.id)) initChart(cfg);
-          });
-        }
-      });
-    }, { root: sc, threshold: 0.1 });
-    document.querySelectorAll('.slide').forEach(function(s) { obs.observe(s); });
-    // Fallback: init all charts on page load
-    window.addEventListener('load', function() { configs.forEach(initChart); });
+    // Init charts — load maps first, then use IntersectionObserver
+    function setupCharts() {
+      var sc = document.querySelector('.slides-container');
+      var obs = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            configs.forEach(function(cfg) {
+              if (entry.target.querySelector('#' + cfg.id)) initChart(cfg);
+            });
+          }
+        });
+      }, { root: sc, threshold: 0.1 });
+      document.querySelectorAll('.slide').forEach(function(s) { obs.observe(s); });
+      // Fallback: init all charts
+      configs.forEach(initChart);
+    }
+    window.addEventListener('load', function() { loadMaps(setupCharts); });
     // ResizeObserver for responsive charts
     var resizer = new ResizeObserver(function(entries) {
       entries.forEach(function(e) { if (instances[e.target.id]) instances[e.target.id].resize(); });

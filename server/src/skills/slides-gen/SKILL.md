@@ -40,7 +40,7 @@ The generator has powerful built-in visual components. **Use them instead of pla
 | Listing features with bullets | `icon-grid` with Material Symbols icons |
 | Writing "Revenue: $2.5B, Users: 10M" | `stats` slide with icon cards |
 | Describing a process step-by-step | `process` with connected steps |
-| Listing comparison data | `chart` (bar/pie/radar/funnel/gauge/treemap/scatter) |
+| Listing comparison data | `chart` (bar/pie/radar/funnel/gauge/treemap/scatter/map) |
 | Pros vs Cons | `two-column` with glass cards |
 | Important quote/takeaway | `quote` with decorative marks |
 | Describing team members | `team` with photos |
@@ -50,6 +50,7 @@ The generator has powerful built-in visual components. **Use them instead of pla
 | Brainstorming / topic overview | `mindmap` (Markmap) |
 | Showing multiple images | `gallery` with grid layout |
 | KPI overview + chart | `dashboard` combined layout |
+| Geographic / regional data | `chart` with `type: "map"` (world/china choropleth) |
 | Multi-step workflow | `timeline` with milestones |
 
 ### Rule 3: Keep Text Ultra-Concise
@@ -189,6 +190,42 @@ When a slide uses `sideImage`, search for modern flat-style vector illustrations
 - Prefer Storyset for decorative `sideImage` illustrations (content, process, stats slides)
 - Use picsum/Unsplash for hero backgrounds, gallery, team photos
 - Don't force illustrations on every slide — use on 2-3 key slides per deck
+
+### Rule 16: Default Quality Guarantee (When User Prompt is Vague)
+When the user gives a short or vague prompt (e.g. "make a presentation about AI", "簡報關於銷售報告"), apply these minimum quality standards automatically:
+
+**Default style**: `"corporate"` (white background, professional blue accents)
+
+**Minimum visual requirements for ANY deck (8-10 slides):**
+- At least **1 `dashboard`** slide (KPI cards + trend chart)
+- At least **2 `chart`** slides (use different types: bar + line, or pie + radar, etc.) — all with compound `layout` + `description` + `highlights`
+- At least **1 `stats`** slide with sideImage (Storyset illustration)
+- At least **1 `content`** slide with `cardStyle: true` + `bulletIcons` + sideImage
+- At least **1 `icon-grid`** or `process` slide
+- Title slide MUST have `sideImage` (Storyset or picsum)
+- Use `fragments: true` on content and two-column slides
+
+**Default slide structure (10 slides):**
+```
+1. title        — Topic + tagline + sideImage (Storyset)
+2. stats        — 4 key metrics + sideImage, layout: split-right
+3. icon-grid    — 6 core concepts/features (columns: 3, fragments: true)
+4. chart (bar)  — Primary data, layout: split-left, description + highlights
+5. dashboard    — 3 KPIs + line chart
+6. process      — 4-5 steps + sideImage
+7. chart (pie)  — Distribution/composition, layout: split-right, description + highlights
+8. table        — Comparison data, highlightHeader: true
+9. content      — Key takeaways, cardStyle: true, bulletIcons, sideImage (Storyset)
+10. quote       — Closing statement + sideImage
+```
+
+**Data generation**: When the user provides no data, generate realistic placeholder data that tells a coherent story. Use consistent numbers across slides (e.g. if stats shows "10K users", the chart should reflect that scale).
+
+**Image strategy for default:**
+- Title slide: Storyset illustration matching the topic
+- Stats/content sideImages: Storyset illustrations (2-3 total)
+- Gallery/hero: picsum.photos with relevant seed keywords
+- Never leave image-heavy slides without images
 
 ## How to Generate
 
@@ -348,6 +385,23 @@ Card-style with icons and side image:
   "waterfallData": [{"name": "Revenue", "value": 1000}, {"name": "COGS", "value": -400}, {"name": "Marketing", "value": -200}, {"name": "Profit", "value": 400}]
 }}
 ```
+
+**Map chart (choropleth):** (use `top-bottom` layout — maps need full width to be readable)
+```json
+{ "type": "chart", "title": "Revenue by Region", "layout": "top-bottom",
+  "description": "North America leads revenue, but APAC is the fastest-growing region at 62% YoY.",
+  "highlights": ["APAC revenue up 62%", "EMEA crossed $1B"],
+  "chart": {
+    "type": "map", "mapType": "world", "mapLabel": "Revenue ($M)",
+    "mapRegions": [
+      {"name": "United States", "value": 3200},
+      {"name": "China", "value": 680},
+      {"name": "Japan", "value": 520},
+      {"name": "Germany", "value": 350}
+    ]
+}}
+```
+Map types: `"world"`, `"china"`. Region names must match GeoJSON feature names (use English country names for world map, Chinese province names for china map).
 
 ### Stats & Metrics
 
