@@ -945,6 +945,216 @@ export default function Navbar() {
                       const previewKey = `${selectedSkill}:${tmpl.id}`;
                       const preview = TEMPLATE_PREVIEW[previewKey];
                       const isHovered = hoveredTemplate === tmpl.id;
+                      const skillType = selectedSkill?.replace('-gen', '') || '';
+
+                      // --- Mini preview (non-hovered, 48px) ---
+                      const renderMini = () => {
+                        const ac = preview?.accent || '#6b7280';
+                        const tx = preview?.text || '#1f2937';
+                        const cd = preview?.card || '#f3f4f6';
+                        if (skillType === 'docx') {
+                          // Mini doc: heading line + paragraph lines
+                          return (
+                            <div className="absolute inset-0 p-2.5 flex flex-col gap-1 justify-center">
+                              <div className="h-1.5 w-10 rounded-sm" style={{ background: ac, opacity: 0.8 }} />
+                              <div className="h-1 w-full rounded-sm" style={{ background: tx, opacity: 0.12 }} />
+                              <div className="h-1 w-4/5 rounded-sm" style={{ background: tx, opacity: 0.1 }} />
+                              <div className="h-1 w-3/5 rounded-sm" style={{ background: tx, opacity: 0.08 }} />
+                            </div>
+                          );
+                        }
+                        if (skillType === 'xlsx') {
+                          // Mini grid: header row + data rows
+                          return (
+                            <div className="absolute inset-0 p-2 flex flex-col gap-0.5 justify-center">
+                              <div className="flex gap-0.5">
+                                <div className="h-2 flex-1 rounded-sm" style={{ background: ac, opacity: 0.7 }} />
+                                <div className="h-2 flex-1 rounded-sm" style={{ background: ac, opacity: 0.7 }} />
+                                <div className="h-2 flex-1 rounded-sm" style={{ background: ac, opacity: 0.7 }} />
+                              </div>
+                              <div className="flex gap-0.5">
+                                <div className="h-1.5 flex-1 rounded-sm" style={{ background: cd }} />
+                                <div className="h-1.5 flex-1 rounded-sm" style={{ background: cd }} />
+                                <div className="h-1.5 flex-1 rounded-sm" style={{ background: cd }} />
+                              </div>
+                              <div className="flex gap-0.5">
+                                <div className="h-1.5 flex-1 rounded-sm" style={{ background: cd, opacity: 0.7 }} />
+                                <div className="h-1.5 flex-1 rounded-sm" style={{ background: cd, opacity: 0.7 }} />
+                                <div className="h-1.5 flex-1 rounded-sm" style={{ background: cd, opacity: 0.7 }} />
+                              </div>
+                            </div>
+                          );
+                        }
+                        if (skillType === 'pdf') {
+                          // Mini page: title block + two-col hint
+                          return (
+                            <div className="absolute inset-0 p-2.5 flex flex-col gap-1 justify-center">
+                              <div className="h-2 w-12 rounded-sm" style={{ background: ac, opacity: 0.8 }} />
+                              <div className="h-px w-full" style={{ background: tx, opacity: 0.1 }} />
+                              <div className="flex gap-1">
+                                <div className="h-1 flex-1 rounded-sm" style={{ background: tx, opacity: 0.1 }} />
+                                <div className="h-1 flex-1 rounded-sm" style={{ background: tx, opacity: 0.08 }} />
+                              </div>
+                            </div>
+                          );
+                        }
+                        // PPTX / Slides: slide bars (original style)
+                        return (
+                          <div className="absolute inset-0 p-2 flex items-end gap-0.5">
+                            <div className="h-3/5 flex-1 rounded-sm" style={{ background: ac, opacity: 0.8 }} />
+                            <div className="h-4/5 flex-1 rounded-sm" style={{ background: ac, opacity: 0.6 }} />
+                            <div className="h-3/4 flex-1 rounded-sm" style={{ background: ac, opacity: 0.7 }} />
+                          </div>
+                        );
+                      };
+
+                      // --- Full mockup (hovered, 130px) ---
+                      const renderFull = () => {
+                        const ac = preview?.accent || '#6b7280';
+                        const tx = preview?.text || '#1f2937';
+                        const cd = preview?.card || '#f3f4f6';
+
+                        if (skillType === 'docx') {
+                          // Document layout: heading, paragraphs, sections
+                          return (
+                            <div className="absolute inset-0 p-3 flex flex-col gap-1.5">
+                              {/* Title */}
+                              <div className="h-3 w-20 rounded-sm" style={{ background: ac, opacity: 0.85 }} />
+                              {/* Divider */}
+                              <div className="h-px w-full" style={{ background: ac, opacity: 0.3 }} />
+                              {/* Paragraph 1 */}
+                              <div className="flex flex-col gap-0.5">
+                                <div className="h-1.5 w-full rounded-sm" style={{ background: tx, opacity: 0.15 }} />
+                                <div className="h-1.5 w-full rounded-sm" style={{ background: tx, opacity: 0.13 }} />
+                                <div className="h-1.5 w-3/4 rounded-sm" style={{ background: tx, opacity: 0.11 }} />
+                              </div>
+                              {/* Subheading */}
+                              <div className="h-2.5 w-14 rounded-sm mt-0.5" style={{ background: ac, opacity: 0.6 }} />
+                              {/* Paragraph 2 */}
+                              <div className="flex flex-col gap-0.5">
+                                <div className="h-1.5 w-full rounded-sm" style={{ background: tx, opacity: 0.12 }} />
+                                <div className="h-1.5 w-5/6 rounded-sm" style={{ background: tx, opacity: 0.1 }} />
+                              </div>
+                              {/* Bullet list hint */}
+                              <div className="flex flex-col gap-0.5 pl-2 mt-auto">
+                                <div className="flex items-center gap-1">
+                                  <div className="w-1 h-1 rounded-full" style={{ background: ac, opacity: 0.5 }} />
+                                  <div className="h-1 w-16 rounded-sm" style={{ background: tx, opacity: 0.1 }} />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <div className="w-1 h-1 rounded-full" style={{ background: ac, opacity: 0.5 }} />
+                                  <div className="h-1 w-12 rounded-sm" style={{ background: tx, opacity: 0.1 }} />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        if (skillType === 'xlsx') {
+                          // Spreadsheet layout: header row + data grid
+                          return (
+                            <div className="absolute inset-0 p-2.5 flex flex-col gap-1">
+                              {/* Header row */}
+                              <div className="flex gap-1">
+                                <div className="h-3 flex-1 rounded-sm flex items-center justify-center" style={{ background: ac, opacity: 0.8 }}>
+                                  <div className="h-1 w-3/5 rounded-sm" style={{ background: '#fff', opacity: 0.6 }} />
+                                </div>
+                                <div className="h-3 flex-1 rounded-sm flex items-center justify-center" style={{ background: ac, opacity: 0.8 }}>
+                                  <div className="h-1 w-3/5 rounded-sm" style={{ background: '#fff', opacity: 0.6 }} />
+                                </div>
+                                <div className="h-3 flex-1 rounded-sm flex items-center justify-center" style={{ background: ac, opacity: 0.8 }}>
+                                  <div className="h-1 w-3/5 rounded-sm" style={{ background: '#fff', opacity: 0.6 }} />
+                                </div>
+                                <div className="h-3 flex-1 rounded-sm flex items-center justify-center" style={{ background: ac, opacity: 0.8 }}>
+                                  <div className="h-1 w-3/5 rounded-sm" style={{ background: '#fff', opacity: 0.6 }} />
+                                </div>
+                              </div>
+                              {/* Data rows */}
+                              {[0.9, 0.7, 0.8, 0.6, 0.75].map((op, i) => (
+                                <div key={i} className="flex gap-1">
+                                  <div className="h-2.5 flex-1 rounded-sm" style={{ background: cd, opacity: i % 2 === 0 ? 1 : 0.7 }} />
+                                  <div className="h-2.5 flex-1 rounded-sm" style={{ background: cd, opacity: i % 2 === 0 ? 1 : 0.7 }} />
+                                  <div className="h-2.5 flex-1 rounded-sm" style={{ background: cd, opacity: i % 2 === 0 ? 1 : 0.7 }} />
+                                  <div className="h-2.5 flex-1 rounded-sm" style={{ background: i === 4 ? ac : cd, opacity: i === 4 ? 0.3 : (i % 2 === 0 ? 1 : 0.7) }} />
+                                </div>
+                              ))}
+                              {/* Summary row */}
+                              <div className="flex gap-1 mt-auto">
+                                <div className="h-2.5 flex-[3] rounded-sm" style={{ background: tx, opacity: 0.08 }} />
+                                <div className="h-2.5 flex-1 rounded-sm" style={{ background: ac, opacity: 0.4 }} />
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        if (skillType === 'pdf') {
+                          // PDF page layout: title block, divider, multi-column
+                          return (
+                            <div className="absolute inset-0 p-3 flex flex-col gap-1.5">
+                              {/* Title block */}
+                              <div className="flex items-center gap-2">
+                                <div className="w-5 h-5 rounded-sm" style={{ background: ac, opacity: 0.8 }} />
+                                <div className="flex flex-col gap-0.5 flex-1">
+                                  <div className="h-2.5 w-16 rounded-sm" style={{ background: tx, opacity: 0.7 }} />
+                                  <div className="h-1 w-10 rounded-sm" style={{ background: tx, opacity: 0.2 }} />
+                                </div>
+                              </div>
+                              {/* Divider */}
+                              <div className="h-px w-full" style={{ background: ac, opacity: 0.3 }} />
+                              {/* Two-column content */}
+                              <div className="flex-1 flex gap-2">
+                                <div className="flex-1 flex flex-col gap-0.5">
+                                  <div className="h-1.5 w-full rounded-sm" style={{ background: tx, opacity: 0.12 }} />
+                                  <div className="h-1.5 w-full rounded-sm" style={{ background: tx, opacity: 0.1 }} />
+                                  <div className="h-1.5 w-4/5 rounded-sm" style={{ background: tx, opacity: 0.08 }} />
+                                  <div className="flex-1" />
+                                  <div className="h-4 w-full rounded-sm" style={{ background: cd }} />
+                                </div>
+                                <div className="flex-1 flex flex-col gap-0.5">
+                                  <div className="h-1.5 w-full rounded-sm" style={{ background: tx, opacity: 0.12 }} />
+                                  <div className="h-1.5 w-full rounded-sm" style={{ background: tx, opacity: 0.1 }} />
+                                  <div className="h-1.5 w-3/5 rounded-sm" style={{ background: tx, opacity: 0.08 }} />
+                                  <div className="flex-1" />
+                                  <div className="h-4 w-full rounded-sm" style={{ background: cd }} />
+                                </div>
+                              </div>
+                              {/* Footer */}
+                              <div className="flex justify-between items-center">
+                                <div className="h-1 w-10 rounded-sm" style={{ background: tx, opacity: 0.08 }} />
+                                <div className="h-1 w-4 rounded-sm" style={{ background: tx, opacity: 0.1 }} />
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // PPTX / Slides: slide mockup (improved)
+                        return (
+                          <div className="absolute inset-0 p-3 flex flex-col gap-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-4 h-4 rounded-sm" style={{ background: ac }} />
+                              <div className="h-2.5 w-16 rounded-sm" style={{ background: tx, opacity: 0.7 }} />
+                            </div>
+                            <div className="flex-1 flex gap-2">
+                              <div className="flex-1 flex flex-col gap-1">
+                                <div className="h-1.5 w-full rounded-sm" style={{ background: tx, opacity: 0.15 }} />
+                                <div className="h-1.5 w-4/5 rounded-sm" style={{ background: tx, opacity: 0.12 }} />
+                                <div className="h-1.5 w-3/5 rounded-sm" style={{ background: tx, opacity: 0.1 }} />
+                                <div className="flex-1" />
+                                <div className="flex gap-1">
+                                  <div className="h-5 flex-1 rounded-sm" style={{ background: cd }} />
+                                  <div className="h-5 flex-1 rounded-sm" style={{ background: cd }} />
+                                </div>
+                              </div>
+                              <div className="w-14 rounded-sm flex flex-col gap-1 p-1" style={{ background: cd }}>
+                                <div className="h-4 w-full rounded-sm" style={{ background: ac, opacity: 0.4 }} />
+                                <div className="h-1 w-full rounded-sm" style={{ background: tx, opacity: 0.1 }} />
+                                <div className="h-1 w-3/4 rounded-sm" style={{ background: tx, opacity: 0.08 }} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      };
+
                       return (
                         <button
                           key={tmpl.id}
@@ -956,59 +1166,37 @@ export default function Navbar() {
                             isHovered ? 'border-primary/40 shadow-lg' : 'border-transparent hover:border-primary/20'
                           }`}
                         >
-                          {/* Slide mockup preview — both layers always rendered, crossfade via opacity */}
+                          {/* Preview mockup — both layers always rendered, crossfade via opacity */}
                           <div
                             className="w-full overflow-hidden relative transition-all duration-300 ease-out"
                             style={{
                               background: preview?.bg || '#f3f4f6',
-                              height: isHovered ? '120px' : '48px',
+                              height: isHovered ? '130px' : '48px',
                             }}
                           >
-                            {/* Layer 1: Mini color bars (default) */}
+                            {/* Layer 1: Mini type-specific preview (default) */}
                             <div
-                              className="absolute inset-0 p-2 flex items-end gap-0.5 transition-opacity duration-300 ease-out"
+                              className="transition-opacity duration-300 ease-out"
                               style={{ opacity: isHovered ? 0 : 1 }}
                             >
-                              <div className="h-3/5 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.8 }} />
-                              <div className="h-4/5 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.6 }} />
-                              <div className="h-3/4 flex-1 rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.7 }} />
+                              {renderMini()}
                             </div>
-                            {/* Layer 2: Full slide mockup (hover) */}
+                            {/* Layer 2: Full type-specific mockup (hover) */}
                             <div
-                              className="absolute inset-0 p-3 flex flex-col gap-1.5 transition-opacity duration-300 ease-out"
+                              className="transition-opacity duration-300 ease-out"
                               style={{ opacity: isHovered ? 1 : 0 }}
                             >
-                              <div className="flex items-center gap-1.5">
-                                <div className="w-4 h-4 rounded-sm" style={{ background: preview?.accent || '#6b7280' }} />
-                                <div className="h-2.5 w-16 rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.7 }} />
-                              </div>
-                              <div className="flex-1 flex gap-2">
-                                <div className="flex-1 flex flex-col gap-1">
-                                  <div className="h-1.5 w-full rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.15 }} />
-                                  <div className="h-1.5 w-4/5 rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.12 }} />
-                                  <div className="h-1.5 w-3/5 rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.1 }} />
-                                  <div className="flex-1" />
-                                  <div className="flex gap-1">
-                                    <div className="h-5 flex-1 rounded-sm" style={{ background: preview?.card || '#f3f4f6' }} />
-                                    <div className="h-5 flex-1 rounded-sm" style={{ background: preview?.card || '#f3f4f6' }} />
-                                  </div>
-                                </div>
-                                <div className="w-14 rounded-sm flex flex-col gap-1 p-1" style={{ background: preview?.card || '#f3f4f6' }}>
-                                  <div className="h-4 w-full rounded-sm" style={{ background: preview?.accent || '#6b7280', opacity: 0.4 }} />
-                                  <div className="h-1 w-full rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.1 }} />
-                                  <div className="h-1 w-3/4 rounded-sm" style={{ background: preview?.text || '#1f2937', opacity: 0.08 }} />
-                                </div>
-                              </div>
+                              {renderFull()}
                             </div>
                           </div>
                           {/* Label + description */}
-                          <div className="px-2 pb-2 pt-1.5">
+                          <div className="px-2.5 pb-2.5 pt-2">
                             <span className="text-xs font-bold text-on-surface leading-tight block">{t(tmpl.labelKey as any)}</span>
                             <div
                               className="overflow-hidden transition-all duration-300 ease-out"
-                              style={{ maxHeight: isHovered ? '40px' : '0px', opacity: isHovered ? 1 : 0 }}
+                              style={{ maxHeight: isHovered ? '48px' : '0px', opacity: isHovered ? 1 : 0 }}
                             >
-                              <span className="text-[10px] text-on-surface-variant leading-snug mt-0.5 block">{t(tmpl.descKey as any)}</span>
+                              <span className="text-xs text-on-surface-variant leading-snug mt-1 block">{t(tmpl.descKey as any)}</span>
                             </div>
                           </div>
                         </button>
