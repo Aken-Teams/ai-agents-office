@@ -1958,10 +1958,6 @@ function generateHtml(input: SlidesInput): string {
       var result = transformer.transform(cfg.code);
       // Start collapsed at depth 1 — user expands manually
       foldTree(result.root, 0, 1);
-      ${s.isDark ? `// Inject dark-theme styles directly into the SVG
-      var svgStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-      svgStyle.textContent = 'foreignObject div, foreignObject span { color: #e0e0f0 !important; } text { fill: #e0e0f0 !important; }';
-      el.insertBefore(svgStyle, el.firstChild);` : ''}
       var mm = markmap.Markmap.create(el, {
         autoFit: false,
         duration: 300,
@@ -1973,6 +1969,10 @@ function generateHtml(input: SlidesInput): string {
       }, result.root);
       el.__markmap = mm;
       mm.fit();
+      ${s.isDark ? `// Inject dark-theme styles into the SVG AFTER markmap renders
+      var svgStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+      svgStyle.textContent = 'foreignObject div, foreignObject span { color: #e0e0f0 !important; } text { fill: #e0e0f0 !important; }';
+      el.insertBefore(svgStyle, el.firstChild);` : ''}
       // Click handler: toggle node + pan to show children
       mm.handleClick = function(e, d) {
         var wasFolded = d.payload && d.payload.fold;
