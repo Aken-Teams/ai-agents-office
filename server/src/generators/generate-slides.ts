@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 /**
- * Reveal.js Premium Slides Generator
+ * Reveal.js Premium Slides Generator v2
  * Usage: node --import tsx generate-slides.ts <input.json> <output.html>
  *
  * 8 styles: minimal | dark | gradient | neon | corporate | creative | elegant | tech
- * 13 slide types: title | section | content | two-column | code | image |
- *                 hero | stats | icon-grid | timeline | quote | chart | image-text
+ * 21 slide types: title | section | content | two-column | code | image |
+ *                 hero | stats | icon-grid | timeline | quote | chart | image-text |
+ *                 profile | process | gallery | team | table | dashboard | diagram | mindmap
+ *
+ * Charts: Apache ECharts (bar, line, pie, donut, radar, funnel, gauge, treemap, waterfall, scatter)
+ * Diagrams: Mermaid.js (flowchart, gantt, sequence, ER, state)
+ * Mindmaps: Markmap (markdown → interactive mindmap)
  *
  * Generates a self-contained HTML with Reveal.js, Google Fonts, Material Symbols from CDN.
  */
@@ -259,23 +264,40 @@ interface ChartBarItem { label: string; value: number; color?: string; }
 interface ChartPieSlice { label: string; value: number; color?: string; }
 interface ChartLinePoint { label: string; value: number; }
 interface ChartLineSeries { name: string; points: ChartLinePoint[]; color?: string; }
+interface TreemapNode { name: string; value: number; children?: TreemapNode[]; }
 
 interface ChartData {
-  type: 'bar' | 'pie' | 'donut' | 'line';
+  type: 'bar' | 'pie' | 'donut' | 'line' | 'radar' | 'funnel' | 'gauge' | 'treemap' | 'waterfall' | 'scatter';
   bars?: ChartBarItem[];
   maxValue?: number;
   slices?: ChartPieSlice[];
   series?: ChartLineSeries[];
   labels?: string[];
+  // Radar
+  indicators?: { name: string; max: number }[];
+  radarData?: { name: string; values: number[] }[];
+  // Funnel
+  funnelData?: { name: string; value: number }[];
+  // Gauge
+  gaugeValue?: number;
+  gaugeMax?: number;
+  gaugeLabel?: string;
+  // Treemap
+  treemapData?: TreemapNode[];
+  // Waterfall
+  waterfallData?: { label: string; value: number; type?: 'increase' | 'decrease' | 'total' }[];
+  // Scatter
+  scatterSeries?: { name: string; data: [number, number][] }[];
 }
 
 interface StatItem { value: string; label: string; icon?: string; trend?: 'up' | 'down' | 'neutral'; }
-interface IconGridItem { icon: string; title: string; description?: string; }
+interface IconGridItem { icon: string; title: string; description?: string; imageSrc?: string; }
 interface TimelineMilestone { date?: string; title: string; description?: string; icon?: string; }
 
 interface SlideData {
   type: 'title' | 'content' | 'two-column' | 'section' | 'code' | 'image'
-    | 'hero' | 'stats' | 'icon-grid' | 'timeline' | 'quote' | 'chart' | 'image-text';
+    | 'hero' | 'stats' | 'icon-grid' | 'timeline' | 'quote' | 'chart' | 'image-text'
+    | 'profile' | 'process' | 'gallery' | 'team' | 'table' | 'dashboard' | 'diagram' | 'mindmap';
   title?: string;
   subtitle?: string;
   bullets?: string[];
@@ -287,7 +309,6 @@ interface SlideData {
   imageSrc?: string;
   imageAlt?: string;
   fragments?: boolean;
-  // New fields
   tagline?: string;
   quote?: string;
   attribution?: string;
@@ -300,6 +321,28 @@ interface SlideData {
   autoAnimate?: boolean;
   background?: string;
   notes?: string;
+  // Profile
+  avatar?: string;
+  name?: string;
+  role?: string;
+  bio?: string;
+  socialLinks?: { icon: string; label: string }[];
+  // Process
+  steps?: { icon?: string; title: string; description?: string }[];
+  // Gallery
+  images?: { src: string; caption?: string; alt?: string }[];
+  galleryLayout?: '2x2' | '3-col' | '1-hero-2-small';
+  // Team
+  members?: { photo?: string; name: string; role: string; description?: string }[];
+  // Table
+  headers?: string[];
+  rows?: string[][];
+  highlightHeader?: boolean;
+  // Dashboard
+  kpis?: StatItem[];
+  dashboardChart?: ChartData;
+  // Diagram (Mermaid)
+  diagramType?: 'mermaid';
 }
 
 interface SlidesInput {
@@ -367,199 +410,273 @@ function renderDecoWave(color: string): string {
 </svg>`;
 }
 
-// ── Chart Renderers ────────────────────────────────────────────
+// ── ECharts Option Builder ─────────────────────────────────────
 
-function renderBarChart(chart: ChartData, s: StylePreset): string {
-  const bars = chart.bars || [];
-  if (bars.length === 0) return '';
-  const maxVal = chart.maxValue || Math.ceil(Math.max(...bars.map(b => b.value)) * 1.2) || 100;
-  const barHtml = bars.map((b, i) => {
-    const color = b.color || s.chartColors[i % s.chartColors.length];
-    const pct = Math.min((b.value / maxVal) * 100, 100);
-    return `<div class="bar-row" data-label="${escapeHtml(b.label)}" data-value="${b.value}">
-      <span class="bar-label">${escapeHtml(b.label)}</span>
-      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color};" data-pct="${pct.toFixed(0)}"></div></div>
-      <span class="bar-value">${b.value}</span>
-    </div>`;
-  }).join('');
-  return `<div class="chart-bar">${barHtml}</div>`;
-}
+function buildEChartsOption(chart: ChartData, s: StylePreset): object {
+  const colors = s.chartColors;
+  const textColor = s.bodyColor;
+  const isDark = s.isDark;
+  const splitLineColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+  const tooltipBg = isDark ? 'rgba(30,30,50,0.92)' : 'rgba(255,255,255,0.96)';
+  const tooltipBorder = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)';
 
-function renderPieChart(chart: ChartData, s: StylePreset): string {
-  const slices = chart.slices || [];
-  if (slices.length === 0) return '';
-  const total = slices.reduce((sum, sl) => sum + sl.value, 0) || 1;
-  let cum = 0;
-  const stops = slices.map((sl, i) => {
-    const color = sl.color || s.chartColors[i % s.chartColors.length];
-    const start = (cum / total) * 100;
-    cum += sl.value;
-    const end = (cum / total) * 100;
-    return `${color} ${start.toFixed(1)}% ${end.toFixed(1)}%`;
-  }).join(', ');
-  const isDonut = chart.type === 'donut';
-  const legend = slices.map((sl, i) => {
-    const color = sl.color || s.chartColors[i % s.chartColors.length];
-    return `<div class="chart-legend-item"><span class="chart-dot" style="background:${color};"></span><span>${escapeHtml(sl.label)} (${sl.value}%)</span></div>`;
-  }).join('');
-  const sliceData = slices.map(sl => ({ label: sl.label, value: sl.value, pct: ((sl.value / total) * 100).toFixed(1) }));
-  return `<div class="chart-pie-wrap">
-    <div class="chart-pie${isDonut ? ' donut' : ''}" style="background:conic-gradient(${stops});" data-slices='${JSON.stringify(sliceData)}'></div>
-    <div class="chart-legend">${legend}</div>
-  </div>`;
-}
+  const baseTooltip = { backgroundColor: tooltipBg, borderColor: tooltipBorder, textStyle: { color: isDark ? '#e0e0ff' : '#333', fontSize: 13 } };
 
-function renderLineChart(chart: ChartData, s: StylePreset): string {
-  const series = chart.series || [];
-  if (series.length === 0) return '';
-  const allVals = series.flatMap(sr => sr.points.map(p => p.value));
-  const maxVal = Math.ceil(Math.max(...allVals) * 1.15) || 100;
-  const minVal = 0;
-  const labels = chart.labels || series[0]?.points.map(p => p.label) || [];
-  const W = 900, H = 380, PL = 60, PR = 30, PT = 25, PB = 45;
-  const cW = W - PL - PR, cH = H - PT - PB;
-
-  // Grid lines
-  const gridCount = 4;
-  let gridSvg = '';
-  for (let i = 0; i <= gridCount; i++) {
-    const y = PT + (cH / gridCount) * i;
-    const val = Math.round(maxVal - (maxVal - minVal) * (i / gridCount));
-    gridSvg += `<line x1="${PL}" y1="${y}" x2="${W - PR}" y2="${y}" stroke="var(--body-color)" stroke-opacity="0.15" stroke-width="0.7"/>`;
-    gridSvg += `<text x="${PL - 10}" y="${y + 5}" text-anchor="end" fill="var(--body-color)" font-size="13" opacity="0.6">${val}</text>`;
-  }
-
-  // X labels
-  let xLabelSvg = '';
-  labels.forEach((lbl, i) => {
-    const x = PL + (cW / Math.max(labels.length - 1, 1)) * i;
-    xLabelSvg += `<text x="${x}" y="${H - 8}" text-anchor="middle" fill="var(--body-color)" font-size="13" opacity="0.6">${escapeHtml(lbl)}</text>`;
-  });
-
-  // Series lines
-  const linesSvg = series.map((sr, si) => {
-    const color = sr.color || s.chartColors[si % s.chartColors.length];
-    const pts = sr.points.map((p, pi) => {
-      const x = PL + (cW / Math.max(sr.points.length - 1, 1)) * pi;
-      const y = PT + cH - ((p.value - minVal) / (maxVal - minVal)) * cH;
-      return `${x},${y}`;
-    });
-    const dots = sr.points.map((p, pi) => {
-      const x = PL + (cW / Math.max(sr.points.length - 1, 1)) * pi;
-      const y = PT + cH - ((p.value - minVal) / (maxVal - minVal)) * cH;
-      return `<circle cx="${x}" cy="${y}" r="4.5" fill="${color}" stroke="var(--slide-bg)" stroke-width="2.5" data-label="${escapeHtml(p.label)}" data-value="${p.value}" data-series="${escapeHtml(sr.name)}"/>`;
-    }).join('');
-    return `<polyline points="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-    ${dots}`;
-  }).join('');
-
-  // Legend
-  const legendSvg = series.length > 1 ? series.map((sr, si) => {
-    const color = sr.color || s.chartColors[si % s.chartColors.length];
-    const x = PL + si * 140;
-    return `<circle cx="${x}" cy="${H + 20}" r="5" fill="${color}"/>
-    <text x="${x + 12}" y="${H + 25}" fill="var(--body-color)" font-size="13">${escapeHtml(sr.name)}</text>`;
-  }).join('') : '';
-
-  const svgH = series.length > 1 ? H + 40 : H;
-  return `<svg class="chart-line-svg" viewBox="0 0 ${W} ${svgH}" xmlns="http://www.w3.org/2000/svg">
-  ${gridSvg}${xLabelSvg}${linesSvg}${legendSvg}
-</svg>`;
-}
-
-function renderChart(chart: ChartData | undefined, s: StylePreset): string {
-  if (!chart) return '';
   switch (chart.type) {
-    case 'bar': return renderBarChart(chart, s);
-    case 'pie': case 'donut': return renderPieChart(chart, s);
-    case 'line': return renderLineChart(chart, s);
-    default: return '';
+    case 'bar': {
+      const bars = chart.bars || [];
+      return {
+        color: colors,
+        tooltip: { ...baseTooltip, trigger: 'axis' },
+        grid: { left: '8%', right: '6%', bottom: '12%', top: '8%', containLabel: true },
+        xAxis: { type: 'category', data: bars.map(b => b.label), axisLabel: { color: textColor, fontSize: 12 }, axisLine: { lineStyle: { color: splitLineColor } } },
+        yAxis: { type: 'value', axisLabel: { color: textColor, fontSize: 12 }, splitLine: { lineStyle: { color: splitLineColor } } },
+        series: [{ type: 'bar', data: bars.map((b, i) => ({ value: b.value, itemStyle: b.color ? { color: b.color } : undefined })), barWidth: '45%', itemStyle: { borderRadius: [6, 6, 0, 0] } }],
+        animationDuration: 1200, animationEasing: 'cubicOut',
+      };
+    }
+    case 'pie': case 'donut': {
+      const slices = chart.slices || [];
+      return {
+        color: colors,
+        tooltip: { ...baseTooltip, trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        legend: { orient: 'vertical', right: '5%', top: 'center', textStyle: { color: textColor, fontSize: 12 } },
+        series: [{
+          type: 'pie', radius: chart.type === 'donut' ? ['40%', '70%'] : ['0%', '70%'],
+          center: ['40%', '50%'], padAngle: 2, itemStyle: { borderRadius: 6 },
+          data: slices.map(sl => ({ value: sl.value, name: sl.label })),
+          label: { color: textColor, fontSize: 12 },
+          emphasis: { itemStyle: { shadowBlur: 20, shadowColor: 'rgba(0,0,0,0.3)' } },
+          animationType: 'scale', animationEasing: 'elasticOut',
+        }],
+      };
+    }
+    case 'line': {
+      const series = chart.series || [];
+      const labels = chart.labels || series[0]?.points.map(p => p.label) || [];
+      return {
+        color: colors,
+        tooltip: { ...baseTooltip, trigger: 'axis' },
+        legend: series.length > 1 ? { data: series.map(sr => sr.name), textStyle: { color: textColor, fontSize: 12 }, bottom: 0 } : undefined,
+        grid: { left: '8%', right: '6%', bottom: series.length > 1 ? '15%' : '10%', top: '8%', containLabel: true },
+        xAxis: { type: 'category', data: labels, axisLabel: { color: textColor, fontSize: 12 }, axisLine: { lineStyle: { color: splitLineColor } }, boundaryGap: false },
+        yAxis: { type: 'value', axisLabel: { color: textColor, fontSize: 12 }, splitLine: { lineStyle: { color: splitLineColor } } },
+        series: series.map((sr, i) => ({
+          name: sr.name, type: 'line', smooth: true,
+          data: sr.points.map(p => p.value),
+          lineStyle: { width: 3 },
+          areaStyle: { opacity: 0.08 },
+          symbolSize: 6,
+          ...(sr.color ? { itemStyle: { color: sr.color } } : {}),
+        })),
+        animationDuration: 1500,
+      };
+    }
+    case 'radar': {
+      const indicators = chart.indicators || [];
+      const radarData = chart.radarData || [];
+      return {
+        color: colors,
+        tooltip: { ...baseTooltip },
+        legend: radarData.length > 1 ? { data: radarData.map(d => d.name), textStyle: { color: textColor }, bottom: 0 } : undefined,
+        radar: {
+          indicator: indicators.map(ind => ({ name: ind.name, max: ind.max })),
+          shape: 'polygon',
+          axisName: { color: textColor, fontSize: 12 },
+          splitArea: { areaStyle: { color: isDark ? ['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.04)'] : ['rgba(0,0,0,0.01)', 'rgba(0,0,0,0.03)'] } },
+          splitLine: { lineStyle: { color: splitLineColor } },
+          axisLine: { lineStyle: { color: splitLineColor } },
+        },
+        series: [{ type: 'radar', data: radarData.map((d, i) => ({ value: d.values, name: d.name, areaStyle: { opacity: 0.15 }, lineStyle: { width: 2 } })) }],
+        animationDuration: 1200,
+      };
+    }
+    case 'funnel': {
+      const funnelData = chart.funnelData || [];
+      return {
+        color: colors,
+        tooltip: { ...baseTooltip, trigger: 'item', formatter: '{b}: {c}' },
+        series: [{
+          type: 'funnel', left: '10%', top: '5%', bottom: '5%', width: '80%',
+          sort: 'descending', gap: 4,
+          label: { show: true, position: 'inside', color: '#fff', fontSize: 14, fontWeight: 600 },
+          labelLine: { show: false },
+          itemStyle: { borderWidth: 0, borderRadius: 4 },
+          emphasis: { label: { fontSize: 16 } },
+          data: funnelData.map(d => ({ value: d.value, name: d.name })),
+          animationDuration: 1200, animationEasing: 'cubicOut',
+        }],
+      };
+    }
+    case 'gauge': {
+      const val = chart.gaugeValue ?? 0;
+      const max = chart.gaugeMax ?? 100;
+      return {
+        series: [{
+          type: 'gauge', min: 0, max,
+          progress: { show: true, width: 18, itemStyle: { color: s.accentColor } },
+          axisLine: { lineStyle: { width: 18, color: [[1, splitLineColor]] } },
+          axisTick: { show: false },
+          splitLine: { length: 12, lineStyle: { width: 2, color: textColor } },
+          axisLabel: { distance: 25, color: textColor, fontSize: 12 },
+          pointer: { width: 5, length: '60%', itemStyle: { color: s.accentColor } },
+          anchor: { show: true, size: 16, itemStyle: { borderWidth: 2, borderColor: s.accentColor, color: isDark ? '#1a1a2e' : '#fff' } },
+          title: { show: true, offsetCenter: [0, '70%'], fontSize: 16, color: textColor },
+          detail: { valueAnimation: true, fontSize: 36, fontWeight: 700, color: s.titleColor, offsetCenter: [0, '45%'], formatter: '{value}' },
+          data: [{ value: val, name: chart.gaugeLabel || '' }],
+          animationDuration: 2000,
+        }],
+      };
+    }
+    case 'treemap': {
+      const data = chart.treemapData || [];
+      return {
+        color: colors,
+        tooltip: { ...baseTooltip, formatter: '{b}: {c}' },
+        series: [{
+          type: 'treemap', data, roam: false,
+          breadcrumb: { show: false },
+          label: { show: true, fontSize: 13, color: '#fff', fontWeight: 600 },
+          itemStyle: { borderColor: isDark ? '#1a1a2e' : '#fff', borderWidth: 3, borderRadius: 4 },
+          levels: [{ itemStyle: { borderWidth: 0 }, upperLabel: { show: false } }],
+          animationDuration: 1000,
+        }],
+      };
+    }
+    case 'waterfall': {
+      const items = chart.waterfallData || [];
+      const total: number[] = [];
+      let cumulative = 0;
+      const values: (number | string)[] = [];
+      items.forEach(item => {
+        if (item.type === 'total') { total.push(0); values.push(cumulative); }
+        else { total.push(cumulative); values.push(item.value); cumulative += item.value; }
+      });
+      return {
+        color: colors,
+        tooltip: { ...baseTooltip, trigger: 'axis', axisPointer: { type: 'shadow' } },
+        grid: { left: '8%', right: '6%', bottom: '12%', top: '8%', containLabel: true },
+        xAxis: { type: 'category', data: items.map(i => i.label), axisLabel: { color: textColor, fontSize: 12 } },
+        yAxis: { type: 'value', axisLabel: { color: textColor, fontSize: 12 }, splitLine: { lineStyle: { color: splitLineColor } } },
+        series: [
+          { type: 'bar', stack: 'wf', silent: true, itemStyle: { borderColor: 'transparent', color: 'transparent' }, data: total },
+          {
+            type: 'bar', stack: 'wf', barWidth: '40%',
+            data: items.map((item, i) => ({
+              value: values[i],
+              itemStyle: {
+                color: item.type === 'total' ? s.accentColor : (item.value >= 0 ? '#48BB78' : '#FC8181'),
+                borderRadius: [4, 4, 0, 0],
+              },
+            })),
+            label: { show: true, position: 'top', color: textColor, fontSize: 12, formatter: (p: any) => p.value },
+          },
+        ],
+        animationDuration: 1200,
+      };
+    }
+    case 'scatter': {
+      const scatterSeries = chart.scatterSeries || [];
+      return {
+        color: colors,
+        tooltip: { ...baseTooltip, trigger: 'item' },
+        legend: scatterSeries.length > 1 ? { data: scatterSeries.map(s => s.name), textStyle: { color: textColor }, bottom: 0 } : undefined,
+        grid: { left: '8%', right: '6%', bottom: scatterSeries.length > 1 ? '15%' : '10%', top: '8%', containLabel: true },
+        xAxis: { type: 'value', axisLabel: { color: textColor, fontSize: 12 }, splitLine: { lineStyle: { color: splitLineColor } } },
+        yAxis: { type: 'value', axisLabel: { color: textColor, fontSize: 12 }, splitLine: { lineStyle: { color: splitLineColor } } },
+        series: scatterSeries.map(sr => ({
+          name: sr.name, type: 'scatter', data: sr.data, symbolSize: 12,
+          emphasis: { focus: 'series', itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.3)' } },
+        })),
+        animationDuration: 1200,
+      };
+    }
+    default:
+      return {};
   }
 }
 
 // ── Content Limits (prevent overflow) ───────────────────────────
-// Slide viewport: 1280×720, padding: 40px top/bottom + 60px left/right
-// Usable content height: ~600px (after title ~40px)
-
 const LIMITS = {
   bullets: 6,
-  bulletsCompact: 4, // two-column
+  bulletsCompact: 4,
   stats: 4,
   iconGridItems: 6,
-  timelineMilestones: 4,  // 5 overflows on 16:9
+  timelineMilestones: 4,
   codeLines: 12,
   chartBars: 6,
   chartSlices: 6,
   chartLinePoints: 8,
+  profileSocialLinks: 4,
+  processSteps: 5,
+  galleryImages: 6,
+  teamMembers: 4,
+  tableRows: 6,
+  tableColumns: 6,
+  dashboardKpis: 4,
+  radarIndicators: 6,
+  funnelItems: 8,
+  waterfallItems: 10,
 };
 
-/** Sanitize slide data to enforce content limits */
 function sanitizeSlide(slide: SlideData): SlideData {
   const s = { ...slide };
-
-  // Truncate bullets
-  if (s.bullets && s.bullets.length > LIMITS.bullets) {
-    s.bullets = s.bullets.slice(0, LIMITS.bullets);
-  }
-
-  // Truncate two-column bullets
-  if (s.left && s.left.bullets.length > LIMITS.bulletsCompact) {
-    s.left = { ...s.left, bullets: s.left.bullets.slice(0, LIMITS.bulletsCompact) };
-  }
-  if (s.right && s.right.bullets.length > LIMITS.bulletsCompact) {
-    s.right = { ...s.right, bullets: s.right.bullets.slice(0, LIMITS.bulletsCompact) };
-  }
-
-  // Truncate stats
-  if (s.stats && s.stats.length > LIMITS.stats) {
-    s.stats = s.stats.slice(0, LIMITS.stats);
-  }
-
-  // Icon grid: truncate + auto-fit columns to minimize rows
-  if (s.items && s.items.length > LIMITS.iconGridItems) {
-    s.items = s.items.slice(0, LIMITS.iconGridItems);
-  }
+  if (s.bullets && s.bullets.length > LIMITS.bullets) s.bullets = s.bullets.slice(0, LIMITS.bullets);
+  if (s.left && s.left.bullets.length > LIMITS.bulletsCompact) s.left = { ...s.left, bullets: s.left.bullets.slice(0, LIMITS.bulletsCompact) };
+  if (s.right && s.right.bullets.length > LIMITS.bulletsCompact) s.right = { ...s.right, bullets: s.right.bullets.slice(0, LIMITS.bulletsCompact) };
+  if (s.stats && s.stats.length > LIMITS.stats) s.stats = s.stats.slice(0, LIMITS.stats);
+  if (s.items && s.items.length > LIMITS.iconGridItems) s.items = s.items.slice(0, LIMITS.iconGridItems);
   if (s.items && s.type === 'icon-grid') {
     const count = s.items.length;
-    // Auto-set columns: prefer single row (up to 4), then 2 rows
     if (!s.columns || s.columns < count) {
-      if (count <= 4) s.columns = count;       // 1-4 items: single row
-      else if (count <= 6) s.columns = 3;      // 5-6 items: 2 rows of 3
+      if (count <= 4) s.columns = count;
+      else if (count <= 6) s.columns = 3;
     }
   }
-
-  // Truncate timeline
-  if (s.milestones && s.milestones.length > LIMITS.timelineMilestones) {
-    s.milestones = s.milestones.slice(0, LIMITS.timelineMilestones);
-  }
-
-  // Truncate code
+  if (s.milestones && s.milestones.length > LIMITS.timelineMilestones) s.milestones = s.milestones.slice(0, LIMITS.timelineMilestones);
   if (s.code) {
     const lines = s.code.split('\n');
-    if (lines.length > LIMITS.codeLines) {
-      s.code = lines.slice(0, LIMITS.codeLines).join('\n') + '\n// ...';
-    }
+    if (lines.length > LIMITS.codeLines) s.code = lines.slice(0, LIMITS.codeLines).join('\n') + '\n// ...';
   }
-
-  // Truncate chart data
   if (s.chart) {
     const c = { ...s.chart };
     if (c.bars && c.bars.length > LIMITS.chartBars) c.bars = c.bars.slice(0, LIMITS.chartBars);
     if (c.slices && c.slices.length > LIMITS.chartSlices) c.slices = c.slices.slice(0, LIMITS.chartSlices);
-    if (c.series) {
-      c.series = c.series.map(sr => ({
-        ...sr,
-        points: sr.points.length > LIMITS.chartLinePoints
-          ? sr.points.slice(0, LIMITS.chartLinePoints) : sr.points,
-      }));
-    }
+    if (c.series) c.series = c.series.map(sr => ({ ...sr, points: sr.points.length > LIMITS.chartLinePoints ? sr.points.slice(0, LIMITS.chartLinePoints) : sr.points }));
+    if (c.indicators && c.indicators.length > LIMITS.radarIndicators) c.indicators = c.indicators.slice(0, LIMITS.radarIndicators);
+    if (c.radarData) c.radarData = c.radarData.map(d => ({ ...d, values: d.values.slice(0, LIMITS.radarIndicators) }));
+    if (c.funnelData && c.funnelData.length > LIMITS.funnelItems) c.funnelData = c.funnelData.slice(0, LIMITS.funnelItems);
+    if (c.waterfallData && c.waterfallData.length > LIMITS.waterfallItems) c.waterfallData = c.waterfallData.slice(0, LIMITS.waterfallItems);
     s.chart = c;
   }
-
+  if (s.dashboardChart) {
+    const c = { ...s.dashboardChart };
+    if (c.bars && c.bars.length > LIMITS.chartBars) c.bars = c.bars.slice(0, LIMITS.chartBars);
+    if (c.slices && c.slices.length > LIMITS.chartSlices) c.slices = c.slices.slice(0, LIMITS.chartSlices);
+    s.dashboardChart = c;
+  }
+  if (s.socialLinks && s.socialLinks.length > LIMITS.profileSocialLinks) s.socialLinks = s.socialLinks.slice(0, LIMITS.profileSocialLinks);
+  if (s.steps && s.steps.length > LIMITS.processSteps) s.steps = s.steps.slice(0, LIMITS.processSteps);
+  if (s.images && s.images.length > LIMITS.galleryImages) s.images = s.images.slice(0, LIMITS.galleryImages);
+  if (s.members && s.members.length > LIMITS.teamMembers) s.members = s.members.slice(0, LIMITS.teamMembers);
+  if (s.kpis && s.kpis.length > LIMITS.dashboardKpis) s.kpis = s.kpis.slice(0, LIMITS.dashboardKpis);
+  if (s.headers && s.headers.length > LIMITS.tableColumns) s.headers = s.headers.slice(0, LIMITS.tableColumns);
+  if (s.rows) {
+    if (s.rows.length > LIMITS.tableRows) s.rows = s.rows.slice(0, LIMITS.tableRows);
+    if (s.headers) s.rows = s.rows.map(r => r.slice(0, s.headers!.length));
+  }
   return s;
 }
 
 // ── Slide Renderers ────────────────────────────────────────────
+
+// Track CDN needs
+let echartsUsed = false;
+let mermaidUsed = false;
+let markmapUsed = false;
+const echartsConfigs: { id: string; option: object }[] = [];
+const mindmapConfigs: { id: string; code: string }[] = [];
+const mermaidConfigs: { id: string; code: string }[] = [];
 
 function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
   const slide = sanitizeSlide(rawSlide);
@@ -635,15 +752,13 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
   ${notes}
 </section>`;
 
-    // ── New Types ──
-
     case 'hero': {
       const bgAttr = slide.imageSrc
-        ? ` data-background-image="${escapeHtml(slide.imageSrc)}" data-background-opacity="0.3"`
+        ? ` data-background-image="${escapeHtml(slide.imageSrc)}" data-background-opacity="1"`
         : '';
       return `<section${sa}${bgAttr}>
-  ${deco ? renderDecoBlob(s.decorationColors, idx) : ''}
-  ${deco ? `<div class="deco-svg" style="bottom:-60px;left:-60px;opacity:0.3;">${renderDecoCircles(s.decorationColors, idx)}</div>` : ''}
+  ${slide.imageSrc ? '<div class="hero-overlay"></div>' : ''}
+  ${deco && !slide.imageSrc ? renderDecoBlob(s.decorationColors, idx) : ''}
   <div class="hero-content">
     <h1 class="hero-title">${escapeHtml(slide.title || '')}</h1>
     ${slide.subtitle ? `<p class="hero-subtitle">${escapeHtml(slide.subtitle)}</p>` : ''}
@@ -655,7 +770,7 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
 
     case 'stats': {
       const statsItems = slide.stats || [];
-      const cards = statsItems.map((st, i) => {
+      const cards = statsItems.map(st => {
         const trendIcon = st.trend === 'up' ? 'trending_up' : st.trend === 'down' ? 'trending_down' : '';
         const trendClass = st.trend === 'up' ? 'trend-up' : st.trend === 'down' ? 'trend-down' : '';
         return `<div class="stats-card glass-card"${fa ? ` ${fa.trim()}` : ''}>
@@ -675,13 +790,16 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
     case 'icon-grid': {
       const items = slide.items || [];
       const cols = Math.min(slide.columns || 3, 4);
-      const cards = items.map(it =>
-        `<div class="icon-card glass-card"${fa ? ` ${fa.trim()}` : ''}>
-  <div class="icon-card-icon">${renderIcon(it.icon)}</div>
+      const cards = items.map(it => {
+        const iconHtml = it.imageSrc
+          ? `<img src="${escapeHtml(it.imageSrc)}" class="icon-card-img" loading="lazy" alt="${escapeHtml(it.title)}" />`
+          : `<div class="icon-card-icon">${renderIcon(it.icon)}</div>`;
+        return `<div class="icon-card glass-card"${fa ? ` ${fa.trim()}` : ''}>
+  ${iconHtml}
   <div class="icon-card-title">${escapeHtml(it.title)}</div>
   ${it.description ? `<p class="icon-card-desc">${escapeHtml(it.description)}</p>` : ''}
-</div>`
-      ).join('');
+</div>`;
+      }).join('');
       return `<section${sa}>
   ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
   <div class="icon-grid cols-${cols}">${cards}</div>
@@ -714,19 +832,23 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
     case 'quote':
       return `<section${sa}>
   <div class="quote-block">
-    <div class="quote-mark">"</div>
+    <div class="quote-mark">\u201C</div>
     <blockquote class="quote-text">${escapeHtml(slide.quote || slide.text || '')}</blockquote>
-    ${slide.attribution ? `<cite class="quote-author">— ${escapeHtml(slide.attribution)}</cite>` : ''}
+    ${slide.attribution ? `<cite class="quote-author">\u2014 ${escapeHtml(slide.attribution)}</cite>` : ''}
   </div>
   ${notes}
 </section>`;
 
-    case 'chart':
+    case 'chart': {
+      echartsUsed = true;
+      const chartId = `echart-${idx}`;
+      echartsConfigs.push({ id: chartId, option: buildEChartsOption(slide.chart || { type: 'bar' }, s) });
       return `<section${sa}>
   ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  ${renderChart(slide.chart, s)}
+  <div id="${chartId}" class="echart-container"></div>
   ${notes}
 </section>`;
+    }
 
     case 'image-text': {
       const pos = slide.imagePosition || 'left';
@@ -746,6 +868,140 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
 </section>`;
     }
 
+    // ── New Types ──
+
+    case 'profile': {
+      const links = (slide.socialLinks || []).map(l =>
+        `<span class="profile-link">${renderIcon(l.icon, 'profile-link-icon')}<span>${escapeHtml(l.label)}</span></span>`
+      ).join('');
+      return `<section${sa}>
+  <div class="profile-layout">
+    ${slide.avatar ? `<div class="profile-avatar-wrap"><img src="${escapeHtml(slide.avatar)}" class="profile-avatar" loading="lazy" alt="${escapeHtml(slide.name || '')}" /></div>` : ''}
+    ${slide.name ? `<h2 class="profile-name">${escapeHtml(slide.name)}</h2>` : ''}
+    ${slide.role ? `<p class="profile-role">${escapeHtml(slide.role)}</p>` : ''}
+    ${slide.bio ? `<p class="profile-bio">${escapeHtml(slide.bio)}</p>` : ''}
+    ${links ? `<div class="profile-social">${links}</div>` : ''}
+  </div>
+  ${notes}
+</section>`;
+    }
+
+    case 'process': {
+      const steps = slide.steps || [];
+      const stepsHtml = steps.map((st, i) =>
+        `<div class="process-step"${fa ? ` ${fa.trim()}` : ''}>
+  <div class="process-step-circle">${st.icon ? renderIcon(st.icon, 'process-icon') : `<span class="process-num">${i + 1}</span>`}</div>
+  <div class="process-step-label">${escapeHtml(st.title)}</div>
+  ${st.description ? `<div class="process-step-desc">${escapeHtml(st.description)}</div>` : ''}
+</div>`
+      ).join('');
+      return `<section${sa}>
+  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  <div class="process-steps">
+    <div class="process-connector"></div>
+    ${stepsHtml}
+  </div>
+  ${notes}
+</section>`;
+    }
+
+    case 'gallery': {
+      const images = slide.images || [];
+      const layout = slide.galleryLayout || (images.length <= 3 ? '3-col' : '2x2');
+      const items = images.map(img =>
+        `<figure class="gallery-item">
+  <img src="${escapeHtml(img.src)}" alt="${escapeHtml(img.alt || img.caption || '')}" loading="lazy" />
+  ${img.caption ? `<figcaption>${escapeHtml(img.caption)}</figcaption>` : ''}
+</figure>`
+      ).join('');
+      return `<section${sa}>
+  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  <div class="gallery gallery-${layout}">${items}</div>
+  ${notes}
+</section>`;
+    }
+
+    case 'team': {
+      const members = slide.members || [];
+      const cards = members.map(m =>
+        `<div class="team-card glass-card"${fa ? ` ${fa.trim()}` : ''}>
+  ${m.photo ? `<img src="${escapeHtml(m.photo)}" class="team-photo" loading="lazy" alt="${escapeHtml(m.name)}" />` : `<div class="team-photo-placeholder">${renderIcon('person')}</div>`}
+  <div class="team-name">${escapeHtml(m.name)}</div>
+  <div class="team-role">${escapeHtml(m.role)}</div>
+  ${m.description ? `<div class="team-desc">${escapeHtml(m.description)}</div>` : ''}
+</div>`
+      ).join('');
+      return `<section${sa}>
+  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  <div class="team-grid">${cards}</div>
+  ${notes}
+</section>`;
+    }
+
+    case 'table': {
+      const headers = slide.headers || [];
+      const rows = slide.rows || [];
+      const thClass = slide.highlightHeader ? ' class="table-header-highlighted"' : '';
+      const headerRow = headers.length ? `<thead${thClass}><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>` : '';
+      const bodyRows = rows.map(r => `<tr>${r.map(c => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('');
+      return `<section${sa}>
+  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  <div class="table-wrap"><table class="slide-table">${headerRow}<tbody>${bodyRows}</tbody></table></div>
+  ${notes}
+</section>`;
+    }
+
+    case 'dashboard': {
+      const kpis = slide.kpis || [];
+      const kpiCards = kpis.map(st => {
+        const trendIcon = st.trend === 'up' ? 'trending_up' : st.trend === 'down' ? 'trending_down' : '';
+        const trendClass = st.trend === 'up' ? 'trend-up' : st.trend === 'down' ? 'trend-down' : '';
+        return `<div class="stats-card glass-card dashboard-kpi-card">
+  ${st.icon ? `<div class="stats-icon">${renderIcon(st.icon)}</div>` : ''}
+  <div class="stats-value">${escapeHtml(st.value)}</div>
+  <div class="stats-label">${escapeHtml(st.label)}</div>
+  ${trendIcon ? `<div class="stats-trend ${trendClass}">${renderIcon(trendIcon, 'trend-icon')}</div>` : ''}
+</div>`;
+      }).join('');
+
+      let chartHtml = '';
+      if (slide.dashboardChart) {
+        echartsUsed = true;
+        const chartId = `echart-dash-${idx}`;
+        echartsConfigs.push({ id: chartId, option: buildEChartsOption(slide.dashboardChart, s) });
+        chartHtml = `<div id="${chartId}" class="echart-container echart-compact"></div>`;
+      }
+
+      return `<section${sa}>
+  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  <div class="dashboard-kpis">${kpiCards}</div>
+  ${chartHtml ? `<div class="dashboard-chart">${chartHtml}</div>` : ''}
+  ${notes}
+</section>`;
+    }
+
+    case 'diagram': {
+      mermaidUsed = true;
+      const mermaidId = `mermaid-${idx}`;
+      mermaidConfigs.push({ id: mermaidId, code: slide.code || '' });
+      return `<section${sa}>
+  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  <div class="diagram-container"><pre class="mermaid" id="${mermaidId}"></pre></div>
+  ${notes}
+</section>`;
+    }
+
+    case 'mindmap': {
+      markmapUsed = true;
+      const mmId = `mindmap-${idx}`;
+      mindmapConfigs.push({ id: mmId, code: slide.code || '' });
+      return `<section${sa}>
+  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  <div class="mindmap-container"><svg id="${mmId}" class="mindmap-svg"></svg></div>
+  ${notes}
+</section>`;
+    }
+
     default:
       return `<section><p class="body-text">${escapeHtml(slide.title || 'Untitled Slide')}</p></section>`;
   }
@@ -756,6 +1012,7 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
 function generateCSS(s: StylePreset): string {
   const isGrad = s.bg.startsWith('linear-gradient');
   const bgRule = isGrad ? `background: ${s.bg};` : `background-color: ${s.bg};`;
+  const hoverBg = s.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)';
 
   return `
 /* ── CSS Custom Properties ── */
@@ -786,33 +1043,49 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
 .reveal-viewport { ${bgRule} }
 .reveal { font-family: var(--font-body); }
 
-/* ── Sections ── */
-/* overflow:hidden is the SAFETY NET — content MUST NOT escape the slide boundary */
+/* ── Sections — grid background + floating gradient decorations ── */
 .reveal .slides section {
   ${bgRule}
-  padding: 40px 60px !important;
+  background-image:
+    linear-gradient(${s.isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.018)'} 1px, transparent 1px),
+    linear-gradient(90deg, ${s.isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.018)'} 1px, transparent 1px);
+  background-size: 50px 50px;
+  padding: 48px 64px !important;
   text-align: left;
   overflow: hidden !important;
 }
 .reveal .slides section .deco-svg { position: absolute; pointer-events: none; z-index: 0; }
-.reveal .slides section > *:not(.deco-svg) { position: relative; z-index: 1; }
+.reveal .slides section > *:not(.deco-svg):not(.hero-overlay) { position: relative; z-index: 1; }
 
-/* ── Watermark ── */
-.reveal .slides section::after {
-  content: '測試版 TEST VERSION';
+/* Floating gradient orbs — adds depth to every slide */
+.reveal .slides section::before {
+  content: '';
   position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%) rotate(-35deg);
-  font-size: 4.5vw;
-  font-family: Arial, "Microsoft JhengHei", sans-serif;
-  font-weight: 700;
-  color: ${s.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'};
-  white-space: nowrap;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: radial-gradient(circle, ${s.accentColor} 0%, transparent 70%);
+  opacity: ${s.isDark ? '0.1' : '0.06'};
   pointer-events: none;
-  z-index: 9999;
-  user-select: none;
-  letter-spacing: 0.15em;
+  z-index: 0;
+  filter: blur(50px);
 }
+.reveal .slides section:nth-child(odd)::before { top: -200px; right: -160px; }
+.reveal .slides section:nth-child(even)::before { bottom: -200px; left: -160px; }
+.reveal .slides section::after {
+  content: '';
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, ${s.accentColor2} 0%, transparent 70%);
+  opacity: ${s.isDark ? '0.07' : '0.04'};
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(35px);
+}
+.reveal .slides section:nth-child(odd)::after { bottom: -130px; left: -100px; }
+.reveal .slides section:nth-child(even)::after { top: -130px; right: -100px; }
 
 /* ── Typography ── */
 .reveal h1, .reveal h2, .reveal h3, .reveal h4 {
@@ -821,49 +1094,72 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
   color: var(--heading-color);
   word-wrap: break-word;
   margin: 0 0 0.3em;
-  line-height: 1.15;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
 }
-.reveal h1 { font-size: clamp(1.5em, 3.5vw, 2.2em); color: var(--title-color); }
-.reveal h2 { font-size: clamp(1.1em, 2.8vw, 1.5em); }
-.reveal h3 { font-size: clamp(0.9em, 2.2vw, 1.1em); }
-.reveal h4 { font-size: clamp(0.8em, 1.8vw, 0.95em); font-weight: 600; }
-.slide-title { text-align: left; margin-bottom: 0.5em; }
-.section-heading { font-size: clamp(1.3em, 3.2vw, 1.8em); text-align: center; color: var(--title-color); }
-.subtitle { color: var(--subtitle-color); font-size: 0.65em; margin: 0; }
-.tagline { color: var(--accent); font-size: 0.5em; letter-spacing: 0.15em; text-transform: uppercase; margin-top: 0.5em; }
-.body-text { color: var(--body-color); font-size: 0.65em; line-height: 1.6; }
+.reveal h1 { font-size: clamp(2em, 4.5vw, 2.8em); color: var(--title-color); }
+.reveal h2 { font-size: clamp(1.2em, 3vw, 1.65em); }
+.reveal h3 { font-size: clamp(0.95em, 2.2vw, 1.15em); }
+.reveal h4 { font-size: clamp(0.85em, 1.8vw, 1em); font-weight: 600; }
+.slide-title {
+  text-align: left;
+  margin-bottom: 0.65em;
+  padding-left: 20px;
+  padding-bottom: 0.3em;
+  border-left: 4px solid var(--accent);
+  border-image: linear-gradient(to bottom, var(--accent), var(--accent2)) 1;
+}
+.section-heading { font-size: clamp(1.5em, 3.5vw, 2em); text-align: center; color: var(--title-color); }
+.subtitle { color: var(--subtitle-color); font-size: 0.7em; margin: 0; }
+.tagline { color: var(--accent); font-size: 0.5em; letter-spacing: 0.18em; text-transform: uppercase; margin-top: 0.6em; font-weight: 600; }
+.body-text { color: var(--body-color); font-size: 0.65em; line-height: 1.7; }
 
-/* ── Accent Line ── */
-.accent-line { width: 80px; height: 4px; background: var(--accent); margin: 0.4em auto; border-radius: 2px; }
+/* ── Accent Line (gradient) ── */
+.accent-line { width: 100px; height: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); margin: 0.5em auto; border-radius: 2px; }
 
-/* ── Glass Card ── */
+/* ── Glass Card — gradient top border ── */
 .glass-card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
-  ${s.isDark ? 'backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);' : ''}
-  border-radius: 14px;
-  padding: 1em;
-  transition: transform 0.2s;
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border-radius: 16px;
+  padding: 1.2em;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s ease;
+  cursor: default;
+}
+.glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+}
+.glass-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 16px 40px rgba(0,0,0,${s.isDark ? '0.35' : '0.12'}), 0 0 0 1px ${s.accentColor}22;
 }
 
 /* ── Bullet Lists ── */
-.bullet-list { list-style: none; padding: 0; margin: 0; width: 100%; color: var(--body-color); font-size: 0.7em; line-height: 1.7; }
+.bullet-list { list-style: none; padding: 0; margin: 0; width: 100%; color: var(--body-color); font-size: 0.7em; line-height: 1.8; }
 .bullet-list.compact { font-size: 0.6em; }
-.bullet-list li { display: flex; align-items: flex-start; gap: 0.5em; margin-bottom: 0.3em; }
+.bullet-list li { display: flex; align-items: flex-start; gap: 0.6em; margin-bottom: 0.35em; padding: 0.35em 0.5em; border-radius: 8px; transition: background 0.2s, padding-left 0.2s; }
+.bullet-list li:hover { background: ${s.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'}; padding-left: 0.8em; }
 .bullet-icon { flex-shrink: 0; }
 .bullet-sym { font-size: 1em; color: var(--accent); }
 .reveal ul, .reveal ol { overflow: hidden; }
 .reveal li { word-wrap: break-word; overflow-wrap: break-word; }
-/* Hide ALL scrollbars — slides should never scroll */
 * { scrollbar-width: none; -ms-overflow-style: none; }
 *::-webkit-scrollbar { display: none; }
 
 /* ── Code ── */
-.code-block { background: var(--code-bg); border-radius: 12px; padding: 1em 1.2em; text-align: left; max-height: 380px; overflow: hidden; width: 100%; border: 1px solid var(--card-border); }
+.code-block { background: var(--code-bg); border-radius: 14px; padding: 1.2em 1.4em; text-align: left; max-height: 380px; overflow: hidden; width: 100%; border: 1px solid var(--card-border); box-shadow: ${s.isDark ? '0 0 40px rgba(0,0,0,0.2)' : '0 4px 30px rgba(0,0,0,0.04)'}; }
 .code-block code { color: var(--code-color); font-size: 0.58em; line-height: 1.7; white-space: pre-wrap; word-break: break-all; }
 
 /* ── Images ── */
-.slide-image { max-width: 85%; max-height: 400px; height: auto; object-fit: contain; border-radius: 12px; margin: 0 auto; display: block; }
+.slide-image { max-width: 85%; max-height: 400px; height: auto; object-fit: contain; border-radius: 16px; margin: 0 auto; display: block; box-shadow: 0 8px 30px rgba(0,0,0,${s.isDark ? '0.3' : '0.1'}); }
 
 /* ── Two-Column ── */
 .slide-columns { display: flex; gap: 1em; width: 100%; }
@@ -875,75 +1171,224 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
 .deco-wave { bottom: 0; left: 0; width: 100%; height: auto; opacity: 0.6; }
 
 /* ── Hero ── */
-.hero-content { text-align: center; z-index: 2; }
-.hero-title { font-size: clamp(1.8em, 5vw, 3em) !important; margin-bottom: 0.3em; }
-.hero-subtitle { font-size: 0.85em; color: var(--subtitle-color); margin: 0.5em 0; }
+.hero-content { text-align: center; z-index: 2; position: relative; }
+.hero-title { font-size: clamp(2.2em, 5.5vw, 3.4em) !important; margin-bottom: 0.3em; text-shadow: 0 2px 30px rgba(0,0,0,0.4); color: #fff !important; }
+.hero-subtitle { font-size: 0.9em; color: rgba(255,255,255,0.9); margin: 0.5em 0; text-shadow: 0 1px 10px rgba(0,0,0,0.3); }
 .hero-tagline { font-size: 0.55em; color: var(--accent); letter-spacing: 0.2em; text-transform: uppercase; }
+.hero-overlay { position: absolute; inset: 0; z-index: 1; background: linear-gradient(135deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.55) 100%); }
 
-/* ── Stats ── */
-.stats-grid { display: flex; gap: 1.5em; justify-content: center; flex-wrap: nowrap; width: 100%; padding: 0.5em 0; }
+/* ── Stats — gradient icon bg + gradient value ── */
+.stats-grid { display: flex; gap: 1.2em; justify-content: center; flex-wrap: nowrap; width: 100%; padding: 0.5em 0; }
 .stats-card { flex: 1; min-width: 0; text-align: center; padding: 28px 20px; background: var(--stats-card-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.stats-icon .material-symbols-outlined { font-size: 36px; color: var(--icon-color); margin-bottom: 8px; }
-.stats-value { font-size: 42px; font-weight: 700; color: var(--title-color); font-family: var(--font-heading); line-height: 1.2; }
+.stats-card:hover { transform: translateY(-6px) scale(1.02); }
+.stats-icon .material-symbols-outlined {
+  font-size: 26px;
+  color: #fff;
+  width: 52px; height: 52px;
+  line-height: 52px;
+  text-align: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: inline-block;
+  margin-bottom: 10px;
+  box-shadow: 0 4px 15px ${s.accentColor}30;
+}
+.stats-value {
+  font-size: 44px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-family: var(--font-heading);
+  line-height: 1.2;
+}
 .stats-label { font-size: 13px; color: var(--body-color); margin-top: 6px; text-transform: uppercase; letter-spacing: 0.08em; }
 .stats-trend { margin-top: 6px; }
 .trend-icon { font-size: 22px; }
 .trend-up .trend-icon { color: #48BB78; }
 .trend-down .trend-icon { color: #FC8181; }
 
-/* ── Icon Grid ── */
-.icon-grid { display: grid; gap: 1.2em; width: 100%; padding: 0.5em 0; }
+/* ── Icon Grid — gradient icon backgrounds ── */
+.icon-grid { display: grid; gap: 1em; width: 100%; padding: 0.5em 0; }
 .cols-1 { grid-template-columns: 1fr; }
 .cols-2 { grid-template-columns: repeat(2, 1fr); }
 .cols-3 { grid-template-columns: repeat(3, 1fr); }
 .cols-4 { grid-template-columns: repeat(4, 1fr); }
-.icon-card { text-align: center; padding: 1.2em 0.8em; }
-.icon-card-icon .material-symbols-outlined { font-size: 36px; color: var(--icon-color); }
-.icon-card-title { font-size: 16px; color: var(--heading-color); margin: 0.4em 0 0.15em; font-weight: 700; }
-.icon-card-desc { font-size: 13px; color: var(--body-color); margin: 0; line-height: 1.4; }
+.icon-card { text-align: center; padding: 1.4em 1em; }
+.icon-card-icon .material-symbols-outlined {
+  font-size: 30px;
+  color: #fff;
+  width: 58px; height: 58px;
+  line-height: 58px;
+  text-align: center;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: inline-block;
+  box-shadow: 0 4px 15px ${s.accentColor}25;
+  transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s ease;
+}
+.icon-card:hover .icon-card-icon .material-symbols-outlined {
+  transform: scale(1.1) rotate(-3deg);
+  box-shadow: 0 8px 25px ${s.accentColor}40;
+}
+.icon-card-img { width: 52px; height: 52px; border-radius: 14px; object-fit: cover; margin: 0 auto 0.4em; display: block; }
+.icon-card-title { font-size: 16px; color: var(--heading-color); margin: 0.5em 0 0.2em; font-weight: 700; }
+.icon-card-desc { font-size: 13px; color: var(--body-color); margin: 0; line-height: 1.5; }
 
-/* ── Timeline (horizontal) ── */
+/* ── Timeline (horizontal) — enhanced with gradient line + card content ── */
 .timeline { position: relative; width: 100%; margin-top: 1em; }
-.tl-line { position: absolute; top: 20px; left: 5%; right: 5%; height: 3px; background: var(--timeline-color); opacity: 0.3; border-radius: 2px; }
-.tl-items { display: flex; gap: 1em; width: 100%; position: relative; z-index: 1; }
-.tl-item { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; text-align: center; }
-.tl-dot { width: 40px; height: 40px; border-radius: 50%; background: var(--timeline-color); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-bottom: 0.6em; box-shadow: 0 0 0 4px var(--slide-bg, #fff), 0 0 0 6px var(--timeline-color); }
-.tl-num { font-size: 14px; font-weight: 700; color: ${s.isDark ? '#000' : '#fff'}; }
-.tl-icon { font-size: 20px; color: ${s.isDark ? '#000' : '#fff'}; }
-.tl-content { flex: 1; min-width: 0; }
-.tl-date { font-size: 12px; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 0.2em; }
-.tl-title { font-size: 16px; font-weight: 700; color: var(--heading-color); margin: 0.2em 0; }
-.tl-desc { font-size: 13px; color: var(--body-color); margin: 0.15em 0 0; line-height: 1.4; }
+.tl-line { position: absolute; top: 22px; left: 5%; right: 5%; height: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); opacity: 0.35; border-radius: 2px; }
+.tl-items { display: flex; gap: 0.8em; width: 100%; position: relative; z-index: 1; }
+.tl-item { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; text-align: center; transition: transform 0.3s; }
+.tl-item:hover { transform: translateY(-4px); }
+.tl-dot { width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-bottom: 0.7em; box-shadow: 0 0 0 5px ${isGrad ? 'rgba(255,255,255,0.2)' : s.bg}, 0 0 0 7px var(--accent), 0 6px 20px ${s.accentColor}30; transition: transform 0.3s, box-shadow 0.3s; }
+.tl-item:hover .tl-dot { transform: scale(1.15); box-shadow: 0 0 0 5px ${isGrad ? 'rgba(255,255,255,0.2)' : s.bg}, 0 0 0 7px var(--accent), 0 10px 30px ${s.accentColor}50; }
+.tl-num { font-size: 14px; font-weight: 700; color: #fff; }
+.tl-icon { font-size: 22px; color: #fff; }
+.tl-content { flex: 1; min-width: 0; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 0.7em 0.6em; margin-top: 0.2em; }
+.tl-date { font-size: 11px; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 0.15em; }
+.tl-title { font-size: 14px; font-weight: 700; color: var(--heading-color); margin: 0.1em 0; }
+.tl-desc { font-size: 12px; color: var(--body-color); margin: 0.1em 0 0; line-height: 1.4; }
 
-/* ── Quote ── */
-.quote-block { text-align: center; max-width: 85%; margin: 0 auto; }
-.quote-mark { font-size: 5em; line-height: 0.6; color: var(--quote-mark-color); font-family: Georgia, serif; user-select: none; }
-.quote-text { font-size: 1em; color: var(--heading-color); font-style: italic; line-height: 1.6; margin: 0.3em 0 0.6em; border: none; padding: 0; }
-.quote-author { font-size: 0.6em; color: var(--subtitle-color); font-style: normal; letter-spacing: 0.05em; }
+/* ── Quote — card bg with gradient left accent ── */
+.quote-block {
+  text-align: center;
+  max-width: 82%;
+  margin: 0 auto;
+  padding: 2.5em 2.5em;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 24px;
+  position: relative;
+  overflow: hidden;
+}
+.quote-block::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 5px;
+  background: linear-gradient(to bottom, var(--accent), var(--accent2));
+  border-radius: 24px 0 0 24px;
+}
+.quote-mark {
+  font-size: 5.5em;
+  line-height: 0.5;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-family: Georgia, serif;
+  user-select: none;
+}
+.quote-text { font-size: 1.05em; color: var(--heading-color); font-style: italic; line-height: 1.7; margin: 0.5em 0 0.8em; border: none; padding: 0; }
+.quote-author { font-size: 0.65em; color: var(--accent); font-style: normal; font-weight: 600; letter-spacing: 0.05em; }
 
-/* ── Charts ── */
-.chart-bar { width: 100%; max-width: 700px; margin: 0 auto; }
-.bar-row { display: flex; align-items: center; gap: 0.6em; margin-bottom: 0.5em; }
-.bar-label { font-size: 0.6em; color: var(--body-color); width: 120px; text-align: right; flex-shrink: 0; }
-.bar-track { flex: 1; height: 28px; background: ${s.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'}; border-radius: 6px; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 6px; transition: width 0.8s ease; }
-.bar-value { font-size: 0.6em; color: var(--heading-color); font-weight: 700; width: 40px; }
-
-.chart-pie-wrap { display: flex; align-items: center; justify-content: center; gap: 2em; }
-.chart-pie { width: 200px; height: 200px; border-radius: 50%; position: relative; }
-.chart-pie.donut::after { content: ''; position: absolute; top: 25%; left: 25%; width: 50%; height: 50%; border-radius: 50%; background: var(--slide-bg); }
-.chart-legend { display: flex; flex-direction: column; gap: 0.5em; }
-.chart-legend-item { display: flex; align-items: center; gap: 0.5em; font-size: 0.6em; color: var(--body-color); }
-.chart-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-
-.chart-line-svg { width: 100%; max-width: 95%; height: auto; margin: 0 auto; display: block; }
+/* ── ECharts ── */
+.echart-container { width: 100%; height: 380px; max-width: 900px; margin: 0 auto; }
+.echart-compact { height: 260px; }
 
 /* ── Image + Text ── */
-.image-text-layout { display: flex; gap: 2em; align-items: center; width: 100%; }
+.image-text-layout { display: flex; gap: 2.5em; align-items: center; width: 100%; }
 .image-text-layout.img-right { flex-direction: row-reverse; }
 .it-image { flex: 1; min-width: 0; }
-.it-image img { width: 100%; height: auto; max-height: 380px; object-fit: cover; border-radius: 16px; }
+.it-image img { width: 100%; height: auto; max-height: 400px; object-fit: cover; border-radius: 20px; box-shadow: 0 12px 40px rgba(0,0,0,${s.isDark ? '0.3' : '0.1'}); }
 .it-text { flex: 1; min-width: 0; }
+
+/* ── Profile — gradient avatar ring + pill links ── */
+.profile-layout { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.4em; }
+.profile-avatar-wrap {
+  width: 150px; height: 150px;
+  border-radius: 50%;
+  overflow: hidden;
+  padding: 4px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  box-shadow: 0 8px 30px ${s.accentColor}30;
+}
+.profile-avatar { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.profile-name { font-size: 1.8em; font-family: var(--font-heading); color: var(--heading-color); margin: 0.2em 0 0; }
+.profile-role { font-size: 0.7em; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; margin: 0; }
+.profile-bio { font-size: 0.6em; color: var(--body-color); max-width: 600px; line-height: 1.7; margin: 0.4em 0; }
+.profile-social { display: flex; gap: 1em; justify-content: center; margin-top: 0.6em; }
+.profile-link {
+  display: flex; align-items: center; gap: 0.3em;
+  font-size: 0.55em; color: var(--body-color);
+  padding: 0.35em 0.9em;
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 20px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.profile-link:hover { border-color: var(--accent); transform: translateY(-2px); }
+.profile-link-icon { font-size: 18px !important; color: var(--icon-color); }
+
+/* ── Process — large circles + card descriptions ── */
+.process-steps { display: flex; align-items: flex-start; justify-content: center; gap: 0; width: 100%; position: relative; padding-top: 1.5em; }
+.process-connector { position: absolute; top: calc(1.5em + 32px); left: 12%; right: 12%; height: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); opacity: 0.4; border-radius: 2px; }
+.process-step { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; z-index: 1; }
+.process-step-circle { width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; margin-bottom: 0.8em; box-shadow: 0 6px 25px ${s.accentColor}35; transition: transform 0.3s, box-shadow 0.3s; }
+.process-step:hover .process-step-circle { transform: scale(1.12); box-shadow: 0 8px 35px ${s.accentColor}50; }
+.process-icon { font-size: 28px !important; color: #fff; }
+.process-num { font-size: 20px; font-weight: 700; color: #fff; }
+.process-step-label { font-size: 0.78em; font-weight: 700; color: var(--heading-color); margin-bottom: 0.2em; }
+.process-step-desc { font-size: 0.55em; color: var(--body-color); margin: 0; max-width: 150px; line-height: 1.5; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 0.5em 0.6em; }
+
+/* ── Gallery — rounded with shadows ── */
+.gallery { display: grid; gap: 0.8em; width: 100%; }
+.gallery-2x2 { grid-template-columns: 1fr 1fr; }
+.gallery-3-col { grid-template-columns: 1fr 1fr 1fr; }
+.gallery-1-hero-2-small { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; }
+.gallery-1-hero-2-small .gallery-item:first-child { grid-row: 1 / 3; }
+.gallery-item { overflow: hidden; border-radius: 16px; position: relative; margin: 0; box-shadow: 0 4px 20px rgba(0,0,0,${s.isDark ? '0.25' : '0.08'}); }
+.gallery-item img { width: 100%; height: 100%; object-fit: cover; max-height: 280px; display: block; transition: transform 0.4s cubic-bezier(0.22,1,0.36,1); }
+.gallery-item:hover img { transform: scale(1.06); }
+.gallery-item figcaption { position: absolute; bottom: 0; left: 0; right: 0; padding: 0.6em 1em; background: linear-gradient(transparent, rgba(0,0,0,0.75)); color: #fff; font-size: 0.55em; font-weight: 500; }
+
+/* ── Team — gradient photo ring ── */
+.team-grid { display: flex; gap: 1.5em; justify-content: center; flex-wrap: nowrap; padding: 0.5em 0; }
+.team-card { flex: 1; min-width: 0; text-align: center; padding: 1.8em 1.2em; max-width: 260px; }
+.team-photo {
+  width: 100px; height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  padding: 3px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  margin: 0 auto 0.8em;
+  display: block;
+  box-shadow: 0 4px 20px ${s.accentColor}25;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+.team-card:hover .team-photo { transform: scale(1.08); box-shadow: 0 8px 30px ${s.accentColor}40; }
+.team-photo-placeholder { width: 100px; height: 100px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; margin: 0 auto 0.8em; }
+.team-photo-placeholder .material-symbols-outlined { font-size: 40px; color: #fff; }
+.team-name { font-size: 0.85em; font-weight: 700; color: var(--heading-color); }
+.team-role { font-size: 0.6em; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.15em; }
+.team-desc { font-size: 0.55em; color: var(--body-color); margin-top: 0.35em; line-height: 1.5; }
+
+/* ── Table — modern with gradient header + hover ── */
+.table-wrap { width: 100%; overflow: hidden; border-radius: 16px; border: 1px solid var(--card-border); box-shadow: 0 4px 20px rgba(0,0,0,${s.isDark ? '0.2' : '0.06'}); }
+.slide-table { width: 100%; border-collapse: collapse; font-size: 0.6em; }
+.slide-table th, .slide-table td { padding: 0.85em 1.2em; text-align: left; border-bottom: 1px solid var(--card-border); color: var(--body-color); transition: background 0.2s; }
+.slide-table th { font-weight: 700; color: var(--heading-color); background: var(--card-bg); }
+.table-header-highlighted th { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; }
+.slide-table tbody tr:nth-child(even) { background: var(--card-bg); }
+.slide-table tbody tr:hover { background: ${hoverBg}; }
+
+/* ── Dashboard — compact KPI + chart ── */
+.dashboard-kpis { display: flex; gap: 1em; margin-bottom: 1em; }
+.dashboard-kpi-card { padding: 18px 14px; }
+.dashboard-kpi-card .stats-value { font-size: 28px; }
+.dashboard-kpi-card .stats-label { font-size: 11px; }
+.dashboard-kpi-card .stats-icon .material-symbols-outlined { font-size: 22px; width: 40px; height: 40px; line-height: 40px; border-radius: 10px; margin-bottom: 6px; }
+.dashboard-chart { width: 100%; }
+
+/* ── Diagram (Mermaid) ── */
+.diagram-container { display: flex; justify-content: center; align-items: center; width: 100%; min-height: 300px; }
+.diagram-container .mermaid { font-size: 14px; }
+.diagram-container svg { max-width: 100%; max-height: 480px; }
+
+/* ── Mindmap (Markmap) ── */
+.mindmap-container { width: 100%; height: 480px; display: flex; justify-content: center; }
+.mindmap-svg { width: 100%; height: 100%; }
 
 /* ── Fragment Animations ── */
 .fragment.slide-up { transform: translateY(20px); opacity: 0; transition: all 0.5s ease; }
@@ -952,42 +1397,10 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
 .fragment.blur.visible { filter: none; opacity: 1; }
 .fragment.scale-in { transform: scale(0.85); opacity: 0; transition: all 0.4s ease; }
 .fragment.scale-in.visible { transform: scale(1); opacity: 1; }
-
-/* ── Interactive Hover Effects ── */
-.glass-card { transition: transform 0.25s ease, box-shadow 0.25s ease; cursor: default; }
-.glass-card:hover { transform: translateY(-4px); box-shadow: 0 8px 30px rgba(0,0,0,${s.isDark ? '0.3' : '0.12'}); }
-.stats-card:hover { transform: translateY(-5px) scale(1.02); }
-.icon-card:hover .icon-card-icon .material-symbols-outlined { transform: scale(1.15); }
-.icon-card-icon .material-symbols-outlined { transition: transform 0.2s ease; }
-
-/* Bar chart hover */
-.bar-fill { transition: width 0.8s ease, filter 0.2s; }
-.bar-row { cursor: pointer; transition: background 0.15s; border-radius: 4px; padding: 2px 4px; margin: 0 -4px; }
-.bar-row:hover { background: ${s.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'}; }
-.bar-row:hover .bar-fill { filter: brightness(1.2); }
-.bar-row:hover .bar-value { font-weight: 800; color: var(--title-color); }
-
-/* Pie chart legend hover */
-.chart-legend-item { cursor: pointer; transition: all 0.2s; padding: 2px 8px; border-radius: 6px; }
-.chart-legend-item:hover { background: ${s.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}; }
-
-/* Line chart dot hover */
-.chart-line-svg circle { cursor: pointer; }
-.chart-line-svg circle:hover { r: 6; stroke-width: 3; }
-
-/* Timeline hover */
-.tl-item { transition: transform 0.2s; }
-.tl-item:hover { transform: translateY(-2px); }
-.tl-dot { transition: transform 0.2s, box-shadow 0.2s; }
-.tl-item:hover .tl-dot { transform: scale(1.15); box-shadow: 0 0 0 6px ${s.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'}; }
-
-/* Tooltip */
-#slide-tooltip { position: fixed; pointer-events: none; z-index: 9999; display: none; padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); background: ${s.isDark ? 'rgba(30,30,50,0.9)' : 'rgba(255,255,255,0.95)'}; color: ${s.isDark ? '#e0e0ff' : '#333'}; border: 1px solid ${s.isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)'}; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
-#slide-tooltip .tt-label { font-size: 11px; font-weight: 400; opacity: 0.7; display: block; }
-#slide-tooltip .tt-value { font-size: 16px; }
+.fragment.fade-up { transform: translateY(30px); opacity: 0; transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+.fragment.fade-up.visible { transform: translateY(0); opacity: 1; }
 
 /* ── Theme Overrides ── */
-/* Override Reveal.js white theme defaults */
 .reveal .slide-background { ${bgRule} }
 .reveal .slides > section { margin: 0; }
 .reveal .progress { color: var(--accent); height: 4px; }
@@ -997,14 +1410,19 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
 
 /* ── RWD ── */
 @media (max-width: 768px) {
-  .reveal .slides section { padding: 1.2em 1.5em; }
+  .reveal .slides section { padding: 1.2em 1.5em !important; }
   .reveal h1 { font-size: 1.4em; }
   .slide-columns, .image-text-layout, .image-text-layout.img-right { flex-direction: column; }
-  .stats-grid { flex-direction: column; align-items: center; }
+  .stats-grid, .dashboard-kpis { flex-direction: column; align-items: center; }
   .icon-grid { grid-template-columns: repeat(2, 1fr) !important; }
   .tl-items { flex-direction: column; }
   .tl-line { display: none; }
-  .chart-pie-wrap { flex-direction: column; }
+  .process-steps { flex-direction: column; align-items: center; }
+  .process-connector { display: none; }
+  .gallery { grid-template-columns: 1fr !important; grid-template-rows: auto !important; }
+  .gallery-1-hero-2-small .gallery-item:first-child { grid-row: auto; }
+  .team-grid { flex-direction: column; align-items: center; }
+  .echart-container { height: 260px; }
 }
 
 ${s.extra || ''}
@@ -1015,7 +1433,171 @@ ${s.extra || ''}
 
 function generateHtml(input: SlidesInput): string {
   const s = STYLES[input.style || ''] || DEFAULT_STYLE;
+
+  // Reset CDN flags
+  echartsUsed = false;
+  mermaidUsed = false;
+  markmapUsed = false;
+  echartsConfigs.length = 0;
+  mindmapConfigs.length = 0;
+  mermaidConfigs.length = 0;
+
   const slides = input.slides.map((slide, i) => renderSlide(slide, s, i)).join('\n');
+
+  // Build conditional CDN scripts
+  const cdnScripts: string[] = [];
+  if (echartsUsed) {
+    cdnScripts.push(`<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"><\/script>`);
+  }
+  if (mermaidUsed) {
+    cdnScripts.push(`<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"><\/script>`);
+  }
+  if (markmapUsed) {
+    cdnScripts.push(`<script src="https://cdn.jsdelivr.net/npm/d3@7"><\/script>`);
+    cdnScripts.push(`<script src="https://cdn.jsdelivr.net/npm/markmap-lib"><\/script>`);
+    cdnScripts.push(`<script src="https://cdn.jsdelivr.net/npm/markmap-view"><\/script>`);
+  }
+
+  // Build ECharts init code
+  let echartsInitCode = '';
+  if (echartsUsed && echartsConfigs.length > 0) {
+    const configs = echartsConfigs.map(c =>
+      `{ id: '${c.id}', option: ${JSON.stringify(c.option)} }`
+    ).join(',\n      ');
+    echartsInitCode = `
+  <script>
+  (function() {
+    var configs = [
+      ${configs}
+    ];
+    var instances = {};
+    function initChart(cfg) {
+      var el = document.getElementById(cfg.id);
+      if (!el || instances[cfg.id]) return;
+      var chart = echarts.init(el, ${s.isDark ? "'dark'" : 'null'}, { renderer: 'canvas' });
+      chart.setOption(cfg.option);
+      instances[cfg.id] = chart;
+    }
+    function initVisibleCharts() {
+      var current = Reveal.getCurrentSlide();
+      if (!current) return;
+      configs.forEach(function(cfg) {
+        if (current.querySelector('#' + cfg.id)) initChart(cfg);
+      });
+    }
+    function resizeAll() {
+      Object.keys(instances).forEach(function(k) { instances[k].resize(); });
+    }
+    Reveal.on('ready', initVisibleCharts);
+    Reveal.on('slidechanged', function(e) {
+      configs.forEach(function(cfg) {
+        if (e.currentSlide.querySelector('#' + cfg.id)) {
+          if (!instances[cfg.id]) initChart(cfg);
+          else instances[cfg.id].resize();
+        }
+      });
+    });
+    window.addEventListener('resize', resizeAll);
+  })();
+  <\/script>`;
+  }
+
+  // Build Mermaid init code (inject via JS to avoid HTML entity escaping issues)
+  let mermaidInitCode = '';
+  if (mermaidUsed && mermaidConfigs.length > 0) {
+    const mermaidCfgs = mermaidConfigs.map(c =>
+      `{ id: '${c.id}', code: ${JSON.stringify(c.code)} }`
+    ).join(',\n      ');
+    mermaidInitCode = `
+  <script>
+  (function() {
+    var configs = [
+      ${mermaidCfgs}
+    ];
+    mermaid.initialize({ startOnLoad: false, theme: '${s.isDark ? 'dark' : 'default'}', themeVariables: { primaryColor: '${s.accentColor}', primaryTextColor: '${s.headingColor}', lineColor: '${s.bodyColor}' } });
+    configs.forEach(function(cfg) {
+      var el = document.getElementById(cfg.id);
+      if (el) el.textContent = cfg.code;
+    });
+    Reveal.on('ready', function() { mermaid.run({ querySelector: '.mermaid' }); });
+  })();
+  <\/script>`;
+  }
+
+  // Build Markmap init code
+  let markmapInitCode = '';
+  if (markmapUsed && mindmapConfigs.length > 0) {
+    const mmConfigs = mindmapConfigs.map(c =>
+      `{ id: '${c.id}', code: ${JSON.stringify(c.code)} }`
+    ).join(',\n      ');
+    markmapInitCode = `
+  <script>
+  (function() {
+    var configs = [
+      ${mmConfigs}
+    ];
+    var transformer = new markmap.Transformer();
+    Reveal.on('ready', function() {
+      configs.forEach(function(cfg) {
+        var el = document.getElementById(cfg.id);
+        if (!el) return;
+        var result = transformer.transform(cfg.code);
+        var mm = markmap.Markmap.create(el, {
+          color: function(node) {
+            var colors = ${JSON.stringify(s.chartColors)};
+            return colors[(node.state ? node.state.id : 0) % colors.length];
+          },
+          paddingX: 16,
+          initialExpandLevel: 2,
+        }, result.root);
+        mm.fit();
+      });
+    });
+    Reveal.on('slidechanged', function(e) {
+      configs.forEach(function(cfg) {
+        var el = e.currentSlide.querySelector('#' + cfg.id);
+        if (el && el.__markmap) el.__markmap.fit();
+      });
+    });
+  })();
+  <\/script>`;
+  }
+
+  // Stats count-up animation (always included if stats exist)
+  const hasStats = input.slides.some(sl => sl.type === 'stats' || sl.type === 'dashboard');
+  const statsScript = hasStats ? `
+  <script>
+  (function() {
+    function animateNumbers(section) {
+      section.querySelectorAll('.stats-value').forEach(function(el) {
+        var text = el.textContent || '';
+        var match = text.match(/([\\d,.]+)/);
+        if (!match) return;
+        var target = parseFloat(match[1].replace(/,/g, ''));
+        if (isNaN(target)) return;
+        var prefix = text.substring(0, text.indexOf(match[1]));
+        var suffix = text.substring(text.indexOf(match[1]) + match[1].length);
+        var duration = 800, start = performance.now();
+        function tick(now) {
+          var p = Math.min((now - start) / duration, 1);
+          p = 1 - Math.pow(1 - p, 3);
+          var current = Math.round(target * p);
+          el.textContent = prefix + current.toLocaleString() + suffix;
+          if (p < 1) requestAnimationFrame(tick);
+          else el.textContent = text;
+        }
+        el.textContent = prefix + '0' + suffix;
+        requestAnimationFrame(tick);
+      });
+    }
+    Reveal.on('slidechanged', function(e) {
+      if (e.currentSlide.querySelector('.stats-grid') || e.currentSlide.querySelector('.dashboard-kpis')) animateNumbers(e.currentSlide);
+    });
+    Reveal.on('ready', function(e) {
+      if (e.currentSlide && (e.currentSlide.querySelector('.stats-grid') || e.currentSlide.querySelector('.dashboard-kpis'))) animateNumbers(e.currentSlide);
+    });
+  })();
+  <\/script>` : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1045,6 +1627,7 @@ function generateHtml(input: SlidesInput): string {
 
   <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"><\/script>
   <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"><\/script>
+  ${cdnScripts.join('\n  ')}
   <script>
     Reveal.initialize({
       hash: true,
@@ -1063,111 +1646,10 @@ function generateHtml(input: SlidesInput): string {
       disableLayout: false,
     });
   <\/script>
-
-  <!-- Tooltip element -->
-  <div id="slide-tooltip"></div>
-
-  <!-- Interactive chart & card JS -->
-  <script>
-  (function() {
-    var tip = document.getElementById('slide-tooltip');
-    function showTip(e, html) {
-      tip.innerHTML = html;
-      tip.style.display = 'block';
-      moveTip(e);
-    }
-    function moveTip(e) {
-      var x = e.clientX + 12, y = e.clientY - 40;
-      if (x + 180 > window.innerWidth) x = e.clientX - 180;
-      if (y < 8) y = e.clientY + 16;
-      tip.style.left = x + 'px';
-      tip.style.top = y + 'px';
-    }
-    function hideTip() { tip.style.display = 'none'; }
-
-    // Bar chart tooltip
-    document.querySelectorAll('.bar-row').forEach(function(row) {
-      row.addEventListener('mouseenter', function(e) {
-        var label = row.getAttribute('data-label');
-        var value = row.getAttribute('data-value');
-        showTip(e, '<span class="tt-label">' + label + '</span><span class="tt-value">' + value + '</span>');
-      });
-      row.addEventListener('mousemove', moveTip);
-      row.addEventListener('mouseleave', hideTip);
-    });
-
-    // SVG line chart circle tooltip
-    document.querySelectorAll('.chart-line-svg circle[data-label]').forEach(function(c) {
-      c.addEventListener('mouseenter', function(e) {
-        var label = c.getAttribute('data-label');
-        var value = c.getAttribute('data-value');
-        var series = c.getAttribute('data-series');
-        var html = '<span class="tt-label">' + (series ? series + ' — ' : '') + label + '</span><span class="tt-value">' + value + '</span>';
-        showTip(e, html);
-      });
-      c.addEventListener('mousemove', moveTip);
-      c.addEventListener('mouseleave', hideTip);
-    });
-
-    // Pie chart tooltip on hover (angle-based)
-    document.querySelectorAll('.chart-pie[data-slices]').forEach(function(pie) {
-      var slices;
-      try { slices = JSON.parse(pie.getAttribute('data-slices')); } catch(e) { return; }
-      pie.style.cursor = 'crosshair';
-      pie.addEventListener('mousemove', function(e) {
-        var rect = pie.getBoundingClientRect();
-        var cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
-        var angle = Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI + 90;
-        if (angle < 0) angle += 360;
-        var cum = 0, total = slices.reduce(function(s, sl) { return s + sl.value; }, 0);
-        for (var i = 0; i < slices.length; i++) {
-          cum += (slices[i].value / total) * 360;
-          if (angle <= cum) {
-            showTip(e, '<span class="tt-label">' + slices[i].label + '</span><span class="tt-value">' + slices[i].pct + '%</span>');
-            return;
-          }
-        }
-      });
-      pie.addEventListener('mouseleave', hideTip);
-    });
-
-    // Stats number count-up animation on slide change
-    function animateNumbers(section) {
-      section.querySelectorAll('.stats-value').forEach(function(el) {
-        var text = el.textContent || '';
-        var match = text.match(/([\\d,.]+)/);
-        if (!match) return;
-        var target = parseFloat(match[1].replace(/,/g, ''));
-        if (isNaN(target)) return;
-        var prefix = text.substring(0, text.indexOf(match[1]));
-        var suffix = text.substring(text.indexOf(match[1]) + match[1].length);
-        var duration = 800, start = performance.now();
-        function tick(now) {
-          var p = Math.min((now - start) / duration, 1);
-          p = 1 - Math.pow(1 - p, 3); // ease-out cubic
-          var current = Math.round(target * p);
-          el.textContent = prefix + current.toLocaleString() + suffix;
-          if (p < 1) requestAnimationFrame(tick);
-          else el.textContent = text; // restore original (preserves formatting)
-        }
-        el.textContent = prefix + '0' + suffix;
-        requestAnimationFrame(tick);
-      });
-    }
-
-    Reveal.on('slidechanged', function(event) {
-      if (event.currentSlide.querySelector('.stats-grid')) {
-        animateNumbers(event.currentSlide);
-      }
-    });
-    // Also animate the first slide if it has stats
-    Reveal.on('ready', function(event) {
-      if (event.currentSlide && event.currentSlide.querySelector('.stats-grid')) {
-        animateNumbers(event.currentSlide);
-      }
-    });
-  })();
-  <\/script>
+  ${echartsInitCode}
+  ${mermaidInitCode}
+  ${markmapInitCode}
+  ${statsScript}
 </body>
 </html>`;
 }

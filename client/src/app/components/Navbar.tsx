@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from './AuthProvider';
@@ -53,14 +53,12 @@ const SKILL_TEMPLATES: Record<string, Array<{ id: string; icon: string; labelKey
     { id: 'technical', icon: 'code', labelKey: 'templates.pdf.technical' as any, descKey: 'templates.pdf.technical.desc' as any, promptKey: 'templates.pdf.technical.prompt' as any },
   ],
   'slides-gen': [
-    { id: 'minimal', icon: 'tune', labelKey: 'templates.slides.minimal' as any, descKey: 'templates.slides.minimal.desc' as any, promptKey: 'templates.slides.minimal.prompt' as any },
-    { id: 'dark', icon: 'dark_mode', labelKey: 'templates.slides.dark' as any, descKey: 'templates.slides.dark.desc' as any, promptKey: 'templates.slides.dark.prompt' as any },
-    { id: 'gradient', icon: 'gradient', labelKey: 'templates.slides.gradient' as any, descKey: 'templates.slides.gradient.desc' as any, promptKey: 'templates.slides.gradient.prompt' as any },
-    { id: 'neon', icon: 'flare', labelKey: 'templates.slides.neon' as any, descKey: 'templates.slides.neon.desc' as any, promptKey: 'templates.slides.neon.prompt' as any },
-    { id: 'corporate', icon: 'business', labelKey: 'templates.slides.corporate' as any, descKey: 'templates.slides.corporate.desc' as any, promptKey: 'templates.slides.corporate.prompt' as any },
+    { id: 'personal', icon: 'person', labelKey: 'templates.slides.personal' as any, descKey: 'templates.slides.personal.desc' as any, promptKey: 'templates.slides.personal.prompt' as any },
+    { id: 'business', icon: 'business_center', labelKey: 'templates.slides.business' as any, descKey: 'templates.slides.business.desc' as any, promptKey: 'templates.slides.business.prompt' as any },
+    { id: 'data', icon: 'analytics', labelKey: 'templates.slides.data' as any, descKey: 'templates.slides.data.desc' as any, promptKey: 'templates.slides.data.prompt' as any },
+    { id: 'project', icon: 'rocket_launch', labelKey: 'templates.slides.project' as any, descKey: 'templates.slides.project.desc' as any, promptKey: 'templates.slides.project.prompt' as any },
+    { id: 'education', icon: 'school', labelKey: 'templates.slides.education' as any, descKey: 'templates.slides.education.desc' as any, promptKey: 'templates.slides.education.prompt' as any },
     { id: 'creative', icon: 'palette', labelKey: 'templates.slides.creative' as any, descKey: 'templates.slides.creative.desc' as any, promptKey: 'templates.slides.creative.prompt' as any },
-    { id: 'elegant', icon: 'diamond', labelKey: 'templates.slides.elegant' as any, descKey: 'templates.slides.elegant.desc' as any, promptKey: 'templates.slides.elegant.prompt' as any },
-    { id: 'tech', icon: 'terminal', labelKey: 'templates.slides.tech' as any, descKey: 'templates.slides.tech.desc' as any, promptKey: 'templates.slides.tech.prompt' as any },
   ],
 };
 
@@ -86,15 +84,13 @@ const TEMPLATE_PREVIEW: Record<string, { bg: string; accent: string; text: strin
   'pdf-gen:modern': { bg: '#ffffff', accent: '#8b5cf6', text: '#1f2937', card: '#ede9fe' },
   'pdf-gen:magazine': { bg: '#fef2f2', accent: '#dc2626', text: '#1f2937', card: '#fee2e2' },
   'pdf-gen:technical': { bg: '#1e293b', accent: '#22d3ee', text: '#e2e8f0', card: '#0f172a' },
-  // Slides
-  'slides-gen:minimal': { bg: '#ffffff', accent: '#9ca3af', text: '#1f2937', card: '#f9fafb' },
-  'slides-gen:dark': { bg: '#0a0a0a', accent: '#a855f7', text: '#fafafa', card: '#1a1a2e' },
-  'slides-gen:gradient': { bg: 'linear-gradient(135deg, #667eea, #764ba2)', accent: '#a78bfa', text: '#ffffff', card: 'rgba(255,255,255,0.1)' },
-  'slides-gen:neon': { bg: '#000000', accent: '#00ff88', text: '#ffffff', card: '#0a0a0a' },
-  'slides-gen:corporate': { bg: '#ffffff', accent: '#2563eb', text: '#1e3a5f', card: '#f0f7ff' },
+  // Slides (purpose-based)
+  'slides-gen:personal': { bg: '#faf5ef', accent: '#b8860b', text: '#2d2006', card: '#f5ead6' },
+  'slides-gen:business': { bg: '#ffffff', accent: '#2563eb', text: '#1e3a5f', card: '#f0f7ff' },
+  'slides-gen:data': { bg: '#0a0a1a', accent: '#3b82f6', text: '#e2e8f0', card: '#1e293b' },
+  'slides-gen:project': { bg: 'linear-gradient(135deg, #667eea, #764ba2)', accent: '#a78bfa', text: '#ffffff', card: 'rgba(255,255,255,0.15)' },
+  'slides-gen:education': { bg: '#ffffff', accent: '#6366f1', text: '#1f2937', card: '#eef2ff' },
   'slides-gen:creative': { bg: '#fff7ed', accent: '#f97316', text: '#431407', card: '#ffedd5' },
-  'slides-gen:elegant': { bg: '#faf5ef', accent: '#b8860b', text: '#2d2006', card: '#f5ead6' },
-  'slides-gen:tech': { bg: '#0d1117', accent: '#3fb950', text: '#c9d1d9', card: '#161b22' },
 };
 
 const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
@@ -998,7 +994,76 @@ export default function Navbar() {
                             </div>
                           );
                         }
-                        // PPTX / Slides: slide bars (original style)
+                        if (skillType === 'slides') {
+                          // Purpose-specific mini mockups for slides
+                          if (tmpl.id === 'personal') return (
+                            <div className="absolute inset-0 p-2.5 flex items-center gap-2">
+                              <div className="w-5 h-5 rounded-full" style={{ background: ac, opacity: 0.7 }} />
+                              <div className="flex flex-col gap-0.5 flex-1">
+                                <div className="h-1.5 w-10 rounded-sm" style={{ background: tx, opacity: 0.3 }} />
+                                <div className="h-1 w-7 rounded-sm" style={{ background: tx, opacity: 0.15 }} />
+                              </div>
+                            </div>
+                          );
+                          if (tmpl.id === 'business') return (
+                            <div className="absolute inset-0 p-2 flex items-end gap-0.5">
+                              <div className="h-2/5 flex-1 rounded-sm" style={{ background: ac, opacity: 0.5 }} />
+                              <div className="h-3/5 flex-1 rounded-sm" style={{ background: ac, opacity: 0.7 }} />
+                              <div className="h-4/5 flex-1 rounded-sm" style={{ background: ac, opacity: 0.9 }} />
+                            </div>
+                          );
+                          if (tmpl.id === 'data') return (
+                            <div className="absolute inset-0 p-2 flex flex-col gap-0.5 justify-center">
+                              <div className="flex gap-0.5">
+                                <div className="h-1.5 flex-1 rounded-sm" style={{ background: ac, opacity: 0.6 }} />
+                                <div className="h-1.5 flex-1 rounded-sm" style={{ background: ac, opacity: 0.6 }} />
+                              </div>
+                              <div className="flex gap-0.5">
+                                <div className="h-1.5 flex-1 rounded-sm" style={{ background: cd }} />
+                                <div className="h-1.5 flex-1 rounded-sm" style={{ background: cd }} />
+                              </div>
+                              <div className="flex gap-0.5">
+                                <div className="h-1.5 flex-1 rounded-sm" style={{ background: cd, opacity: 0.7 }} />
+                                <div className="h-1.5 flex-1 rounded-sm" style={{ background: cd, opacity: 0.7 }} />
+                              </div>
+                            </div>
+                          );
+                          if (tmpl.id === 'project') return (
+                            <div className="absolute inset-0 p-2.5 flex items-center gap-1">
+                              {[0.9, 0.7, 0.5].map((op, i) => (
+                                <div key={i} className="flex flex-col items-center gap-0.5 flex-1">
+                                  <div className="w-3 h-3 rounded-full" style={{ background: ac, opacity: op }} />
+                                  <div className="h-0.5 w-full rounded-sm" style={{ background: ac, opacity: 0.3 }} />
+                                </div>
+                              ))}
+                            </div>
+                          );
+                          if (tmpl.id === 'education') return (
+                            <div className="absolute inset-0 p-2.5 flex flex-col gap-1 justify-center">
+                              <div className="flex items-center gap-1">
+                                <div className="w-3 h-3 rounded-sm" style={{ background: ac, opacity: 0.6 }} />
+                                <div className="h-1 w-8 rounded-sm" style={{ background: tx, opacity: 0.15 }} />
+                              </div>
+                              <div className="flex gap-0.5 pl-4">
+                                <div className="h-1 w-6 rounded-sm" style={{ background: tx, opacity: 0.1 }} />
+                              </div>
+                              <div className="flex gap-0.5 pl-4">
+                                <div className="h-1 w-8 rounded-sm" style={{ background: tx, opacity: 0.08 }} />
+                              </div>
+                            </div>
+                          );
+                          // creative: image + text overlay
+                          return (
+                            <div className="absolute inset-0 p-2 flex gap-1">
+                              <div className="flex-1 rounded-sm" style={{ background: ac, opacity: 0.3 }} />
+                              <div className="flex-1 flex flex-col gap-0.5 justify-center">
+                                <div className="h-1.5 w-full rounded-sm" style={{ background: tx, opacity: 0.2 }} />
+                                <div className="h-1 w-3/4 rounded-sm" style={{ background: tx, opacity: 0.12 }} />
+                              </div>
+                            </div>
+                          );
+                        }
+                        // PPTX: slide bars (original style)
                         return (
                           <div className="absolute inset-0 p-2 flex items-end gap-0.5">
                             <div className="h-3/5 flex-1 rounded-sm" style={{ background: ac, opacity: 0.8 }} />
@@ -1127,7 +1192,111 @@ export default function Navbar() {
                           );
                         }
 
-                        // PPTX / Slides: slide mockup (improved)
+                        if (skillType === 'slides') {
+                          // Purpose-specific full mockups for slides
+                          if (tmpl.id === 'personal') return (
+                            <div className="absolute inset-0 p-3 flex flex-col items-center gap-1.5">
+                              <div className="w-10 h-10 rounded-full" style={{ background: ac, opacity: 0.7 }} />
+                              <div className="h-2.5 w-16 rounded-sm" style={{ background: tx, opacity: 0.6 }} />
+                              <div className="h-1.5 w-10 rounded-sm" style={{ background: ac, opacity: 0.4 }} />
+                              <div className="h-1 w-24 rounded-sm mt-1" style={{ background: tx, opacity: 0.1 }} />
+                              <div className="h-1 w-20 rounded-sm" style={{ background: tx, opacity: 0.08 }} />
+                              <div className="flex gap-2 mt-auto">
+                                {[0.5, 0.4, 0.3].map((op, i) => (
+                                  <div key={i} className="w-3 h-3 rounded-full" style={{ background: ac, opacity: op }} />
+                                ))}
+                              </div>
+                            </div>
+                          );
+                          if (tmpl.id === 'business') return (
+                            <div className="absolute inset-0 p-3 flex flex-col gap-1.5">
+                              <div className="h-2.5 w-16 rounded-sm" style={{ background: tx, opacity: 0.6 }} />
+                              <div className="flex gap-1">
+                                {['up', 'up', 'down'].map((d, i) => (
+                                  <div key={i} className="flex-1 rounded-sm p-1 flex flex-col items-center gap-0.5" style={{ background: cd }}>
+                                    <div className="h-2 w-6 rounded-sm" style={{ background: ac, opacity: 0.7 }} />
+                                    <div className="h-1 w-4 rounded-sm" style={{ background: tx, opacity: 0.15 }} />
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="flex-1 flex items-end gap-0.5 px-1">
+                                {[0.4, 0.6, 0.5, 0.8, 0.7, 0.95].map((h, i) => (
+                                  <div key={i} className="flex-1 rounded-t-sm" style={{ background: ac, opacity: 0.7, height: `${h * 100}%` }} />
+                                ))}
+                              </div>
+                            </div>
+                          );
+                          if (tmpl.id === 'data') return (
+                            <div className="absolute inset-0 p-2.5 flex flex-col gap-1">
+                              <div className="flex gap-1">
+                                {[1, 2].map(i => (
+                                  <div key={i} className="flex-1 rounded-sm p-1" style={{ background: cd }}>
+                                    <div className="h-2 w-5 rounded-sm" style={{ background: ac, opacity: 0.8 }} />
+                                    <div className="h-1 w-8 mt-0.5 rounded-sm" style={{ background: tx, opacity: 0.15 }} />
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="flex-1 rounded-sm p-1 flex items-end gap-0.5" style={{ background: cd }}>
+                                {[0.3, 0.5, 0.4, 0.7, 0.6, 0.8, 0.75, 0.9].map((h, i) => (
+                                  <div key={i} className="flex-1 rounded-t-sm" style={{ background: ac, opacity: 0.7, height: `${h * 100}%` }} />
+                                ))}
+                              </div>
+                            </div>
+                          );
+                          if (tmpl.id === 'project') return (
+                            <div className="absolute inset-0 p-3 flex flex-col gap-2">
+                              <div className="h-2.5 w-14 rounded-sm" style={{ background: tx, opacity: 0.6 }} />
+                              <div className="flex items-center gap-1 justify-center flex-1">
+                                {[0.9, 0.7, 0.5, 0.3].map((op, i) => (
+                                  <Fragment key={i}>
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ background: ac, opacity: op }}>
+                                        <div className="w-2 h-0.5 rounded-sm" style={{ background: '#fff', opacity: 0.7 }} />
+                                      </div>
+                                      <div className="h-1 w-6 rounded-sm" style={{ background: tx, opacity: 0.12 }} />
+                                    </div>
+                                    {i < 3 && <div className="w-3 h-0.5 rounded-sm" style={{ background: ac, opacity: 0.3 }} />}
+                                  </Fragment>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                          if (tmpl.id === 'education') return (
+                            <div className="absolute inset-0 p-3 flex flex-col gap-1.5">
+                              <div className="h-2.5 w-14 rounded-sm" style={{ background: tx, opacity: 0.6 }} />
+                              <div className="flex-1 flex gap-2">
+                                <div className="flex-1 flex flex-col gap-1">
+                                  <div className="h-8 w-full rounded-sm flex items-center justify-center" style={{ background: cd }}>
+                                    <div className="w-6 h-4 rounded-sm" style={{ background: ac, opacity: 0.4 }} />
+                                  </div>
+                                  <div className="h-1 w-full rounded-sm" style={{ background: tx, opacity: 0.1 }} />
+                                  <div className="h-1 w-3/4 rounded-sm" style={{ background: tx, opacity: 0.08 }} />
+                                </div>
+                                <div className="flex-1 flex flex-col gap-0.5">
+                                  {[1, 2, 3, 4].map(i => (
+                                    <div key={i} className="flex items-center gap-1">
+                                      <div className="w-1.5 h-1.5 rounded-full" style={{ background: ac, opacity: 0.5 }} />
+                                      <div className="h-1 flex-1 rounded-sm" style={{ background: tx, opacity: 0.1 }} />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                          // creative: hero image + text
+                          return (
+                            <div className="absolute inset-0 p-3 flex gap-2">
+                              <div className="flex-1 rounded-sm" style={{ background: ac, opacity: 0.25 }} />
+                              <div className="flex-1 flex flex-col gap-1.5 justify-center">
+                                <div className="h-3 w-16 rounded-sm" style={{ background: tx, opacity: 0.6 }} />
+                                <div className="h-1.5 w-full rounded-sm" style={{ background: tx, opacity: 0.15 }} />
+                                <div className="h-1.5 w-4/5 rounded-sm" style={{ background: tx, opacity: 0.12 }} />
+                                <div className="h-4 w-12 rounded-sm mt-1" style={{ background: ac, opacity: 0.5 }} />
+                              </div>
+                            </div>
+                          );
+                        }
+                        // PPTX: slide mockup (improved)
                         return (
                           <div className="absolute inset-0 p-3 flex flex-col gap-1.5">
                             <div className="flex items-center gap-1.5">

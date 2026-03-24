@@ -1,0 +1,367 @@
+{
+  "title": "Full Feature Test — All Slide Types",
+  "author": "Test Suite",
+  "style": "dark",
+  "slides": [
+    {
+      "type": "title",
+      "title": "All Slide Types Demo",
+      "subtitle": "Testing 21 slide types + 10 chart types",
+      "tagline": "COMPREHENSIVE TEST"
+    },
+    {
+      "type": "hero",
+      "title": "Hero Slide",
+      "subtitle": "Full-screen background with overlay",
+      "background": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1920&h=1080&fit=crop"
+    },
+    {
+      "type": "section",
+      "title": "Section 1: Text & Layout"
+    },
+    {
+      "type": "content",
+      "title": "Content Slide with Fragments",
+      "bullets": [
+        "First point appears",
+        "Second point follows",
+        "Third point arrives",
+        "Final point concludes"
+      ],
+      "fragments": true
+    },
+    {
+      "type": "two-column",
+      "title": "Two Column Comparison",
+      "left": {
+        "heading": "Advantages",
+        "bullets": ["Fast performance", "Easy to use", "Scalable"]
+      },
+      "right": {
+        "heading": "Challenges",
+        "bullets": ["Learning curve", "Setup time", "Cost"]
+      }
+    },
+    {
+      "type": "section",
+      "title": "Section 2: Visual & Data"
+    },
+    {
+      "type": "stats",
+      "title": "Key Metrics",
+      "stats": [
+        { "value": "10M+", "label": "Active Users", "icon": "group", "trend": "up" },
+        { "value": "99.9%", "label": "Uptime", "icon": "speed" },
+        { "value": "$2.5B", "label": "Revenue", "icon": "payments", "trend": "up" },
+        { "value": "150+", "label": "Countries", "icon": "public" }
+      ]
+    },
+    {
+      "type": "icon-grid",
+      "title": "Core Features",
+      "columns": 3,
+      "items": [
+        { "icon": "rocket_launch", "title": "Fast Deploy", "description": "Ship in minutes" },
+        { "icon": "security", "title": "Secure", "description": "Enterprise-grade" },
+        { "icon": "analytics", "title": "Analytics", "description": "Real-time insights" },
+        { "icon": "cloud", "title": "Cloud Native", "description": "Built for scale" },
+        { "icon": "code", "title": "Developer First", "description": "Great DX" },
+        { "icon": "smart_toy", "title": "AI Powered", "description": "Intelligent automation" }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "Section 3: Charts (ECharts)"
+    },
+    {
+      "type": "chart",
+      "title": "Bar Chart — Revenue Growth",
+      "chart": {
+        "type": "bar",
+        "bars": [
+          { "label": "2020", "value": 25 },
+          { "label": "2021", "value": 45 },
+          { "label": "2022", "value": 62 },
+          { "label": "2023", "value": 78 },
+          { "label": "2024", "value": 95 }
+        ]
+      }
+    },
+    {
+      "type": "chart",
+      "title": "Donut Chart — Market Share",
+      "chart": {
+        "type": "donut",
+        "slices": [
+          { "label": "Product A", "value": 45 },
+          { "label": "Product B", "value": 25 },
+          { "label": "Product C", "value": 18 },
+          { "label": "Others", "value": 12 }
+        ]
+      }
+    },
+    {
+      "type": "chart",
+      "title": "Line Chart — Growth Trend",
+      "chart": {
+        "type": "line",
+        "series": [
+          {
+            "name": "Revenue",
+            "points": [
+              { "label": "Q1", "value": 120 },
+              { "label": "Q2", "value": 180 },
+              { "label": "Q3", "value": 250 },
+              { "label": "Q4", "value": 320 }
+            ]
+          },
+          {
+            "name": "Costs",
+            "points": [
+              { "label": "Q1", "value": 80 },
+              { "label": "Q2", "value": 100 },
+              { "label": "Q3", "value": 130 },
+              { "label": "Q4", "value": 150 }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "chart",
+      "title": "Radar Chart — Skill Assessment",
+      "chart": {
+        "type": "radar",
+        "indicators": [
+          { "name": "Frontend", "max": 100 },
+          { "name": "Backend", "max": 100 },
+          { "name": "DevOps", "max": 100 },
+          { "name": "Design", "max": 100 },
+          { "name": "AI/ML", "max": 100 }
+        ],
+        "radarData": [
+          { "name": "Alice", "values": [90, 70, 60, 85, 75] },
+          { "name": "Bob", "values": [60, 95, 85, 40, 80] }
+        ]
+      }
+    },
+    {
+      "type": "chart",
+      "title": "Funnel Chart — Sales Pipeline",
+      "chart": {
+        "type": "funnel",
+        "funnelData": [
+          { "name": "Website Visitors", "value": 10000 },
+          { "name": "Leads", "value": 5000 },
+          { "name": "Qualified", "value": 2500 },
+          { "name": "Proposals", "value": 1200 },
+          { "name": "Closed Deals", "value": 600 }
+        ]
+      }
+    },
+    {
+      "type": "chart",
+      "title": "Gauge Chart — Performance Score",
+      "chart": {
+        "type": "gauge",
+        "gaugeValue": 87,
+        "gaugeMax": 100,
+        "gaugeLabel": "Performance"
+      }
+    },
+    {
+      "type": "chart",
+      "title": "Treemap — Budget Allocation",
+      "chart": {
+        "type": "treemap",
+        "treemapData": [
+          {
+            "name": "Engineering",
+            "value": 500,
+            "children": [
+              { "name": "Frontend", "value": 200 },
+              { "name": "Backend", "value": 300 }
+            ]
+          },
+          {
+            "name": "Marketing",
+            "value": 300,
+            "children": [
+              { "name": "Digital", "value": 180 },
+              { "name": "Events", "value": 120 }
+            ]
+          },
+          { "name": "Operations", "value": 200 }
+        ]
+      }
+    },
+    {
+      "type": "chart",
+      "title": "Scatter Chart — Correlation",
+      "chart": {
+        "type": "scatter",
+        "scatterSeries": [
+          { "name": "Group A", "data": [[10, 20], [15, 35], [20, 50], [25, 40], [30, 60]] },
+          { "name": "Group B", "data": [[12, 18], [18, 40], [22, 55], [28, 45], [35, 70]] }
+        ]
+      }
+    },
+    {
+      "type": "chart",
+      "title": "Waterfall Chart — Profit Breakdown",
+      "chart": {
+        "type": "waterfall",
+        "waterfallData": [
+          { "name": "Revenue", "value": 1000 },
+          { "name": "COGS", "value": -400 },
+          { "name": "Gross Profit", "value": 600 },
+          { "name": "Marketing", "value": -150 },
+          { "name": "R&D", "value": -200 },
+          { "name": "Net Profit", "value": 250 }
+        ]
+      }
+    },
+    {
+      "type": "section",
+      "title": "Section 4: New Slide Types"
+    },
+    {
+      "type": "profile",
+      "name": "Jane Smith",
+      "role": "Lead Designer & Creative Director",
+      "avatar": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop&crop=face",
+      "bio": "15+ years of experience in product design. Passionate about creating intuitive, beautiful user experiences that drive business results.",
+      "socialLinks": [
+        { "icon": "language", "label": "janesmith.design" },
+        { "icon": "mail", "label": "jane@example.com" },
+        { "icon": "work", "label": "LinkedIn" }
+      ]
+    },
+    {
+      "type": "process",
+      "title": "Our Development Workflow",
+      "steps": [
+        { "icon": "search", "title": "Research", "description": "User interviews & market analysis" },
+        { "icon": "design_services", "title": "Design", "description": "Wireframes & prototyping" },
+        { "icon": "code", "title": "Develop", "description": "Agile sprints & code review" },
+        { "icon": "bug_report", "title": "Test", "description": "QA & automated testing" },
+        { "icon": "rocket_launch", "title": "Launch", "description": "Deploy & monitor" }
+      ]
+    },
+    {
+      "type": "gallery",
+      "title": "Project Gallery",
+      "galleryLayout": "2x2",
+      "images": [
+        { "src": "https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=800&h=600&fit=crop", "caption": "Dashboard Design" },
+        { "src": "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&h=600&fit=crop", "caption": "Analytics Platform" },
+        { "src": "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&h=600&fit=crop", "caption": "Development" },
+        { "src": "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800&h=600&fit=crop", "caption": "Team Collaboration" }
+      ]
+    },
+    {
+      "type": "team",
+      "title": "Our Team",
+      "members": [
+        { "photo": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&h=300&fit=crop&crop=face", "name": "Alex Chen", "role": "CEO", "description": "Visionary leader with 20 years in tech" },
+        { "photo": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=300&h=300&fit=crop&crop=face", "name": "Sarah Kim", "role": "CTO", "description": "Former Google engineer, AI expert" },
+        { "photo": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop&crop=face", "name": "Mike Johnson", "role": "CPO", "description": "Product strategist, ex-Apple" }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Feature Comparison",
+      "highlightHeader": true,
+      "headers": ["Feature", "Free", "Pro", "Enterprise"],
+      "rows": [
+        ["Storage", "5 GB", "100 GB", "Unlimited"],
+        ["Users", "1", "10", "Unlimited"],
+        ["API Calls", "1K/mo", "100K/mo", "Unlimited"],
+        ["Support", "Community", "Email", "24/7 Phone"],
+        ["SLA", "—", "99.5%", "99.99%"]
+      ]
+    },
+    {
+      "type": "dashboard",
+      "title": "Q4 2025 Results",
+      "kpis": [
+        { "value": "$2.4M", "label": "Revenue", "icon": "payments", "trend": "up" },
+        { "value": "12,345", "label": "New Users", "icon": "person_add", "trend": "up" },
+        { "value": "98.2%", "label": "Satisfaction", "icon": "sentiment_very_satisfied" },
+        { "value": "42ms", "label": "Avg Latency", "icon": "speed", "trend": "down" }
+      ],
+      "dashboardChart": {
+        "type": "line",
+        "series": [{
+          "name": "Monthly Revenue",
+          "points": [
+            { "label": "Jul", "value": 350 },
+            { "label": "Aug", "value": 420 },
+            { "label": "Sep", "value": 480 },
+            { "label": "Oct", "value": 550 },
+            { "label": "Nov", "value": 620 },
+            { "label": "Dec", "value": 700 }
+          ]
+        }]
+      }
+    },
+    {
+      "type": "section",
+      "title": "Section 5: Diagrams & Mindmaps"
+    },
+    {
+      "type": "diagram",
+      "title": "System Architecture",
+      "diagramType": "mermaid",
+      "code": "graph TD\n  A[Client Browser] -->|HTTPS| B[Load Balancer]\n  B --> C[API Gateway]\n  C --> D[Auth Service]\n  C --> E[Core API]\n  E --> F[(PostgreSQL)]\n  E --> G[(Redis Cache)]\n  C --> H[AI Service]\n  H --> I[Claude API]"
+    },
+    {
+      "type": "diagram",
+      "title": "Login Sequence",
+      "diagramType": "mermaid",
+      "code": "sequenceDiagram\n  participant U as User\n  participant F as Frontend\n  participant A as API\n  participant D as Database\n  U->>F: Enter credentials\n  F->>A: POST /auth/login\n  A->>D: Verify password\n  D-->>A: User found\n  A-->>F: JWT Token\n  F-->>U: Redirect to dashboard"
+    },
+    {
+      "type": "mindmap",
+      "title": "AI Technology Landscape",
+      "code": "# AI Technology\n## Machine Learning\n### Supervised Learning\n#### Classification\n#### Regression\n### Unsupervised Learning\n#### Clustering\n#### Dimensionality Reduction\n### Reinforcement Learning\n## Deep Learning\n### CNN\n### RNN / LSTM\n### Transformers\n#### GPT\n#### BERT\n## Applications\n### Natural Language Processing\n### Computer Vision\n### Robotics\n### Autonomous Vehicles"
+    },
+    {
+      "type": "section",
+      "title": "Section 6: Media & Quote"
+    },
+    {
+      "type": "image-text",
+      "title": "Our Vision",
+      "imageSrc": "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&h=600&fit=crop",
+      "text": "We're building the future of intelligent document generation — where AI agents collaborate to create professional-grade content in minutes, not hours.",
+      "imagePosition": "left"
+    },
+    {
+      "type": "image",
+      "title": "Global Presence",
+      "imageSrc": "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=1280&h=720&fit=crop"
+    },
+    {
+      "type": "code",
+      "title": "Quick Start",
+      "code": "import { SlideGenerator } from '@slides/core';\n\nconst generator = new SlideGenerator({\n  style: 'dark',\n  title: 'My Presentation'\n});\n\ngenerator.addSlide({ type: 'title', title: 'Hello' });\ngenerator.addSlide({ type: 'chart', chart: { type: 'bar', bars: [...] } });\n\nawait generator.export('output.html');",
+      "language": "typescript"
+    },
+    {
+      "type": "timeline",
+      "title": "Product Roadmap 2026",
+      "milestones": [
+        { "date": "Q1 2026", "title": "Foundation", "description": "Core platform launch", "icon": "flag" },
+        { "date": "Q2 2026", "title": "AI Integration", "description": "Smart automation features", "icon": "smart_toy" },
+        { "date": "Q3 2026", "title": "Global Scale", "description": "Multi-region deployment", "icon": "public" },
+        { "date": "Q4 2026", "title": "Enterprise", "description": "Enterprise-grade security", "icon": "security" }
+      ]
+    },
+    {
+      "type": "quote",
+      "quote": "The best way to predict the future is to invent it.",
+      "attribution": "Alan Kay"
+    }
+  ]
+}

@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="author" content="Alex Chen, CEO">
+  <title>TechVision AI — Series A Pitch</title>
+  <!-- Reveal.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css" id="theme">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Material Symbols -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+  <style>
+/* ── CSS Custom Properties ── */
+:root {
+  --slide-bg: #ffffff;
+  --title-color: #1B365D;
+  --subtitle-color: #718096;
+  --heading-color: #2D3748;
+  --body-color: #4A5568;
+  --accent: #2B6CB0;
+  --accent2: #38B2AC;
+  --code-bg: #EDF2F7;
+  --code-color: #2B6CB0;
+  --font-body: "Inter", "Roboto", "Segoe UI", sans-serif;
+  --font-heading: "Inter", "Roboto", "Segoe UI", sans-serif;
+  --card-bg: #F7FAFC;
+  --card-border: #E2E8F0;
+  --icon-color: #2B6CB0;
+  --timeline-color: #2B6CB0;
+  --stats-card-bg: #EBF8FF;
+  --quote-mark-color: rgba(43,108,176,0.1);
+  --chart-accent: #2B6CB0;
+}
+
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; }
+.reveal-viewport { background-color: #ffffff; }
+.reveal { font-family: var(--font-body); }
+
+/* ── Sections — grid background + floating gradient decorations ── */
+.reveal .slides section {
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(rgba(0,0,0,0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.018) 1px, transparent 1px);
+  background-size: 50px 50px;
+  padding: 48px 64px !important;
+  text-align: left;
+  overflow: hidden !important;
+}
+.reveal .slides section .deco-svg { position: absolute; pointer-events: none; z-index: 0; }
+.reveal .slides section > *:not(.deco-svg):not(.hero-overlay) { position: relative; z-index: 1; }
+
+/* Floating gradient orbs — adds depth to every slide */
+.reveal .slides section::before {
+  content: '';
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #2B6CB0 0%, transparent 70%);
+  opacity: 0.06;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(50px);
+}
+.reveal .slides section:nth-child(odd)::before { top: -200px; right: -160px; }
+.reveal .slides section:nth-child(even)::before { bottom: -200px; left: -160px; }
+.reveal .slides section::after {
+  content: '';
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #38B2AC 0%, transparent 70%);
+  opacity: 0.04;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(35px);
+}
+.reveal .slides section:nth-child(odd)::after { bottom: -130px; left: -100px; }
+.reveal .slides section:nth-child(even)::after { top: -130px; right: -100px; }
+
+/* ── Typography ── */
+.reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  color: var(--heading-color);
+  word-wrap: break-word;
+  margin: 0 0 0.3em;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+.reveal h1 { font-size: clamp(2em, 4.5vw, 2.8em); color: var(--title-color); }
+.reveal h2 { font-size: clamp(1.2em, 3vw, 1.65em); }
+.reveal h3 { font-size: clamp(0.95em, 2.2vw, 1.15em); }
+.reveal h4 { font-size: clamp(0.85em, 1.8vw, 1em); font-weight: 600; }
+.slide-title {
+  text-align: left;
+  margin-bottom: 0.65em;
+  padding-left: 20px;
+  padding-bottom: 0.3em;
+  border-left: 4px solid var(--accent);
+  border-image: linear-gradient(to bottom, var(--accent), var(--accent2)) 1;
+}
+.section-heading { font-size: clamp(1.5em, 3.5vw, 2em); text-align: center; color: var(--title-color); }
+.subtitle { color: var(--subtitle-color); font-size: 0.7em; margin: 0; }
+.tagline { color: var(--accent); font-size: 0.5em; letter-spacing: 0.18em; text-transform: uppercase; margin-top: 0.6em; font-weight: 600; }
+.body-text { color: var(--body-color); font-size: 0.65em; line-height: 1.7; }
+
+/* ── Accent Line (gradient) ── */
+.accent-line { width: 100px; height: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); margin: 0.5em auto; border-radius: 2px; }
+
+/* ── Glass Card — gradient top border ── */
+.glass-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border-radius: 16px;
+  padding: 1.2em;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s ease;
+  cursor: default;
+}
+.glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+}
+.glass-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.12), 0 0 0 1px #2B6CB022;
+}
+
+/* ── Bullet Lists ── */
+.bullet-list { list-style: none; padding: 0; margin: 0; width: 100%; color: var(--body-color); font-size: 0.7em; line-height: 1.8; }
+.bullet-list.compact { font-size: 0.6em; }
+.bullet-list li { display: flex; align-items: flex-start; gap: 0.6em; margin-bottom: 0.35em; padding: 0.35em 0.5em; border-radius: 8px; transition: background 0.2s, padding-left 0.2s; }
+.bullet-list li:hover { background: rgba(0,0,0,0.02); padding-left: 0.8em; }
+.bullet-icon { flex-shrink: 0; }
+.bullet-sym { font-size: 1em; color: var(--accent); }
+.reveal ul, .reveal ol { overflow: hidden; }
+.reveal li { word-wrap: break-word; overflow-wrap: break-word; }
+* { scrollbar-width: none; -ms-overflow-style: none; }
+*::-webkit-scrollbar { display: none; }
+
+/* ── Code ── */
+.code-block { background: var(--code-bg); border-radius: 14px; padding: 1.2em 1.4em; text-align: left; max-height: 380px; overflow: hidden; width: 100%; border: 1px solid var(--card-border); box-shadow: 0 4px 30px rgba(0,0,0,0.04); }
+.code-block code { color: var(--code-color); font-size: 0.58em; line-height: 1.7; white-space: pre-wrap; word-break: break-all; }
+
+/* ── Images ── */
+.slide-image { max-width: 85%; max-height: 400px; height: auto; object-fit: contain; border-radius: 16px; margin: 0 auto; display: block; box-shadow: 0 8px 30px rgba(0,0,0,0.1); }
+
+/* ── Two-Column ── */
+.slide-columns { display: flex; gap: 1em; width: 100%; }
+.slide-col { flex: 1; min-width: 0; }
+
+/* ── Decorative SVG ── */
+.deco-blob { top: -80px; right: -80px; opacity: 0.5; }
+.deco-circles-pos { bottom: -60px; left: -60px; opacity: 0.4; }
+.deco-wave { bottom: 0; left: 0; width: 100%; height: auto; opacity: 0.6; }
+
+/* ── Hero ── */
+.hero-content { text-align: center; z-index: 2; position: relative; }
+.hero-title { font-size: clamp(2.2em, 5.5vw, 3.4em) !important; margin-bottom: 0.3em; text-shadow: 0 2px 30px rgba(0,0,0,0.4); color: #fff !important; }
+.hero-subtitle { font-size: 0.9em; color: rgba(255,255,255,0.9); margin: 0.5em 0; text-shadow: 0 1px 10px rgba(0,0,0,0.3); }
+.hero-tagline { font-size: 0.55em; color: var(--accent); letter-spacing: 0.2em; text-transform: uppercase; }
+.hero-overlay { position: absolute; inset: 0; z-index: 1; background: linear-gradient(135deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.55) 100%); }
+
+/* ── Stats — gradient icon bg + gradient value ── */
+.stats-grid { display: flex; gap: 1.2em; justify-content: center; flex-wrap: nowrap; width: 100%; padding: 0.5em 0; }
+.stats-card { flex: 1; min-width: 0; text-align: center; padding: 28px 20px; background: var(--stats-card-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.stats-card:hover { transform: translateY(-6px) scale(1.02); }
+.stats-icon .material-symbols-outlined {
+  font-size: 26px;
+  color: #fff;
+  width: 52px; height: 52px;
+  line-height: 52px;
+  text-align: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: inline-block;
+  margin-bottom: 10px;
+  box-shadow: 0 4px 15px #2B6CB030;
+}
+.stats-value {
+  font-size: 44px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-family: var(--font-heading);
+  line-height: 1.2;
+}
+.stats-label { font-size: 13px; color: var(--body-color); margin-top: 6px; text-transform: uppercase; letter-spacing: 0.08em; }
+.stats-trend { margin-top: 6px; }
+.trend-icon { font-size: 22px; }
+.trend-up .trend-icon { color: #48BB78; }
+.trend-down .trend-icon { color: #FC8181; }
+
+/* ── Icon Grid — gradient icon backgrounds ── */
+.icon-grid { display: grid; gap: 1em; width: 100%; padding: 0.5em 0; }
+.cols-1 { grid-template-columns: 1fr; }
+.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.icon-card { text-align: center; padding: 1.4em 1em; }
+.icon-card-icon .material-symbols-outlined {
+  font-size: 30px;
+  color: #fff;
+  width: 58px; height: 58px;
+  line-height: 58px;
+  text-align: center;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: inline-block;
+  box-shadow: 0 4px 15px #2B6CB025;
+  transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s ease;
+}
+.icon-card:hover .icon-card-icon .material-symbols-outlined {
+  transform: scale(1.1) rotate(-3deg);
+  box-shadow: 0 8px 25px #2B6CB040;
+}
+.icon-card-img { width: 52px; height: 52px; border-radius: 14px; object-fit: cover; margin: 0 auto 0.4em; display: block; }
+.icon-card-title { font-size: 16px; color: var(--heading-color); margin: 0.5em 0 0.2em; font-weight: 700; }
+.icon-card-desc { font-size: 13px; color: var(--body-color); margin: 0; line-height: 1.5; }
+
+/* ── Timeline (horizontal) — enhanced with gradient line + card content ── */
+.timeline { position: relative; width: 100%; margin-top: 1em; }
+.tl-line { position: absolute; top: 22px; left: 5%; right: 5%; height: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); opacity: 0.35; border-radius: 2px; }
+.tl-items { display: flex; gap: 0.8em; width: 100%; position: relative; z-index: 1; }
+.tl-item { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; text-align: center; transition: transform 0.3s; }
+.tl-item:hover { transform: translateY(-4px); }
+.tl-dot { width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-bottom: 0.7em; box-shadow: 0 0 0 5px #ffffff, 0 0 0 7px var(--accent), 0 6px 20px #2B6CB030; transition: transform 0.3s, box-shadow 0.3s; }
+.tl-item:hover .tl-dot { transform: scale(1.15); box-shadow: 0 0 0 5px #ffffff, 0 0 0 7px var(--accent), 0 10px 30px #2B6CB050; }
+.tl-num { font-size: 14px; font-weight: 700; color: #fff; }
+.tl-icon { font-size: 22px; color: #fff; }
+.tl-content { flex: 1; min-width: 0; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 0.7em 0.6em; margin-top: 0.2em; }
+.tl-date { font-size: 11px; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 0.15em; }
+.tl-title { font-size: 14px; font-weight: 700; color: var(--heading-color); margin: 0.1em 0; }
+.tl-desc { font-size: 12px; color: var(--body-color); margin: 0.1em 0 0; line-height: 1.4; }
+
+/* ── Quote — card bg with gradient left accent ── */
+.quote-block {
+  text-align: center;
+  max-width: 82%;
+  margin: 0 auto;
+  padding: 2.5em 2.5em;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 24px;
+  position: relative;
+  overflow: hidden;
+}
+.quote-block::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 5px;
+  background: linear-gradient(to bottom, var(--accent), var(--accent2));
+  border-radius: 24px 0 0 24px;
+}
+.quote-mark {
+  font-size: 5.5em;
+  line-height: 0.5;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-family: Georgia, serif;
+  user-select: none;
+}
+.quote-text { font-size: 1.05em; color: var(--heading-color); font-style: italic; line-height: 1.7; margin: 0.5em 0 0.8em; border: none; padding: 0; }
+.quote-author { font-size: 0.65em; color: var(--accent); font-style: normal; font-weight: 600; letter-spacing: 0.05em; }
+
+/* ── ECharts ── */
+.echart-container { width: 100%; height: 380px; max-width: 900px; margin: 0 auto; }
+.echart-compact { height: 260px; }
+
+/* ── Image + Text ── */
+.image-text-layout { display: flex; gap: 2.5em; align-items: center; width: 100%; }
+.image-text-layout.img-right { flex-direction: row-reverse; }
+.it-image { flex: 1; min-width: 0; }
+.it-image img { width: 100%; height: auto; max-height: 400px; object-fit: cover; border-radius: 20px; box-shadow: 0 12px 40px rgba(0,0,0,0.1); }
+.it-text { flex: 1; min-width: 0; }
+
+/* ── Profile — gradient avatar ring + pill links ── */
+.profile-layout { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.4em; }
+.profile-avatar-wrap {
+  width: 150px; height: 150px;
+  border-radius: 50%;
+  overflow: hidden;
+  padding: 4px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  box-shadow: 0 8px 30px #2B6CB030;
+}
+.profile-avatar { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.profile-name { font-size: 1.8em; font-family: var(--font-heading); color: var(--heading-color); margin: 0.2em 0 0; }
+.profile-role { font-size: 0.7em; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; margin: 0; }
+.profile-bio { font-size: 0.6em; color: var(--body-color); max-width: 600px; line-height: 1.7; margin: 0.4em 0; }
+.profile-social { display: flex; gap: 1em; justify-content: center; margin-top: 0.6em; }
+.profile-link {
+  display: flex; align-items: center; gap: 0.3em;
+  font-size: 0.55em; color: var(--body-color);
+  padding: 0.35em 0.9em;
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 20px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.profile-link:hover { border-color: var(--accent); transform: translateY(-2px); }
+.profile-link-icon { font-size: 18px !important; color: var(--icon-color); }
+
+/* ── Process — large circles + card descriptions ── */
+.process-steps { display: flex; align-items: flex-start; justify-content: center; gap: 0; width: 100%; position: relative; padding-top: 1.5em; }
+.process-connector { position: absolute; top: calc(1.5em + 32px); left: 12%; right: 12%; height: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); opacity: 0.4; border-radius: 2px; }
+.process-step { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; z-index: 1; }
+.process-step-circle { width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; margin-bottom: 0.8em; box-shadow: 0 6px 25px #2B6CB035; transition: transform 0.3s, box-shadow 0.3s; }
+.process-step:hover .process-step-circle { transform: scale(1.12); box-shadow: 0 8px 35px #2B6CB050; }
+.process-icon { font-size: 28px !important; color: #fff; }
+.process-num { font-size: 20px; font-weight: 700; color: #fff; }
+.process-step-label { font-size: 0.78em; font-weight: 700; color: var(--heading-color); margin-bottom: 0.2em; }
+.process-step-desc { font-size: 0.55em; color: var(--body-color); margin: 0; max-width: 150px; line-height: 1.5; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 0.5em 0.6em; }
+
+/* ── Gallery — rounded with shadows ── */
+.gallery { display: grid; gap: 0.8em; width: 100%; }
+.gallery-2x2 { grid-template-columns: 1fr 1fr; }
+.gallery-3-col { grid-template-columns: 1fr 1fr 1fr; }
+.gallery-1-hero-2-small { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; }
+.gallery-1-hero-2-small .gallery-item:first-child { grid-row: 1 / 3; }
+.gallery-item { overflow: hidden; border-radius: 16px; position: relative; margin: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+.gallery-item img { width: 100%; height: 100%; object-fit: cover; max-height: 280px; display: block; transition: transform 0.4s cubic-bezier(0.22,1,0.36,1); }
+.gallery-item:hover img { transform: scale(1.06); }
+.gallery-item figcaption { position: absolute; bottom: 0; left: 0; right: 0; padding: 0.6em 1em; background: linear-gradient(transparent, rgba(0,0,0,0.75)); color: #fff; font-size: 0.55em; font-weight: 500; }
+
+/* ── Team — gradient photo ring ── */
+.team-grid { display: flex; gap: 1.5em; justify-content: center; flex-wrap: nowrap; padding: 0.5em 0; }
+.team-card { flex: 1; min-width: 0; text-align: center; padding: 1.8em 1.2em; max-width: 260px; }
+.team-photo {
+  width: 100px; height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  padding: 3px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  margin: 0 auto 0.8em;
+  display: block;
+  box-shadow: 0 4px 20px #2B6CB025;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+.team-card:hover .team-photo { transform: scale(1.08); box-shadow: 0 8px 30px #2B6CB040; }
+.team-photo-placeholder { width: 100px; height: 100px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; margin: 0 auto 0.8em; }
+.team-photo-placeholder .material-symbols-outlined { font-size: 40px; color: #fff; }
+.team-name { font-size: 0.85em; font-weight: 700; color: var(--heading-color); }
+.team-role { font-size: 0.6em; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.15em; }
+.team-desc { font-size: 0.55em; color: var(--body-color); margin-top: 0.35em; line-height: 1.5; }
+
+/* ── Table — modern with gradient header + hover ── */
+.table-wrap { width: 100%; overflow: hidden; border-radius: 16px; border: 1px solid var(--card-border); box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+.slide-table { width: 100%; border-collapse: collapse; font-size: 0.6em; }
+.slide-table th, .slide-table td { padding: 0.85em 1.2em; text-align: left; border-bottom: 1px solid var(--card-border); color: var(--body-color); transition: background 0.2s; }
+.slide-table th { font-weight: 700; color: var(--heading-color); background: var(--card-bg); }
+.table-header-highlighted th { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; }
+.slide-table tbody tr:nth-child(even) { background: var(--card-bg); }
+.slide-table tbody tr:hover { background: rgba(0,0,0,0.03); }
+
+/* ── Dashboard — compact KPI + chart ── */
+.dashboard-kpis { display: flex; gap: 1em; margin-bottom: 1em; }
+.dashboard-kpi-card { padding: 18px 14px; }
+.dashboard-kpi-card .stats-value { font-size: 28px; }
+.dashboard-kpi-card .stats-label { font-size: 11px; }
+.dashboard-kpi-card .stats-icon .material-symbols-outlined { font-size: 22px; width: 40px; height: 40px; line-height: 40px; border-radius: 10px; margin-bottom: 6px; }
+.dashboard-chart { width: 100%; }
+
+/* ── Diagram (Mermaid) ── */
+.diagram-container { display: flex; justify-content: center; align-items: center; width: 100%; min-height: 300px; }
+.diagram-container .mermaid { font-size: 14px; }
+.diagram-container svg { max-width: 100%; max-height: 480px; }
+
+/* ── Mindmap (Markmap) ── */
+.mindmap-container { width: 100%; height: 480px; display: flex; justify-content: center; }
+.mindmap-svg { width: 100%; height: 100%; }
+
+/* ── Fragment Animations ── */
+.fragment.slide-up { transform: translateY(20px); opacity: 0; transition: all 0.5s ease; }
+.fragment.slide-up.visible { transform: translateY(0); opacity: 1; }
+.fragment.blur { filter: blur(6px); opacity: 0; transition: all 0.5s ease; }
+.fragment.blur.visible { filter: none; opacity: 1; }
+.fragment.scale-in { transform: scale(0.85); opacity: 0; transition: all 0.4s ease; }
+.fragment.scale-in.visible { transform: scale(1); opacity: 1; }
+.fragment.fade-up { transform: translateY(30px); opacity: 0; transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+.fragment.fade-up.visible { transform: translateY(0); opacity: 1; }
+
+/* ── Theme Overrides ── */
+.reveal .slide-background { background-color: #ffffff; }
+.reveal .slides > section { margin: 0; }
+.reveal .progress { color: var(--accent); height: 4px; }
+.reveal .controls { color: var(--accent); }
+.reveal .controls button { opacity: 0.6; transition: opacity 0.2s; }
+.reveal .controls button:hover { opacity: 1; }
+
+/* ── RWD ── */
+@media (max-width: 768px) {
+  .reveal .slides section { padding: 1.2em 1.5em !important; }
+  .reveal h1 { font-size: 1.4em; }
+  .slide-columns, .image-text-layout, .image-text-layout.img-right { flex-direction: column; }
+  .stats-grid, .dashboard-kpis { flex-direction: column; align-items: center; }
+  .icon-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .tl-items { flex-direction: column; }
+  .tl-line { display: none; }
+  .process-steps { flex-direction: column; align-items: center; }
+  .process-connector { display: none; }
+  .gallery { grid-template-columns: 1fr !important; grid-template-rows: auto !important; }
+  .gallery-1-hero-2-small .gallery-item:first-child { grid-row: auto; }
+  .team-grid { flex-direction: column; align-items: center; }
+  .echart-container { height: 260px; }
+}
+
+
+</style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+      <section>
+  
+  
+  <h1>TechVision AI</h1>
+  <div class="accent-line"></div>
+  <p class="subtitle">Intelligent Document Generation for Enterprise</p>
+  <p class="tagline">SERIES A PITCH DECK</p>
+  
+</section>
+<section>
+  <h2 class="slide-title">The Problem</h2>
+  <ul class="bullet-list"><li class="fragment slide-up"><span class="bullet-icon"><span class="material-symbols-outlined bullet-sym">arrow_right</span></span><span>Enterprises spend 2.5 hours/day on document creation</span></li><li class="fragment slide-up"><span class="bullet-icon"><span class="material-symbols-outlined bullet-sym">arrow_right</span></span><span>80% of business docs follow repetitive templates</span></li><li class="fragment slide-up"><span class="bullet-icon"><span class="material-symbols-outlined bullet-sym">arrow_right</span></span><span>Manual formatting wastes $50K+ per employee yearly</span></li><li class="fragment slide-up"><span class="bullet-icon"><span class="material-symbols-outlined bullet-sym">arrow_right</span></span><span>No existing solution handles multi-format generation</span></li></ul>
+  
+</section>
+<section>
+  <h2 class="slide-title">Market Opportunity</h2>
+  <div class="stats-grid"><div class="stats-card glass-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">public</span></div>
+  <div class="stats-value">$42B</div>
+  <div class="stats-label">TAM by 2027</div>
+  <div class="stats-trend trend-up"><span class="material-symbols-outlined trend-icon">trending_up</span></div>
+</div><div class="stats-card glass-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">trending_up</span></div>
+  <div class="stats-value">34%</div>
+  <div class="stats-label">CAGR Growth</div>
+  <div class="stats-trend trend-up"><span class="material-symbols-outlined trend-icon">trending_up</span></div>
+</div><div class="stats-card glass-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">group</span></div>
+  <div class="stats-value">150M</div>
+  <div class="stats-label">Knowledge Workers</div>
+  
+</div><div class="stats-card glass-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">insights</span></div>
+  <div class="stats-value">12%</div>
+  <div class="stats-label">Current Penetration</div>
+  
+</div></div>
+  
+</section>
+<section>
+  <h2 class="slide-title">Our Solution</h2>
+  <div class="icon-grid cols-3"><div class="icon-card glass-card">
+  <div class="icon-card-icon"><span class="material-symbols-outlined">smart_toy</span></div>
+  <div class="icon-card-title">AI Agents</div>
+  <p class="icon-card-desc">Multi-agent collaboration</p>
+</div><div class="icon-card glass-card">
+  <div class="icon-card-icon"><span class="material-symbols-outlined">description</span></div>
+  <div class="icon-card-title">Multi-Format</div>
+  <p class="icon-card-desc">PPTX, DOCX, XLSX, PDF</p>
+</div><div class="icon-card glass-card">
+  <div class="icon-card-icon"><span class="material-symbols-outlined">speed</span></div>
+  <div class="icon-card-title">10x Faster</div>
+  <p class="icon-card-desc">Minutes, not hours</p>
+</div><div class="icon-card glass-card">
+  <div class="icon-card-icon"><span class="material-symbols-outlined">security</span></div>
+  <div class="icon-card-title">Enterprise Security</div>
+  <p class="icon-card-desc">SOC2 &amp; GDPR compliant</p>
+</div><div class="icon-card glass-card">
+  <div class="icon-card-icon"><span class="material-symbols-outlined">palette</span></div>
+  <div class="icon-card-title">Brand Compliant</div>
+  <p class="icon-card-desc">Your templates, your style</p>
+</div><div class="icon-card glass-card">
+  <div class="icon-card-icon"><span class="material-symbols-outlined">language</span></div>
+  <div class="icon-card-title">Multilingual</div>
+  <p class="icon-card-desc">30+ languages supported</p>
+</div></div>
+  
+</section>
+<section>
+  <h2 class="slide-title">How It Works</h2>
+  <div class="process-steps">
+    <div class="process-connector"></div>
+    <div class="process-step">
+  <div class="process-step-circle"><span class="material-symbols-outlined process-icon">chat</span></div>
+  <div class="process-step-label">Describe</div>
+  <div class="process-step-desc">Tell AI what you need</div>
+</div><div class="process-step">
+  <div class="process-step-circle"><span class="material-symbols-outlined process-icon">smart_toy</span></div>
+  <div class="process-step-label">AI Plans</div>
+  <div class="process-step-desc">Agents collaborate on structure</div>
+</div><div class="process-step">
+  <div class="process-step-circle"><span class="material-symbols-outlined process-icon">auto_awesome</span></div>
+  <div class="process-step-label">Generate</div>
+  <div class="process-step-desc">Professional docs in minutes</div>
+</div><div class="process-step">
+  <div class="process-step-circle"><span class="material-symbols-outlined process-icon">edit</span></div>
+  <div class="process-step-label">Refine</div>
+  <div class="process-step-desc">Iterate with conversational AI</div>
+</div>
+  </div>
+  
+</section>
+<section>
+  <h2 class="slide-title">Revenue Growth</h2>
+  <div id="echart-5" class="echart-container"></div>
+  
+</section>
+<section>
+  <h2 class="slide-title">Competitive Landscape</h2>
+  <div class="table-wrap"><table class="slide-table"><thead class="table-header-highlighted"><tr><th>Capability</th><th>TechVision</th><th>Competitor A</th><th>Competitor B</th></tr></thead><tbody><tr><td>Multi-format output</td><td>Yes (5 formats)</td><td>PPTX only</td><td>DOCX only</td></tr><tr><td>AI Agent collaboration</td><td>Multi-agent</td><td>Single model</td><td>None</td></tr><tr><td>Enterprise security</td><td>SOC2 + GDPR</td><td>Basic</td><td>None</td></tr><tr><td>Custom templates</td><td>Unlimited</td><td>10 presets</td><td>5 presets</td></tr><tr><td>Real-time collaboration</td><td>Yes</td><td>No</td><td>No</td></tr></tbody></table></div>
+  
+</section>
+<section>
+  <h2 class="slide-title">Leadership Team</h2>
+  <div class="team-grid"><div class="team-card glass-card">
+  <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&amp;h=300&amp;fit=crop&amp;crop=face" class="team-photo" loading="lazy" alt="Alex Chen" />
+  <div class="team-name">Alex Chen</div>
+  <div class="team-role">CEO</div>
+  <div class="team-desc">Ex-Google, 15yr AI/ML</div>
+</div><div class="team-card glass-card">
+  <img src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=300&amp;h=300&amp;fit=crop&amp;crop=face" class="team-photo" loading="lazy" alt="Sarah Kim" />
+  <div class="team-name">Sarah Kim</div>
+  <div class="team-role">CTO</div>
+  <div class="team-desc">Ex-Meta, distributed systems</div>
+</div><div class="team-card glass-card">
+  <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&amp;h=300&amp;fit=crop&amp;crop=face" class="team-photo" loading="lazy" alt="Mike Johnson" />
+  <div class="team-name">Mike Johnson</div>
+  <div class="team-role">CPO</div>
+  <div class="team-desc">Ex-Apple, product design</div>
+</div></div>
+  
+</section>
+<section>
+  <h2 class="slide-title">Current Traction</h2>
+  <div class="dashboard-kpis"><div class="stats-card glass-card dashboard-kpi-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">group</span></div>
+  <div class="stats-value">2,400</div>
+  <div class="stats-label">Paying Customers</div>
+  <div class="stats-trend trend-up"><span class="material-symbols-outlined trend-icon">trending_up</span></div>
+</div><div class="stats-card glass-card dashboard-kpi-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">payments</span></div>
+  <div class="stats-value">$1.2M</div>
+  <div class="stats-label">ARR</div>
+  <div class="stats-trend trend-up"><span class="material-symbols-outlined trend-icon">trending_up</span></div>
+</div><div class="stats-card glass-card dashboard-kpi-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">favorite</span></div>
+  <div class="stats-value">95%</div>
+  <div class="stats-label">Retention Rate</div>
+  
+</div><div class="stats-card glass-card dashboard-kpi-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">star</span></div>
+  <div class="stats-value">4.8/5</div>
+  <div class="stats-label">NPS Score</div>
+  
+</div></div>
+  <div class="dashboard-chart"><div id="echart-dash-8" class="echart-container echart-compact"></div></div>
+  
+</section>
+<section>
+  <h2 class="slide-title">Roadmap</h2>
+  <div class="timeline">
+    <div class="tl-line"></div>
+    <div class="tl-items"><div class="tl-item">
+  <div class="tl-dot"><span class="material-symbols-outlined tl-icon">flag</span></div>
+  <div class="tl-content">
+    <span class="tl-date">Q3 2025</span>
+    <div class="tl-title">Series A Close</div>
+    <p class="tl-desc">Scale team to 30</p>
+  </div>
+</div><div class="tl-item">
+  <div class="tl-dot"><span class="material-symbols-outlined tl-icon">business</span></div>
+  <div class="tl-content">
+    <span class="tl-date">Q4 2025</span>
+    <div class="tl-title">Enterprise Launch</div>
+    <p class="tl-desc">SSO, audit logs, custom models</p>
+  </div>
+</div><div class="tl-item">
+  <div class="tl-dot"><span class="material-symbols-outlined tl-icon">code</span></div>
+  <div class="tl-content">
+    <span class="tl-date">Q1 2026</span>
+    <div class="tl-title">Platform APIs</div>
+    <p class="tl-desc">Developer ecosystem</p>
+  </div>
+</div><div class="tl-item">
+  <div class="tl-dot"><span class="material-symbols-outlined tl-icon">public</span></div>
+  <div class="tl-content">
+    <span class="tl-date">Q3 2026</span>
+    <div class="tl-title">Global Expansion</div>
+    <p class="tl-desc">EU &amp; APAC offices</p>
+  </div>
+</div></div>
+  </div>
+  
+</section>
+<section>
+  <h2 class="slide-title">The Ask</h2>
+  <div class="stats-grid"><div class="stats-card glass-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">account_balance</span></div>
+  <div class="stats-value">$8M</div>
+  <div class="stats-label">Series A</div>
+  
+</div><div class="stats-card glass-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">schedule</span></div>
+  <div class="stats-value">18mo</div>
+  <div class="stats-label">Runway</div>
+  
+</div><div class="stats-card glass-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">group</span></div>
+  <div class="stats-value">3x</div>
+  <div class="stats-label">Team Growth</div>
+  <div class="stats-trend trend-up"><span class="material-symbols-outlined trend-icon">trending_up</span></div>
+</div><div class="stats-card glass-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">trending_up</span></div>
+  <div class="stats-value">10x</div>
+  <div class="stats-label">Revenue Target</div>
+  <div class="stats-trend trend-up"><span class="material-symbols-outlined trend-icon">trending_up</span></div>
+</div></div>
+  
+</section>
+<section>
+  <div class="quote-block">
+    <div class="quote-mark">“</div>
+    <blockquote class="quote-text">TechVision is not just building a tool — we&#39;re creating the future of how enterprises generate documents.</blockquote>
+    <cite class="quote-author">— Alex Chen, CEO</cite>
+  </div>
+  
+</section>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script>
+    Reveal.initialize({
+      hash: true,
+      transition: 'slide',
+      plugins: [RevealHighlight],
+      width: 1280,
+      height: 720,
+      margin: 0.04,
+      minScale: 0.2,
+      maxScale: 1.5,
+      center: true,
+      controlsLayout: 'edges',
+      controlsBackArrows: 'visible',
+      autoAnimateDuration: 0.8,
+      slideNumber: 'c/t',
+      disableLayout: false,
+    });
+  </script>
+  
+  <script>
+  (function() {
+    var configs = [
+      { id: 'echart-5', option: {"color":["#2B6CB0","#38B2AC","#ED8936","#9F7AEA","#48BB78"],"tooltip":{"backgroundColor":"rgba(255,255,255,0.96)","borderColor":"rgba(0,0,0,0.08)","textStyle":{"color":"#333","fontSize":13},"trigger":"axis"},"grid":{"left":"8%","right":"6%","bottom":"12%","top":"8%","containLabel":true},"xAxis":{"type":"category","data":["2023 Q1","2023 Q2","2023 Q3","2023 Q4","2024 Q1","2024 Q2"],"axisLabel":{"color":"#4A5568","fontSize":12},"axisLine":{"lineStyle":{"color":"rgba(0,0,0,0.06)"}}},"yAxis":{"type":"value","axisLabel":{"color":"#4A5568","fontSize":12},"splitLine":{"lineStyle":{"color":"rgba(0,0,0,0.06)"}}},"series":[{"type":"bar","data":[{"value":50},{"value":120},{"value":280},{"value":450},{"value":680},{"value":920}],"barWidth":"45%","itemStyle":{"borderRadius":[6,6,0,0]}}],"animationDuration":1200,"animationEasing":"cubicOut"} },
+      { id: 'echart-dash-8', option: {"color":["#2B6CB0","#38B2AC","#ED8936","#9F7AEA","#48BB78"],"tooltip":{"backgroundColor":"rgba(255,255,255,0.96)","borderColor":"rgba(0,0,0,0.08)","textStyle":{"color":"#333","fontSize":13},"trigger":"axis"},"grid":{"left":"8%","right":"6%","bottom":"10%","top":"8%","containLabel":true},"xAxis":{"type":"category","data":["Jan","Feb","Mar","Apr","May","Jun"],"axisLabel":{"color":"#4A5568","fontSize":12},"axisLine":{"lineStyle":{"color":"rgba(0,0,0,0.06)"}},"boundaryGap":false},"yAxis":{"type":"value","axisLabel":{"color":"#4A5568","fontSize":12},"splitLine":{"lineStyle":{"color":"rgba(0,0,0,0.06)"}}},"series":[{"name":"MRR ($K)","type":"line","smooth":true,"data":[45,58,72,85,100,120],"lineStyle":{"width":3},"areaStyle":{"opacity":0.08},"symbolSize":6}],"animationDuration":1500} }
+    ];
+    var instances = {};
+    function initChart(cfg) {
+      var el = document.getElementById(cfg.id);
+      if (!el || instances[cfg.id]) return;
+      var chart = echarts.init(el, null, { renderer: 'canvas' });
+      chart.setOption(cfg.option);
+      instances[cfg.id] = chart;
+    }
+    function initVisibleCharts() {
+      var current = Reveal.getCurrentSlide();
+      if (!current) return;
+      configs.forEach(function(cfg) {
+        if (current.querySelector('#' + cfg.id)) initChart(cfg);
+      });
+    }
+    function resizeAll() {
+      Object.keys(instances).forEach(function(k) { instances[k].resize(); });
+    }
+    Reveal.on('ready', initVisibleCharts);
+    Reveal.on('slidechanged', function(e) {
+      configs.forEach(function(cfg) {
+        if (e.currentSlide.querySelector('#' + cfg.id)) {
+          if (!instances[cfg.id]) initChart(cfg);
+          else instances[cfg.id].resize();
+        }
+      });
+    });
+    window.addEventListener('resize', resizeAll);
+  })();
+  </script>
+  
+  
+  
+  <script>
+  (function() {
+    function animateNumbers(section) {
+      section.querySelectorAll('.stats-value').forEach(function(el) {
+        var text = el.textContent || '';
+        var match = text.match(/([\d,.]+)/);
+        if (!match) return;
+        var target = parseFloat(match[1].replace(/,/g, ''));
+        if (isNaN(target)) return;
+        var prefix = text.substring(0, text.indexOf(match[1]));
+        var suffix = text.substring(text.indexOf(match[1]) + match[1].length);
+        var duration = 800, start = performance.now();
+        function tick(now) {
+          var p = Math.min((now - start) / duration, 1);
+          p = 1 - Math.pow(1 - p, 3);
+          var current = Math.round(target * p);
+          el.textContent = prefix + current.toLocaleString() + suffix;
+          if (p < 1) requestAnimationFrame(tick);
+          else el.textContent = text;
+        }
+        el.textContent = prefix + '0' + suffix;
+        requestAnimationFrame(tick);
+      });
+    }
+    Reveal.on('slidechanged', function(e) {
+      if (e.currentSlide.querySelector('.stats-grid') || e.currentSlide.querySelector('.dashboard-kpis')) animateNumbers(e.currentSlide);
+    });
+    Reveal.on('ready', function(e) {
+      if (e.currentSlide && (e.currentSlide.querySelector('.stats-grid') || e.currentSlide.querySelector('.dashboard-kpis'))) animateNumbers(e.currentSlide);
+    });
+  })();
+  </script>
+</body>
+</html>

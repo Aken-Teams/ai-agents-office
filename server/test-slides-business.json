@@ -1,0 +1,143 @@
+{
+  "title": "TechVision AI — Series A Pitch",
+  "author": "Alex Chen, CEO",
+  "style": "corporate",
+  "slides": [
+    {
+      "type": "title",
+      "title": "TechVision AI",
+      "subtitle": "Intelligent Document Generation for Enterprise",
+      "tagline": "SERIES A PITCH DECK"
+    },
+    {
+      "type": "content",
+      "title": "The Problem",
+      "bullets": [
+        "Enterprises spend 2.5 hours/day on document creation",
+        "80% of business docs follow repetitive templates",
+        "Manual formatting wastes $50K+ per employee yearly",
+        "No existing solution handles multi-format generation"
+      ],
+      "fragments": true
+    },
+    {
+      "type": "stats",
+      "title": "Market Opportunity",
+      "stats": [
+        { "value": "$42B", "label": "TAM by 2027", "icon": "public", "trend": "up" },
+        { "value": "34%", "label": "CAGR Growth", "icon": "trending_up", "trend": "up" },
+        { "value": "150M", "label": "Knowledge Workers", "icon": "group" },
+        { "value": "12%", "label": "Current Penetration", "icon": "insights" }
+      ]
+    },
+    {
+      "type": "icon-grid",
+      "title": "Our Solution",
+      "columns": 3,
+      "items": [
+        { "icon": "smart_toy", "title": "AI Agents", "description": "Multi-agent collaboration" },
+        { "icon": "description", "title": "Multi-Format", "description": "PPTX, DOCX, XLSX, PDF" },
+        { "icon": "speed", "title": "10x Faster", "description": "Minutes, not hours" },
+        { "icon": "security", "title": "Enterprise Security", "description": "SOC2 & GDPR compliant" },
+        { "icon": "palette", "title": "Brand Compliant", "description": "Your templates, your style" },
+        { "icon": "language", "title": "Multilingual", "description": "30+ languages supported" }
+      ]
+    },
+    {
+      "type": "process",
+      "title": "How It Works",
+      "steps": [
+        { "icon": "chat", "title": "Describe", "description": "Tell AI what you need" },
+        { "icon": "smart_toy", "title": "AI Plans", "description": "Agents collaborate on structure" },
+        { "icon": "auto_awesome", "title": "Generate", "description": "Professional docs in minutes" },
+        { "icon": "edit", "title": "Refine", "description": "Iterate with conversational AI" }
+      ]
+    },
+    {
+      "type": "chart",
+      "title": "Revenue Growth",
+      "chart": {
+        "type": "bar",
+        "bars": [
+          { "label": "2023 Q1", "value": 50 },
+          { "label": "2023 Q2", "value": 120 },
+          { "label": "2023 Q3", "value": 280 },
+          { "label": "2023 Q4", "value": 450 },
+          { "label": "2024 Q1", "value": 680 },
+          { "label": "2024 Q2", "value": 920 }
+        ]
+      }
+    },
+    {
+      "type": "table",
+      "title": "Competitive Landscape",
+      "highlightHeader": true,
+      "headers": ["Capability", "TechVision", "Competitor A", "Competitor B"],
+      "rows": [
+        ["Multi-format output", "Yes (5 formats)", "PPTX only", "DOCX only"],
+        ["AI Agent collaboration", "Multi-agent", "Single model", "None"],
+        ["Enterprise security", "SOC2 + GDPR", "Basic", "None"],
+        ["Custom templates", "Unlimited", "10 presets", "5 presets"],
+        ["Real-time collaboration", "Yes", "No", "No"]
+      ]
+    },
+    {
+      "type": "team",
+      "title": "Leadership Team",
+      "members": [
+        { "photo": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=300&h=300&fit=crop&crop=face", "name": "Alex Chen", "role": "CEO", "description": "Ex-Google, 15yr AI/ML" },
+        { "photo": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=300&h=300&fit=crop&crop=face", "name": "Sarah Kim", "role": "CTO", "description": "Ex-Meta, distributed systems" },
+        { "photo": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop&crop=face", "name": "Mike Johnson", "role": "CPO", "description": "Ex-Apple, product design" }
+      ]
+    },
+    {
+      "type": "dashboard",
+      "title": "Current Traction",
+      "kpis": [
+        { "value": "2,400", "label": "Paying Customers", "icon": "group", "trend": "up" },
+        { "value": "$1.2M", "label": "ARR", "icon": "payments", "trend": "up" },
+        { "value": "95%", "label": "Retention Rate", "icon": "favorite" },
+        { "value": "4.8/5", "label": "NPS Score", "icon": "star" }
+      ],
+      "dashboardChart": {
+        "type": "line",
+        "series": [{
+          "name": "MRR ($K)",
+          "points": [
+            { "label": "Jan", "value": 45 },
+            { "label": "Feb", "value": 58 },
+            { "label": "Mar", "value": 72 },
+            { "label": "Apr", "value": 85 },
+            { "label": "May", "value": 100 },
+            { "label": "Jun", "value": 120 }
+          ]
+        }]
+      }
+    },
+    {
+      "type": "timeline",
+      "title": "Roadmap",
+      "milestones": [
+        { "date": "Q3 2025", "title": "Series A Close", "description": "Scale team to 30", "icon": "flag" },
+        { "date": "Q4 2025", "title": "Enterprise Launch", "description": "SSO, audit logs, custom models", "icon": "business" },
+        { "date": "Q1 2026", "title": "Platform APIs", "description": "Developer ecosystem", "icon": "code" },
+        { "date": "Q3 2026", "title": "Global Expansion", "description": "EU & APAC offices", "icon": "public" }
+      ]
+    },
+    {
+      "type": "stats",
+      "title": "The Ask",
+      "stats": [
+        { "value": "$8M", "label": "Series A", "icon": "account_balance" },
+        { "value": "18mo", "label": "Runway", "icon": "schedule" },
+        { "value": "3x", "label": "Team Growth", "icon": "group", "trend": "up" },
+        { "value": "10x", "label": "Revenue Target", "icon": "trending_up", "trend": "up" }
+      ]
+    },
+    {
+      "type": "quote",
+      "quote": "TechVision is not just building a tool — we're creating the future of how enterprises generate documents.",
+      "attribution": "Alex Chen, CEO"
+    }
+  ]
+}
