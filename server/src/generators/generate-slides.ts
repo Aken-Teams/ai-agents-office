@@ -1030,7 +1030,15 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
       markmapUsed = true;
       const mmId = `mindmap-${idx}`;
       mindmapConfigs.push({ id: mmId, code: slide.code || '' });
-      const visualHtml = `<div class="mindmap-container"><svg id="${mmId}" class="mindmap-svg"></svg></div>`;
+      const visualHtml = `<div class="mindmap-wrapper">
+  <div class="mindmap-container"><svg id="${mmId}" class="mindmap-svg"></svg></div>
+  <div class="mindmap-toolbar">
+    <button onclick="mmExpandAll('${mmId}')" title="Expand All"><span class="material-symbols-outlined">unfold_more</span> Expand All</button>
+    <button onclick="mmCollapseAll('${mmId}')" title="Collapse All"><span class="material-symbols-outlined">unfold_less</span> Collapse All</button>
+    <button onclick="mmFitView('${mmId}')" title="Fit View"><span class="material-symbols-outlined">fit_screen</span> Fit View</button>
+    <span class="mindmap-hint"><span class="material-symbols-outlined">touch_app</span> Click node to expand</span>
+  </div>
+</div>`;
       const compound = renderCompoundLayout(slide, s, visualHtml);
       if (compound) return wrapSlide('mindmap', compound, slide, idx);
       return wrapSlide('mindmap', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
@@ -1478,13 +1486,20 @@ li { word-wrap: break-word; overflow-wrap: break-word; }
 .dashboard-chart { width: 100%; }
 
 /* ── Diagram (Mermaid) ── */
-.diagram-container { display: flex; justify-content: center; align-items: center; width: 100%; min-height: 300px; }
-.diagram-container .mermaid { font-size: 14px; }
-.diagram-container svg { max-width: 100%; max-height: 480px; }
+.diagram-container { display: flex; justify-content: center; align-items: center; width: 100%; min-height: 400px; overflow: auto; }
+.diagram-container .mermaid { font-size: 16px; }
+.diagram-container svg { width: 100%; min-height: 360px; height: auto; }
 
 /* ── Mindmap (Markmap) ── */
-.mindmap-container { width: 100%; height: 480px; display: flex; justify-content: center; }
+.mindmap-wrapper { width: 100%; display: flex; flex-direction: column; border-radius: 16px; overflow: hidden; border: 1px solid var(--card-border); background: var(--card-bg); }
+.mindmap-container { width: 100%; height: 520px; display: flex; justify-content: center; position: relative; }
 .mindmap-svg { width: 100%; height: 100%; }
+.mindmap-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--card-border); background: var(--card-bg); }
+.mindmap-toolbar button { display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; font-size: 12px; font-weight: 600; color: var(--accent); background: transparent; border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
+.mindmap-toolbar button:hover { background: ${s.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'}; border-color: var(--accent); }
+.mindmap-toolbar button .material-symbols-outlined { font-size: 16px; }
+.mindmap-hint { display: flex; align-items: center; gap: 4px; margin-left: auto; font-size: 11px; color: var(--subtitle-color); opacity: 0.7; }
+.mindmap-hint .material-symbols-outlined { font-size: 13px; }
 
 /* ── Compound Layout System (no fixed height — content flows naturally) ── */
 .slide-layout { display: grid; gap: 40px; width: 100%; align-items: center; }
@@ -1534,19 +1549,36 @@ li { word-wrap: break-word; overflow-wrap: break-word; }
 /* Compound-mode chart/diagram sizing */
 .slide-layout .echart-container { height: 380px; max-width: 100%; }
 .slide-layout.top-bottom .echart-container { height: 340px; }
-.slide-layout .diagram-container { min-height: 250px; }
+.slide-layout .diagram-container { min-height: 340px; }
+.slide-layout .diagram-container svg { min-height: 300px; }
 .slide-layout .mindmap-container { height: 400px; }
-.slide-layout.top-bottom .mindmap-container { height: 320px; }
+.slide-layout.top-bottom .mindmap-container { height: 360px; }
 
-/* Compound-mode: process/timeline vertical in split */
+/* Compound-mode: process vertical in split — horizontal items + vertical connector */
 .slide-layout.split-left .process-steps,
-.slide-layout.split-right .process-steps { flex-direction: column; align-items: flex-start; gap: 0.8em; }
+.slide-layout.split-right .process-steps { flex-direction: column; align-items: stretch; gap: 1em; padding-top: 0; padding-left: 0; position: relative; }
 .slide-layout.split-left .process-connector,
-.slide-layout.split-right .process-connector { display: none; }
+.slide-layout.split-right .process-connector { top: 0; bottom: 0; left: 31px; right: auto; width: 3px; height: auto; }
+.slide-layout.split-left .process-step,
+.slide-layout.split-right .process-step { flex-direction: row; text-align: left; align-items: center; gap: 16px; }
+.slide-layout.split-left .process-step-circle,
+.slide-layout.split-right .process-step-circle { width: 48px; height: 48px; margin-bottom: 0; flex-shrink: 0; }
+.slide-layout.split-left .process-icon,
+.slide-layout.split-right .process-icon { font-size: 22px !important; }
+.slide-layout.split-left .process-step-desc,
+.slide-layout.split-right .process-step-desc { max-width: none; }
+
+/* Compound-mode: timeline vertical in split — horizontal items + vertical line */
 .slide-layout.split-left .timeline .tl-items,
-.slide-layout.split-right .timeline .tl-items { flex-direction: column; gap: 0.8em; }
+.slide-layout.split-right .timeline .tl-items { flex-direction: column; gap: 0.6em; }
 .slide-layout.split-left .timeline .tl-line,
-.slide-layout.split-right .timeline .tl-line { display: none; }
+.slide-layout.split-right .timeline .tl-line { top: 0; bottom: 0; left: 20px; right: auto; width: 3px; height: auto; background: linear-gradient(180deg, var(--accent), var(--accent2)); }
+.slide-layout.split-left .timeline .tl-item,
+.slide-layout.split-right .timeline .tl-item { flex-direction: row; text-align: left; align-items: center; gap: 16px; }
+.slide-layout.split-left .timeline .tl-dot,
+.slide-layout.split-right .timeline .tl-dot { width: 40px; height: 40px; margin-bottom: 0; flex-shrink: 0; }
+.slide-layout.split-left .timeline .tl-content,
+.slide-layout.split-right .timeline .tl-content { margin-top: 0; }
 
 /* Compound-mode icon-grid in split — 2-col */
 .slide-layout.split-left .icon-grid,
@@ -1687,6 +1719,9 @@ function generateHtml(input: SlidesInput): string {
           el.innerHTML = result.svg;
           el.setAttribute('data-rendered', 'true');
           el.classList.remove('mermaid');
+          // Make SVG fill container properly
+          var svg = el.querySelector('svg');
+          if (svg) { svg.style.width = '100%'; svg.style.minHeight = '360px'; svg.style.height = 'auto'; svg.removeAttribute('height'); }
         }).catch(function(e) { console.warn('Mermaid render error for ' + cfg.id + ':', e); });
       });
     }
@@ -1697,7 +1732,7 @@ function generateHtml(input: SlidesInput): string {
   <\/script>`;
   }
 
-  // Build Markmap init code — IntersectionObserver-based
+  // Build Markmap init code — IntersectionObserver-based + interactive controls
   let markmapInitCode = '';
   if (markmapUsed && mindmapConfigs.length > 0) {
     const mmConfigs = mindmapConfigs.map(c =>
@@ -1710,22 +1745,75 @@ function generateHtml(input: SlidesInput): string {
       ${mmConfigs}
     ];
     var transformer = new markmap.Transformer();
+
+    // Tree manipulation helpers
+    function foldTree(node, depth, maxLevel) {
+      if (depth >= maxLevel && node.children && node.children.length) {
+        node.payload = Object.assign({}, node.payload, { fold: 1 });
+      }
+      if (node.children) node.children.forEach(function(c) { foldTree(c, depth + 1, maxLevel); });
+    }
+    function unfoldAll(node) {
+      if (node.payload && node.payload.fold) {
+        node.payload = Object.assign({}, node.payload, { fold: 0 });
+      }
+      if (node.children) node.children.forEach(unfoldAll);
+    }
+
     function initMindmap(cfg) {
       var el = document.getElementById(cfg.id);
       if (!el || el.getAttribute('data-rendered')) return;
       el.setAttribute('data-rendered', 'true');
       var result = transformer.transform(cfg.code);
+      // Start collapsed at depth 1 — user expands manually
+      foldTree(result.root, 0, 1);
       var mm = markmap.Markmap.create(el, {
+        autoFit: false,
+        duration: 300,
         color: function(node) {
           var colors = ${JSON.stringify(s.chartColors)};
           return colors[(node.state ? node.state.id : 0) % colors.length];
         },
         paddingX: 16,
-        initialExpandLevel: 2,
       }, result.root);
       el.__markmap = mm;
       mm.fit();
+      // Click handler: toggle node + pan to show children
+      mm.handleClick = function(e, d) {
+        var wasFolded = d.payload && d.payload.fold;
+        var recursive = (navigator.platform.startsWith('Mac') ? e.metaKey : e.ctrlKey) && mm.options.toggleRecursively;
+        mm.toggleNode(d, recursive).then(function() {
+          if (wasFolded && d.children && d.children.length) {
+            var vw = mm.svg.node().getBoundingClientRect().width;
+            var ratio = vw < 768 ? 0.85 : 0.5;
+            mm.centerNode(d, { right: vw * ratio });
+          } else {
+            mm.centerNode(d);
+          }
+        });
+      };
     }
+
+    // Global toolbar functions
+    window.mmExpandAll = function(id) {
+      var el = document.getElementById(id);
+      if (!el || !el.__markmap) return;
+      var mm = el.__markmap;
+      unfoldAll(mm.state.data);
+      mm.renderData().then(function() { mm.fit(); });
+    };
+    window.mmCollapseAll = function(id) {
+      var el = document.getElementById(id);
+      if (!el || !el.__markmap) return;
+      var mm = el.__markmap;
+      foldTree(mm.state.data, 0, 1);
+      mm.renderData().then(function() { mm.fit(); });
+    };
+    window.mmFitView = function(id) {
+      var el = document.getElementById(id);
+      if (el && el.__markmap) el.__markmap.fit();
+    };
+
     // Lazy-init mindmaps when section scrolls into view
     var obs = new IntersectionObserver(function(entries) {
       entries.forEach(function(entry) {
