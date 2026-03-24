@@ -67,6 +67,21 @@ const SKILL_META: Record<string, { icon: string; color: string; label: string }>
   'research': { icon: 'travel_explore', color: '#8f9097', label: 'RESEARCH' },
 };
 
+function extractSources(text: string): { title: string; url: string }[] {
+  const urlRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+  const sources: { title: string; url: string }[] = [];
+  const seen = new Set<string>();
+  let match;
+  while ((match = urlRegex.exec(text)) !== null) {
+    const url = match[2];
+    if (!seen.has(url)) {
+      seen.add(url);
+      sources.push({ title: match[1], url });
+    }
+  }
+  return sources;
+}
+
 export default function SharedConversationPage() {
   const params = useParams();
   const shareToken = params.token as string;
@@ -184,27 +199,53 @@ export default function SharedConversationPage() {
       </header>
 
       {/* Messages */}
-      <main className="max-w-4xl mx-auto px-4 md:px-8 py-6 md:py-10 space-y-6 md:space-y-8">
-        {messages.map(msg => (
-          <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : 'flex gap-3 md:gap-4'}>
-            {msg.role === 'assistant' && (
-              <div className="w-7 h-7 md:w-9 md:h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
-                <span className="material-symbols-outlined text-primary text-xs md:text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
-              </div>
-            )}
-            <div className={
-              msg.role === 'user'
-                ? 'max-w-[85%] md:max-w-[70%] px-4 py-2.5 bg-primary text-on-primary rounded-2xl rounded-br-md text-sm whitespace-pre-wrap'
-                : 'chat-markdown text-sm leading-relaxed text-on-surface-variant max-w-full overflow-hidden'
-            }>
-              {msg.role === 'user' ? (
-                msg.content
-              ) : (
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{msg.content}</ReactMarkdown>
+      <main className="max-w-4xl mx-auto px-4 md:px-8 py-6 md:py-10 space-y-4 md:space-y-8">
+        {messages.map(msg => {
+          const sources = msg.role === 'assistant' ? extractSources(msg.content) : [];
+          return (
+            <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : 'flex gap-2 md:gap-4'}>
+              {msg.role === 'assistant' && (
+                <div className="w-7 h-7 md:w-9 md:h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
+                  <span className="material-symbols-outlined text-primary text-xs md:text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
+                </div>
               )}
+              <div className={
+                msg.role === 'user'
+                  ? 'max-w-[85%] md:max-w-[70%]'
+                  : 'max-w-[90%] md:max-w-[85%] min-w-0'
+              }>
+                {msg.role === 'user' ? (
+                  <div className="bg-surface-container px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tr-sm text-on-surface shadow-lg">
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                  </div>
+                ) : (
+                  <div className="bg-surface-container-low px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tl-sm border border-outline-variant/10 overflow-hidden">
+                    <div className="chat-markdown text-sm leading-relaxed text-on-surface-variant">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{msg.content}</ReactMarkdown>
+                    </div>
+                    {sources.length > 0 && (
+                      <details className="mt-2 md:mt-3 border-t border-outline-variant/10 pt-2">
+                        <summary className="text-xs md:text-sm text-primary cursor-pointer font-bold uppercase tracking-wider">
+                          來源 ({sources.length})
+                        </summary>
+                        <div className="flex flex-col gap-1.5 mt-2">
+                          {sources.map((src, i) => (
+                            <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
+                              className="flex items-center gap-2 px-2 md:px-3 py-1.5 md:py-2 bg-surface-container rounded text-xs md:text-sm active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors no-underline">
+                              <span className="material-symbols-outlined text-primary text-xs md:text-sm">link</span>
+                              <span className="text-on-surface truncate flex-1">{src.title}</span>
+                              <span className="text-outline text-xs md:text-sm shrink-0 hidden md:inline">{new URL(src.url).hostname}</span>
+                            </a>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {/* End of conversation indicator */}
         <div className="flex items-center gap-3 pt-6">
