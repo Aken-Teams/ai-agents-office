@@ -116,8 +116,10 @@ Title slides should set `"sideImage"` to a thematic Unsplash image URL to create
 
 Also add `"description"` to title slides for a brief subtitle paragraph.
 
-### Rule 13: Use Side Images for Visual Balance (1/3 Rule)
-Any slide type (`content`, `stats`, `icon-grid`, `process`, `code`, `quote`) can set `"sideImage"` for a decorative image alongside content. The image takes **1/3 width**, content takes **2/3 width**.
+### Rule 13: Use Side Images for Visual Balance
+Each slide renders as a **card on a colored background** (Gamma.app style). Side images are flush against the card edge for a magazine-quality look.
+
+Any slide type (`content`, `stats`, `icon-grid`, `process`, `code`, `quote`) can set `"sideImage"` for a decorative image alongside content. The image takes **~40% width**, content takes **~60% width**.
 
 Use `"imagePosition": "right"` (default) or `"left"` to control placement.
 
@@ -158,13 +160,35 @@ Optionally add `"bulletIcons"` array for icon-enhanced cards.
 
 **Do NOT use for:** sequential steps (use `process`), simple lists, or slides that already have visual elements.
 
-### Rule 15: Search for Flat Design Illustrations
-When a slide uses `sideImage`, search for modern flat-style vector illustrations:
-- Search: `site:storyset.com {topic keywords}` or `site:undraw.co {topic keywords}`
-- These clean, modern illustrations are universally appealing on presentations
-- Prefer illustrations that match the slide's theme (business, tech, creative, etc.)
-- Alternative: `site:unsplash.com {topic} minimal` for photo alternatives
-- **Don't force illustrations on every slide** — use on 2-3 key slides per deck
+### Rule 15: Use Flat Design Illustrations (Storyset Preferred)
+When a slide uses `sideImage`, search for modern flat-style vector illustrations.
+
+**Storyset (preferred)** — rich, colorful SVG illustrations by Freepik:
+- Search: `site:storyset.com {topic keywords}` to find relevant illustration pages
+- CDN URL format: `https://stories.freepiklabs.com/storage/{ID}/{filename}.svg`
+- These URLs work directly as `<img src>` — no download needed
+- Example URLs by category:
+  - Business: `https://stories.freepiklabs.com/storage/13368/299-Business-plan_Artboard-1.svg`
+  - Technology: `https://stories.freepiklabs.com/storage/2522/257-Programming_Artboard-1.svg`
+  - Teamwork: `https://stories.freepiklabs.com/storage/16531/470-Creative-team_Artboard-1.svg`
+  - Data: `https://stories.freepiklabs.com/storage/35149/Data-Extraction_Artboard-1-copy.svg`
+  - Security: `https://stories.freepiklabs.com/storage/27289/Secure-data_Artboard-1.svg`
+  - Creativity: `https://stories.freepiklabs.com/storage/2104/217-Creativity_Artboard-1.svg`
+  - Server/Infra: `https://stories.freepiklabs.com/storage/1434/Server-01.svg`
+  - Music: `https://stories.freepiklabs.com/storage/4440/music-rafiki_Artboard-1.svg`
+
+**Picsum (placeholder photos)** — use for generic/thematic photography:
+- Format: `https://picsum.photos/seed/{keyword}/{width}/{height}`
+- Example: `https://picsum.photos/seed/teamwork/600/800`
+
+**Unsplash (real photos)** — use for hero backgrounds, portraits, real objects:
+- Search: `site:unsplash.com {topic keywords}`
+- Format: `https://images.unsplash.com/photo-xxx?w=800&h=600&fit=crop`
+
+**Guidelines:**
+- Prefer Storyset for decorative `sideImage` illustrations (content, process, stats slides)
+- Use picsum/Unsplash for hero backgrounds, gallery, team photos
+- Don't force illustrations on every slide — use on 2-3 key slides per deck
 
 ## How to Generate
 
