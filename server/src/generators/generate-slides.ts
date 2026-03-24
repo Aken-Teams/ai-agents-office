@@ -1178,7 +1178,7 @@ body { margin: 0; padding: 0; font-family: var(--font-body); color: var(--body-c
   min-height: 100vh;
   scroll-snap-align: start;
   display: flex; align-items: center; justify-content: center;
-  position: relative; overflow: clip;
+  position: relative;
   text-align: left;
 }
 /* Section background cycling */
@@ -1674,7 +1674,7 @@ li { word-wrap: break-word; overflow-wrap: break-word; }
 
 /* Compound-mode chart/diagram sizing */
 .slide-layout .echart-container { height: 380px; max-width: 100%; }
-.slide-layout.top-bottom .echart-container { height: 340px; }
+.slide-layout.top-bottom .echart-container { height: 320px; }
 .slide-layout .diagram-container { min-height: 340px; }
 .slide-layout .diagram-container svg { min-height: 300px; }
 .slide-layout .mindmap-container { height: 400px; }
