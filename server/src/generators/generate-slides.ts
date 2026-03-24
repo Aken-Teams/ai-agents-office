@@ -691,7 +691,7 @@ function sanitizeSlide(slide: SlideData): SlideData {
     }
   }
   if (s.milestones && s.milestones.length > LIMITS.timelineMilestones) s.milestones = s.milestones.slice(0, LIMITS.timelineMilestones);
-  if (s.code) {
+  if (s.code && s.type !== 'diagram' && s.type !== 'mindmap') {
     const lines = s.code.split('\n');
     if (lines.length > LIMITS.codeLines) s.code = lines.slice(0, LIMITS.codeLines).join('\n') + '\n// ...';
   }
@@ -1390,7 +1390,7 @@ li { word-wrap: break-word; overflow-wrap: break-word; }
 
 /* ── ECharts ── */
 .echart-container { width: 100%; height: 420px; max-width: 100%; margin: 0 auto; }
-.echart-compact { height: 280px; }
+.echart-compact { height: 360px; }
 
 /* ── Image + Text ── */
 .image-text-layout { display: flex; gap: 2.5em; align-items: center; width: 100%; }
@@ -1433,8 +1433,8 @@ li { word-wrap: break-word; overflow-wrap: break-word; }
 .process-step:hover .process-step-circle { transform: scale(1.12); box-shadow: 0 8px 35px ${s.accentColor}50; }
 .process-icon { font-size: 28px !important; color: #fff; }
 .process-num { font-size: 20px; font-weight: 700; color: #fff; }
-.process-step-label { font-size: 0.78em; font-weight: 700; color: var(--heading-color); margin-bottom: 0.2em; }
-.process-step-desc { font-size: 0.55em; color: var(--body-color); margin: 0; max-width: 150px; line-height: 1.5; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 0.5em 0.6em; }
+.process-step-label { font-size: 0.95em; font-weight: 700; color: var(--heading-color); margin-bottom: 0.2em; }
+.process-step-desc { font-size: 0.72em; color: var(--body-color); margin: 0; max-width: 180px; line-height: 1.5; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 0.5em 0.8em; }
 
 /* ── Gallery — rounded with shadows ── */
 .gallery { display: grid; gap: 0.8em; width: 100%; }
@@ -1558,15 +1558,17 @@ li { word-wrap: break-word; overflow-wrap: break-word; }
 .slide-layout.split-left .process-steps,
 .slide-layout.split-right .process-steps { flex-direction: column; align-items: stretch; gap: 1em; padding-top: 0; padding-left: 0; position: relative; }
 .slide-layout.split-left .process-connector,
-.slide-layout.split-right .process-connector { top: 0; bottom: 0; left: 31px; right: auto; width: 3px; height: auto; }
+.slide-layout.split-right .process-connector { top: 0; bottom: 0; left: 23px; right: auto; width: 3px; height: auto; }
 .slide-layout.split-left .process-step,
 .slide-layout.split-right .process-step { flex-direction: row; text-align: left; align-items: center; gap: 16px; }
 .slide-layout.split-left .process-step-circle,
 .slide-layout.split-right .process-step-circle { width: 48px; height: 48px; margin-bottom: 0; flex-shrink: 0; }
 .slide-layout.split-left .process-icon,
 .slide-layout.split-right .process-icon { font-size: 22px !important; }
+.slide-layout.split-left .process-step-label,
+.slide-layout.split-right .process-step-label { font-size: 1em; }
 .slide-layout.split-left .process-step-desc,
-.slide-layout.split-right .process-step-desc { max-width: none; }
+.slide-layout.split-right .process-step-desc { max-width: none; font-size: 0.8em; padding: 0.6em 1em; }
 
 /* Compound-mode: timeline vertical in split — horizontal items + vertical line */
 .slide-layout.split-left .timeline .tl-items,
@@ -1578,7 +1580,21 @@ li { word-wrap: break-word; overflow-wrap: break-word; }
 .slide-layout.split-left .timeline .tl-dot,
 .slide-layout.split-right .timeline .tl-dot { width: 40px; height: 40px; margin-bottom: 0; flex-shrink: 0; }
 .slide-layout.split-left .timeline .tl-content,
-.slide-layout.split-right .timeline .tl-content { margin-top: 0; }
+.slide-layout.split-right .timeline .tl-content { margin-top: 0; padding: 0.8em 1em; }
+.slide-layout.split-left .timeline .tl-title,
+.slide-layout.split-right .timeline .tl-title { font-size: 16px; }
+.slide-layout.split-left .timeline .tl-desc,
+.slide-layout.split-right .timeline .tl-desc { font-size: 13px; }
+.slide-layout.split-left .timeline .tl-date,
+.slide-layout.split-right .timeline .tl-date { font-size: 12px; }
+
+/* Compound-mode stats in split — 2×2 grid */
+.slide-layout.split-left .stats-grid,
+.slide-layout.split-right .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.8em; }
+.slide-layout.split-left .stats-card,
+.slide-layout.split-right .stats-card { padding: 18px 14px; }
+.slide-layout.split-left .stats-value,
+.slide-layout.split-right .stats-value { font-size: 32px; }
 
 /* Compound-mode icon-grid in split — 2-col */
 .slide-layout.split-left .icon-grid,
@@ -1676,7 +1692,8 @@ function generateHtml(input: SlidesInput): string {
       instances[cfg.id] = chart;
       setTimeout(function() { chart.resize(); }, 100);
     }
-    // Lazy-init charts when their section scrolls into view
+    // Init charts — use scrollable container as IntersectionObserver root
+    var sc = document.querySelector('.slides-container');
     var obs = new IntersectionObserver(function(entries) {
       entries.forEach(function(entry) {
         if (entry.isIntersecting) {
@@ -1685,8 +1702,10 @@ function generateHtml(input: SlidesInput): string {
           });
         }
       });
-    }, { threshold: 0.1 });
+    }, { root: sc, threshold: 0.1 });
     document.querySelectorAll('.slide').forEach(function(s) { obs.observe(s); });
+    // Fallback: init all charts on page load
+    window.addEventListener('load', function() { configs.forEach(initChart); });
     // ResizeObserver for responsive charts
     var resizer = new ResizeObserver(function(entries) {
       entries.forEach(function(e) { if (instances[e.target.id]) instances[e.target.id].resize(); });
@@ -1814,7 +1833,8 @@ function generateHtml(input: SlidesInput): string {
       if (el && el.__markmap) el.__markmap.fit();
     };
 
-    // Lazy-init mindmaps when section scrolls into view
+    // Lazy-init mindmaps — use scrollable container as root
+    var sc = document.querySelector('.slides-container');
     var obs = new IntersectionObserver(function(entries) {
       entries.forEach(function(entry) {
         if (entry.isIntersecting) {
@@ -1827,8 +1847,10 @@ function generateHtml(input: SlidesInput): string {
           });
         }
       });
-    }, { threshold: 0.1 });
+    }, { root: sc, threshold: 0.1 });
     document.querySelectorAll('.slide').forEach(function(s) { obs.observe(s); });
+    // Fallback: init on page load
+    window.addEventListener('load', function() { configs.forEach(initMindmap); });
   })();
   <\/script>`;
   }
@@ -1862,13 +1884,14 @@ function generateHtml(input: SlidesInput): string {
         requestAnimationFrame(tick);
       });
     }
+    var sc = document.querySelector('.slides-container');
     var obs = new IntersectionObserver(function(entries) {
       entries.forEach(function(entry) {
         if (entry.isIntersecting && (entry.target.querySelector('.stats-grid') || entry.target.querySelector('.dashboard-kpis'))) {
           animateNumbers(entry.target);
         }
       });
-    }, { threshold: 0.3 });
+    }, { root: sc, threshold: 0.3 });
     document.querySelectorAll('.slide').forEach(function(s) { obs.observe(s); });
   })();
   <\/script>` : '';
@@ -1990,11 +2013,12 @@ function generateHtml(input: SlidesInput): string {
   <!-- Scroll-triggered animations -->
   <script>
   (function() {
+    var sc = document.querySelector('.slides-container');
     var obs = new IntersectionObserver(function(entries) {
       entries.forEach(function(entry) {
         if (entry.isIntersecting) entry.target.classList.add('is-visible');
       });
-    }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+    }, { root: sc, threshold: 0.15 });
     document.querySelectorAll('.animate-on-scroll').forEach(function(el) { obs.observe(el); });
   })();
   <\/script>
