@@ -17,7 +17,9 @@ const pool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0,
   charset: 'utf8mb4',
-  timezone: '+00:00',
+  // Use 'local' so mysql2 interprets DATETIME values using the system timezone
+  // (data in MySQL is stored in local time via CURRENT_TIMESTAMP)
+  timezone: 'local',
   // MySQL SUM/COUNT returns DECIMAL/LONGLONG as strings by default.
   // Convert them to JavaScript numbers so the API returns proper numeric values.
   typeCast: function (field: any, next: any) {

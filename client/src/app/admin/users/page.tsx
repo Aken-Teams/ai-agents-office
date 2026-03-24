@@ -35,6 +35,12 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
+function toUTC(dateStr: string): Date {
+  if (!dateStr) return new Date(0);
+  const s = dateStr.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(dateStr) ? dateStr : dateStr.replace(' ', 'T') + 'Z';
+  return new Date(s);
+}
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -198,7 +204,7 @@ export default function AdminUsers() {
         <div className="px-4 py-3 flex items-center gap-2 text-xs border-b border-outline-variant/10">
           <StatusBadge status={detail.status} />
           <RoleBadge role={detail.role} />
-          <span className="text-on-surface-variant ml-auto">{new Date(detail.created_at).toLocaleDateString('zh-TW')}</span>
+          <span className="text-on-surface-variant ml-auto">{toUTC(detail.created_at).toLocaleDateString('zh-TW')}</span>
         </div>
 
         {/* Role Toggle */}
@@ -391,7 +397,7 @@ export default function AdminUsers() {
                       </div>
                     </td>
                     <td className="py-3 px-4 text-sm text-on-surface-variant font-mono">
-                      {new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                      {toUTC(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                     </td>
                     <td className="py-3 px-4"><RoleBadge role={user.role} /></td>
                     <td className="py-3 px-4"><StatusBadge status={user.status} /></td>
@@ -432,7 +438,7 @@ export default function AdminUsers() {
                 <div className="flex items-center gap-4 mt-2 ml-[52px] text-[11px] text-on-surface-variant">
                   <span className="font-mono">{formatTokens(user.total_tokens)} tokens</span>
                   <span>{user.file_count} {t('admin.users.table.files')}</span>
-                  <span className="ml-auto font-mono">{new Date(user.created_at).toLocaleDateString('zh-TW')}</span>
+                  <span className="ml-auto font-mono">{toUTC(user.created_at).toLocaleDateString('zh-TW')}</span>
                 </div>
               </div>
             ))}

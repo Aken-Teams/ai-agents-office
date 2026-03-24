@@ -16,7 +16,7 @@ router.use(adminMiddleware);
 // GET /api/admin/overview/stats
 router.get('/overview/stats', async (_req: Request, res: Response) => {
   const totalUsersRow = await dbGet<{ count: number }>(
-    "SELECT COUNT(*) as count FROM users WHERE role != 'admin'"
+    'SELECT COUNT(*) as count FROM users'
   );
 
   const activeSkills = loadSkills().length;
@@ -63,7 +63,7 @@ router.get('/overview/token-velocity', async (req: Request, res: Response) => {
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const existing = dataMap.get(dateStr);
     result.push(existing || { date: dateStr, total_input: 0, total_output: 0, invocation_count: 0 });
   }
@@ -373,7 +373,7 @@ router.get('/tokens/chart', async (req: Request, res: Response) => {
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const existing = dataMap.get(dateStr);
     result.push(existing || { date: dateStr, total_input: 0, total_output: 0, invocation_count: 0 });
   }

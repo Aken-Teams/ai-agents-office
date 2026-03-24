@@ -56,10 +56,17 @@ export default function AdminOverview() {
     conversation_created: { icon: 'chat', color: 'text-tertiary', label: t('admin.overview.event.conversationCreated') },
   };
 
+  function toUTC(dateStr: string): Date {
+    if (!dateStr) return new Date(0);
+    const s = dateStr.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(dateStr) ? dateStr : dateStr.replace(' ', 'T') + 'Z';
+    return new Date(s);
+  }
+
   function timeAgo(dateStr: string): string {
     const now = Date.now();
-    const then = new Date(dateStr).getTime();
+    const then = toUTC(dateStr).getTime();
     const diff = Math.floor((now - then) / 1000);
+    if (diff < 0) return toUTC(dateStr).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
     if (diff < 60) return t('admin.overview.time.justNow');
     if (diff < 3600) return t('admin.overview.time.minutesAgo', { count: Math.floor(diff / 60) });
     if (diff < 86400) return t('admin.overview.time.hoursAgo', { count: Math.floor(diff / 3600) });
