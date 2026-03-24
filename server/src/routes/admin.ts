@@ -186,7 +186,15 @@ router.get('/users/:id', async (req: Request, res: Response) => {
     ORDER BY created_at DESC LIMIT 5
   `, userId);
 
-  res.json({ ...user, tokenStats, recentFiles, recentConversations });
+  const convCount = await dbGet<{ count: number }>(
+    'SELECT COUNT(*) as count FROM conversations WHERE user_id = ?', userId
+  );
+
+  const fileCount = await dbGet<{ count: number }>(
+    'SELECT COUNT(*) as count FROM generated_files WHERE user_id = ?', userId
+  );
+
+  res.json({ ...user, tokenStats, recentFiles, recentConversations, conversation_count: convCount?.count ?? 0, file_count: fileCount?.count ?? 0 });
 });
 
 // PATCH /api/admin/users/:id/status

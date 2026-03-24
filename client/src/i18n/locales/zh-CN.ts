@@ -551,6 +551,7 @@ const zhCN = {
   'admin.users.table.role': '角色',
   'admin.users.table.status': '状态',
   'admin.users.table.files': '文件',
+  'admin.users.table.conversations': '对话',
   'admin.users.table.empty': '未找到用户',
   'admin.users.pagination.summary': '第 {start}-{end} 笔，共 {total} 个身份',
   'admin.users.detail.statusLabel': '状态',

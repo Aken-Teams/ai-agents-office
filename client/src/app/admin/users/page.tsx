@@ -27,6 +27,8 @@ interface UserDetail {
   tokenStats: { total_input: number; total_output: number; invocation_count: number };
   recentFiles: { id: string; filename: string; file_type: string; file_size: number; created_at: string }[];
   recentConversations: { id: string; title: string; skill_id: string | null; status: string; created_at: string }[];
+  conversation_count: number;
+  file_count: number;
 }
 
 function formatTokens(n: number): string {
@@ -375,6 +377,7 @@ export default function AdminUsers() {
                   <th className="py-3 px-4 font-bold">{t('admin.users.table.role')}</th>
                   <th className="py-3 px-4 font-bold">{t('admin.users.table.status')}</th>
                   <th className="py-3 px-4 font-bold text-right">Tokens</th>
+                  <th className="py-3 px-4 font-bold text-right">{t('admin.users.table.conversations')}</th>
                   <th className="py-3 px-4 font-bold text-right">{t('admin.users.table.files')}</th>
                 </tr>
               </thead>
@@ -402,12 +405,13 @@ export default function AdminUsers() {
                     <td className="py-3 px-4"><RoleBadge role={user.role} /></td>
                     <td className="py-3 px-4"><StatusBadge status={user.status} /></td>
                     <td className="py-3 px-4 text-right text-sm text-on-surface font-mono">{formatTokens(user.total_tokens)}</td>
+                    <td className="py-3 px-4 text-right text-sm text-on-surface-variant">{user.conversation_count}</td>
                     <td className="py-3 px-4 text-right text-sm text-on-surface-variant">{user.file_count}</td>
                   </tr>
                 ))}
                 {users.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-on-surface-variant">{t('admin.users.table.empty')}</td>
+                    <td colSpan={7} className="py-12 text-center text-on-surface-variant">{t('admin.users.table.empty')}</td>
                   </tr>
                 )}
               </tbody>
@@ -437,6 +441,7 @@ export default function AdminUsers() {
                 </div>
                 <div className="flex items-center gap-4 mt-2 ml-[52px] text-[11px] text-on-surface-variant">
                   <span className="font-mono">{formatTokens(user.total_tokens)} tokens</span>
+                  <span>{user.conversation_count} {t('admin.users.table.conversations')}</span>
                   <span>{user.file_count} {t('admin.users.table.files')}</span>
                   <span className="ml-auto font-mono">{toUTC(user.created_at).toLocaleDateString('zh-TW')}</span>
                 </div>

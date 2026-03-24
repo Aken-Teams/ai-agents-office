@@ -538,6 +538,7 @@ const en = {
   'admin.users.table.role': 'Role',
   'admin.users.table.status': 'Status',
   'admin.users.table.files': 'Files',
+  'admin.users.table.conversations': 'Chats',
   'admin.users.table.empty': 'No users found',
   'admin.users.pagination.summary': '{start}-{end} of {total} identities',
   'admin.users.detail.statusLabel': 'Status',
