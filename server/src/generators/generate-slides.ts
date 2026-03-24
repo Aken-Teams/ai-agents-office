@@ -524,13 +524,14 @@ function buildEChartsOption(chart: ChartData, s: StylePreset): object {
       return {
         color: colors,
         tooltip: { ...baseTooltip, trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-        legend: { orient: 'vertical', right: '5%', top: 'center', textStyle: { color: textColor, fontSize: 12 } },
+        legend: { orient: 'vertical', right: '2%', top: 'center', textStyle: { color: textColor, fontSize: 12 }, formatter: function (name: string) { return name.length > 10 ? name.slice(0, 10) + '…' : name; } },
         series: [{
           type: 'pie', radius: chart.type === 'donut' ? ['40%', '70%'] : ['0%', '70%'],
-          center: ['40%', '50%'], padAngle: 2, itemStyle: { borderRadius: 6 },
+          center: ['35%', '50%'], padAngle: 2, itemStyle: { borderRadius: 6 },
           data: slices.map(sl => ({ value: sl.value, name: sl.label })),
-          label: { color: textColor, fontSize: 12 },
-          emphasis: { itemStyle: { shadowBlur: 20, shadowColor: 'rgba(0,0,0,0.3)' } },
+          label: { show: false },
+          labelLine: { show: false },
+          emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold', color: textColor }, itemStyle: { shadowBlur: 20, shadowColor: 'rgba(0,0,0,0.3)' } },
           animationType: 'scale', animationEasing: 'elasticOut',
         }],
       };
