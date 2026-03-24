@@ -479,6 +479,7 @@ function ChatContent() {
   const sidebarMargin = useSidebarMargin();
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
 
   // Custom ReactMarkdown components — intercept ```chart and ```mermaid blocks
   // Memoized to prevent chart/map components from re-mounting on every render
@@ -553,15 +554,24 @@ function ChatContent() {
       .then(r => r.json())
       .then((allFiles: GeneratedFile[]) => {
         setFiles(allFiles);
-        // Restore latestFiles: files from the most recent generation batch (within 60s of newest)
+        // Restore latestFiles: only the latest version of each filename from the most recent batch
         if (allFiles.length > 0) {
           const sorted = [...allFiles].sort((a, b) =>
             new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
           );
           const latestTime = new Date(sorted[0].created_at || 0).getTime();
-          setLatestFiles(sorted.filter(f =>
+          const recentFiles = sorted.filter(f =>
             latestTime - new Date(f.created_at || 0).getTime() < 60000
-          ));
+          );
+          // Deduplicate by filename, keep highest version
+          const byName = new Map<string, GeneratedFile>();
+          for (const f of recentFiles) {
+            const existing = byName.get(f.filename);
+            if (!existing || (f.version || 1) > (existing.version || 1)) {
+              byName.set(f.filename, f);
+            }
+          }
+          setLatestFiles(Array.from(byName.values()));
         }
       })
       .catch(console.error);
@@ -647,6 +657,13 @@ function ChatContent() {
   const sendMessage = useCallback(async (directMessage?: string, extraUploadIds?: string[]) => {
     const messageToSend = directMessage || input.trim();
     if (!messageToSend || streaming || !token) return;
+
+    // Pre-create AudioContext on user gesture (required by browser autoplay policy)
+    if (!audioCtxRef.current) {
+      try { audioCtxRef.current = new AudioContext(); } catch { /* unsupported */ }
+    } else if (audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume().catch(() => {});
+    }
 
     // Inject template instruction if a template was selected
     const userMessage = pendingTemplate
@@ -762,8 +779,19 @@ function ChatContent() {
             }
             if (event.type === 'file_generated') {
               const newFiles = event.data as GeneratedFile[];
-              // Track latest generation for inline preview
-              setLatestFiles(prev => [...prev, ...newFiles]);
+              // Track latest generation for inline preview (deduplicate by filename, keep latest version)
+              setLatestFiles(prev => {
+                const updated = [...prev];
+                for (const nf of newFiles) {
+                  const existingIdx = updated.findIndex(f => f.filename === nf.filename);
+                  if (existingIdx >= 0) {
+                    updated[existingIdx] = nf;
+                  } else {
+                    updated.push(nf);
+                  }
+                }
+                return updated;
+              });
               // Deduplicate: replace older versions of same file_path, keep latest
               setFiles(prev => {
                 const updated = [...prev];
@@ -863,6 +891,22 @@ function ChatContent() {
     } finally {
       setStreaming(false);
       abortRef.current = null;
+      // Play notification sound when task completes (uses pre-created AudioContext)
+      try {
+        const ctx = audioCtxRef.current;
+        if (ctx && ctx.state === 'running') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.setValueAtTime(880, ctx.currentTime);
+          osc.frequency.setValueAtTime(1047, ctx.currentTime + 0.1);
+          gain.gain.setValueAtTime(0.15, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.3);
+        }
+      } catch { /* audio not available */ }
       // Reload sidebar uploads — dashboard uploads now linked to this conversation
       reloadConversationUploads();
     }
