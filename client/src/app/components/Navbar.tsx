@@ -936,7 +936,7 @@ export default function Navbar() {
                 </div>
                 <div>
                   {/* Template Grid */}
-                  <div className={`p-4 grid gap-3 ${(SKILL_TEMPLATES[selectedSkill] || []).length > 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-2'}`}>
+                  <div className={`p-4 grid gap-3 ${(SKILL_TEMPLATES[selectedSkill] || []).length > 4 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2'}`}>
                     {(SKILL_TEMPLATES[selectedSkill] || []).map(tmpl => {
                       const previewKey = `${selectedSkill}:${tmpl.id}`;
                       const preview = TEMPLATE_PREVIEW[previewKey];
