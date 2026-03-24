@@ -1279,15 +1279,15 @@ body { margin: 0; padding: 0; font-family: var(--font-body); color: var(--body-c
   transition: opacity 0.3s;
 }
 .slide-counter:hover { opacity: 0.9; }
-.watermark {
-  position: fixed; bottom: 24px; left: 24px; z-index: 200;
-  font-size: 11px; font-family: var(--font-body); letter-spacing: 0.06em;
-  color: var(--body-color); opacity: 0.3;
-  display: flex; align-items: center; gap: 6px;
+.watermark-overlay {
+  position: fixed; inset: 0; z-index: 150;
   pointer-events: none; user-select: none;
+  overflow: hidden;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='320'%3E%3Cg transform='rotate(-30 240 160)'%3E%3Ctext x='240' y='145' dominant-baseline='middle' text-anchor='middle' font-family='Arial,sans-serif' font-size='20' font-weight='700' fill='${encodeURIComponent(s.isDark ? 'rgba(255,255,255,0.045)' : 'rgba(0,0,0,0.045)')}'%3ECONFIDENTIAL%3C/text%3E%3Ctext x='240' y='172' dominant-baseline='middle' text-anchor='middle' font-family='Arial,sans-serif' font-size='14' font-weight='500' fill='${encodeURIComponent(s.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)')}'%3E%E6%A9%9F%E5%AF%86%E6%96%87%E4%BB%B6 %C2%B7 %E6%B8%AC%E8%A9%A6%E7%89%88%3C/text%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 480px 320px;
 }
-.watermark img { width: 14px; height: 14px; opacity: 0.5; }
-@media print { .watermark { position: absolute; bottom: 12px; left: 12px; } }
+@media print { .watermark-overlay { position: absolute; } }
 .fullscreen-btn {
   position: fixed; bottom: 24px; right: 24px; z-index: 200;
   width: 44px; height: 44px; border-radius: 12px;
@@ -2108,7 +2108,7 @@ function generateHtml(input: SlidesInput): string {
     <div class="nav-progress"></div>
     <nav class="slide-nav" aria-label="Slide navigation"></nav>
     <div class="slide-counter"><span class="current-slide">1</span> / <span class="total-slides">${totalSlides}</span></div>
-    <div class="watermark">Powered by AI Agents Office</div>
+    <div class="watermark-overlay" aria-hidden="true"></div>
     <button class="fullscreen-btn" aria-label="Toggle fullscreen">
       <span class="material-symbols-outlined">fullscreen</span>
     </button>

@@ -274,6 +274,25 @@ function parseToolInput(tool: string, rawInput: string | undefined, t: (key: any
   return rawInput.length > 80 ? rawInput.substring(0, 80) + '…' : rawInput;
 }
 
+/** Parse AskUserQuestion options from tool input JSON */
+function parseAskUserOptions(rawInput: string | undefined): { question: string; options: { label: string; description?: string }[] }[] | null {
+  if (!rawInput) return null;
+  try {
+    const parsed = JSON.parse(rawInput);
+    const questions = parsed?.questions;
+    if (!Array.isArray(questions) || questions.length === 0) return null;
+    return questions.map((q: any) => ({
+      question: q.question || '',
+      options: Array.isArray(q.options) ? q.options.map((o: any) => ({
+        label: o.label || '',
+        description: o.description || '',
+      })) : [],
+    })).filter((q: any) => q.options.length > 0);
+  } catch {
+    return null;
+  }
+}
+
 /** Get tool icon (material symbol name) and label */
 function getToolInfo(tool: string, t: (key: any, params?: Record<string, string | number>) => string): { icon: string; label: string } {
   if (tool.includes(':')) {
@@ -1279,18 +1298,44 @@ function ChatContent() {
                         const info = getToolInfo(tool.tool, t);
                         const detail = parseToolInput(tool.tool, tool.input, t);
                         const isDone = tool.status === 'completed';
+                        const baseTool = tool.tool.includes(':') ? tool.tool.split(':')[1] : tool.tool;
+                        const askOptions = baseTool === 'AskUserQuestion' ? parseAskUserOptions(tool.input) : null;
                         return (
-                          <div key={tool.id || i} className={`flex items-center gap-2 px-2 py-1.5 rounded ${isDone ? 'text-outline' : 'text-on-surface-variant bg-surface-container/50'}`}>
-                            {isDone
-                              ? <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
-                              : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
-                            }
-                            <span className="material-symbols-outlined text-sm">{info.icon}</span>
-                            <span className={isDone ? 'line-through opacity-60' : ''}>{info.label}</span>
-                            {detail && (
-                              <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[150px] md:max-w-[400px]">
-                                {detail}
-                              </span>
+                          <div key={tool.id || i}>
+                            <div className={`flex items-center gap-2 px-2 py-1.5 rounded ${isDone ? 'text-outline' : 'text-on-surface-variant bg-surface-container/50'}`}>
+                              {isDone
+                                ? <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
+                                : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
+                              }
+                              <span className="material-symbols-outlined text-sm">{info.icon}</span>
+                              <span className={isDone ? 'line-through opacity-60' : ''}>{info.label}</span>
+                              {detail && (
+                                <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[150px] md:max-w-[400px]">
+                                  {detail}
+                                </span>
+                              )}
+                            </div>
+                            {/* AskUserQuestion interactive options */}
+                            {askOptions && !streaming && (
+                              <div className="mt-2 ml-6 space-y-3">
+                                {askOptions.map((q, qi) => (
+                                  <div key={qi} className="space-y-2">
+                                    <p className="text-sm text-on-surface-variant font-medium">{q.question}</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {q.options.map((opt, oi) => (
+                                        <button
+                                          key={oi}
+                                          onClick={() => sendMessage(opt.label)}
+                                          className="px-3 py-1.5 text-sm rounded-lg border border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 hover:border-primary/50 transition-colors cursor-pointer"
+                                          title={opt.description}
+                                        >
+                                          {opt.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
                             )}
                           </div>
                         );
