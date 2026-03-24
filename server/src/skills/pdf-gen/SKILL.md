@@ -57,6 +57,15 @@ If the user mentions a style preference (e.g. "formal report", "technical manual
 4. **Include an author name** — Use "AI Agents Office" if none specified.
 5. The `"modern"` style produces a **premium business look**: colored top banner, accent sidebar bars on headings, styled bullet dots, page numbers with separator line, and clean typography. It is NOT a plain white document.
 
+## CJK (Chinese/Japanese/Korean) Support
+
+The generator **automatically detects** CJK characters in the content and switches to **Noto Sans SC** font. No special configuration needed — just write Chinese (繁體/簡體), Japanese, or Korean text in the JSON fields and it works.
+
+- Font file: `assets/fonts/NotoSansSC-VariableFont.ttf` (auto-loaded)
+- Detection: scans title, author, all headings, paragraphs, and bullets
+- When CJK is detected, all fonts (title, heading, body) switch to Noto Sans SC
+- Latin text within CJK documents also renders correctly (the font supports both)
+
 ## Features
 
 All styles include:
@@ -65,6 +74,7 @@ All styles include:
 - Bullet point formatting
 - Justified paragraph text with configurable line spacing
 - Custom page margins per style
+- Automatic CJK font support (Chinese, Japanese, Korean)
 
 ## Custom Generation
 For complex requirements (graphics, tables, forms), write custom Node.js code using `pdfkit`:
