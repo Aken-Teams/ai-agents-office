@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Reveal.js Premium Slides Generator v2
+ * Scroll-Snap Web Presentation Generator v3
  * Usage: node --import tsx generate-slides.ts <input.json> <output.html>
  *
  * 8 styles: minimal | dark | gradient | neon | corporate | creative | elegant | tech
@@ -12,7 +12,9 @@
  * Diagrams: Mermaid.js (flowchart, gantt, sequence, ER, state)
  * Mindmaps: Markmap (markdown → interactive mindmap)
  *
- * Generates a self-contained HTML with Reveal.js, Google Fonts, Material Symbols from CDN.
+ * Architecture: CSS scroll-snap sections (each section = one page, min-height: 100vh).
+ * No external presentation framework — pure HTML + CSS + minimal JS.
+ * Generates a self-contained HTML with Google Fonts, Material Symbols from CDN.
  */
 
 import fs from 'fs';
@@ -343,6 +345,11 @@ interface SlideData {
   dashboardChart?: ChartData;
   // Diagram (Mermaid)
   diagramType?: 'mermaid';
+  // Compound layout
+  layout?: 'full' | 'split-left' | 'split-right' | 'top-bottom';
+  description?: string;
+  highlights?: string[];
+  sideImage?: string;
 }
 
 interface SlidesInput {
@@ -360,22 +367,21 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function fragAttr(slide: SlideData, anim = 'slide-up'): string {
-  return slide.fragments ? ` class="fragment ${anim}"` : '';
+function animAttr(slide: SlideData, index: number): string {
+  return slide.fragments ? ` class="animate-on-scroll" data-delay="${index}"` : '';
 }
 
-function sectionAttrs(slide: SlideData): string {
-  const parts: string[] = [];
-  if (slide.autoAnimate) parts.push('data-auto-animate');
-  if (slide.background) {
-    if (slide.background.startsWith('http')) parts.push(`data-background-image="${escapeHtml(slide.background)}"`);
-    else parts.push(`data-background="${escapeHtml(slide.background)}"`);
-  }
-  return parts.length ? ' ' + parts.join(' ') : '';
-}
-
-function renderNotes(notes?: string): string {
-  return notes ? `<aside class="notes">${escapeHtml(notes)}</aside>` : '';
+function wrapSlide(type: string, innerHtml: string, slide: SlideData, idx: number): string {
+  const bgStyle = slide.background
+    ? (slide.background.startsWith('http')
+        ? ` style="background-image:url('${escapeHtml(slide.background)}');background-size:cover;background-position:center;"`
+        : ` style="background-color:${escapeHtml(slide.background)};"`)
+    : '';
+  return `<section class="slide slide--${type}" id="slide-${idx}"${bgStyle}>
+  <div class="slide-inner">
+    ${innerHtml}
+  </div>
+</section>`;
 }
 
 function renderIcon(name: string, extraClass = ''): string {
@@ -408,6 +414,55 @@ function renderDecoWave(color: string): string {
   return `<svg class="deco-svg deco-wave" viewBox="0 0 1440 120" xmlns="http://www.w3.org/2000/svg">
   <path d="M0,64L60,69.3C120,75,240,85,360,80C480,75,600,53,720,48C840,43,960,53,1080,58.7C1200,64,1320,64,1380,64L1440,64L1440,120L0,120Z" fill="${color}" fill-opacity="0.1"/>
 </svg>`;
+}
+
+// ── Compound Layout Helper ────────────────────────────────────
+
+/**
+ * Wraps a visual element in a compound layout with narrative text.
+ * Returns the inner HTML (title + layout grid) when layout is set, or null to use legacy rendering.
+ * Caller wraps with wrapSlide().
+ */
+function renderCompoundLayout(
+  slide: SlideData,
+  s: StylePreset,
+  visualHtml: string,
+): string | null {
+  const layout = slide.layout;
+  if (!layout || layout === 'full') return null;
+
+  const hasText = slide.description || (slide.highlights && slide.highlights.length > 0);
+  if (!hasText) return null;
+
+  // Build text block
+  let textHtml = '';
+  if (slide.description) {
+    textHtml += `<p class="compound-description">${escapeHtml(slide.description)}</p>`;
+  }
+  if (slide.highlights && slide.highlights.length > 0) {
+    textHtml += `<ul class="compound-highlights">${slide.highlights.map(h =>
+      `<li>${renderIcon('check_circle', 'highlight-icon')}<span>${escapeHtml(h)}</span></li>`
+    ).join('')}</ul>`;
+  }
+  if (slide.sideImage) {
+    textHtml += `<img src="${escapeHtml(slide.sideImage)}" class="compound-side-image" loading="lazy" alt="" />`;
+  }
+
+  const textBlock = `<div class="layout-text">${textHtml}</div>`;
+  const visualBlock = `<div class="layout-visual">${visualHtml}</div>`;
+
+  let gridHtml: string;
+  if (layout === 'split-left') {
+    gridHtml = `${visualBlock}${textBlock}`;
+  } else if (layout === 'split-right') {
+    gridHtml = `${textBlock}${visualBlock}`;
+  } else {
+    // top-bottom
+    gridHtml = `${visualBlock}${textBlock}`;
+  }
+
+  return `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  <div class="slide-layout ${layout}">${gridHtml}</div>`;
 }
 
 // ── ECharts Option Builder ─────────────────────────────────────
@@ -617,6 +672,8 @@ const LIMITS = {
   radarIndicators: 6,
   funnelItems: 8,
   waterfallItems: 10,
+  highlights: 4,
+  descriptionChars: 300,
 };
 
 function sanitizeSlide(slide: SlideData): SlideData {
@@ -665,6 +722,9 @@ function sanitizeSlide(slide: SlideData): SlideData {
     if (s.rows.length > LIMITS.tableRows) s.rows = s.rows.slice(0, LIMITS.tableRows);
     if (s.headers) s.rows = s.rows.map(r => r.slice(0, s.headers!.length));
   }
+  // Compound layout fields
+  if (s.highlights && s.highlights.length > LIMITS.highlights) s.highlights = s.highlights.slice(0, LIMITS.highlights);
+  if (s.description && s.description.length > LIMITS.descriptionChars) s.description = s.description.slice(0, LIMITS.descriptionChars) + '...';
   return s;
 }
 
@@ -680,137 +740,132 @@ const mermaidConfigs: { id: string; code: string }[] = [];
 
 function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
   const slide = sanitizeSlide(rawSlide);
-  const fa = fragAttr(slide);
-  const sa = sectionAttrs(slide);
-  const notes = renderNotes(slide.notes);
+  const aa = (i: number) => animAttr(slide, i);
   const deco = s.decorations && s.decorationColors.length > 0;
 
   switch (slide.type) {
 
-    case 'title':
-      return `<section${sa}>
-  ${deco ? renderDecoBlob(s.decorationColors, idx) : ''}
+    case 'title': {
+      let inner: string;
+      if (slide.sideImage) {
+        inner = `<div class="slide-layout split-right">
+    <div class="layout-text title-text-block">
+      ${slide.tagline ? `<p class="tagline">${escapeHtml(slide.tagline)}</p>` : ''}
+      <h1>${escapeHtml(slide.title || '')}</h1>
+      <div class="accent-line"></div>
+      ${slide.subtitle ? `<p class="subtitle">${escapeHtml(slide.subtitle)}</p>` : ''}
+      ${slide.description ? `<p class="compound-description">${escapeHtml(slide.description)}</p>` : ''}
+    </div>
+    <div class="layout-visual title-side-image">
+      <img src="${escapeHtml(slide.sideImage)}" loading="lazy" alt="" />
+    </div>
+  </div>`;
+      } else {
+        inner = `${deco ? renderDecoBlob(s.decorationColors, idx) : ''}
   ${deco ? `<div class="deco-svg deco-circles-pos">${renderDecoCircles(s.decorationColors, idx)}</div>` : ''}
   <h1>${escapeHtml(slide.title || '')}</h1>
   <div class="accent-line"></div>
   ${slide.subtitle ? `<p class="subtitle">${escapeHtml(slide.subtitle)}</p>` : ''}
-  ${slide.tagline ? `<p class="tagline">${escapeHtml(slide.tagline)}</p>` : ''}
-  ${notes}
-</section>`;
+  ${slide.tagline ? `<p class="tagline">${escapeHtml(slide.tagline)}</p>` : ''}`;
+      }
+      return wrapSlide('title', inner, slide, idx);
+    }
 
     case 'section':
-      return `<section${sa}>
-  ${deco ? renderDecoWave(s.decorationColors[0] || s.accentColor) : ''}
+      return wrapSlide('section', `${deco ? renderDecoWave(s.decorationColors[0] || s.accentColor) : ''}
   <h2 class="section-heading">${escapeHtml(slide.title || '')}</h2>
   <div class="accent-line"></div>
-  ${slide.subtitle ? `<p class="subtitle">${escapeHtml(slide.subtitle)}</p>` : ''}
-  ${notes}
-</section>`;
+  ${slide.subtitle ? `<p class="subtitle">${escapeHtml(slide.subtitle)}</p>` : ''}`, slide, idx);
 
     case 'content': {
       let body = '';
       if (slide.bullets) {
-        body = `<ul class="bullet-list">${slide.bullets.map(b =>
-          `<li${fa}><span class="bullet-icon">${renderIcon('arrow_right', 'bullet-sym')}</span><span>${escapeHtml(b)}</span></li>`
+        body = `<ul class="bullet-list">${slide.bullets.map((b, i) =>
+          `<li${aa(i)}><span class="bullet-icon">${renderIcon('arrow_right', 'bullet-sym')}</span><span>${escapeHtml(b)}</span></li>`
         ).join('')}</ul>`;
       } else if (slide.text) {
         body = `<p class="body-text">${escapeHtml(slide.text)}</p>`;
       }
-      return `<section${sa}>
-  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  ${body}
-  ${notes}
-</section>`;
+      return wrapSlide('content', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  ${body}`, slide, idx);
     }
 
     case 'two-column': {
       const renderCol = (col: { heading: string; bullets: string[] }) =>
         `<div class="slide-col glass-card">
           <h3>${escapeHtml(col.heading)}</h3>
-          <ul class="bullet-list compact">${col.bullets.map(b =>
-            `<li${fa}><span class="bullet-icon">${renderIcon('chevron_right', 'bullet-sym')}</span><span>${escapeHtml(b)}</span></li>`
+          <ul class="bullet-list compact">${col.bullets.map((b, i) =>
+            `<li${aa(i)}><span class="bullet-icon">${renderIcon('chevron_right', 'bullet-sym')}</span><span>${escapeHtml(b)}</span></li>`
           ).join('')}</ul>
         </div>`;
-      return `<section${sa}>
-  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  <div class="slide-columns">${slide.left ? renderCol(slide.left) : ''}${slide.right ? renderCol(slide.right) : ''}</div>
-  ${notes}
-</section>`;
+      return wrapSlide('two-column', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  <div class="slide-columns">${slide.left ? renderCol(slide.left) : ''}${slide.right ? renderCol(slide.right) : ''}</div>`, slide, idx);
     }
 
     case 'code':
-      return `<section${sa}>
-  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  <pre class="code-block"><code class="language-${slide.language || 'plaintext'}">${escapeHtml(slide.code || '')}</code></pre>
-  ${notes}
-</section>`;
+      return wrapSlide('code', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  <pre class="code-block"><code class="language-${slide.language || 'plaintext'}">${escapeHtml(slide.code || '')}</code></pre>`, slide, idx);
 
     case 'image':
-      return `<section${sa}>
-  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  <img src="${escapeHtml(slide.imageSrc || '')}" alt="${escapeHtml(slide.imageAlt || '')}" loading="lazy" class="slide-image">
-  ${notes}
-</section>`;
+      return wrapSlide('image', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  <img src="${escapeHtml(slide.imageSrc || '')}" alt="${escapeHtml(slide.imageAlt || '')}" loading="lazy" class="slide-image">`, slide, idx);
 
     case 'hero': {
-      const bgAttr = slide.imageSrc
-        ? ` data-background-image="${escapeHtml(slide.imageSrc)}" data-background-opacity="1"`
-        : '';
-      return `<section${sa}${bgAttr}>
-  ${slide.imageSrc ? '<div class="hero-overlay"></div>' : ''}
+      // Hero uses background image via inline style on the section
+      const heroBg = slide.imageSrc ? slide.imageSrc : '';
+      const heroSlide: SlideData = { ...slide, background: heroBg || slide.background };
+      return wrapSlide('hero', `${slide.imageSrc ? '<div class="hero-overlay"></div>' : ''}
   ${deco && !slide.imageSrc ? renderDecoBlob(s.decorationColors, idx) : ''}
   <div class="hero-content">
     <h1 class="hero-title">${escapeHtml(slide.title || '')}</h1>
     ${slide.subtitle ? `<p class="hero-subtitle">${escapeHtml(slide.subtitle)}</p>` : ''}
     ${slide.tagline ? `<p class="hero-tagline">${escapeHtml(slide.tagline)}</p>` : ''}
-  </div>
-  ${notes}
-</section>`;
+  </div>`, heroSlide, idx);
     }
 
     case 'stats': {
       const statsItems = slide.stats || [];
-      const cards = statsItems.map(st => {
+      const cards = statsItems.map((st, i) => {
         const trendIcon = st.trend === 'up' ? 'trending_up' : st.trend === 'down' ? 'trending_down' : '';
         const trendClass = st.trend === 'up' ? 'trend-up' : st.trend === 'down' ? 'trend-down' : '';
-        return `<div class="stats-card glass-card"${fa ? ` ${fa.trim()}` : ''}>
+        return `<div class="stats-card glass-card"${aa(i)}>
   ${st.icon ? `<div class="stats-icon">${renderIcon(st.icon)}</div>` : ''}
   <div class="stats-value">${escapeHtml(st.value)}</div>
   <div class="stats-label">${escapeHtml(st.label)}</div>
   ${trendIcon ? `<div class="stats-trend ${trendClass}">${renderIcon(trendIcon, 'trend-icon')}</div>` : ''}
 </div>`;
       }).join('');
-      return `<section${sa}>
-  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  <div class="stats-grid">${cards}</div>
-  ${notes}
-</section>`;
+      const visualHtml = `<div class="stats-grid">${cards}</div>`;
+      const compound = renderCompoundLayout(slide, s, visualHtml);
+      if (compound) return wrapSlide('stats', compound, slide, idx);
+      return wrapSlide('stats', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  ${visualHtml}`, slide, idx);
     }
 
     case 'icon-grid': {
       const items = slide.items || [];
       const cols = Math.min(slide.columns || 3, 4);
-      const cards = items.map(it => {
+      const cards = items.map((it, i) => {
         const iconHtml = it.imageSrc
           ? `<img src="${escapeHtml(it.imageSrc)}" class="icon-card-img" loading="lazy" alt="${escapeHtml(it.title)}" />`
           : `<div class="icon-card-icon">${renderIcon(it.icon)}</div>`;
-        return `<div class="icon-card glass-card"${fa ? ` ${fa.trim()}` : ''}>
+        return `<div class="icon-card glass-card"${aa(i)}>
   ${iconHtml}
   <div class="icon-card-title">${escapeHtml(it.title)}</div>
   ${it.description ? `<p class="icon-card-desc">${escapeHtml(it.description)}</p>` : ''}
 </div>`;
       }).join('');
-      return `<section${sa}>
-  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  <div class="icon-grid cols-${cols}">${cards}</div>
-  ${notes}
-</section>`;
+      const visualHtml = `<div class="icon-grid cols-${cols}">${cards}</div>`;
+      const compound = renderCompoundLayout(slide, s, visualHtml);
+      if (compound) return wrapSlide('icon-grid', compound, slide, idx);
+      return wrapSlide('icon-grid', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  ${visualHtml}`, slide, idx);
     }
 
     case 'timeline': {
       const milestones = slide.milestones || [];
-      const items = milestones.map((m, i) =>
-        `<div class="tl-item"${fa ? ` ${fa.trim()}` : ''}>
+      const tlItems = milestones.map((m, i) =>
+        `<div class="tl-item"${aa(i)}>
   <div class="tl-dot">${m.icon ? renderIcon(m.icon, 'tl-icon') : `<span class="tl-num">${i + 1}</span>`}</div>
   <div class="tl-content">
     ${m.date ? `<span class="tl-date">${escapeHtml(m.date)}</span>` : ''}
@@ -819,35 +874,29 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
   </div>
 </div>`
       ).join('');
-      return `<section${sa}>
-  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  <div class="timeline">
-    <div class="tl-line"></div>
-    <div class="tl-items">${items}</div>
-  </div>
-  ${notes}
-</section>`;
+      const visualHtml = `<div class="timeline"><div class="tl-line"></div><div class="tl-items">${tlItems}</div></div>`;
+      const compound = renderCompoundLayout(slide, s, visualHtml);
+      if (compound) return wrapSlide('timeline', compound, slide, idx);
+      return wrapSlide('timeline', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  ${visualHtml}`, slide, idx);
     }
 
     case 'quote':
-      return `<section${sa}>
-  <div class="quote-block">
+      return wrapSlide('quote', `<div class="quote-block">
     <div class="quote-mark">\u201C</div>
     <blockquote class="quote-text">${escapeHtml(slide.quote || slide.text || '')}</blockquote>
     ${slide.attribution ? `<cite class="quote-author">\u2014 ${escapeHtml(slide.attribution)}</cite>` : ''}
-  </div>
-  ${notes}
-</section>`;
+  </div>`, slide, idx);
 
     case 'chart': {
       echartsUsed = true;
       const chartId = `echart-${idx}`;
       echartsConfigs.push({ id: chartId, option: buildEChartsOption(slide.chart || { type: 'bar' }, s) });
-      return `<section${sa}>
-  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  <div id="${chartId}" class="echart-container"></div>
-  ${notes}
-</section>`;
+      const visualHtml = `<div id="${chartId}" class="echart-container"></div>`;
+      const compound = renderCompoundLayout(slide, s, visualHtml);
+      if (compound) return wrapSlide('chart', compound, slide, idx);
+      return wrapSlide('chart', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  ${visualHtml}`, slide, idx);
     }
 
     case 'image-text': {
@@ -857,98 +906,87 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
       if (slide.title) textBlock += `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>`;
       if (slide.text) textBlock += `<p class="body-text">${escapeHtml(slide.text)}</p>`;
       if (slide.bullets) {
-        textBlock += `<ul class="bullet-list compact">${slide.bullets.map(b =>
-          `<li${fa}><span class="bullet-icon">${renderIcon('arrow_right', 'bullet-sym')}</span><span>${escapeHtml(b)}</span></li>`
+        textBlock += `<ul class="bullet-list compact">${slide.bullets.map((b, i) =>
+          `<li${aa(i)}><span class="bullet-icon">${renderIcon('arrow_right', 'bullet-sym')}</span><span>${escapeHtml(b)}</span></li>`
         ).join('')}</ul>`;
       }
       textBlock += `</div>`;
-      return `<section${sa}>
-  <div class="image-text-layout ${pos === 'right' ? 'img-right' : ''}">${pos === 'left' ? imgBlock + textBlock : textBlock + imgBlock}</div>
-  ${notes}
-</section>`;
+      return wrapSlide('image-text', `<div class="image-text-layout ${pos === 'right' ? 'img-right' : ''}">${pos === 'left' ? imgBlock + textBlock : textBlock + imgBlock}</div>`, slide, idx);
     }
-
-    // ── New Types ──
 
     case 'profile': {
       const links = (slide.socialLinks || []).map(l =>
         `<span class="profile-link">${renderIcon(l.icon, 'profile-link-icon')}<span>${escapeHtml(l.label)}</span></span>`
       ).join('');
-      return `<section${sa}>
-  <div class="profile-layout">
+      return wrapSlide('profile', `<div class="profile-layout">
     ${slide.avatar ? `<div class="profile-avatar-wrap"><img src="${escapeHtml(slide.avatar)}" class="profile-avatar" loading="lazy" alt="${escapeHtml(slide.name || '')}" /></div>` : ''}
     ${slide.name ? `<h2 class="profile-name">${escapeHtml(slide.name)}</h2>` : ''}
     ${slide.role ? `<p class="profile-role">${escapeHtml(slide.role)}</p>` : ''}
     ${slide.bio ? `<p class="profile-bio">${escapeHtml(slide.bio)}</p>` : ''}
     ${links ? `<div class="profile-social">${links}</div>` : ''}
-  </div>
-  ${notes}
-</section>`;
+  </div>`, slide, idx);
     }
 
     case 'process': {
       const steps = slide.steps || [];
       const stepsHtml = steps.map((st, i) =>
-        `<div class="process-step"${fa ? ` ${fa.trim()}` : ''}>
+        `<div class="process-step"${aa(i)}>
   <div class="process-step-circle">${st.icon ? renderIcon(st.icon, 'process-icon') : `<span class="process-num">${i + 1}</span>`}</div>
   <div class="process-step-label">${escapeHtml(st.title)}</div>
   ${st.description ? `<div class="process-step-desc">${escapeHtml(st.description)}</div>` : ''}
 </div>`
       ).join('');
-      return `<section${sa}>
-  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  <div class="process-steps">
-    <div class="process-connector"></div>
-    ${stepsHtml}
-  </div>
-  ${notes}
-</section>`;
+      const visualHtml = `<div class="process-steps"><div class="process-connector"></div>${stepsHtml}</div>`;
+      const compound = renderCompoundLayout(slide, s, visualHtml);
+      if (compound) return wrapSlide('process', compound, slide, idx);
+      return wrapSlide('process', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  ${visualHtml}`, slide, idx);
     }
 
     case 'gallery': {
       const images = slide.images || [];
-      const layout = slide.galleryLayout || (images.length <= 3 ? '3-col' : '2x2');
-      const items = images.map(img =>
+      const gLayout = slide.galleryLayout || (images.length <= 3 ? '3-col' : '2x2');
+      const gItems = images.map(img =>
         `<figure class="gallery-item">
   <img src="${escapeHtml(img.src)}" alt="${escapeHtml(img.alt || img.caption || '')}" loading="lazy" />
   ${img.caption ? `<figcaption>${escapeHtml(img.caption)}</figcaption>` : ''}
 </figure>`
       ).join('');
-      return `<section${sa}>
-  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  <div class="gallery gallery-${layout}">${items}</div>
-  ${notes}
-</section>`;
+      const visualHtml = `<div class="gallery gallery-${gLayout}">${gItems}</div>`;
+      const compound = renderCompoundLayout(slide, s, visualHtml);
+      if (compound) return wrapSlide('gallery', compound, slide, idx);
+      return wrapSlide('gallery', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  ${visualHtml}`, slide, idx);
     }
 
     case 'team': {
       const members = slide.members || [];
-      const cards = members.map(m =>
-        `<div class="team-card glass-card"${fa ? ` ${fa.trim()}` : ''}>
+      const teamCards = members.map((m, i) =>
+        `<div class="team-card glass-card"${aa(i)}>
   ${m.photo ? `<img src="${escapeHtml(m.photo)}" class="team-photo" loading="lazy" alt="${escapeHtml(m.name)}" />` : `<div class="team-photo-placeholder">${renderIcon('person')}</div>`}
   <div class="team-name">${escapeHtml(m.name)}</div>
   <div class="team-role">${escapeHtml(m.role)}</div>
   ${m.description ? `<div class="team-desc">${escapeHtml(m.description)}</div>` : ''}
 </div>`
       ).join('');
-      return `<section${sa}>
-  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  <div class="team-grid">${cards}</div>
-  ${notes}
-</section>`;
+      const visualHtml = `<div class="team-grid">${teamCards}</div>`;
+      const compound = renderCompoundLayout(slide, s, visualHtml);
+      if (compound) return wrapSlide('team', compound, slide, idx);
+      return wrapSlide('team', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  ${visualHtml}`, slide, idx);
     }
 
     case 'table': {
-      const headers = slide.headers || [];
-      const rows = slide.rows || [];
+      const tHeaders = slide.headers || [];
+      const tRows = slide.rows || [];
       const thClass = slide.highlightHeader ? ' class="table-header-highlighted"' : '';
-      const headerRow = headers.length ? `<thead${thClass}><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>` : '';
-      const bodyRows = rows.map(r => `<tr>${r.map(c => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('');
-      return `<section${sa}>
-  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  <div class="table-wrap"><table class="slide-table">${headerRow}<tbody>${bodyRows}</tbody></table></div>
-  ${notes}
-</section>`;
+      const headerRow = tHeaders.length ? `<thead${thClass}><tr>${tHeaders.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>` : '';
+      const bodyRows = tRows.map(r => `<tr>${r.map(c => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('');
+      const visualHtml = `<div class="table-wrap"><table class="slide-table">${headerRow}<tbody>${bodyRows}</tbody></table></div>`;
+      const compound = renderCompoundLayout(slide, s, visualHtml);
+      if (compound) return wrapSlide('table', compound, slide, idx);
+      return wrapSlide('table', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  ${visualHtml}`, slide, idx);
     }
 
     case 'dashboard': {
@@ -972,38 +1010,35 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
         chartHtml = `<div id="${chartId}" class="echart-container echart-compact"></div>`;
       }
 
-      return `<section${sa}>
-  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+      return wrapSlide('dashboard', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
   <div class="dashboard-kpis">${kpiCards}</div>
-  ${chartHtml ? `<div class="dashboard-chart">${chartHtml}</div>` : ''}
-  ${notes}
-</section>`;
+  ${chartHtml ? `<div class="dashboard-chart">${chartHtml}</div>` : ''}`, slide, idx);
     }
 
     case 'diagram': {
       mermaidUsed = true;
       const mermaidId = `mermaid-${idx}`;
       mermaidConfigs.push({ id: mermaidId, code: slide.code || '' });
-      return `<section${sa}>
-  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  <div class="diagram-container"><pre class="mermaid" id="${mermaidId}"></pre></div>
-  ${notes}
-</section>`;
+      const visualHtml = `<div class="diagram-container"><pre class="mermaid" id="${mermaidId}"></pre></div>`;
+      const compound = renderCompoundLayout(slide, s, visualHtml);
+      if (compound) return wrapSlide('diagram', compound, slide, idx);
+      return wrapSlide('diagram', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  ${visualHtml}`, slide, idx);
     }
 
     case 'mindmap': {
       markmapUsed = true;
       const mmId = `mindmap-${idx}`;
       mindmapConfigs.push({ id: mmId, code: slide.code || '' });
-      return `<section${sa}>
-  ${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  <div class="mindmap-container"><svg id="${mmId}" class="mindmap-svg"></svg></div>
-  ${notes}
-</section>`;
+      const visualHtml = `<div class="mindmap-container"><svg id="${mmId}" class="mindmap-svg"></svg></div>`;
+      const compound = renderCompoundLayout(slide, s, visualHtml);
+      if (compound) return wrapSlide('mindmap', compound, slide, idx);
+      return wrapSlide('mindmap', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  ${visualHtml}`, slide, idx);
     }
 
     default:
-      return `<section><p class="body-text">${escapeHtml(slide.title || 'Untitled Slide')}</p></section>`;
+      return wrapSlide('default', `<p class="body-text">${escapeHtml(slide.title || 'Untitled Slide')}</p>`, slide, idx);
   }
 }
 
@@ -1039,80 +1074,143 @@ function generateCSS(s: StylePreset): string {
 
 /* ── Reset & Base ── */
 *, *::before, *::after { box-sizing: border-box; }
-html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; }
-.reveal-viewport { ${bgRule} }
-.reveal { font-family: var(--font-body); }
+html { scroll-behavior: smooth; font-size: 18px; }
+body { margin: 0; padding: 0; font-family: var(--font-body); color: var(--body-color); ${bgRule} }
+* { scrollbar-width: none; -ms-overflow-style: none; }
+*::-webkit-scrollbar { display: none; }
 
-/* ── Sections — grid background + floating gradient decorations ── */
-.reveal .slides section {
-  background-color: transparent;
+/* ── Scroll-Snap Container ── */
+.slides-container {
+  height: 100vh; overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+}
+
+/* ── Each Section (Slide) ── */
+.slide {
+  min-height: 100vh;
+  scroll-snap-align: start;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+  ${bgRule}
   background-image:
     linear-gradient(${s.isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'} 1px, transparent 1px),
     linear-gradient(90deg, ${s.isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'} 1px, transparent 1px);
   background-size: 50px 50px;
-  padding: 48px 64px !important;
   text-align: left;
-  overflow: hidden !important;
 }
-.reveal .slides section .deco-svg { position: absolute; pointer-events: none; z-index: 0; }
-.reveal .slides section > *:not(.deco-svg):not(.hero-overlay) { position: relative; z-index: 1; }
+.slide .deco-svg { position: absolute; pointer-events: none; z-index: 0; }
+.slide-inner > *:not(.deco-svg):not(.hero-overlay) { position: relative; z-index: 1; }
 
-/* Floating gradient orbs — adds depth to every slide */
-.reveal .slides section::before {
+/* Content wrapper — centered, max-width for readability */
+.slide-inner {
+  width: 100%; max-width: 1200px;
+  margin: 0 auto;
+  padding: 80px 64px;
+  display: flex; flex-direction: column; justify-content: center;
+  min-height: 100vh;
+}
+
+/* Floating gradient orbs */
+.slide::before {
   content: '';
   position: absolute;
-  width: 420px;
-  height: 420px;
+  width: 500px; height: 500px;
   border-radius: 50%;
   background: radial-gradient(circle, ${s.accentColor} 0%, transparent 70%);
   opacity: ${s.isDark ? '0.1' : '0.06'};
-  pointer-events: none;
-  z-index: 0;
-  filter: blur(50px);
+  pointer-events: none; z-index: 0;
+  filter: blur(60px);
 }
-.reveal .slides section:nth-child(odd)::before { top: -200px; right: -160px; }
-.reveal .slides section:nth-child(even)::before { bottom: -200px; left: -160px; }
-.reveal .slides section::after {
+.slide:nth-child(odd)::before { top: -220px; right: -180px; }
+.slide:nth-child(even)::before { bottom: -220px; left: -180px; }
+.slide::after {
   content: '';
   position: absolute;
-  width: 300px;
-  height: 300px;
+  width: 350px; height: 350px;
   border-radius: 50%;
   background: radial-gradient(circle, ${s.accentColor2} 0%, transparent 70%);
   opacity: ${s.isDark ? '0.07' : '0.04'};
-  pointer-events: none;
-  z-index: 0;
-  filter: blur(35px);
+  pointer-events: none; z-index: 0;
+  filter: blur(40px);
 }
-.reveal .slides section:nth-child(odd)::after { bottom: -130px; left: -100px; }
-.reveal .slides section:nth-child(even)::after { top: -130px; right: -100px; }
+.slide:nth-child(odd)::after { bottom: -150px; left: -120px; }
+.slide:nth-child(even)::after { top: -150px; right: -120px; }
+
+/* ── Navigation Overlay ── */
+.slide-nav {
+  position: fixed; right: 28px; top: 50%; transform: translateY(-50%);
+  z-index: 200; display: flex; flex-direction: column; gap: 10px;
+}
+.nav-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--body-color); opacity: 0.25;
+  cursor: pointer; transition: all 0.3s ease; border: none;
+}
+.nav-dot:hover { opacity: 0.6; transform: scale(1.3); }
+.nav-dot.active { opacity: 1; background: var(--accent); transform: scale(1.5); box-shadow: 0 0 10px ${s.accentColor}60; }
+.nav-progress {
+  position: fixed; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  transform-origin: left; transform: scaleX(0);
+  z-index: 200; transition: transform 0.3s ease;
+}
+.slide-counter {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  z-index: 200; font-size: 13px; color: var(--body-color); opacity: 0.5;
+  font-family: var(--font-body); letter-spacing: 0.08em;
+  transition: opacity 0.3s;
+}
+.slide-counter:hover { opacity: 0.9; }
+.fullscreen-btn {
+  position: fixed; bottom: 24px; right: 24px; z-index: 200;
+  width: 44px; height: 44px; border-radius: 12px;
+  border: 1px solid var(--card-border); background: var(--card-bg);
+  backdrop-filter: blur(12px); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.2s, opacity 0.2s; opacity: 0.5;
+  color: var(--body-color);
+}
+.fullscreen-btn:hover { opacity: 1; transform: scale(1.08); }
+
+/* ── Scroll-Triggered Animations ── */
+.animate-on-scroll {
+  opacity: 0; transform: translateY(24px);
+  transition: opacity 0.6s cubic-bezier(0.22,1,0.36,1), transform 0.6s cubic-bezier(0.22,1,0.36,1);
+}
+.animate-on-scroll.is-visible { opacity: 1; transform: translateY(0); }
+.animate-on-scroll[data-delay="1"] { transition-delay: 0.1s; }
+.animate-on-scroll[data-delay="2"] { transition-delay: 0.2s; }
+.animate-on-scroll[data-delay="3"] { transition-delay: 0.3s; }
+.animate-on-scroll[data-delay="4"] { transition-delay: 0.4s; }
+.animate-on-scroll[data-delay="5"] { transition-delay: 0.5s; }
 
 /* ── Typography ── */
-.reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+h1, h2, h3, h4 {
   font-family: var(--font-heading);
   font-weight: 700;
   color: var(--heading-color);
   word-wrap: break-word;
-  margin: 0 0 0.3em;
-  line-height: 1.1;
+  margin: 0 0 0.4em;
+  line-height: 1.15;
   letter-spacing: -0.02em;
 }
-.reveal h1 { font-size: clamp(2em, 4.5vw, 2.8em); color: var(--title-color); }
-.reveal h2 { font-size: clamp(1.2em, 3vw, 1.65em); }
-.reveal h3 { font-size: clamp(0.95em, 2.2vw, 1.15em); }
-.reveal h4 { font-size: clamp(0.85em, 1.8vw, 1em); font-weight: 600; }
+h1 { font-size: clamp(2.2em, 4.5vw, 3.2em); color: var(--title-color); }
+h2 { font-size: clamp(1.4em, 3vw, 2em); }
+h3 { font-size: clamp(1em, 2.2vw, 1.3em); }
+h4 { font-size: clamp(0.9em, 1.8vw, 1.1em); font-weight: 600; }
 .slide-title {
   text-align: left;
-  margin-bottom: 0.65em;
+  margin-bottom: 0.8em;
   padding-left: 20px;
   padding-bottom: 0.3em;
   border-left: 4px solid var(--accent);
   border-image: linear-gradient(to bottom, var(--accent), var(--accent2)) 1;
 }
-.section-heading { font-size: clamp(1.5em, 3.5vw, 2em); text-align: center; color: var(--title-color); }
-.subtitle { color: var(--subtitle-color); font-size: 0.7em; margin: 0; }
-.tagline { color: var(--accent); font-size: 0.5em; letter-spacing: 0.18em; text-transform: uppercase; margin-top: 0.6em; font-weight: 600; }
-.body-text { color: var(--body-color); font-size: 0.65em; line-height: 1.7; }
+.section-heading { font-size: clamp(1.8em, 3.5vw, 2.4em); text-align: center; color: var(--title-color); }
+.subtitle { color: var(--subtitle-color); font-size: 1.1em; margin: 0; line-height: 1.5; }
+.tagline { color: var(--accent); font-size: 0.78em; letter-spacing: 0.18em; text-transform: uppercase; margin-top: 0.6em; font-weight: 600; }
+.body-text { color: var(--body-color); font-size: 1em; line-height: 1.8; }
 
 /* ── Accent Line (gradient) ── */
 .accent-line { width: 100px; height: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); margin: 0.5em auto; border-radius: 2px; }
@@ -1143,23 +1241,21 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
 }
 
 /* ── Bullet Lists ── */
-.bullet-list { list-style: none; padding: 0; margin: 0; width: 100%; color: var(--body-color); font-size: 0.7em; line-height: 1.8; }
-.bullet-list.compact { font-size: 0.6em; }
-.bullet-list li { display: flex; align-items: flex-start; gap: 0.6em; margin-bottom: 0.35em; padding: 0.35em 0.5em; border-radius: 8px; transition: background 0.2s, padding-left 0.2s; }
-.bullet-list li:hover { background: ${s.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'}; padding-left: 0.8em; }
+.bullet-list { list-style: none; padding: 0; margin: 0; width: 100%; color: var(--body-color); font-size: 1.05em; line-height: 1.9; }
+.bullet-list.compact { font-size: 0.95em; }
+.bullet-list li { display: flex; align-items: flex-start; gap: 0.7em; margin-bottom: 0.4em; padding: 0.5em 0.7em; border-radius: 10px; transition: background 0.2s, padding-left 0.2s; }
+.bullet-list li:hover { background: ${s.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'}; padding-left: 1em; }
 .bullet-icon { flex-shrink: 0; }
 .bullet-sym { font-size: 1em; color: var(--accent); }
-.reveal ul, .reveal ol { overflow: hidden; }
-.reveal li { word-wrap: break-word; overflow-wrap: break-word; }
-* { scrollbar-width: none; -ms-overflow-style: none; }
-*::-webkit-scrollbar { display: none; }
+ul, ol { overflow: hidden; }
+li { word-wrap: break-word; overflow-wrap: break-word; }
 
 /* ── Code ── */
-.code-block { background: var(--code-bg); border-radius: 14px; padding: 1.2em 1.4em; text-align: left; max-height: 380px; overflow: hidden; width: 100%; border: 1px solid var(--card-border); box-shadow: ${s.isDark ? '0 0 40px rgba(0,0,0,0.2)' : '0 4px 30px rgba(0,0,0,0.04)'}; }
-.code-block code { color: var(--code-color); font-size: 0.58em; line-height: 1.7; white-space: pre-wrap; word-break: break-all; }
+.code-block { background: var(--code-bg); border-radius: 14px; padding: 1.5em 1.6em; text-align: left; overflow: auto; width: 100%; border: 1px solid var(--card-border); box-shadow: ${s.isDark ? '0 0 40px rgba(0,0,0,0.2)' : '0 4px 30px rgba(0,0,0,0.04)'}; }
+.code-block code { color: var(--code-color); font-size: 0.85em; line-height: 1.7; white-space: pre-wrap; word-break: break-all; }
 
 /* ── Images ── */
-.slide-image { max-width: 85%; max-height: 400px; height: auto; object-fit: contain; border-radius: 16px; margin: 0 auto; display: block; box-shadow: 0 8px 30px rgba(0,0,0,${s.isDark ? '0.3' : '0.1'}); }
+.slide-image { max-width: 90%; height: auto; object-fit: contain; border-radius: 16px; margin: 0 auto; display: block; box-shadow: 0 8px 30px rgba(0,0,0,${s.isDark ? '0.3' : '0.1'}); }
 
 /* ── Two-Column ── */
 .slide-columns { display: flex; gap: 1em; width: 100%; }
@@ -1285,8 +1381,8 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
 .quote-author { font-size: 0.65em; color: var(--accent); font-style: normal; font-weight: 600; letter-spacing: 0.05em; }
 
 /* ── ECharts ── */
-.echart-container { width: 100%; height: 380px; max-width: 900px; margin: 0 auto; }
-.echart-compact { height: 260px; }
+.echart-container { width: 100%; height: 420px; max-width: 100%; margin: 0 auto; }
+.echart-compact { height: 280px; }
 
 /* ── Image + Text ── */
 .image-text-layout { display: flex; gap: 2.5em; align-items: center; width: 100%; }
@@ -1390,28 +1486,80 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
 .mindmap-container { width: 100%; height: 480px; display: flex; justify-content: center; }
 .mindmap-svg { width: 100%; height: 100%; }
 
-/* ── Fragment Animations ── */
-.fragment.slide-up { transform: translateY(20px); opacity: 0; transition: all 0.5s ease; }
-.fragment.slide-up.visible { transform: translateY(0); opacity: 1; }
-.fragment.blur { filter: blur(6px); opacity: 0; transition: all 0.5s ease; }
-.fragment.blur.visible { filter: none; opacity: 1; }
-.fragment.scale-in { transform: scale(0.85); opacity: 0; transition: all 0.4s ease; }
-.fragment.scale-in.visible { transform: scale(1); opacity: 1; }
-.fragment.fade-up { transform: translateY(30px); opacity: 0; transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
-.fragment.fade-up.visible { transform: translateY(0); opacity: 1; }
+/* ── Compound Layout System (no fixed height — content flows naturally) ── */
+.slide-layout { display: grid; gap: 40px; width: 100%; align-items: center; }
+.slide-layout.split-left { grid-template-columns: 50% 1fr; }
+.slide-layout.split-right { grid-template-columns: 1fr 50%; }
+.slide-layout.top-bottom { grid-template-columns: 1fr; }
 
-/* ── Theme Overrides ── */
-.reveal .slide-background { ${bgRule} }
-.reveal .slides > section { margin: 0; }
-.reveal .progress { color: var(--accent); height: 4px; }
-.reveal .controls { color: var(--accent); }
-.reveal .controls button { opacity: 0.6; transition: opacity 0.2s; }
-.reveal .controls button:hover { opacity: 1; }
+/* Text block — left accent border */
+.layout-text {
+  display: flex; flex-direction: column; gap: 20px; justify-content: center; min-width: 0;
+  padding-left: 28px;
+  border-left: 3px solid transparent;
+  border-image: linear-gradient(180deg, ${s.accentColor}, ${s.accentColor2 || s.accentColor}) 1;
+}
+.layout-visual { min-width: 0; display: flex; align-items: center; justify-content: center; }
+
+/* Description */
+.compound-description {
+  font-size: 1em; line-height: 1.8; color: var(--body-color); margin: 0;
+  font-weight: 300; letter-spacing: 0.01em;
+  font-family: var(--font-heading), serif;
+}
+
+/* Highlights — pill cards */
+.compound-highlights { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.compound-highlights li {
+  display: flex; align-items: center; gap: 12px; font-size: 0.9em; color: var(--body-color);
+  line-height: 1.5; padding: 12px 18px;
+  background: ${s.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'};
+  border: 1px solid ${s.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'};
+  border-radius: 12px; transition: transform 0.2s, border-color 0.2s, background 0.2s;
+  font-weight: 500; letter-spacing: 0.02em;
+}
+.compound-highlights li:hover { transform: translateX(6px); border-color: var(--accent); background: ${s.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)'}; }
+.highlight-icon { font-size: 20px !important; color: var(--accent); flex-shrink: 0; }
+.compound-side-image {
+  width: 100%; max-height: 180px; object-fit: cover; border-radius: 14px; margin-top: 4px;
+  box-shadow: 0 4px 20px ${s.isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.08)'};
+}
+
+/* Title slide with side image */
+.title-text-block { display: flex; flex-direction: column; justify-content: center; gap: 16px; border-left: none; padding-left: 0; }
+.title-text-block .accent-line { margin: 0.3em 0 !important; }
+.title-side-image { min-height: 400px; overflow: hidden; border-radius: 24px; }
+.title-side-image img { width: 100%; height: 100%; min-height: 400px; object-fit: cover; border-radius: 24px; }
+
+/* Compound-mode chart/diagram sizing */
+.slide-layout .echart-container { height: 380px; max-width: 100%; }
+.slide-layout.top-bottom .echart-container { height: 340px; }
+.slide-layout .diagram-container { min-height: 250px; }
+.slide-layout .mindmap-container { height: 400px; }
+.slide-layout.top-bottom .mindmap-container { height: 320px; }
+
+/* Compound-mode: process/timeline vertical in split */
+.slide-layout.split-left .process-steps,
+.slide-layout.split-right .process-steps { flex-direction: column; align-items: flex-start; gap: 0.8em; }
+.slide-layout.split-left .process-connector,
+.slide-layout.split-right .process-connector { display: none; }
+.slide-layout.split-left .timeline .tl-items,
+.slide-layout.split-right .timeline .tl-items { flex-direction: column; gap: 0.8em; }
+.slide-layout.split-left .timeline .tl-line,
+.slide-layout.split-right .timeline .tl-line { display: none; }
+
+/* Compound-mode icon-grid in split — 2-col */
+.slide-layout.split-left .icon-grid,
+.slide-layout.split-right .icon-grid { grid-template-columns: repeat(2, 1fr) !important; }
+
+/* Compound-mode gallery in split */
+.slide-layout.split-left .gallery,
+.slide-layout.split-right .gallery { grid-template-columns: 1fr 1fr !important; grid-template-rows: auto !important; }
 
 /* ── RWD ── */
 @media (max-width: 768px) {
-  .reveal .slides section { padding: 1.2em 1.5em !important; }
-  .reveal h1 { font-size: 1.4em; }
+  .slide-inner { padding: 40px 24px; }
+  h1 { font-size: 1.8em; }
   .slide-columns, .image-text-layout, .image-text-layout.img-right { flex-direction: column; }
   .stats-grid, .dashboard-kpis { flex-direction: column; align-items: center; }
   .icon-grid { grid-template-columns: repeat(2, 1fr) !important; }
@@ -1422,7 +1570,24 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
   .gallery { grid-template-columns: 1fr !important; grid-template-rows: auto !important; }
   .gallery-1-hero-2-small .gallery-item:first-child { grid-row: auto; }
   .team-grid { flex-direction: column; align-items: center; }
-  .echart-container { height: 260px; }
+  .echart-container { height: 280px; }
+  .slide-layout.split-left, .slide-layout.split-right { grid-template-columns: 1fr; }
+  .title-side-image { min-height: 250px; }
+  .slides-container { scroll-snap-type: y proximity; }
+  .slide-nav { display: none; }
+}
+
+/* ── Print ── */
+@media print {
+  .slides-container { scroll-snap-type: none; height: auto; overflow: visible; }
+  .slide { min-height: auto; page-break-after: always; scroll-snap-align: none; }
+  .slide-nav, .nav-progress, .slide-counter, .fullscreen-btn { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-on-scroll { transition: none; opacity: 1; transform: none; }
+  .slides-container { scroll-behavior: auto; }
+  html { scroll-behavior: auto; }
 }
 
 ${s.extra || ''}
@@ -1458,7 +1623,7 @@ function generateHtml(input: SlidesInput): string {
     cdnScripts.push(`<script src="https://cdn.jsdelivr.net/npm/markmap-view/dist/browser/index.js"><\/script>`);
   }
 
-  // Build ECharts init code
+  // Build ECharts init code — IntersectionObserver-based lazy loading
   let echartsInitCode = '';
   if (echartsUsed && echartsConfigs.length > 0) {
     const configs = echartsConfigs.map(c =>
@@ -1477,32 +1642,30 @@ function generateHtml(input: SlidesInput): string {
       var chart = echarts.init(el, ${s.isDark ? "'dark'" : 'null'}, { renderer: 'canvas' });
       chart.setOption(cfg.option);
       instances[cfg.id] = chart;
+      setTimeout(function() { chart.resize(); }, 100);
     }
-    function initVisibleCharts() {
-      var current = Reveal.getCurrentSlide();
-      if (!current) return;
-      configs.forEach(function(cfg) {
-        if (current.querySelector('#' + cfg.id)) initChart(cfg);
-      });
-    }
-    function resizeAll() {
-      Object.keys(instances).forEach(function(k) { instances[k].resize(); });
-    }
-    Reveal.on('ready', initVisibleCharts);
-    Reveal.on('slidechanged', function(e) {
-      configs.forEach(function(cfg) {
-        if (e.currentSlide.querySelector('#' + cfg.id)) {
-          if (!instances[cfg.id]) initChart(cfg);
-          else instances[cfg.id].resize();
+    // Lazy-init charts when their section scrolls into view
+    var obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          configs.forEach(function(cfg) {
+            if (entry.target.querySelector('#' + cfg.id)) initChart(cfg);
+          });
         }
       });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.slide').forEach(function(s) { obs.observe(s); });
+    // ResizeObserver for responsive charts
+    var resizer = new ResizeObserver(function(entries) {
+      entries.forEach(function(e) { if (instances[e.target.id]) instances[e.target.id].resize(); });
     });
-    window.addEventListener('resize', resizeAll);
+    configs.forEach(function(cfg) { var el = document.getElementById(cfg.id); if (el) resizer.observe(el); });
+    window.addEventListener('resize', function() { Object.keys(instances).forEach(function(k) { instances[k].resize(); }); });
   })();
   <\/script>`;
   }
 
-  // Build Mermaid init code — uses mermaid.render(id, code) to pass code directly as string
+  // Build Mermaid init code — render on page load
   let mermaidInitCode = '';
   if (mermaidUsed && mermaidConfigs.length > 0) {
     const mermaidCfgs = mermaidConfigs.map(c =>
@@ -1527,17 +1690,14 @@ function generateHtml(input: SlidesInput): string {
         }).catch(function(e) { console.warn('Mermaid render error for ' + cfg.id + ':', e); });
       });
     }
-    if (typeof Reveal !== 'undefined' && Reveal.isReady && Reveal.isReady()) {
-      renderAll();
-    } else {
-      Reveal.on('ready', renderAll);
-    }
-    Reveal.on('slidechanged', function() { renderAll(); });
+    // Render all diagrams on page load
+    if (document.readyState === 'complete') renderAll();
+    else window.addEventListener('load', renderAll);
   })();
   <\/script>`;
   }
 
-  // Build Markmap init code
+  // Build Markmap init code — IntersectionObserver-based
   let markmapInitCode = '';
   if (markmapUsed && mindmapConfigs.length > 0) {
     const mmConfigs = mindmapConfigs.map(c =>
@@ -1550,47 +1710,50 @@ function generateHtml(input: SlidesInput): string {
       ${mmConfigs}
     ];
     var transformer = new markmap.Transformer();
-    function initMarkmaps() {
-      configs.forEach(function(cfg) {
-        var el = document.getElementById(cfg.id);
-        if (!el || el.getAttribute('data-rendered')) return;
-        el.setAttribute('data-rendered', 'true');
-        var result = transformer.transform(cfg.code);
-        var mm = markmap.Markmap.create(el, {
-          color: function(node) {
-            var colors = ${JSON.stringify(s.chartColors)};
-            return colors[(node.state ? node.state.id : 0) % colors.length];
-          },
-          paddingX: 16,
-          initialExpandLevel: 2,
-        }, result.root);
-        el.__markmap = mm;
-        mm.fit();
-      });
+    function initMindmap(cfg) {
+      var el = document.getElementById(cfg.id);
+      if (!el || el.getAttribute('data-rendered')) return;
+      el.setAttribute('data-rendered', 'true');
+      var result = transformer.transform(cfg.code);
+      var mm = markmap.Markmap.create(el, {
+        color: function(node) {
+          var colors = ${JSON.stringify(s.chartColors)};
+          return colors[(node.state ? node.state.id : 0) % colors.length];
+        },
+        paddingX: 16,
+        initialExpandLevel: 2,
+      }, result.root);
+      el.__markmap = mm;
+      mm.fit();
     }
-    if (typeof Reveal !== 'undefined' && Reveal.isReady && Reveal.isReady()) {
-      initMarkmaps();
-    } else {
-      Reveal.on('ready', initMarkmaps);
-    }
-    Reveal.on('slidechanged', function(e) {
-      initMarkmaps();
-      configs.forEach(function(cfg) {
-        var el = e.currentSlide.querySelector('#' + cfg.id);
-        if (el && el.__markmap) el.__markmap.fit();
+    // Lazy-init mindmaps when section scrolls into view
+    var obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          configs.forEach(function(cfg) {
+            if (entry.target.querySelector('#' + cfg.id)) {
+              initMindmap(cfg);
+              var el = document.getElementById(cfg.id);
+              if (el && el.__markmap) setTimeout(function() { el.__markmap.fit(); }, 200);
+            }
+          });
+        }
       });
-    });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.slide').forEach(function(s) { obs.observe(s); });
   })();
   <\/script>`;
   }
 
-  // Stats count-up animation (always included if stats exist)
+  // Stats count-up animation — IntersectionObserver-based
   const hasStats = input.slides.some(sl => sl.type === 'stats' || sl.type === 'dashboard');
   const statsScript = hasStats ? `
   <script>
   (function() {
     function animateNumbers(section) {
       section.querySelectorAll('.stats-value').forEach(function(el) {
+        if (el.getAttribute('data-animated')) return;
+        el.setAttribute('data-animated', 'true');
         var text = el.textContent || '';
         var match = text.match(/([\\d,.]+)/);
         if (!match) return;
@@ -1611,14 +1774,19 @@ function generateHtml(input: SlidesInput): string {
         requestAnimationFrame(tick);
       });
     }
-    Reveal.on('slidechanged', function(e) {
-      if (e.currentSlide.querySelector('.stats-grid') || e.currentSlide.querySelector('.dashboard-kpis')) animateNumbers(e.currentSlide);
-    });
-    Reveal.on('ready', function(e) {
-      if (e.currentSlide && (e.currentSlide.querySelector('.stats-grid') || e.currentSlide.querySelector('.dashboard-kpis'))) animateNumbers(e.currentSlide);
-    });
+    var obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting && (entry.target.querySelector('.stats-grid') || entry.target.querySelector('.dashboard-kpis'))) {
+          animateNumbers(entry.target);
+        }
+      });
+    }, { threshold: 0.3 });
+    document.querySelectorAll('.slide').forEach(function(s) { obs.observe(s); });
   })();
   <\/script>` : '';
+
+  // Total slide count for navigation
+  const totalSlides = input.slides.length;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1627,46 +1795,125 @@ function generateHtml(input: SlidesInput): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="author" content="${escapeHtml(input.author || 'AI Agents Office')}">
   <title>${escapeHtml(input.title)}</title>
-  <!-- Reveal.js -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css" id="theme">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="${s.googleFontsUrl}" rel="stylesheet">
   <!-- Material Symbols -->
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+  <!-- Syntax Highlighting -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/styles/atom-one-${s.isDark ? 'dark' : 'light'}.min.css">
   <style>${generateCSS(s)}</style>
 </head>
 <body>
-  <div class="reveal">
-    <div class="slides">
+  <div class="presentation">
+    <!-- Navigation overlay -->
+    <div class="nav-progress"></div>
+    <nav class="slide-nav" aria-label="Slide navigation"></nav>
+    <div class="slide-counter"><span class="current-slide">1</span> / <span class="total-slides">${totalSlides}</span></div>
+    <button class="fullscreen-btn" aria-label="Toggle fullscreen">
+      <span class="material-symbols-outlined">fullscreen</span>
+    </button>
+
+    <!-- Scroll-snap container -->
+    <main class="slides-container">
       ${slides}
-    </div>
+    </main>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"><\/script>
-  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"><\/script>
+  <!-- Syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js"><\/script>
   ${cdnScripts.join('\n  ')}
+
+  <!-- Navigation controller -->
   <script>
-    Reveal.initialize({
-      hash: true,
-      transition: '${s.transition}',
-      plugins: [RevealHighlight],
-      width: 1280,
-      height: 720,
-      margin: 0.04,
-      minScale: 0.2,
-      maxScale: 1.5,
-      center: true,
-      controlsLayout: 'edges',
-      controlsBackArrows: 'visible',
-      autoAnimateDuration: 0.8,
-      slideNumber: 'c/t',
-      disableLayout: false,
+  (function() {
+    var container = document.querySelector('.slides-container');
+    var allSlides = Array.from(document.querySelectorAll('.slide'));
+    var nav = document.querySelector('.slide-nav');
+    var progress = document.querySelector('.nav-progress');
+    var counterCurrent = document.querySelector('.current-slide');
+    var currentIndex = 0;
+
+    // Create nav dots
+    allSlides.forEach(function(_, i) {
+      var dot = document.createElement('button');
+      dot.className = 'nav-dot' + (i === 0 ? ' active' : '');
+      dot.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+      dot.addEventListener('click', function() { scrollToSlide(i); });
+      nav.appendChild(dot);
     });
+
+    function scrollToSlide(index) {
+      index = Math.max(0, Math.min(index, allSlides.length - 1));
+      allSlides[index].scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function updateNav(idx) {
+      var dots = nav.querySelectorAll('.nav-dot');
+      dots.forEach(function(d, i) { d.classList.toggle('active', i === idx); });
+      progress.style.transform = 'scaleX(' + ((idx + 1) / allSlides.length) + ')';
+      counterCurrent.textContent = idx + 1;
+    }
+
+    // Track current slide via IntersectionObserver
+    var slideObs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting && entry.intersectionRatio > 0.4) {
+          var idx = allSlides.indexOf(entry.target);
+          if (idx !== -1 && idx !== currentIndex) {
+            currentIndex = idx;
+            updateNav(idx);
+            history.replaceState(null, '', '#slide-' + idx);
+          }
+        }
+      });
+    }, { root: container, threshold: 0.4 });
+    allSlides.forEach(function(s) { slideObs.observe(s); });
+
+    // Keyboard navigation
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault(); scrollToSlide(currentIndex + 1);
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault(); scrollToSlide(currentIndex - 1);
+      } else if (e.key === 'Home') {
+        e.preventDefault(); scrollToSlide(0);
+      } else if (e.key === 'End') {
+        e.preventDefault(); scrollToSlide(allSlides.length - 1);
+      }
+    });
+
+    // Fullscreen toggle
+    document.querySelector('.fullscreen-btn').addEventListener('click', function() {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    });
+
+    // Hash-based deep linking
+    var hash = window.location.hash;
+    if (hash && hash.startsWith('#slide-')) {
+      var el = document.querySelector(hash);
+      if (el) setTimeout(function() { el.scrollIntoView(); }, 100);
+    }
+  })();
   <\/script>
+
+  <!-- Scroll-triggered animations -->
+  <script>
+  (function() {
+    var obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) entry.target.classList.add('is-visible');
+      });
+    }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+    document.querySelectorAll('.animate-on-scroll').forEach(function(el) { obs.observe(el); });
+  })();
+  <\/script>
+
+  <!-- Syntax highlighting init -->
+  <script>hljs.highlightAll();<\/script>
+
   ${echartsInitCode}
   ${mermaidInitCode}
   ${markmapInitCode}

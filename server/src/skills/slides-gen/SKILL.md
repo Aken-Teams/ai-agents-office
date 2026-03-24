@@ -92,6 +92,30 @@ When explaining system architecture, decision trees, or sequences — use `diagr
 ### Rule 10: Use `mindmap` for Topic Overviews
 When brainstorming, showing topic hierarchies, or summarizing concepts — use `mindmap` with Markmap syntax.
 
+### Rule 11: MANDATORY — Use Compound Layouts for Visual Slides
+**Every visual slide (stats, chart, diagram, mindmap, table, process, timeline, team, gallery, icon-grid) MUST use a compound layout with narrative text.**
+
+A slide with ONLY a chart or ONLY a stats grid looks empty and unprofessional. Always pair visuals with explanatory text.
+
+Set `"layout"` to one of:
+- `"split-left"` — visual on left (48%), narrative text on right (52%)
+- `"split-right"` — narrative text on left (52%), visual on right (48%)
+- `"top-bottom"` — visual on top, narrative text below
+
+**Always provide these fields alongside the visual:**
+- `"description"` — 1-3 sentences explaining what the visual shows and why it matters (max 300 chars)
+- `"highlights"` — 2-4 short key takeaway phrases
+
+**Layout alternation for variety:**
+- Alternate between `"split-left"` and `"split-right"` across consecutive visual slides
+- Use `"top-bottom"` for dashboard-like overview slides
+- NEVER use the same layout direction for 3+ consecutive slides
+
+### Rule 12: Use `sideImage` on Title Slides
+Title slides should set `"sideImage"` to a thematic Unsplash image URL to create an eye-catching split layout (text left, image right). This transforms a plain title into a magazine-quality opening.
+
+Also add `"description"` to title slides for a brief subtitle paragraph.
+
 ## How to Generate
 
 ```bash
@@ -134,9 +158,11 @@ node --import tsx generate-slides.ts slides.json output.html
 
 ### Opening & Dividers
 
-**`"title"`** — Opening slide with accent line and optional tagline.
+**`"title"`** — Opening slide with accent line and optional tagline. Use `sideImage` for a magazine-style split layout.
 ```json
-{ "type": "title", "title": "Main Title", "subtitle": "Subtitle", "tagline": "COMPANY NAME" }
+{ "type": "title", "title": "Main Title", "subtitle": "Subtitle", "tagline": "COMPANY NAME",
+  "sideImage": "https://images.unsplash.com/photo-xxx?w=800&h=720&fit=crop",
+  "description": "A brief opening description that sets the context for the presentation." }
 ```
 
 **`"hero"`** — Full-screen background image + large title.
@@ -167,10 +193,13 @@ node --import tsx generate-slides.ts slides.json output.html
 
 **`"chart"`** — Data visualization powered by Apache ECharts. Supports 10 chart types.
 
-**Bar chart:**
+**Bar chart:** (always use compound layout)
 ```json
-{ "type": "chart", "title": "Revenue Growth", "chart": {
-  "type": "bar", "bars": [{"label": "2022", "value": 45}, {"label": "2023", "value": 72}, {"label": "2024", "value": 95}]
+{ "type": "chart", "title": "Revenue Growth", "layout": "split-left",
+  "description": "Revenue has grown steadily over the past 3 years, with acceleration in 2024 driven by our enterprise tier launch.",
+  "highlights": ["111% growth from 2022 to 2024", "Enterprise tier driving 60% of new revenue"],
+  "chart": {
+    "type": "bar", "bars": [{"label": "2022", "value": 45}, {"label": "2023", "value": 72}, {"label": "2024", "value": 95}]
 }}
 ```
 
@@ -241,12 +270,15 @@ node --import tsx generate-slides.ts slides.json output.html
 
 ### Stats & Metrics
 
-**`"stats"`** — Large number cards with icons and trend arrows.
+**`"stats"`** — Large number cards with icons and trend arrows. **Always use compound layout.**
 ```json
-{ "type": "stats", "title": "Impact", "stats": [
-  { "value": "10M+", "label": "Users", "icon": "group", "trend": "up" },
-  { "value": "99.9%", "label": "Uptime", "icon": "speed" },
-  { "value": "$2.5B", "label": "Revenue", "icon": "payments", "trend": "up" }
+{ "type": "stats", "title": "Impact", "layout": "split-right",
+  "description": "Our platform has achieved remarkable growth this quarter, driven by enterprise adoption and global expansion.",
+  "highlights": ["3x user growth in APAC region", "Enterprise segment up 45%", "NPS score at all-time high of 72"],
+  "stats": [
+    { "value": "10M+", "label": "Users", "icon": "group", "trend": "up" },
+    { "value": "99.9%", "label": "Uptime", "icon": "speed" },
+    { "value": "$2.5B", "label": "Revenue", "icon": "payments", "trend": "up" }
 ]}
 ```
 
@@ -356,9 +388,12 @@ Gallery layouts: `"2x2"`, `"3-col"`, `"1-hero-2-small"`
 
 **`"diagram"`** — Mermaid.js diagrams — flowcharts, sequence diagrams, Gantt charts, and more.
 
-**Flowchart:**
+**Flowchart:** (always use compound layout)
 ```json
-{ "type": "diagram", "title": "System Architecture", "diagramType": "mermaid",
+{ "type": "diagram", "title": "System Architecture", "layout": "split-right",
+  "description": "Our microservices architecture uses an API Gateway for routing and authentication, with dedicated services for each domain.",
+  "highlights": ["Horizontally scalable", "Event-driven communication", "99.99% SLA"],
+  "diagramType": "mermaid",
   "code": "graph TD\n  A[Client] -->|HTTP| B[API Gateway]\n  B --> C[Auth Service]\n  B --> D[Core Service]\n  D --> E[(Database)]" }
 ```
 
@@ -376,10 +411,12 @@ Gallery layouts: `"2x2"`, `"3-col"`, `"1-hero-2-small"`
 
 ### Mindmap (Markmap)
 
-**`"mindmap"`** — Interactive mindmap using Markmap. Uses markdown heading syntax.
+**`"mindmap"`** — Interactive mindmap using Markmap. Uses markdown heading syntax. **Always use compound layout.**
 
 ```json
-{ "type": "mindmap", "title": "AI Ecosystem",
+{ "type": "mindmap", "title": "AI Ecosystem", "layout": "split-left",
+  "description": "The AI landscape spans multiple disciplines, each with distinct methodologies and real-world applications.",
+  "highlights": ["Transformers revolutionized NLP", "Computer Vision powers autonomous vehicles", "RL enables game-playing agents"],
   "code": "# AI Ecosystem\n## Machine Learning\n### Supervised\n### Unsupervised\n### Reinforcement\n## Deep Learning\n### CNN\n### RNN\n### Transformers\n## Applications\n### NLP\n### Computer Vision\n### Robotics" }
 ```
 
@@ -439,34 +476,34 @@ Style: `elegant` or `creative`. Search Unsplash for portrait + lifestyle photos.
 
 ### Business Pitch (10-12 slides)
 ```
-1. title      — Company name + tagline
+1. title      — Company name + tagline + sideImage (thematic photo)
 2. content    — Problem statement (fragments: true)
-3. stats      — Market opportunity (TAM, growth rate)
-4. icon-grid  — Solution features
-5. process    — How it works (3-5 steps)
-6. chart      — Revenue/growth chart (bar or line)
-7. table      — Competitive comparison
-8. team       — Founding team with photos
-9. dashboard  — KPI overview + chart
-10. timeline  — Roadmap milestones
-11. stats     — Investment ask & milestones
+3. stats      — Market opportunity, layout: split-right, description + highlights
+4. icon-grid  — Solution features, layout: split-left, description + highlights
+5. process    — How it works, layout: split-right, description + highlights
+6. chart      — Revenue/growth chart, layout: split-left, description + highlights
+7. table      — Competitive comparison, layout: top-bottom, description + highlights
+8. team       — Founding team, layout: split-right, description about the team
+9. dashboard  — KPI overview + chart (already compound)
+10. timeline  — Roadmap, layout: split-left, description + highlights
+11. stats     — Investment ask, layout: split-right, description + highlights
 12. quote     — Vision statement
 ```
-Style: `corporate` or `gradient`. Use charts and data slides heavily.
+Style: `corporate` or `gradient`. **Every visual slide MUST have layout + description + highlights.**
 
 ### Data Report (9 slides)
 ```
-1. title      — Report title + date
-2. dashboard  — KPI summary + trend chart
-3. chart      — Primary analysis (bar/line)
-4. chart      — Secondary analysis (radar/funnel)
-5. table      — Detailed data comparison
+1. title      — Report title + date + sideImage
+2. dashboard  — KPI summary + trend chart (already compound)
+3. chart      — Primary analysis, layout: split-right, description + highlights
+4. chart      — Secondary analysis, layout: split-left, description + highlights
+5. table      — Detailed comparison, layout: top-bottom, description + highlights
 6. two-column — Key findings
-7. chart      — Forecast (line with projection)
+7. chart      — Forecast, layout: split-right, description + highlights
 8. content    — Recommendations (fragments: true)
 9. quote      — Closing insight
 ```
-Style: `dark` or `tech`. ECharts-heavy, minimal text.
+Style: `dark` or `tech`. **Every chart/table MUST have layout + description + highlights.**
 
 ### Project Showcase (9 slides)
 ```

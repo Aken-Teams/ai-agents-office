@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="author" content="Sarah Chen">
+  <title>TechVision AI — Series A Pitch</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Material Symbols -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet">
+  <!-- Syntax Highlighting -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/styles/atom-one-light.min.css">
+  <style>
+/* ── CSS Custom Properties ── */
+:root {
+  --slide-bg: #ffffff;
+  --title-color: #1B365D;
+  --subtitle-color: #718096;
+  --heading-color: #2D3748;
+  --body-color: #4A5568;
+  --accent: #2B6CB0;
+  --accent2: #38B2AC;
+  --code-bg: #EDF2F7;
+  --code-color: #2B6CB0;
+  --font-body: "Inter", "Roboto", "Segoe UI", sans-serif;
+  --font-heading: "Inter", "Roboto", "Segoe UI", sans-serif;
+  --card-bg: #F7FAFC;
+  --card-border: #E2E8F0;
+  --icon-color: #2B6CB0;
+  --timeline-color: #2B6CB0;
+  --stats-card-bg: #EBF8FF;
+  --quote-mark-color: rgba(43,108,176,0.1);
+  --chart-accent: #2B6CB0;
+}
+
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; font-size: 18px; }
+body { margin: 0; padding: 0; font-family: var(--font-body); color: var(--body-color); background-color: #ffffff; }
+* { scrollbar-width: none; -ms-overflow-style: none; }
+*::-webkit-scrollbar { display: none; }
+
+/* ── Scroll-Snap Container ── */
+.slides-container {
+  height: 100vh; overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+}
+
+/* ── Each Section (Slide) ── */
+.slide {
+  min-height: 100vh;
+  scroll-snap-align: start;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(rgba(0,0,0,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,0,0,0.02) 1px, transparent 1px);
+  background-size: 50px 50px;
+  text-align: left;
+}
+.slide .deco-svg { position: absolute; pointer-events: none; z-index: 0; }
+.slide-inner > *:not(.deco-svg):not(.hero-overlay) { position: relative; z-index: 1; }
+
+/* Content wrapper — centered, max-width for readability */
+.slide-inner {
+  width: 100%; max-width: 1200px;
+  margin: 0 auto;
+  padding: 80px 64px;
+  display: flex; flex-direction: column; justify-content: center;
+  min-height: 100vh;
+}
+
+/* Floating gradient orbs */
+.slide::before {
+  content: '';
+  position: absolute;
+  width: 500px; height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #2B6CB0 0%, transparent 70%);
+  opacity: 0.06;
+  pointer-events: none; z-index: 0;
+  filter: blur(60px);
+}
+.slide:nth-child(odd)::before { top: -220px; right: -180px; }
+.slide:nth-child(even)::before { bottom: -220px; left: -180px; }
+.slide::after {
+  content: '';
+  position: absolute;
+  width: 350px; height: 350px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #38B2AC 0%, transparent 70%);
+  opacity: 0.04;
+  pointer-events: none; z-index: 0;
+  filter: blur(40px);
+}
+.slide:nth-child(odd)::after { bottom: -150px; left: -120px; }
+.slide:nth-child(even)::after { top: -150px; right: -120px; }
+
+/* ── Navigation Overlay ── */
+.slide-nav {
+  position: fixed; right: 28px; top: 50%; transform: translateY(-50%);
+  z-index: 200; display: flex; flex-direction: column; gap: 10px;
+}
+.nav-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--body-color); opacity: 0.25;
+  cursor: pointer; transition: all 0.3s ease; border: none;
+}
+.nav-dot:hover { opacity: 0.6; transform: scale(1.3); }
+.nav-dot.active { opacity: 1; background: var(--accent); transform: scale(1.5); box-shadow: 0 0 10px #2B6CB060; }
+.nav-progress {
+  position: fixed; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  transform-origin: left; transform: scaleX(0);
+  z-index: 200; transition: transform 0.3s ease;
+}
+.slide-counter {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  z-index: 200; font-size: 13px; color: var(--body-color); opacity: 0.5;
+  font-family: var(--font-body); letter-spacing: 0.08em;
+  transition: opacity 0.3s;
+}
+.slide-counter:hover { opacity: 0.9; }
+.fullscreen-btn {
+  position: fixed; bottom: 24px; right: 24px; z-index: 200;
+  width: 44px; height: 44px; border-radius: 12px;
+  border: 1px solid var(--card-border); background: var(--card-bg);
+  backdrop-filter: blur(12px); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform 0.2s, opacity 0.2s; opacity: 0.5;
+  color: var(--body-color);
+}
+.fullscreen-btn:hover { opacity: 1; transform: scale(1.08); }
+
+/* ── Scroll-Triggered Animations ── */
+.animate-on-scroll {
+  opacity: 0; transform: translateY(24px);
+  transition: opacity 0.6s cubic-bezier(0.22,1,0.36,1), transform 0.6s cubic-bezier(0.22,1,0.36,1);
+}
+.animate-on-scroll.is-visible { opacity: 1; transform: translateY(0); }
+.animate-on-scroll[data-delay="1"] { transition-delay: 0.1s; }
+.animate-on-scroll[data-delay="2"] { transition-delay: 0.2s; }
+.animate-on-scroll[data-delay="3"] { transition-delay: 0.3s; }
+.animate-on-scroll[data-delay="4"] { transition-delay: 0.4s; }
+.animate-on-scroll[data-delay="5"] { transition-delay: 0.5s; }
+
+/* ── Typography ── */
+h1, h2, h3, h4 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  color: var(--heading-color);
+  word-wrap: break-word;
+  margin: 0 0 0.4em;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+h1 { font-size: clamp(2.2em, 4.5vw, 3.2em); color: var(--title-color); }
+h2 { font-size: clamp(1.4em, 3vw, 2em); }
+h3 { font-size: clamp(1em, 2.2vw, 1.3em); }
+h4 { font-size: clamp(0.9em, 1.8vw, 1.1em); font-weight: 600; }
+.slide-title {
+  text-align: left;
+  margin-bottom: 0.8em;
+  padding-left: 20px;
+  padding-bottom: 0.3em;
+  border-left: 4px solid var(--accent);
+  border-image: linear-gradient(to bottom, var(--accent), var(--accent2)) 1;
+}
+.section-heading { font-size: clamp(1.8em, 3.5vw, 2.4em); text-align: center; color: var(--title-color); }
+.subtitle { color: var(--subtitle-color); font-size: 1.1em; margin: 0; line-height: 1.5; }
+.tagline { color: var(--accent); font-size: 0.78em; letter-spacing: 0.18em; text-transform: uppercase; margin-top: 0.6em; font-weight: 600; }
+.body-text { color: var(--body-color); font-size: 1em; line-height: 1.8; }
+
+/* ── Accent Line (gradient) ── */
+.accent-line { width: 100px; height: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); margin: 0.5em auto; border-radius: 2px; }
+
+/* ── Glass Card — gradient top border ── */
+.glass-card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border-radius: 16px;
+  padding: 1.2em;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s ease;
+  cursor: default;
+}
+.glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+}
+.glass-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.12), 0 0 0 1px #2B6CB022;
+}
+
+/* ── Bullet Lists ── */
+.bullet-list { list-style: none; padding: 0; margin: 0; width: 100%; color: var(--body-color); font-size: 1.05em; line-height: 1.9; }
+.bullet-list.compact { font-size: 0.95em; }
+.bullet-list li { display: flex; align-items: flex-start; gap: 0.7em; margin-bottom: 0.4em; padding: 0.5em 0.7em; border-radius: 10px; transition: background 0.2s, padding-left 0.2s; }
+.bullet-list li:hover { background: rgba(0,0,0,0.02); padding-left: 1em; }
+.bullet-icon { flex-shrink: 0; }
+.bullet-sym { font-size: 1em; color: var(--accent); }
+ul, ol { overflow: hidden; }
+li { word-wrap: break-word; overflow-wrap: break-word; }
+
+/* ── Code ── */
+.code-block { background: var(--code-bg); border-radius: 14px; padding: 1.5em 1.6em; text-align: left; overflow: auto; width: 100%; border: 1px solid var(--card-border); box-shadow: 0 4px 30px rgba(0,0,0,0.04); }
+.code-block code { color: var(--code-color); font-size: 0.85em; line-height: 1.7; white-space: pre-wrap; word-break: break-all; }
+
+/* ── Images ── */
+.slide-image { max-width: 90%; height: auto; object-fit: contain; border-radius: 16px; margin: 0 auto; display: block; box-shadow: 0 8px 30px rgba(0,0,0,0.1); }
+
+/* ── Two-Column ── */
+.slide-columns { display: flex; gap: 1em; width: 100%; }
+.slide-col { flex: 1; min-width: 0; }
+
+/* ── Decorative SVG ── */
+.deco-blob { top: -80px; right: -80px; opacity: 0.5; }
+.deco-circles-pos { bottom: -60px; left: -60px; opacity: 0.4; }
+.deco-wave { bottom: 0; left: 0; width: 100%; height: auto; opacity: 0.6; }
+
+/* ── Hero ── */
+.hero-content { text-align: center; z-index: 2; position: relative; }
+.hero-title { font-size: clamp(2.2em, 5.5vw, 3.4em) !important; margin-bottom: 0.3em; text-shadow: 0 2px 30px rgba(0,0,0,0.4); color: #fff !important; }
+.hero-subtitle { font-size: 0.9em; color: rgba(255,255,255,0.9); margin: 0.5em 0; text-shadow: 0 1px 10px rgba(0,0,0,0.3); }
+.hero-tagline { font-size: 0.55em; color: var(--accent); letter-spacing: 0.2em; text-transform: uppercase; }
+.hero-overlay { position: absolute; inset: 0; z-index: 1; background: linear-gradient(135deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.55) 100%); }
+
+/* ── Stats — gradient icon bg + gradient value ── */
+.stats-grid { display: flex; gap: 1.2em; justify-content: center; flex-wrap: nowrap; width: 100%; padding: 0.5em 0; }
+.stats-card { flex: 1; min-width: 0; text-align: center; padding: 28px 20px; background: var(--stats-card-bg); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.stats-card:hover { transform: translateY(-6px) scale(1.02); }
+.stats-icon .material-symbols-outlined {
+  font-size: 26px;
+  color: #fff;
+  width: 52px; height: 52px;
+  line-height: 52px;
+  text-align: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: inline-block;
+  margin-bottom: 10px;
+  box-shadow: 0 4px 15px #2B6CB030;
+}
+.stats-value {
+  font-size: 44px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-family: var(--font-heading);
+  line-height: 1.2;
+}
+.stats-label { font-size: 13px; color: var(--body-color); margin-top: 6px; text-transform: uppercase; letter-spacing: 0.08em; }
+.stats-trend { margin-top: 6px; }
+.trend-icon { font-size: 22px; }
+.trend-up .trend-icon { color: #48BB78; }
+.trend-down .trend-icon { color: #FC8181; }
+
+/* ── Icon Grid — gradient icon backgrounds ── */
+.icon-grid { display: grid; gap: 1em; width: 100%; padding: 0.5em 0; }
+.cols-1 { grid-template-columns: 1fr; }
+.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.cols-4 { grid-template-columns: repeat(4, 1fr); }
+.icon-card { text-align: center; padding: 1.4em 1em; }
+.icon-card-icon .material-symbols-outlined {
+  font-size: 30px;
+  color: #fff;
+  width: 58px; height: 58px;
+  line-height: 58px;
+  text-align: center;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  display: inline-block;
+  box-shadow: 0 4px 15px #2B6CB025;
+  transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), box-shadow 0.3s ease;
+}
+.icon-card:hover .icon-card-icon .material-symbols-outlined {
+  transform: scale(1.1) rotate(-3deg);
+  box-shadow: 0 8px 25px #2B6CB040;
+}
+.icon-card-img { width: 52px; height: 52px; border-radius: 14px; object-fit: cover; margin: 0 auto 0.4em; display: block; }
+.icon-card-title { font-size: 16px; color: var(--heading-color); margin: 0.5em 0 0.2em; font-weight: 700; }
+.icon-card-desc { font-size: 13px; color: var(--body-color); margin: 0; line-height: 1.5; }
+
+/* ── Timeline (horizontal) — enhanced with gradient line + card content ── */
+.timeline { position: relative; width: 100%; margin-top: 1em; }
+.tl-line { position: absolute; top: 22px; left: 5%; right: 5%; height: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); opacity: 0.35; border-radius: 2px; }
+.tl-items { display: flex; gap: 0.8em; width: 100%; position: relative; z-index: 1; }
+.tl-item { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; text-align: center; transition: transform 0.3s; }
+.tl-item:hover { transform: translateY(-4px); }
+.tl-dot { width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-bottom: 0.7em; box-shadow: 0 0 0 5px #ffffff, 0 0 0 7px var(--accent), 0 6px 20px #2B6CB030; transition: transform 0.3s, box-shadow 0.3s; }
+.tl-item:hover .tl-dot { transform: scale(1.15); box-shadow: 0 0 0 5px #ffffff, 0 0 0 7px var(--accent), 0 10px 30px #2B6CB050; }
+.tl-num { font-size: 14px; font-weight: 700; color: #fff; }
+.tl-icon { font-size: 22px; color: #fff; }
+.tl-content { flex: 1; min-width: 0; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 0.7em 0.6em; margin-top: 0.2em; }
+.tl-date { font-size: 11px; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-bottom: 0.15em; }
+.tl-title { font-size: 14px; font-weight: 700; color: var(--heading-color); margin: 0.1em 0; }
+.tl-desc { font-size: 12px; color: var(--body-color); margin: 0.1em 0 0; line-height: 1.4; }
+
+/* ── Quote — card bg with gradient left accent ── */
+.quote-block {
+  text-align: center;
+  max-width: 82%;
+  margin: 0 auto;
+  padding: 2.5em 2.5em;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 24px;
+  position: relative;
+  overflow: hidden;
+}
+.quote-block::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 5px;
+  background: linear-gradient(to bottom, var(--accent), var(--accent2));
+  border-radius: 24px 0 0 24px;
+}
+.quote-mark {
+  font-size: 5.5em;
+  line-height: 0.5;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-family: Georgia, serif;
+  user-select: none;
+}
+.quote-text { font-size: 1.05em; color: var(--heading-color); font-style: italic; line-height: 1.7; margin: 0.5em 0 0.8em; border: none; padding: 0; }
+.quote-author { font-size: 0.65em; color: var(--accent); font-style: normal; font-weight: 600; letter-spacing: 0.05em; }
+
+/* ── ECharts ── */
+.echart-container { width: 100%; height: 420px; max-width: 100%; margin: 0 auto; }
+.echart-compact { height: 280px; }
+
+/* ── Image + Text ── */
+.image-text-layout { display: flex; gap: 2.5em; align-items: center; width: 100%; }
+.image-text-layout.img-right { flex-direction: row-reverse; }
+.it-image { flex: 1; min-width: 0; }
+.it-image img { width: 100%; height: auto; max-height: 400px; object-fit: cover; border-radius: 20px; box-shadow: 0 12px 40px rgba(0,0,0,0.1); }
+.it-text { flex: 1; min-width: 0; }
+
+/* ── Profile — gradient avatar ring + pill links ── */
+.profile-layout { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.4em; }
+.profile-avatar-wrap {
+  width: 150px; height: 150px;
+  border-radius: 50%;
+  overflow: hidden;
+  padding: 4px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  box-shadow: 0 8px 30px #2B6CB030;
+}
+.profile-avatar { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.profile-name { font-size: 1.8em; font-family: var(--font-heading); color: var(--heading-color); margin: 0.2em 0 0; }
+.profile-role { font-size: 0.7em; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; margin: 0; }
+.profile-bio { font-size: 0.6em; color: var(--body-color); max-width: 600px; line-height: 1.7; margin: 0.4em 0; }
+.profile-social { display: flex; gap: 1em; justify-content: center; margin-top: 0.6em; }
+.profile-link {
+  display: flex; align-items: center; gap: 0.3em;
+  font-size: 0.55em; color: var(--body-color);
+  padding: 0.35em 0.9em;
+  background: var(--card-bg); border: 1px solid var(--card-border);
+  border-radius: 20px;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.profile-link:hover { border-color: var(--accent); transform: translateY(-2px); }
+.profile-link-icon { font-size: 18px !important; color: var(--icon-color); }
+
+/* ── Process — large circles + card descriptions ── */
+.process-steps { display: flex; align-items: flex-start; justify-content: center; gap: 0; width: 100%; position: relative; padding-top: 1.5em; }
+.process-connector { position: absolute; top: calc(1.5em + 32px); left: 12%; right: 12%; height: 4px; background: linear-gradient(90deg, var(--accent), var(--accent2)); opacity: 0.4; border-radius: 2px; }
+.process-step { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; z-index: 1; }
+.process-step-circle { width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; margin-bottom: 0.8em; box-shadow: 0 6px 25px #2B6CB035; transition: transform 0.3s, box-shadow 0.3s; }
+.process-step:hover .process-step-circle { transform: scale(1.12); box-shadow: 0 8px 35px #2B6CB050; }
+.process-icon { font-size: 28px !important; color: #fff; }
+.process-num { font-size: 20px; font-weight: 700; color: #fff; }
+.process-step-label { font-size: 0.78em; font-weight: 700; color: var(--heading-color); margin-bottom: 0.2em; }
+.process-step-desc { font-size: 0.55em; color: var(--body-color); margin: 0; max-width: 150px; line-height: 1.5; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 0.5em 0.6em; }
+
+/* ── Gallery — rounded with shadows ── */
+.gallery { display: grid; gap: 0.8em; width: 100%; }
+.gallery-2x2 { grid-template-columns: 1fr 1fr; }
+.gallery-3-col { grid-template-columns: 1fr 1fr 1fr; }
+.gallery-1-hero-2-small { grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; }
+.gallery-1-hero-2-small .gallery-item:first-child { grid-row: 1 / 3; }
+.gallery-item { overflow: hidden; border-radius: 16px; position: relative; margin: 0; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+.gallery-item img { width: 100%; height: 100%; object-fit: cover; max-height: 280px; display: block; transition: transform 0.4s cubic-bezier(0.22,1,0.36,1); }
+.gallery-item:hover img { transform: scale(1.06); }
+.gallery-item figcaption { position: absolute; bottom: 0; left: 0; right: 0; padding: 0.6em 1em; background: linear-gradient(transparent, rgba(0,0,0,0.75)); color: #fff; font-size: 0.55em; font-weight: 500; }
+
+/* ── Team — gradient photo ring ── */
+.team-grid { display: flex; gap: 1.5em; justify-content: center; flex-wrap: nowrap; padding: 0.5em 0; }
+.team-card { flex: 1; min-width: 0; text-align: center; padding: 1.8em 1.2em; max-width: 260px; }
+.team-photo {
+  width: 100px; height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  padding: 3px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  margin: 0 auto 0.8em;
+  display: block;
+  box-shadow: 0 4px 20px #2B6CB025;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+.team-card:hover .team-photo { transform: scale(1.08); box-shadow: 0 8px 30px #2B6CB040; }
+.team-photo-placeholder { width: 100px; height: 100px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; margin: 0 auto 0.8em; }
+.team-photo-placeholder .material-symbols-outlined { font-size: 40px; color: #fff; }
+.team-name { font-size: 0.85em; font-weight: 700; color: var(--heading-color); }
+.team-role { font-size: 0.6em; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.15em; }
+.team-desc { font-size: 0.55em; color: var(--body-color); margin-top: 0.35em; line-height: 1.5; }
+
+/* ── Table — modern with gradient header + hover ── */
+.table-wrap { width: 100%; overflow: hidden; border-radius: 16px; border: 1px solid var(--card-border); box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+.slide-table { width: 100%; border-collapse: collapse; font-size: 0.6em; }
+.slide-table th, .slide-table td { padding: 0.85em 1.2em; text-align: left; border-bottom: 1px solid var(--card-border); color: var(--body-color); transition: background 0.2s; }
+.slide-table th { font-weight: 700; color: var(--heading-color); background: var(--card-bg); }
+.table-header-highlighted th { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; }
+.slide-table tbody tr:nth-child(even) { background: var(--card-bg); }
+.slide-table tbody tr:hover { background: rgba(0,0,0,0.03); }
+
+/* ── Dashboard — compact KPI + chart ── */
+.dashboard-kpis { display: flex; gap: 1em; margin-bottom: 1em; }
+.dashboard-kpi-card { padding: 18px 14px; }
+.dashboard-kpi-card .stats-value { font-size: 28px; }
+.dashboard-kpi-card .stats-label { font-size: 11px; }
+.dashboard-kpi-card .stats-icon .material-symbols-outlined { font-size: 22px; width: 40px; height: 40px; line-height: 40px; border-radius: 10px; margin-bottom: 6px; }
+.dashboard-chart { width: 100%; }
+
+/* ── Diagram (Mermaid) ── */
+.diagram-container { display: flex; justify-content: center; align-items: center; width: 100%; min-height: 300px; }
+.diagram-container .mermaid { font-size: 14px; }
+.diagram-container svg { max-width: 100%; max-height: 480px; }
+
+/* ── Mindmap (Markmap) ── */
+.mindmap-container { width: 100%; height: 480px; display: flex; justify-content: center; }
+.mindmap-svg { width: 100%; height: 100%; }
+
+/* ── Compound Layout System (no fixed height — content flows naturally) ── */
+.slide-layout { display: grid; gap: 40px; width: 100%; align-items: center; }
+.slide-layout.split-left { grid-template-columns: 50% 1fr; }
+.slide-layout.split-right { grid-template-columns: 1fr 50%; }
+.slide-layout.top-bottom { grid-template-columns: 1fr; }
+
+/* Text block — left accent border */
+.layout-text {
+  display: flex; flex-direction: column; gap: 20px; justify-content: center; min-width: 0;
+  padding-left: 28px;
+  border-left: 3px solid transparent;
+  border-image: linear-gradient(180deg, #2B6CB0, #38B2AC) 1;
+}
+.layout-visual { min-width: 0; display: flex; align-items: center; justify-content: center; }
+
+/* Description */
+.compound-description {
+  font-size: 1em; line-height: 1.8; color: var(--body-color); margin: 0;
+  font-weight: 300; letter-spacing: 0.01em;
+  font-family: var(--font-heading), serif;
+}
+
+/* Highlights — pill cards */
+.compound-highlights { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.compound-highlights li {
+  display: flex; align-items: center; gap: 12px; font-size: 0.9em; color: var(--body-color);
+  line-height: 1.5; padding: 12px 18px;
+  background: rgba(0,0,0,0.02);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 12px; transition: transform 0.2s, border-color 0.2s, background 0.2s;
+  font-weight: 500; letter-spacing: 0.02em;
+}
+.compound-highlights li:hover { transform: translateX(6px); border-color: var(--accent); background: rgba(0,0,0,0.03); }
+.highlight-icon { font-size: 20px !important; color: var(--accent); flex-shrink: 0; }
+.compound-side-image {
+  width: 100%; max-height: 180px; object-fit: cover; border-radius: 14px; margin-top: 4px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+/* Title slide with side image */
+.title-text-block { display: flex; flex-direction: column; justify-content: center; gap: 16px; border-left: none; padding-left: 0; }
+.title-text-block .accent-line { margin: 0.3em 0 !important; }
+.title-side-image { min-height: 400px; overflow: hidden; border-radius: 24px; }
+.title-side-image img { width: 100%; height: 100%; min-height: 400px; object-fit: cover; border-radius: 24px; }
+
+/* Compound-mode chart/diagram sizing */
+.slide-layout .echart-container { height: 380px; max-width: 100%; }
+.slide-layout.top-bottom .echart-container { height: 340px; }
+.slide-layout .diagram-container { min-height: 250px; }
+.slide-layout .mindmap-container { height: 400px; }
+.slide-layout.top-bottom .mindmap-container { height: 320px; }
+
+/* Compound-mode: process/timeline vertical in split */
+.slide-layout.split-left .process-steps,
+.slide-layout.split-right .process-steps { flex-direction: column; align-items: flex-start; gap: 0.8em; }
+.slide-layout.split-left .process-connector,
+.slide-layout.split-right .process-connector { display: none; }
+.slide-layout.split-left .timeline .tl-items,
+.slide-layout.split-right .timeline .tl-items { flex-direction: column; gap: 0.8em; }
+.slide-layout.split-left .timeline .tl-line,
+.slide-layout.split-right .timeline .tl-line { display: none; }
+
+/* Compound-mode icon-grid in split — 2-col */
+.slide-layout.split-left .icon-grid,
+.slide-layout.split-right .icon-grid { grid-template-columns: repeat(2, 1fr) !important; }
+
+/* Compound-mode gallery in split */
+.slide-layout.split-left .gallery,
+.slide-layout.split-right .gallery { grid-template-columns: 1fr 1fr !important; grid-template-rows: auto !important; }
+
+/* ── RWD ── */
+@media (max-width: 768px) {
+  .slide-inner { padding: 40px 24px; }
+  h1 { font-size: 1.8em; }
+  .slide-columns, .image-text-layout, .image-text-layout.img-right { flex-direction: column; }
+  .stats-grid, .dashboard-kpis { flex-direction: column; align-items: center; }
+  .icon-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .tl-items { flex-direction: column; }
+  .tl-line { display: none; }
+  .process-steps { flex-direction: column; align-items: center; }
+  .process-connector { display: none; }
+  .gallery { grid-template-columns: 1fr !important; grid-template-rows: auto !important; }
+  .gallery-1-hero-2-small .gallery-item:first-child { grid-row: auto; }
+  .team-grid { flex-direction: column; align-items: center; }
+  .echart-container { height: 280px; }
+  .slide-layout.split-left, .slide-layout.split-right { grid-template-columns: 1fr; }
+  .title-side-image { min-height: 250px; }
+  .slides-container { scroll-snap-type: y proximity; }
+  .slide-nav { display: none; }
+}
+
+/* ── Print ── */
+@media print {
+  .slides-container { scroll-snap-type: none; height: auto; overflow: visible; }
+  .slide { min-height: auto; page-break-after: always; scroll-snap-align: none; }
+  .slide-nav, .nav-progress, .slide-counter, .fullscreen-btn { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-on-scroll { transition: none; opacity: 1; transform: none; }
+  .slides-container { scroll-behavior: auto; }
+  html { scroll-behavior: auto; }
+}
+
+
+</style>
+</head>
+<body>
+  <div class="presentation">
+    <!-- Navigation overlay -->
+    <div class="nav-progress"></div>
+    <nav class="slide-nav" aria-label="Slide navigation"></nav>
+    <div class="slide-counter"><span class="current-slide">1</span> / <span class="total-slides">12</span></div>
+    <button class="fullscreen-btn" aria-label="Toggle fullscreen">
+      <span class="material-symbols-outlined">fullscreen</span>
+    </button>
+
+    <!-- Scroll-snap container -->
+    <main class="slides-container">
+      <section class="slide slide--title" id="slide-0">
+  <div class="slide-inner">
+    <div class="slide-layout split-right">
+    <div class="layout-text title-text-block">
+      <p class="tagline">SERIES A — $15M RAISE</p>
+      <h1>TechVision AI</h1>
+      <div class="accent-line"></div>
+      <p class="subtitle">Intelligent Automation for Enterprise</p>
+      <p class="compound-description">Transforming how enterprises operate with AI-powered workflow automation.</p>
+    </div>
+    <div class="layout-visual title-side-image">
+      <img src="https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&amp;h=720&amp;fit=crop" loading="lazy" alt="" />
+    </div>
+  </div>
+  </div>
+</section>
+<section class="slide slide--content" id="slide-1">
+  <div class="slide-inner">
+    <h2 class="slide-title">The Problem</h2>
+  <ul class="bullet-list"><li class="animate-on-scroll" data-delay="0"><span class="bullet-icon"><span class="material-symbols-outlined bullet-sym">arrow_right</span></span><span>80% of enterprise workflows are still manual</span></li><li class="animate-on-scroll" data-delay="1"><span class="bullet-icon"><span class="material-symbols-outlined bullet-sym">arrow_right</span></span><span>Companies lose $1.8T annually to inefficiency</span></li><li class="animate-on-scroll" data-delay="2"><span class="bullet-icon"><span class="material-symbols-outlined bullet-sym">arrow_right</span></span><span>Existing tools require 6+ months to implement</span></li><li class="animate-on-scroll" data-delay="3"><span class="bullet-icon"><span class="material-symbols-outlined bullet-sym">arrow_right</span></span><span>No solution combines AI + low-code effectively</span></li></ul>
+  </div>
+</section>
+<section class="slide slide--stats" id="slide-2">
+  <div class="slide-inner">
+    <h2 class="slide-title">Market Opportunity</h2>
+  <div class="slide-layout split-right"><div class="layout-text"><p class="compound-description">The enterprise automation market is experiencing explosive growth, driven by digital transformation initiatives and AI adoption across industries.</p><ul class="compound-highlights"><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>Fastest-growing B2B SaaS segment</span></li><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>Fortune 500 adoption accelerating</span></li><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>Only 5% of market currently served by AI solutions</span></li></ul></div><div class="layout-visual"><div class="stats-grid"><div class="stats-card glass-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">analytics</span></div>
+  <div class="stats-value">$45B</div>
+  <div class="stats-label">TAM by 2028</div>
+  <div class="stats-trend trend-up"><span class="material-symbols-outlined trend-icon">trending_up</span></div>
+</div><div class="stats-card glass-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">trending_up</span></div>
+  <div class="stats-value">32%</div>
+  <div class="stats-label">CAGR</div>
+  <div class="stats-trend trend-up"><span class="material-symbols-outlined trend-icon">trending_up</span></div>
+</div><div class="stats-card glass-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">business</span></div>
+  <div class="stats-value">850K</div>
+  <div class="stats-label">Target Companies</div>
+  
+</div></div></div></div>
+  </div>
+</section>
+<section class="slide slide--icon-grid" id="slide-3">
+  <div class="slide-inner">
+    <h2 class="slide-title">Our Solution</h2>
+  <div class="slide-layout split-left"><div class="layout-visual"><div class="icon-grid cols-4"><div class="icon-card glass-card">
+  <div class="icon-card-icon"><span class="material-symbols-outlined">smart_toy</span></div>
+  <div class="icon-card-title">AI Engine</div>
+  <p class="icon-card-desc">LLM-powered reasoning</p>
+</div><div class="icon-card glass-card">
+  <div class="icon-card-icon"><span class="material-symbols-outlined">integration_instructions</span></div>
+  <div class="icon-card-title">200+ Integrations</div>
+  <p class="icon-card-desc">Connect any system</p>
+</div><div class="icon-card glass-card">
+  <div class="icon-card-icon"><span class="material-symbols-outlined">speed</span></div>
+  <div class="icon-card-title">5min Setup</div>
+  <p class="icon-card-desc">No-code builder</p>
+</div><div class="icon-card glass-card">
+  <div class="icon-card-icon"><span class="material-symbols-outlined">security</span></div>
+  <div class="icon-card-title">SOC2 Certified</div>
+  <p class="icon-card-desc">Enterprise security</p>
+</div></div></div><div class="layout-text"><p class="compound-description">TechVision AI combines cutting-edge language models with an intuitive low-code platform, enabling any team to automate complex workflows in days, not months.</p><ul class="compound-highlights"><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>No-code setup for business users</span></li><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>Enterprise-grade security &amp; compliance</span></li><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>10x faster than traditional RPA</span></li></ul></div></div>
+  </div>
+</section>
+<section class="slide slide--process" id="slide-4">
+  <div class="slide-inner">
+    <h2 class="slide-title">How It Works</h2>
+  <div class="slide-layout split-right"><div class="layout-text"><p class="compound-description">From initial setup to full automation, our platform guides teams through a streamlined 4-step process that delivers value within the first week.</p><ul class="compound-highlights"><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>Average time to first automation: 3 days</span></li><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>95% of users need zero training</span></li></ul></div><div class="layout-visual"><div class="process-steps"><div class="process-connector"></div><div class="process-step">
+  <div class="process-step-circle"><span class="material-symbols-outlined process-icon">upload</span></div>
+  <div class="process-step-label">Connect</div>
+  <div class="process-step-desc">Link your tools</div>
+</div><div class="process-step">
+  <div class="process-step-circle"><span class="material-symbols-outlined process-icon">auto_awesome</span></div>
+  <div class="process-step-label">Design</div>
+  <div class="process-step-desc">Build with AI</div>
+</div><div class="process-step">
+  <div class="process-step-circle"><span class="material-symbols-outlined process-icon">play_circle</span></div>
+  <div class="process-step-label">Deploy</div>
+  <div class="process-step-desc">One-click launch</div>
+</div><div class="process-step">
+  <div class="process-step-circle"><span class="material-symbols-outlined process-icon">monitoring</span></div>
+  <div class="process-step-label">Optimize</div>
+  <div class="process-step-desc">AI improves over time</div>
+</div></div></div></div>
+  </div>
+</section>
+<section class="slide slide--chart" id="slide-5">
+  <div class="slide-inner">
+    <h2 class="slide-title">Revenue Growth</h2>
+  <div class="slide-layout split-left"><div class="layout-visual"><div id="echart-5" class="echart-container"></div></div><div class="layout-text"><p class="compound-description">Since launching our enterprise tier in Q2 2025, revenue has accelerated dramatically with 40% quarter-over-quarter growth.</p><ul class="compound-highlights"><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>140% YoY revenue growth</span></li><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>Net revenue retention: 145%</span></li><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>Average contract value up 3x</span></li></ul></div></div>
+  </div>
+</section>
+<section class="slide slide--table" id="slide-6">
+  <div class="slide-inner">
+    <h2 class="slide-title">Competitive Landscape</h2>
+  <div class="slide-layout top-bottom"><div class="layout-visual"><div class="table-wrap"><table class="slide-table"><thead class="table-header-highlighted"><tr><th>Capability</th><th>TechVision</th><th>UiPath</th><th>Zapier</th><th>Microsoft PA</th></tr></thead><tbody><tr><td>AI Reasoning</td><td>✓ Native</td><td>✗</td><td>✗</td><td>Partial</td></tr><tr><td>No-Code Builder</td><td>✓</td><td>Partial</td><td>✓</td><td>✓</td></tr><tr><td>Enterprise Security</td><td>SOC2+HIPAA</td><td>SOC2</td><td>SOC2</td><td>SOC2</td></tr><tr><td>Setup Time</td><td>3 days</td><td>3 months</td><td>1 week</td><td>1 month</td></tr><tr><td>Pricing</td><td>$$$</td><td>$$$$</td><td>$$</td><td>$$$</td></tr></tbody></table></div></div><div class="layout-text"><p class="compound-description">TechVision is the only platform combining AI reasoning with no-code automation and enterprise compliance — a unique position in the market.</p><ul class="compound-highlights"><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>Only solution with native LLM integration</span></li><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>Fastest deployment time in category</span></li></ul></div></div>
+  </div>
+</section>
+<section class="slide slide--team" id="slide-7">
+  <div class="slide-inner">
+    <h2 class="slide-title">Leadership Team</h2>
+  <div class="slide-layout split-right"><div class="layout-text"><p class="compound-description">Our founding team brings 50+ years of combined experience from Google, Amazon, and McKinsey — the perfect blend of AI expertise and enterprise go-to-market.</p><ul class="compound-highlights"><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>3 ex-Google AI researchers</span></li><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>Previously built 2 successful exits</span></li></ul></div><div class="layout-visual"><div class="team-grid"><div class="team-card glass-card">
+  <div class="team-photo-placeholder"><span class="material-symbols-outlined">person</span></div>
+  <div class="team-name">Sarah Chen</div>
+  <div class="team-role">CEO</div>
+  <div class="team-desc">Ex-McKinsey, Stanford MBA</div>
+</div><div class="team-card glass-card">
+  <div class="team-photo-placeholder"><span class="material-symbols-outlined">person</span></div>
+  <div class="team-name">Marcus Johnson</div>
+  <div class="team-role">CTO</div>
+  <div class="team-desc">Ex-Google AI, PhD MIT</div>
+</div><div class="team-card glass-card">
+  <div class="team-photo-placeholder"><span class="material-symbols-outlined">person</span></div>
+  <div class="team-name">Priya Patel</div>
+  <div class="team-role">VP Sales</div>
+  <div class="team-desc">Ex-Salesforce, $50M ARR</div>
+</div></div></div></div>
+  </div>
+</section>
+<section class="slide slide--dashboard" id="slide-8">
+  <div class="slide-inner">
+    <h2 class="slide-title">Q4 2025 Metrics</h2>
+  <div class="dashboard-kpis"><div class="stats-card glass-card dashboard-kpi-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">payments</span></div>
+  <div class="stats-value">$1.35M</div>
+  <div class="stats-label">MRR</div>
+  <div class="stats-trend trend-up"><span class="material-symbols-outlined trend-icon">trending_up</span></div>
+</div><div class="stats-card glass-card dashboard-kpi-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">autorenew</span></div>
+  <div class="stats-value">145%</div>
+  <div class="stats-label">NRR</div>
+  <div class="stats-trend trend-up"><span class="material-symbols-outlined trend-icon">trending_up</span></div>
+</div><div class="stats-card glass-card dashboard-kpi-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">business</span></div>
+  <div class="stats-value">52</div>
+  <div class="stats-label">Enterprise Clients</div>
+  <div class="stats-trend trend-up"><span class="material-symbols-outlined trend-icon">trending_up</span></div>
+</div><div class="stats-card glass-card dashboard-kpi-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">star</span></div>
+  <div class="stats-value">4.8★</div>
+  <div class="stats-label">G2 Rating</div>
+  
+</div></div>
+  <div class="dashboard-chart"><div id="echart-dash-8" class="echart-container echart-compact"></div></div>
+  </div>
+</section>
+<section class="slide slide--timeline" id="slide-9">
+  <div class="slide-inner">
+    <h2 class="slide-title">Product Roadmap</h2>
+  <div class="slide-layout split-left"><div class="layout-visual"><div class="timeline"><div class="tl-line"></div><div class="tl-items"><div class="tl-item">
+  <div class="tl-dot"><span class="material-symbols-outlined tl-icon">smart_toy</span></div>
+  <div class="tl-content">
+    <span class="tl-date">Q1 2026</span>
+    <div class="tl-title">Multi-Agent AI</div>
+    <p class="tl-desc">Orchestrated AI workflows</p>
+  </div>
+</div><div class="tl-item">
+  <div class="tl-dot"><span class="material-symbols-outlined tl-icon">category</span></div>
+  <div class="tl-content">
+    <span class="tl-date">Q2 2026</span>
+    <div class="tl-title">Industry Verticals</div>
+    <p class="tl-desc">Healthcare &amp; Finance templates</p>
+  </div>
+</div><div class="tl-item">
+  <div class="tl-dot"><span class="material-symbols-outlined tl-icon">public</span></div>
+  <div class="tl-content">
+    <span class="tl-date">Q3 2026</span>
+    <div class="tl-title">Global Expansion</div>
+    <p class="tl-desc">APAC &amp; EMEA launch</p>
+  </div>
+</div></div></div></div><div class="layout-text"><p class="compound-description">Our 2026 roadmap focuses on deepening AI capabilities while expanding our platform&#39;s reach across new verticals and geographies.</p><ul class="compound-highlights"><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>APAC launch planned for Q3</span></li><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>AI Agent marketplace by Q4</span></li></ul></div></div>
+  </div>
+</section>
+<section class="slide slide--stats" id="slide-10">
+  <div class="slide-inner">
+    <h2 class="slide-title">The Ask</h2>
+  <div class="slide-layout split-left"><div class="layout-visual"><div class="stats-grid"><div class="stats-card glass-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">account_balance</span></div>
+  <div class="stats-value">$15M</div>
+  <div class="stats-label">Series A</div>
+  
+</div><div class="stats-card glass-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">schedule</span></div>
+  <div class="stats-value">24mo</div>
+  <div class="stats-label">Runway</div>
+  
+</div><div class="stats-card glass-card">
+  <div class="stats-icon"><span class="material-symbols-outlined">trending_up</span></div>
+  <div class="stats-value">10x</div>
+  <div class="stats-label">Target ROI</div>
+  <div class="stats-trend trend-up"><span class="material-symbols-outlined trend-icon">trending_up</span></div>
+</div></div></div><div class="layout-text"><p class="compound-description">We&#39;re raising $15M Series A to accelerate product development, expand our sales team, and enter new markets. Current runway extends through Q2 2027.</p><ul class="compound-highlights"><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>60% → Product &amp; Engineering</span></li><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>25% → Sales &amp; Marketing</span></li><li><span class="material-symbols-outlined highlight-icon">check_circle</span><span>15% → Operations &amp; Compliance</span></li></ul></div></div>
+  </div>
+</section>
+<section class="slide slide--quote" id="slide-11">
+  <div class="slide-inner">
+    <div class="quote-block">
+    <div class="quote-mark">“</div>
+    <blockquote class="quote-text">We&#39;re not just automating workflows — we&#39;re giving every enterprise team an AI co-pilot that learns and improves with every interaction.</blockquote>
+    <cite class="quote-author">— Sarah Chen, CEO</cite>
+  </div>
+  </div>
+</section>
+    </main>
+  </div>
+
+  <!-- Syntax highlighting -->
+  <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+
+  <!-- Navigation controller -->
+  <script>
+  (function() {
+    var container = document.querySelector('.slides-container');
+    var allSlides = Array.from(document.querySelectorAll('.slide'));
+    var nav = document.querySelector('.slide-nav');
+    var progress = document.querySelector('.nav-progress');
+    var counterCurrent = document.querySelector('.current-slide');
+    var currentIndex = 0;
+
+    // Create nav dots
+    allSlides.forEach(function(_, i) {
+      var dot = document.createElement('button');
+      dot.className = 'nav-dot' + (i === 0 ? ' active' : '');
+      dot.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+      dot.addEventListener('click', function() { scrollToSlide(i); });
+      nav.appendChild(dot);
+    });
+
+    function scrollToSlide(index) {
+      index = Math.max(0, Math.min(index, allSlides.length - 1));
+      allSlides[index].scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function updateNav(idx) {
+      var dots = nav.querySelectorAll('.nav-dot');
+      dots.forEach(function(d, i) { d.classList.toggle('active', i === idx); });
+      progress.style.transform = 'scaleX(' + ((idx + 1) / allSlides.length) + ')';
+      counterCurrent.textContent = idx + 1;
+    }
+
+    // Track current slide via IntersectionObserver
+    var slideObs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting && entry.intersectionRatio > 0.4) {
+          var idx = allSlides.indexOf(entry.target);
+          if (idx !== -1 && idx !== currentIndex) {
+            currentIndex = idx;
+            updateNav(idx);
+            history.replaceState(null, '', '#slide-' + idx);
+          }
+        }
+      });
+    }, { root: container, threshold: 0.4 });
+    allSlides.forEach(function(s) { slideObs.observe(s); });
+
+    // Keyboard navigation
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault(); scrollToSlide(currentIndex + 1);
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault(); scrollToSlide(currentIndex - 1);
+      } else if (e.key === 'Home') {
+        e.preventDefault(); scrollToSlide(0);
+      } else if (e.key === 'End') {
+        e.preventDefault(); scrollToSlide(allSlides.length - 1);
+      }
+    });
+
+    // Fullscreen toggle
+    document.querySelector('.fullscreen-btn').addEventListener('click', function() {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    });
+
+    // Hash-based deep linking
+    var hash = window.location.hash;
+    if (hash && hash.startsWith('#slide-')) {
+      var el = document.querySelector(hash);
+      if (el) setTimeout(function() { el.scrollIntoView(); }, 100);
+    }
+  })();
+  </script>
+
+  <!-- Scroll-triggered animations -->
+  <script>
+  (function() {
+    var obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) entry.target.classList.add('is-visible');
+      });
+    }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+    document.querySelectorAll('.animate-on-scroll').forEach(function(el) { obs.observe(el); });
+  })();
+  </script>
+
+  <!-- Syntax highlighting init -->
+  <script>hljs.highlightAll();</script>
+
+  
+  <script>
+  (function() {
+    var configs = [
+      { id: 'echart-5', option: {"color":["#2B6CB0","#38B2AC","#ED8936","#9F7AEA","#48BB78"],"tooltip":{"backgroundColor":"rgba(255,255,255,0.96)","borderColor":"rgba(0,0,0,0.08)","textStyle":{"color":"#333","fontSize":13},"trigger":"axis"},"grid":{"left":"8%","right":"6%","bottom":"12%","top":"8%","containLabel":true},"xAxis":{"type":"category","data":["Q1'25","Q2'25","Q3'25","Q4'25"],"axisLabel":{"color":"#4A5568","fontSize":12},"axisLine":{"lineStyle":{"color":"rgba(0,0,0,0.06)"}}},"yAxis":{"type":"value","axisLabel":{"color":"#4A5568","fontSize":12},"splitLine":{"lineStyle":{"color":"rgba(0,0,0,0.06)"}}},"series":[{"type":"bar","data":[{"value":280},{"value":520},{"value":890},{"value":1350}],"barWidth":"45%","itemStyle":{"borderRadius":[6,6,0,0]}}],"animationDuration":1200,"animationEasing":"cubicOut"} },
+      { id: 'echart-dash-8', option: {"color":["#2B6CB0","#38B2AC","#ED8936","#9F7AEA","#48BB78"],"tooltip":{"backgroundColor":"rgba(255,255,255,0.96)","borderColor":"rgba(0,0,0,0.08)","textStyle":{"color":"#333","fontSize":13},"trigger":"axis"},"grid":{"left":"8%","right":"6%","bottom":"10%","top":"8%","containLabel":true},"xAxis":{"type":"category","data":["Jul","Aug","Sep","Oct","Nov","Dec"],"axisLabel":{"color":"#4A5568","fontSize":12},"axisLine":{"lineStyle":{"color":"rgba(0,0,0,0.06)"}},"boundaryGap":false},"yAxis":{"type":"value","axisLabel":{"color":"#4A5568","fontSize":12},"splitLine":{"lineStyle":{"color":"rgba(0,0,0,0.06)"}}},"series":[{"name":"MRR ($K)","type":"line","smooth":true,"data":[420,560,720,890,1100,1350],"lineStyle":{"width":3},"areaStyle":{"opacity":0.08},"symbolSize":6}],"animationDuration":1500} }
+    ];
+    var instances = {};
+    function initChart(cfg) {
+      var el = document.getElementById(cfg.id);
+      if (!el || instances[cfg.id]) return;
+      var chart = echarts.init(el, null, { renderer: 'canvas' });
+      chart.setOption(cfg.option);
+      instances[cfg.id] = chart;
+      setTimeout(function() { chart.resize(); }, 100);
+    }
+    // Lazy-init charts when their section scrolls into view
+    var obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          configs.forEach(function(cfg) {
+            if (entry.target.querySelector('#' + cfg.id)) initChart(cfg);
+          });
+        }
+      });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.slide').forEach(function(s) { obs.observe(s); });
+    // ResizeObserver for responsive charts
+    var resizer = new ResizeObserver(function(entries) {
+      entries.forEach(function(e) { if (instances[e.target.id]) instances[e.target.id].resize(); });
+    });
+    configs.forEach(function(cfg) { var el = document.getElementById(cfg.id); if (el) resizer.observe(el); });
+    window.addEventListener('resize', function() { Object.keys(instances).forEach(function(k) { instances[k].resize(); }); });
+  })();
+  </script>
+  
+  
+  
+  <script>
+  (function() {
+    function animateNumbers(section) {
+      section.querySelectorAll('.stats-value').forEach(function(el) {
+        if (el.getAttribute('data-animated')) return;
+        el.setAttribute('data-animated', 'true');
+        var text = el.textContent || '';
+        var match = text.match(/([\d,.]+)/);
+        if (!match) return;
+        var target = parseFloat(match[1].replace(/,/g, ''));
+        if (isNaN(target)) return;
+        var prefix = text.substring(0, text.indexOf(match[1]));
+        var suffix = text.substring(text.indexOf(match[1]) + match[1].length);
+        var duration = 800, start = performance.now();
+        function tick(now) {
+          var p = Math.min((now - start) / duration, 1);
+          p = 1 - Math.pow(1 - p, 3);
+          var current = Math.round(target * p);
+          el.textContent = prefix + current.toLocaleString() + suffix;
+          if (p < 1) requestAnimationFrame(tick);
+          else el.textContent = text;
+        }
+        el.textContent = prefix + '0' + suffix;
+        requestAnimationFrame(tick);
+      });
+    }
+    var obs = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting && (entry.target.querySelector('.stats-grid') || entry.target.querySelector('.dashboard-kpis'))) {
+          animateNumbers(entry.target);
+        }
+      });
+    }, { threshold: 0.3 });
+    document.querySelectorAll('.slide').forEach(function(s) { obs.observe(s); });
+  })();
+  </script>
+</body>
+</html>
