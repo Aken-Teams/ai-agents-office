@@ -743,6 +743,16 @@ const zhTW = {
   'uploadAlert.statusError': '錯誤',
   'uploadAlert.statusQuota': '空間不足',
   'uploadAlert.close': '我知道了',
+
+  // Share
+  'share.button': '分享',
+  'share.title': '分享對話',
+  'share.description': '擁有此連結的人可以檢視此對話（唯讀）。',
+  'share.createDescription': '建立分享連結，讓其他人以唯讀方式檢視此對話。',
+  'share.createLink': '建立分享連結',
+  'share.removeLink': '移除分享連結',
+  'share.copyLink': '複製',
+  'share.copied': '已複製！',
 } as const;
 
 export default zhTW;

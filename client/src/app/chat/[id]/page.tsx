@@ -8,6 +8,7 @@ import dynamic from 'next/dynamic';
 import { AuthProvider, useAuth } from '../../components/AuthProvider';
 import Navbar from '../../components/Navbar';
 import UploadAlertModal, { type UploadAlertItem } from '../../components/UploadAlertModal';
+import ShareModal from '../../components/ShareModal';
 import { I18nProvider, useTranslation } from '../../../i18n';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 
@@ -454,6 +455,7 @@ function ChatContent() {
   const [versionDropdown, setVersionDropdown] = useState<string | null>(null); // file ID whose dropdown is open
   const [versionCache, setVersionCache] = useState<Record<string, GeneratedFile[]>>({});
   const [mobileFilesOpen, setMobileFilesOpen] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sidebarMargin = useSidebarMargin();
   const abortRef = useRef<AbortController | null>(null);
@@ -1093,6 +1095,11 @@ function ChatContent() {
         <UploadAlertModal items={uploadAlerts} onClose={() => setUploadAlerts([])} />
       )}
 
+      {/* Share Modal */}
+      {showShareModal && conversationId && (
+        <ShareModal conversationId={conversationId} onClose={() => setShowShareModal(false)} />
+      )}
+
       <div className={`${sidebarMargin} h-[100svh] md:h-screen flex overflow-hidden transition-all duration-300`}>
         {/* === Central Chat Area === */}
         <section className="flex flex-col flex-1 min-h-0 min-w-0">
@@ -1111,6 +1118,14 @@ function ChatContent() {
               </span>
             )}
             <span className="flex-1" />
+            {/* Share button */}
+            <button
+              onClick={() => setShowShareModal(true)}
+              className="p-1 text-on-surface-variant hover:text-primary active:text-primary transition-colors bg-transparent cursor-pointer shrink-0"
+              title={t('share.button' as any)}
+            >
+              <span className="material-symbols-outlined text-base">share</span>
+            </button>
             {/* Mobile: file drawer toggle */}
             {(files.length > 0 || conversationUploads.length > 0) && (
               <button

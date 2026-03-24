@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
 import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
+import ShareModal from '../components/ShareModal';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
 
 interface Conversation {
@@ -172,6 +173,7 @@ function ConversationsContent() {
   const [page, setPage] = useState(1);
   const [deleteTarget, setDeleteTarget] = useState<Conversation | null>(null);
   const [renameTarget, setRenameTarget] = useState<Conversation | null>(null);
+  const [shareTarget, setShareTarget] = useState<Conversation | null>(null);
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
@@ -254,6 +256,9 @@ function ConversationsContent() {
           onCancel={() => setRenameTarget(null)}
         />
       )}
+      {shareTarget && (
+        <ShareModal conversationId={shareTarget.id} onClose={() => setShareTarget(null)} />
+      )}
 
       <main className={`${sidebarMargin} md:pt-10 pb-12 px-4 md:px-10 transition-all duration-300`}>
         {/* Header Section */}
@@ -333,7 +338,7 @@ function ConversationsContent() {
           <>
             {/* Desktop Table */}
             <div className="hidden md:block bg-surface-container rounded-lg overflow-hidden">
-              <div className="grid grid-cols-[auto_1fr_100px_120px_140px_80px] gap-4 px-6 py-3 bg-surface-container-high text-sm font-bold uppercase tracking-widest text-on-surface-variant">
+              <div className="grid grid-cols-[auto_1fr_100px_120px_140px_110px] gap-4 px-6 py-3 bg-surface-container-high text-sm font-bold uppercase tracking-widest text-on-surface-variant">
                 <span className="w-9" />
                 <span>{t('conversations.table.title')}</span>
                 <span>{t('conversations.table.type')}</span>
@@ -347,7 +352,7 @@ function ConversationsContent() {
                   return (
                     <div
                       key={conv.id}
-                      className="grid grid-cols-[auto_1fr_100px_120px_140px_80px] gap-4 px-6 py-3.5 items-center hover:bg-surface-container-high/50 cursor-pointer transition-colors group"
+                      className="grid grid-cols-[auto_1fr_100px_120px_140px_110px] gap-4 px-6 py-3.5 items-center hover:bg-surface-container-high/50 cursor-pointer transition-colors group"
                       onClick={() => router.push(`/chat/${conv.id}`)}
                     >
                       <div className="w-9 h-9 rounded flex items-center justify-center shrink-0" style={{ background: config.bgColor }}>
@@ -363,6 +368,9 @@ function ConversationsContent() {
                         {new Date(conv.created_at).toLocaleString('zh-TW', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </span>
                       <div className="flex items-center justify-end gap-1">
+                        <button onClick={e => { e.stopPropagation(); setShareTarget(conv); }} className="w-7 h-7 flex items-center justify-center rounded bg-transparent hover:bg-primary/10 text-on-surface-variant hover:text-primary cursor-pointer transition-colors opacity-0 group-hover:opacity-100" title={t('share.button' as any)}>
+                          <span className="material-symbols-outlined text-sm">share</span>
+                        </button>
                         <button onClick={e => { e.stopPropagation(); setRenameTarget(conv); }} className="w-7 h-7 flex items-center justify-center rounded bg-transparent hover:bg-primary/10 text-on-surface-variant hover:text-primary cursor-pointer transition-colors opacity-0 group-hover:opacity-100" title={t('conversations.tooltip.rename')}>
                           <span className="material-symbols-outlined text-sm">edit</span>
                         </button>
@@ -403,6 +411,9 @@ function ConversationsContent() {
                         </span>
                       </div>
                       <div className="flex items-center gap-0.5 shrink-0">
+                        <button onClick={e => { e.stopPropagation(); setShareTarget(conv); }} className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant/50 active:text-primary active:bg-primary/10 cursor-pointer transition-colors">
+                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>share</span>
+                        </button>
                         <button onClick={e => { e.stopPropagation(); setRenameTarget(conv); }} className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant/50 active:text-primary active:bg-primary/10 cursor-pointer transition-colors">
                           <span className="material-symbols-outlined" style={{ fontSize: 16 }}>edit</span>
                         </button>

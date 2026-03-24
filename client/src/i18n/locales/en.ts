@@ -720,6 +720,16 @@ const en = {
   'uploadAlert.statusError': 'Error',
   'uploadAlert.statusQuota': 'No Space',
   'uploadAlert.close': 'Got it',
+
+  // Share
+  'share.button': 'Share',
+  'share.title': 'Share Conversation',
+  'share.description': 'Anyone with this link can view this conversation (read-only).',
+  'share.createDescription': 'Create a share link to let others view this conversation in read-only mode.',
+  'share.createLink': 'Create Share Link',
+  'share.removeLink': 'Remove Share Link',
+  'share.copyLink': 'Copy',
+  'share.copied': 'Copied!',
 } as const;
 
 export default en;

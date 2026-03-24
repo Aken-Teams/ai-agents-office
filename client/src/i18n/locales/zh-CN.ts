@@ -739,6 +739,16 @@ const zhCN = {
   'uploadAlert.statusError': '错误',
   'uploadAlert.statusQuota': '空间不足',
   'uploadAlert.close': '我知道了',
+
+  // Share
+  'share.button': '分享',
+  'share.title': '分享对话',
+  'share.description': '拥有此链接的人可以查看此对话（只读）。',
+  'share.createDescription': '创建分享链接，让其他人以只读方式查看此对话。',
+  'share.createLink': '创建分享链接',
+  'share.removeLink': '移除分享链接',
+  'share.copyLink': '复制',
+  'share.copied': '已复制！',
 } as const;
 
 export default zhCN;

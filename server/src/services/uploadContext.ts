@@ -9,6 +9,18 @@ import { dbAll } from '../db.js';
 import path from 'path';
 import { config } from '../config.js';
 
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg', '.tiff', '.tif']);
+
+function isImageFile(filename: string): boolean {
+  return IMAGE_EXTENSIONS.has(path.extname(filename).toLowerCase());
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 interface UploadRow {
   id: string;
   filename: string;
@@ -60,28 +72,53 @@ export async function getUserUploadsForPrompt(
   // Calculate relative path from sandbox to uploads dir
   const relUploadDir = path.relative(sandboxPath, path.join(config.workspaceRoot, userId, '_uploads')).replace(/\\/g, '/');
 
+  const dataFiles = uploads.filter(u => !isImageFile(u.original_name));
+  const imageFiles = uploads.filter(u => isImageFile(u.original_name));
+
   const lines = [
     '',
     '## User Uploaded Files',
     `The user has uploaded ${uploads.length} file(s) for analysis. These files are READ-ONLY.`,
     `Upload directory (absolute): ${uploadDir}`,
     `Upload directory (relative from your cwd): ${relUploadDir}`,
-    '',
-    '| Original Name | Type | Size | Relative Path |',
-    '|---|---|---|---|',
   ];
 
-  for (const u of uploads) {
-    const relPath = path.relative(sandboxPath, path.join(config.workspaceRoot, u.storage_path)).replace(/\\/g, '/');
-    const size = u.file_size < 1024 ? `${u.file_size} B`
-      : u.file_size < 1024 * 1024 ? `${(u.file_size / 1024).toFixed(1)} KB`
-      : `${(u.file_size / (1024 * 1024)).toFixed(1)} MB`;
-    lines.push(`| ${u.original_name} | ${u.file_type.toUpperCase()} | ${size} | ${relPath} |`);
+  if (dataFiles.length > 0) {
+    lines.push(
+      '',
+      '### Data Files',
+      '| Original Name | Type | Size | Relative Path |',
+      '|---|---|---|---|',
+    );
+    for (const u of dataFiles) {
+      const relPath = path.relative(sandboxPath, path.join(config.workspaceRoot, u.storage_path)).replace(/\\/g, '/');
+      const size = formatSize(u.file_size);
+      lines.push(`| ${u.original_name} | ${u.file_type.toUpperCase()} | ${size} | ${relPath} |`);
+    }
+    lines.push('', 'To read data files: `cat "' + relUploadDir + '/filename"` or use appropriate parsing code.');
   }
 
-  lines.push('');
-  lines.push('To read a file: `cat "' + relUploadDir + '/filename"` or use appropriate parsing code.');
-  lines.push('IMPORTANT: These files are READ-ONLY. Do NOT modify or delete uploaded files.');
+  if (imageFiles.length > 0) {
+    lines.push(
+      '',
+      '### Image Files',
+      '| Original Name | Type | Size | Relative Path |',
+      '|---|---|---|---|',
+    );
+    for (const u of imageFiles) {
+      const relPath = path.relative(sandboxPath, path.join(config.workspaceRoot, u.storage_path)).replace(/\\/g, '/');
+      const size = formatSize(u.file_size);
+      lines.push(`| ${u.original_name} | ${u.file_type.toUpperCase()} | ${size} | ${relPath} |`);
+    }
+    lines.push(
+      '',
+      'To view image files: Use the **Read** tool with the absolute file path. The Read tool supports multimodal vision and can see image contents directly.',
+      `Example: Read the file "${uploadDir}/${imageFiles[0].original_name}" to view the image.`,
+      'Do NOT use \`cat\` for image files — it will output binary garbage.',
+    );
+  }
+
+  lines.push('', 'IMPORTANT: These files are READ-ONLY. Do NOT modify or delete uploaded files.');
 
   return lines.join('\n');
 }
@@ -94,12 +131,6 @@ interface GeneratedFileRow {
   file_path: string;
   file_type: string;
   file_size: number;
-}
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /**
@@ -135,34 +166,84 @@ export async function getConversationFilesForPrompt(
     const uploadDir = path.join(config.workspaceRoot, userId, '_uploads').replace(/\\/g, '/');
     const relUploadDir = path.relative(sandboxPath, path.join(config.workspaceRoot, userId, '_uploads')).replace(/\\/g, '/');
 
+    const dataUploads = uploads.filter(u => !isImageFile(u.original_name));
+    const imageUploads = uploads.filter(u => isImageFile(u.original_name));
+
     lines.push(
       '## User Uploaded Files (Entire Conversation)',
       `${uploads.length} file(s) uploaded throughout this conversation. These are READ-ONLY.`,
       `Upload directory (relative from your cwd): ${relUploadDir}`,
-      '',
-      '| Original Name | Type | Size | Relative Path |',
-      '|---|---|---|---|',
     );
-    for (const u of uploads) {
-      const relPath = path.relative(sandboxPath, path.join(config.workspaceRoot, u.storage_path)).replace(/\\/g, '/');
-      lines.push(`| ${u.original_name} | ${u.file_type.toUpperCase()} | ${formatSize(u.file_size)} | ${relPath} |`);
+
+    if (dataUploads.length > 0) {
+      lines.push(
+        '',
+        '### Data Files',
+        '| Original Name | Type | Size | Relative Path |',
+        '|---|---|---|---|',
+      );
+      for (const u of dataUploads) {
+        const relPath = path.relative(sandboxPath, path.join(config.workspaceRoot, u.storage_path)).replace(/\\/g, '/');
+        lines.push(`| ${u.original_name} | ${u.file_type.toUpperCase()} | ${formatSize(u.file_size)} | ${relPath} |`);
+      }
+      lines.push('', `To read data files: \`cat "${relUploadDir}/filename"\` or use appropriate parsing code.`);
     }
-    lines.push('', `To read: \`cat "${relUploadDir}/filename"\` or use appropriate parsing code.`);
+
+    if (imageUploads.length > 0) {
+      lines.push(
+        '',
+        '### Image Files',
+        '| Original Name | Type | Size | Relative Path |',
+        '|---|---|---|---|',
+      );
+      for (const u of imageUploads) {
+        const relPath = path.relative(sandboxPath, path.join(config.workspaceRoot, u.storage_path)).replace(/\\/g, '/');
+        lines.push(`| ${u.original_name} | ${u.file_type.toUpperCase()} | ${formatSize(u.file_size)} | ${relPath} |`);
+      }
+      lines.push(
+        '',
+        'To view image files: Use the **Read** tool with the absolute file path. The Read tool supports multimodal vision and can see image contents directly.',
+        `Example: Read the file "${uploadDir}/${imageUploads[0].original_name}" to view the image.`,
+        'Do NOT use `cat` for image files — it will output binary garbage.',
+      );
+    }
   }
 
   // Generated files section
   if (generated.length > 0) {
+    const dataGenerated = generated.filter(g => !isImageFile(g.filename));
+    const imageGenerated = generated.filter(g => isImageFile(g.filename));
+
     lines.push(
       '',
       '## Generated Files in This Conversation',
       `${generated.length} file(s) generated by AI agents. These are READ-ONLY.`,
-      '',
-      '| Filename | Type | Size | Relative Path |',
-      '|---|---|---|---|',
     );
-    for (const g of generated) {
-      const relPath = path.relative(sandboxPath, path.join(config.workspaceRoot, g.file_path)).replace(/\\/g, '/');
-      lines.push(`| ${g.filename} | ${g.file_type.toUpperCase()} | ${formatSize(g.file_size)} | ${relPath} |`);
+
+    if (dataGenerated.length > 0) {
+      lines.push(
+        '',
+        '| Filename | Type | Size | Relative Path |',
+        '|---|---|---|---|',
+      );
+      for (const g of dataGenerated) {
+        const relPath = path.relative(sandboxPath, path.join(config.workspaceRoot, g.file_path)).replace(/\\/g, '/');
+        lines.push(`| ${g.filename} | ${g.file_type.toUpperCase()} | ${formatSize(g.file_size)} | ${relPath} |`);
+      }
+    }
+
+    if (imageGenerated.length > 0) {
+      lines.push(
+        '',
+        '### Generated Image Files',
+        '| Filename | Type | Size | Relative Path |',
+        '|---|---|---|---|',
+      );
+      for (const g of imageGenerated) {
+        const relPath = path.relative(sandboxPath, path.join(config.workspaceRoot, g.file_path)).replace(/\\/g, '/');
+        lines.push(`| ${g.filename} | ${g.file_type.toUpperCase()} | ${formatSize(g.file_size)} | ${relPath} |`);
+      }
+      lines.push('', 'To view generated image files: Use the **Read** tool with the absolute file path.');
     }
   }
 
