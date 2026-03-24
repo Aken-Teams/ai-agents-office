@@ -9,6 +9,19 @@
 // @ts-ignore -- pdfkit lacks type declarations
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ── CJK Font Registration ────────────────────────────────────
+const __filename_ = fileURLToPath(import.meta.url);
+const __dirname_ = path.dirname(__filename_);
+const CJK_FONT_PATH = path.join(__dirname_, '../../assets/fonts/NotoSansSC-VariableFont.ttf');
+const hasCjkFont = fs.existsSync(CJK_FONT_PATH);
+
+// Detect if text contains CJK characters
+function hasCjkChars(text: string): boolean {
+  return /[\u4e00-\u9fff\u3400-\u4dbf\u3000-\u303f\uff00-\uffef]/.test(text);
+}
 
 // ── Style Presets ──────────────────────────────────────────────
 interface StylePreset {
@@ -112,6 +125,29 @@ async function generatePdf(inputPath: string, outputPath: string) {
       },
     });
 
+    // Register CJK font if available
+    if (hasCjkFont) {
+      doc.registerFont('NotoSansSC', CJK_FONT_PATH);
+      doc.registerFont('NotoSansSC-Bold', CJK_FONT_PATH);
+    }
+
+    // Check if any content has CJK characters → use CJK fonts throughout
+    const allText = [input.title, input.author || '', ...input.sections.flatMap(sec =>
+      [sec.heading || '', ...(sec.paragraphs || []), ...(sec.bullets || [])]
+    )].join('');
+    const needsCjk = hasCjkFont && hasCjkChars(allText);
+
+    // Override fonts to CJK if needed
+    const fonts = needsCjk ? {
+      title: 'NotoSansSC-Bold',
+      heading: 'NotoSansSC-Bold',
+      body: 'NotoSansSC',
+    } : {
+      title: s.titleFont,
+      heading: s.headingFont,
+      body: s.bodyFont,
+    };
+
     const stream = fs.createWriteStream(outputPath);
     doc.pipe(stream);
 
@@ -126,7 +162,7 @@ async function generatePdf(inputPath: string, outputPath: string) {
 
     // Title
     if (s.titlePageBanner) doc.moveDown(1);
-    doc.fontSize(s.titleSize).font(s.titleFont).fillColor(s.titleColor)
+    doc.fontSize(s.titleSize).font(fonts.title).fillColor(s.titleColor)
       .text(input.title, { align: s.titleAlign });
 
     // Accent line under title
@@ -149,7 +185,7 @@ async function generatePdf(inputPath: string, outputPath: string) {
     // Author line
     if (input.author) {
       doc.moveDown(0.8);
-      doc.fontSize(s.bodySize + 1).font(s.bodyFont).fillColor(s.accentColor)
+      doc.fontSize(s.bodySize + 1).font(fonts.body).fillColor(s.accentColor)
         .text(input.author, { align: s.titleAlign });
     }
 
@@ -166,7 +202,7 @@ async function generatePdf(inputPath: string, outputPath: string) {
           doc.restore();
         }
 
-        doc.fontSize(s.headingSize).font(s.headingFont).fillColor(s.headingColor)
+        doc.fontSize(s.headingSize).font(fonts.heading).fillColor(s.headingColor)
           .text(section.heading);
 
         // Header rule
@@ -186,7 +222,7 @@ async function generatePdf(inputPath: string, outputPath: string) {
       }
 
       if (section.paragraphs) {
-        doc.fontSize(s.bodySize).font(s.bodyFont).fillColor(s.bodyColor);
+        doc.fontSize(s.bodySize).font(fonts.body).fillColor(s.bodyColor);
         for (const para of section.paragraphs) {
           doc.text(para, { align: 'justify', lineGap: s.lineGap });
           doc.moveDown(s.paragraphGap / 10);
@@ -194,7 +230,7 @@ async function generatePdf(inputPath: string, outputPath: string) {
       }
 
       if (section.bullets) {
-        doc.fontSize(s.bodySize).font(s.bodyFont).fillColor(s.bodyColor);
+        doc.fontSize(s.bodySize).font(fonts.body).fillColor(s.bodyColor);
         for (const bullet of section.bullets) {
           // Colored bullet dot
           const bulletY = doc.y + s.bodySize * 0.35;
@@ -227,7 +263,7 @@ async function generatePdf(inputPath: string, outputPath: string) {
           .opacity(0.3)
           .stroke();
         // Page number
-        doc.fontSize(8).font(s.bodyFont).fillColor(s.accentColor)
+        doc.fontSize(8).font(fonts.body).fillColor(s.accentColor)
           .text(
             `${i + 1}`,
             s.margins.left,

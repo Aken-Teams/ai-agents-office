@@ -1616,9 +1616,12 @@ li { word-wrap: break-word; overflow-wrap: break-word; }
 .diagram-container svg { width: 100%; min-height: 360px; height: auto; }
 
 /* ── Mindmap (Markmap) ── */
-.mindmap-wrapper { width: 100%; display: flex; flex-direction: column; border-radius: 16px; overflow: hidden; border: 1px solid var(--card-border); background: var(--card-bg); }
+.mindmap-wrapper { width: 100%; display: flex; flex-direction: column; border-radius: 16px; overflow: hidden; border: 1px solid var(--card-border); background: ${s.isDark ? '#1a1a2e' : 'var(--card-bg)'}; }
 .mindmap-container { width: 100%; height: 520px; display: flex; justify-content: center; position: relative; }
 .mindmap-svg { width: 100%; height: 100%; }
+.mindmap-svg foreignObject > div { color: ${s.isDark ? '#e0e0f0' : '#333'} !important; }
+.mindmap-svg foreignObject div, .mindmap-svg foreignObject span { color: ${s.isDark ? '#e0e0f0' : '#333'} !important; }
+${s.isDark ? `.mindmap-svg > g > rect, .mindmap-svg > rect { fill: transparent !important; }` : ''}
 .mindmap-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-top: 1px solid var(--card-border); background: var(--card-bg); }
 .mindmap-toolbar button { display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; font-size: 12px; font-weight: 600; color: var(--accent); background: transparent; border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
 .mindmap-toolbar button:hover { background: ${s.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'}; border-color: var(--accent); }
@@ -1955,6 +1958,10 @@ function generateHtml(input: SlidesInput): string {
       var result = transformer.transform(cfg.code);
       // Start collapsed at depth 1 — user expands manually
       foldTree(result.root, 0, 1);
+      ${s.isDark ? `// Inject dark-theme styles directly into the SVG
+      var svgStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+      svgStyle.textContent = 'foreignObject div, foreignObject span { color: #e0e0f0 !important; } text { fill: #e0e0f0 !important; }';
+      el.insertBefore(svgStyle, el.firstChild);` : ''}
       var mm = markmap.Markmap.create(el, {
         autoFit: false,
         duration: 300,
