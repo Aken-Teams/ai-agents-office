@@ -293,6 +293,18 @@ function parseAskUserOptions(rawInput: string | undefined): { question: string; 
   }
 }
 
+/** Parse [CHOICES]...[/CHOICES] blocks from assistant messages */
+function parseChoices(content: string): { text: string; choices: string[] } {
+  const match = content.match(/\[CHOICES\]\s*([\s\S]*?)\s*\[\/CHOICES\]/);
+  if (!match) return { text: content, choices: [] };
+  const choices = match[1]
+    .split('\n')
+    .map(line => line.replace(/^[-•*]\s*/, '').trim())
+    .filter(Boolean);
+  const text = content.replace(/\[CHOICES\][\s\S]*?\[\/CHOICES\]/, '').trim();
+  return { text, choices };
+}
+
 /** Get tool icon (material symbol name) and label */
 function getToolInfo(tool: string, t: (key: any, params?: Record<string, string | number>) => string): { icon: string; label: string } {
   if (tool.includes(':')) {
@@ -1212,7 +1224,7 @@ function ChatContent() {
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 md:px-8 py-4 md:py-8 space-y-4 md:space-y-8">
-            {messages.map(msg => {
+            {messages.map((msg, idx) => {
               const sources = msg.role === 'assistant' ? extractSources(msg.content) : [];
               return (
                 <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : 'flex gap-2 md:gap-4'}>
@@ -1235,9 +1247,30 @@ function ChatContent() {
                       </>
                     ) : (
                       <div className="bg-surface-container-low px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tl-sm border border-outline-variant/10 overflow-hidden">
-                        <div className="chat-markdown text-sm leading-relaxed text-on-surface-variant">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{msg.content}</ReactMarkdown>
-                        </div>
+                        {(() => {
+                          const { text: msgText, choices } = parseChoices(msg.content);
+                          const isLatestMsg = idx === messages.length - 1;
+                          return (
+                            <>
+                              <div className="chat-markdown text-sm leading-relaxed text-on-surface-variant">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{msgText}</ReactMarkdown>
+                              </div>
+                              {choices.length > 0 && isLatestMsg && !streaming && (
+                                <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-outline-variant/10">
+                                  {choices.map((choice, ci) => (
+                                    <button
+                                      key={ci}
+                                      onClick={() => sendMessage(choice)}
+                                      className="px-3.5 py-2 text-sm rounded-lg border border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 hover:border-primary/50 active:bg-primary/20 transition-colors cursor-pointer"
+                                    >
+                                      {choice}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
                         {sources.length > 0 && (
                           <details className="mt-2 md:mt-3 border-t border-outline-variant/10 pt-2">
                             <summary className="text-xs md:text-sm text-primary cursor-pointer font-bold uppercase tracking-wider">
