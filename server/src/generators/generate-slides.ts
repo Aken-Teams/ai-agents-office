@@ -350,6 +350,9 @@ interface SlideData {
   description?: string;
   highlights?: string[];
   sideImage?: string;
+  // Card-style bullets
+  cardStyle?: boolean;
+  bulletIcons?: string[];
 }
 
 interface SlidesInput {
@@ -463,6 +466,19 @@ function renderCompoundLayout(
 
   return `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
   <div class="slide-layout ${layout}">${gridHtml}</div>`;
+}
+
+// ── Side Image Wrapper (1/3 image + 2/3 content) ──────────────
+
+function wrapWithSideImage(contentHtml: string, slide: SlideData): string {
+  if (!slide.sideImage || slide.layout) return contentHtml;
+  const imgPos = slide.imagePosition || 'right';
+  const imgBlock = `<div class="side-image-panel"><img src="${escapeHtml(slide.sideImage)}" loading="lazy" alt="" /></div>`;
+  const contentBlock = `<div class="side-content-panel">${contentHtml}</div>`;
+  if (imgPos === 'left') {
+    return `<div class="side-image-layout img-left">${imgBlock}${contentBlock}</div>`;
+  }
+  return `<div class="side-image-layout">${contentBlock}${imgBlock}</div>`;
 }
 
 // ── ECharts Option Builder ─────────────────────────────────────
@@ -779,15 +795,25 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
 
     case 'content': {
       let body = '';
-      if (slide.bullets) {
+      if (slide.bullets && slide.cardStyle) {
+        const icons = slide.bulletIcons || [];
+        body = `<div class="bullet-cards">${slide.bullets.map((b, i) => {
+          const icon = icons[i] || 'arrow_right';
+          return `<div class="bullet-card glass-card"${aa(i)}>
+  <div class="bullet-card-icon">${renderIcon(icon)}</div>
+  <div class="bullet-card-text">${escapeHtml(b)}</div>
+</div>`;
+        }).join('')}</div>`;
+      } else if (slide.bullets) {
         body = `<ul class="bullet-list">${slide.bullets.map((b, i) =>
           `<li${aa(i)}><span class="bullet-icon">${renderIcon('arrow_right', 'bullet-sym')}</span><span>${escapeHtml(b)}</span></li>`
         ).join('')}</ul>`;
       } else if (slide.text) {
         body = `<p class="body-text">${escapeHtml(slide.text)}</p>`;
       }
-      return wrapSlide('content', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  ${body}`, slide, idx);
+      const contentInner = `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  ${body}`;
+      return wrapSlide('content', wrapWithSideImage(contentInner, slide), slide, idx);
     }
 
     case 'two-column': {
@@ -802,9 +828,11 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
   <div class="slide-columns">${slide.left ? renderCol(slide.left) : ''}${slide.right ? renderCol(slide.right) : ''}</div>`, slide, idx);
     }
 
-    case 'code':
-      return wrapSlide('code', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  <pre class="code-block"><code class="language-${slide.language || 'plaintext'}">${escapeHtml(slide.code || '')}</code></pre>`, slide, idx);
+    case 'code': {
+      const codeInner = `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  <pre class="code-block"><code class="language-${slide.language || 'plaintext'}">${escapeHtml(slide.code || '')}</code></pre>`;
+      return wrapSlide('code', wrapWithSideImage(codeInner, slide), slide, idx);
+    }
 
     case 'image':
       return wrapSlide('image', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
@@ -838,8 +866,9 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
       const visualHtml = `<div class="stats-grid">${cards}</div>`;
       const compound = renderCompoundLayout(slide, s, visualHtml);
       if (compound) return wrapSlide('stats', compound, slide, idx);
-      return wrapSlide('stats', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  ${visualHtml}`, slide, idx);
+      const statsInner = `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  ${visualHtml}`;
+      return wrapSlide('stats', wrapWithSideImage(statsInner, slide), slide, idx);
     }
 
     case 'icon-grid': {
@@ -858,8 +887,9 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
       const visualHtml = `<div class="icon-grid cols-${cols}">${cards}</div>`;
       const compound = renderCompoundLayout(slide, s, visualHtml);
       if (compound) return wrapSlide('icon-grid', compound, slide, idx);
-      return wrapSlide('icon-grid', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  ${visualHtml}`, slide, idx);
+      const gridInner = `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  ${visualHtml}`;
+      return wrapSlide('icon-grid', wrapWithSideImage(gridInner, slide), slide, idx);
     }
 
     case 'timeline': {
@@ -881,12 +911,14 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
   ${visualHtml}`, slide, idx);
     }
 
-    case 'quote':
-      return wrapSlide('quote', `<div class="quote-block">
+    case 'quote': {
+      const quoteInner = `<div class="quote-block">
     <div class="quote-mark">\u201C</div>
     <blockquote class="quote-text">${escapeHtml(slide.quote || slide.text || '')}</blockquote>
     ${slide.attribution ? `<cite class="quote-author">\u2014 ${escapeHtml(slide.attribution)}</cite>` : ''}
-  </div>`, slide, idx);
+  </div>`;
+      return wrapSlide('quote', wrapWithSideImage(quoteInner, slide), slide, idx);
+    }
 
     case 'chart': {
       echartsUsed = true;
@@ -939,8 +971,9 @@ function renderSlide(rawSlide: SlideData, s: StylePreset, idx: number): string {
       const visualHtml = `<div class="process-steps"><div class="process-connector"></div>${stepsHtml}</div>`;
       const compound = renderCompoundLayout(slide, s, visualHtml);
       if (compound) return wrapSlide('process', compound, slide, idx);
-      return wrapSlide('process', `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
-  ${visualHtml}`, slide, idx);
+      const processInner = `${slide.title ? `<h2 class="slide-title">${escapeHtml(slide.title)}</h2>` : ''}
+  ${visualHtml}`;
+      return wrapSlide('process', wrapWithSideImage(processInner, slide), slide, idx);
     }
 
     case 'gallery': {
@@ -1255,6 +1288,13 @@ h4 { font-size: clamp(0.9em, 1.8vw, 1.1em); font-weight: 600; }
 .bullet-list li:hover { background: ${s.isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'}; padding-left: 1em; }
 .bullet-icon { flex-shrink: 0; }
 .bullet-sym { font-size: 1em; color: var(--accent); }
+
+/* Card-style bullets */
+.bullet-cards { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.bullet-card { display: flex; align-items: center; gap: 16px; padding: 18px 24px; border-left: 4px solid; border-image: linear-gradient(180deg, var(--accent), var(--accent2)) 1; transition: transform 0.25s cubic-bezier(0.22,1,0.36,1), box-shadow 0.25s ease; }
+.bullet-card:hover { transform: translateX(6px); box-shadow: 0 4px 20px ${s.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)'}; }
+.bullet-card-icon .material-symbols-outlined { font-size: 26px; color: var(--accent); }
+.bullet-card-text { font-size: 1.1rem; color: var(--body-color); line-height: 1.5; }
 ul, ol { overflow: hidden; }
 li { word-wrap: break-word; overflow-wrap: break-word; }
 
@@ -1319,7 +1359,7 @@ li { word-wrap: break-word; overflow-wrap: break-word; }
 .cols-2 { grid-template-columns: repeat(2, 1fr); }
 .cols-3 { grid-template-columns: repeat(3, 1fr); }
 .cols-4 { grid-template-columns: repeat(4, 1fr); }
-.icon-card { text-align: center; padding: 1.4em 1em; }
+.icon-card { text-align: left; padding: 1.6em 1.4em; }
 .icon-card-icon .material-symbols-outlined {
   font-size: 30px;
   color: #fff;
@@ -1337,8 +1377,8 @@ li { word-wrap: break-word; overflow-wrap: break-word; }
   box-shadow: 0 8px 25px ${s.accentColor}40;
 }
 .icon-card-img { width: 52px; height: 52px; border-radius: 14px; object-fit: cover; margin: 0 auto 0.4em; display: block; }
-.icon-card-title { font-size: 16px; color: var(--heading-color); margin: 0.5em 0 0.2em; font-weight: 700; }
-.icon-card-desc { font-size: 13px; color: var(--body-color); margin: 0; line-height: 1.5; }
+.icon-card-title { font-size: 1.1rem; color: var(--heading-color); margin: 0.5em 0 0.3em; font-weight: 700; }
+.icon-card-desc { font-size: 0.95rem; color: var(--body-color); margin: 0; line-height: 1.55; opacity: 0.85; }
 
 /* ── Timeline (horizontal) — enhanced with gradient line + card content ── */
 .timeline { position: relative; width: 100%; margin-top: 1em; }
@@ -1395,9 +1435,15 @@ li { word-wrap: break-word; overflow-wrap: break-word; }
 /* ── Image + Text ── */
 .image-text-layout { display: flex; gap: 2.5em; align-items: center; width: 100%; }
 .image-text-layout.img-right { flex-direction: row-reverse; }
-.it-image { flex: 1; min-width: 0; }
+.it-image { flex: 2; min-width: 0; }
 .it-image img { width: 100%; height: auto; max-height: 400px; object-fit: cover; border-radius: 20px; box-shadow: 0 12px 40px rgba(0,0,0,${s.isDark ? '0.3' : '0.1'}); }
-.it-text { flex: 1; min-width: 0; }
+.it-text { flex: 5; min-width: 0; }
+
+/* Side image layout — 1/3 image + 2/3 content for any slide type */
+.side-image-layout { display: grid; grid-template-columns: 1fr 33%; gap: 40px; width: 100%; align-items: center; }
+.side-image-layout.img-left { grid-template-columns: 33% 1fr; }
+.side-image-panel img { width: 100%; height: auto; max-height: 70vh; object-fit: contain; border-radius: 16px; }
+.side-content-panel { min-width: 0; }
 
 /* ── Profile — gradient avatar ring + pill links ── */
 .profile-layout { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 0.4em; }
@@ -1503,8 +1549,9 @@ li { word-wrap: break-word; overflow-wrap: break-word; }
 
 /* ── Compound Layout System (no fixed height — content flows naturally) ── */
 .slide-layout { display: grid; gap: 40px; width: 100%; align-items: center; }
-.slide-layout.split-left { grid-template-columns: 50% 1fr; }
-.slide-layout.split-right { grid-template-columns: 1fr 50%; }
+.slide-layout.split-left { grid-template-columns: 38% 1fr; }
+.slide-layout.split-right { grid-template-columns: 1fr 38%; }
+.slide--title .slide-layout.split-right { grid-template-columns: 1fr 35%; }
 .slide-layout.top-bottom { grid-template-columns: 1fr; }
 
 /* Text block — left accent border */
@@ -1609,6 +1656,7 @@ li { word-wrap: break-word; overflow-wrap: break-word; }
   .slide-inner { padding: 40px 24px; }
   h1 { font-size: 1.8em; }
   .slide-columns, .image-text-layout, .image-text-layout.img-right { flex-direction: column; }
+  .side-image-layout, .side-image-layout.img-left { grid-template-columns: 1fr; }
   .stats-grid, .dashboard-kpis { flex-direction: column; align-items: center; }
   .icon-grid { grid-template-columns: repeat(2, 1fr) !important; }
   .tl-items { flex-direction: column; }
