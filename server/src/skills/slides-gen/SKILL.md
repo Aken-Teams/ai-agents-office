@@ -162,34 +162,150 @@ Optionally add `"bulletIcons"` array for icon-enhanced cards.
 **Do NOT use for:** sequential steps (use `process`), simple lists, or slides that already have visual elements.
 
 ### Rule 15: Use Flat Design Illustrations (Storyset Preferred)
-When a slide uses `sideImage`, search for modern flat-style vector illustrations.
+When a slide uses `sideImage`, use Storyset CDN illustrations. Pick from the **built-in library** below by topic. If no match, use WebSearch fallback.
 
-**Storyset (preferred)** — rich, colorful SVG illustrations by Freepik:
-- Search: `site:storyset.com {topic keywords}` to find relevant illustration pages
-- CDN URL format: `https://stories.freepiklabs.com/storage/{ID}/{filename}.svg`
-- These URLs work directly as `<img src>` — no download needed
-- Example URLs by category:
-  - Business: `https://stories.freepiklabs.com/storage/13368/299-Business-plan_Artboard-1.svg`
-  - Technology: `https://stories.freepiklabs.com/storage/2522/257-Programming_Artboard-1.svg`
-  - Teamwork: `https://stories.freepiklabs.com/storage/16531/470-Creative-team_Artboard-1.svg`
-  - Data: `https://stories.freepiklabs.com/storage/35149/Data-Extraction_Artboard-1-copy.svg`
-  - Security: `https://stories.freepiklabs.com/storage/27289/Secure-data_Artboard-1.svg`
-  - Creativity: `https://stories.freepiklabs.com/storage/2104/217-Creativity_Artboard-1.svg`
-  - Server/Infra: `https://stories.freepiklabs.com/storage/1434/Server-01.svg`
-  - Music: `https://stories.freepiklabs.com/storage/4440/music-rafiki_Artboard-1.svg`
+**Built-in Storyset Library** (pick by topic — use URL directly as `sideImage`):
+
+**AI & Automation:**
+| Topic | URL |
+|-------|-----|
+| Artificial Intelligence | `https://stories.freepiklabs.com/storage/1854/143-Artificial-intelligence_Artboard-1.svg` |
+| AI (alt) | `https://stories.freepiklabs.com/storage/1932/3-Artificial-intelligence_Mesa-de-trabajo-1.svg` |
+| Chat Bot | `https://stories.freepiklabs.com/storage/38752/Chat-bot_Artboard-1.svg` |
+| Chat Bot (alt) | `https://stories.freepiklabs.com/storage/37362/Chat-Bot-01.svg` |
+| Robotics | `https://stories.freepiklabs.com/storage/8225/362-Robotics_Artboard-1.svg` |
+| Robot Face | `https://stories.freepiklabs.com/storage/56212/Robot-face_Artboard-1.svg` |
+| Competitive Intelligence | `https://stories.freepiklabs.com/storage/51074/Competitive-intelligence_Artboard-1.svg` |
+
+**Enterprise & Business:**
+| Topic | URL |
+|-------|-----|
+| Business Meeting | `https://stories.freepiklabs.com/storage/1864/Meeting-01.svg` |
+| Meeting (alt) | `https://stories.freepiklabs.com/storage/2180/5-Meeting_Mesa-de-trabajo-1.svg` |
+| Pitch Meeting | `https://stories.freepiklabs.com/storage/41303/Pitch-meeting-01.svg` |
+| Business Deal | `https://stories.freepiklabs.com/storage/2323/240-Business-deal_Artboard-1.svg` |
+| Signing Contract | `https://stories.freepiklabs.com/storage/35152/Signing-a-contract_Artboard-1.svg` |
+| Business Plan | `https://stories.freepiklabs.com/storage/13368/299-Business-plan_Artboard-1.svg` |
+| Office Work | `https://stories.freepiklabs.com/storage/2562/273-On-the-office_Artboard-1.svg` |
+| Office Management | `https://stories.freepiklabs.com/storage/61668/Office-Management_Artboard-1-copy.svg` |
+| Company | `https://stories.freepiklabs.com/storage/16093/Company-01.svg` |
+| Product Presentation | `https://stories.freepiklabs.com/storage/56387/Product-Presentation_Artboard-1.svg` |
+| Product Iteration | `https://stories.freepiklabs.com/storage/40236/408-Product-iteration_Artboard-1.svg` |
+| Product Launch | `https://stories.freepiklabs.com/storage/6323/Maker-launch-(1)-Pana.svg` |
+
+**Digital & Transformation:**
+| Topic | URL |
+|-------|-----|
+| Digital Transformation | `https://stories.freepiklabs.com/storage/58518/Digital-transformation_Artboard-1.svg` |
+| Digital Transformation (alt) | `https://stories.freepiklabs.com/storage/57391/Digital-Transformation_Mesa-de-trabajo-1.svg` |
+| Innovation | `https://stories.freepiklabs.com/storage/40602/Innovation-(1)_Artboard-1.svg` |
+| Innovation (alt) | `https://stories.freepiklabs.com/storage/41059/Innovation-01.svg` |
+| Light Bulb / Idea | `https://stories.freepiklabs.com/storage/31857/Light-bulb-01.svg` |
+| Visionary Technology | `https://stories.freepiklabs.com/storage/34704/Visionary-technology-01.svg` |
+
+**Cloud & Infrastructure:**
+| Topic | URL |
+|-------|-----|
+| Server | `https://stories.freepiklabs.com/storage/1434/Server-01.svg` |
+| Server Status | `https://stories.freepiklabs.com/storage/2326/243-Server-status_Artboard-1.svg` |
+| Real-time Sync | `https://stories.freepiklabs.com/storage/1529/44-Real-time-sync_Artboard-1.svg` |
+| Connected World | `https://stories.freepiklabs.com/storage/30602/Connected-World_Mesa-de-trabajo-1.svg` |
+
+**CRM & Customer Service:**
+| Topic | URL |
+|-------|-----|
+| Call Center | `https://stories.freepiklabs.com/storage/13583/410-Call-center_Artboard-1.svg` |
+| CRM | `https://stories.freepiklabs.com/storage/51425/Customer-relationship-management_Artboard-1.svg` |
+| Customer Survey | `https://stories.freepiklabs.com/storage/1531/46-Customer-survey_Artboard-1.svg` |
+| Contact Us | `https://stories.freepiklabs.com/storage/15488/Contact-us-01.svg` |
+
+**Project & Risk Management:**
+| Topic | URL |
+|-------|-----|
+| Scrum Board | `https://stories.freepiklabs.com/storage/6239/Scrum-board-01.svg` |
+| Risk Management | `https://stories.freepiklabs.com/storage/48439/Risk-management_Artboard-1.svg` |
+| Time Management | `https://stories.freepiklabs.com/storage/2052/196-Time-management_Artboard-1.svg` |
+| Taking Notes | `https://stories.freepiklabs.com/storage/2356/Taking-notes--01.svg` |
+
+**Remote Work & Conference:**
+| Topic | URL |
+|-------|-----|
+| Video Call | `https://stories.freepiklabs.com/storage/15955/Video-call_Artboard-1.svg` |
+| Working Remotely | `https://stories.freepiklabs.com/storage/16435/Working-remotely_Artboard-1.svg` |
+| Remote Meeting | `https://stories.freepiklabs.com/storage/33306/Remote-meeting_Artboard-1.svg` |
+| Conference | `https://stories.freepiklabs.com/storage/13938/Conference_Artboard-1.svg` |
+| Conference Speaker | `https://stories.freepiklabs.com/storage/13940/Conference-Speaker_Artboard-1.svg` |
+| Webinar | `https://stories.freepiklabs.com/storage/34564/Webinar-01.svg` |
+
+**Data & Dashboard:**
+| Topic | URL |
+|-------|-----|
+| Dashboard | `https://stories.freepiklabs.com/storage/4579/296-Dashboard_Artboard-1.svg` |
+| Data Report | `https://stories.freepiklabs.com/storage/1895/Data-report-01.svg` |
+| Data Analysis | `https://stories.freepiklabs.com/storage/54834/Data-Analysis_Artboard-1.svg` |
+| Analytics | `https://stories.freepiklabs.com/storage/1259/Analytics-01.svg` |
+| Visual Data | `https://stories.freepiklabs.com/storage/14357/visual-data_Artboard-1.svg` |
+| Data Extraction | `https://stories.freepiklabs.com/storage/35149/Data-Extraction_Artboard-1-copy.svg` |
+| Investment Data | `https://stories.freepiklabs.com/storage/36543/Investment-Data_Mesa-de-trabajo-1.svg` |
+
+**Teamwork & Culture:**
+| Topic | URL |
+|-------|-----|
+| Teamwork | `https://stories.freepiklabs.com/storage/16527/466-Team-work_Artboard-1.svg` |
+| Collaboration | `https://stories.freepiklabs.com/storage/1208/16-Collaboration_Artboard-1.svg` |
+| Creative Team | `https://stories.freepiklabs.com/storage/28381/Creative-team-01.svg` |
+| Team Goals | `https://stories.freepiklabs.com/storage/36874/Team-goals-01.svg` |
+| Team Spirit | `https://stories.freepiklabs.com/storage/4620/Team-spirit-01.svg` |
+
+**Finance & Ecommerce:**
+| Topic | URL |
+|-------|-----|
+| Finance | `https://stories.freepiklabs.com/storage/4333/finance_Artboard-1.svg` |
+| Saving Money | `https://stories.freepiklabs.com/storage/54848/Saving-money_Artboard-1.svg` |
+| Ecommerce Campaign | `https://stories.freepiklabs.com/storage/56400/Ecommerce-Campaign_Artboard-1.svg` |
+| Ecommerce Web Page | `https://stories.freepiklabs.com/storage/56402/Ecommerce-web-page_Artboard-1.svg` |
+
+**Growth & Marketing:**
+| Topic | URL |
+|-------|-----|
+| Startup Life | `https://stories.freepiklabs.com/storage/4534/221-Startup-life_Artboard-1.svg` |
+| Growth Curve | `https://stories.freepiklabs.com/storage/33307/Growth-Curve_Artboard-1-copy.svg` |
+| Business Growth | `https://stories.freepiklabs.com/storage/57455/Business-Growth_Mesa-de-trabajo-1.svg` |
+| Marketing | `https://stories.freepiklabs.com/storage/16730/Marketing_Artboard-1.svg` |
+| Social Strategy | `https://stories.freepiklabs.com/storage/1673/92-Social-strategy_Artboard-1.svg` |
+
+**Tech & Security:**
+| Topic | URL |
+|-------|-----|
+| Programming | `https://stories.freepiklabs.com/storage/2522/257-Programming_Artboard-1.svg` |
+| Coding | `https://stories.freepiklabs.com/storage/1857/147-Coding_Artboard-1.svg` |
+| Security | `https://stories.freepiklabs.com/storage/6449/331-Security_Artboard-1.svg` |
+| Secure Data | `https://stories.freepiklabs.com/storage/27289/Secure-data_Artboard-1.svg` |
+
+**Education & Presentation:**
+| Topic | URL |
+|-------|-----|
+| Learning | `https://stories.freepiklabs.com/storage/16533/472-Learning_Artboard-1.svg` |
+| Online Learning | `https://stories.freepiklabs.com/storage/34549/Online-Learning_Mesa-de-trabajo-1.svg` |
+| Presentation | `https://stories.freepiklabs.com/storage/1213/01-Presentation_Artboard-1.svg` |
+| Seminar | `https://stories.freepiklabs.com/storage/50724/Seminar-01.svg` |
+
+> Full catalog with 218 URLs across 27 categories: `client/public/storyset-library.json`
+
+**WebSearch fallback** — if no illustration above matches the topic:
+1. Search: `site:storyset.com {topic keywords}` (e.g. `site:storyset.com artificial intelligence`)
+2. Open the storyset page and find the CDN image URL
+3. CDN format: `https://stories.freepiklabs.com/storage/{ID}/{filename}.svg`
 
 **Picsum (placeholder photos)** — use for generic/thematic photography:
 - Format: `https://picsum.photos/seed/{keyword}/{width}/{height}`
 - Example: `https://picsum.photos/seed/teamwork/600/800`
 
-**Unsplash (real photos)** — use for hero backgrounds, portraits, real objects:
-- Search: `site:unsplash.com {topic keywords}`
-- Format: `https://images.unsplash.com/photo-xxx?w=800&h=600&fit=crop`
-
 **Guidelines:**
 - Prefer Storyset for decorative `sideImage` illustrations (content, process, stats slides)
-- Use picsum/Unsplash for hero backgrounds, gallery, team photos
-- Don't force illustrations on every slide — use on 2-3 key slides per deck
+- Use picsum for hero backgrounds, gallery, team photos when no specific image is needed
+- Use 2-4 illustrations per deck — don't force them on every slide
+- Vary the illustrations — don't reuse the same URL in one deck
 
 ### Rule 16: Default Quality Guarantee (When User Prompt is Vague)
 When the user gives a short or vague prompt (e.g. "make a presentation about AI", "簡報關於銷售報告"), apply these minimum quality standards automatically:

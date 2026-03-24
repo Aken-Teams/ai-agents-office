@@ -1,0 +1,281 @@
+{
+  "_description": "Storyset illustration library — curated CDN URLs for slide generation",
+  "_cdn_base": "https://stories.freepiklabs.com/storage/",
+  "_usage": "Use directly as <img src> in generated HTML slides. No download needed.",
+  "_license": "Freepik License — free for personal and commercial use with attribution",
+  "_total": "200+ illustrations across 22 categories",
+  "categories": {
+    "ai-artificial-intelligence": [
+      { "url": "https://stories.freepiklabs.com/storage/1912/Artificial-intelligence-01.svg", "label": "AI (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/1854/143-Artificial-intelligence_Artboard-1.svg", "label": "AI (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/2588/Artifctial-Intelligence-01.svg", "label": "AI (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/1932/3-Artificial-intelligence_Mesa-de-trabajo-1.svg", "label": "AI (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/16342/Artificial-intelligence-(1)_Mesa-de-trabajo-1.svg", "label": "AI (Cuate)" }
+    ],
+    "ai-chatbot-automation": [
+      { "url": "https://stories.freepiklabs.com/storage/37362/Chat-Bot-01.svg", "label": "Chat Bot (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/38752/Chat-bot_Artboard-1.svg", "label": "Chat Bot (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/38535/Chat-Bot_Mesa-de-trabajo-1.svg", "label": "Chat Bot (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/39070/Chat-bot-01.svg", "label": "Chat Bot (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/55955/Chat-bot_Mesa-de-trabajo-1.svg", "label": "Chat Bot (Cuate)" }
+    ],
+    "ai-robotics": [
+      { "url": "https://stories.freepiklabs.com/storage/6238/Robotics-(1)-01.svg", "label": "Robotics (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/8225/362-Robotics_Artboard-1.svg", "label": "Robotics (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/14328/Robotics_Mesa-de-trabajo-1.svg", "label": "Robotics (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/6216/Robotics_Mesa-de-trabajo-1.svg", "label": "Robotics (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/54884/Robot-face-01.svg", "label": "Robot Face (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/56212/Robot-face_Artboard-1.svg", "label": "Robot Face (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/55010/Robot-face-(1)-01.svg", "label": "Robot Face (Bro)" }
+    ],
+    "ai-competitive-intelligence": [
+      { "url": "https://stories.freepiklabs.com/storage/49885/Competitive-intelligence-01.svg", "label": "Competitive Intelligence (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/51074/Competitive-intelligence_Artboard-1.svg", "label": "Competitive Intelligence (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/50242/Competitive-Intelligence_Mesa-de-trabajo-1.svg", "label": "Competitive Intelligence (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/49481/Competitive-intelligence-01.svg", "label": "Competitive Intelligence (Pana)" }
+    ],
+    "business-meeting": [
+      { "url": "https://stories.freepiklabs.com/storage/1864/Meeting-01.svg", "label": "Meeting (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/1676/95-Meeting_Freepik_copy_Artboard-1.svg", "label": "Meeting (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/2180/5-Meeting_Mesa-de-trabajo-1.svg", "label": "Meeting (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/1742/Meeting-01.svg", "label": "Meeting (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/48426/Standup-meeting-01.svg", "label": "Standup Meeting (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/41303/Pitch-meeting-01.svg", "label": "Pitch Meeting (Bro)" }
+    ],
+    "business-deal-contract": [
+      { "url": "https://stories.freepiklabs.com/storage/2419/Business-deal-01.svg", "label": "Business Deal (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/2323/240-Business-deal_Artboard-1.svg", "label": "Business Deal (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/4603/Business-Deal-bro-01.svg", "label": "Business Deal (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/4604/Business-Deal-amico_Mesa-de-trabajo-1.svg", "label": "Business Deal (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/34571/Signing-a-contract-(1)-01.svg", "label": "Signing Contract (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/35152/Signing-a-contract_Artboard-1.svg", "label": "Signing Contract (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/35387/Signing-a-contract-01.svg", "label": "Signing Contract (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/35162/Signing-a-Contract-(1)_Mesa-de-trabajo-1.svg", "label": "Signing Contract (Amico)" }
+    ],
+    "business-plan": [
+      { "url": "https://stories.freepiklabs.com/storage/4558/Business-plan-01.svg", "label": "Business Plan (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/13368/299-Business-plan_Artboard-1.svg", "label": "Business Plan (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/4625/Business-Plan-(1)_Mesa-de-trabajo-1.svg", "label": "Business Plan (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/2630/Business-Plan_Mesa-de-trabajo-1.svg", "label": "Business Plan (Amico alt)" },
+      { "url": "https://stories.freepiklabs.com/storage/51069/Product-quality_Artboard-1.svg", "label": "Product Quality (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/27289/Secure-data_Artboard-1.svg", "label": "Secure Data (Rafiki)" }
+    ],
+    "cloud-server-infrastructure": [
+      { "url": "https://stories.freepiklabs.com/storage/1362/Server-01.svg", "label": "Server (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/1434/Server-01.svg", "label": "Server (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/4341/Server-01.svg", "label": "Server (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/1079/Server_Mesa-de-trabajo-1.svg", "label": "Server (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/2425/Server-status-01.svg", "label": "Server Status (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/2326/243-Server-status_Artboard-1.svg", "label": "Server Status (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/4518/Server-Status-01.svg", "label": "Server Status (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/1595/Real-time-sync-01.svg", "label": "Real-time Sync (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/1529/44-Real-time-sync_Artboard-1.svg", "label": "Real-time Sync (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/30602/Connected-World_Mesa-de-trabajo-1.svg", "label": "Connected World (Amico)" }
+    ],
+    "customer-service-crm": [
+      { "url": "https://stories.freepiklabs.com/storage/12237/Call-center-01.svg", "label": "Call Center (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/13583/410-Call-center_Artboard-1.svg", "label": "Call Center (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/13603/Call-Center-01.svg", "label": "Call Center (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/13522/Call-Center_Mesa-de-trabajo-1.svg", "label": "Call Center (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/49901/Customer-relationship-management-01.svg", "label": "CRM (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/51425/Customer-relationship-management_Artboard-1.svg", "label": "CRM (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/50217/Customer-relationship-management-01.svg", "label": "CRM (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/1531/46-Customer-survey_Artboard-1.svg", "label": "Customer Survey (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/15488/Contact-us-01.svg", "label": "Contact Us (Pana)" }
+    ],
+    "dashboard-report": [
+      { "url": "https://stories.freepiklabs.com/storage/4580/Dasboard-01.svg", "label": "Dashboard (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/4579/296-Dashboard_Artboard-1.svg", "label": "Dashboard (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/13348/dashboard.svg", "label": "Dashboard (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/4581/Dashboard_Mesa-de-trabajo-1.svg", "label": "Dashboard (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/1895/Data-report-01.svg", "label": "Data Report (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/1894/Data-Report_Mesa-de-trabajo-1.svg", "label": "Data Report (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/15265/Consulting-01.svg", "label": "Consulting (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/36543/Investment-Data_Mesa-de-trabajo-1.svg", "label": "Investment Data (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/54804/Research-Paper_Mesa-de-trabajo-1.svg", "label": "Research Paper (Amico)" }
+    ],
+    "data-analytics": [
+      { "url": "https://stories.freepiklabs.com/storage/53792/Data-Analysis_Mesa-de-trabajo-1.svg", "label": "Data Analysis (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/54834/Data-Analysis_Artboard-1.svg", "label": "Data Analysis (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/54160/Data-analysis-01.svg", "label": "Data Analysis (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/16326/Analytics_Mesa-de-trabajo-1.svg", "label": "Analytics (Cuate)" },
+      { "url": "https://stories.freepiklabs.com/storage/2188/Analytics-01.svg", "label": "Analytics (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/1259/Analytics-01.svg", "label": "Analytics (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/14427/Visual-data-(1)-01.svg", "label": "Visual Data (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/14357/visual-data_Artboard-1.svg", "label": "Visual Data (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/35149/Data-Extraction_Artboard-1-copy.svg", "label": "Data Extraction (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/34566/Data-extraction-01.svg", "label": "Data Extraction (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/2615/Site-stats_Mesa-de-trabajo-1.svg", "label": "Site Stats (Amico)" }
+    ],
+    "digital-transformation": [
+      { "url": "https://stories.freepiklabs.com/storage/57205/Digital-transformation-01.svg", "label": "Digital Transformation (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/58518/Digital-transformation_Artboard-1.svg", "label": "Digital Transformation (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/57395/Digital-transformation-(1)-01.svg", "label": "Digital Transformation (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/57391/Digital-Transformation_Mesa-de-trabajo-1.svg", "label": "Digital Transformation (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/58099/Digital-transformation_Mesa-de-trabajo-1.svg", "label": "Digital Transformation (Cuate)" },
+      { "url": "https://stories.freepiklabs.com/storage/34704/Visionary-technology-01.svg", "label": "Visionary Technology (Amico)" }
+    ],
+    "ecommerce": [
+      { "url": "https://stories.freepiklabs.com/storage/54879/Ecommerce-campaign-01.svg", "label": "Ecommerce Campaign (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/56400/Ecommerce-Campaign_Artboard-1.svg", "label": "Ecommerce Campaign (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/55005/Ecommerce-campaign-01.svg", "label": "Ecommerce Campaign (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/54881/Ecommerce-web-page-01.svg", "label": "Ecommerce Web Page (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/56402/Ecommerce-web-page_Artboard-1.svg", "label": "Ecommerce Web Page (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/55007/Ecommerce-web-page-(1)-01.svg", "label": "Ecommerce Web Page (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/16209/Payment-Information-01.svg", "label": "Payment Information (Bro)" }
+    ],
+    "education": [
+      { "url": "https://stories.freepiklabs.com/storage/28383/Learning-01.svg", "label": "Learning (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/16533/472-Learning_Artboard-1.svg", "label": "Learning (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/34149/learning-01.svg", "label": "Learning (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/53777/Teacher-student_Artboard-1.svg", "label": "Teacher-Student (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/34549/Online-Learning_Mesa-de-trabajo-1.svg", "label": "Online Learning" },
+      { "url": "https://stories.freepiklabs.com/storage/48303/Mathematics.svg", "label": "Mathematics" },
+      { "url": "https://stories.freepiklabs.com/storage/15877/Exams-01-01.svg", "label": "Exams" }
+    ],
+    "finance": [
+      { "url": "https://stories.freepiklabs.com/storage/1799/Finance-01.svg", "label": "Finance (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/4333/finance_Artboard-1.svg", "label": "Finance (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/4422/Finance-01.svg", "label": "Finance (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/4207/Finance-amico.svg", "label": "Finance (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/54166/Saving-money-01.svg", "label": "Saving Money (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/54848/Saving-money_Artboard-1.svg", "label": "Saving Money (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/39081/Finance-app-01.svg", "label": "Finance App (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/56222/Credit-card.svg", "label": "Credit Card" }
+    ],
+    "innovation-idea": [
+      { "url": "https://stories.freepiklabs.com/storage/41059/Innovation-01.svg", "label": "Innovation (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/40602/Innovation-(1)_Artboard-1.svg", "label": "Innovation (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/45754/Innovation-01.svg", "label": "Innovation (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/41445/Innovation_Mesa-de-trabajo-1.svg", "label": "Innovation (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/31857/Light-bulb-01.svg", "label": "Light Bulb (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/2370/Creativity-01.svg", "label": "Creativity (Pana)" }
+    ],
+    "marketing": [
+      { "url": "https://stories.freepiklabs.com/storage/28958/Marketing-01.svg", "label": "Marketing (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/16730/Marketing_Artboard-1.svg", "label": "Marketing (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/34410/Marketing-bro-01.svg", "label": "Marketing (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/30785/Marketing-01.svg", "label": "Marketing (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/1735/Social-Strategy_Mesa-de-trabajo-1.svg", "label": "Social Strategy (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/1673/92-Social-strategy_Artboard-1.svg", "label": "Social Strategy (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/60588/Marketing-Consulting-(1)_Mesa-de-trabajo-1.svg", "label": "Marketing Consulting (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/4679/Mobile-marketing-01.svg", "label": "Mobile Marketing (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/6320/310-Mobile-marketing_Artboard-1.svg", "label": "Mobile Marketing (Rafiki)" }
+    ],
+    "office-work": [
+      { "url": "https://stories.freepiklabs.com/storage/2458/On-the-office-01.svg", "label": "At the Office (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/2562/273-On-the-office_Artboard-1.svg", "label": "At the Office (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/6338/On-the-Office-01.svg", "label": "At the Office (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/2581/On-the-office_Mesa-de-trabajo-1.svg", "label": "At the Office (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/58507/Office-management-(1)-01.svg", "label": "Office Management (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/61668/Office-Management_Artboard-1-copy.svg", "label": "Office Management (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/58497/Office-management-01.svg", "label": "Office Management (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/58311/Office-Management_Mesa-de-trabajo-1.svg", "label": "Office Management (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/4486/Work-time-01.svg", "label": "Work Time (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/15816/Company_Mesa-de-trabajo-1.svg", "label": "Company (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/16093/Company-01.svg", "label": "Company (Pana)" }
+    ],
+    "presentation": [
+      { "url": "https://stories.freepiklabs.com/storage/1391/Presentation-01.svg", "label": "Presentation (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/1213/01-Presentation_Artboard-1.svg", "label": "Presentation (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/1070/Presentation-01.svg", "label": "Presentation (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/1154/Presentation-(1)_Mesa-de-trabajo-1.svg", "label": "Presentation (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/54825/Digital-Presentation_Mesa-de-trabajo-1.svg", "label": "Digital Presentation (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/56194/Digital-Presentation_Artboard-1.svg", "label": "Digital Presentation (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/50724/Seminar-01.svg", "label": "Seminar (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/17348/Projections-01.svg", "label": "Projections (Amico)" }
+    ],
+    "product-launch": [
+      { "url": "https://stories.freepiklabs.com/storage/54729/Product-presentation-01.svg", "label": "Product Presentation (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/56387/Product-Presentation_Artboard-1.svg", "label": "Product Presentation (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/54854/Product-presentation-01.svg", "label": "Product Presentation (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/54826/Product-Presentation_Mesa-de-trabajo-1.svg", "label": "Product Presentation (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/34376/Product-iteration-01.svg", "label": "Product Iteration (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/40236/408-Product-iteration_Artboard-1.svg", "label": "Product Iteration (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/1811/Product-hunt-NUEVO-01.svg", "label": "Product Hunt (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/13388/72-Product-hunt_Artboard-1.svg", "label": "Product Hunt (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/6323/Maker-launch-(1)-Pana.svg", "label": "Maker Launch (Pana)" }
+    ],
+    "project-management": [
+      { "url": "https://stories.freepiklabs.com/storage/6239/Scrum-board-01.svg", "label": "Scrum Board (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/14329/scrum-board_Mesa-de-trabajo-1.svg", "label": "Scrum Board (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/6217/Scrum-Board-(1)_Mesa-de-trabajo-1.svg", "label": "Scrum Board (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/48753/Risk-Management_Mesa-de-trabajo-1.svg", "label": "Risk Management (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/48439/Risk-management_Artboard-1.svg", "label": "Risk Management (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/47899/Risk-management-01.svg", "label": "Risk Management (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/47383/Risk-management.svg", "label": "Risk Management (Pana)" }
+    ],
+    "remote-work-conference": [
+      { "url": "https://stories.freepiklabs.com/storage/6359/Video-call-(1)-01.svg", "label": "Video Call (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/15955/Video-call_Artboard-1.svg", "label": "Video Call (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/15848/Video-Call-01.svg", "label": "Video Call (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/6360/Video-Call_Mesa-de-trabajo-1.svg", "label": "Video Call (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/14443/Working-remotely-01.svg", "label": "Working Remotely (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/16435/Working-remotely_Artboard-1.svg", "label": "Working Remotely (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/15889/Working-Remotely-01.svg", "label": "Working Remotely (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/33889/Remote-meeting-01.svg", "label": "Remote Meeting (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/33306/Remote-meeting_Artboard-1.svg", "label": "Remote Meeting (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/30549/Conference-01.svg", "label": "Conference (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/13938/Conference_Artboard-1.svg", "label": "Conference (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/17278/Conference-Speaker-01.svg", "label": "Conference Speaker (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/13940/Conference-Speaker_Artboard-1.svg", "label": "Conference Speaker (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/34564/Webinar-01.svg", "label": "Webinar (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/35384/Webinar-01.svg", "label": "Webinar (Bro)" }
+    ],
+    "security": [
+      { "url": "https://stories.freepiklabs.com/storage/4691/Security-01.svg", "label": "Security (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/6449/331-Security_Artboard-1.svg", "label": "Security (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/14185/Security-01.svg", "label": "Security (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/4702/Security-(1)_Mesa-de-trabajo-1.svg", "label": "Security (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/15760/Mobile-login_Mesa-de-trabajo-1.svg", "label": "Mobile Login (Cuate)" },
+      { "url": "https://stories.freepiklabs.com/storage/4153/Mobile-login-bro.svg", "label": "Mobile Login (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/4223/Security-On-01.svg", "label": "Security On" }
+    ],
+    "startup-growth": [
+      { "url": "https://stories.freepiklabs.com/storage/4454/startup-life-01.svg", "label": "Startup Life (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/4534/221-Startup-life_Artboard-1.svg", "label": "Startup Life (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/4533/startup-life-01.svg", "label": "Startup Life (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/33869/Growth-curve-01.svg", "label": "Growth Curve (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/33307/Growth-Curve_Artboard-1-copy.svg", "label": "Growth Curve (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/31433/Growth-curve-01.svg", "label": "Growth Curve (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/57455/Business-Growth_Mesa-de-trabajo-1.svg", "label": "Business Growth (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/57477/Business-growth-01.svg", "label": "Business Growth (Bro)" }
+    ],
+    "teamwork": [
+      { "url": "https://stories.freepiklabs.com/storage/26391/team-work-01.svg", "label": "Team Work (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/16527/466-Team-work_Artboard-1.svg", "label": "Team Work (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/29574/Team-Work_Mesa-de-trabajo-1.svg", "label": "Team Work (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/28377/Team-work-01.svg", "label": "Team Work (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/1394/Collaboration-01.svg", "label": "Collaboration (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/1208/16-Collaboration_Artboard-1.svg", "label": "Collaboration (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/1493/Collaboration-01.svg", "label": "Collaboration (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/36874/Team-goals-01.svg", "label": "Team Goals (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/51112/Team-goals_Artboard-1.svg", "label": "Team Goals (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/28381/Creative-team-01.svg", "label": "Creative Team (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/35736/Good-Team-bro-01.svg", "label": "Good Team (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/4620/Team-spirit-01.svg", "label": "Team Spirit (Pana)" }
+    ],
+    "technology": [
+      { "url": "https://stories.freepiklabs.com/storage/2498/Programming_Mesa-de-trabajo-1.svg", "label": "Programming (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/2522/257-Programming_Artboard-1.svg", "label": "Programming (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/6297/Programming-01.svg", "label": "Programming (Cuate)" },
+      { "url": "https://stories.freepiklabs.com/storage/1916/Coding-01.svg", "label": "Coding (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/1857/147-Coding_Artboard-1.svg", "label": "Coding (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/4410/Coding-01.svg", "label": "Coding (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/33590/Code-Typing-bro-01.svg", "label": "Code Typing (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/32059/Website-Creator-bro-01.svg", "label": "Website Creator (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/16408/developer-activity_Mesa-de-trabajo-1.svg", "label": "Developer Activity" },
+      { "url": "https://stories.freepiklabs.com/storage/16433/Operating-system_Rafiki.svg", "label": "Operating System (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/14325/version-control_Mesa-de-trabajo-1.svg", "label": "Version Control (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/2573/Online-Review-01.svg", "label": "Online Review (Pana)" }
+    ],
+    "time-management": [
+      { "url": "https://stories.freepiklabs.com/storage/2140/Time-management-01.svg", "label": "Time Management (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/2052/196-Time-management_Artboard-1.svg", "label": "Time Management (Rafiki)" },
+      { "url": "https://stories.freepiklabs.com/storage/2512/Time-Management-01.svg", "label": "Time Management (Bro)" },
+      { "url": "https://stories.freepiklabs.com/storage/4266/Time-management-amico.svg", "label": "Time Management (Amico)" },
+      { "url": "https://stories.freepiklabs.com/storage/15446/Mind-map-01.svg", "label": "Mind Map (Pana)" },
+      { "url": "https://stories.freepiklabs.com/storage/2356/Taking-notes--01.svg", "label": "Taking Notes (Pana)" }
+    ]
+  }
+}
