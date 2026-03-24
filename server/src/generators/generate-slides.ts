@@ -1045,10 +1045,10 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
 
 /* ── Sections — grid background + floating gradient decorations ── */
 .reveal .slides section {
-  ${bgRule}
+  background-color: transparent;
   background-image:
-    linear-gradient(${s.isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.018)'} 1px, transparent 1px),
-    linear-gradient(90deg, ${s.isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.018)'} 1px, transparent 1px);
+    linear-gradient(${s.isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'} 1px, transparent 1px),
+    linear-gradient(90deg, ${s.isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'} 1px, transparent 1px);
   background-size: 50px 50px;
   padding: 48px 64px !important;
   text-align: left;
@@ -1453,9 +1453,9 @@ function generateHtml(input: SlidesInput): string {
     cdnScripts.push(`<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"><\/script>`);
   }
   if (markmapUsed) {
-    cdnScripts.push(`<script src="https://cdn.jsdelivr.net/npm/d3@7"><\/script>`);
-    cdnScripts.push(`<script src="https://cdn.jsdelivr.net/npm/markmap-lib"><\/script>`);
-    cdnScripts.push(`<script src="https://cdn.jsdelivr.net/npm/markmap-view"><\/script>`);
+    cdnScripts.push(`<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"><\/script>`);
+    cdnScripts.push(`<script src="https://cdn.jsdelivr.net/npm/markmap-lib/dist/browser/index.iife.js"><\/script>`);
+    cdnScripts.push(`<script src="https://cdn.jsdelivr.net/npm/markmap-view/dist/browser/index.js"><\/script>`);
   }
 
   // Build ECharts init code
@@ -1502,7 +1502,7 @@ function generateHtml(input: SlidesInput): string {
   <\/script>`;
   }
 
-  // Build Mermaid init code (inject via JS to avoid HTML entity escaping issues)
+  // Build Mermaid init code — uses mermaid.render(id, code) to pass code directly as string
   let mermaidInitCode = '';
   if (mermaidUsed && mermaidConfigs.length > 0) {
     const mermaidCfgs = mermaidConfigs.map(c =>
@@ -1515,24 +1515,24 @@ function generateHtml(input: SlidesInput): string {
       ${mermaidCfgs}
     ];
     mermaid.initialize({ startOnLoad: false, theme: '${s.isDark ? 'dark' : 'default'}', themeVariables: { primaryColor: '${s.accentColor}', primaryTextColor: '${s.headingColor}', lineColor: '${s.bodyColor}' } });
-    configs.forEach(function(cfg) {
-      var el = document.getElementById(cfg.id);
-      if (el) el.textContent = cfg.code;
-    });
-    function runMermaid() {
-      mermaid.run({ querySelector: '.mermaid' }).catch(function(e) { console.warn('Mermaid render:', e); });
+    function renderAll() {
+      configs.forEach(function(cfg, i) {
+        var el = document.getElementById(cfg.id);
+        if (!el || el.getAttribute('data-rendered')) return;
+        var svgId = 'mermaid-svg-' + i + '-' + Date.now();
+        mermaid.render(svgId, cfg.code).then(function(result) {
+          el.innerHTML = result.svg;
+          el.setAttribute('data-rendered', 'true');
+          el.classList.remove('mermaid');
+        }).catch(function(e) { console.warn('Mermaid render error for ' + cfg.id + ':', e); });
+      });
     }
-    // Handle race condition: Reveal may already be ready
     if (typeof Reveal !== 'undefined' && Reveal.isReady && Reveal.isReady()) {
-      runMermaid();
+      renderAll();
     } else {
-      Reveal.on('ready', runMermaid);
+      Reveal.on('ready', renderAll);
     }
-    // Re-render unprocessed diagrams on slide change (hidden slides can't render)
-    Reveal.on('slidechanged', function(e) {
-      var els = e.currentSlide.querySelectorAll('.mermaid:not([data-processed])');
-      if (els.length) mermaid.run({ nodes: Array.from(els) }).catch(function() {});
-    });
+    Reveal.on('slidechanged', function() { renderAll(); });
   })();
   <\/script>`;
   }
@@ -1550,10 +1550,11 @@ function generateHtml(input: SlidesInput): string {
       ${mmConfigs}
     ];
     var transformer = new markmap.Transformer();
-    Reveal.on('ready', function() {
+    function initMarkmaps() {
       configs.forEach(function(cfg) {
         var el = document.getElementById(cfg.id);
-        if (!el) return;
+        if (!el || el.getAttribute('data-rendered')) return;
+        el.setAttribute('data-rendered', 'true');
         var result = transformer.transform(cfg.code);
         var mm = markmap.Markmap.create(el, {
           color: function(node) {
@@ -1563,10 +1564,17 @@ function generateHtml(input: SlidesInput): string {
           paddingX: 16,
           initialExpandLevel: 2,
         }, result.root);
+        el.__markmap = mm;
         mm.fit();
       });
-    });
+    }
+    if (typeof Reveal !== 'undefined' && Reveal.isReady && Reveal.isReady()) {
+      initMarkmaps();
+    } else {
+      Reveal.on('ready', initMarkmaps);
+    }
     Reveal.on('slidechanged', function(e) {
+      initMarkmaps();
       configs.forEach(function(cfg) {
         var el = e.currentSlide.querySelector('#' + cfg.id);
         if (el && el.__markmap) el.__markmap.fit();

@@ -46,10 +46,10 @@ html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
 
 /* ── Sections — grid background + floating gradient decorations ── */
 .reveal .slides section {
-  background-color: #1a1a2e;
+  background-color: transparent;
   background-image:
-    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
   background-size: 50px 50px;
   padding: 48px 64px !important;
   text-align: left;
@@ -830,9 +830,9 @@ await generator.export(&#39;output.html&#39;);</code></pre>
   <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-lib"></script>
-  <script src="https://cdn.jsdelivr.net/npm/markmap-view"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-lib/dist/browser/index.iife.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view/dist/browser/index.js"></script>
   <script>
     Reveal.initialize({
       hash: true,
@@ -904,24 +904,24 @@ await generator.export(&#39;output.html&#39;);</code></pre>
       { id: 'mermaid-27', code: "sequenceDiagram\n  participant U as User\n  participant F as Frontend\n  participant A as API\n  participant D as Database\n  U->>F: Enter credentials\n  F->>A: POST /auth/login\n  A->>D: Verify password\n  D-->>A: User found\n  A-->>F: JWT Token\n  F-->>U: Redirect to dashboard" }
     ];
     mermaid.initialize({ startOnLoad: false, theme: 'dark', themeVariables: { primaryColor: '#00f0ff', primaryTextColor: '#e0e0ff', lineColor: '#aaaacc' } });
-    configs.forEach(function(cfg) {
-      var el = document.getElementById(cfg.id);
-      if (el) el.textContent = cfg.code;
-    });
-    function runMermaid() {
-      mermaid.run({ querySelector: '.mermaid' }).catch(function(e) { console.warn('Mermaid render:', e); });
+    function renderAll() {
+      configs.forEach(function(cfg, i) {
+        var el = document.getElementById(cfg.id);
+        if (!el || el.getAttribute('data-rendered')) return;
+        var svgId = 'mermaid-svg-' + i + '-' + Date.now();
+        mermaid.render(svgId, cfg.code).then(function(result) {
+          el.innerHTML = result.svg;
+          el.setAttribute('data-rendered', 'true');
+          el.classList.remove('mermaid');
+        }).catch(function(e) { console.warn('Mermaid render error for ' + cfg.id + ':', e); });
+      });
     }
-    // Handle race condition: Reveal may already be ready
     if (typeof Reveal !== 'undefined' && Reveal.isReady && Reveal.isReady()) {
-      runMermaid();
+      renderAll();
     } else {
-      Reveal.on('ready', runMermaid);
+      Reveal.on('ready', renderAll);
     }
-    // Re-render unprocessed diagrams on slide change (hidden slides can't render)
-    Reveal.on('slidechanged', function(e) {
-      var els = e.currentSlide.querySelectorAll('.mermaid:not([data-processed])');
-      if (els.length) mermaid.run({ nodes: Array.from(els) }).catch(function() {});
-    });
+    Reveal.on('slidechanged', function() { renderAll(); });
   })();
   </script>
   
@@ -931,10 +931,11 @@ await generator.export(&#39;output.html&#39;);</code></pre>
       { id: 'mindmap-28', code: "# AI Technology\n## Machine Learning\n### Supervised Learning\n#### Classification\n#### Regression\n### Unsupervised Learning\n#### Clustering\n#### Dimensionality Reduction\n### Reinforcement Learning\n## Deep Learning\n### CNN\n### RNN / LSTM\n// ..." }
     ];
     var transformer = new markmap.Transformer();
-    Reveal.on('ready', function() {
+    function initMarkmaps() {
       configs.forEach(function(cfg) {
         var el = document.getElementById(cfg.id);
-        if (!el) return;
+        if (!el || el.getAttribute('data-rendered')) return;
+        el.setAttribute('data-rendered', 'true');
         var result = transformer.transform(cfg.code);
         var mm = markmap.Markmap.create(el, {
           color: function(node) {
@@ -944,10 +945,17 @@ await generator.export(&#39;output.html&#39;);</code></pre>
           paddingX: 16,
           initialExpandLevel: 2,
         }, result.root);
+        el.__markmap = mm;
         mm.fit();
       });
-    });
+    }
+    if (typeof Reveal !== 'undefined' && Reveal.isReady && Reveal.isReady()) {
+      initMarkmaps();
+    } else {
+      Reveal.on('ready', initMarkmaps);
+    }
     Reveal.on('slidechanged', function(e) {
+      initMarkmaps();
       configs.forEach(function(cfg) {
         var el = e.currentSlide.querySelector('#' + cfg.id);
         if (el && el.__markmap) el.__markmap.fit();
