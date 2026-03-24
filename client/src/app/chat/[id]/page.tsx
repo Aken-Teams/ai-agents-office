@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -460,7 +460,8 @@ function ChatContent() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Custom ReactMarkdown components — intercept ```chart and ```mermaid blocks
-  const markdownComponents = {
+  // Memoized to prevent chart/map components from re-mounting on every render
+  const markdownComponents = useMemo(() => ({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     pre({ children, node, ...props }: any) {
       // Check if this <pre> contains a chart or mermaid code block — unwrap to avoid <pre> wrapper
@@ -496,7 +497,7 @@ function ChatContent() {
     table({ children, ...props }: any) {
       return <div className="table-wrapper"><table {...props}>{children}</table></div>;
     },
-  };
+  }), []);
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
