@@ -14,6 +14,7 @@ import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { ssr: false });
 const ChatMermaid = dynamic(() => import('../../components/charts/ChatMermaid'), { ssr: false });
 const ChatMindmap = dynamic(() => import('../../components/charts/ChatMindmap'), { ssr: false });
+const ChatMap = dynamic(() => import('../../components/charts/ChatMap'), { ssr: false });
 
 // Convert mermaid mindmap syntax to markdown headings for markmap
 function convertMermaidMindmapToMarkdown(mermaidCode: string): string {
@@ -465,7 +466,7 @@ function ChatContent() {
       // Check if this <pre> contains a chart or mermaid code block — unwrap to avoid <pre> wrapper
       const codeEl = node?.children?.[0];
       const cls = codeEl?.properties?.className?.[0] || '';
-      if (cls === 'language-chart' || cls === 'language-mermaid' || cls === 'language-mindmap') {
+      if (cls === 'language-chart' || cls === 'language-mermaid' || cls === 'language-mindmap' || cls === 'language-map') {
         return <>{children}</>;
       }
       return <pre {...props}>{children}</pre>;
@@ -485,6 +486,9 @@ function ChatContent() {
       }
       if (className === 'language-mindmap') {
         return <ChatMindmap code={text} />;
+      }
+      if (className === 'language-map') {
+        return <ChatMap rawJson={text} />;
       }
       return <code className={className} {...props}>{children}</code>;
     },

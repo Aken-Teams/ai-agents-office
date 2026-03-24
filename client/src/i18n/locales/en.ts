@@ -330,6 +330,17 @@ const en = {
   'chart.preview.loading': 'Loading preview...',
   'chart.hint.mindmap': 'Click nodes to collapse/expand, scroll to zoom, drag to pan',
 
+  // Map
+  'map.status.rendering': 'Rendering map...',
+  'map.status.loading': 'Loading map...',
+  'map.status.loadingRoute': 'Loading route...',
+  'map.error.map': 'Map error',
+  'map.disclaimer': 'Coordinates are AI-generated and may be inaccurate. Click markers to verify on Google Maps.',
+  'map.action.openGoogleMaps': 'Open in Google Maps',
+  'map.action.openRouteGoogleMaps': 'View route in Google Maps',
+  'map.route.label': 'Route',
+  'map.hint': 'Drag to pan, scroll to zoom. Click markers for details.',
+
   'files.deleteModal.title': 'Confirm Delete?',
   'files.deleteModal.message': 'About to delete {filename}. This action cannot be undone.',
   'files.deleteModal.cancel': 'Cancel',

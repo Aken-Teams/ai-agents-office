@@ -85,7 +85,7 @@ export function parsePipelineBlocks(text: string): {
  */
 export function truncateResultForRouter(result: string, maxChars = 1500): string {
   // If result contains code blocks (charts/diagrams), use a larger limit to preserve them
-  if (/```(?:chart|mermaid|mindmap)\b/.test(result)) {
+  if (/```(?:chart|mermaid|mindmap|map)\b/.test(result)) {
     maxChars = Math.max(maxChars, 4000);
   }
   if (result.length <= maxChars) return result;

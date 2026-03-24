@@ -336,6 +336,17 @@ const zhCN = {
   'chart.preview.loading': '加载预览中...',
   'chart.hint.mindmap': '点击节点可收合/展开，滚轮缩放，拖拽平移',
 
+  // Map
+  'map.status.rendering': '地图渲染中...',
+  'map.status.loading': '加载地图中...',
+  'map.status.loadingRoute': '加载路线中...',
+  'map.error.map': '地图错误',
+  'map.disclaimer': '坐标由 AI 生成，可能不准确。点击标记可在 Google Maps 上验证。',
+  'map.action.openGoogleMaps': '在 Google Maps 打开',
+  'map.action.openRouteGoogleMaps': '在 Google Maps 查看路线',
+  'map.route.label': '路线',
+  'map.hint': '拖拽平移，滚轮缩放，点击标记查看详情',
+
   // Files
   'files.deleteModal.title': '确定删除？',
   'files.deleteModal.message': '即将删除 {filename}，此操作无法恢复。',

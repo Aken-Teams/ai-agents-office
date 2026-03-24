@@ -340,6 +340,17 @@ const zhTW = {
   'chart.preview.loading': '載入預覽中...',
   'chart.hint.mindmap': '點擊節點可收合/展開，滾輪縮放，拖曳平移',
 
+  // Map
+  'map.status.rendering': '地圖渲染中...',
+  'map.status.loading': '載入地圖中...',
+  'map.status.loadingRoute': '載入路線中...',
+  'map.error.map': '地圖錯誤',
+  'map.disclaimer': '座標由 AI 生成，可能不精確。點擊標記可在 Google Maps 上驗證。',
+  'map.action.openGoogleMaps': '在 Google Maps 開啟',
+  'map.action.openRouteGoogleMaps': '在 Google Maps 查看路線',
+  'map.route.label': '路線',
+  'map.hint': '拖曳平移，滾輪縮放，點擊標記查看詳情',
+
   // Files
   'files.deleteModal.title': '確定刪除？',
   'files.deleteModal.message': '即將刪除 {filename}，此操作無法復原。',
