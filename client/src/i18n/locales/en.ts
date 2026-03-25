@@ -48,6 +48,7 @@ const en = {
   'nav.docTypes.research.desc': 'Search & compile',
 
   'login.brandSubtitle': 'Siliconpower Group · Smart Document Platform',
+  'login.brandSubtitleGeneric': 'Smart Document Platform',
   'login.heroTitle.prefix': 'Enterprise Document Generation Powered by ',
   'login.heroTitle.highlight': 'AI Agents',
   'login.heroTitle.suffix': '',
@@ -71,6 +72,7 @@ const en = {
   'login.footerCollaborationValue': 'Multi-AI Agent Collaboration',
 
   'register.brandSubtitle': 'Siliconpower Group · Smart Document Platform',
+  'register.brandSubtitleGeneric': 'Smart Document Platform',
   'register.heroTitle.prefix': 'Join the ',
   'register.heroTitle.highlight': 'AI Document Workflow',
   'register.heroTitle.suffix': ' — Start Smart Collaboration',

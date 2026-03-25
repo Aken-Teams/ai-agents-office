@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '../components/AuthProvider';
 import { I18nProvider, useTranslation } from '../../i18n';
 
 const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
 
 function GoogleButton({ mode, onLoginSuccess, onError }: {
   mode: 'signin' | 'signup';
@@ -121,7 +122,7 @@ function LoginForm() {
                   {t('common.appName')}
                 </h1>
                 <p className="font-label text-sm uppercase tracking-[0.2em] text-primary">
-                  {t('login.brandSubtitle')}
+                  {t(deployMode === 'pro-panjit' ? 'login.brandSubtitle' : 'login.brandSubtitleGeneric' as any)}
                 </p>
               </div>
             </div>
@@ -167,7 +168,7 @@ function LoginForm() {
               </div>
               <div>
                 <h1 className="font-headline text-xl font-bold tracking-tighter leading-tight">{t('common.appName')}</h1>
-                <p className="font-label text-[11px] uppercase tracking-[0.15em] text-primary">{t('login.brandSubtitle')}</p>
+                <p className="font-label text-[11px] uppercase tracking-[0.15em] text-primary">{t(deployMode === 'pro-panjit' ? 'login.brandSubtitle' : 'login.brandSubtitleGeneric' as any)}</p>
               </div>
             </div>
 

@@ -51,6 +51,7 @@ const zhCN = {
 
   // Login
   'login.brandSubtitle': '强茂集团 · 智能文档平台',
+  'login.brandSubtitleGeneric': '智能文档平台',
   'login.heroTitle.prefix': '以 ',
   'login.heroTitle.highlight': 'AI 智能代理',
   'login.heroTitle.suffix': '驱动企业级文档生成',
@@ -75,6 +76,7 @@ const zhCN = {
 
   // Register
   'register.brandSubtitle': '强茂集团 · 智能文档平台',
+  'register.brandSubtitleGeneric': '智能文档平台',
   'register.heroTitle.prefix': '加入 ',
   'register.heroTitle.highlight': 'AI 文档工作流',
   'register.heroTitle.suffix': '开始智能协作',

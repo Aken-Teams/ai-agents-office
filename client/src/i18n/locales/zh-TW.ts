@@ -51,6 +51,7 @@ const zhTW = {
 
   // Login
   'login.brandSubtitle': '強茂集團 · 智能文件平台',
+  'login.brandSubtitleGeneric': '智能文件平台',
   'login.heroTitle.prefix': '以 ',
   'login.heroTitle.highlight': 'AI 智能代理',
   'login.heroTitle.suffix': '驅動企業級文件生成',
@@ -75,6 +76,7 @@ const zhTW = {
 
   // Register
   'register.brandSubtitle': '強茂集團 · 智能文件平台',
+  'register.brandSubtitleGeneric': '智能文件平台',
   'register.heroTitle.prefix': '加入 ',
   'register.heroTitle.highlight': 'AI 文件工作流',
   'register.heroTitle.suffix': '開始智能協作',

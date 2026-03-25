@@ -21,6 +21,7 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
     NEXT_PUBLIC_API_URL: apiUrl,
+    NEXT_PUBLIC_DEPLOY_MODE: process.env.DEPLOY_MODE || 'pro-panjit',
   },
   async rewrites() {
     return [
