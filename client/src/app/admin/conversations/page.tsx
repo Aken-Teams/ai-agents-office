@@ -176,7 +176,7 @@ function ConversationDetailPanel({
   return (
     <>
       {/* Header: Title + User + Skill */}
-      <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 px-4 md:px-8 py-4 border-b border-outline-variant/10">
+      <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 px-4 md:px-8 py-4 border-b border-outline-variant/20">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: config.bgColor }}>
             <span className="material-symbols-outlined" style={{ color: config.color, fontSize: 20 }}>{config.icon}</span>
@@ -200,7 +200,7 @@ function ConversationDetailPanel({
       </div>
 
       {/* Stats Row — right-aligned on desktop, compact grid on mobile */}
-      <div className="px-4 md:px-8 py-3 border-b border-outline-variant/10 grid grid-cols-3 gap-2 md:flex md:items-center md:justify-end md:gap-5">
+      <div className="px-4 md:px-8 py-3 border-b border-outline-variant/20 grid grid-cols-3 gap-2 md:flex md:items-center md:justify-end md:gap-5">
         <div className="flex items-center gap-1.5">
           <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 16 }}>chat</span>
           <span className="text-xs md:text-sm font-bold text-on-surface">{data.messages?.length ?? 0}</span>
@@ -228,7 +228,7 @@ function ConversationDetailPanel({
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center border-b border-outline-variant/10 px-2 md:px-4">
+      <div className="flex items-center border-b border-outline-variant/20 px-2 md:px-4">
         {tabs.map(tab => (
           <button
             key={tab.key}
@@ -296,8 +296,8 @@ function ConversationDetailPanel({
                       isUser
                         ? 'bg-primary/8 border border-primary/15 text-on-surface whitespace-pre-wrap'
                         : isSystem
-                          ? 'bg-surface-container-high/50 border border-outline-variant/10 text-on-surface-variant text-xs opacity-60 whitespace-pre-wrap'
-                          : 'bg-surface-container border border-outline-variant/10 text-on-surface chat-markdown'
+                          ? 'bg-surface-container-high/50 border border-outline-variant/20 text-on-surface-variant text-xs opacity-60 whitespace-pre-wrap'
+                          : 'bg-surface-container border border-outline-variant/20 text-on-surface chat-markdown'
                     }`}>
                       {isUser || isSystem
                         ? displayContent
@@ -307,7 +307,7 @@ function ConversationDetailPanel({
                               <>
                                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{msgText}</ReactMarkdown>
                                 {choices.length > 0 && (
-                                  <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-outline-variant/10">
+                                  <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-outline-variant/20">
                                     {choices.map((choice, ci) => (
                                       <span key={ci} className="px-2.5 py-1.5 text-xs rounded-lg border border-primary/20 bg-primary/5 text-primary">
                                         {choice}
@@ -424,7 +424,7 @@ function ConversationDetailPanel({
               const statusColor = task.status === 'completed' ? 'text-success' : task.status === 'failed' ? 'text-error' : 'text-warning';
               const isExpanded = expandedTasks.has(task.id);
               return (
-                <div key={task.id} className="rounded-xl border border-outline-variant/10 bg-surface-container/30 overflow-hidden">
+                <div key={task.id} className="rounded-xl border border-outline-variant/20 bg-surface-container/30 overflow-hidden">
                   <button
                     onClick={() => setExpandedTasks(prev => {
                       const next = new Set(prev);
@@ -446,7 +446,7 @@ function ConversationDetailPanel({
                     )}
                   </button>
                   {task.description && isExpanded && (
-                    <div className="px-3 md:px-4 py-2.5 md:py-3 text-sm text-on-surface leading-relaxed chat-markdown border-t border-outline-variant/10">
+                    <div className="px-3 md:px-4 py-2.5 md:py-3 text-sm text-on-surface leading-relaxed chat-markdown border-t border-outline-variant/20">
                       <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{task.description}</ReactMarkdown>
                     </div>
                   )}
@@ -670,7 +670,7 @@ export default function AdminConversationsPage() {
 
         {/* Pagination — matches users page style */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between pt-4 border-t border-outline-variant/10 mt-4">
+          <div className="flex items-center justify-between pt-4 border-t border-outline-variant/20 mt-4">
             <span className="text-xs md:text-sm text-on-surface-variant hidden md:block">
               {t('admin.conversations.pagination.summary' as any, { start: (page - 1) * limit + 1, end: Math.min(page * limit, total), total })}
             </span>
