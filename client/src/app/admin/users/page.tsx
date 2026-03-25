@@ -315,13 +315,12 @@ export default function AdminUsers() {
           {detail.deploy_mode === 'pro-out' && (
             <div className="flex items-center gap-2 mt-2">
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 placeholder={t('admin.users.detail.quotaPlaceholder' as any)}
                 value={quotaInput}
-                onChange={e => setQuotaInput(e.target.value)}
-                className="flex-1 bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-1.5 px-2.5 text-xs font-mono rounded placeholder:text-outline min-w-0"
+                onChange={e => { if (/^\d*\.?\d{0,2}$/.test(e.target.value) || e.target.value === '') setQuotaInput(e.target.value); }}
+                className="flex-1 bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-1.5 px-2.5 text-xs font-mono rounded placeholder:text-outline min-w-0 [appearance:textfield]"
               />
               <button
                 onClick={() => updateQuota(detail.id)}

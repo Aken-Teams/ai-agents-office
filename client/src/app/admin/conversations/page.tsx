@@ -270,7 +270,7 @@ function ConversationDetailPanel({
               const isMsgExpanded = expandedMessages.has(msg.id);
               const displayContent = isLong && !isMsgExpanded ? msg.content.slice(0, 3000) : msg.content;
               return (
-                <div key={msg.id} className="flex gap-2.5">
+                <div key={msg.id} className={`flex gap-2.5 ${isUser ? 'flex-row-reverse' : ''}`}>
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
                     isUser ? 'bg-primary/15' : isSystem ? 'bg-outline-variant/20' : 'bg-tertiary/15'
                   }`}>
@@ -280,14 +280,14 @@ function ConversationDetailPanel({
                       {isUser ? 'person' : isSystem ? 'settings' : 'smart_toy'}
                     </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-[10px] font-bold uppercase tracking-widest ${
+                  <div className={`min-w-0 ${isUser ? '' : 'max-w-3xl'}`}>
+                    <div className={`flex items-center gap-2 mb-1 ${isUser ? 'justify-end' : ''}`}>
+                      <span className={`text-xs font-bold uppercase tracking-widest ${
                         isUser ? 'text-primary' : isSystem ? 'text-outline' : 'text-tertiary'
                       }`}>
                         {t(`admin.conversations.role.${msg.role}` as any)}
                       </span>
-                      <span className="text-[10px] text-on-surface-variant">{formatDate(msg.created_at)}</span>
+                      <span className="text-[11px] text-on-surface-variant">{formatDate(msg.created_at)}</span>
                       {isLong && (
                         <span className="text-[10px] text-on-surface-variant">({Math.round(msg.content.length / 1000)}k chars)</span>
                       )}

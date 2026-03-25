@@ -57,8 +57,10 @@ function ForgotPasswordForm() {
                 <span className="material-symbols-outlined text-4xl text-primary">forward_to_inbox</span>
               </div>
               <h3 className="font-headline text-2xl font-bold mb-3">{t('forgotPassword.sentTitle' as any)}</h3>
-              <p className="text-on-surface-variant text-sm mb-2">{t('forgotPassword.sentMessage' as any)}</p>
-              <p className="text-on-surface-variant text-xs mb-8">{t('forgotPassword.sentDetail' as any)}</p>
+              <div className="max-w-[280px] mx-auto mb-8">
+                <p className="text-on-surface-variant text-sm mb-3 text-balance leading-relaxed">{t('forgotPassword.sentMessage' as any)}</p>
+                <p className="text-on-surface-variant text-xs text-balance leading-relaxed">{t('forgotPassword.sentDetail' as any)}</p>
+              </div>
               <Link
                 href="/login"
                 className="inline-flex items-center gap-2 cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-3 px-8 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 transition-all no-underline"
