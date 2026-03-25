@@ -94,7 +94,7 @@ router.get('/:id/preview', async (req: Request, res: Response) => {
   const ext = path.extname(filePath).slice(1).toLowerCase();
   const mime = MIME_MAP[ext];
   if (mime) {
-    if (ext === 'pdf') {
+    if (ext === 'pdf' || ext === 'html' || ext === 'htm') {
       try {
         const watermarked = await applyWatermark(filePath);
         if (watermarked) {
@@ -103,7 +103,7 @@ router.get('/:id/preview', async (req: Request, res: Response) => {
           res.setHeader('Content-Length', watermarked.length);
           res.end(watermarked); return;
         }
-      } catch (err) { console.warn('[Preview] PDF watermark failed, serving original:', err); }
+      } catch (err) { console.warn('[Preview] Watermark failed, serving original:', err); }
     }
     const stat = fs.statSync(filePath);
     res.setHeader('Content-Type', mime);

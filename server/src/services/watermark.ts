@@ -11,7 +11,7 @@ const WATERMARK_TEXT = '測試版 TEST VERSION';
 
 /**
  * Returns a Buffer with watermark applied for the given file.
- * Supports: PDF, DOCX, PPTX, XLSX.
+ * Supports: PDF, DOCX, PPTX, XLSX, HTML.
  * For unsupported types, returns null (caller should serve original).
  */
 export async function applyWatermark(filePath: string): Promise<Buffer | null> {
@@ -29,6 +29,9 @@ export async function applyWatermark(filePath: string): Promise<Buffer | null> {
     case 'xlsx':
     case 'xls':
       return watermarkXlsx(filePath);
+    case 'html':
+    case 'htm':
+      return watermarkHtml(filePath);
     default:
       return null;
   }
@@ -391,4 +394,38 @@ async function watermarkXlsx(filePath: string): Promise<Buffer> {
 
   const buf = await zip.generateAsync({ type: 'nodebuffer' });
   return buf;
+}
+
+/* ============================================================
+   HTML — inject CSS watermark overlay before </body>
+   ============================================================ */
+async function watermarkHtml(filePath: string): Promise<Buffer | null> {
+  const html = fs.readFileSync(filePath, 'utf-8');
+
+  // Skip if already has a watermark (e.g. slides-gen embeds its own)
+  if (html.includes('watermark-overlay')) return null;
+
+  const wmCss = `
+<style data-watermark>
+.watermark-overlay {
+  position: fixed; inset: 0; z-index: 999999;
+  pointer-events: none; user-select: none;
+  overflow: hidden;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='320'%3E%3Cg transform='rotate(-30 240 160)'%3E%3Ctext x='240' y='145' dominant-baseline='middle' text-anchor='middle' font-family='Arial,sans-serif' font-size='20' font-weight='700' fill='rgba(0,0,0,0.045)'%3ECONFIDENTIAL%3C/text%3E%3Ctext x='240' y='172' dominant-baseline='middle' text-anchor='middle' font-family='Arial,sans-serif' font-size='14' font-weight='500' fill='rgba(0,0,0,0.04)'%3E%E6%A9%9F%E5%AF%86%E6%96%87%E4%BB%B6 %C2%B7 %E6%B8%AC%E8%A9%A6%E7%89%88%3C/text%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 480px 320px;
+}
+@media print { .watermark-overlay { position: absolute; } }
+</style>`;
+
+  const wmDiv = '<div class="watermark-overlay" aria-hidden="true"></div>';
+
+  let result = html;
+  if (result.includes('</body>')) {
+    result = result.replace('</body>', `${wmCss}\n${wmDiv}\n</body>`);
+  } else {
+    result += `\n${wmCss}\n${wmDiv}`;
+  }
+
+  return Buffer.from(result, 'utf-8');
 }
