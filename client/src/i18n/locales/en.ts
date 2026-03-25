@@ -564,6 +564,7 @@ const en = {
   'admin.users.table.conversations': 'Chats',
   'admin.users.table.empty': 'No users found',
   'admin.users.pagination.summary': '{start}-{end} of {total} identities',
+  'admin.users.detail.title': 'User Detail',
   'admin.users.detail.statusLabel': 'Status',
   'admin.users.detail.registeredLabel': 'Registered',
   'admin.users.detail.roleLabel': 'Role',

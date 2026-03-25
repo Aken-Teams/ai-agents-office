@@ -537,7 +537,7 @@ export default function AdminUsers() {
             >
               <span className="material-symbols-outlined">arrow_back</span>
             </button>
-            <span className="text-sm font-bold text-on-surface font-headline">{t('admin.users.detail.title' as any) || t('admin.users.title')}</span>
+            <span className="text-sm font-bold text-on-surface font-headline">{t('admin.users.detail.title' as any)}</span>
           </div>
           <div className="flex-1 overflow-y-auto flex flex-col">
             {renderDetail(selectedUser, () => setSelectedUser(null))}

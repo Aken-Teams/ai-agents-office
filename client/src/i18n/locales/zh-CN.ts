@@ -577,6 +577,7 @@ const zhCN = {
   'admin.users.table.conversations': '对话',
   'admin.users.table.empty': '未找到用户',
   'admin.users.pagination.summary': '第 {start}-{end} 笔，共 {total} 个身份',
+  'admin.users.detail.title': '用户详情',
   'admin.users.detail.statusLabel': '状态',
   'admin.users.detail.registeredLabel': '注册日期',
   'admin.users.detail.roleLabel': '角色',

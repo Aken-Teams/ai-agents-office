@@ -581,6 +581,7 @@ const zhTW = {
   'admin.users.table.conversations': '對話',
   'admin.users.table.empty': '未找到用戶',
   'admin.users.pagination.summary': '第 {start}-{end} 筆，共 {total} 個身份',
+  'admin.users.detail.title': '用戶詳情',
   'admin.users.detail.statusLabel': '狀態',
   'admin.users.detail.registeredLabel': '註冊日期',
   'admin.users.detail.roleLabel': '角色',
