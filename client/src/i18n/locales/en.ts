@@ -421,6 +421,7 @@ const en = {
   'files.filter.xlsx': 'Excel',
   'files.filter.pdf': 'PDF',
   'files.watermark': 'CONFIDENTIAL · Test Version',
+  'files.downloadError': 'File download failed. Please try again later.',
   'files.scan.clean': 'All security checks passed',
   'files.scan.suspicious': 'Suspicious content detected',
   'files.scan.rejected': 'Rejected by system',

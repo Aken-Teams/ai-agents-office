@@ -428,6 +428,7 @@ const zhCN = {
   'files.filter.xlsx': 'Excel',
   'files.filter.pdf': 'PDF',
   'files.watermark': '机密文件 CONFIDENTIAL · 测试版',
+  'files.downloadError': '文件下载失败，请稍后再试',
   'files.scan.clean': '通过所有安全检查',
   'files.scan.suspicious': '发现可疑内容',
   'files.scan.rejected': '已被系统拒绝',

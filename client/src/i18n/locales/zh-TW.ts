@@ -432,6 +432,7 @@ const zhTW = {
   'files.filter.xlsx': 'Excel',
   'files.filter.pdf': 'PDF',
   'files.watermark': '機密文件 CONFIDENTIAL · 測試版',
+  'files.downloadError': '檔案下載失敗，請稍後再試',
   'files.scan.clean': '通過所有安全檢查',
   'files.scan.suspicious': '發現可疑內容',
   'files.scan.rejected': '已被系統拒絕',

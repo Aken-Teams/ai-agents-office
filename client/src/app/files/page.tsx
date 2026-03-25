@@ -578,11 +578,18 @@ function FilesContent() {
   const [uploadStorage, setUploadStorage] = useState<UploadStorageInfo | null>(null);
   const [conversations, setConversations] = useState<ConversationInfo[]>([]);
   const [deleteUploadTarget, setDeleteUploadTarget] = useState<UploadItem | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
   }, [user, isLoading, router]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   const fetchStorage = useCallback(() => {
     if (!token) return;
@@ -652,7 +659,10 @@ function FilesContent() {
       const res = await fetch(`/api/files/${fileId}/download`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('Download failed');
+      if (!res.ok) {
+        setToast(t('files.downloadError' as any));
+        return;
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -662,10 +672,10 @@ function FilesContent() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Download error:', err);
+    } catch {
+      setToast(t('files.downloadError' as any));
     }
-  }, [token]);
+  }, [token, t]);
 
   function formatSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -1082,6 +1092,19 @@ function FilesContent() {
         </>
         )}
       </main>
+
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center gap-2 bg-error-container text-on-error-container px-4 py-3 rounded-lg shadow-lg text-sm font-medium">
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>error</span>
+            {toast}
+            <button onClick={() => setToast(null)} className="ml-2 opacity-70 hover:opacity-100 cursor-pointer">
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
