@@ -10,10 +10,11 @@ import { I18nProvider, useTranslation } from '../../i18n';
 const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
 
-function GoogleButton({ mode, onLoginSuccess, onError }: {
+function GoogleButton({ mode, onLoginSuccess, onError, onNeedsVerification }: {
   mode: 'signin' | 'signup';
   onLoginSuccess: () => void;
   onError: (msg: string) => void;
+  onNeedsVerification?: (email: string) => void;
 }) {
   const { loginWithGoogle } = useAuth();
   const { t } = useTranslation();
@@ -23,8 +24,12 @@ function GoogleButton({ mode, onLoginSuccess, onError }: {
     onSuccess: async (tokenResponse) => {
       setBusy(true);
       try {
-        await loginWithGoogle(tokenResponse.access_token, 'access_token');
-        onLoginSuccess();
+        const result = await loginWithGoogle(tokenResponse.access_token, 'access_token');
+        if (result?.needsVerification && result.email) {
+          onNeedsVerification?.(result.email);
+        } else {
+          onLoginSuccess();
+        }
       } catch (err) {
         onError((err as Error).message);
       } finally {
@@ -53,7 +58,7 @@ function GoogleButton({ mode, onLoginSuccess, onError }: {
 }
 
 function LoginForm() {
-  const { login, loginWithGoogle } = useAuth();
+  const { login, loginWithGoogle, verifyEmail, resendCode } = useAuth();
   const { t, theme } = useTranslation();
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -61,6 +66,12 @@ function LoginForm() {
   const [error, setError] = useState('');
   const [errorType, setErrorType] = useState<'error' | 'warning' | 'info'>('error');
   const [loading, setLoading] = useState(false);
+  // Verification state (for Google OAuth new users)
+  const [verifyStep, setVerifyStep] = useState(false);
+  const [verifyEmail_, setVerifyEmail_] = useState('');
+  const [code, setCode] = useState('');
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -99,6 +110,44 @@ function LoginForm() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleVerify(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setVerifyLoading(true);
+    try {
+      await verifyEmail(verifyEmail_, code);
+      router.push('/dashboard');
+    } catch (err) {
+      setErrorType('error');
+      setError((err as Error).message);
+    } finally {
+      setVerifyLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    if (resendCooldown > 0) return;
+    try {
+      await resendCode(verifyEmail_);
+      setResendCooldown(60);
+      const timer = setInterval(() => {
+        setResendCooldown(prev => { if (prev <= 1) { clearInterval(timer); return 0; } return prev - 1; });
+      }, 1000);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  function onGoogleNeedsVerification(email: string) {
+    setVerifyEmail_(email);
+    setVerifyStep(true);
+    setError('');
+    setResendCooldown(60);
+    const timer = setInterval(() => {
+      setResendCooldown(prev => { if (prev <= 1) { clearInterval(timer); return 0; } return prev - 1; });
+    }, 1000);
   }
 
   return (
@@ -172,103 +221,165 @@ function LoginForm() {
               </div>
             </div>
 
-            <div className="mb-8 md:mb-10">
-              <h3 className="font-headline text-2xl font-bold mb-1.5">{t('login.title')}</h3>
-              <p className="text-on-surface-variant text-sm">{t('login.subtitle')}</p>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {error && (
-                <div className={`px-4 py-3 rounded text-sm flex items-start gap-3 ${
-                  errorType === 'warning'
-                    ? 'bg-warning/10 border border-warning/20 text-warning'
-                    : errorType === 'info'
-                    ? 'bg-primary/10 border border-primary/20 text-primary'
-                    : 'bg-error-container/30 border border-error/20 text-on-error-container'
-                }`}>
-                  <span className="material-symbols-outlined text-sm mt-0.5 shrink-0">
-                    {errorType === 'warning' ? 'hourglass_top' : errorType === 'info' ? 'lock' : 'error'}
-                  </span>
-                  {error}
+            {verifyStep ? (
+              /* ===== Verification Code Step ===== */
+              <>
+                <div className="mb-8 md:mb-10">
+                  <h3 className="font-headline text-2xl font-bold mb-1.5">{t('register.verifyTitle' as any)}</h3>
+                  <p className="text-on-surface-variant text-sm">{t('register.verifySubtitle' as any)}</p>
+                  <p className="text-primary text-sm font-mono mt-2">{verifyEmail_}</p>
                 </div>
-              )}
-
-              <div className="space-y-1.5">
-                <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
-                  {t('login.emailLabel')}
-                </label>
-                <input
-                  className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-base md:text-sm font-body rounded placeholder:text-outline"
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="your@email.com"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
-                  {t('login.passwordLabel')}
-                </label>
-                <input
-                  className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-base md:text-sm font-body rounded placeholder:text-outline"
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  required
-                />
-              </div>
-
-              {/* Links — below password */}
-              <div className="flex justify-between -mt-1">
-                <Link
-                  href="/forgot-password"
-                  className="text-xs font-label text-on-surface-variant hover:text-primary transition-colors"
-                >
-                  {t('login.forgotPassword' as any)}
-                </Link>
-                <Link
-                  href="/register"
-                  className="text-xs font-label text-on-surface-variant hover:text-primary transition-colors"
-                >
-                  {t('login.noAccount')} {t('login.createAccount')} &rarr;
-                </Link>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? t('login.submitLoading') : t('login.submit')}
-              </button>
-            </form>
-
-            {/* Google OAuth */}
-            {googleClientId && (
-              <div className="mt-5 flex flex-col items-center gap-4">
-                <div className="w-full h-px bg-outline-variant/20 relative">
-                  <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-container-high px-4 text-xs uppercase tracking-widest text-outline">
-                    {t('login.orDivider')}
-                  </span>
+                <form onSubmit={handleVerify} className="space-y-6">
+                  {error && (
+                    <div className="px-4 py-3 rounded text-sm flex items-start gap-3 bg-error-container/30 border border-error/20 text-on-error-container">
+                      <span className="material-symbols-outlined text-sm mt-0.5 shrink-0">error</span>
+                      {error}
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
+                      {t('register.verifyCodeLabel' as any)}
+                    </label>
+                    <input
+                      className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-center text-2xl font-mono tracking-[0.5em] rounded placeholder:text-outline placeholder:text-base placeholder:tracking-normal"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={code}
+                      onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder={t('register.verifyCodePlaceholder' as any)}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={verifyLoading || code.length !== 6}
+                    className="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {verifyLoading ? t('register.verifySubmitLoading' as any) : t('register.verifySubmit' as any)}
+                  </button>
+                  <div className="flex justify-between items-center">
+                    <button
+                      type="button"
+                      onClick={() => { setVerifyStep(false); setError(''); setCode(''); }}
+                      className="text-xs font-label text-on-surface-variant hover:text-primary transition-colors bg-transparent cursor-pointer"
+                    >
+                      &larr; {t('login.title')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResend}
+                      disabled={resendCooldown > 0}
+                      className="text-xs font-label text-on-surface-variant hover:text-primary transition-colors bg-transparent cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {resendCooldown > 0 ? `${t('register.verifyResend' as any)} (${resendCooldown}s)` : t('register.verifyResend' as any)}
+                    </button>
+                  </div>
+                </form>
+              </>
+            ) : (
+              /* ===== Normal Login Form ===== */
+              <>
+                <div className="mb-8 md:mb-10">
+                  <h3 className="font-headline text-2xl font-bold mb-1.5">{t('login.title')}</h3>
+                  <p className="text-on-surface-variant text-sm">{t('login.subtitle')}</p>
                 </div>
-                <GoogleButton mode="signin" onLoginSuccess={async () => {
-                  const storedToken = localStorage.getItem('token');
-                  if (storedToken) {
-                    try {
-                      const payload = JSON.parse(atob(storedToken.split('.')[1]));
-                      if (payload.role === 'admin') {
-                        router.push('/admin/overview');
-                        return;
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {error && (
+                    <div className={`px-4 py-3 rounded text-sm flex items-start gap-3 ${
+                      errorType === 'warning'
+                        ? 'bg-warning/10 border border-warning/20 text-warning'
+                        : errorType === 'info'
+                        ? 'bg-primary/10 border border-primary/20 text-primary'
+                        : 'bg-error-container/30 border border-error/20 text-on-error-container'
+                    }`}>
+                      <span className="material-symbols-outlined text-sm mt-0.5 shrink-0">
+                        {errorType === 'warning' ? 'hourglass_top' : errorType === 'info' ? 'lock' : 'error'}
+                      </span>
+                      {error}
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
+                      {t('login.emailLabel')}
+                    </label>
+                    <input
+                      className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-base md:text-sm font-body rounded placeholder:text-outline"
+                      type="email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      placeholder="your@email.com"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
+                      {t('login.passwordLabel')}
+                    </label>
+                    <input
+                      className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-base md:text-sm font-body rounded placeholder:text-outline"
+                      type="password"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="••••••••••••"
+                      required
+                    />
+                  </div>
+
+                  {/* Links — below password */}
+                  <div className="flex justify-between -mt-1">
+                    <Link
+                      href="/forgot-password"
+                      className="text-xs font-label text-on-surface-variant hover:text-primary transition-colors"
+                    >
+                      {t('login.forgotPassword' as any)}
+                    </Link>
+                    <Link
+                      href="/register"
+                      className="text-xs font-label text-on-surface-variant hover:text-primary transition-colors"
+                    >
+                      {t('login.noAccount')} {t('login.createAccount')} &rarr;
+                    </Link>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? t('login.submitLoading') : t('login.submit')}
+                  </button>
+                </form>
+
+                {/* Google OAuth */}
+                {googleClientId && (
+                  <div className="mt-5 flex flex-col items-center gap-4">
+                    <div className="w-full h-px bg-outline-variant/20 relative">
+                      <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-container-high px-4 text-xs uppercase tracking-widest text-outline">
+                        {t('login.orDivider')}
+                      </span>
+                    </div>
+                    <GoogleButton mode="signin" onLoginSuccess={async () => {
+                      const storedToken = localStorage.getItem('token');
+                      if (storedToken) {
+                        try {
+                          const payload = JSON.parse(atob(storedToken.split('.')[1]));
+                          if (payload.role === 'admin') {
+                            router.push('/admin/overview');
+                            return;
+                          }
+                        } catch { /* ignore */ }
                       }
-                    } catch { /* ignore */ }
-                  }
-                  router.push('/dashboard');
-                }} onError={(msg) => { setErrorType('error'); setError(msg); }} />
-              </div>
+                      router.push('/dashboard');
+                    }} onError={(msg) => { setErrorType('error'); setError(msg); }}
+                    onNeedsVerification={onGoogleNeedsVerification} />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </section>

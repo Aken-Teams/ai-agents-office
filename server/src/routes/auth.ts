@@ -337,16 +337,40 @@ router.post('/google', async (req: Request, res: Response) => {
         await dbRun("UPDATE users SET oauth_provider = 'google', oauth_id = ?, updated_at = NOW() WHERE id = ?", googleId, user.id);
       }
       const status = user.status || 'active';
-      if (status === 'pending_verification') { res.status(403).json({ error: '您的帳號尚未完成 Email 驗證', code: 'PENDING_VERIFICATION', email: user.email }); return; }
+      if (status === 'pending_verification') {
+        // Resend verification code for pending users
+        if (isEmailEnabled()) {
+          const code = generateVerificationCode();
+          const expiresAt = new Date(Date.now() + 10 * 60_000);
+          await dbRun('DELETE FROM email_verification_codes WHERE email = ?', email);
+          await dbRun('INSERT INTO email_verification_codes (id, email, code, expires_at) VALUES (?, ?, ?, ?)', uuidv4(), email, code, expiresAt);
+          await sendVerificationCode(email, code, 'zh-TW');
+        }
+        res.status(403).json({ error: '您的帳號尚未完成 Email 驗證', code: 'PENDING_VERIFICATION', needsVerification: true, email: user.email }); return;
+      }
       if (status === 'pending') { res.status(403).json({ error: '您的帳號正在等待管理者審核', code: 'PENDING' }); return; }
       if (status === 'suspended') { res.status(403).json({ error: '您的帳號已被停用，如有疑問請聯繫管理者', code: 'SUSPENDED' }); return; }
     } else {
+      // New Google user — same verification flow as email registration
       const id = uuidv4();
-      await dbRun(
-        "INSERT INTO users (id, email, password_hash, display_name, role, status, oauth_provider, oauth_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        id, email, OAUTH_NO_PASSWORD, name || null, 'user', 'pending', 'google', googleId
-      );
-      res.status(403).json({ error: '帳號已建立，請等待管理者審核後即可登入', code: 'PENDING' }); return;
+      if (isEmailEnabled()) {
+        await dbRun(
+          "INSERT INTO users (id, email, password_hash, display_name, role, status, oauth_provider, oauth_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          id, email, OAUTH_NO_PASSWORD, name || null, 'user', 'pending_verification', 'google', googleId
+        );
+        const code = generateVerificationCode();
+        const expiresAt = new Date(Date.now() + 10 * 60_000);
+        await dbRun('INSERT INTO email_verification_codes (id, email, code, expires_at) VALUES (?, ?, ?, ?)', uuidv4(), email, code, expiresAt);
+        await sendVerificationCode(email, code, 'zh-TW');
+        res.status(403).json({ needsVerification: true, email, code: 'PENDING_VERIFICATION' }); return;
+      } else {
+        // No email service — fallback to admin approval
+        await dbRun(
+          "INSERT INTO users (id, email, password_hash, display_name, role, status, oauth_provider, oauth_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          id, email, OAUTH_NO_PASSWORD, name || null, 'user', 'pending', 'google', googleId
+        );
+        res.status(403).json({ error: '帳號已建立，請等待管理者審核後即可登入', code: 'PENDING' }); return;
+      }
     }
 
     const role = user.role || 'user';

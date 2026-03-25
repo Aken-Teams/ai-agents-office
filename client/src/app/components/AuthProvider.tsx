@@ -18,7 +18,7 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: (token: string, tokenType?: 'credential' | 'access_token') => Promise<void>;
+  loginWithGoogle: (token: string, tokenType?: 'credential' | 'access_token') => Promise<{ needsVerification?: boolean; email?: string } | void>;
   register: (email: string, password: string, displayName: string) => Promise<{ pending: boolean; needsVerification: boolean; email?: string; message?: string }>;
   verifyEmail: (email: string, code: string) => Promise<void>;
   resendCode: (email: string) => Promise<void>;
@@ -89,14 +89,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Google login failed');
-    }
     const data = await res.json();
+    if (!res.ok) {
+      // Handle verification needed (new Google user or pending_verification)
+      if (data.needsVerification) {
+        return { needsVerification: true, email: data.email };
+      }
+      throw new Error(data.error || 'Google login failed');
+    }
     localStorage.setItem('token', data.token);
     setToken(data.token);
-    // Fetch full user profile (including oauthProvider, hasPassword, locale, theme)
     await fetchMe(data.token);
   }, []);
 
