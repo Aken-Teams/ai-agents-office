@@ -174,19 +174,21 @@ function ConversationDetailPanel({
   return (
     <>
       {/* Header: Title + User + Skill */}
-      <div className="flex items-center gap-3 px-4 md:px-8 py-4 border-b border-outline-variant/10">
-        <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: config.bgColor }}>
-          <span className="material-symbols-outlined" style={{ color: config.color, fontSize: 20 }}>{config.icon}</span>
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="text-base font-bold text-on-surface">{data.title}</h3>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-sm text-on-surface-variant">{data.user_display_name || data.user_email}</span>
-            <span className="text-on-surface-variant/30">·</span>
-            <span className="text-xs font-mono text-on-surface-variant">{data.user_email}</span>
+      <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 px-4 md:px-8 py-4 border-b border-outline-variant/10">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: config.bgColor }}>
+            <span className="material-symbols-outlined" style={{ color: config.color, fontSize: 20 }}>{config.icon}</span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-bold text-on-surface truncate">{data.title}</h3>
+            <div className="flex items-center gap-2 mt-0.5 overflow-hidden">
+              <span className="text-sm text-on-surface-variant truncate">{data.user_display_name || data.user_email}</span>
+              <span className="text-on-surface-variant/30 shrink-0">·</span>
+              <span className="text-xs font-mono text-on-surface-variant truncate">{data.user_email}</span>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 ml-[52px] md:ml-0 shrink-0">
           <span className="px-2 py-0.5 text-xs font-bold uppercase tracking-wider rounded" style={{ background: config.bgColor, color: config.color }}>{config.label}</span>
           <span className={`px-2 py-0.5 text-xs font-bold uppercase tracking-wider rounded ${data.status === 'active' ? 'bg-success/15 text-success' : 'bg-surface-container text-on-surface-variant'}`}>
             {data.status || 'active'}
@@ -196,26 +198,26 @@ function ConversationDetailPanel({
       </div>
 
       {/* Stats Row — right-aligned */}
-      <div className="px-4 md:px-8 py-3 border-b border-outline-variant/10 flex items-center justify-end gap-5 flex-wrap">
+      <div className="px-4 md:px-8 py-3 border-b border-outline-variant/10 flex items-center justify-start md:justify-end gap-3 md:gap-5 flex-wrap">
         <div className="flex items-center gap-1.5">
           <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 18 }}>chat</span>
           <span className="text-sm font-bold text-on-surface">{data.messages?.length ?? 0}</span>
           <span className="text-sm text-on-surface-variant">{t('admin.conversations.detail.messages')}</span>
         </div>
-        <span className="text-outline-variant/30">|</span>
-        <div className="flex items-center gap-1.5">
+        <span className="text-outline-variant/30 hidden md:inline">|</span>
+        <div className="flex items-center gap-1.5 flex-wrap">
           <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 18 }}>token</span>
-          <span className="text-sm text-on-surface-variant">{t('admin.conversations.detail.inputTokens' as any)}</span>
-          <span className="text-sm font-bold text-on-surface font-mono">{formatTokens(data.tokenUsage?.total_input ?? 0)}</span>
-          <span className="text-sm text-on-surface-variant">{t('admin.conversations.detail.outputTokens' as any)}</span>
-          <span className="text-sm font-bold text-on-surface font-mono">{formatTokens(data.tokenUsage?.total_output ?? 0)}</span>
+          <span className="text-xs md:text-sm text-on-surface-variant">{t('admin.conversations.detail.inputTokens' as any)}</span>
+          <span className="text-xs md:text-sm font-bold text-on-surface font-mono">{formatTokens(data.tokenUsage?.total_input ?? 0)}</span>
+          <span className="text-xs md:text-sm text-on-surface-variant">{t('admin.conversations.detail.outputTokens' as any)}</span>
+          <span className="text-xs md:text-sm font-bold text-on-surface font-mono">{formatTokens(data.tokenUsage?.total_output ?? 0)}</span>
           {calcCost(data.tokenUsage?.total_input ?? 0, data.tokenUsage?.total_output ?? 0) >= 0.01 && (
-            <span className="text-sm font-bold text-success font-mono">
+            <span className="text-xs md:text-sm font-bold text-success font-mono">
               ({formatCost(calcCost(data.tokenUsage?.total_input ?? 0, data.tokenUsage?.total_output ?? 0))})
             </span>
           )}
         </div>
-        <span className="text-outline-variant/30">|</span>
+        <span className="text-outline-variant/30 hidden md:inline">|</span>
         <div className="flex items-center gap-1.5">
           <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 18 }}>folder</span>
           <span className="text-sm font-bold text-on-surface">{data.files?.length ?? 0}</span>
