@@ -69,6 +69,15 @@ function formatTokens(n: number) {
   return String(n);
 }
 
+function calcCost(input: number, output: number): number {
+  return ((input / 1_000_000 * 3) + (output / 1_000_000 * 15)) * 10;
+}
+
+function formatCost(cost: number): string {
+  if (cost < 0.01) return '-';
+  return '$' + cost.toFixed(2);
+}
+
 function toUTC(dateStr: string): Date {
   if (!dateStr) return new Date(0);
   const s = dateStr.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(dateStr) ? dateStr : dateStr.replace(' ', 'T') + 'Z';
@@ -164,59 +173,53 @@ function ConversationDetailPanel({
 
   return (
     <>
-      {/* Header: Title */}
-      <div className="flex items-center gap-3 px-4 md:px-6 py-4 border-b border-outline-variant/10">
+      {/* Header: Title + User + Skill */}
+      <div className="flex items-center gap-3 px-4 md:px-8 py-4 border-b border-outline-variant/10">
         <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: config.bgColor }}>
           <span className="material-symbols-outlined" style={{ color: config.color, fontSize: 20 }}>{config.icon}</span>
         </div>
         <div className="min-w-0 flex-1">
           <h3 className="text-base font-bold text-on-surface">{data.title}</h3>
-          <p className="text-sm text-on-surface-variant">{data.user_display_name || data.user_email}</p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="text-sm text-on-surface-variant">{data.user_display_name || data.user_email}</span>
+            <span className="text-on-surface-variant/30">·</span>
+            <span className="text-xs font-mono text-on-surface-variant">{data.user_email}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="px-2 py-0.5 text-xs font-bold uppercase tracking-wider rounded" style={{ background: config.bgColor, color: config.color }}>{config.label}</span>
+          <span className={`px-2 py-0.5 text-xs font-bold uppercase tracking-wider rounded ${data.status === 'active' ? 'bg-success/15 text-success' : 'bg-surface-container text-on-surface-variant'}`}>
+            {data.status || 'active'}
+          </span>
+          <span className="text-xs text-on-surface-variant ml-2">{formatDate(data.created_at)}</span>
         </div>
       </div>
 
-      {/* Info Row: Skill + Status + Date */}
-      <div className="px-4 md:px-6 py-3 flex items-center gap-2 text-xs border-b border-outline-variant/10">
-        <span className="px-2 py-0.5 font-bold uppercase tracking-wider rounded" style={{ background: config.bgColor, color: config.color }}>{config.label}</span>
-        <span className={`px-2 py-0.5 font-bold uppercase tracking-wider rounded ${data.status === 'active' ? 'bg-success/15 text-success' : 'bg-surface-container text-on-surface-variant'}`}>
-          {data.status || 'active'}
-        </span>
-        <span className="text-on-surface-variant ml-auto">{formatDate(data.created_at)}</span>
-      </div>
-
-      {/* Token & File Stats */}
-      <div className="px-4 md:px-6 py-3 border-b border-outline-variant/10">
-        <div className="flex items-center justify-between text-xs">
-          <span className="uppercase tracking-wider text-on-surface-variant font-bold">{t('admin.conversations.detail.tokenUsage')}</span>
-          <span className="text-on-surface-variant">{data.messages?.length ?? 0} {t('admin.conversations.detail.messages')}</span>
+      {/* Stats Row — right-aligned */}
+      <div className="px-4 md:px-8 py-3 border-b border-outline-variant/10 flex items-center justify-end gap-5 flex-wrap">
+        <div className="flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 18 }}>chat</span>
+          <span className="text-sm font-bold text-on-surface">{data.messages?.length ?? 0}</span>
+          <span className="text-sm text-on-surface-variant">{t('admin.conversations.detail.messages')}</span>
         </div>
-        <div className="flex gap-4 mt-2">
-          <div>
-            <span className="text-xs text-on-surface-variant">In </span>
-            <span className="text-sm font-bold text-on-surface">{formatTokens(data.tokenUsage?.total_input ?? 0)}</span>
-          </div>
-          <div>
-            <span className="text-xs text-on-surface-variant">Out </span>
-            <span className="text-sm font-bold text-on-surface">{formatTokens(data.tokenUsage?.total_output ?? 0)}</span>
-          </div>
-          <div className="ml-auto">
-            <span className="text-xs text-on-surface-variant">{t('admin.conversations.detail.files')} </span>
-            <span className="text-sm font-bold text-on-surface">{data.files?.length ?? 0}</span>
-          </div>
+        <span className="text-outline-variant/30">|</span>
+        <div className="flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 18 }}>token</span>
+          <span className="text-sm text-on-surface-variant">{t('admin.conversations.detail.inputTokens' as any)}</span>
+          <span className="text-sm font-bold text-on-surface font-mono">{formatTokens(data.tokenUsage?.total_input ?? 0)}</span>
+          <span className="text-sm text-on-surface-variant">{t('admin.conversations.detail.outputTokens' as any)}</span>
+          <span className="text-sm font-bold text-on-surface font-mono">{formatTokens(data.tokenUsage?.total_output ?? 0)}</span>
+          {calcCost(data.tokenUsage?.total_input ?? 0, data.tokenUsage?.total_output ?? 0) >= 0.01 && (
+            <span className="text-sm font-bold text-success font-mono">
+              ({formatCost(calcCost(data.tokenUsage?.total_input ?? 0, data.tokenUsage?.total_output ?? 0))})
+            </span>
+          )}
         </div>
-      </div>
-
-      {/* User Info */}
-      <div className="px-4 md:px-6 py-3 border-b border-outline-variant/10">
-        <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold mb-1.5">{t('admin.conversations.detail.user')}</p>
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded bg-primary/15 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-            {(data.user_display_name || data.user_email || 'U')[0].toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm text-on-surface font-medium truncate">{data.user_display_name || data.user_email?.split('@')[0]}</p>
-            <p className="text-xs text-on-surface-variant font-mono truncate">{data.user_email}</p>
-          </div>
+        <span className="text-outline-variant/30">|</span>
+        <div className="flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 18 }}>folder</span>
+          <span className="text-sm font-bold text-on-surface">{data.files?.length ?? 0}</span>
+          <span className="text-sm text-on-surface-variant">{t('admin.conversations.detail.files')}</span>
         </div>
       </div>
 
@@ -556,7 +559,12 @@ export default function AdminConversationsPage() {
                       <span className="text-xs font-bold uppercase tracking-wider" style={{ color: config.color }}>{config.label}</span>
                     </td>
                     <td className="py-3 px-4 text-center text-sm text-on-surface-variant">{conv.message_count || 0}</td>
-                    <td className="py-3 px-4 text-right text-sm text-on-surface font-mono">{totalTk > 0 ? formatTokens(totalTk) : '-'}</td>
+                    <td className="py-3 px-4 text-right text-sm font-mono">
+                      <span className="text-on-surface">{totalTk > 0 ? formatTokens(totalTk) : '-'}</span>
+                      {calcCost(conv.total_input_tokens || 0, conv.total_output_tokens || 0) >= 0.01 && (
+                        <span className="text-xs text-success ml-1">({formatCost(calcCost(conv.total_input_tokens || 0, conv.total_output_tokens || 0))})</span>
+                      )}
+                    </td>
                     <td className="py-3 px-4 text-right text-sm text-on-surface-variant">{conv.file_count || 0}</td>
                     <td className="py-3 px-4 text-sm text-on-surface-variant font-mono">
                       {toUTC(conv.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
@@ -599,7 +607,12 @@ export default function AdminConversationsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-4 mt-2 ml-[52px] text-[11px] text-on-surface-variant">
-                  <span className="font-mono">{totalTk > 0 ? formatTokens(totalTk) + ' tokens' : '-'}</span>
+                  <span className="font-mono">
+                    {totalTk > 0 ? formatTokens(totalTk) : '-'}
+                    {calcCost(conv.total_input_tokens || 0, conv.total_output_tokens || 0) >= 0.01 && (
+                      <span className="text-success ml-1">({formatCost(calcCost(conv.total_input_tokens || 0, conv.total_output_tokens || 0))})</span>
+                    )}
+                  </span>
                   <span>{conv.message_count || 0} msg</span>
                   <span>{conv.file_count || 0} {t('admin.conversations.table.files' as any)}</span>
                   <span className="ml-auto font-mono">{toUTC(conv.created_at).toLocaleDateString('zh-TW')}</span>

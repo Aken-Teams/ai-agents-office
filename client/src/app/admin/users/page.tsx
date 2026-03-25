@@ -12,8 +12,19 @@ interface UserRow {
   role: string;
   created_at: string;
   total_tokens: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
   file_count: number;
   conversation_count: number;
+}
+
+function calcCost(input: number, output: number): number {
+  return ((input / 1_000_000 * 3) + (output / 1_000_000 * 15)) * 10;
+}
+
+function formatCost(cost: number): string {
+  if (cost < 0.01) return '-';
+  return '$' + cost.toFixed(2);
 }
 
 interface UserDetail {
@@ -238,7 +249,7 @@ export default function AdminUsers() {
             <span className="uppercase tracking-wider text-on-surface-variant font-bold">{t('admin.users.detail.tokenUsage')}</span>
             <span className="text-on-surface-variant">{detail.tokenStats.invocation_count} calls</span>
           </div>
-          <div className="flex gap-4 mt-2">
+          <div className="flex gap-4 mt-2 items-center">
             <div>
               <span className="text-xs text-on-surface-variant">{t('admin.users.detail.tokenInput')} </span>
               <span className="text-sm font-bold text-on-surface">{formatTokens(detail.tokenStats.total_input)}</span>
@@ -247,6 +258,11 @@ export default function AdminUsers() {
               <span className="text-xs text-on-surface-variant">{t('admin.users.detail.tokenOutput')} </span>
               <span className="text-sm font-bold text-on-surface">{formatTokens(detail.tokenStats.total_output)}</span>
             </div>
+            {calcCost(detail.tokenStats.total_input, detail.tokenStats.total_output) >= 0.01 && (
+              <div className="ml-auto">
+                <span className="text-sm font-bold text-success font-mono">{formatCost(calcCost(detail.tokenStats.total_input, detail.tokenStats.total_output))}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -404,7 +420,12 @@ export default function AdminUsers() {
                     </td>
                     <td className="py-3 px-4"><RoleBadge role={user.role} /></td>
                     <td className="py-3 px-4"><StatusBadge status={user.status} /></td>
-                    <td className="py-3 px-4 text-right text-sm text-on-surface font-mono">{formatTokens(user.total_tokens)}</td>
+                    <td className="py-3 px-4 text-right text-sm font-mono">
+                      <span className="text-on-surface">{formatTokens(user.total_tokens)}</span>
+                      {calcCost(user.total_input_tokens, user.total_output_tokens) >= 0.01 && (
+                        <span className="text-xs text-success ml-1">({formatCost(calcCost(user.total_input_tokens, user.total_output_tokens))})</span>
+                      )}
+                    </td>
                     <td className="py-3 px-4 text-right text-sm text-on-surface-variant">{user.conversation_count}</td>
                     <td className="py-3 px-4 text-right text-sm text-on-surface-variant">{user.file_count}</td>
                   </tr>
@@ -440,7 +461,12 @@ export default function AdminUsers() {
                   <StatusBadge status={user.status} />
                 </div>
                 <div className="flex items-center gap-4 mt-2 ml-[52px] text-[11px] text-on-surface-variant">
-                  <span className="font-mono">{formatTokens(user.total_tokens)} tokens</span>
+                  <span className="font-mono">
+                    {formatTokens(user.total_tokens)}
+                    {calcCost(user.total_input_tokens, user.total_output_tokens) >= 0.01 && (
+                      <span className="text-success ml-1">({formatCost(calcCost(user.total_input_tokens, user.total_output_tokens))})</span>
+                    )}
+                  </span>
                   <span>{user.conversation_count} {t('admin.users.table.conversations')}</span>
                   <span>{user.file_count} {t('admin.users.table.files')}</span>
                   <span className="ml-auto font-mono">{toUTC(user.created_at).toLocaleDateString('zh-TW')}</span>

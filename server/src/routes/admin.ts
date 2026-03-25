@@ -124,11 +124,14 @@ router.get('/users', async (req: Request, res: Response) => {
     SELECT
       u.id, u.email, u.display_name, u.status, u.role, u.created_at,
       COALESCE(t.total_tokens, 0) as total_tokens,
+      COALESCE(t.total_input, 0) as total_input_tokens,
+      COALESCE(t.total_output, 0) as total_output_tokens,
       COALESCE(f.file_count, 0) as file_count,
       COALESCE(c.conv_count, 0) as conversation_count
     FROM users u
     LEFT JOIN (
-      SELECT user_id, SUM(input_tokens + output_tokens) as total_tokens
+      SELECT user_id, SUM(input_tokens + output_tokens) as total_tokens,
+        SUM(input_tokens) as total_input, SUM(output_tokens) as total_output
       FROM token_usage GROUP BY user_id
     ) t ON t.user_id = u.id
     LEFT JOIN (
