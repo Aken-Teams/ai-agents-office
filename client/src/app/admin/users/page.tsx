@@ -11,6 +11,7 @@ interface UserRow {
   status: string;
   role: string;
   created_at: string;
+  last_login_at: string | null;
   total_tokens: number;
   total_input_tokens: number;
   total_output_tokens: number;
@@ -467,12 +468,12 @@ export default function AdminUsers() {
               <thead className="sticky top-0 bg-surface-container-lowest">
                 <tr className="text-left text-sm uppercase tracking-widest text-on-surface-variant">
                   <th className="py-3 px-4 font-bold">{t('admin.users.table.user')}</th>
-                  <th className="py-3 px-4 font-bold">{t('admin.users.table.registered')}</th>
                   <th className="py-3 px-4 font-bold">{t('admin.users.table.role')}</th>
                   <th className="py-3 px-4 font-bold">{t('admin.users.table.status')}</th>
                   <th className="py-3 px-4 font-bold text-right">Tokens</th>
                   <th className="py-3 px-4 font-bold text-right">{t('admin.users.table.conversations')}</th>
                   <th className="py-3 px-4 font-bold text-right">{t('admin.users.table.files')}</th>
+                  <th className="py-3 px-4 font-bold text-right">{t('admin.users.table.dates' as any)}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/10">
@@ -493,9 +494,6 @@ export default function AdminUsers() {
                         </div>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-sm text-on-surface-variant font-mono">
-                      {toUTC(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                    </td>
                     <td className="py-3 px-4"><RoleBadge role={user.role} /></td>
                     <td className="py-3 px-4"><StatusBadge status={user.status} /></td>
                     <td className="py-3 px-4 text-right text-sm font-mono">
@@ -506,6 +504,10 @@ export default function AdminUsers() {
                     </td>
                     <td className="py-3 px-4 text-right text-sm text-on-surface-variant">{user.conversation_count}</td>
                     <td className="py-3 px-4 text-right text-sm text-on-surface-variant">{user.file_count}</td>
+                    <td className="py-3 px-4 text-right text-xs font-mono leading-relaxed">
+                      <div className="text-on-surface-variant">{toUTC(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</div>
+                      <div className="text-on-surface-variant/60">{user.last_login_at ? toUTC(user.last_login_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'}</div>
+                    </td>
                   </tr>
                 ))}
                 {users.length === 0 && (
@@ -547,7 +549,7 @@ export default function AdminUsers() {
                   </span>
                   <span>{user.conversation_count} {t('admin.users.table.conversations')}</span>
                   <span>{user.file_count} {t('admin.users.table.files')}</span>
-                  <span className="ml-auto font-mono">{toUTC(user.created_at).toLocaleDateString('zh-TW')}</span>
+                  <span className="ml-auto font-mono">{user.last_login_at ? toUTC(user.last_login_at).toLocaleDateString('zh-TW') : '-'}</span>
                 </div>
               </div>
             ))}

@@ -122,7 +122,7 @@ router.get('/users', async (req: Request, res: Response) => {
 
   const rows = await dbAll(`
     SELECT
-      u.id, u.email, u.display_name, u.status, u.role, u.created_at,
+      u.id, u.email, u.display_name, u.status, u.role, u.created_at, u.last_login_at,
       COALESCE(t.total_tokens, 0) as total_tokens,
       COALESCE(t.total_input, 0) as total_input_tokens,
       COALESCE(t.total_output, 0) as total_output_tokens,

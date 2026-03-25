@@ -613,6 +613,7 @@ const zhCN = {
   'admin.users.table.status': '状态',
   'admin.users.table.files': '文件',
   'admin.users.table.conversations': '对话',
+  'admin.users.table.dates': '注册 / 最后登录',
   'admin.users.table.empty': '未找到用户',
   'admin.users.pagination.summary': '第 {start}-{end} 笔，共 {total} 个身份',
   'admin.users.detail.title': '用户详情',

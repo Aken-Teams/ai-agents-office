@@ -75,6 +75,7 @@ export async function initializeDatabase(): Promise<void> {
         oauth_provider VARCHAR(50),
         oauth_id      VARCHAR(255),
         quota_override DECIMAL(10,2) DEFAULT NULL,
+        last_login_at DATETIME DEFAULT NULL,
         created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -84,6 +85,13 @@ export async function initializeDatabase(): Promise<void> {
     try {
       await conn.query('ALTER TABLE users ADD COLUMN quota_override DECIMAL(10,2) DEFAULT NULL');
     } catch { /* column already exists */ }
+
+    // Add last_login_at column if not exists (migration for existing databases)
+    try {
+      await conn.query('ALTER TABLE users ADD COLUMN last_login_at DATETIME DEFAULT NULL');
+    } catch { /* column already exists */ }
+    // Backfill: set last_login_at to created_at for users who haven't logged in since migration
+    await conn.query('UPDATE users SET last_login_at = created_at WHERE last_login_at IS NULL');
 
     await conn.query(`
       CREATE TABLE IF NOT EXISTS conversations (

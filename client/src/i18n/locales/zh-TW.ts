@@ -617,6 +617,7 @@ const zhTW = {
   'admin.users.table.status': '狀態',
   'admin.users.table.files': '檔案',
   'admin.users.table.conversations': '對話',
+  'admin.users.table.dates': '註冊 / 最後登入',
   'admin.users.table.empty': '未找到用戶',
   'admin.users.pagination.summary': '第 {start}-{end} 筆，共 {total} 個身份',
   'admin.users.detail.title': '用戶詳情',

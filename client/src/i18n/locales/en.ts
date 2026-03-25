@@ -600,6 +600,7 @@ const en = {
   'admin.users.table.status': 'Status',
   'admin.users.table.files': 'Files',
   'admin.users.table.conversations': 'Chats',
+  'admin.users.table.dates': 'Registered / Last Login',
   'admin.users.table.empty': 'No users found',
   'admin.users.pagination.summary': '{start}-{end} of {total} identities',
   'admin.users.detail.title': 'User Detail',

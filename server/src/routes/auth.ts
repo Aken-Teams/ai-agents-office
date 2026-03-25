@@ -200,6 +200,7 @@ router.post('/verify-email', async (req: Request, res: Response) => {
 
     // Auto-login after verification
     const role = user.role || 'user';
+    await dbRun('UPDATE users SET last_login_at = NOW() WHERE id = ?', user.id);
     const token = jwt.sign({ userId: user.id, email: user.email, role }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
     res.json({ token, user: { id: user.id, email: user.email, displayName: user.display_name, role } });
   } catch (error) {
@@ -294,6 +295,7 @@ router.post('/login', async (req: Request, res: Response) => {
       }
     }
 
+    await dbRun('UPDATE users SET last_login_at = NOW() WHERE id = ?', user.id);
     const token = jwt.sign({ userId: user.id, email: user.email, role }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
     res.json({ token, user: { id: user.id, email: user.email, displayName: user.display_name, role } });
   } catch (error) {
@@ -381,6 +383,7 @@ router.post('/google', async (req: Request, res: Response) => {
       }
     }
 
+    await dbRun('UPDATE users SET last_login_at = NOW() WHERE id = ?', user.id);
     const token = jwt.sign({ userId: user.id, email: user.email, role }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
     res.json({ token, user: { id: user.id, email: user.email, displayName: user.display_name, role } });
   } catch (error) {
