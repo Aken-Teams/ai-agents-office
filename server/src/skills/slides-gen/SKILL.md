@@ -109,6 +109,7 @@ Set `"layout"` to one of:
 
 **Layout selection by slide type:**
 - `icon-grid`: **ALWAYS use `"top-bottom"`** — grid items need full width to display as 3 columns × 2 rows. Split layouts force 2 columns which overflows on most screens.
+- `team`: **ALWAYS use `"top-bottom"`** — team member cards need full width to display side by side. Split layouts compress cards vertically.
 - `chart`, `diagram`, `mindmap`: prefer `"split-left"` or `"split-right"` for visual variety
 - `table`: prefer `"top-bottom"` (tables need full width)
 - `stats`, `process`, `timeline`: `"split-left"` or `"split-right"` work well
@@ -592,9 +593,11 @@ Map types: `"world"`, `"china"`. Region names must match GeoJSON feature names (
 
 ### Team
 
-**`"team"`** — Team member cards with circular photos.
+**`"team"`** — Team member cards with circular photos. **Always use `"layout": "top-bottom"`** so cards get full width.
 ```json
-{ "type": "team", "title": "Our Team",
+{ "type": "team", "title": "Our Team", "layout": "top-bottom",
+  "description": "Our experienced leadership team drives innovation.",
+  "highlights": ["Combined 30+ years of experience", "Background from top-tier companies"],
   "members": [
     { "photo": "https://images.unsplash.com/photo-xxx?w=300&h=300&fit=crop&crop=face", "name": "Alice", "role": "CEO", "description": "Visionary leader" },
     { "photo": "https://images.unsplash.com/photo-yyy?w=300&h=300&fit=crop&crop=face", "name": "Bob", "role": "CTO", "description": "Tech architect" }
@@ -743,7 +746,7 @@ Style: `elegant` or `creative`. Search Unsplash for portrait + lifestyle photos.
 5. process    — How it works, layout: split-right, description + highlights
 6. chart      — Revenue/growth chart, layout: split-left, description + highlights
 7. table      — Competitive comparison, layout: top-bottom, description + highlights
-8. team       — Founding team, layout: split-right, description about the team
+8. team       — Founding team, layout: top-bottom, description + highlights
 9. dashboard  — KPI overview + chart (already compound)
 10. timeline  — Roadmap, layout: split-left, description + highlights
 11. stats     — Investment ask, layout: split-right, description + highlights

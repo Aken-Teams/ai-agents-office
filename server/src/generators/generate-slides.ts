@@ -598,16 +598,16 @@ function buildEChartsOption(chart: ChartData, s: StylePreset): object {
       const max = chart.gaugeMax ?? 100;
       return {
         series: [{
-          type: 'gauge', min: 0, max,
-          progress: { show: true, width: 18, itemStyle: { color: s.accentColor } },
-          axisLine: { lineStyle: { width: 18, color: [[1, splitLineColor]] } },
+          type: 'gauge', min: 0, max, radius: '85%',
+          progress: { show: true, width: 14, itemStyle: { color: s.accentColor } },
+          axisLine: { lineStyle: { width: 14, color: [[1, splitLineColor]] } },
           axisTick: { show: false },
-          splitLine: { length: 12, lineStyle: { width: 2, color: textColor } },
-          axisLabel: { distance: 25, color: textColor, fontSize: 12 },
-          pointer: { width: 5, length: '60%', itemStyle: { color: s.accentColor } },
-          anchor: { show: true, size: 16, itemStyle: { borderWidth: 2, borderColor: s.accentColor, color: isDark ? '#1a1a2e' : '#fff' } },
-          title: { show: true, offsetCenter: [0, '70%'], fontSize: 16, color: textColor },
-          detail: { valueAnimation: true, fontSize: 36, fontWeight: 700, color: s.titleColor, offsetCenter: [0, '45%'], formatter: '{value}' },
+          splitLine: { length: 10, lineStyle: { width: 2, color: textColor } },
+          axisLabel: { distance: 18, color: textColor, fontSize: 10 },
+          pointer: { width: 4, length: '55%', itemStyle: { color: s.accentColor } },
+          anchor: { show: true, size: 12, itemStyle: { borderWidth: 2, borderColor: s.accentColor, color: isDark ? '#1a1a2e' : '#fff' } },
+          title: { show: true, offsetCenter: [0, '70%'], fontSize: 14, color: textColor },
+          detail: { valueAnimation: true, fontSize: 28, fontWeight: 700, color: s.titleColor, offsetCenter: [0, '42%'], formatter: '{value}' },
           data: [{ value: val, name: chart.gaugeLabel || '' }],
           animationDuration: 2000,
         }],
@@ -1870,10 +1870,13 @@ ${s.isDark ? `.mindmap-svg > g > rect, .mindmap-svg > rect { fill: transparent !
   .gallery { grid-template-columns: 1fr !important; grid-template-rows: auto !important; }
   .gallery-1-hero-2-small .gallery-item:first-child { grid-row: auto; }
 
-  /* Team → stack */
-  .team-grid { flex-direction: column; align-items: center; gap: 1em; }
-  .team-card { flex: none; width: 100%; max-width: 320px; padding: 1.4em 1em; }
-  .team-photo { width: 80px; height: 80px; }
+  /* Team → horizontal cards stacked vertically */
+  .team-grid { flex-direction: column; align-items: stretch; gap: 0.8em; }
+  .team-card { flex: none; width: 100%; max-width: 100%; padding: 1em 1.2em; display: flex; flex-direction: row; align-items: center; gap: 1em; text-align: left; }
+  .team-photo { width: 64px; height: 64px; margin: 0; flex-shrink: 0; }
+  .team-photo-placeholder { width: 64px; height: 64px; margin: 0; flex-shrink: 0; }
+  .team-name { font-size: 0.9em; }
+  .team-role { font-size: 0.6em; }
 
   /* Table → horizontal scroll */
   .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; }
@@ -1935,8 +1938,13 @@ ${s.isDark ? `.mindmap-svg > g > rect, .mindmap-svg > rect { fill: transparent !
   /* Icon grid → single column */
   .icon-grid { grid-template-columns: 1fr !important; }
 
-  /* Team card narrower */
-  .team-card { max-width: 100%; }
+  /* Team card → even more compact */
+  .team-card { padding: 0.8em 1em; gap: 0.8em; }
+  .team-photo { width: 52px; height: 52px; }
+  .team-photo-placeholder { width: 52px; height: 52px; }
+  .team-name { font-size: 0.8em; }
+  .team-role { font-size: 0.55em; }
+  .team-desc { font-size: 0.5em; }
 
   /* Charts minimal height */
   .echart-container { height: 220px; }
