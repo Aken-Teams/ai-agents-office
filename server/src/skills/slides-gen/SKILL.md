@@ -101,15 +101,21 @@ A slide with ONLY a chart or ONLY a stats grid looks empty and unprofessional. A
 Set `"layout"` to one of:
 - `"split-left"` — visual on left (38%), narrative text on right (62%)
 - `"split-right"` — narrative text on left (62%), visual on right (38%)
-- `"top-bottom"` — visual on top, narrative text below
+- `"top-bottom"` — narrative text on top, visual below (full width)
 
 **Always provide these fields alongside the visual:**
 - `"description"` — 1-3 sentences explaining what the visual shows and why it matters (max 300 chars)
 - `"highlights"` — 2-4 short key takeaway phrases
 
+**Layout selection by slide type:**
+- `icon-grid`: **ALWAYS use `"top-bottom"`** — grid items need full width to display as 3 columns × 2 rows. Split layouts force 2 columns which overflows on most screens.
+- `chart`, `diagram`, `mindmap`: prefer `"split-left"` or `"split-right"` for visual variety
+- `table`: prefer `"top-bottom"` (tables need full width)
+- `stats`, `process`, `timeline`: `"split-left"` or `"split-right"` work well
+
 **Layout alternation for variety:**
 - Alternate between `"split-left"` and `"split-right"` across consecutive visual slides
-- Use `"top-bottom"` for dashboard-like overview slides
+- Use `"top-bottom"` for icon-grid, table, and dashboard-like overview slides
 - NEVER use the same layout direction for 3+ consecutive slides
 
 ### Rule 12: Use `sideImage` on Title Slides
@@ -325,7 +331,7 @@ When the user gives a short or vague prompt (e.g. "make a presentation about AI"
 ```
 1. title        — Topic + tagline + sideImage (Storyset)
 2. stats        — 4 key metrics + sideImage, layout: split-right
-3. icon-grid    — 6 core concepts/features (columns: 3, fragments: true)
+3. icon-grid    — 6 core concepts/features (columns: 3, layout: top-bottom)
 4. chart (bar)  — Primary data, layout: split-left, description + highlights
 5. dashboard    — 3 KPIs + line chart
 6. process      — 4-5 steps + sideImage
@@ -535,9 +541,12 @@ Map types: `"world"`, `"china"`. Region names must match GeoJSON feature names (
 
 ### Icon Grid
 
-**`"icon-grid"`** — Feature/concept grid with Material Symbols icons.
+**`"icon-grid"`** — Feature/concept grid with Material Symbols icons. **Always use `"layout": "top-bottom"`** so the grid gets full width (3 columns × 2 rows). Split layouts force 2 columns which overflows.
 ```json
-{ "type": "icon-grid", "title": "Core Features", "columns": 3, "items": [
+{ "type": "icon-grid", "title": "Core Features", "columns": 3, "layout": "top-bottom",
+  "description": "Our platform provides enterprise-grade capabilities out of the box.",
+  "highlights": ["Zero-config deployment", "Real-time monitoring"],
+  "items": [
   { "icon": "rocket_launch", "title": "Fast Deploy", "description": "Ship in minutes" },
   { "icon": "security", "title": "Secure", "description": "Enterprise-grade" },
   { "icon": "analytics", "title": "Analytics", "description": "Real-time insights" }
@@ -730,7 +739,7 @@ Style: `elegant` or `creative`. Search Unsplash for portrait + lifestyle photos.
 1. title      — Company name + tagline + sideImage (thematic photo)
 2. content    — Problem statement (fragments: true)
 3. stats      — Market opportunity, layout: split-right, description + highlights
-4. icon-grid  — Solution features, layout: split-left, description + highlights
+4. icon-grid  — Solution features, layout: top-bottom, description + highlights
 5. process    — How it works, layout: split-right, description + highlights
 6. chart      — Revenue/growth chart, layout: split-left, description + highlights
 7. table      — Competitive comparison, layout: top-bottom, description + highlights
