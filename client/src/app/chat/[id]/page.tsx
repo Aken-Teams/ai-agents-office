@@ -1674,9 +1674,7 @@ function ChatContent() {
                   <iframe
                     src={previewBlobUrl}
                     sandbox="allow-scripts allow-same-origin"
-                    scrolling="no"
                     className="w-full h-full rounded-lg border border-outline-variant/20"
-                    style={{ overflow: 'hidden' }}
                     title={previewFile.filename}
                   />
                 ) : (
