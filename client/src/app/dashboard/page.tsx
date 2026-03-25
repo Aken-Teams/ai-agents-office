@@ -36,6 +36,7 @@ const DOC_TYPES = [
   { id: 'xlsx-gen', labelKey: 'nav.docTypes.xlsx.label' as const, descKey: 'nav.docTypes.xlsx.desc' as const, icon: 'table_chart', colorClass: 'text-success' },
   { id: 'pdf-gen', labelKey: 'nav.docTypes.pdf.label' as const, descKey: 'nav.docTypes.pdf.desc' as const, icon: 'picture_as_pdf', colorClass: 'text-error' },
   { id: 'slides-gen', labelKey: 'nav.docTypes.slides.label' as const, descKey: 'nav.docTypes.slides.desc' as const, icon: 'slideshow', colorClass: 'text-secondary' },
+  { id: 'webapp-gen', labelKey: 'nav.docTypes.webapp.label' as const, descKey: 'nav.docTypes.webapp.desc' as const, icon: 'dashboard', colorClass: 'text-primary' },
   { id: 'data-analyst', labelKey: 'nav.docTypes.dataAnalyst.label' as const, descKey: 'nav.docTypes.dataAnalyst.desc' as const, icon: 'analytics', colorClass: 'text-primary' },
   { id: 'rag-analyst', labelKey: 'nav.docTypes.ragAnalyst.label' as const, descKey: 'nav.docTypes.ragAnalyst.desc' as const, icon: 'hub', colorClass: 'text-tertiary' },
   { id: 'research', labelKey: 'nav.docTypes.research.label' as const, descKey: 'nav.docTypes.research.desc' as const, icon: 'travel_explore', colorClass: 'text-on-surface-variant' },
@@ -47,6 +48,7 @@ const SKILL_ICONS: Record<string, string> = {
   'xlsx-gen': 'table_chart',
   'pdf-gen': 'picture_as_pdf',
   'slides-gen': 'slideshow',
+  'webapp-gen': 'dashboard',
   'rag-analyst': 'hub',
 };
 

@@ -422,6 +422,12 @@ router.get('/tokens/ledger', async (req: Request, res: Response) => {
     SELECT
       tu.id, tu.user_id, u.email, u.display_name,
       tu.conversation_id, c.title as conversation_title,
+      (SELECT content FROM messages
+       WHERE conversation_id = tu.conversation_id
+         AND role = 'user'
+         AND created_at <= tu.created_at
+       ORDER BY created_at DESC
+       LIMIT 1) as user_prompt,
       tu.input_tokens, tu.output_tokens, tu.model, tu.duration_ms, tu.created_at
     FROM token_usage tu
     LEFT JOIN users u ON u.id = tu.user_id

@@ -34,6 +34,7 @@ interface LedgerEntry {
   display_name: string | null;
   conversation_id: string | null;
   conversation_title: string | null;
+  user_prompt: string | null;
   input_tokens: number;
   output_tokens: number;
   model: string | null;
@@ -302,8 +303,8 @@ export default function AdminTokens() {
                 return (
                   <tr key={entry.id} className="hover:bg-surface-container-high/50 transition-colors">
                     <td className="py-3 px-6 text-sm text-primary font-mono">{entry.id.slice(0, 8)}</td>
-                    <td className="py-3 px-6 text-sm text-on-surface truncate max-w-[200px]">
-                      {entry.conversation_title || '\u2014'}
+                    <td className="py-3 px-6 text-sm text-on-surface truncate max-w-[300px]" title={entry.user_prompt || entry.conversation_title || ''}>
+                      {entry.user_prompt || entry.conversation_title || '\u2014'}
                     </td>
                     <td className="py-3 px-6 max-w-[180px]">
                       <p className="text-sm text-on-surface truncate">{entry.display_name || entry.email.split('@')[0]}</p>
@@ -337,7 +338,7 @@ export default function AdminTokens() {
                     <span className="text-xs text-primary font-mono">{entry.id.slice(0, 8)}</span>
                     <span className="text-[10px] text-on-surface-variant">{timeAgo(entry.created_at)}</span>
                   </div>
-                  <p className="text-sm text-on-surface font-medium truncate">{entry.conversation_title || '\u2014'}</p>
+                  <p className="text-sm text-on-surface font-medium truncate">{entry.user_prompt || entry.conversation_title || '\u2014'}</p>
                   <p className="text-xs text-on-surface-variant truncate">{entry.display_name || entry.email.split('@')[0]}</p>
                   <div className="flex items-center gap-3 mt-1.5 text-xs text-on-surface-variant font-mono">
                     <span>{formatTokens(entry.input_tokens + entry.output_tokens)} tokens</span>

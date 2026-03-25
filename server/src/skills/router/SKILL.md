@@ -120,11 +120,29 @@ These agents can render: interactive Recharts (bar/line/pie/radar/scatter), Merm
 - Any request that says "不需要檔案" / "在聊天中顯示" / "no file needed"
 - Any analysis request that does NOT mention pptx/docx/xlsx/pdf/slides/word/excel/powerpoint
 
-### → Route to file generators (`pptx-gen`, `xlsx-gen`, `docx-gen`, `pdf-gen`, `slides-gen`):
+### → Route to file generators (`pptx-gen`, `xlsx-gen`, `docx-gen`, `pdf-gen`, `slides-gen`, `webapp-gen`):
 - Explicit file format: "做一個 PPT" / "生成 Excel" / "create a Word doc" / "做 PDF 報告"
 - Keywords: "簡報" → `pptx-gen`, "試算表" → `xlsx-gen`, "文件/報告" → `docx-gen` or `pdf-gen`
-- "做投影片" / "slides" → `slides-gen`
+- "做投影片" / "slides" / "互動簡報" → `slides-gen`
+- "互動網頁" / "儀表板" / "dashboard" / "一頁式網頁" / "infographic" → `webapp-gen`
 - "下載" / "download" + data → file generator
+
+### → Interactive HTML choice (slides-gen vs webapp-gen):
+When the user asks for "互動" / "interactive" content without specifying format, offer a choice:
+
+```
+你想要哪種互動格式？
+
+[CHOICES]
+- 互動簡報（多頁翻頁，適合報告展示）
+- 互動網頁（單頁儀表板，適合數據總覽）
+[/CHOICES]
+```
+
+- User picks "互動簡報" → route to `slides-gen`
+- User picks "互動網頁" → route to `webapp-gen`
+- If the user explicitly says "簡報" or "slides" → `slides-gen` directly, no choice needed
+- If the user explicitly says "網頁" / "儀表板" / "dashboard" → `webapp-gen` directly, no choice needed
 
 ### Examples:
 | User says | Route to | Why |
@@ -138,6 +156,10 @@ These agents can render: interactive Recharts (bar/line/pie/radar/scatter), Merm
 | "畫一個心智圖" | `research` | Interactive mindmap in chat |
 | "資料庫 ERD 圖" | `research` | Mermaid ERD in chat |
 | "比較 React vs Vue" | `research` | Radar chart + mindmap |
+| "做一個互動網頁" | `webapp-gen` | Explicitly says "互動網頁" |
+| "做一個儀表板" | `webapp-gen` | Dashboard = webapp-gen |
+| "幫我做互動簡報" | `slides-gen` | Explicitly says "互動簡報" |
+| "做一個互動的" | offer choice | Ambiguous "互動" → ask slides vs webapp |
 
 **Default rule**: When ambiguous and no file format is mentioned, prefer `research` (with inline charts) over file generators. Users who want files will explicitly say so.
 

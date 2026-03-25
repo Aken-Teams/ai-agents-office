@@ -96,7 +96,7 @@ interface AgentTask {
 }
 
 const SKILL_IDS = [
-  'pptx-gen', 'docx-gen', 'xlsx-gen', 'pdf-gen', 'slides-gen',
+  'pptx-gen', 'docx-gen', 'xlsx-gen', 'pdf-gen', 'slides-gen', 'webapp-gen',
   'research', 'data-analyst', 'rag-analyst', 'planner', 'reviewer', 'router',
 ] as const;
 
@@ -106,6 +106,7 @@ const SKILL_ICONS: Record<string, string> = {
   'xlsx-gen': 'table_chart',
   'pdf-gen': 'picture_as_pdf',
   'slides-gen': 'slideshow',
+  'webapp-gen': 'dashboard',
   'data-analyst': 'analytics',
   'rag-analyst': 'search_insights',
 };

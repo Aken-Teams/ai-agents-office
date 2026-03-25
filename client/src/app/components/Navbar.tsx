@@ -22,6 +22,7 @@ const DOC_TYPES = [
   { id: 'xlsx-gen', labelKey: 'nav.docTypes.xlsx.label' as const, descKey: 'nav.docTypes.xlsx.desc' as const, icon: 'table_chart', colorClass: 'text-success' },
   { id: 'pdf-gen', labelKey: 'nav.docTypes.pdf.label' as const, descKey: 'nav.docTypes.pdf.desc' as const, icon: 'picture_as_pdf', colorClass: 'text-error' },
   { id: 'slides-gen', labelKey: 'nav.docTypes.slides.label' as const, descKey: 'nav.docTypes.slides.desc' as const, icon: 'slideshow', colorClass: 'text-secondary' },
+  { id: 'webapp-gen', labelKey: 'nav.docTypes.webapp.label' as const, descKey: 'nav.docTypes.webapp.desc' as const, icon: 'dashboard', colorClass: 'text-primary' },
   { id: 'data-analyst', labelKey: 'nav.docTypes.dataAnalyst.label' as const, descKey: 'nav.docTypes.dataAnalyst.desc' as const, icon: 'analytics', colorClass: 'text-primary' },
   { id: 'rag-analyst', labelKey: 'nav.docTypes.ragAnalyst.label' as const, descKey: 'nav.docTypes.ragAnalyst.desc' as const, icon: 'hub', colorClass: 'text-tertiary' },
   { id: 'research', labelKey: 'nav.docTypes.research.label' as const, descKey: 'nav.docTypes.research.desc' as const, icon: 'travel_explore', colorClass: 'text-on-surface-variant' },
@@ -60,6 +61,12 @@ const SKILL_TEMPLATES: Record<string, Array<{ id: string; icon: string; labelKey
     { id: 'education', icon: 'school', labelKey: 'templates.slides.education' as any, descKey: 'templates.slides.education.desc' as any, promptKey: 'templates.slides.education.prompt' as any },
     { id: 'creative', icon: 'palette', labelKey: 'templates.slides.creative' as any, descKey: 'templates.slides.creative.desc' as any, promptKey: 'templates.slides.creative.prompt' as any },
   ],
+  'webapp-gen': [
+    { id: 'dashboard', icon: 'dashboard', labelKey: 'templates.webapp.dashboard' as any, descKey: 'templates.webapp.dashboard.desc' as any, promptKey: 'templates.webapp.dashboard.prompt' as any },
+    { id: 'analysis', icon: 'analytics', labelKey: 'templates.webapp.analysis' as any, descKey: 'templates.webapp.analysis.desc' as any, promptKey: 'templates.webapp.analysis.prompt' as any },
+    { id: 'infographic', icon: 'insert_chart', labelKey: 'templates.webapp.infographic' as any, descKey: 'templates.webapp.infographic.desc' as any, promptKey: 'templates.webapp.infographic.prompt' as any },
+    { id: 'report', icon: 'summarize', labelKey: 'templates.webapp.report' as any, descKey: 'templates.webapp.report.desc' as any, promptKey: 'templates.webapp.report.prompt' as any },
+  ],
 };
 
 // Style preview colors for template hover preview
@@ -91,6 +98,11 @@ const TEMPLATE_PREVIEW: Record<string, { bg: string; accent: string; text: strin
   'slides-gen:project': { bg: 'linear-gradient(135deg, #667eea, #764ba2)', accent: '#a78bfa', text: '#ffffff', card: 'rgba(255,255,255,0.15)' },
   'slides-gen:education': { bg: '#ffffff', accent: '#6366f1', text: '#1f2937', card: '#eef2ff' },
   'slides-gen:creative': { bg: '#fff7ed', accent: '#f97316', text: '#431407', card: '#ffedd5' },
+  // Webapp
+  'webapp-gen:dashboard': { bg: '#ffffff', accent: '#2563eb', text: '#1e293b', card: '#f0f7ff' },
+  'webapp-gen:analysis': { bg: '#f8fafc', accent: '#0891b2', text: '#164e63', card: '#ecfeff' },
+  'webapp-gen:infographic': { bg: '#ffffff', accent: '#7c3aed', text: '#1f2937', card: '#f5f3ff' },
+  'webapp-gen:report': { bg: '#ffffff', accent: '#059669', text: '#064e3b', card: '#ecfdf5' },
 };
 
 const LOCALE_OPTIONS: { value: Locale; label: string }[] = [

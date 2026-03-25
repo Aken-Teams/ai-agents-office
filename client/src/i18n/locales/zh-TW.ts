@@ -40,6 +40,8 @@ const zhTW = {
   'nav.docTypes.pdf.desc': '文件輸出',
   'nav.docTypes.slides.label': '網頁簡報',
   'nav.docTypes.slides.desc': '互動式 HTML 簡報',
+  'nav.docTypes.webapp.label': '互動網頁',
+  'nav.docTypes.webapp.desc': '一頁式儀表板與資訊圖',
   'nav.docTypes.dataAnalyst.label': '數據分析',
   'nav.docTypes.dataAnalyst.desc': '上傳資料分析',
   'nav.docTypes.ragAnalyst.label': '知識庫分析',
@@ -228,6 +230,20 @@ const zhTW = {
   'templates.slides.creative.desc': '設計作品、攝影集、創意展示',
   'templates.slides.creative.prompt': '創意作品集風格：使用 creative 風格。建議投影片結構：hero（大圖背景+名字）→ profile（個人介紹+頭像）→ gallery（精選作品，2x2 或 3-col）→ image-text（重點作品+說明）→ stats（成就數據：客戶數、專案數、獎項）→ icon-grid（服務項目）→ timeline（創作歷程）→ quote（創作理念）。以圖片為主軸，請大量搜尋 Unsplash 找相關美圖（?w=800&h=600&fit=crop）。',
 
+  // Webapp templates
+  'templates.webapp.dashboard': '數據儀表板',
+  'templates.webapp.dashboard.desc': 'KPI 卡片、圖表分析、數據總覽',
+  'templates.webapp.dashboard.prompt': '數據儀表板風格：白色底色 + 網格設計。包含 KPI 卡片列、ECharts 圖表（柱狀圖、折線圖、圓餅圖）、數據表格、進度追蹤。適合經營管理、銷售報表、專案追蹤。',
+  'templates.webapp.analysis': '分析報告',
+  'templates.webapp.analysis.desc': '趨勢分析、比較圖表、深度洞察',
+  'templates.webapp.analysis.prompt': '分析報告風格：專業分析頁面，包含趨勢折線圖、比較雷達圖、分類圓餅圖、關鍵發現摘要卡片。適合市場分析、競品比較、數據洞察。',
+  'templates.webapp.infographic': '資訊圖表',
+  'templates.webapp.infographic.desc': '視覺化資訊、流程圖解、統計展示',
+  'templates.webapp.infographic.prompt': '資訊圖表風格：視覺導向的一頁式資訊圖，大量使用圖示、色彩區塊、統計數字突顯。適合年度總結、產業概覽、數據故事。',
+  'templates.webapp.report': '總結報告',
+  'templates.webapp.report.desc': '專案總結、季度回顧、成果展示',
+  'templates.webapp.report.prompt': '總結報告風格：結構化報告頁面，包含摘要區塊、里程碑時間軸、KPI 達成率、圖表分析、下一步行動項目。適合專案結案、季度回顧、年度報告。',
+
   // Chat
   'chat.tool.generatePptx': '生成簡報檔案',
   'chat.tool.generateDocx': '生成文件檔案',
@@ -292,6 +308,7 @@ const zhTW = {
   'skill.xlsx-gen': 'Excel',
   'skill.pdf-gen': 'PDF',
   'skill.slides-gen': '線上簡報',
+  'skill.webapp-gen': '互動網頁',
   'skill.research': '研究分析',
   'skill.data-analyst': '數據分析',
   'skill.rag-analyst': 'RAG 分析',

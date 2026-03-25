@@ -40,6 +40,8 @@ const zhCN = {
   'nav.docTypes.pdf.desc': '文档输出',
   'nav.docTypes.slides.label': '网页演示',
   'nav.docTypes.slides.desc': '交互式 HTML 演示文稿',
+  'nav.docTypes.webapp.label': '交互网页',
+  'nav.docTypes.webapp.desc': '单页仪表板与信息图',
   'nav.docTypes.dataAnalyst.label': '数据分析',
   'nav.docTypes.dataAnalyst.desc': '上传资料分析',
   'nav.docTypes.ragAnalyst.label': '知识库分析',
@@ -224,6 +226,20 @@ const zhCN = {
   'templates.slides.creative.desc': '设计作品、摄影集、创意展示',
   'templates.slides.creative.prompt': '创意作品集风格：使用 creative 风格。建议幻灯片结构：hero（大图背景+名字）→ profile（个人介绍+头像）→ gallery（精选作品，2x2 或 3-col）→ image-text（重点作品+说明）→ stats（成就数据：客户数、项目数、奖项）→ icon-grid（服务项目）→ timeline（创作历程）→ quote（创作理念）。以图片为主轴，请大量搜索 Unsplash 找相关美图（?w=800&h=600&fit=crop）。',
 
+  // Webapp templates
+  'templates.webapp.dashboard': '数据仪表板',
+  'templates.webapp.dashboard.desc': 'KPI 卡片、图表分析、数据总览',
+  'templates.webapp.dashboard.prompt': '数据仪表板风格：白色底色 + 网格设计。包含 KPI 卡片列、ECharts 图表（柱状图、折线图、饼图）、数据表格、进度追踪。适合经营管理、销售报表、项目追踪。',
+  'templates.webapp.analysis': '分析报告',
+  'templates.webapp.analysis.desc': '趋势分析、比较图表、深度洞察',
+  'templates.webapp.analysis.prompt': '分析报告风格：专业分析页面，包含趋势折线图、比较雷达图、分类饼图、关键发现摘要卡片。适合市场分析、竞品比较、数据洞察。',
+  'templates.webapp.infographic': '信息图表',
+  'templates.webapp.infographic.desc': '可视化信息、流程图解、统计展示',
+  'templates.webapp.infographic.prompt': '信息图表风格：视觉导向的单页信息图，大量使用图标、色彩区块、统计数字突显。适合年度总结、行业概览、数据故事。',
+  'templates.webapp.report': '总结报告',
+  'templates.webapp.report.desc': '项目总结、季度回顾、成果展示',
+  'templates.webapp.report.prompt': '总结报告风格：结构化报告页面，包含摘要区块、里程碑时间轴、KPI 达成率、图表分析、下一步行动项目。适合项目结案、季度回顾、年度报告。',
+
   // Chat
   'chat.tool.generatePptx': '生成演示文稿',
   'chat.tool.generateDocx': '生成文档',
@@ -288,6 +304,7 @@ const zhCN = {
   'skill.xlsx-gen': 'Excel',
   'skill.pdf-gen': 'PDF',
   'skill.slides-gen': '在线简报',
+  'skill.webapp-gen': '交互网页',
   'skill.research': '研究分析',
   'skill.data-analyst': '数据分析',
   'skill.rag-analyst': 'RAG 分析',
