@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://agents-office.zhgpt.org'),
   title: 'AI Agents Office',
   description: 'AI 驅動的智能文件生成平台 — 透過自然語言快速產出 PPT、Word、Excel、PDF 等專業文件',
   icons: {
