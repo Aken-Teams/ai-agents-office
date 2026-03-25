@@ -226,7 +226,7 @@ function LoginForm() {
               <>
                 <div className="mb-8 md:mb-10">
                   <h3 className="font-headline text-2xl font-bold mb-1.5">{t('register.verifyTitle' as any)}</h3>
-                  <p className="text-on-surface-variant text-sm">{t('register.verifySubtitle' as any)}</p>
+                  <p className="text-on-surface-variant text-sm">{t('register.verifyDescription' as any)}</p>
                   <p className="text-primary text-sm font-mono mt-2">{verifyEmail_}</p>
                 </div>
                 <form onSubmit={handleVerify} className="space-y-6">
@@ -257,7 +257,7 @@ function LoginForm() {
                     disabled={verifyLoading || code.length !== 6}
                     className="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {verifyLoading ? t('register.verifySubmitLoading' as any) : t('register.verifySubmit' as any)}
+                    {verifyLoading ? t('register.verifyLoading' as any) : t('register.verifySubmit' as any)}
                   </button>
                   <div className="flex justify-between items-center">
                     <button
@@ -273,7 +273,7 @@ function LoginForm() {
                       disabled={resendCooldown > 0}
                       className="text-xs font-label text-on-surface-variant hover:text-primary transition-colors bg-transparent cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {resendCooldown > 0 ? `${t('register.verifyResend' as any)} (${resendCooldown}s)` : t('register.verifyResend' as any)}
+                      {resendCooldown > 0 ? `${t('register.resendCooldown' as any)} (${resendCooldown}s)` : t('register.resendCooldown' as any)}
                     </button>
                   </div>
                 </form>

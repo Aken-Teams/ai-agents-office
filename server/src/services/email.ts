@@ -10,12 +10,13 @@ export function isEmailEnabled(): boolean {
 
 // --- Shared HTML fragments ---
 
-const ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 -960 960 960" fill="#ffffff"><path d="M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm0-80h640v-400H160v400Zm140-40-56-56 103-104-104-104 57-56 160 160-160 160Zm180 0v-80h240v80H480Z"/></svg>';
+// Gmail strips <svg>, use HTML/CSS terminal icon instead
+const ICON_HTML = '<div style="display:inline-block;width:44px;height:44px;background:rgba(255,255,255,0.2);border-radius:10px;text-align:center;line-height:44px;font-size:20px;font-family:monospace;color:#ffffff;margin-bottom:12px">&gt;_</div>';
 
 function headerHtml(isZh: boolean): string {
   const subtitle = isZh ? '智能文件平台' : 'Smart Document Platform';
   return `<div style="background:linear-gradient(135deg,#006970 0%,#009099 100%);padding:32px 32px 28px;text-align:center">
-  <div style="display:inline-block;width:44px;height:44px;background:rgba(255,255,255,0.2);border-radius:10px;line-height:0;padding:10px;margin-bottom:12px;box-sizing:border-box">${ICON_SVG}</div>
+  ${ICON_HTML}
   <h1 style="margin:0;font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.5px">AI Agents Office</h1>
   <p style="margin:4px 0 0;font-size:11px;text-transform:uppercase;letter-spacing:3px;color:rgba(255,255,255,0.7)">${subtitle}</p>
 </div>`;
