@@ -197,16 +197,16 @@ function ConversationDetailPanel({
         </div>
       </div>
 
-      {/* Stats Row — right-aligned */}
-      <div className="px-4 md:px-8 py-3 border-b border-outline-variant/10 flex items-center justify-start md:justify-end gap-3 md:gap-5 flex-wrap">
+      {/* Stats Row — right-aligned on desktop, compact grid on mobile */}
+      <div className="px-4 md:px-8 py-3 border-b border-outline-variant/10 grid grid-cols-3 gap-2 md:flex md:items-center md:justify-end md:gap-5">
         <div className="flex items-center gap-1.5">
-          <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 18 }}>chat</span>
-          <span className="text-sm font-bold text-on-surface">{data.messages?.length ?? 0}</span>
-          <span className="text-sm text-on-surface-variant">{t('admin.conversations.detail.messages')}</span>
+          <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 16 }}>chat</span>
+          <span className="text-xs md:text-sm font-bold text-on-surface">{data.messages?.length ?? 0}</span>
+          <span className="text-xs md:text-sm text-on-surface-variant">{t('admin.conversations.detail.messages')}</span>
         </div>
         <span className="text-outline-variant/30 hidden md:inline">|</span>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 18 }}>token</span>
+        <div className="flex items-center gap-1 md:gap-1.5 col-span-2 md:col-span-1 justify-end md:justify-start">
+          <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 16 }}>token</span>
           <span className="text-xs md:text-sm text-on-surface-variant">{t('admin.conversations.detail.inputTokens' as any)}</span>
           <span className="text-xs md:text-sm font-bold text-on-surface font-mono">{formatTokens(data.tokenUsage?.total_input ?? 0)}</span>
           <span className="text-xs md:text-sm text-on-surface-variant">{t('admin.conversations.detail.outputTokens' as any)}</span>
@@ -218,28 +218,28 @@ function ConversationDetailPanel({
           )}
         </div>
         <span className="text-outline-variant/30 hidden md:inline">|</span>
-        <div className="flex items-center gap-1.5">
-          <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 18 }}>folder</span>
-          <span className="text-sm font-bold text-on-surface">{data.files?.length ?? 0}</span>
-          <span className="text-sm text-on-surface-variant">{t('admin.conversations.detail.files')}</span>
+        <div className="flex items-center gap-1.5 col-start-1 md:col-start-auto">
+          <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 16 }}>folder</span>
+          <span className="text-xs md:text-sm font-bold text-on-surface">{data.files?.length ?? 0}</span>
+          <span className="text-xs md:text-sm text-on-surface-variant">{t('admin.conversations.detail.files')}</span>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center border-b border-outline-variant/10 overflow-x-auto no-scrollbar px-2 md:px-4">
+      <div className="flex items-center border-b border-outline-variant/10 overflow-x-auto no-scrollbar px-1 md:px-4">
         {tabs.map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1.5 px-4 py-3 text-sm font-bold tracking-wide transition-colors cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-1 md:gap-1.5 px-2.5 md:px-4 py-3 text-xs md:text-sm font-bold tracking-wide transition-colors cursor-pointer whitespace-nowrap ${
               activeTab === tab.key
                 ? 'text-primary border-b-2 border-primary'
                 : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{tab.icon}</span>
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>{tab.icon}</span>
             {tab.label}
-            <span className="text-xs opacity-60">{tab.count}</span>
+            <span className="text-[10px] md:text-xs opacity-60">{tab.count}</span>
           </button>
         ))}
       </div>
