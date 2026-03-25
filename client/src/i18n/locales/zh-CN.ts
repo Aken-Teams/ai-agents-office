@@ -781,6 +781,7 @@ const zhCN = {
   'admin.conversations.role.user': '用户',
   'admin.conversations.role.assistant': 'AI',
   'admin.conversations.role.system': '系统',
+  'admin.conversations.pagination.summary': '第 {start}-{end} 笔，共 {total} 笔对话',
 
   // Upload Alert Modal
   'uploadAlert.title': '文件安全扫描结果',

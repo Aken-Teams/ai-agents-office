@@ -6,6 +6,7 @@ import { dbGet, dbAll, dbRun } from '../db.js';
 import { adminMiddleware } from '../middleware/adminAuth.js';
 import { loadSkills } from '../skills/loader.js';
 import { config } from '../config.js';
+import { applyWatermark } from '../services/watermark.js';
 import { getUserUsageLimitUsd, setUserUsageLimitUsd, getUserDisplayCost, getStorageQuotaGb, setStorageQuotaGb, getUploadQuotaMb, setUploadQuotaMb } from '../services/usageLimit.js';
 
 const router = Router();
@@ -874,6 +875,34 @@ router.get('/conversations/:id', async (req: Request, res: Response) => {
     tokenUsage,
     tasks,
   });
+});
+
+// GET /api/admin/files/:id/download — admin can download any user's file
+router.get('/files/:id/download', async (req: Request, res: Response) => {
+  const fileId = req.params.id;
+
+  const file = await dbGet<{ file_path: string }>(
+    'SELECT file_path FROM generated_files WHERE id = ?',
+    fileId
+  );
+
+  if (!file) { res.status(404).json({ error: 'File not found' }); return; }
+
+  const fullPath = path.join(config.workspaceRoot, file.file_path);
+  if (!fs.existsSync(fullPath)) { res.status(404).json({ error: 'File not found on disk' }); return; }
+
+  const filename = path.basename(fullPath);
+
+  try {
+    const watermarked = await applyWatermark(fullPath);
+    if (watermarked) {
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+      res.setHeader('Content-Length', watermarked.length);
+      res.end(watermarked); return;
+    }
+  } catch (err) { console.warn('[Admin Download] Watermark failed, serving original:', err); }
+
+  res.download(fullPath, filename);
 });
 
 export default router;

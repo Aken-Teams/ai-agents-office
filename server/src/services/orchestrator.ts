@@ -412,6 +412,9 @@ export class Orchestrator {
     taskId?: string,
   ): Promise<{ text: string; inputTokens: number; outputTokens: number; model: string }> {
     return new Promise((resolve, reject) => {
+      // Look up skill-level tool restrictions
+      const skillDef = opts.role !== 'router' ? getSkill(opts.skillId) : undefined;
+
       const { emitter, abort } = spawnClaude(message, systemPrompt, {
         userId: this.userId,
         conversationId: this.conversationId,
@@ -419,6 +422,8 @@ export class Orchestrator {
         isResume: opts.isResume,
         role: opts.role,
         skillId: opts.skillId,
+        customAllowedTools: skillDef?.allowedTools,
+        customDisallowedTools: skillDef?.disallowedTools,
         // Each agent gets its own subdirectory to avoid CLAUDE.md conflicts
         sandboxSubdir: `_agents/${opts.skillId}`,
       });

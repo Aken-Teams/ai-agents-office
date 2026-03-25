@@ -263,6 +263,8 @@ async function handleDirect(
 
     const { emitter, abort } = spawnClaude(sanitizedMessage, systemPrompt, {
       userId, conversationId, sessionId: sid, isResume, skillId: effectiveSkillId,
+      customAllowedTools: skill?.allowedTools,
+      customDisallowedTools: skill?.disallowedTools,
     });
 
     activeGenerations.set(conversationId, abort);

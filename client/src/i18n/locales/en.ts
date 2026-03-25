@@ -762,6 +762,7 @@ const en = {
   'admin.conversations.role.user': 'User',
   'admin.conversations.role.assistant': 'AI',
   'admin.conversations.role.system': 'System',
+  'admin.conversations.pagination.summary': '{start}-{end} of {total} conversations',
 
   // Upload Alert Modal
   'uploadAlert.title': 'File Security Scan Results',

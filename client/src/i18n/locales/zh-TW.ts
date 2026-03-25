@@ -785,6 +785,7 @@ const zhTW = {
   'admin.conversations.role.user': '用戶',
   'admin.conversations.role.assistant': 'AI',
   'admin.conversations.role.system': '系統',
+  'admin.conversations.pagination.summary': '第 {start}-{end} 筆，共 {total} 筆對話',
 
   // Upload Alert Modal
   'uploadAlert.title': '檔案安全掃描結果',

@@ -157,8 +157,11 @@ export function spawnClaude(
   // Router agents get NO tools; workers get full tool access
   const allowedTools = options.customAllowedTools
     || (options.role === 'router' ? ROUTER_ALLOWED_TOOLS : ALLOWED_TOOLS);
+  // Disallowed tools: merge global + per-skill restrictions (additive, not replace)
+  const baseDisallowed = options.role === 'router' ? ROUTER_DISALLOWED_TOOLS : DISALLOWED_TOOLS;
   const disallowedTools = options.customDisallowedTools
-    || (options.role === 'router' ? ROUTER_DISALLOWED_TOOLS : DISALLOWED_TOOLS);
+    ? [...new Set([...baseDisallowed, ...options.customDisallowedTools])]
+    : baseDisallowed;
 
   // Tool restrictions (security layer 2)
   if (allowedTools.length > 0) {
