@@ -754,4 +754,126 @@ router.get('/settings/users-usage', async (_req: Request, res: Response) => {
   res.json(result);
 });
 
+// ==================== Conversations ====================
+
+// GET /api/admin/conversations?page=1&limit=20&search=&userId=
+router.get('/conversations', async (req: Request, res: Response) => {
+  const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+  const offset = (page - 1) * limit;
+  const search = req.query.search as string || '';
+  const userId = req.query.userId as string || '';
+
+  let whereClause = 'WHERE 1=1';
+  const params: any[] = [];
+
+  if (search) {
+    whereClause += ' AND (c.title LIKE ? OR u.email LIKE ? OR u.display_name LIKE ?)';
+    const pattern = `%${search}%`;
+    params.push(pattern, pattern, pattern);
+  }
+  if (userId) {
+    whereClause += ' AND c.user_id = ?';
+    params.push(userId);
+  }
+
+  const countRow = await dbGet<{ total: number }>(
+    `SELECT COUNT(*) as total FROM conversations c LEFT JOIN users u ON u.id = c.user_id ${whereClause}`,
+    ...params
+  );
+
+  const rows = await dbAll(`
+    SELECT
+      c.id, c.user_id, c.title, c.skill_id, c.mode, c.status, c.created_at,
+      u.email as user_email, u.display_name as user_display_name,
+      COALESCE(t.total_input, 0) as total_input_tokens,
+      COALESCE(t.total_output, 0) as total_output_tokens,
+      COALESCE(f.file_count, 0) as file_count,
+      COALESCE(msg.message_count, 0) as message_count
+    FROM conversations c
+    LEFT JOIN users u ON u.id = c.user_id
+    LEFT JOIN (
+      SELECT conversation_id, SUM(input_tokens) as total_input, SUM(output_tokens) as total_output
+      FROM token_usage GROUP BY conversation_id
+    ) t ON t.conversation_id = c.id
+    LEFT JOIN (
+      SELECT conversation_id, COUNT(*) as file_count
+      FROM generated_files GROUP BY conversation_id
+    ) f ON f.conversation_id = c.id
+    LEFT JOIN (
+      SELECT conversation_id, COUNT(*) as message_count
+      FROM messages GROUP BY conversation_id
+    ) msg ON msg.conversation_id = c.id
+    ${whereClause}
+    ORDER BY c.created_at DESC
+    LIMIT ? OFFSET ?
+  `, ...params, limit, offset);
+
+  res.json({
+    conversations: rows,
+    total: countRow?.total ?? 0,
+    page,
+    limit,
+    totalPages: Math.ceil((countRow?.total ?? 0) / limit),
+  });
+});
+
+// GET /api/admin/conversations/:id — conversation detail with messages + files + uploads
+router.get('/conversations/:id', async (req: Request, res: Response) => {
+  const convId = req.params.id;
+
+  const conv = await dbGet<any>(`
+    SELECT c.*, u.email as user_email, u.display_name as user_display_name
+    FROM conversations c
+    LEFT JOIN users u ON u.id = c.user_id
+    WHERE c.id = ?
+  `, convId);
+
+  if (!conv) {
+    res.status(404).json({ error: 'Conversation not found' });
+    return;
+  }
+
+  const messages = await dbAll(`
+    SELECT id, role, content, metadata, created_at
+    FROM messages WHERE conversation_id = ?
+    ORDER BY created_at ASC
+  `, convId);
+
+  const files = await dbAll(`
+    SELECT id, filename, file_type, file_size, version, created_at
+    FROM generated_files WHERE conversation_id = ?
+    ORDER BY created_at DESC
+  `, convId);
+
+  const uploads = await dbAll(`
+    SELECT id, filename, original_name, file_type, mime_type, file_size, created_at
+    FROM user_uploads WHERE conversation_id = ?
+    ORDER BY created_at DESC
+  `, convId);
+
+  const tokenUsage = await dbGet<{ total_input: number; total_output: number; call_count: number }>(`
+    SELECT
+      COALESCE(SUM(input_tokens), 0) as total_input,
+      COALESCE(SUM(output_tokens), 0) as total_output,
+      COUNT(*) as call_count
+    FROM token_usage WHERE conversation_id = ?
+  `, convId);
+
+  const tasks = await dbAll(`
+    SELECT id, skill_id, description, status, result_summary, input_tokens, output_tokens, started_at, completed_at
+    FROM task_executions WHERE conversation_id = ?
+    ORDER BY created_at DESC
+  `, convId);
+
+  res.json({
+    ...conv,
+    messages,
+    files,
+    uploads,
+    tokenUsage,
+    tasks,
+  });
+});
+
 export default router;

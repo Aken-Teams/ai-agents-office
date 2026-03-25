@@ -11,6 +11,7 @@ const ADMIN_SIDEBAR_KEY = 'admin-sidebar-collapsed';
 const ADMIN_NAV = [
   { href: '/admin/overview', labelKey: 'admin.sidebar.overview' as const, icon: 'dashboard' },
   { href: '/admin/users', labelKey: 'admin.sidebar.users' as const, icon: 'corporate_fare' },
+  { href: '/admin/conversations', labelKey: 'admin.sidebar.conversations' as const, icon: 'forum' },
   { href: '/admin/skills', labelKey: 'admin.sidebar.skills' as const, icon: 'hub' },
   { href: '/admin/tokens', labelKey: 'admin.sidebar.tokens' as const, icon: 'payments' },
   { href: '/admin/security', labelKey: 'admin.sidebar.security' as const, icon: 'shield_with_heart' },
