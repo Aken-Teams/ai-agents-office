@@ -415,8 +415,8 @@ function ConversationDetailPanel({
                     <div className="w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: taskConfig.bgColor }}>
                       <span className="material-symbols-outlined" style={{ fontSize: 14, color: taskConfig.color }}>{taskConfig.icon}</span>
                     </div>
-                    <span className="text-[10px] md:text-xs font-bold uppercase tracking-wider" style={{ color: taskConfig.color }}>{taskConfig.label}</span>
-                    <span className={`ml-auto flex items-center gap-1 text-[10px] md:text-xs font-bold ${statusColor}`}>
+                    <span className="text-xs font-bold uppercase tracking-wider" style={{ color: taskConfig.color }}>{taskConfig.label}</span>
+                    <span className={`ml-auto flex items-center gap-1 text-xs font-bold ${statusColor}`}>
                       <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{statusIcon}</span>
                       {task.status}
                     </span>
