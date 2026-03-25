@@ -748,7 +748,7 @@ const zhTW = {
   'admin.skills.architecture.pipelineDesc': '支援多步驟串連與並行任務，自動彙整結果',
 
   // Admin Conversations
-  'admin.conversations.title': '用戶對話管理',
+  'admin.conversations.title': '對話管理',
   'admin.conversations.subtitle': '所有用戶對話',
   'admin.conversations.description': '瀏覽所有用戶的對話記錄、訊息內容和生成檔案。',
   'admin.conversations.search': '搜尋對話標題或用戶...',

@@ -744,7 +744,7 @@ const zhCN = {
   'admin.skills.architecture.pipelineDesc': '支持多步骤串联与并行任务，自动汇整结果',
 
   // Admin Conversations
-  'admin.conversations.title': '用户对话管理',
+  'admin.conversations.title': '对话管理',
   'admin.conversations.subtitle': '所有用户对话',
   'admin.conversations.description': '浏览所有用户的对话记录、消息内容和生成文件。',
   'admin.conversations.search': '搜索对话标题或用户...',

@@ -111,6 +111,7 @@ function ConversationDetailPanel({
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'messages' | 'files' | 'uploads' | 'tasks'>('messages');
   const [toast, setToast] = useState<string | null>(null);
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
 
   const mdComponents = useMemo(() => ({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -226,27 +227,26 @@ function ConversationDetailPanel({
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center border-b border-outline-variant/10 overflow-x-auto no-scrollbar px-1 md:px-4">
+      <div className="flex items-center border-b border-outline-variant/10 px-2 md:px-4">
         {tabs.map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1 md:gap-1.5 px-2.5 md:px-4 py-3 text-xs md:text-sm font-bold tracking-wide transition-colors cursor-pointer whitespace-nowrap ${
+            className={`flex-1 md:flex-none flex flex-col md:flex-row items-center gap-0.5 md:gap-1.5 px-1 md:px-4 py-2 md:py-3 text-[10px] md:text-sm font-bold transition-colors cursor-pointer ${
               activeTab === tab.key
                 ? 'text-primary border-b-2 border-primary'
                 : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>{tab.icon}</span>
-            {tab.label}
-            <span className="text-[10px] md:text-xs opacity-60">{tab.count}</span>
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{tab.icon}</span>
+            <span className="truncate max-w-full">{tab.label}<span className="ml-0.5 md:ml-1 opacity-60">{tab.count}</span></span>
           </button>
         ))}
       </div>
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-error text-on-error text-sm font-medium shadow-lg animate-[slideUp_0.2s_ease-out]">
+        <div className="fixed bottom-6 left-4 right-4 md:left-1/2 md:right-auto md:-translate-x-1/2 z-50 flex items-center gap-2 px-4 py-3 rounded-xl bg-error text-on-error text-sm font-medium shadow-lg animate-[slideUp_0.2s_ease-out]">
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>error</span>
           {toast}
           <button onClick={() => setToast(null)} className="ml-2 w-6 h-6 flex items-center justify-center rounded-full hover:bg-on-error/20 cursor-pointer">
@@ -362,7 +362,7 @@ function ConversationDetailPanel({
                           setTimeout(() => setToast(null), 4000);
                         });
                     }}
-                    className="opacity-0 group-hover:opacity-100 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-primary/10 text-primary cursor-pointer transition-all shrink-0"
+                    className="md:opacity-0 md:group-hover:opacity-100 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-primary/10 text-primary cursor-pointer transition-all shrink-0"
                     title="Download"
                   >
                     <span className="material-symbols-outlined" style={{ fontSize: 18 }}>download</span>
@@ -393,7 +393,7 @@ function ConversationDetailPanel({
         )}
 
         {activeTab === 'tasks' && (
-          <div className="p-4 md:p-6 space-y-3">
+          <div className="p-3 md:p-6 space-y-2 md:space-y-3">
             {data.tasks?.length === 0 && (
               <p className="text-center py-8 text-on-surface-variant text-sm">{t('admin.conversations.detail.noTasks')}</p>
             )}
@@ -401,20 +401,31 @@ function ConversationDetailPanel({
               const taskConfig = getSkillConfig(task.skill_id);
               const statusIcon = task.status === 'completed' ? 'check_circle' : task.status === 'failed' ? 'error' : 'pending';
               const statusColor = task.status === 'completed' ? 'text-success' : task.status === 'failed' ? 'text-error' : 'text-warning';
+              const isExpanded = expandedTasks.has(task.id);
               return (
                 <div key={task.id} className="rounded-xl border border-outline-variant/10 bg-surface-container/30 overflow-hidden">
-                  <div className="flex items-center gap-3 px-4 py-3 border-b border-outline-variant/10">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: taskConfig.bgColor }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 16, color: taskConfig.color }}>{taskConfig.icon}</span>
+                  <button
+                    onClick={() => setExpandedTasks(prev => {
+                      const next = new Set(prev);
+                      if (next.has(task.id)) next.delete(task.id); else next.add(task.id);
+                      return next;
+                    })}
+                    className="w-full flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-3 cursor-pointer hover:bg-surface-container/50 transition-colors"
+                  >
+                    <div className="w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: taskConfig.bgColor }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 14, color: taskConfig.color }}>{taskConfig.icon}</span>
                     </div>
-                    <span className="text-xs font-bold uppercase tracking-wider" style={{ color: taskConfig.color }}>{taskConfig.label}</span>
-                    <span className={`ml-auto flex items-center gap-1 text-xs font-bold ${statusColor}`}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 16 }}>{statusIcon}</span>
+                    <span className="text-[10px] md:text-xs font-bold uppercase tracking-wider" style={{ color: taskConfig.color }}>{taskConfig.label}</span>
+                    <span className={`ml-auto flex items-center gap-1 text-[10px] md:text-xs font-bold ${statusColor}`}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{statusIcon}</span>
                       {task.status}
                     </span>
-                  </div>
-                  {task.description && (
-                    <div className="px-4 py-3 text-sm text-on-surface leading-relaxed chat-markdown">
+                    {task.description && (
+                      <span className="material-symbols-outlined text-on-surface-variant transition-transform" style={{ fontSize: 18, transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>expand_more</span>
+                    )}
+                  </button>
+                  {task.description && isExpanded && (
+                    <div className="px-3 md:px-4 py-2.5 md:py-3 text-sm text-on-surface leading-relaxed chat-markdown border-t border-outline-variant/10">
                       <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{task.description}</ReactMarkdown>
                     </div>
                   )}
