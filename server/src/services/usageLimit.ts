@@ -1,7 +1,8 @@
 import { dbGet, dbRun } from '../db.js';
+import { config } from '../config.js';
 
 /**
- * Get the per-user usage limit in display dollars (x10 markup).
+ * Get the global per-user usage limit in display dollars (x10 markup).
  * Configurable by admin via system_settings table.
  */
 export async function getUserUsageLimitUsd(): Promise<number> {
@@ -10,7 +11,7 @@ export async function getUserUsageLimitUsd(): Promise<number> {
 }
 
 /**
- * Set the per-user usage limit.
+ * Set the global per-user usage limit.
  */
 export async function setUserUsageLimitUsd(value: number): Promise<void> {
   await dbRun(
@@ -33,11 +34,28 @@ export async function getUserDisplayCost(userId: string): Promise<number> {
 }
 
 /**
+ * Get the effective usage limit for a specific user.
+ * In 'pro-out' mode, checks for per-user quota_override first.
+ * Falls back to global limit.
+ */
+export async function getEffectiveUserLimit(userId: string): Promise<number> {
+  if (config.deployMode === 'pro-out') {
+    const user = await dbGet<{ quota_override: number | null }>(
+      'SELECT quota_override FROM users WHERE id = ?', userId
+    );
+    if (user?.quota_override != null) {
+      return user.quota_override;
+    }
+  }
+  return getUserUsageLimitUsd();
+}
+
+/**
  * Check if user has exceeded their usage limit.
  * Returns { exceeded, cost, limit }
  */
 export async function checkUserUsageLimit(userId: string): Promise<{ exceeded: boolean; cost: number; limit: number }> {
-  const limit = await getUserUsageLimitUsd();
+  const limit = await getEffectiveUserLimit(userId);
   const cost = await getUserDisplayCost(userId);
   return { exceeded: cost >= limit, cost, limit };
 }

@@ -74,10 +74,16 @@ export async function initializeDatabase(): Promise<void> {
         theme         VARCHAR(10) NOT NULL DEFAULT 'light',
         oauth_provider VARCHAR(50),
         oauth_id      VARCHAR(255),
+        quota_override DECIMAL(10,2) DEFAULT NULL,
         created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    // Add quota_override column if not exists (migration for existing databases)
+    try {
+      await conn.query('ALTER TABLE users ADD COLUMN quota_override DECIMAL(10,2) DEFAULT NULL');
+    } catch { /* column already exists */ }
 
     await conn.query(`
       CREATE TABLE IF NOT EXISTS conversations (
@@ -243,6 +249,33 @@ export async function initializeDatabase(): Promise<void> {
       CREATE TABLE IF NOT EXISTS system_settings (
         \`key\`   VARCHAR(100) PRIMARY KEY,
         value   TEXT NOT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS email_verification_codes (
+        id          VARCHAR(36) PRIMARY KEY,
+        email       VARCHAR(255) NOT NULL,
+        code        VARCHAR(10) NOT NULL,
+        attempts    INT NOT NULL DEFAULT 0,
+        expires_at  DATETIME NOT NULL,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_verify_email (email),
+        INDEX idx_verify_expires (expires_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id          VARCHAR(36) PRIMARY KEY,
+        user_id     VARCHAR(36) NOT NULL,
+        token       VARCHAR(64) NOT NULL UNIQUE,
+        used        TINYINT NOT NULL DEFAULT 0,
+        expires_at  DATETIME NOT NULL,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_reset_token (token),
+        INDEX idx_reset_user (user_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 

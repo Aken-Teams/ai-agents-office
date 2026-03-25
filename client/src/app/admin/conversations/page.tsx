@@ -112,6 +112,7 @@ function ConversationDetailPanel({
   const [activeTab, setActiveTab] = useState<'messages' | 'files' | 'uploads' | 'tasks'>('messages');
   const [toast, setToast] = useState<string | null>(null);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
 
   const mdComponents = useMemo(() => ({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -265,6 +266,9 @@ function ConversationDetailPanel({
             {data.messages?.map((msg: any) => {
               const isUser = msg.role === 'user';
               const isSystem = msg.role === 'system';
+              const isLong = msg.content?.length > 3000;
+              const isMsgExpanded = expandedMessages.has(msg.id);
+              const displayContent = isLong && !isMsgExpanded ? msg.content.slice(0, 3000) : msg.content;
               return (
                 <div key={msg.id} className="flex gap-2.5">
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
@@ -284,6 +288,9 @@ function ConversationDetailPanel({
                         {t(`admin.conversations.role.${msg.role}` as any)}
                       </span>
                       <span className="text-[10px] text-on-surface-variant">{formatDate(msg.created_at)}</span>
+                      {isLong && (
+                        <span className="text-[10px] text-on-surface-variant">({Math.round(msg.content.length / 1000)}k chars)</span>
+                      )}
                     </div>
                     <div className={`rounded-xl px-3 py-2.5 text-sm leading-relaxed break-words ${
                       isUser
@@ -293,10 +300,9 @@ function ConversationDetailPanel({
                           : 'bg-surface-container border border-outline-variant/10 text-on-surface chat-markdown'
                     }`}>
                       {isUser || isSystem
-                        ? (msg.content?.length > 3000 ? msg.content.slice(0, 3000) + '...' : msg.content)
+                        ? displayContent
                         : (() => {
-                            const raw = msg.content?.length > 3000 ? msg.content.slice(0, 3000) + '...' : msg.content;
-                            const { text: msgText, choices } = parseChoices(raw);
+                            const { text: msgText, choices } = parseChoices(displayContent);
                             return (
                               <>
                                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{msgText}</ReactMarkdown>
@@ -313,6 +319,21 @@ function ConversationDetailPanel({
                             );
                           })()
                       }
+                      {isLong && (
+                        <button
+                          onClick={() => setExpandedMessages(prev => {
+                            const next = new Set(prev);
+                            if (next.has(msg.id)) next.delete(msg.id); else next.add(msg.id);
+                            return next;
+                          })}
+                          className="mt-2 flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                            {isMsgExpanded ? 'expand_less' : 'expand_more'}
+                          </span>
+                          {isMsgExpanded ? t('admin.conversations.detail.collapse' as any) : t('admin.conversations.detail.expand' as any)}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

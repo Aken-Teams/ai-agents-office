@@ -221,10 +221,6 @@ function DashboardContent() {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm font-bold uppercase tracking-widest text-on-surface-variant">{t('dashboard.engineLabel')}</span>
-            <div className="w-px h-3 bg-outline-variant/30" />
-            <span className="text-sm font-bold uppercase tracking-widest text-on-surface-variant">{t('dashboard.modeLabel')}</span>
-            <div className="w-px h-3 bg-outline-variant/30" />
             <div className="flex items-center gap-1.5 px-3 py-1 bg-primary/10 rounded-full">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="text-sm text-primary font-bold tracking-widest uppercase">{t('dashboard.statusRunning')}</span>

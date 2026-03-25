@@ -52,7 +52,7 @@ function GoogleButton({ mode, onLoginSuccess, onError }: {
 }
 
 function RegisterForm() {
-  const { register, loginWithGoogle } = useAuth();
+  const { register, verifyEmail, resendCode } = useAuth();
   const { t, theme } = useTranslation();
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -61,6 +61,11 @@ function RegisterForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  // Verification code step
+  const [step, setStep] = useState<'form' | 'verify'>('form');
+  const [verifyEmail_, setVerifyEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -68,7 +73,11 @@ function RegisterForm() {
     setLoading(true);
     try {
       const result = await register(email, password, displayName);
-      if (result.pending) {
+      if (result.needsVerification) {
+        setVerifyEmail(result.email || email);
+        setStep('verify');
+        startResendCooldown();
+      } else if (result.pending) {
         setSuccess(true);
       }
     } catch (err) {
@@ -76,6 +85,41 @@ function RegisterForm() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleVerify(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await verifyEmail(verifyEmail_, code);
+      router.push('/chat');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    if (resendCooldown > 0) return;
+    setError('');
+    try {
+      await resendCode(verifyEmail_);
+      startResendCooldown();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }
+
+  function startResendCooldown() {
+    setResendCooldown(60);
+    const timer = setInterval(() => {
+      setResendCooldown(prev => {
+        if (prev <= 1) { clearInterval(timer); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
   }
 
   return (
@@ -167,6 +211,68 @@ function RegisterForm() {
                   {t('register.backToLogin')}
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </Link>
+              </div>
+            ) : step === 'verify' ? (
+              /* ===== Email Verification Code ===== */
+              <div className="py-4">
+                <div className="text-center mb-8">
+                  <div className="w-20 h-20 mx-auto mb-6 bg-primary/10 rounded-full flex items-center justify-center">
+                    <span className="material-symbols-outlined text-4xl text-primary">mark_email_read</span>
+                  </div>
+                  <h3 className="font-headline text-2xl font-bold mb-2">{t('register.verifyTitle' as any)}</h3>
+                  <p className="text-on-surface-variant text-sm">
+                    {t('register.verifyDescription' as any)}
+                  </p>
+                  <p className="text-primary text-sm font-medium mt-1">{verifyEmail_}</p>
+                </div>
+
+                <form onSubmit={handleVerify} className="space-y-6">
+                  {error && (
+                    <div className="bg-error-container/30 border border-error/20 text-on-error-container px-4 py-3 rounded text-sm">
+                      {error}
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
+                      {t('register.verifyCodeLabel' as any)}
+                    </label>
+                    <input
+                      className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-4 px-4 text-2xl text-center font-mono tracking-[0.5em] rounded placeholder:text-outline placeholder:text-base placeholder:tracking-normal"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      value={code}
+                      onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder={t('register.verifyCodePlaceholder' as any)}
+                      required
+                      autoFocus
+                      autoComplete="one-time-code"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading || code.length !== 6}
+                    className="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? t('register.verifyLoading' as any) : t('register.verifySubmit' as any)}
+                  </button>
+
+                  <div className="text-center">
+                    <button
+                      type="button"
+                      onClick={handleResend}
+                      disabled={resendCooldown > 0}
+                      className="text-sm text-on-surface-variant hover:text-primary transition-colors disabled:opacity-50"
+                    >
+                      {resendCooldown > 0
+                        ? `${t('register.resendCooldown' as any)} (${resendCooldown}s)`
+                        : t('register.resendCode' as any)}
+                    </button>
+                  </div>
+                </form>
               </div>
             ) : (
               /* ===== Registration Form ===== */

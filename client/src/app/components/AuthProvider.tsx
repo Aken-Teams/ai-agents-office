@@ -19,7 +19,9 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (token: string, tokenType?: 'credential' | 'access_token') => Promise<void>;
-  register: (email: string, password: string, displayName: string) => Promise<{ pending: boolean; message?: string }>;
+  register: (email: string, password: string, displayName: string) => Promise<{ pending: boolean; needsVerification: boolean; email?: string; message?: string }>;
+  verifyEmail: (email: string, code: string) => Promise<void>;
+  resendCode: (email: string) => Promise<void>;
   logout: () => void;
   updateUser: (partial: Partial<User>) => void;
 }
@@ -109,17 +111,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(err.error || 'Registration failed');
     }
     const data = await res.json();
-    // New flow: registration returns pending status, no auto-login
-    if (data.pending) {
-      return { pending: true, message: data.message };
+    // Email verification flow
+    if (data.needsVerification) {
+      return { pending: false, needsVerification: true, email: data.email };
     }
-    // Fallback: if server returns token (e.g. admin-created accounts)
+    // Admin approval flow (fallback)
+    if (data.pending) {
+      return { pending: true, needsVerification: false, message: data.message };
+    }
+    // Fallback: if server returns token
     if (data.token) {
       localStorage.setItem('token', data.token);
       setToken(data.token);
       setUser(data.user);
     }
-    return { pending: false };
+    return { pending: false, needsVerification: false };
+  }, []);
+
+  const verifyEmail = useCallback(async (email: string, code: string) => {
+    const res = await fetch('/api/auth/verify-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Verification failed');
+    }
+    const data = await res.json();
+    localStorage.setItem('token', data.token);
+    setToken(data.token);
+    setUser(data.user);
+  }, []);
+
+  const resendCode = useCallback(async (email: string) => {
+    const res = await fetch('/api/auth/resend-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to resend code');
+    }
   }, []);
 
   const logout = useCallback(() => {
@@ -133,7 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, loginWithGoogle, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, loginWithGoogle, register, verifyEmail, resendCode, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

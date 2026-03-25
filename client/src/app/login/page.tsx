@@ -221,8 +221,14 @@ function LoginForm() {
                 />
               </div>
 
-              {/* Register link — right below password */}
-              <div className="flex justify-end -mt-1">
+              {/* Links — below password */}
+              <div className="flex justify-between -mt-1">
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-label text-on-surface-variant hover:text-primary transition-colors"
+                >
+                  {t('login.forgotPassword' as any)}
+                </Link>
                 <Link
                   href="/register"
                   className="text-xs font-label text-on-surface-variant hover:text-primary transition-colors"

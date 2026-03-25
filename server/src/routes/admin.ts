@@ -7,7 +7,7 @@ import { adminMiddleware } from '../middleware/adminAuth.js';
 import { loadSkills } from '../skills/loader.js';
 import { config } from '../config.js';
 import { applyWatermark } from '../services/watermark.js';
-import { getUserUsageLimitUsd, setUserUsageLimitUsd, getUserDisplayCost, getStorageQuotaGb, setStorageQuotaGb, getUploadQuotaMb, setUploadQuotaMb } from '../services/usageLimit.js';
+import { getUserUsageLimitUsd, setUserUsageLimitUsd, getUserDisplayCost, getEffectiveUserLimit, getStorageQuotaGb, setStorageQuotaGb, getUploadQuotaMb, setUploadQuotaMb } from '../services/usageLimit.js';
 
 const router = Router();
 router.use(adminMiddleware);
@@ -110,7 +110,7 @@ router.get('/users', async (req: Request, res: Response) => {
     const pattern = `%${search}%`;
     params.push(pattern, pattern, pattern);
   }
-  if (status && ['active', 'pending', 'suspended'].includes(status)) {
+  if (status && ['active', 'pending', 'pending_verification', 'suspended'].includes(status)) {
     whereClause += ' AND u.status = ?';
     params.push(status);
   }
@@ -158,10 +158,10 @@ router.get('/users', async (req: Request, res: Response) => {
 
 // GET /api/admin/users/:id
 router.get('/users/:id', async (req: Request, res: Response) => {
-  const userId = req.params.id;
+  const userId = req.params.id as string;
 
   const user = await dbGet<any>(`
-    SELECT id, email, display_name, status, role, created_at, updated_at
+    SELECT id, email, display_name, status, role, quota_override, created_at, updated_at
     FROM users WHERE id = ?
   `, userId);
 
@@ -198,7 +198,20 @@ router.get('/users/:id', async (req: Request, res: Response) => {
     'SELECT COUNT(*) as count FROM generated_files WHERE user_id = ?', userId
   );
 
-  res.json({ ...user, tokenStats, recentFiles, recentConversations, conversation_count: convCount?.count ?? 0, file_count: fileCount?.count ?? 0 });
+  const effectiveLimit = await getEffectiveUserLimit(userId);
+  const displayCost = await getUserDisplayCost(userId);
+
+  res.json({
+    ...user,
+    tokenStats,
+    recentFiles,
+    recentConversations,
+    conversation_count: convCount?.count ?? 0,
+    file_count: fileCount?.count ?? 0,
+    effective_limit: effectiveLimit,
+    display_cost: displayCost,
+    deploy_mode: config.deployMode,
+  });
 });
 
 // PATCH /api/admin/users/:id/status
@@ -286,6 +299,37 @@ router.patch('/users/:id', async (req: Request, res: Response) => {
   }
 
   res.json({ success: true });
+});
+
+// PATCH /api/admin/users/:id/quota — Set per-user quota override (pro-out mode)
+router.patch('/users/:id/quota', async (req: Request, res: Response) => {
+  const userId = req.params.id as string;
+  const { quota_override } = req.body;
+
+  const user = await dbGet<any>('SELECT id, email, role FROM users WHERE id = ?', userId);
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  // null means "use global default", number means custom override
+  const value = quota_override === null || quota_override === '' ? null : parseFloat(quota_override);
+  if (value !== null && (isNaN(value) || value < 0)) {
+    res.status(400).json({ error: 'Invalid quota value' });
+    return;
+  }
+
+  await dbRun('UPDATE users SET quota_override = ?, updated_at = NOW() WHERE id = ?', value, userId);
+
+  // Audit log
+  await dbRun(
+    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+    uuidv4(), req.user!.userId, 'set_quota_override', 'user', userId,
+    JSON.stringify({ email: user.email, quota_override: value })
+  );
+
+  const effectiveLimit = await getEffectiveUserLimit(userId);
+  res.json({ success: true, quota_override: value, effective_limit: effectiveLimit });
 });
 
 // DELETE /api/admin/users/:id — Permanently delete user + workspace

@@ -33,6 +33,7 @@ interface UserDetail {
   display_name: string | null;
   status: string;
   role: string;
+  quota_override: number | null;
   created_at: string;
   updated_at: string;
   tokenStats: { total_input: number; total_output: number; invocation_count: number };
@@ -40,6 +41,9 @@ interface UserDetail {
   recentConversations: { id: string; title: string; skill_id: string | null; status: string; created_at: string }[];
   conversation_count: number;
   file_count: number;
+  effective_limit: number;
+  display_cost: number;
+  deploy_mode: string;
 }
 
 function formatTokens(n: number): string {
@@ -63,10 +67,13 @@ function formatFileSize(bytes: number): string {
 function StatusBadge({ status }: { status: string }) {
   const cls = status === 'active'
     ? 'bg-success/15 text-success'
-    : status === 'pending'
+    : status === 'pending' || status === 'pending_verification'
     ? 'bg-warning/15 text-warning'
     : 'bg-error/15 text-error';
-  const label = status === 'active' ? 'Active' : status === 'pending' ? 'Pending' : 'Suspended';
+  const label = status === 'active' ? 'Active'
+    : status === 'pending' ? 'Pending'
+    : status === 'pending_verification' ? 'Verifying'
+    : 'Suspended';
   return <span className={`px-2 py-0.5 text-xs font-bold uppercase tracking-wider rounded ${cls}`}>{label}</span>;
 }
 
@@ -89,6 +96,8 @@ export default function AdminUsers() {
   const [actionLoading, setActionLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; email: string } | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [quotaInput, setQuotaInput] = useState('');
+  const [quotaLoading, setQuotaLoading] = useState(false);
   const limit = 10;
 
   const fetchUsers = useCallback(() => {
@@ -126,6 +135,7 @@ export default function AdminUsers() {
       });
       const data = await res.json();
       setSelectedUser(data);
+      setQuotaInput(data.quota_override != null ? String(data.quota_override) : '');
     } catch {
       // ignore
     } finally {
@@ -189,6 +199,25 @@ export default function AdminUsers() {
       }
     } finally {
       setDeleteLoading(false);
+    }
+  }
+
+  async function updateQuota(userId: string) {
+    if (!token || quotaLoading) return;
+    setQuotaLoading(true);
+    try {
+      const value = quotaInput.trim() === '' ? null : parseFloat(quotaInput);
+      const res = await fetch(`/api/admin/users/${userId}/quota`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quota_override: value }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedUser(prev => prev ? { ...prev, quota_override: data.quota_override, effective_limit: data.effective_limit } : null);
+      }
+    } finally {
+      setQuotaLoading(false);
     }
   }
 
@@ -266,6 +295,56 @@ export default function AdminUsers() {
           </div>
         </div>
 
+        {/* Quota / Usage */}
+        <div className="px-4 py-3 border-b border-outline-variant/10">
+          <div className="flex items-center justify-between text-xs mb-2">
+            <span className="uppercase tracking-wider text-on-surface-variant font-bold">{t('admin.users.detail.quota' as any)}</span>
+            <span className="text-on-surface-variant font-mono">
+              ${detail.display_cost?.toFixed(2) ?? '0.00'} / ${detail.effective_limit?.toFixed(2) ?? '50.00'}
+            </span>
+          </div>
+          {/* Progress bar */}
+          <div className="h-1.5 bg-surface-container-highest rounded-full overflow-hidden mb-2">
+            <div
+              className={`h-full rounded-full transition-all ${
+                (detail.display_cost ?? 0) >= (detail.effective_limit ?? 50) ? 'bg-error' : 'bg-primary'
+              }`}
+              style={{ width: `${Math.min(100, ((detail.display_cost ?? 0) / (detail.effective_limit ?? 50)) * 100)}%` }}
+            />
+          </div>
+          {detail.deploy_mode === 'pro-out' && (
+            <div className="flex items-center gap-2 mt-2">
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder={t('admin.users.detail.quotaPlaceholder' as any)}
+                value={quotaInput}
+                onChange={e => setQuotaInput(e.target.value)}
+                className="flex-1 bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-1.5 px-2.5 text-xs font-mono rounded placeholder:text-outline min-w-0"
+              />
+              <button
+                onClick={() => updateQuota(detail.id)}
+                disabled={quotaLoading}
+                className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                {t('admin.users.detail.quotaSave' as any)}
+              </button>
+            </div>
+          )}
+          {detail.deploy_mode === 'pro-out' && detail.quota_override != null && (
+            <div className="flex items-center gap-1 mt-1.5">
+              <span className="text-[10px] text-on-surface-variant">{t('admin.users.detail.quotaOverride' as any)}: ${detail.quota_override}</span>
+              <button
+                onClick={() => { setQuotaInput(''); updateQuota(detail.id); }}
+                className="text-[10px] text-error hover:text-error/80 transition-colors cursor-pointer ml-1"
+              >
+                {t('admin.users.detail.quotaReset' as any)}
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Recent Files */}
         <div className="px-4 py-3 border-b border-outline-variant/10 flex-1 min-h-0 overflow-y-auto">
           <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold mb-2">{t('admin.users.detail.recentFiles')}</p>
@@ -286,7 +365,7 @@ export default function AdminUsers() {
 
         {/* Actions */}
         <div className="px-4 py-3 space-y-2">
-          {detail.status === 'pending' ? (
+          {(detail.status === 'pending' || detail.status === 'pending_verification') ? (
             <div className="flex gap-2">
               <button
                 onClick={() => toggleUserStatus(detail.id, 'active')}

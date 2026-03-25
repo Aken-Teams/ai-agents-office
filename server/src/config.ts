@@ -41,6 +41,14 @@ export const config = {
   // Google OAuth
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
 
+  // Resend (email service)
+  resendApiKey: process.env.RESEND_API_KEY || '',
+  emailFrom: process.env.EMAIL_FROM || '',
+  emailBcc: process.env.EMAIL_BCC || '',
+
+  // Deploy mode: 'pro-panjit' (internal) | 'pro-out' (external, per-user quota)
+  deployMode: (process.env.DEPLOY_MODE || 'pro-panjit') as 'pro-panjit' | 'pro-out',
+
   // Security
   maxMessageLength: 10_000,
   bcryptRounds: 12,
