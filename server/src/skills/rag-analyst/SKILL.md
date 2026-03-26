@@ -82,11 +82,24 @@ Use fenced chart blocks with the `chart` language tag:
 | `scatter` | `{"type":"scatter","title":"...","series":[{"name":"G","data":[{"x":1,"y":2}]}]}` | Correlations |
 
 ### Chart Strategy
-1. **Cross-file comparison** — bar chart comparing metrics across different source files
-2. **Trend/timeline** — line chart for temporal data found across files
-3. **Breakdown** — pie/donut for distribution analysis
-4. Place charts INLINE next to their analysis text, cite source files nearby
-5. Always include `title`. JSON must be valid and on a single line.
+1. **Always pick the BEST chart type for the data** — do NOT default to bar/line
+2. Place charts INLINE next to their analysis text, cite source files nearby
+3. Always include `title`. JSON must be valid and on a single line.
+
+### Scenario → Best Chart Type
+| Data scenario | Best chart | Block |
+|---------------|-----------|-------|
+| Single KPI / achievement | gauge | `echart` |
+| Conversion funnel | funnel | `echart` |
+| Flow between categories | sankey | `echart` |
+| Time × category matrix | heatmap | `echart` |
+| Hierarchical proportions | treemap / sunburst | `echart` |
+| Distribution / outliers | boxplot | `echart` |
+| Simple comparison | bar | `chart` |
+| Time-series trend | line / area | `chart` |
+| Proportions (< 7 items) | pie / donut | `chart` |
+
+**CRITICAL**: When data fits an advanced type, MUST use `echart` — do NOT flatten into basic bar/line.
 
 ## Mermaid Diagrams — USE FOR STRUCTURAL INSIGHTS
 

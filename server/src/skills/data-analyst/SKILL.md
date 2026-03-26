@@ -69,54 +69,60 @@ If the user wants a formal report based on the data:
 - The uploaded files are READ-ONLY — do not modify them
 - Generated reports go in your current working directory
 
-## Inline Charts — MANDATORY
+## Visualization — STEP 1: CHOOSE THE RIGHT FORMAT
 
-**CRITICAL**: You MUST embed at least 2-3 charts in EVERY data analysis response. Charts are rendered as interactive visualizations in the chat UI. Users expect visual data representation — text-only analysis is unacceptable.
+**FORBIDDEN COMBINATIONS** (violating these is a critical error):
+- Stock/financial price data → NEVER use ` ```chart ` line. MUST use ` ```echart ` candlestick
+- Conversion/pipeline stages → NEVER use ` ```chart ` bar. MUST use ` ```echart ` funnel
+- Single KPI/percentage → NEVER use ` ```chart ` bar. MUST use ` ```echart ` gauge
+- Category flow/traffic flow → NEVER use ` ```chart ` bar. MUST use ` ```echart ` sankey
+- Time×category matrix data → NEVER use ` ```chart ` bar. MUST use ` ```echart ` heatmap
 
-Use fenced chart blocks with the `chart` language tag:
+**CRITICAL**: You MUST embed visualizations in EVERY analysis. **BEFORE writing ANY visualization, check this unified table to pick the most precise format for your data:**
 
+| Data / content | Best type | Block |
+|----------------|----------|-------|
+| Stock/financial OHLC prices | **candlestick** | ` ```echart ` |
+| Single KPI / achievement % (達成率) | **gauge** | ` ```echart ` |
+| Conversion / pipeline stages | **funnel** | ` ```echart ` |
+| Flow between categories (資金流向, traffic) | **sankey** | ` ```echart ` |
+| Time × category intensity (每小時/每日熱度) | **heatmap** | ` ```echart ` |
+| Hierarchical proportions (多層佔比) | **treemap** | ` ```echart ` |
+| Distribution / outliers | **boxplot** | ` ```echart ` |
+| Network / relationship graph | **graph** | ` ```echart ` |
+| Simple category comparison | bar | ` ```chart ` |
+| Time-series trend (non-OHLC) | line / area | ` ```chart ` |
+| Part-of-whole (< 7 items) | pie / donut | ` ```chart ` |
+| Multi-dimensional scoring | radar | ` ```chart ` |
+| Correlation between 2 variables | scatter | ` ```chart ` |
+| Process flow / decision tree / workflow | flowchart | ` ```mermaid ` |
+| Database schema / entity relationships | erDiagram | ` ```mermaid ` |
+| Timeline / project schedule | gantt | ` ```mermaid ` |
+| System / API interaction sequence | sequenceDiagram | ` ```mermaid ` |
+| Topic hierarchy / brainstorming / overview | mindmap | ` ```mindmap ` |
+| 3D, audio, physics, custom interactive | HTML | ` ```visual ` |
+
+**RULES**:
+- Pick the MOST PRECISE type — NEVER flatten stock data into line, NEVER use bar for funnel data
+- Use 2-3+ DIFFERENT visualization types per analysis for variety
+- You can mix multiple block types in one response (e.g. echart + mermaid + mindmap)
+
+### `chart` block format (for bar, line, area, pie, donut, radar, scatter only)
 ```chart
-{"type":"bar","title":"Sales by Region","data":[{"name":"North","value":245},{"name":"South","value":189},{"name":"East","value":312},{"name":"West","value":267}]}
+{"type":"bar","title":"Sales by Region","data":[{"name":"North","value":245},{"name":"South","value":189}]}
 ```
 
-### Chart Types
-
-| Type | Schema | Best For |
-|------|--------|----------|
-| `bar` | `{"type":"bar","title":"...","data":[{"name":"A","value":10}]}` | Category comparisons |
-| `line` | `{"type":"line","title":"...","series":[{"name":"Rev","data":[{"name":"Q1","value":20}]}]}` | Trends over time |
-| `area` | Same as line but `"type":"area"`, optional `"stacked":true` | Volume/cumulative trends |
-| `pie`/`donut` | `{"type":"pie","title":"...","data":[{"name":"A","value":55}]}` | Part-of-whole proportions |
-| `radar` | `{"type":"radar","title":"...","axes":["Speed","Cost"],"series":[{"name":"A","values":[8,6]}]}` | Multi-dimensional comparison |
-| `scatter` | `{"type":"scatter","title":"...","series":[{"name":"Group","data":[{"x":1,"y":2}]}]}` | Correlation analysis |
-
-### Chart Strategy
-1. **Always pick the BEST chart type for the data** — do NOT default to bar/line for everything
-2. Place charts INLINE next to their textual explanations — not all at the end
-3. Use at least 2-3 DIFFERENT chart types per analysis — variety makes analysis richer
-
-### Scenario → Best Chart Type (IMPORTANT)
-| Data scenario | Best chart | Block |
-|---------------|-----------|-------|
-| Stock prices, OHLC, K-line | candlestick | `echart` |
-| Single KPI / target achievement (達成率) | gauge | `echart` |
-| Conversion funnel, pipeline stages | funnel | `echart` |
-| Flow between categories (資金流向, traffic) | sankey | `echart` |
-| Time × category matrix (每小時/每日熱度) | heatmap | `echart` |
-| Hierarchical proportions (多層佔比) | treemap or sunburst | `echart` |
-| Distribution / outlier detection | boxplot | `echart` |
-| Network / relationship graph | graph | `echart` |
-| Simple category comparison | bar | `chart` |
-| Time-series trend | line / area | `chart` |
-| Part-of-whole (< 7 items) | pie / donut | `chart` |
-| Multi-dimensional scoring | radar | `chart` |
-| Correlation between 2 variables | scatter | `chart` |
-
-**CRITICAL**: When data fits an advanced type (candlestick, gauge, funnel, sankey, heatmap, treemap, boxplot), you MUST use `echart` — do NOT flatten it into a basic bar/line chart.
+| Type | Schema |
+|------|--------|
+| `bar` | `{"type":"bar","title":"...","data":[{"name":"A","value":10}]}` |
+| `line` | `{"type":"line","title":"...","series":[{"name":"Rev","data":[{"name":"Q1","value":20}]}]}` |
+| `area` | Same as line, `"type":"area"`, optional `"stacked":true` |
+| `pie`/`donut` | `{"type":"pie","title":"...","data":[{"name":"A","value":55}]}` |
+| `radar` | `{"type":"radar","title":"...","axes":["Speed","Cost"],"series":[{"name":"A","values":[8,6]}]}` |
+| `scatter` | `{"type":"scatter","title":"...","series":[{"name":"Group","data":[{"x":1,"y":2}]}]}` |
 
 ### Chart Rules
 - ALWAYS include a descriptive `title`
-- Use `bar` charts as default for comparisons
 - Keep pie/donut to 7 or fewer slices
 - For line/area, always use `series` array even for a single series
 - Add `"smooth":true` for curved line charts
@@ -162,10 +168,37 @@ This renders as an interactive tree — users can click to collapse/expand nodes
 
 ## ECharts — ADVANCED CHARTS (100+ types)
 
-For advanced chart types NOT supported by `chart` blocks (heatmap, treemap, sunburst, sankey, funnel, gauge, boxplot, parallel, themeRiver, calendar, graph/network, 3D charts, etc.), use ` ```echart ` blocks with standard ECharts option JSON.
+For advanced chart types NOT supported by `chart` blocks, use ` ```echart ` blocks with standard ECharts option JSON. **You MUST use echart when the data fits these types — do NOT fall back to basic bar/line.**
 
+**Candlestick (K-line) — Stock/financial OHLC data:**
+```echart
+{"title":{"text":"Stock Price"},"xAxis":{"type":"category","data":["3/3","3/7","3/12","3/14","3/19"]},"yAxis":{"type":"value"},"series":[{"type":"candlestick","data":[[20,34,10,38],[40,35,30,50],[31,38,33,44],[38,15,5,42],[25,36,20,40]]}]}
+```
+Note: candlestick data format is `[open, close, low, high]` per data point.
+
+**Gauge — KPI / achievement rate / single metric:**
+```echart
+{"title":{"text":"達成率"},"series":[{"type":"gauge","data":[{"value":78,"name":"完成度"}],"detail":{"formatter":"{value}%"}}]}
+```
+
+**Funnel — Conversion / pipeline stages:**
 ```echart
 {"title":{"text":"Sales Funnel"},"series":[{"type":"funnel","data":[{"name":"Visit","value":100},{"name":"Cart","value":60},{"name":"Order","value":30},{"name":"Pay","value":20}]}]}
+```
+
+**Heatmap — Time × category matrix:**
+```echart
+{"title":{"text":"Weekly Traffic"},"xAxis":{"type":"category","data":["Mon","Tue","Wed","Thu","Fri"]},"yAxis":{"type":"category","data":["Morning","Afternoon","Evening"]},"visualMap":{"min":0,"max":100},"series":[{"type":"heatmap","data":[[0,0,50],[1,0,70],[2,0,60],[0,1,80],[1,1,90],[2,1,75],[0,2,30],[1,2,40],[2,2,35]]}]}
+```
+
+**Treemap — Hierarchical proportions:**
+```echart
+{"title":{"text":"Revenue by Division"},"series":[{"type":"treemap","data":[{"name":"Tech","value":100,"children":[{"name":"Cloud","value":60},{"name":"AI","value":40}]},{"name":"Finance","value":80}]}]}
+```
+
+**Sankey — Flow between categories:**
+```echart
+{"title":{"text":"Traffic Flow"},"series":[{"type":"sankey","data":[{"name":"Google"},{"name":"Homepage"},{"name":"Product"},{"name":"Checkout"}],"links":[{"source":"Google","target":"Homepage","value":100},{"source":"Homepage","target":"Product","value":60},{"source":"Product","target":"Checkout","value":30}]}]}
 ```
 
 ### When to Use `echart` vs `chart`
