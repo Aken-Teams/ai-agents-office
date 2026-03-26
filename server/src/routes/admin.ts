@@ -198,6 +198,10 @@ router.get('/users/:id', async (req: Request, res: Response) => {
     'SELECT COUNT(*) as count FROM generated_files WHERE user_id = ?', userId
   );
 
+  const memoryCount = await dbGet<{ count: number }>(
+    'SELECT COUNT(*) as count FROM user_memories WHERE user_id = ?', userId
+  );
+
   const effectiveLimit = await getEffectiveUserLimit(userId);
   const displayCost = await getUserDisplayCost(userId);
 
@@ -208,10 +212,24 @@ router.get('/users/:id', async (req: Request, res: Response) => {
     recentConversations,
     conversation_count: convCount?.count ?? 0,
     file_count: fileCount?.count ?? 0,
+    memory_count: memoryCount?.count ?? 0,
     effective_limit: effectiveLimit,
     display_cost: displayCost,
     deploy_mode: config.deployMode,
   });
+});
+
+// GET /api/admin/users/:id/memories
+router.get('/users/:id/memories', async (req: Request, res: Response) => {
+  const userId = req.params.id as string;
+  const user = await dbGet('SELECT id FROM users WHERE id = ?', userId);
+  if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+
+  const memories = await dbAll(
+    'SELECT id, content, category, source_conversation_id, created_at FROM user_memories WHERE user_id = ? ORDER BY created_at DESC',
+    userId
+  );
+  res.json(memories);
 });
 
 // PATCH /api/admin/users/:id/status

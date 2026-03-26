@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { href: '/conversations', labelKey: 'nav.conversations' as const, icon: 'chat' },
   { href: '/files', labelKey: 'nav.files' as const, icon: 'folder_open' },
   { href: '/usage', labelKey: 'nav.usage' as const, icon: 'bar_chart' },
+  { href: '/memories', labelKey: 'nav.memories' as const, icon: 'psychology' },
 ];
 
 const DOC_TYPES = [
@@ -144,6 +145,11 @@ export default function Navbar() {
   const [saved, setSaved] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileUserExpanded, setMobileUserExpanded] = useState(false);
+
+  // AI Memory state
+  const [memories, setMemories] = useState<Array<{ id: string; content: string; category: string; created_at: string }>>([]);
+  const [memoriesLoading, setMemoriesLoading] = useState(false);
+  const [showMemories, setShowMemories] = useState(false);
 
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -303,6 +309,28 @@ export default function Navbar() {
     } finally {
       setSavingName(false);
     }
+  }
+
+  async function fetchMemories() {
+    if (!token) return;
+    setMemoriesLoading(true);
+    try {
+      const res = await fetch('/api/auth/memories', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) setMemories(await res.json());
+    } catch { /* ignore */ }
+    setMemoriesLoading(false);
+  }
+
+  async function deleteMemory(id: string) {
+    if (!token) return;
+    await fetch(`/api/auth/memories/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    setMemories(prev => prev.filter(m => m.id !== id));
+  }
+
+  async function clearAllMemories() {
+    if (!token || !confirm(t('userMenu.memory.clearConfirm' as any))) return;
+    await fetch('/api/auth/memories', { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    setMemories([]);
   }
 
   return (

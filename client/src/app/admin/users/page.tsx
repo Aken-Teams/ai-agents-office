@@ -42,6 +42,7 @@ interface UserDetail {
   recentConversations: { id: string; title: string; skill_id: string | null; status: string; created_at: string }[];
   conversation_count: number;
   file_count: number;
+  memory_count: number;
   effective_limit: number;
   display_cost: number;
   deploy_mode: string;
@@ -363,6 +364,18 @@ export default function AdminUsers() {
           )}
         </div>
 
+        {/* AI Memories */}
+        <div className="px-4 py-3 border-b border-outline-variant/10">
+          <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold mb-2">
+            {t('admin.users.detail.memories' as any)} ({detail.memory_count})
+          </p>
+          {detail.memory_count > 0 ? (
+            <AdminMemoryList userId={detail.id} token={token!} t={t} />
+          ) : (
+            <p className="text-xs text-on-surface-variant">{t('admin.users.detail.noMemories' as any)}</p>
+          )}
+        </div>
+
         {/* Actions */}
         <div className="px-4 py-3 space-y-2">
           {(detail.status === 'pending' || detail.status === 'pending_verification') ? (
@@ -681,5 +694,40 @@ export default function AdminUsers() {
         </div>
       )}
     </>
+  );
+}
+
+function AdminMemoryList({ userId, token, t }: { userId: string; token: string; t: (key: any) => string }) {
+  const [memories, setMemories] = useState<Array<{ id: string; content: string; category: string; created_at: string }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/admin/users/${userId}/memories`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => { setMemories(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [userId, token]);
+
+  const catColors: Record<string, string> = {
+    preference: 'bg-blue-500/15 text-blue-400',
+    company: 'bg-green-500/15 text-green-400',
+    project: 'bg-purple-500/15 text-purple-400',
+    style: 'bg-orange-500/15 text-orange-400',
+    general: 'bg-surface-container-high text-on-surface-variant',
+  };
+
+  if (loading) return <span className="material-symbols-outlined text-sm animate-spin text-on-surface-variant">progress_activity</span>;
+
+  return (
+    <div className="space-y-1">
+      {memories.map(m => (
+        <div key={m.id} className="flex items-start gap-1.5 text-xs">
+          <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${catColors[m.category] || catColors.general}`}>
+            {t(`userMenu.memory.category.${m.category}` as any)}
+          </span>
+          <span className="text-on-surface">{m.content}</span>
+        </div>
+      ))}
+    </div>
   );
 }

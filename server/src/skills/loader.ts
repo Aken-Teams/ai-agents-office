@@ -190,3 +190,13 @@ export function buildSystemPrompt(
 
   return parts.join('\n');
 }
+
+/**
+ * Build a memory context block to append to system prompts.
+ * Contains user's work-related facts from previous conversations.
+ */
+export function buildMemoryContext(memories: { content: string }[]): string {
+  if (!memories.length) return '';
+  return '\n\n## User Context (from previous conversations)\n' +
+    memories.map(m => `- ${m.content}`).join('\n') + '\n';
+}

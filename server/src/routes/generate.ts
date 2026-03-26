@@ -9,9 +9,10 @@ import { analyzeInput, logSecurityEvent, WARN_THRESHOLD } from '../services/inpu
 import { recordTokenUsage } from '../services/tokenTracker.js';
 import { registerNewFiles, getExistingFilePaths, snapshotExistingFiles } from '../services/fileManager.js';
 import { getUserStorageUsed } from './files.js';
-import { getSkill, buildSystemPrompt, loadSkills, getRouterSkill } from '../skills/loader.js';
+import { getSkill, buildSystemPrompt, buildMemoryContext, loadSkills, getRouterSkill } from '../skills/loader.js';
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from '../services/uploadContext.js';
 import { Orchestrator } from '../services/orchestrator.js';
+import { extractMemoryAndSummary } from '../services/memoryExtractor.js';
 import { config } from '../config.js';
 import { checkUserUsageLimit, getStorageQuotaGb } from '../services/usageLimit.js';
 import type { Conversation, Message, SSEEvent } from '../types.js';
@@ -210,6 +211,11 @@ async function handleOrchestrated(
     activeGenerations.delete(conversationId);
     sseWriter({ type: 'done', data: { exitCode: 0 } });
     res.end();
+
+    // Fire-and-forget: extract conversation summary + user memories
+    extractMemoryAndSummary(userId, conversationId).catch(e =>
+      console.error('[Generate] Memory extraction failed (non-blocking):', e)
+    );
   }
 }
 
@@ -230,7 +236,12 @@ async function handleDirect(
         uploadIds: uploadIds.length > 0 ? uploadIds : undefined,
         conversationId,
       });
-  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + uploadContext;
+  // Fetch user memories for context injection
+  const userMemories = await dbAll<{ content: string }>(
+    'SELECT content FROM user_memories WHERE user_id = ? ORDER BY created_at DESC LIMIT 10', userId
+  );
+  const memoryContext = buildMemoryContext(userMemories);
+  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + uploadContext + memoryContext;
 
   if (skillId && skillId !== conversation.skill_id) {
     await dbRun('UPDATE conversations SET skill_id = ? WHERE id = ?', skillId, conversationId);
@@ -336,6 +347,11 @@ async function handleDirect(
               })}\n\n`);
             } catch { /* closed */ }
           }
+
+          // Fire-and-forget: extract conversation summary + user memories
+          extractMemoryAndSummary(userId, conversationId).catch(e =>
+            console.error('[Generate] Memory extraction failed (non-blocking):', e)
+          );
 
           res.end();
         })().catch(e => {

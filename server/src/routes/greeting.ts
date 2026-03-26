@@ -43,19 +43,26 @@ router.get('/', async (req: Request, res: Response) => {
   );
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
 
-  // Fetch recent conversations (last 5 with their latest message)
+  // Fetch recent conversations (last 5 with summary or latest message)
   const recentConversations = await dbAll<{
     title: string;
     skill_id: string | null;
     created_at: string;
+    summary: string | null;
     last_message: string | null;
   }>(
-    `SELECT c.title, c.skill_id, c.created_at,
+    `SELECT c.title, c.skill_id, c.created_at, c.summary,
        (SELECT content FROM messages m WHERE m.conversation_id = c.id AND m.role = 'user' ORDER BY m.created_at DESC LIMIT 1) AS last_message
      FROM conversations c
      WHERE c.user_id = ?
      ORDER BY c.created_at DESC
      LIMIT 5`,
+    userId
+  );
+
+  // Fetch user memories for context
+  const userMemories = await dbAll<{ content: string }>(
+    'SELECT content FROM user_memories WHERE user_id = ? ORDER BY created_at DESC LIMIT 10',
     userId
   );
 
@@ -95,10 +102,12 @@ router.get('/', async (req: Request, res: Response) => {
   console.log(`[Greeting] Found ${recentConversations.length} recent conversations for user ${userName}`);
 
   const conversationSummary = recentConversations.map((c, i) => {
-    const msg = c.last_message
-      ? (c.last_message.length > 100 ? c.last_message.substring(0, 100) + '...' : c.last_message)
-      : '';
-    return `${i + 1}. "${c.title}" (${c.skill_id || 'general'}) — ${msg}`;
+    // Prefer summary (safe, pre-filtered) over raw message
+    const desc = c.summary
+      || (c.last_message
+        ? (c.last_message.length > 50 ? c.last_message.substring(0, 50) + '...' : c.last_message)
+        : '');
+    return `${i + 1}. "${c.title}" (${c.skill_id || 'general'}) — ${desc}`;
   }).join('\n');
 
   const langInstruction = locale === 'en'
@@ -111,12 +120,23 @@ router.get('/', async (req: Request, res: Response) => {
     ? `\n\nNew features/updates to share with the user:\n${announcements.map((a, i) => `${i + 1}. ${a.title}: ${a.content}`).join('\n')}\n- Naturally mention one or two new features in your greeting so the user discovers them\n- Frame it as exciting news, e.g. "By the way, we just added..."`
     : '';
 
+  const memorySection = userMemories.length > 0
+    ? `\n\nThings you know about this user from previous conversations:\n${userMemories.map(m => `- ${m.content}`).join('\n')}\nUse this context naturally in your greeting if relevant.`
+    : '';
+
   const prompt = `You are a friendly AI assistant greeting a returning user. ${langInstruction}
 
 The user's name is "${userName}".
 
+SAFETY RULES (CRITICAL — follow strictly):
+- ONLY reference work-related conversations (documents, presentations, reports, spreadsheets, data analysis)
+- If a conversation title or content seems personal, emotional, negative, or sensitive — skip it entirely, pretend it does not exist
+- NEVER mention or ask about anything negative or sensitive: mood, feelings, stress, health, relationships, personal life, resignation, job changes, career plans, complaints, conflicts, salary, or any topic that could embarrass the user in front of colleagues
+- If ALL conversations seem personal/sensitive, just give a generic warm professional greeting without referencing any specific work
+
 Their recent conversations:
 ${conversationSummary}
+${memorySection}
 
 Write a warm, concise greeting (2-4 sentences max). Be human, natural, and caring.
 - Briefly reference what they've been working on recently

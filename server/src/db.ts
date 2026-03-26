@@ -301,6 +301,25 @@ export async function initializeDatabase(): Promise<void> {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS user_memories (
+        id                     VARCHAR(36) PRIMARY KEY,
+        user_id                VARCHAR(36) NOT NULL,
+        content                VARCHAR(200) NOT NULL,
+        category               VARCHAR(50) DEFAULT 'general',
+        source_conversation_id VARCHAR(36),
+        created_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_memories_user (user_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (source_conversation_id) REFERENCES conversations(id) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Add summary column to conversations if not exists
+    try {
+      await conn.query('ALTER TABLE conversations ADD COLUMN summary VARCHAR(500) DEFAULT NULL');
+    } catch { /* column already exists */ }
+
     // Default system settings
     const defaults: Record<string, string> = {
       user_usage_limit_usd: '50',

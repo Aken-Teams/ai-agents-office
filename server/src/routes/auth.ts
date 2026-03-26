@@ -556,4 +556,42 @@ router.post('/reset-password', async (req: Request, res: Response) => {
   }
 });
 
+/* ============================================================
+   GET /api/auth/memories
+   List current user's AI memories
+   ============================================================ */
+router.get('/memories', authMiddleware, async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const memories = await dbAll(
+    'SELECT id, content, category, source_conversation_id, created_at FROM user_memories WHERE user_id = ? ORDER BY created_at DESC',
+    userId
+  );
+  res.json(memories);
+});
+
+/* ============================================================
+   DELETE /api/auth/memories/:id
+   Delete a specific memory (ownership check)
+   ============================================================ */
+router.delete('/memories/:id', authMiddleware, async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const memoryId = req.params.id;
+
+  const memory = await dbGet('SELECT id FROM user_memories WHERE id = ? AND user_id = ?', memoryId, userId);
+  if (!memory) { res.status(404).json({ error: 'Memory not found' }); return; }
+
+  await dbRun('DELETE FROM user_memories WHERE id = ?', memoryId);
+  res.json({ success: true });
+});
+
+/* ============================================================
+   DELETE /api/auth/memories
+   Clear ALL memories for current user
+   ============================================================ */
+router.delete('/memories', authMiddleware, async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  await dbRun('DELETE FROM user_memories WHERE user_id = ?', userId);
+  res.json({ success: true });
+});
+
 export default router;

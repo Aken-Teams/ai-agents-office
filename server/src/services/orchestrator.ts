@@ -1,10 +1,10 @@
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { EventEmitter } from 'events';
-import { dbGet, dbRun } from '../db.js';
+import { dbGet, dbAll, dbRun } from '../db.js';
 import { spawnClaude } from './claudeCli.js';
 import { parsePipelineBlocks, truncateResultForRouter } from './taskParser.js';
-import { getSkill, buildSystemPrompt, getRouterSkill, buildRouterPrompt } from '../skills/loader.js';
+import { getSkill, buildSystemPrompt, buildMemoryContext, getRouterSkill, buildRouterPrompt } from '../skills/loader.js';
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from './uploadContext.js';
 import { getSandboxPath } from './sandbox.js';
 import { config } from '../config.js';
@@ -82,7 +82,11 @@ export class Orchestrator {
     // Get or create Router's session for this conversation
     const { sessionId: routerSessionId, initialized: routerInitialized } = await this.getOrCreateAgentSession('router');
 
-    const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale);
+    // Inject user memories into router prompt
+    const userMemories = await dbAll<{ content: string }>(
+      'SELECT content FROM user_memories WHERE user_id = ? ORDER BY created_at DESC LIMIT 10', this.userId
+    );
+    const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale) + buildMemoryContext(userMemories);
 
     // If user attached files, prepend file info to message so Router knows to delegate to data-analyst/rag-analyst
     let messageWithFileContext = message;
