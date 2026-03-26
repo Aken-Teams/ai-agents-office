@@ -9,7 +9,7 @@ import { config } from '../config.js';
 const MIN_MSGS_FOR_SUMMARY = 1;   // Summary: extract from any conversation
 const MIN_MSGS_FOR_MEMORIES = 1;  // Extract from any conversation (safety prompt filters non-work content)
 const MAX_MEMORIES_PER_USER = 50;  // Total memory cap per user
-const MAX_PER_EXTRACTION = 5;      // Max new memories per extraction
+const MAX_PER_EXTRACTION = 3;      // Max new memories per extraction (fewer but higher quality)
 const EXTRACTION_TIMEOUT_MS = 30_000;
 
 /**
@@ -42,6 +42,7 @@ interface ExtractionResult {
 export async function extractMemoryAndSummary(
   userId: string,
   conversationId: string,
+  locale: string = 'zh-TW',
 ): Promise<void> {
   try {
     // Gate: need at least 1 user message for summary
@@ -88,7 +89,7 @@ export async function extractMemoryAndSummary(
       ? `\nExisting memories (do NOT duplicate these):\n${existingMemories.map(m => `- ${m.content}`).join('\n')}`
       : '';
 
-    const prompt = buildExtractionPrompt(conversationText, existingText, atMemoryLimit);
+    const prompt = buildExtractionPrompt(conversationText, existingText, atMemoryLimit, locale);
 
     // Spawn Claude CLI to extract
     const output = await spawnExtractionClaude(prompt);
@@ -128,22 +129,40 @@ export async function extractMemoryAndSummary(
   }
 }
 
+const LOCALE_LABELS: Record<string, string> = {
+  'zh-TW': '繁體中文',
+  'zh-CN': '简体中文',
+  'en': 'English',
+};
+
 function buildExtractionPrompt(
   conversationText: string,
   existingMemoriesText: string,
   skipMemories: boolean,
+  locale: string,
 ): string {
+  const lang = LOCALE_LABELS[locale] || LOCALE_LABELS['zh-TW'];
   return `You are a memory extraction system. Analyze this conversation and produce:
 
 1. A 1-line summary (max 100 chars) describing what work was done. Focus on the document type and topic.
-2. ${skipMemories ? 'SKIP memories — user is at storage limit. Return empty memories array.' : 'Up to 5 work-related facts worth remembering about this user.'}
+2. ${skipMemories ? 'SKIP memories — user is at storage limit. Return empty memories array.' : 'Up to 3 facts worth remembering about this user that would be useful across MANY future conversations.'}
 
-CRITICAL SAFETY RULES:
-- Extract ONLY work-related facts: formatting preferences, company name, project names, document types, technical requirements, style preferences
-- NEVER extract personal opinions, emotions, relationships, health info, political views, complaints, or anything sensitive
-- Each memory must be a short factual sentence (max 200 chars)
-- If the conversation contains nothing work-related, return an empty memories array
-- Summary should always be work-focused; if conversation is not work-related, write a neutral summary like "General conversation"
+WHAT TO EXTRACT (high value, reusable across future conversations):
+- Company name, team name, industry, domain
+- Recurring project names or product names
+- Style and quality preferences inferred from the user's requests (e.g. user asked for "professional clean report" → remember "documents should feel professional with clean formatting")
+- Visual preferences like color schemes, layout styles, tone of writing
+
+WHAT NOT TO EXTRACT:
+- File format choices (e.g. "prefers Word" or "prefers PPT") — users pick formats from templates per task, this is NOT a preference
+- Task-specific document structure (e.g. "PRD has 8 sections") — this is about the task, not the user
+- Language or locale preferences — controlled by system settings
+- Personal opinions, emotions, relationships, health, political views, complaints, or anything sensitive
+
+KEY PRINCIPLE: Focus on HOW the user wants things done (style, quality, tone), not WHAT format they used. A user choosing Word template doesn't mean they prefer Word — but asking for "clean professional formatting" tells you about their style preference. When in doubt, do NOT extract — return an empty memories array.
+
+LANGUAGE RULE:
+- Both summary and memory content MUST be written in ${lang}
 ${existingMemoriesText}
 
 Output EXACTLY in this JSON format (no markdown fences, no explanation, just raw JSON):

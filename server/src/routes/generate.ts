@@ -213,7 +213,7 @@ async function handleOrchestrated(
     res.end();
 
     // Fire-and-forget: extract conversation summary + user memories
-    extractMemoryAndSummary(userId, conversationId).catch(e =>
+    extractMemoryAndSummary(userId, conversationId, userLocale).catch(e =>
       console.error('[Generate] Memory extraction failed (non-blocking):', e)
     );
   }
@@ -349,7 +349,7 @@ async function handleDirect(
           }
 
           // Fire-and-forget: extract conversation summary + user memories
-          extractMemoryAndSummary(userId, conversationId).catch(e =>
+          extractMemoryAndSummary(userId, conversationId, userLocale).catch(e =>
             console.error('[Generate] Memory extraction failed (non-blocking):', e)
           );
 

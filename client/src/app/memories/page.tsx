@@ -78,7 +78,7 @@ function MemoriesContent() {
           {memories.length > 0 && (
             <button
               onClick={clearAll}
-              className="flex items-center gap-1.5 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-headline font-bold text-on-surface-variant hover:text-error hover:bg-error/10 border border-outline-variant/20 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-headline font-bold text-error/60 hover:text-error hover:bg-error/10 border border-error/20 transition-all cursor-pointer"
             >
               <span className="material-symbols-outlined text-lg">delete_sweep</span>
               {t('userMenu.memory.clearAll' as any)}
