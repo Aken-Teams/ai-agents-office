@@ -805,7 +805,7 @@ const en = {
   'admin.conversations.table.messages': 'Messages',
   'admin.conversations.table.tokens': 'Tokens',
   'admin.conversations.table.files': 'Files',
-  'admin.conversations.table.createdAt': 'Created',
+  'admin.conversations.table.createdAt': 'Last Active',
   'admin.conversations.empty': 'No conversations yet',
   'admin.conversations.emptySearch': 'No matching conversations',
   'admin.conversations.total': '{count} conversations',

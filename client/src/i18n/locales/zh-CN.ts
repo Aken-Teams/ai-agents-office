@@ -825,7 +825,7 @@ const zhCN = {
   'admin.conversations.table.messages': '消息',
   'admin.conversations.table.tokens': 'Tokens',
   'admin.conversations.table.files': '文件',
-  'admin.conversations.table.createdAt': '创建时间',
+  'admin.conversations.table.createdAt': '最近活动',
   'admin.conversations.empty': '暂无对话记录',
   'admin.conversations.emptySearch': '找不到符合的对话',
   'admin.conversations.total': '共 {count} 条对话',

@@ -837,7 +837,8 @@ router.get('/conversations', async (req: Request, res: Response) => {
       COALESCE(t.total_input, 0) as total_input_tokens,
       COALESCE(t.total_output, 0) as total_output_tokens,
       COALESCE(f.file_count, 0) as file_count,
-      COALESCE(msg.message_count, 0) as message_count
+      COALESCE(msg.message_count, 0) as message_count,
+      COALESCE(msg.last_message_at, c.created_at) as last_activity
     FROM conversations c
     LEFT JOIN users u ON u.id = c.user_id
     LEFT JOIN (
@@ -849,11 +850,11 @@ router.get('/conversations', async (req: Request, res: Response) => {
       FROM generated_files GROUP BY conversation_id
     ) f ON f.conversation_id = c.id
     LEFT JOIN (
-      SELECT conversation_id, COUNT(*) as message_count
+      SELECT conversation_id, COUNT(*) as message_count, MAX(created_at) as last_message_at
       FROM messages GROUP BY conversation_id
     ) msg ON msg.conversation_id = c.id
     ${whereClause}
-    ORDER BY c.created_at DESC
+    ORDER BY COALESCE(msg.last_message_at, c.created_at) DESC
     LIMIT ? OFFSET ?
   `, ...params, limit, offset);
 

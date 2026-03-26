@@ -601,7 +601,7 @@ export default function AdminConversationsPage() {
                     </td>
                     <td className="py-3 px-4 text-right text-sm text-on-surface-variant">{conv.file_count || 0}</td>
                     <td className="py-3 px-4 text-sm text-on-surface-variant font-mono">
-                      {toUTC(conv.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                      {toUTC(conv.last_activity || conv.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                     </td>
                   </tr>
                 );
@@ -649,7 +649,7 @@ export default function AdminConversationsPage() {
                   </span>
                   <span>{conv.message_count || 0} msg</span>
                   <span>{conv.file_count || 0} {t('admin.conversations.table.files' as any)}</span>
-                  <span className="ml-auto font-mono">{toUTC(conv.created_at).toLocaleDateString('zh-TW')}</span>
+                  <span className="ml-auto font-mono">{toUTC(conv.last_activity || conv.created_at).toLocaleDateString('zh-TW')}</span>
                 </div>
               </div>
             );

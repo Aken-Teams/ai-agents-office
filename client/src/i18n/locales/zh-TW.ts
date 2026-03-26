@@ -829,7 +829,7 @@ const zhTW = {
   'admin.conversations.table.messages': '訊息',
   'admin.conversations.table.tokens': 'Tokens',
   'admin.conversations.table.files': '檔案',
-  'admin.conversations.table.createdAt': '建立時間',
+  'admin.conversations.table.createdAt': '最近活動',
   'admin.conversations.empty': '尚無對話記錄',
   'admin.conversations.emptySearch': '找不到符合的對話',
   'admin.conversations.total': '共 {count} 筆對話',
