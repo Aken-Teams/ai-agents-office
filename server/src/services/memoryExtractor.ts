@@ -7,7 +7,7 @@ import { config } from '../config.js';
 
 // Thresholds
 const MIN_MSGS_FOR_SUMMARY = 1;   // Summary: extract from any conversation
-const MIN_MSGS_FOR_MEMORIES = 3;  // Memories: need enough context to be meaningful
+const MIN_MSGS_FOR_MEMORIES = 1;  // Extract from any conversation (safety prompt filters non-work content)
 const MAX_MEMORIES_PER_USER = 50;  // Total memory cap per user
 const MAX_PER_EXTRACTION = 5;      // Max new memories per extraction
 const EXTRACTION_TIMEOUT_MS = 30_000;
