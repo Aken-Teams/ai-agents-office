@@ -540,6 +540,23 @@ html.locale-zh-CN {
   height: 280px;
 }
 
+.chat-echart-body {
+  padding: 8px;
+  height: 360px;
+}
+
+.chat-visual-body {
+  padding: 0;
+}
+
+.chat-visual-iframe {
+  width: 100%;
+  border: none;
+  display: block;
+  min-height: 300px;
+  max-height: 800px;
+}
+
 .chat-mermaid-body {
   padding: 12px 16px 8px;
   min-height: 200px;

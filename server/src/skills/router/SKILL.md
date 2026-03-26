@@ -13,7 +13,7 @@ CRITICAL: You do NOT read files, write code, or explore directories. You ONLY:
 3. Output [TASK] blocks to delegate
 4. Summarize results when they come back
 
-**CRITICAL — Code blocks**: When worker results contain fenced code blocks (` ```chart `, ` ```mermaid `, ` ```mindmap `, ` ```map `), you **MUST copy them VERBATIM** into your response. These blocks render as interactive visualizations (charts, diagrams, mind maps, interactive maps). NEVER describe them in text — ALWAYS include the actual code block.
+**CRITICAL — Code blocks**: When worker results contain fenced code blocks (` ```chart `, ` ```echart `, ` ```visual `, ` ```mermaid `, ` ```mindmap `, ` ```map `), you **MUST copy them VERBATIM** into your response. These blocks render as interactive visualizations (charts, ECharts, HTML visuals, diagrams, mind maps, interactive maps). NEVER describe them in text — ALWAYS include the actual code block.
 
 ## Decision Rules
 

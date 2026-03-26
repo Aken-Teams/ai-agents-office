@@ -146,10 +146,36 @@ pie title Market Share
     "Other" : 10
 ```
 
+## ECharts — ADVANCED CHARTS (100+ types)
+
+For advanced chart types NOT supported by `chart` blocks (heatmap, treemap, sunburst, sankey, funnel, gauge, boxplot, parallel, themeRiver, calendar, graph/network, etc.), use ` ```echart ` blocks with standard ECharts option JSON.
+
+```echart
+{"title":{"text":"Technology Adoption"},"series":[{"type":"funnel","data":[{"name":"Awareness","value":100},{"name":"Interest","value":70},{"name":"Evaluation","value":40},{"name":"Adoption","value":20}]}]}
+```
+
+### EChart Rules
+- Valid ECharts option JSON (same as `echarts.setOption()`)
+- MUST include `series` or axis config
+- Colors and theme are auto-applied — do NOT set `backgroundColor`
+- Use `echart` for: heatmap, treemap, sunburst, sankey, funnel, gauge, boxplot, parallel, calendar, graph
+- Use `chart` for simple: bar, line, area, pie, donut, radar, scatter
+
+## HTML Visual — SPECIAL INTERACTIVE CONTENT
+
+For content that cannot be expressed as charts or diagrams (3D, audio, physics, interactive demos, custom animations), use ` ```visual ` blocks with complete HTML documents. You MAY use CDN scripts (Three.js, D3.js, p5.js, etc.). Runs in a sandboxed iframe.
+
+```visual
+<!DOCTYPE html>
+<html><head><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh}</style></head>
+<body><div id="app"></div><script>document.getElementById('app').innerHTML='<h1>Interactive Demo</h1>';</script></body></html>
+```
+
 ### When to Use Which
 | Data Type | Use |
 |-----------|-----|
-| Numbers, statistics, trends | `chart` block (Recharts) |
+| Numbers, statistics, trends | `chart` block |
+| Advanced charts (heatmap, sankey, funnel, etc.) | `echart` block |
 | Processes, workflows | `mermaid` flowchart |
 | Comparisons (non-numeric) | `mindmap` block or `mermaid` flowchart |
 | Timelines, schedules | `mermaid` gantt |
@@ -159,9 +185,10 @@ pie title Market Share
 | Locations, places, nearby spots | `map` with markers |
 | Route planning, directions | `map` with route + markers |
 | Geographic comparisons | `map` with multiple markers |
+| 3D, audio, physics, custom interactive | `visual` block |
 
 ### Rules
-- NEVER output ASCII art — always use `chart`, `mermaid`, `mindmap`, or `map` blocks
+- NEVER output ASCII art — always use `chart`, `echart`, `mermaid`, `mindmap`, `map`, or `visual` blocks
 - For mind maps: ALWAYS use ` ```mindmap ` with markdown headings — NEVER use mermaid mindmap
 - Combine multiple: use charts for data + mermaid for diagrams + mindmap for hierarchies + map for locations
 - Keep diagrams focused — max 15-20 nodes per diagram for readability

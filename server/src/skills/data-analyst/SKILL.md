@@ -91,10 +91,28 @@ Use fenced chart blocks with the `chart` language tag:
 | `scatter` | `{"type":"scatter","title":"...","series":[{"name":"Group","data":[{"x":1,"y":2}]}]}` | Correlation analysis |
 
 ### Chart Strategy
-1. **Overview chart** — Start with a bar chart showing the most important comparison
-2. **Trend chart** — Add a line/area chart if data has time-series dimensions
-3. **Distribution chart** — Add a pie/donut chart for proportional breakdowns
-4. Place charts INLINE next to their textual explanations — not all at the end
+1. **Always pick the BEST chart type for the data** — do NOT default to bar/line for everything
+2. Place charts INLINE next to their textual explanations — not all at the end
+3. Use at least 2-3 DIFFERENT chart types per analysis — variety makes analysis richer
+
+### Scenario → Best Chart Type (IMPORTANT)
+| Data scenario | Best chart | Block |
+|---------------|-----------|-------|
+| Stock prices, OHLC, K-line | candlestick | `echart` |
+| Single KPI / target achievement (達成率) | gauge | `echart` |
+| Conversion funnel, pipeline stages | funnel | `echart` |
+| Flow between categories (資金流向, traffic) | sankey | `echart` |
+| Time × category matrix (每小時/每日熱度) | heatmap | `echart` |
+| Hierarchical proportions (多層佔比) | treemap or sunburst | `echart` |
+| Distribution / outlier detection | boxplot | `echart` |
+| Network / relationship graph | graph | `echart` |
+| Simple category comparison | bar | `chart` |
+| Time-series trend | line / area | `chart` |
+| Part-of-whole (< 7 items) | pie / donut | `chart` |
+| Multi-dimensional scoring | radar | `chart` |
+| Correlation between 2 variables | scatter | `chart` |
+
+**CRITICAL**: When data fits an advanced type (candlestick, gauge, funnel, sankey, heatmap, treemap, boxplot), you MUST use `echart` — do NOT flatten it into a basic bar/line chart.
 
 ### Chart Rules
 - ALWAYS include a descriptive `title`
@@ -142,17 +160,58 @@ flowchart LR
 ```
 This renders as an interactive tree — users can click to collapse/expand nodes, scroll to zoom, drag to pan.
 
+## ECharts — ADVANCED CHARTS (100+ types)
+
+For advanced chart types NOT supported by `chart` blocks (heatmap, treemap, sunburst, sankey, funnel, gauge, boxplot, parallel, themeRiver, calendar, graph/network, 3D charts, etc.), use ` ```echart ` blocks with standard ECharts option JSON.
+
+```echart
+{"title":{"text":"Sales Funnel"},"series":[{"type":"funnel","data":[{"name":"Visit","value":100},{"name":"Cart","value":60},{"name":"Order","value":30},{"name":"Pay","value":20}]}]}
+```
+
+### When to Use `echart` vs `chart`
+| Scenario | Use |
+|----------|-----|
+| Bar, line, area, pie, donut, radar, scatter | `chart` block (simpler, faster) |
+| Heatmap, treemap, sunburst, sankey, funnel, gauge, boxplot, parallel, calendar, graph | `echart` block |
+| Any chart needing 100+ data points or complex config | `echart` block |
+
+### EChart Rules
+- The JSON must be a valid ECharts option object (same format as `echarts.setOption()`)
+- MUST include `series` or axis config — otherwise rendering will fail
+- Colors and theme are auto-applied — do NOT set `backgroundColor` or `textStyle.color`
+- Keep JSON on a single line within the code block
+
+## HTML Visual — SPECIAL INTERACTIVE CONTENT
+
+For content that cannot be expressed as charts or diagrams (3D visualizations, audio players, physics simulations, interactive calculators, custom animations, etc.), use ` ```visual ` blocks with complete HTML documents.
+
+```visual
+<!DOCTYPE html>
+<html><head><style>body{margin:0;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif}</style></head>
+<body><canvas id="c" width="400" height="400"></canvas>
+<script>var c=document.getElementById('c'),ctx=c.getContext('2d');ctx.fillStyle='#4CAF50';ctx.fillRect(50,50,300,300);</script></body></html>
+```
+
+### Visual Rules
+- Output a COMPLETE HTML document (with `<!DOCTYPE html>`, `<html>`, `<head>`, `<body>`)
+- You MAY use CDN scripts (e.g. Three.js, D3.js, Tone.js, Chart.js, p5.js)
+- The HTML runs in a sandboxed iframe with `allow-scripts` only — no network access, no forms
+- Keep it self-contained — all CSS and JS must be inline or from CDN
+- ONLY use `visual` when `chart`, `echart`, and `mermaid` cannot achieve the result
+
 ### When to Use Which
 | Data Type | Use |
 |-----------|-----|
 | Numbers, stats, trends | `chart` block |
+| Advanced charts (heatmap, sankey, funnel, etc.) | `echart` block |
 | Data relationships, schemas | `mermaid` erDiagram |
 | Process flows | `mermaid` flowchart |
 | Hierarchical breakdowns | `mindmap` block (**NOT** mermaid) |
 | Time-based plans | `mermaid` gantt |
+| 3D, audio, physics, custom interactive | `visual` block |
 
 ### Rules
-- NEVER use ASCII art — always `chart`, `mermaid`, or `mindmap`
+- NEVER use ASCII art — always `chart`, `echart`, `mermaid`, `mindmap`, or `visual`
 - For mind maps: ALWAYS use ` ```mindmap ` — NEVER use mermaid mindmap
 - Combine multiple in one response: charts for data, mermaid for diagrams, mindmap for hierarchies
 - Keep diagrams under 15-20 nodes for readability

@@ -13,6 +13,8 @@ import { I18nProvider, useTranslation } from '../../../i18n';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 
 const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { ssr: false });
+const ChatEChart = dynamic(() => import('../../components/charts/ChatEChart'), { ssr: false });
+const ChatVisual = dynamic(() => import('../../components/charts/ChatVisual'), { ssr: false });
 const ChatMermaid = dynamic(() => import('../../components/charts/ChatMermaid'), { ssr: false });
 const ChatMindmap = dynamic(() => import('../../components/charts/ChatMindmap'), { ssr: false });
 const ChatMap = dynamic(() => import('../../components/charts/ChatMap'), { ssr: false });
@@ -502,7 +504,7 @@ function ChatContent() {
       // Check if this <pre> contains a chart or mermaid code block — unwrap to avoid <pre> wrapper
       const codeEl = node?.children?.[0];
       const cls = codeEl?.properties?.className?.[0] || '';
-      if (cls === 'language-chart' || cls === 'language-mermaid' || cls === 'language-mindmap' || cls === 'language-map') {
+      if (cls === 'language-chart' || cls === 'language-echart' || cls === 'language-visual' || cls === 'language-mermaid' || cls === 'language-mindmap' || cls === 'language-map') {
         return <>{children}</>;
       }
       return <pre {...props}>{children}</pre>;
@@ -512,6 +514,12 @@ function ChatContent() {
       const text = String(children).trim();
       if (className === 'language-chart') {
         return <ChatChart rawJson={text} />;
+      }
+      if (className === 'language-echart') {
+        return <ChatEChart rawJson={text} />;
+      }
+      if (className === 'language-visual') {
+        return <ChatVisual rawHtml={text} />;
       }
       if (className === 'language-mermaid') {
         // Auto-detect mermaid mindmap → convert to interactive markmap

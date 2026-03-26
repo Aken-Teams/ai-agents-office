@@ -120,16 +120,32 @@ flowchart TD
 ## Recommendations
 ```
 
+## ECharts — ADVANCED CHARTS (100+ types)
+
+For advanced chart types NOT supported by `chart` blocks (heatmap, treemap, sunburst, sankey, funnel, gauge, boxplot, parallel, calendar, graph/network, etc.), use ` ```echart ` blocks with standard ECharts option JSON.
+
+```echart
+{"title":{"text":"Data Distribution"},"xAxis":{"type":"category","data":["A","B","C","D","E"]},"yAxis":{"type":"value"},"series":[{"type":"heatmap","data":[[0,0,5],[1,0,10],[2,0,3],[3,0,8],[4,0,6]]}]}
+```
+
+### EChart Rules
+- Valid ECharts option JSON (same as `echarts.setOption()`)
+- MUST include `series` or axis config
+- Colors and theme are auto-applied — do NOT set `backgroundColor`
+- Use `echart` for: heatmap, treemap, sunburst, sankey, funnel, gauge, boxplot, parallel, calendar, graph
+- Use `chart` for simple: bar, line, area, pie, donut, radar, scatter
+
 | Data Type | Use |
 |-----------|-----|
 | Numbers, stats | `chart` block |
+| Advanced charts (heatmap, sankey, funnel, etc.) | `echart` block |
 | Relationships, schemas | `mermaid` erDiagram |
 | Processes, workflows | `mermaid` flowchart |
 | Hierarchies, brainstorming | `mindmap` block (**NOT** mermaid) |
 | Timelines | `mermaid` gantt |
 
 ### Rules
-- NEVER use ASCII art — always `chart`, `mermaid`, or `mindmap`
+- NEVER use ASCII art — always `chart`, `echart`, `mermaid`, or `mindmap`
 - For mind maps: ALWAYS use ` ```mindmap ` — NEVER use mermaid mindmap
 - Combine multiple in one response
 - Keep diagrams under 15-20 nodes
