@@ -135,7 +135,7 @@ export default function AdminSidebar() {
       {/* ===== Desktop Sidebar ===== */}
       <aside className={`hidden md:flex h-screen fixed left-0 top-0 bg-surface-container-lowest flex-col py-6 font-headline text-sm tracking-tight z-50 border-r border-outline-variant/10 transition-all duration-300 ${collapsed ? 'w-[68px]' : 'w-64'}`}>
       {/* Header */}
-      <div className={`mb-2 ${collapsed ? 'px-3' : 'px-6'}`}>
+      <div className={`mb-2 shrink-0 ${collapsed ? 'px-3' : 'px-6'}`}>
         <Link href="/admin/overview" className="flex items-center gap-3 no-underline">
           <div className="w-8 h-8 bg-primary/20 flex items-center justify-center rounded-lg shrink-0">
             <span className="material-symbols-outlined text-primary">admin_panel_settings</span>
@@ -158,7 +158,7 @@ export default function AdminSidebar() {
       )}
 
       {/* Navigation */}
-      <nav className={`flex-1 space-y-1 ${collapsed ? 'px-2' : 'px-4'}`}>
+      <nav className={`flex-1 min-h-0 overflow-y-auto space-y-1 ${collapsed ? 'px-2' : 'px-4'}`}>
         {ADMIN_NAV.map(link => {
           const isActive = pathname.startsWith(link.href);
           return (
@@ -184,7 +184,7 @@ export default function AdminSidebar() {
       </nav>
 
       {/* Bottom */}
-      <div className={`mt-auto pt-6 space-y-1 ${collapsed ? 'px-2' : 'px-4'}`}>
+      <div className={`mt-auto pt-6 space-y-1 shrink-0 ${collapsed ? 'px-2' : 'px-4'}`}>
         {/* Switch to User View */}
         <Link
           href="/dashboard"
