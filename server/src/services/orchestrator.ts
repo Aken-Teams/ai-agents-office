@@ -16,7 +16,7 @@ const ORCHESTRATION_TIMEOUT_MS = 900_000; // 15 minutes total orchestration limi
 // Per-skill timeout (ms) — text-only agents are fast, generators need more time
 const SKILL_TIMEOUT: Record<string, number> = {
   router:    90_000,    // 1.5 min — analyze and delegate (no tools, just text)
-  research:  300_000,   // 5 min — web search
+  research:  480_000,   // 8 min — web search + charts/visualizations
   planner:   300_000,   // 5 min — text planning (complex outlines need time)
   reviewer:  120_000,   // 2 min — text review
   'pptx-gen': 600_000,  // 10 min — write code + run node to generate PPT
@@ -25,8 +25,8 @@ const SKILL_TIMEOUT: Record<string, number> = {
   'pdf-gen':  300_000,  // 5 min — write code + run node to generate PDF
   'slides-gen': 480_000,  // 8 min — generate HTML slides
   'webapp-gen': 480_000,  // 8 min — generate HTML dashboard page
-  'data-analyst': 480_000, // 8 min — data analysis (files can be large)
-  'rag-analyst': 480_000, // 8 min — cross-file analysis (multiple files)
+  'data-analyst': 600_000, // 10 min — data analysis + charts/visualizations
+  'rag-analyst': 600_000, // 10 min — cross-file analysis + charts/visualizations
 };
 const DEFAULT_TASK_TIMEOUT_MS = 300_000; // 5 min fallback for unknown skills
 
@@ -130,9 +130,9 @@ export class Orchestrator {
           }
         );
       } catch (routerErr) {
-        // Retry once with a fresh session on transient failure (exit code 1)
+        // Retry once with a brand-new session on transient failure (exit code 1, "session already in use")
         console.warn(`[Orchestrator] Router failed, retrying with fresh session:`, routerErr);
-        const freshSession = await this.getOrCreateAgentSession('router');
+        const freshSession = await this.resetAgentSession('router');
         try {
           routerResult = await this.spawnAgent(
             currentMessage,
@@ -543,6 +543,25 @@ export class Orchestrator {
     );
 
     if (existing) return { sessionId: existing.session_uuid, initialized: existing.initialized === 1 };
+
+    const sessionUuid = uuidv4();
+    await dbRun(
+      'INSERT INTO agent_sessions (id, conversation_id, skill_id, session_uuid) VALUES (?, ?, ?, ?)',
+      uuidv4(), this.conversationId, skillId, sessionUuid
+    );
+
+    return { sessionId: sessionUuid, initialized: false };
+  }
+
+  /**
+   * Reset an agent's session — delete old record and create a fresh UUID.
+   * Used when --resume fails with "session already in use".
+   */
+  private async resetAgentSession(skillId: string): Promise<{ sessionId: string; initialized: boolean }> {
+    await dbRun(
+      'DELETE FROM agent_sessions WHERE conversation_id = ? AND skill_id = ?',
+      this.conversationId, skillId
+    );
 
     const sessionUuid = uuidv4();
     await dbRun(

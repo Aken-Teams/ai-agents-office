@@ -84,7 +84,6 @@ When your research includes ANY data or structural insights, you MUST embed visu
 | Topic hierarchy / brainstorming | mindmap | ` ```mindmap ` |
 | Locations / geographic data | map | ` ```map ` |
 | Route planning / directions | map + route | ` ```map ` |
-| 3D, audio, physics, custom interactive | HTML | ` ```visual ` |
 
 **RULES**:
 - Pick the MOST PRECISE type — NEVER flatten stock data into line, NEVER use bar for funnel data
@@ -222,34 +221,8 @@ Note: candlestick data = `[open, close, low, high]` per point.
 - MUST include `series` or axis config
 - Colors and theme are auto-applied — do NOT set `backgroundColor`
 
-## HTML Visual — SPECIAL INTERACTIVE CONTENT
-
-For content that cannot be expressed as charts or diagrams (3D, audio, physics, interactive demos, custom animations), use ` ```visual ` blocks with complete HTML documents. You MAY use CDN scripts (Three.js, D3.js, p5.js, etc.). Runs in a sandboxed iframe.
-
-```visual
-<!DOCTYPE html>
-<html><head><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh}</style></head>
-<body><div id="app"></div><script>document.getElementById('app').innerHTML='<h1>Interactive Demo</h1>';</script></body></html>
-```
-
-### When to Use Which
-| Data Type | Use |
-|-----------|-----|
-| Numbers, statistics, trends | `chart` block |
-| Advanced charts (heatmap, sankey, funnel, etc.) | `echart` block |
-| Processes, workflows | `mermaid` flowchart |
-| Comparisons (non-numeric) | `mindmap` block or `mermaid` flowchart |
-| Timelines, schedules | `mermaid` gantt |
-| Relationships, DB schemas | `mermaid` erDiagram |
-| API/system interactions | `mermaid` sequenceDiagram |
-| Topic hierarchies, brainstorming | `mindmap` block (**NOT** mermaid mindmap) |
-| Locations, places, nearby spots | `map` with markers |
-| Route planning, directions | `map` with route + markers |
-| Geographic comparisons | `map` with multiple markers |
-| 3D, audio, physics, custom interactive | `visual` block |
-
 ### Rules
-- NEVER output ASCII art — always use `chart`, `echart`, `mermaid`, `mindmap`, `map`, or `visual` blocks
+- NEVER output ASCII art — always use `chart`, `echart`, `mermaid`, `mindmap`, or `map` blocks
 - For mind maps: ALWAYS use ` ```mindmap ` with markdown headings — NEVER use mermaid mindmap
 - Combine multiple: use charts for data + mermaid for diagrams + mindmap for hierarchies + map for locations
 - Keep diagrams focused — max 15-20 nodes per diagram for readability

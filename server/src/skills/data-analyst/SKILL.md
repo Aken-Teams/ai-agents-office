@@ -100,7 +100,6 @@ If the user wants a formal report based on the data:
 | Timeline / project schedule | gantt | ` ```mermaid ` |
 | System / API interaction sequence | sequenceDiagram | ` ```mermaid ` |
 | Topic hierarchy / brainstorming / overview | mindmap | ` ```mindmap ` |
-| 3D, audio, physics, custom interactive | HTML | ` ```visual ` |
 
 **RULES**:
 - Pick the MOST PRECISE type — NEVER flatten stock data into line, NEVER use bar for funnel data
@@ -214,37 +213,8 @@ Note: candlestick data format is `[open, close, low, high]` per data point.
 - Colors and theme are auto-applied — do NOT set `backgroundColor` or `textStyle.color`
 - Keep JSON on a single line within the code block
 
-## HTML Visual — SPECIAL INTERACTIVE CONTENT
-
-For content that cannot be expressed as charts or diagrams (3D visualizations, audio players, physics simulations, interactive calculators, custom animations, etc.), use ` ```visual ` blocks with complete HTML documents.
-
-```visual
-<!DOCTYPE html>
-<html><head><style>body{margin:0;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif}</style></head>
-<body><canvas id="c" width="400" height="400"></canvas>
-<script>var c=document.getElementById('c'),ctx=c.getContext('2d');ctx.fillStyle='#4CAF50';ctx.fillRect(50,50,300,300);</script></body></html>
-```
-
-### Visual Rules
-- Output a COMPLETE HTML document (with `<!DOCTYPE html>`, `<html>`, `<head>`, `<body>`)
-- You MAY use CDN scripts (e.g. Three.js, D3.js, Tone.js, Chart.js, p5.js)
-- The HTML runs in a sandboxed iframe with `allow-scripts` only — no network access, no forms
-- Keep it self-contained — all CSS and JS must be inline or from CDN
-- ONLY use `visual` when `chart`, `echart`, and `mermaid` cannot achieve the result
-
-### When to Use Which
-| Data Type | Use |
-|-----------|-----|
-| Numbers, stats, trends | `chart` block |
-| Advanced charts (heatmap, sankey, funnel, etc.) | `echart` block |
-| Data relationships, schemas | `mermaid` erDiagram |
-| Process flows | `mermaid` flowchart |
-| Hierarchical breakdowns | `mindmap` block (**NOT** mermaid) |
-| Time-based plans | `mermaid` gantt |
-| 3D, audio, physics, custom interactive | `visual` block |
-
 ### Rules
-- NEVER use ASCII art — always `chart`, `echart`, `mermaid`, `mindmap`, or `visual`
+- NEVER use ASCII art — always `chart`, `echart`, `mermaid`, or `mindmap`
 - For mind maps: ALWAYS use ` ```mindmap ` — NEVER use mermaid mindmap
 - Combine multiple in one response: charts for data, mermaid for diagrams, mindmap for hierarchies
 - Keep diagrams under 15-20 nodes for readability

@@ -61,51 +61,97 @@ Structure your analysis clearly:
 - All files are READ-ONLY — do NOT modify or delete any files
 - Generated reports should go in the current working directory
 
-## Inline Charts — MANDATORY
+## Visualization — STEP 1: CHOOSE THE RIGHT FORMAT
 
-**CRITICAL**: You MUST embed at least 2-3 charts in EVERY analysis response that involves numerical data. Charts are rendered as interactive visualizations in the chat UI. Users expect visual summaries — text-only analysis is insufficient.
+**FORBIDDEN COMBINATIONS** (violating these is a critical error):
+- Stock/financial price data → NEVER use ` ```chart ` line. MUST use ` ```echart ` candlestick
+- Conversion/pipeline stages → NEVER use ` ```chart ` bar. MUST use ` ```echart ` funnel
+- Single KPI/percentage → NEVER use ` ```chart ` bar. MUST use ` ```echart ` gauge
+- Category flow/traffic flow → NEVER use ` ```chart ` bar. MUST use ` ```echart ` sankey
+- Time×category matrix data → NEVER use ` ```chart ` bar. MUST use ` ```echart ` heatmap
 
-Use fenced chart blocks with the `chart` language tag:
+**CRITICAL**: You MUST embed at least 2-3 visualizations in EVERY analysis. **BEFORE writing ANY visualization, check this unified table to pick the most precise format:**
 
+| Data / content | Best type | Block |
+|----------------|----------|-------|
+| Stock/financial OHLC prices | **candlestick** | ` ```echart ` |
+| Single KPI / achievement % | **gauge** | ` ```echart ` |
+| Conversion / pipeline stages | **funnel** | ` ```echart ` |
+| Flow between categories | **sankey** | ` ```echart ` |
+| Time × category intensity | **heatmap** | ` ```echart ` |
+| Hierarchical proportions | **treemap** | ` ```echart ` |
+| Distribution / outliers | **boxplot** | ` ```echart ` |
+| Network / relationships | **graph** | ` ```echart ` |
+| Simple category comparison | bar | ` ```chart ` |
+| Time-series trend (non-OHLC) | line / area | ` ```chart ` |
+| Part-of-whole (< 7 items) | pie / donut | ` ```chart ` |
+| Multi-dimensional scoring | radar | ` ```chart ` |
+| Process flow / decision tree | flowchart | ` ```mermaid ` |
+| Database / entity relationships | erDiagram | ` ```mermaid ` |
+| Timeline / project schedule | gantt | ` ```mermaid ` |
+| Topic hierarchy / brainstorming | mindmap | ` ```mindmap ` |
+
+**RULES**:
+- Pick the MOST PRECISE type — NEVER flatten data into basic bar/line
+- Use 2-3+ DIFFERENT visualization types per analysis for variety
+- You can mix multiple block types (e.g. echart + chart + mermaid + mindmap)
+
+### `chart` block format (for bar, line, area, pie, donut, radar, scatter only)
 ```chart
-{"type":"line","title":"Revenue Trend","series":[{"name":"2024","data":[{"name":"Q1","value":120},{"name":"Q2","value":145},{"name":"Q3","value":168},{"name":"Q4","value":195}]}]}
+{"type":"bar","title":"Cross-file Comparison","data":[{"name":"File A","value":245},{"name":"File B","value":189}]}
 ```
 
-### Chart Types
-| Type | Format | Use for |
-|------|--------|---------|
-| `bar` | `{"type":"bar","title":"...","data":[{"name":"A","value":10}]}` | Comparisons |
-| `line` | `{"type":"line","title":"...","series":[{"name":"S","data":[{"name":"Q1","value":20}]}]}` | Trends |
-| `area` | Same as line, `"type":"area"` | Volume trends |
-| `pie`/`donut` | `{"type":"pie","title":"...","data":[{"name":"A","value":55}]}` | Proportions |
-| `radar` | `{"type":"radar","title":"...","axes":[...],"series":[{"name":"A","values":[...]}]}` | Multi-axis |
-| `scatter` | `{"type":"scatter","title":"...","series":[{"name":"G","data":[{"x":1,"y":2}]}]}` | Correlations |
+| Type | Format |
+|------|--------|
+| `bar` | `{"type":"bar","title":"...","data":[{"name":"A","value":10}]}` |
+| `line` | `{"type":"line","title":"...","series":[{"name":"S","data":[{"name":"Q1","value":20}]}]}` |
+| `area` | Same as line, `"type":"area"` |
+| `pie`/`donut` | `{"type":"pie","title":"...","data":[{"name":"A","value":55}]}` |
+| `radar` | `{"type":"radar","title":"...","axes":[...],"series":[{"name":"A","values":[...]}]}` |
+| `scatter` | `{"type":"scatter","title":"...","series":[{"name":"G","data":[{"x":1,"y":2}]}]}` |
 
-### Chart Strategy
-1. **Always pick the BEST chart type for the data** — do NOT default to bar/line
-2. Place charts INLINE next to their analysis text, cite source files nearby
-3. Always include `title`. JSON must be valid and on a single line.
+Rules: Always include `title`. JSON must be valid and on a single line. Place charts INLINE next to analysis text.
 
-### Scenario → Best Chart Type
-| Data scenario | Best chart | Block |
-|---------------|-----------|-------|
-| Single KPI / achievement | gauge | `echart` |
-| Conversion funnel | funnel | `echart` |
-| Flow between categories | sankey | `echart` |
-| Time × category matrix | heatmap | `echart` |
-| Hierarchical proportions | treemap / sunburst | `echart` |
-| Distribution / outliers | boxplot | `echart` |
-| Simple comparison | bar | `chart` |
-| Time-series trend | line / area | `chart` |
-| Proportions (< 7 items) | pie / donut | `chart` |
+### `echart` block examples (for advanced chart types)
 
-**CRITICAL**: When data fits an advanced type, MUST use `echart` — do NOT flatten into basic bar/line.
+**Candlestick — Stock/financial OHLC:**
+```echart
+{"title":{"text":"Stock Price"},"xAxis":{"type":"category","data":["3/3","3/7","3/12"]},"yAxis":{"type":"value"},"series":[{"type":"candlestick","data":[[20,34,10,38],[40,35,30,50],[31,38,33,44]]}]}
+```
 
-## Mermaid Diagrams — USE FOR STRUCTURAL INSIGHTS
+**Gauge — KPI / achievement rate:**
+```echart
+{"title":{"text":"達成率"},"series":[{"type":"gauge","data":[{"value":78,"name":"完成度"}],"detail":{"formatter":"{value}%"}}]}
+```
 
-For cross-file relationships, process flows, and data schemas, use Mermaid diagrams. They render as interactive diagrams in the chat UI.
+**Funnel — Conversion pipeline:**
+```echart
+{"title":{"text":"Conversion"},"series":[{"type":"funnel","data":[{"name":"Visit","value":100},{"name":"Cart","value":60},{"name":"Order","value":30}]}]}
+```
 
-**CRITICAL**: You MUST actually OUTPUT the fenced code blocks — do NOT just describe diagrams in text. Do NOT use ASCII art. Use `chart` for numbers, `mermaid` for diagrams, `mindmap` for mind maps.
+**Heatmap — Time × category matrix:**
+```echart
+{"title":{"text":"Weekly Activity"},"xAxis":{"type":"category","data":["Mon","Tue","Wed"]},"yAxis":{"type":"category","data":["AM","PM"]},"visualMap":{"min":0,"max":100},"series":[{"type":"heatmap","data":[[0,0,50],[1,0,70],[2,0,60],[0,1,80],[1,1,90],[2,1,75]]}]}
+```
+
+**Treemap — Hierarchical proportions:**
+```echart
+{"title":{"text":"Revenue"},"series":[{"type":"treemap","data":[{"name":"Tech","value":100,"children":[{"name":"Cloud","value":60},{"name":"AI","value":40}]},{"name":"Finance","value":80}]}]}
+```
+
+**Sankey — Flow between categories:**
+```echart
+{"title":{"text":"Data Flow"},"series":[{"type":"sankey","data":[{"name":"Source A"},{"name":"Process"},{"name":"Output"}],"links":[{"source":"Source A","target":"Process","value":100},{"source":"Process","target":"Output","value":60}]}]}
+```
+
+### EChart Rules
+- Valid ECharts option JSON (same as `echarts.setOption()`)
+- MUST include `series` or axis config
+- Colors and theme are auto-applied — do NOT set `backgroundColor`
+
+### Mermaid & Mindmap
+
+**CRITICAL**: You MUST actually OUTPUT the fenced code blocks — do NOT just describe diagrams in text. Do NOT use ASCII art.
 
 ```mermaid
 erDiagram
@@ -133,32 +179,8 @@ flowchart TD
 ## Recommendations
 ```
 
-## ECharts — ADVANCED CHARTS (100+ types)
-
-For advanced chart types NOT supported by `chart` blocks (heatmap, treemap, sunburst, sankey, funnel, gauge, boxplot, parallel, calendar, graph/network, etc.), use ` ```echart ` blocks with standard ECharts option JSON.
-
-```echart
-{"title":{"text":"Data Distribution"},"xAxis":{"type":"category","data":["A","B","C","D","E"]},"yAxis":{"type":"value"},"series":[{"type":"heatmap","data":[[0,0,5],[1,0,10],[2,0,3],[3,0,8],[4,0,6]]}]}
-```
-
-### EChart Rules
-- Valid ECharts option JSON (same as `echarts.setOption()`)
-- MUST include `series` or axis config
-- Colors and theme are auto-applied — do NOT set `backgroundColor`
-- Use `echart` for: heatmap, treemap, sunburst, sankey, funnel, gauge, boxplot, parallel, calendar, graph
-- Use `chart` for simple: bar, line, area, pie, donut, radar, scatter
-
-| Data Type | Use |
-|-----------|-----|
-| Numbers, stats | `chart` block |
-| Advanced charts (heatmap, sankey, funnel, etc.) | `echart` block |
-| Relationships, schemas | `mermaid` erDiagram |
-| Processes, workflows | `mermaid` flowchart |
-| Hierarchies, brainstorming | `mindmap` block (**NOT** mermaid) |
-| Timelines | `mermaid` gantt |
-
-### Rules
-- NEVER use ASCII art — always `chart`, `echart`, `mermaid`, or `mindmap`
+### Diagram Rules
+- NEVER use ASCII art — always use the appropriate block type
 - For mind maps: ALWAYS use ` ```mindmap ` — NEVER use mermaid mindmap
 - Combine multiple in one response
 - Keep diagrams under 15-20 nodes
