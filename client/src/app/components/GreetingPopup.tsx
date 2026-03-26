@@ -71,7 +71,10 @@ export default function GreetingPopup({ userName, userId, onClose }: GreetingPop
               if (event.type === 'welcome') {
                 // New/idle user — static onboarding message (no AI)
                 localStorage.setItem('greeting_shown_for', localStorage.getItem('greeting_login_id') || '');
-                const msg = t('greeting.welcome' as any, { name: event.userName || userName });
+                let msg = t('greeting.welcome' as any, { name: event.userName || userName });
+                if (event.announcements?.length) {
+                  msg += '\n\n' + t('greeting.newFeatures' as any) + event.announcements.join('、') + '！';
+                }
                 textRef.current = msg;
                 setText(msg);
               } else if (event.type === 'text_delta' && event.data) {

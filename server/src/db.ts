@@ -287,6 +287,20 @@ export async function initializeDatabase(): Promise<void> {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS announcements (
+        id            VARCHAR(36) PRIMARY KEY,
+        title         VARCHAR(200) NOT NULL,
+        content       TEXT NOT NULL,
+        created_by    VARCHAR(36) NOT NULL,
+        active_days   INT NOT NULL DEFAULT 2,
+        is_active     TINYINT NOT NULL DEFAULT 1,
+        created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     // Default system settings
     const defaults: Record<string, string> = {
       user_usage_limit_usd: '50',

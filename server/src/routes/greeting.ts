@@ -27,8 +27,13 @@ function resolveClaudeCliPath(cliPath: string): { bin: string; prefix: string[] 
   return { bin: cliPath, prefix: [] };
 }
 
-// GET /api/greeting — SSE stream a personalized AI greeting
+// GET /api/greeting — SSE stream a personalized AI greeting (pro-out only)
 router.get('/', async (req: Request, res: Response) => {
+  if (config.deployMode !== 'pro-out') {
+    res.json({ disabled: true });
+    return;
+  }
+
   console.log('[Greeting] Request received');
   const userId = req.user!.userId;
 
@@ -54,6 +59,14 @@ router.get('/', async (req: Request, res: Response) => {
     userId
   );
 
+  // Fetch active announcements (within their active_days window)
+  const announcements = await dbAll<{ title: string; content: string }>(
+    `SELECT title, content FROM announcements
+     WHERE is_active = 1
+       AND created_at >= DATE_SUB(NOW(), INTERVAL active_days DAY)
+     ORDER BY created_at DESC LIMIT 3`
+  );
+
   // No conversations — return a static welcome (no AI call needed)
   if (recentConversations.length === 0) {
     console.log('[Greeting] New/idle user, sending static welcome');
@@ -62,7 +75,14 @@ router.get('/', async (req: Request, res: Response) => {
       'Cache-Control': 'no-cache',
       'Connection': 'keep-alive',
     });
-    res.write(`data: ${JSON.stringify({ type: 'welcome', userName: user.display_name || user.email.split('@')[0] })}\n\n`);
+    const welcomeData: Record<string, any> = {
+      type: 'welcome',
+      userName: user.display_name || user.email.split('@')[0],
+    };
+    if (announcements.length > 0) {
+      welcomeData.announcements = announcements.map(a => a.title);
+    }
+    res.write(`data: ${JSON.stringify(welcomeData)}\n\n`);
     res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
     res.end();
     return;
@@ -87,6 +107,10 @@ router.get('/', async (req: Request, res: Response) => {
       ? 'Respond in Simplified Chinese (简体中文).'
       : 'Respond in Traditional Chinese (繁體中文).';
 
+  const announcementSection = announcements.length > 0
+    ? `\n\nNew features/updates to share with the user:\n${announcements.map((a, i) => `${i + 1}. ${a.title}: ${a.content}`).join('\n')}\n- Naturally mention one or two new features in your greeting so the user discovers them\n- Frame it as exciting news, e.g. "By the way, we just added..."`
+    : '';
+
   const prompt = `You are a friendly AI assistant greeting a returning user. ${langInstruction}
 
 The user's name is "${userName}".
@@ -99,7 +123,7 @@ Write a warm, concise greeting (2-4 sentences max). Be human, natural, and carin
 - Ask if they want to continue or need something new
 - Keep it short and warm, like a colleague saying hi
 - Do NOT use markdown formatting, just plain text
-- Do NOT repeat their conversation titles verbatim, paraphrase naturally`;
+- Do NOT repeat their conversation titles verbatim, paraphrase naturally${announcementSection}`;
 
   // Set up SSE
   res.writeHead(200, {

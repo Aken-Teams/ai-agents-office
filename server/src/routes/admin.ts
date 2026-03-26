@@ -952,4 +952,58 @@ router.get('/files/:id/download', async (req: Request, res: Response) => {
   res.download(fullPath, filename);
 });
 
+// ==================== Announcements ====================
+
+// GET /api/admin/announcements
+router.get('/announcements', async (_req: Request, res: Response) => {
+  const rows = await dbAll<{
+    id: string; title: string; content: string; created_by: string;
+    active_days: number; is_active: number; created_at: string; updated_at: string;
+    author_name: string | null;
+  }>(
+    `SELECT a.*, u.display_name AS author_name
+     FROM announcements a
+     LEFT JOIN users u ON u.id = a.created_by
+     ORDER BY a.created_at DESC`
+  );
+  res.json(rows);
+});
+
+// POST /api/admin/announcements
+router.post('/announcements', async (req: Request, res: Response) => {
+  const { title, content, active_days } = req.body;
+  if (!title?.trim() || !content?.trim()) {
+    res.status(400).json({ error: 'Title and content are required' });
+    return;
+  }
+  const id = uuidv4();
+  await dbRun(
+    'INSERT INTO announcements (id, title, content, created_by, active_days) VALUES (?, ?, ?, ?, ?)',
+    id, title.trim(), content.trim(), req.user!.userId, active_days ?? 2
+  );
+  res.status(201).json({ id, title: title.trim(), content: content.trim(), active_days: active_days ?? 2 });
+});
+
+// PATCH /api/admin/announcements/:id
+router.patch('/announcements/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { title, content, active_days, is_active } = req.body;
+  const sets: string[] = [];
+  const vals: any[] = [];
+  if (title !== undefined) { sets.push('title = ?'); vals.push(title.trim()); }
+  if (content !== undefined) { sets.push('content = ?'); vals.push(content.trim()); }
+  if (active_days !== undefined) { sets.push('active_days = ?'); vals.push(active_days); }
+  if (is_active !== undefined) { sets.push('is_active = ?'); vals.push(is_active ? 1 : 0); }
+  if (sets.length === 0) { res.status(400).json({ error: 'No fields to update' }); return; }
+  vals.push(id);
+  await dbRun(`UPDATE announcements SET ${sets.join(', ')} WHERE id = ?`, ...vals);
+  res.json({ ok: true });
+});
+
+// DELETE /api/admin/announcements/:id
+router.delete('/announcements/:id', async (req: Request, res: Response) => {
+  await dbRun('DELETE FROM announcements WHERE id = ?', req.params.id);
+  res.json({ ok: true });
+});
+
 export default router;

@@ -12,6 +12,7 @@ const ADMIN_NAV = [
   { href: '/admin/overview', labelKey: 'admin.sidebar.overview' as const, icon: 'dashboard' },
   { href: '/admin/users', labelKey: 'admin.sidebar.users' as const, icon: 'corporate_fare' },
   { href: '/admin/conversations', labelKey: 'admin.sidebar.conversations' as const, icon: 'forum' },
+  { href: '/admin/announcements', labelKey: 'admin.sidebar.announcements' as const, icon: 'campaign' },
   { href: '/admin/skills', labelKey: 'admin.sidebar.skills' as const, icon: 'hub' },
   { href: '/admin/tokens', labelKey: 'admin.sidebar.tokens' as const, icon: 'payments' },
   { href: '/admin/security', labelKey: 'admin.sidebar.security' as const, icon: 'shield_with_heart' },
