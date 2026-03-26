@@ -23,6 +23,8 @@ const CAT_COLORS: Record<string, string> = {
   general: 'bg-surface-container-high text-on-surface-variant',
 };
 
+const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
+
 function MemoriesContent() {
   const { user, token, isLoading } = useAuth();
   const { t } = useTranslation();
@@ -33,6 +35,7 @@ function MemoriesContent() {
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
+    if (!isLoading && user && deployMode !== 'pro-out') router.replace('/dashboard');
   }, [user, isLoading, router]);
 
   const fetchMemories = useCallback(() => {

@@ -348,7 +348,7 @@ export default function AdminUsers() {
 
         {/* Recent Files */}
         <div className="px-4 py-3 border-b border-outline-variant/10 flex-1 min-h-0 overflow-y-auto">
-          <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold mb-2">{t('admin.users.detail.recentFiles')}</p>
+          <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold mb-2">{t('admin.users.detail.recentFiles')} ({detail.file_count})</p>
           {detail.recentFiles.length === 0 ? (
             <p className="text-xs text-on-surface-variant">{t('admin.users.detail.noFiles')}</p>
           ) : (
@@ -364,7 +364,8 @@ export default function AdminUsers() {
           )}
         </div>
 
-        {/* AI Memories */}
+        {/* AI Memories (pro-out only) */}
+        {detail.deploy_mode === 'pro-out' && (
         <div className="px-4 py-3 border-b border-outline-variant/10">
           <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold mb-2">
             {t('admin.users.detail.memories' as any)} ({detail.memory_count})
@@ -375,6 +376,7 @@ export default function AdminUsers() {
             <p className="text-xs text-on-surface-variant">{t('admin.users.detail.noMemories' as any)}</p>
           )}
         </div>
+        )}
 
         {/* Actions */}
         <div className="px-4 py-3 space-y-2">
@@ -720,7 +722,7 @@ function AdminMemoryList({ userId, token, t }: { userId: string; token: string; 
 
   return (
     <div className="space-y-1">
-      {memories.map(m => (
+      {memories.slice(0, 3).map(m => (
         <div key={m.id} className="flex items-start gap-1.5 text-xs">
           <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${catColors[m.category] || catColors.general}`}>
             {t(`userMenu.memory.category.${m.category}` as any)}
