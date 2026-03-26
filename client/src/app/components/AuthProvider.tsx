@@ -76,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const data = await res.json();
     localStorage.setItem('token', data.token);
+    localStorage.setItem('greeting_login_id', String(Date.now()));
     setToken(data.token);
     setUser(data.user);
   }, []);
@@ -98,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(data.error || 'Google login failed');
     }
     localStorage.setItem('token', data.token);
+    localStorage.setItem('greeting_login_id', String(Date.now()));
     setToken(data.token);
     await fetchMe(data.token);
   }, []);
@@ -142,6 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const data = await res.json();
     localStorage.setItem('token', data.token);
+    localStorage.setItem('greeting_login_id', String(Date.now()));
     setToken(data.token);
     setUser(data.user);
   }, []);
@@ -160,6 +163,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem('token');
+    localStorage.removeItem('greeting_login_id');
+    localStorage.removeItem('greeting_shown_for');
     setToken(null);
     setUser(null);
   }, []);

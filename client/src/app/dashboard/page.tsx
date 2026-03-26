@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
 import UploadAlertModal, { type UploadAlertItem } from '../components/UploadAlertModal';
+import GreetingPopup from '../components/GreetingPopup';
 import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
@@ -80,12 +81,25 @@ function DashboardContent() {
   const smartFileRef = useRef<HTMLInputElement>(null);
   const mobileFileRef = useRef<HTMLInputElement>(null);
   const sidebarMargin = useSidebarMargin();
+  const [showGreeting, setShowGreeting] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !user) {
       router.replace('/login');
     }
   }, [user, isLoading, router]);
+
+  // Show greeting popup once per login (skip if muted today for this user)
+  useEffect(() => {
+    if (!token || !user) return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (localStorage.getItem(`greeting_muted_${user.id}`) === today) return;
+    const loginId = localStorage.getItem('greeting_login_id');
+    if (!loginId) return;
+    if (localStorage.getItem('greeting_shown_for') === loginId) return;
+    const timer = setTimeout(() => setShowGreeting(true), 600);
+    return () => clearTimeout(timer);
+  }, [token, user]);
 
   useEffect(() => {
     if (!token) return;
@@ -209,6 +223,15 @@ function DashboardContent() {
       {/* Upload Security Alert Modal */}
       {uploadAlerts.length > 0 && (
         <UploadAlertModal items={uploadAlerts} onClose={() => setUploadAlerts([])} />
+      )}
+
+      {/* AI Greeting Popup (once per session) */}
+      {showGreeting && (
+        <GreetingPopup
+          userName={user.displayName || user.email?.split('@')[0] || ''}
+          userId={user.id}
+          onClose={() => setShowGreeting(false)}
+        />
       )}
 
       <main className={`${sidebarMargin} transition-all duration-300`}>

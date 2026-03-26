@@ -11,6 +11,7 @@ import skillRoutes from './routes/skills.js';
 import adminRoutes from './routes/admin.js';
 import uploadRoutes from './routes/uploads.js';
 import shareRoutes from './routes/share.js';
+import greetingRoutes from './routes/greeting.js';
 
 async function main() {
   // Initialize database
@@ -44,6 +45,7 @@ async function main() {
   app.use('/api/admin', adminRoutes);
   app.use('/api/uploads', uploadRoutes);
   app.use('/api/share', shareRoutes);
+  app.use('/api/greeting', greetingRoutes);
 
   // Start server
   app.listen(config.port, () => {
