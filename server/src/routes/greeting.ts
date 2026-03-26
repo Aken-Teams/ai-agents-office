@@ -122,7 +122,8 @@ Write a warm, concise greeting (2-4 sentences max). Be human, natural, and carin
 - Briefly reference what they've been working on recently
 - Ask if they want to continue or need something new
 - Keep it short and warm, like a colleague saying hi
-- Do NOT use markdown formatting, just plain text
+- Use line breaks between different ideas for readability (e.g. greeting on one line, project reference on another, question on another)
+- Do NOT use markdown formatting (no **, #, -, etc.), just plain text with line breaks
 - Do NOT repeat their conversation titles verbatim, paraphrase naturally${announcementSection}`;
 
   // Set up SSE

@@ -146,7 +146,7 @@ export default function GreetingPopup({ userName, userId, onClose }: GreetingPop
         <div className="px-5 pb-5">
           <div className="bg-surface-container rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-on-surface leading-relaxed min-h-[60px]">
             {text ? (
-              <span>
+              <span className="whitespace-pre-line">
                 {text}
                 {!done && <span className="inline-block w-0.5 h-4 bg-primary ml-0.5 animate-pulse align-text-bottom" />}
               </span>

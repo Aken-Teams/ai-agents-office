@@ -114,13 +114,13 @@ function AnnouncementsContent() {
     <>
       {/* Header */}
       <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
-        <div className="flex items-center gap-2 md:gap-4">
+        <div className="flex items-center gap-2 md:gap-4 min-w-0">
           <span className="text-base md:text-lg font-black text-on-surface font-headline shrink-0">{t('admin.announcements.title' as any)}</span>
-          <span className="text-xs md:text-sm text-on-surface-variant font-mono truncate">{t('admin.announcements.description' as any)}</span>
+          <span className="hidden md:inline text-sm text-on-surface-variant font-mono truncate">{t('admin.announcements.description' as any)}</span>
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 cyber-gradient rounded-xl text-on-primary text-xs md:text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all cursor-pointer shrink-0"
+          className="flex items-center gap-1.5 ml-3 px-3 md:px-4 py-2 md:py-2.5 cyber-gradient rounded-xl text-on-primary text-xs md:text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all cursor-pointer shrink-0"
         >
           <span className="material-symbols-outlined text-lg">add</span>
           <span className="hidden sm:inline">{t('admin.announcements.create' as any)}</span>
@@ -131,10 +131,10 @@ function AnnouncementsContent() {
 
       {/* Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setShowForm(false)}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={() => setShowForm(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div
-            className="relative bg-surface-container rounded-2xl p-5 md:p-7 border border-outline-variant/20 shadow-2xl w-[90vw] max-w-lg animate-[scaleIn_0.2s_ease-out]"
+            className="relative bg-surface-container rounded-t-2xl md:rounded-2xl p-5 md:p-7 border border-outline-variant/20 shadow-2xl w-full md:w-[90vw] md:max-w-lg animate-[slideUp_0.25s_ease-out] md:animate-in"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">
@@ -171,12 +171,11 @@ function AnnouncementsContent() {
               <div className="flex items-center gap-3">
                 <label className="text-xs font-bold text-on-surface-variant">{t('admin.announcements.activeDays' as any)}</label>
                 <input
-                  type="number"
-                  min="1"
-                  max="30"
-                  className="w-20 bg-surface-container-highest rounded-lg px-3 py-2.5 text-sm text-on-surface border border-outline-variant/20 focus:border-primary/40 outline-none"
+                  type="text"
+                  inputMode="numeric"
+                  className="w-16 bg-surface-container-highest rounded-lg px-3 py-2.5 text-sm text-on-surface text-center border border-outline-variant/20 focus:border-primary/40 outline-none"
                   value={form.active_days}
-                  onChange={e => setForm(f => ({ ...f, active_days: e.target.value }))}
+                  onChange={e => { const v = e.target.value.replace(/\D/g, ''); setForm(f => ({ ...f, active_days: v })); }}
                 />
                 <span className="text-xs text-on-surface-variant">{t('admin.announcements.daysUnit' as any)}</span>
               </div>
@@ -216,31 +215,32 @@ function AnnouncementsContent() {
           {items.map(a => {
             const status = getStatus(a);
             return (
-              <div key={a.id} className="bg-surface-container rounded-xl p-4 border border-outline-variant/10 hover:border-outline-variant/20 transition-colors">
-                <div className="flex items-start gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-sm font-headline font-bold text-on-surface truncate">{a.title}</h3>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${statusColors[status]}`}>
-                        {t(`admin.announcements.status.${status}` as any)}
-                      </span>
-                    </div>
-                    <p className="text-xs text-on-surface-variant line-clamp-2 mb-2">{a.content}</p>
-                    <div className="flex items-center gap-3 text-[11px] text-on-surface-variant/70">
-                      <span>{a.author_name || '—'}</span>
-                      <span>·</span>
-                      <span>{new Date(a.created_at).toLocaleDateString()}</span>
-                      <span>·</span>
-                      <span>{a.active_days} {t('admin.announcements.daysUnit' as any)}</span>
-                    </div>
+              <div key={a.id} className="bg-surface-container rounded-lg p-3.5 md:p-4 border border-outline-variant/10 hover:border-outline-variant/20 transition-colors">
+                {/* Title + Status */}
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="text-sm font-headline font-bold text-on-surface truncate">{a.title}</h3>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${statusColors[status]}`}>
+                    {t(`admin.announcements.status.${status}` as any)}
+                  </span>
+                </div>
+                {/* Content */}
+                <p className="text-xs text-on-surface-variant line-clamp-2 mb-2">{a.content}</p>
+                {/* Meta + Actions */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 md:gap-3 text-[11px] text-on-surface-variant/70 min-w-0">
+                    <span className="truncate">{a.author_name || '—'}</span>
+                    <span>·</span>
+                    <span className="shrink-0">{new Date(a.created_at).toLocaleDateString()}</span>
+                    <span>·</span>
+                    <span className="shrink-0">{a.active_days} {t('admin.announcements.daysUnit' as any)}</span>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-0.5 shrink-0 ml-2">
                     <button
                       onClick={() => toggleActive(a)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer ${a.is_active ? 'text-success' : 'text-on-surface-variant'}`}
+                      className={`w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer ${a.is_active ? 'text-success' : 'text-on-surface-variant/50'}`}
                       title={a.is_active ? 'Disable' : 'Enable'}
                     >
-                      <span className="material-symbols-outlined text-lg">
+                      <span className="material-symbols-outlined text-2xl">
                         {a.is_active ? 'toggle_on' : 'toggle_off'}
                       </span>
                     </button>
