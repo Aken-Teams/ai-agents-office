@@ -570,6 +570,9 @@ const zhTW = {
   'settings.saved': '已儲存',
 
   // Admin Sidebar
+  'admin.sidebar.group.members': '用戶',
+  'admin.sidebar.group.operations': '營運',
+  'admin.sidebar.group.system': '系統',
   'admin.sidebar.overview': '總覽',
   'admin.sidebar.users': '用戶管理',
   'admin.sidebar.skills': 'Skills 中心',

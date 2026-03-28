@@ -555,6 +555,9 @@ const en = {
   'settings.theme.light': 'Light',
   'settings.saved': 'Saved',
 
+  'admin.sidebar.group.members': 'Users',
+  'admin.sidebar.group.operations': 'Operations',
+  'admin.sidebar.group.system': 'System',
   'admin.sidebar.overview': 'Overview',
   'admin.sidebar.users': 'User Management',
   'admin.sidebar.skills': 'Skills Center',

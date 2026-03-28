@@ -566,6 +566,9 @@ const zhCN = {
   'settings.saved': '已保存',
 
   // Admin Sidebar
+  'admin.sidebar.group.members': '用户',
+  'admin.sidebar.group.operations': '运营',
+  'admin.sidebar.group.system': '系统',
   'admin.sidebar.overview': '总览',
   'admin.sidebar.users': '用户管理',
   'admin.sidebar.skills': 'Skills 中心',
