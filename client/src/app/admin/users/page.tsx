@@ -314,26 +314,24 @@ export default function AdminUsers() {
               style={{ width: `${Math.min(100, ((detail.display_cost ?? 0) / (detail.effective_limit ?? 50)) * 100)}%` }}
             />
           </div>
-          {detail.deploy_mode === 'pro-out' && (
-            <div className="flex items-center gap-2 mt-2">
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder={t('admin.users.detail.quotaPlaceholder' as any)}
-                value={quotaInput}
-                onChange={e => { if (/^\d*\.?\d{0,2}$/.test(e.target.value) || e.target.value === '') setQuotaInput(e.target.value); }}
-                className="flex-1 bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-1.5 px-2.5 text-xs font-mono rounded placeholder:text-outline min-w-0 [appearance:textfield]"
-              />
-              <button
-                onClick={() => updateQuota(detail.id)}
-                disabled={quotaLoading}
-                className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
-              >
-                {t('admin.users.detail.quotaSave' as any)}
-              </button>
-            </div>
-          )}
-          {detail.deploy_mode === 'pro-out' && detail.quota_override != null && (
+          <div className="flex items-center gap-2 mt-2">
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder={t('admin.users.detail.quotaPlaceholder' as any)}
+              value={quotaInput}
+              onChange={e => { if (/^\d*\.?\d{0,2}$/.test(e.target.value) || e.target.value === '') setQuotaInput(e.target.value); }}
+              className="flex-1 bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-1.5 px-2.5 text-xs font-mono rounded placeholder:text-outline min-w-0 [appearance:textfield]"
+            />
+            <button
+              onClick={() => updateQuota(detail.id)}
+              disabled={quotaLoading}
+              className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+            >
+              {t('admin.users.detail.quotaSave' as any)}
+            </button>
+          </div>
+          {detail.quota_override != null && (
             <div className="flex items-center gap-1 mt-1.5">
               <span className="text-[10px] text-on-surface-variant">{t('admin.users.detail.quotaOverride' as any)}: ${detail.quota_override}</span>
               <button

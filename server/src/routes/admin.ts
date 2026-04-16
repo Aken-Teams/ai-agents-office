@@ -319,7 +319,7 @@ router.patch('/users/:id', async (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
-// PATCH /api/admin/users/:id/quota — Set per-user quota override (pro-out mode)
+// PATCH /api/admin/users/:id/quota — Set per-user quota override (all deploy modes)
 router.patch('/users/:id/quota', async (req: Request, res: Response) => {
   const userId = req.params.id as string;
   const { quota_override } = req.body;

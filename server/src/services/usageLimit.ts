@@ -1,5 +1,4 @@
 import { dbGet, dbRun } from '../db.js';
-import { config } from '../config.js';
 
 /**
  * Get the global per-user usage limit in display dollars (x10 markup).
@@ -35,17 +34,15 @@ export async function getUserDisplayCost(userId: string): Promise<number> {
 
 /**
  * Get the effective usage limit for a specific user.
- * In 'pro-out' mode, checks for per-user quota_override first.
+ * Checks for per-user quota_override first (available in all deploy modes).
  * Falls back to global limit.
  */
 export async function getEffectiveUserLimit(userId: string): Promise<number> {
-  if (config.deployMode === 'pro-out') {
-    const user = await dbGet<{ quota_override: number | null }>(
-      'SELECT quota_override FROM users WHERE id = ?', userId
-    );
-    if (user?.quota_override != null) {
-      return user.quota_override;
-    }
+  const user = await dbGet<{ quota_override: number | null }>(
+    'SELECT quota_override FROM users WHERE id = ?', userId
+  );
+  if (user?.quota_override != null) {
+    return user.quota_override;
   }
   return getUserUsageLimitUsd();
 }
