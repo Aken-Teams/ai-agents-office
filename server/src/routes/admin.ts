@@ -101,6 +101,8 @@ router.get('/users', async (req: Request, res: Response) => {
   const offset = (page - 1) * limit;
   const search = req.query.search as string || '';
   const status = req.query.status as string || '';
+  const sortBy = req.query.sortBy as string || '';
+  const sortDir = (req.query.sortDir as string || 'desc').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
   let whereClause = "WHERE 1=1";
   const params: any[] = [];
@@ -143,7 +145,12 @@ router.get('/users', async (req: Request, res: Response) => {
       FROM conversations GROUP BY user_id
     ) c ON c.user_id = u.id
     ${whereClause}
-    ORDER BY u.created_at DESC
+    ORDER BY ${
+      sortBy === 'tokens' ? `total_tokens ${sortDir}` :
+      sortBy === 'conversations' ? `conversation_count ${sortDir}` :
+      sortBy === 'files' ? `file_count ${sortDir}` :
+      'u.created_at DESC'
+    }
     LIMIT ? OFFSET ?
   `, ...params, limit, offset);
 
@@ -977,8 +984,8 @@ router.get('/files/:id/download', async (req: Request, res: Response) => {
 router.get('/announcements', async (_req: Request, res: Response) => {
   const rows = await dbAll<{
     id: string; title: string; content: string; created_by: string;
-    active_days: number; is_active: number; created_at: string; updated_at: string;
-    author_name: string | null;
+    start_date: string; end_date: string; is_active: number;
+    created_at: string; updated_at: string; author_name: string | null;
   }>(
     `SELECT a.*, u.display_name AS author_name
      FROM announcements a
@@ -990,28 +997,33 @@ router.get('/announcements', async (_req: Request, res: Response) => {
 
 // POST /api/admin/announcements
 router.post('/announcements', async (req: Request, res: Response) => {
-  const { title, content, active_days } = req.body;
+  const { title, content, start_date, end_date } = req.body;
   if (!title?.trim() || !content?.trim()) {
     res.status(400).json({ error: 'Title and content are required' });
     return;
   }
+  if (!start_date || !end_date) {
+    res.status(400).json({ error: 'start_date and end_date are required' });
+    return;
+  }
   const id = uuidv4();
   await dbRun(
-    'INSERT INTO announcements (id, title, content, created_by, active_days) VALUES (?, ?, ?, ?, ?)',
-    id, title.trim(), content.trim(), req.user!.userId, active_days ?? 2
+    'INSERT INTO announcements (id, title, content, created_by, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?)',
+    id, title.trim(), content.trim(), req.user!.userId, start_date, end_date
   );
-  res.status(201).json({ id, title: title.trim(), content: content.trim(), active_days: active_days ?? 2 });
+  res.status(201).json({ id, title: title.trim(), content: content.trim(), start_date, end_date });
 });
 
 // PATCH /api/admin/announcements/:id
 router.patch('/announcements/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { title, content, active_days, is_active } = req.body;
+  const { title, content, start_date, end_date, is_active } = req.body;
   const sets: string[] = [];
   const vals: any[] = [];
   if (title !== undefined) { sets.push('title = ?'); vals.push(title.trim()); }
   if (content !== undefined) { sets.push('content = ?'); vals.push(content.trim()); }
-  if (active_days !== undefined) { sets.push('active_days = ?'); vals.push(active_days); }
+  if (start_date !== undefined) { sets.push('start_date = ?'); vals.push(start_date); }
+  if (end_date !== undefined) { sets.push('end_date = ?'); vals.push(end_date); }
   if (is_active !== undefined) { sets.push('is_active = ?'); vals.push(is_active ? 1 : 0); }
   if (sets.length === 0) { res.status(400).json({ error: 'No fields to update' }); return; }
   vals.push(id);

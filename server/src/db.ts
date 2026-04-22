@@ -293,13 +293,24 @@ export async function initializeDatabase(): Promise<void> {
         title         VARCHAR(200) NOT NULL,
         content       TEXT NOT NULL,
         created_by    VARCHAR(36) NOT NULL,
-        active_days   INT NOT NULL DEFAULT 2,
+        start_date    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        end_date      DATETIME NOT NULL,
         is_active     TINYINT NOT NULL DEFAULT 1,
         created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    // Migration: active_days → start_date/end_date
+    const [annCols] = await conn.execute(`SHOW COLUMNS FROM announcements LIKE 'active_days'`) as any[];
+    if (annCols.length > 0) {
+      await conn.execute(`ALTER TABLE announcements ADD COLUMN start_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER created_by`);
+      await conn.execute(`ALTER TABLE announcements ADD COLUMN end_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP AFTER start_date`);
+      await conn.execute(`UPDATE announcements SET start_date = created_at, end_date = DATE_ADD(created_at, INTERVAL active_days DAY)`);
+      await conn.execute(`ALTER TABLE announcements DROP COLUMN active_days`);
+      console.log('[DB] Migrated announcements: active_days → start_date/end_date');
+    }
 
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS user_memories (

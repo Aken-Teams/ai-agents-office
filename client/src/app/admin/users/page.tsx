@@ -100,13 +100,52 @@ export default function AdminUsers() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [quotaInput, setQuotaInput] = useState('');
   const [quotaLoading, setQuotaLoading] = useState(false);
+  const [sortBy, setSortBy] = useState('');
+  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
+  const [exporting, setExporting] = useState(false);
   const limit = 10;
+
+  async function exportCsv() {
+    if (!token || exporting) return;
+    setExporting(true);
+    try {
+      const params = new URLSearchParams({ page: '1', limit: '9999' });
+      if (search) params.set('search', search);
+      if (statusFilter) params.set('status', statusFilter);
+      if (sortBy) { params.set('sortBy', sortBy); params.set('sortDir', sortDir); }
+      const res = await fetch(`/api/admin/users?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      const rows: UserRow[] = data.users;
+      const header = ['Email', 'Display Name', 'Role', 'Status', 'Total Tokens', 'Input Tokens', 'Output Tokens', 'Cost (USD)', 'Conversations', 'Files', 'Created At', 'Last Login'];
+      const csvRows = rows.map(u => [
+        u.email,
+        u.display_name || '',
+        u.role,
+        u.status,
+        u.total_tokens,
+        u.total_input_tokens,
+        u.total_output_tokens,
+        calcCost(u.total_input_tokens, u.total_output_tokens).toFixed(2),
+        u.conversation_count,
+        u.file_count,
+        u.created_at,
+        u.last_login_at || '',
+      ]);
+      const csv = '\uFEFF' + [header, ...csvRows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `users_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+      URL.revokeObjectURL(url);
+    } finally { setExporting(false); }
+  }
 
   const fetchUsers = useCallback(() => {
     if (!token) return;
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (search) params.set('search', search);
     if (statusFilter) params.set('status', statusFilter);
+    if (sortBy) { params.set('sortBy', sortBy); params.set('sortDir', sortDir); }
 
     fetch(`/api/admin/users?${params}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -118,7 +157,7 @@ export default function AdminUsers() {
         setTotalPages(data.totalPages);
       })
       .catch(console.error);
-  }, [token, page, search, statusFilter]);
+  }, [token, page, search, statusFilter, sortBy, sortDir]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
@@ -126,6 +165,17 @@ export default function AdminUsers() {
     e.preventDefault();
     setPage(1);
     fetchUsers();
+  }
+
+  function toggleSort(col: string) {
+    if (sortBy === col) {
+      if (sortDir === 'desc') setSortDir('asc');
+      else { setSortBy(''); setSortDir('desc'); } // third click clears sort
+    } else {
+      setSortBy(col);
+      setSortDir('desc');
+    }
+    setPage(1);
   }
 
   async function selectUser(userId: string) {
@@ -362,8 +412,7 @@ export default function AdminUsers() {
           )}
         </div>
 
-        {/* AI Memories (pro-out only) */}
-        {detail.deploy_mode === 'pro-out' && (
+        {/* AI Memories */}
         <div className="px-4 py-3 border-b border-outline-variant/10">
           <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold mb-2">
             {t('admin.users.detail.memories' as any)} ({detail.memory_count})
@@ -374,7 +423,6 @@ export default function AdminUsers() {
             <p className="text-xs text-on-surface-variant">{t('admin.users.detail.noMemories' as any)}</p>
           )}
         </div>
-        )}
 
         {/* Actions */}
         <div className="px-4 py-3 space-y-2">
@@ -432,8 +480,12 @@ export default function AdminUsers() {
           <span className="text-base md:text-lg font-black text-on-surface font-headline">{t('admin.users.title')}</span>
           <span className="text-xs md:text-sm text-on-surface-variant font-mono">{t('admin.users.count', { count: total })}</span>
         </div>
-        <button className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
-          <span className="material-symbols-outlined text-sm">download</span>
+        <button
+          onClick={exportCsv}
+          disabled={exporting}
+          className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50"
+        >
+          <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'download'}</span>
           <span className="hidden md:inline">{t('admin.users.exportCsv')}</span>
           <span className="md:hidden">CSV</span>
         </button>
@@ -483,9 +535,24 @@ export default function AdminUsers() {
                   <th className="py-3 px-4 font-bold">{t('admin.users.table.user')}</th>
                   <th className="py-3 px-4 font-bold">{t('admin.users.table.role')}</th>
                   <th className="py-3 px-4 font-bold">{t('admin.users.table.status')}</th>
-                  <th className="py-3 px-4 font-bold text-right">Tokens</th>
-                  <th className="py-3 px-4 font-bold text-right">{t('admin.users.table.conversations')}</th>
-                  <th className="py-3 px-4 font-bold text-right">{t('admin.users.table.files')}</th>
+                  <th className="py-3 px-4 font-bold text-right">
+                    <button onClick={() => toggleSort('tokens')} className="inline-flex items-center gap-1 cursor-pointer hover:text-on-surface transition-colors">
+                      Tokens
+                      {sortBy === 'tokens' && <span className="material-symbols-outlined text-primary text-sm">{sortDir === 'desc' ? 'arrow_downward' : 'arrow_upward'}</span>}
+                    </button>
+                  </th>
+                  <th className="py-3 px-4 font-bold text-right">
+                    <button onClick={() => toggleSort('conversations')} className="inline-flex items-center gap-1 cursor-pointer hover:text-on-surface transition-colors">
+                      {t('admin.users.table.conversations')}
+                      {sortBy === 'conversations' && <span className="material-symbols-outlined text-primary text-sm">{sortDir === 'desc' ? 'arrow_downward' : 'arrow_upward'}</span>}
+                    </button>
+                  </th>
+                  <th className="py-3 px-4 font-bold text-right">
+                    <button onClick={() => toggleSort('files')} className="inline-flex items-center gap-1 cursor-pointer hover:text-on-surface transition-colors">
+                      {t('admin.users.table.files')}
+                      {sortBy === 'files' && <span className="material-symbols-outlined text-primary text-sm">{sortDir === 'desc' ? 'arrow_downward' : 'arrow_upward'}</span>}
+                    </button>
+                  </th>
                   <th className="py-3 px-4 font-bold text-right">{t('admin.users.table.dates' as any)}</th>
                 </tr>
               </thead>

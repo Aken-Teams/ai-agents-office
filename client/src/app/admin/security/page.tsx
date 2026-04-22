@@ -67,6 +67,47 @@ export default function AdminSecurity() {
   const [secPage, setSecPage] = useState(1);
   const [secTotal, setSecTotal] = useState(0);
   const [secTotalPages, setSecTotalPages] = useState(1);
+  const [exporting, setExporting] = useState(false);
+
+  async function exportCsv() {
+    if (!token || exporting) return;
+    setExporting(true);
+    try {
+      const [auditRes, secRes] = await Promise.all([
+        fetch('/api/admin/security/audit-log?page=1&limit=9999', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/admin/security/events?page=1&limit=9999', { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      const auditData = await auditRes.json();
+      const secData = await secRes.json();
+
+      // Sheet 1: Audit Log
+      const auditHeader = ['Event Type', 'Actor', 'Actor Name', 'Detail', 'Created At'];
+      const auditRows = (auditData.entries as AuditEntry[]).map(e => [
+        e.event_type, e.actor || '', e.actor_name || '', (e.detail || '').replace(/\n/g, ' '), e.created_at,
+      ]);
+
+      // Sheet 2: Security Events
+      const secHeader = ['ID', 'Severity', 'Event Type', 'User Email', 'User Name', 'Detail', 'Raw Input', 'Created At'];
+      const secRows = (secData.events as SecurityEvent[]).map(e => [
+        e.id, e.severity, e.event_type, e.user_email || '', e.user_name || '',
+        (e.detail || '').replace(/\n/g, ' '), (e.raw_input || '').replace(/\n/g, ' '), e.created_at,
+      ]);
+
+      const csvParts = [
+        '--- Audit Log ---',
+        [auditHeader, ...auditRows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n'),
+        '',
+        '--- Security Events ---',
+        [secHeader, ...secRows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n'),
+      ];
+      const csv = '\uFEFF' + csvParts.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `security_log_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+      URL.revokeObjectURL(url);
+    } finally { setExporting(false); }
+  }
 
   const EVENT_META: Record<string, { label: string; color: string }> = {
     user_registered:      { label: t('admin.security.event.userRegistered'), color: 'text-tertiary' },
@@ -151,8 +192,12 @@ export default function AdminSecurity() {
       {/* Header */}
       <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
         <span className="text-base md:text-lg font-black text-on-surface font-headline">{t('admin.security.title')}</span>
-        <button className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer shrink-0">
-          <span className="material-symbols-outlined text-sm">download</span>
+        <button
+          onClick={exportCsv}
+          disabled={exporting}
+          className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+        >
+          <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'download'}</span>
           {t('admin.security.exportLog')}
         </button>
       </header>

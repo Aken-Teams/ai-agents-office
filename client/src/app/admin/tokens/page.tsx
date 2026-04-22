@@ -59,6 +59,41 @@ export default function AdminTokens() {
   const [ledgerPage, setLedgerPage] = useState(1);
   const [ledgerTotalPages, setLedgerTotalPages] = useState(1);
   const [period, setPeriod] = useState<'7d' | '30d'>('7d');
+  const [exporting, setExporting] = useState(false);
+
+  async function exportCsv() {
+    if (!token || exporting) return;
+    setExporting(true);
+    try {
+      const res = await fetch('/api/admin/tokens/ledger?page=1&limit=9999', { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      const entries: LedgerEntry[] = data.entries;
+      const header = ['ID', 'User Email', 'User Name', 'Conversation Title', 'User Prompt', 'Input Tokens', 'Output Tokens', 'Total Tokens', 'Cost (USD)', 'Model', 'Duration (ms)', 'Created At'];
+      const csvRows = entries.map(e => {
+        const cost = ((e.input_tokens / 1_000_000) * 3 + (e.output_tokens / 1_000_000) * 15) * 10;
+        return [
+          e.id,
+          e.email,
+          e.display_name || '',
+          e.conversation_title || '',
+          (e.user_prompt || '').replace(/\n/g, ' '),
+          e.input_tokens,
+          e.output_tokens,
+          e.input_tokens + e.output_tokens,
+          cost.toFixed(4),
+          e.model || '',
+          e.duration_ms ?? '',
+          e.created_at,
+        ];
+      });
+      const csv = '\uFEFF' + [header, ...csvRows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `token_ledger_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+      URL.revokeObjectURL(url);
+    } finally { setExporting(false); }
+  }
 
   function toUTC(dateStr: string): Date {
     if (!dateStr) return new Date(0);
@@ -121,8 +156,12 @@ export default function AdminTokens() {
           <span className="text-base md:text-lg font-black text-on-surface font-headline truncate">{t('admin.tokens.title')}</span>
           <span className="text-[10px] md:text-sm px-1.5 md:px-2 py-0.5 bg-success/10 text-success rounded font-bold tracking-wider uppercase shrink-0">{t('admin.tokens.syncStatus')}</span>
         </div>
-        <button className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer shrink-0">
-          <span className="material-symbols-outlined text-sm">download</span>
+        <button
+          onClick={exportCsv}
+          disabled={exporting}
+          className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+        >
+          <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'download'}</span>
           <span className="hidden md:inline">{t('admin.tokens.exportCsv')}</span>
           <span className="md:hidden">CSV</span>
         </button>

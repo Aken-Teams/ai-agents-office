@@ -1,7 +1,7 @@
 /**
- * Initialize the database by importing the db module.
- * The db module auto-creates tables on first import.
+ * Initialize the database — creates all tables and seeds default data.
  */
-const { default: db } = await import('../src/db.ts');
+const { initializeDatabase } = await import('../src/db.ts');
+await initializeDatabase();
 console.log('Database initialized successfully.');
 process.exit(0);

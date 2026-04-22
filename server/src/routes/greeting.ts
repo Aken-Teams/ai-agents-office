@@ -27,12 +27,8 @@ function resolveClaudeCliPath(cliPath: string): { bin: string; prefix: string[] 
   return { bin: cliPath, prefix: [] };
 }
 
-// GET /api/greeting — SSE stream a personalized AI greeting (pro-out only)
+// GET /api/greeting — SSE stream a personalized AI greeting
 router.get('/', async (req: Request, res: Response) => {
-  if (config.deployMode !== 'pro-out') {
-    res.json({ disabled: true });
-    return;
-  }
 
   console.log('[Greeting] Request received');
   const userId = req.user!.userId;
@@ -66,11 +62,11 @@ router.get('/', async (req: Request, res: Response) => {
     userId
   );
 
-  // Fetch active announcements (within their active_days window)
+  // Fetch active announcements (within their start_date ~ end_date window)
   const announcements = await dbAll<{ title: string; content: string }>(
     `SELECT title, content FROM announcements
      WHERE is_active = 1
-       AND created_at >= DATE_SUB(NOW(), INTERVAL active_days DAY)
+       AND NOW() BETWEEN start_date AND end_date
      ORDER BY created_at DESC LIMIT 3`
   );
 

@@ -8,6 +8,7 @@ import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
 
 const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { ssr: false });
+const ChatEChart = dynamic(() => import('../../components/charts/ChatEChart'), { ssr: false });
 const ChatMermaid = dynamic(() => import('../../components/charts/ChatMermaid'), { ssr: false });
 const ChatMindmap = dynamic(() => import('../../components/charts/ChatMindmap'), { ssr: false });
 const ChatMap = dynamic(() => import('../../components/charts/ChatMap'), { ssr: false });
@@ -119,7 +120,7 @@ function ConversationDetailPanel({
     pre({ children, node, ...props }: any) {
       const codeEl = node?.children?.[0];
       const cls = codeEl?.properties?.className?.[0] || '';
-      if (cls === 'language-chart' || cls === 'language-mermaid' || cls === 'language-mindmap' || cls === 'language-map') {
+      if (cls === 'language-chart' || cls === 'language-echart' || cls === 'language-mermaid' || cls === 'language-mindmap' || cls === 'language-map') {
         return <>{children}</>;
       }
       return <pre {...props}>{children}</pre>;
@@ -128,6 +129,7 @@ function ConversationDetailPanel({
     code({ className, children, ...props }: any) {
       const text = String(children).trim();
       if (className === 'language-chart') return <ChatChart rawJson={text} />;
+      if (className === 'language-echart') return <ChatEChart rawJson={text} />;
       if (className === 'language-mermaid') {
         if (/^\s*mindmap\b/i.test(text)) return <ChatMindmap code={convertMermaidMindmapToMarkdown(text)} />;
         return <ChatMermaid code={text} />;

@@ -95,12 +95,18 @@ function UsageContent() {
             <button
               onClick={() => {
                 if (!token || daily.length === 0) return;
-                const header = 'Date,Generations,Input Tokens,Output Tokens,Total\n';
-                const rows = daily.map(d => `${d.date},${d.invocation_count},${d.total_input},${d.total_output},${d.total_input + d.total_output}`).join('\n');
-                const blob = new Blob([header + rows], { type: 'text/csv' });
+                const q = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+                const header = [t('usage.ledger.date'), t('usage.ledger.generations'), t('usage.ledger.inputTokens'), t('usage.ledger.outputTokens'), t('usage.ledger.total'), t('usage.overview.estimatedCost') + ' (USD)'].map(q).join(',');
+                const csvRows = daily.map(d => {
+                  const total = d.total_input + d.total_output;
+                  const cost = ((d.total_input / 1_000_000) * 3 + (d.total_output / 1_000_000) * 15) * 10;
+                  return [d.date.slice(0, 10), d.invocation_count, d.total_input, d.total_output, total, `$${cost.toFixed(4)}`].map(q).join(',');
+                });
+                const csv = '\uFEFF' + [header, ...csvRows].join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
-                a.href = url; a.download = 'token-usage.csv';
+                a.href = url; a.download = `token_usage_${new Date().toISOString().slice(0, 10)}.csv`;
                 document.body.appendChild(a); a.click(); a.remove();
                 URL.revokeObjectURL(url);
               }}

@@ -10,17 +10,47 @@ interface Announcement {
   content: string;
   created_by: string;
   author_name: string | null;
-  active_days: number;
+  start_date: string;
+  end_date: string;
   is_active: number;
   created_at: string;
   updated_at: string;
 }
 
-function getStatus(a: Announcement): 'active' | 'expired' | 'disabled' {
+function getStatus(a: Announcement): 'active' | 'expired' | 'disabled' | 'scheduled' {
   if (!a.is_active) return 'disabled';
-  const createdAt = new Date(a.created_at).getTime();
-  const expiresAt = createdAt + a.active_days * 86400000;
-  return Date.now() < expiresAt ? 'active' : 'expired';
+  const now = Date.now();
+  const start = new Date(a.start_date).getTime();
+  const end = new Date(a.end_date).getTime();
+  if (now < start) return 'scheduled';
+  if (now > end) return 'expired';
+  return 'active';
+}
+
+/** Convert ISO/DB datetime to `datetime-local` input value (YYYY-MM-DDTHH:mm) */
+function toLocalInput(dateStr: string): string {
+  const d = new Date(dateStr);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** Get default start_date (now) and end_date (now + 7 days) for new announcements */
+function getDefaultDates() {
+  const now = new Date();
+  const end = new Date(now.getTime() + 7 * 86400000);
+  return { start_date: toLocalInput(now.toISOString()), end_date: toLocalInput(end.toISOString()) };
+}
+
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function formatDateShort(dateStr: string): string {
+  const d = new Date(dateStr);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export default function AdminAnnouncements() {
@@ -34,7 +64,7 @@ function AnnouncementsContent() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState({ title: '', content: '', active_days: '2' });
+  const [form, setForm] = useState({ title: '', content: '', ...getDefaultDates() });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
@@ -50,21 +80,34 @@ function AnnouncementsContent() {
 
   function openCreate() {
     setEditId(null);
-    setForm({ title: '', content: '', active_days: '2' });
+    setForm({ title: '', content: '', ...getDefaultDates() });
     setShowForm(true);
   }
 
   function openEdit(a: Announcement) {
     setEditId(a.id);
-    setForm({ title: a.title, content: a.content, active_days: String(a.active_days) });
+    setForm({
+      title: a.title,
+      content: a.content,
+      start_date: toLocalInput(a.start_date),
+      end_date: toLocalInput(a.end_date),
+    });
     setShowForm(true);
   }
 
   async function handleSave() {
     if (!token || saving || !form.title.trim() || !form.content.trim()) return;
+    if (!form.start_date || !form.end_date) return;
     setSaving(true);
     try {
-      const body = { title: form.title, content: form.content, active_days: parseInt(form.active_days) || 2 };
+      // Convert datetime-local value (YYYY-MM-DDTHH:mm) to MySQL format (YYYY-MM-DD HH:mm:ss)
+      const toMySQL = (v: string) => v.replace('T', ' ') + ':00';
+      const body = {
+        title: form.title,
+        content: form.content,
+        start_date: toMySQL(form.start_date),
+        end_date: toMySQL(form.end_date),
+      };
       if (editId) {
         await fetch(`/api/admin/announcements/${editId}`, {
           method: 'PATCH',
@@ -104,10 +147,11 @@ function AnnouncementsContent() {
     fetchList();
   }
 
-  const statusColors = {
+  const statusColors: Record<string, string> = {
     active: 'bg-success/15 text-success',
     expired: 'bg-on-surface-variant/10 text-on-surface-variant',
     disabled: 'bg-error/15 text-error',
+    scheduled: 'bg-tertiary/15 text-tertiary',
   };
 
   return (
@@ -168,16 +212,25 @@ function AnnouncementsContent() {
                   placeholder={t('admin.announcements.contentPlaceholder' as any)}
                 />
               </div>
-              <div className="flex items-center gap-3">
-                <label className="text-xs font-bold text-on-surface-variant">{t('admin.announcements.activeDays' as any)}</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  className="w-16 bg-surface-container-highest rounded-lg px-3 py-2.5 text-sm text-on-surface text-center border border-outline-variant/20 focus:border-primary/40 outline-none"
-                  value={form.active_days}
-                  onChange={e => { const v = e.target.value.replace(/\D/g, ''); setForm(f => ({ ...f, active_days: v })); }}
-                />
-                <span className="text-xs text-on-surface-variant">{t('admin.announcements.daysUnit' as any)}</span>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-on-surface-variant mb-1.5 block">{t('admin.announcements.startDate' as any)}</label>
+                  <input
+                    type="datetime-local"
+                    className="w-full bg-surface-container-highest rounded-lg px-3 py-2.5 text-sm text-on-surface border border-outline-variant/20 focus:border-primary/40 outline-none dark:[color-scheme:dark] [accent-color:var(--md-sys-color-primary,#4A90D9)]"
+                    value={form.start_date}
+                    onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-on-surface-variant mb-1.5 block">{t('admin.announcements.endDate' as any)}</label>
+                  <input
+                    type="datetime-local"
+                    className="w-full bg-surface-container-highest rounded-lg px-3 py-2.5 text-sm text-on-surface border border-outline-variant/20 focus:border-primary/40 outline-none dark:[color-scheme:dark] [accent-color:var(--md-sys-color-primary,#4A90D9)]"
+                    value={form.end_date}
+                    onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))}
+                  />
+                </div>
               </div>
             </div>
             <div className="flex gap-2 mt-6 justify-end">
@@ -189,7 +242,7 @@ function AnnouncementsContent() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving || !form.title.trim() || !form.content.trim()}
+                disabled={saving || !form.title.trim() || !form.content.trim() || !form.start_date || !form.end_date}
                 className="px-5 py-2.5 cyber-gradient rounded-lg text-on-primary text-sm font-bold disabled:opacity-50 hover:brightness-110 active:scale-95 transition-all cursor-pointer"
               >
                 {saving ? t('admin.announcements.saving' as any) : t('admin.announcements.save' as any)}
@@ -216,31 +269,23 @@ function AnnouncementsContent() {
             const status = getStatus(a);
             return (
               <div key={a.id} className="bg-surface-container rounded-lg p-3.5 md:p-4 border border-outline-variant/10 hover:border-outline-variant/20 transition-colors">
-                {/* Title + Status */}
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-sm font-headline font-bold text-on-surface truncate">{a.title}</h3>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${statusColors[status]}`}>
-                    {t(`admin.announcements.status.${status}` as any)}
-                  </span>
-                </div>
-                {/* Content */}
-                <p className="text-xs text-on-surface-variant line-clamp-2 mb-2">{a.content}</p>
-                {/* Meta + Actions */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 md:gap-3 text-[11px] text-on-surface-variant/70 min-w-0">
-                    <span className="truncate">{a.author_name || '—'}</span>
-                    <span>·</span>
-                    <span className="shrink-0">{new Date(a.created_at).toLocaleDateString()}</span>
-                    <span>·</span>
-                    <span className="shrink-0">{a.active_days} {t('admin.announcements.daysUnit' as any)}</span>
+                {/* Row 1: Title + Status + Actions */}
+                <div className="flex items-start gap-2 mb-1.5">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-headline font-bold text-on-surface truncate">{a.title}</h3>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${statusColors[status]}`}>
+                        {t(`admin.announcements.status.${status}` as any)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-0.5 shrink-0 ml-2">
+                  <div className="flex items-center gap-0.5 shrink-0 -mt-0.5">
                     <button
                       onClick={() => toggleActive(a)}
-                      className={`w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer ${a.is_active ? 'text-success' : 'text-on-surface-variant/50'}`}
+                      className={`w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer ${a.is_active ? 'text-success' : 'text-on-surface-variant/50'}`}
                       title={a.is_active ? 'Disable' : 'Enable'}
                     >
-                      <span className="material-symbols-outlined text-2xl">
+                      <span className="material-symbols-outlined text-xl md:text-2xl">
                         {a.is_active ? 'toggle_on' : 'toggle_off'}
                       </span>
                     </button>
@@ -258,6 +303,22 @@ function AnnouncementsContent() {
                       <span className="material-symbols-outlined text-lg">delete</span>
                     </button>
                   </div>
+                </div>
+                {/* Row 2: Content */}
+                <p className="text-xs text-on-surface-variant line-clamp-2 mb-2">{a.content}</p>
+                {/* Row 3: Meta — date range stacks on mobile */}
+                <div className="flex items-center gap-1.5 text-[11px] text-on-surface-variant/70">
+                  <span className="material-symbols-outlined text-xs">schedule</span>
+                  {/* Mobile: short format stacked */}
+                  <span className="md:hidden">{formatDateShort(a.start_date)} ~ {formatDateShort(a.end_date)}</span>
+                  {/* Desktop: full format */}
+                  <span className="hidden md:inline">{formatDate(a.start_date)} ~ {formatDate(a.end_date)}</span>
+                  {a.author_name && (
+                    <>
+                      <span className="mx-1">·</span>
+                      <span className="truncate">{a.author_name}</span>
+                    </>
+                  )}
                 </div>
               </div>
             );

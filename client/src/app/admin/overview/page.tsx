@@ -49,6 +49,53 @@ export default function AdminOverview() {
   const [velocity, setVelocity] = useState<VelocityPoint[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [period, setPeriod] = useState<'7d' | '30d'>('7d');
+  const [exporting, setExporting] = useState(false);
+
+  function exportReport() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const parts: string[] = [];
+
+      // Summary
+      if (stats) {
+        parts.push('--- System Summary ---');
+        parts.push(['Metric', 'Value'].join(','));
+        parts.push(['Total Users', stats.totalUsers].join(','));
+        parts.push(['Active Skills', stats.activeSkills].join(','));
+        parts.push(['Total Tokens', stats.totalTokens].join(','));
+        parts.push(['Total Files', stats.totalFiles].join(','));
+        parts.push(['System Uptime (s)', stats.systemUptime].join(','));
+        parts.push('');
+      }
+
+      // Velocity chart
+      if (velocity.length > 0) {
+        parts.push(`--- Token Velocity (${period}) ---`);
+        parts.push(['Date', 'Input Tokens', 'Output Tokens', 'Total', 'Invocations'].join(','));
+        velocity.forEach(v => {
+          parts.push([v.date, v.total_input, v.total_output, v.total_input + v.total_output, v.invocation_count].join(','));
+        });
+        parts.push('');
+      }
+
+      // Recent activity
+      if (activity.length > 0) {
+        parts.push('--- Recent Activity ---');
+        parts.push(['Event Type', 'Description', 'Created At'].join(','));
+        activity.forEach(a => {
+          parts.push([a.event_type, `"${a.description.replace(/"/g, '""')}"`, a.created_at].join(','));
+        });
+      }
+
+      const csv = '\uFEFF' + parts.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `overview_report_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+      URL.revokeObjectURL(url);
+    } finally { setExporting(false); }
+  }
 
   const EVENT_META: Record<string, { icon: string; color: string; label: string }> = {
     user_registered:      { icon: 'person_add', color: 'text-primary', label: t('admin.overview.event.userRegistered') },
@@ -105,9 +152,14 @@ export default function AdminOverview() {
             <span className="text-sm text-primary font-bold tracking-widest uppercase">{t('admin.overview.allNodesNormal')}</span>
           </div>
         </div>
-        <button className="hidden md:flex items-center gap-2 px-4 py-2 bg-surface-container text-on-surface-variant text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer">
-          <span className="material-symbols-outlined text-sm">download</span>
-          {t('admin.overview.exportReport')}
+        <button
+          onClick={exportReport}
+          disabled={exporting}
+          className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50"
+        >
+          <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'download'}</span>
+          <span className="hidden md:inline">{t('admin.overview.exportReport')}</span>
+          <span className="md:hidden">CSV</span>
         </button>
       </header>
 

@@ -89,10 +89,8 @@ function DashboardContent() {
     }
   }, [user, isLoading, router]);
 
-  // Show greeting popup once per login (pro-out only, skip if muted today)
-  const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
+  // Show greeting popup once per login (skip if muted today)
   useEffect(() => {
-    if (deployMode !== 'pro-out') return;
     if (!token || !user) return;
     const today = new Date().toISOString().slice(0, 10);
     if (localStorage.getItem(`greeting_muted_${user.id}`) === today) return;
@@ -101,7 +99,7 @@ function DashboardContent() {
     if (localStorage.getItem('greeting_shown_for') === loginId) return;
     const timer = setTimeout(() => setShowGreeting(true), 600);
     return () => clearTimeout(timer);
-  }, [token, user, deployMode]);
+  }, [token, user]);
 
   useEffect(() => {
     if (!token) return;
