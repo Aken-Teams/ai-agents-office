@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Email Template Preview</title>
+<style>
+  body { margin: 0; background: #f0f0f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  .preview-header { text-align: center; padding: 32px 16px 16px; color: #666; font-size: 13px; text-transform: uppercase; letter-spacing: 2px; }
+  .preview-header h1 { font-size: 14px; margin: 0 0 4px; }
+  .preview-container { max-width: 640px; margin: 0 auto 48px; background: #fff; border-radius: 8px; box-shadow: 0 2px 16px rgba(0,0,0,0.08); overflow: hidden; }
+  .email-meta { padding: 16px 24px; background: #fafafa; border-bottom: 1px solid #eee; font-size: 13px; color: #666; }
+  .email-meta strong { color: #333; }
+  .email-body { padding: 0; }
+</style>
+</head>
+<body>
+
+<!-- ==================== Template 1: Verification Code ==================== -->
+<p class="preview-header"><strong>Template 1 — 註冊驗證碼</strong></p>
+<div class="preview-container">
+  <div class="email-meta">
+    <div><strong>From:</strong> AI Agents Office &lt;noreply@yourcompany.com&gt;</div>
+    <div><strong>To:</strong> user@example.com</div>
+    <div><strong>Subject:</strong> 您的驗證碼：385291</div>
+  </div>
+  <div class="email-body">
+
+    <!-- ===== EMAIL HTML START ===== -->
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans TC',sans-serif;max-width:520px;margin:0 auto;padding:0">
+
+      <!-- Header Bar -->
+      <div style="background:linear-gradient(135deg,#006970 0%,#009099 100%);padding:32px 32px 28px;text-align:center">
+        <div style="display:inline-block;width:44px;height:44px;background:rgba(255,255,255,0.2);border-radius:10px;text-align:center;line-height:44px;font-size:20px;font-family:monospace;color:#ffffff;margin-bottom:12px">&gt;_</div>
+        <h1 style="margin:0;font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.5px">AI Agents Office</h1>
+        <p style="margin:4px 0 0;font-size:11px;text-transform:uppercase;letter-spacing:3px;color:rgba(255,255,255,0.7)">智能文件平台</p>
+      </div>
+
+      <!-- Body -->
+      <div style="padding:36px 32px 32px">
+        <h2 style="margin:0 0 8px;font-size:18px;font-weight:600;color:#1a1c2e">Email 驗證</h2>
+        <p style="margin:0 0 24px;font-size:14px;color:#44474d;line-height:1.6">
+          感謝您註冊 AI Agents Office！<br>請輸入以下驗證碼完成帳號啟用：
+        </p>
+
+        <!-- Code Box -->
+        <div style="background:#f3f5f8;border:2px solid #e5e8ed;border-radius:12px;padding:20px;text-align:center;margin:0 0 24px">
+          <div style="font-size:36px;font-weight:700;letter-spacing:12px;color:#006970;font-family:'SF Mono',Monaco,'Cascadia Code',monospace;padding-left:12px">385291</div>
+        </div>
+
+        <p style="margin:0 0 8px;font-size:13px;color:#747680;line-height:1.5">
+          &#x23F3; 此驗證碼將在 <strong style="color:#44474d">10 分鐘</strong>後失效
+        </p>
+        <p style="margin:0;font-size:13px;color:#747680;line-height:1.5">
+          如果這不是您本人的操作，請忽略此郵件，您的帳號不會有任何變更。
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div style="border-top:1px solid #e5e8ed;padding:20px 32px;text-align:center">
+        <p style="margin:0;font-size:11px;color:#a0a3ab;line-height:1.5">
+          &copy; 2026 AI Agents Office<br>
+          此為系統自動發送的郵件，請勿直接回覆
+        </p>
+      </div>
+
+    </div>
+    <!-- ===== EMAIL HTML END ===== -->
+
+  </div>
+</div>
+
+
+<!-- ==================== Template 2: Password Reset ==================== -->
+<p class="preview-header"><strong>Template 2 — 忘記密碼重設</strong></p>
+<div class="preview-container">
+  <div class="email-meta">
+    <div><strong>From:</strong> AI Agents Office &lt;noreply@yourcompany.com&gt;</div>
+    <div><strong>To:</strong> user@example.com</div>
+    <div><strong>Subject:</strong> 重設您的密碼</div>
+  </div>
+  <div class="email-body">
+
+    <!-- ===== EMAIL HTML START ===== -->
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans TC',sans-serif;max-width:520px;margin:0 auto;padding:0">
+
+      <!-- Header Bar -->
+      <div style="background:linear-gradient(135deg,#006970 0%,#009099 100%);padding:32px 32px 28px;text-align:center">
+        <div style="display:inline-block;width:44px;height:44px;background:rgba(255,255,255,0.2);border-radius:10px;text-align:center;line-height:44px;font-size:20px;font-family:monospace;color:#ffffff;margin-bottom:12px">&gt;_</div>
+        <h1 style="margin:0;font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.5px">AI Agents Office</h1>
+        <p style="margin:4px 0 0;font-size:11px;text-transform:uppercase;letter-spacing:3px;color:rgba(255,255,255,0.7)">智能文件平台</p>
+      </div>
+
+      <!-- Body -->
+      <div style="padding:36px 32px 32px">
+        <h2 style="margin:0 0 8px;font-size:18px;font-weight:600;color:#1a1c2e">重設密碼</h2>
+        <p style="margin:0 0 28px;font-size:14px;color:#44474d;line-height:1.6">
+          我們收到了重設您帳號密碼的請求。<br>請點擊下方按鈕設定新密碼：
+        </p>
+
+        <!-- CTA Button -->
+        <div style="text-align:center;margin:0 0 28px">
+          <a href="https://yoursite.com/reset-password?token=abc123" style="display:inline-block;background:linear-gradient(135deg,#006970 0%,#009099 100%);color:#ffffff;text-decoration:none;padding:14px 48px;border-radius:8px;font-size:15px;font-weight:600;letter-spacing:0.5px">重設密碼</a>
+        </div>
+
+        <p style="margin:0 0 8px;font-size:13px;color:#747680;line-height:1.5">
+          &#x23F3; 此連結將在 <strong style="color:#44474d">30 分鐘</strong>後失效
+        </p>
+        <p style="margin:0 0 20px;font-size:13px;color:#747680;line-height:1.5">
+          如果這不是您本人的操作，請忽略此郵件，您的密碼不會有任何變更。
+        </p>
+
+        <!-- Fallback link -->
+        <div style="background:#f3f5f8;border-radius:8px;padding:12px 16px">
+          <p style="margin:0 0 4px;font-size:11px;color:#747680">如果按鈕無法點擊，請複製以下連結到瀏覽器：</p>
+          <p style="margin:0;font-size:11px;color:#006970;word-break:break-all;line-height:1.4">https://yoursite.com/reset-password?token=a1b2c3d4e5f6...</p>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="border-top:1px solid #e5e8ed;padding:20px 32px;text-align:center">
+        <p style="margin:0;font-size:11px;color:#a0a3ab;line-height:1.5">
+          &copy; 2026 AI Agents Office<br>
+          此為系統自動發送的郵件，請勿直接回覆
+        </p>
+      </div>
+
+    </div>
+    <!-- ===== EMAIL HTML END ===== -->
+
+  </div>
+</div>
+
+<div style="height:64px"></div>
+
+</body>
+</html>

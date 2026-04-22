@@ -131,44 +131,44 @@ function AdminSettingsContent() {
   return (
     <>
       {/* Header */}
-      <header className="sticky top-0 h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
-        <div className="flex items-center gap-4">
-          <span className="text-lg font-black text-on-surface font-headline">{t('admin.settings.title')}</span>
-          <span className="text-sm text-on-surface-variant font-mono">{t('admin.settings.subtitle')}</span>
+      <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
+        <div className="flex items-center gap-2 md:gap-4">
+          <span className="text-base md:text-lg font-black text-on-surface font-headline shrink-0">{t('admin.settings.title')}</span>
+          <span className="text-xs md:text-sm text-on-surface-variant font-mono truncate">{t('admin.settings.subtitle')}</span>
         </div>
       </header>
 
       {/* Content */}
-      <div className="p-8 flex-1 space-y-6 flex flex-col">
+      <div className="p-4 md:p-8 flex-1 space-y-4 md:space-y-6 flex flex-col">
         {/* Personal Preferences */}
         <div className="bg-surface-container rounded-lg overflow-hidden">
-          <div className="p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-2xl text-primary">person</span>
+          <div className="p-4 md:p-6">
+            <div className="flex items-center gap-3 mb-3 md:mb-4">
+              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-xl md:text-2xl text-primary">person</span>
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-base font-headline font-bold text-on-surface">{t('admin.settings.preferences.title')}</h3>
+                  <h3 className="text-sm md:text-base font-headline font-bold text-on-surface">{t('admin.settings.preferences.title')}</h3>
                   {prefSaved && (
-                    <span className="flex items-center gap-1 text-sm text-success font-bold">
-                      <span className="material-symbols-outlined text-sm">check_circle</span>
+                    <span className="flex items-center gap-1 text-xs md:text-sm text-success font-bold">
+                      <span className="material-symbols-outlined text-xs md:text-sm">check_circle</span>
                       {t('admin.settings.saved')}
                     </span>
                   )}
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               {/* Language */}
               <div>
-                <label className="text-sm text-on-surface-variant mb-2 block">{t('admin.settings.preferences.language')}</label>
-                <div className="flex gap-2">
+                <label className="text-xs md:text-sm text-on-surface-variant mb-1.5 md:mb-2 block">{t('admin.settings.preferences.language')}</label>
+                <div className="flex gap-1.5 md:gap-2">
                   {LOCALE_OPTIONS.map(opt => (
                     <button
                       key={opt.value}
                       onClick={() => handleLocaleChange(opt.value)}
-                      className={`flex-1 px-3 py-2 rounded border text-sm font-medium transition-all cursor-pointer ${
+                      className={`flex-1 px-2 md:px-3 py-1.5 md:py-2 rounded border text-xs md:text-sm font-medium transition-all cursor-pointer ${
                         locale === opt.value
                           ? 'border-primary bg-primary/10 text-primary'
                           : 'border-outline-variant/20 bg-surface-container-high text-on-surface-variant hover:border-primary/30'
@@ -181,11 +181,11 @@ function AdminSettingsContent() {
               </div>
               {/* Theme */}
               <div>
-                <label className="text-sm text-on-surface-variant mb-2 block">{t('admin.settings.preferences.theme')}</label>
-                <div className="flex gap-2">
+                <label className="text-xs md:text-sm text-on-surface-variant mb-1.5 md:mb-2 block">{t('admin.settings.preferences.theme')}</label>
+                <div className="flex gap-1.5 md:gap-2">
                   <button
                     onClick={() => handleThemeChange('dark')}
-                    className={`flex-1 px-3 py-2 rounded border text-sm font-medium transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    className={`flex-1 px-2 md:px-3 py-1.5 md:py-2 rounded border text-xs md:text-sm font-medium transition-all cursor-pointer flex items-center justify-center gap-1.5 md:gap-2 ${
                       theme === 'dark'
                         ? 'border-primary bg-primary/10 text-primary'
                         : 'border-outline-variant/20 bg-surface-container-high text-on-surface-variant hover:border-primary/30'
@@ -196,7 +196,7 @@ function AdminSettingsContent() {
                   </button>
                   <button
                     onClick={() => handleThemeChange('light')}
-                    className={`flex-1 px-3 py-2 rounded border text-sm font-medium transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    className={`flex-1 px-2 md:px-3 py-1.5 md:py-2 rounded border text-xs md:text-sm font-medium transition-all cursor-pointer flex items-center justify-center gap-1.5 md:gap-2 ${
                       theme === 'light'
                         ? 'border-primary bg-primary/10 text-primary'
                         : 'border-outline-variant/20 bg-surface-container-high text-on-surface-variant hover:border-primary/30'
@@ -219,36 +219,40 @@ function AdminSettingsContent() {
           const isSaved0 = saved === cfg.key;
           return (
             <div className="bg-surface-container rounded-lg overflow-hidden">
-              <div className="p-6">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0">
-                    <span className={`material-symbols-outlined text-2xl ${cfg.iconColor}`}>{cfg.icon}</span>
+              <div className="p-4 md:p-6">
+                <div className="flex items-start gap-3 md:gap-4">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0">
+                    <span className={`material-symbols-outlined text-xl md:text-2xl ${cfg.iconColor}`}>{cfg.icon}</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-base font-headline font-bold text-on-surface">{cfg.title}</h3>
+                      <h3 className="text-sm md:text-base font-headline font-bold text-on-surface">{cfg.title}</h3>
                       {isSaved0 && (
-                        <span className="flex items-center gap-1 text-sm text-success font-bold">
-                          <span className="material-symbols-outlined text-sm">check_circle</span>
+                        <span className="flex items-center gap-1 text-xs md:text-sm text-success font-bold">
+                          <span className="material-symbols-outlined text-xs md:text-sm">check_circle</span>
                           {t('admin.settings.saved')}
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-on-surface-variant leading-relaxed mb-4">{cfg.description}</p>
+                    <p className="text-xs md:text-sm text-on-surface-variant leading-relaxed mb-3 md:mb-4">{cfg.description}</p>
                     {isEditing0 ? (
-                      <div className="flex items-center gap-3">
-                        {cfg.prefix && <span className="text-on-surface-variant text-base font-bold">{cfg.prefix}</span>}
-                        <input type="number" value={form[cfg.key]} onChange={e => setForm(prev => ({ ...prev, [cfg.key]: e.target.value }))} className="w-40 px-4 py-2.5 bg-surface-container-highest text-on-surface text-base rounded border border-outline-variant/20 focus:border-primary focus:outline-none font-mono" min={cfg.min} max={cfg.max} step={cfg.step} />
-                        <span className="text-sm text-on-surface-variant">{cfg.unit}</span>
-                        <button onClick={() => saveSetting(cfg.key)} disabled={saving} className="px-4 py-2.5 bg-primary text-on-primary text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50">{saving ? t('admin.settings.saving') : t('admin.settings.save')}</button>
-                        <button onClick={() => { setEditing(null); if (settings) setForm(prev => ({ ...prev, [cfg.key]: String(settings[cfg.key]) })); }} className="px-4 py-2.5 bg-surface-container-high text-on-surface-variant text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer">{t('admin.settings.cancel')}</button>
+                      <div className="space-y-2 md:space-y-0 md:flex md:items-center md:gap-3">
+                        <div className="flex items-center gap-2 md:gap-3">
+                          {cfg.prefix && <span className="text-on-surface-variant text-sm md:text-base font-bold">{cfg.prefix}</span>}
+                          <input type="number" value={form[cfg.key]} onChange={e => setForm(prev => ({ ...prev, [cfg.key]: e.target.value }))} className="w-28 md:w-40 px-3 md:px-4 py-2 md:py-2.5 bg-surface-container-highest text-on-surface text-sm md:text-base rounded border border-outline-variant/20 focus:border-primary focus:outline-none font-mono" min={cfg.min} max={cfg.max} step={cfg.step} />
+                          <span className="text-xs md:text-sm text-on-surface-variant">{cfg.unit}</span>
+                        </div>
+                        <div className="flex items-center gap-2 justify-end md:justify-start">
+                          <button onClick={() => saveSetting(cfg.key)} disabled={saving} className="px-3 md:px-4 py-2 md:py-2.5 bg-primary text-on-primary text-xs md:text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50">{saving ? t('admin.settings.saving') : t('admin.settings.save')}</button>
+                          <button onClick={() => { setEditing(null); if (settings) setForm(prev => ({ ...prev, [cfg.key]: String(settings[cfg.key]) })); }} className="px-3 md:px-4 py-2 md:py-2.5 bg-surface-container-high text-on-surface-variant text-xs md:text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer">{t('admin.settings.cancel')}</button>
+                        </div>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-3">
-                        <span className="text-3xl font-headline font-black text-on-surface">{cfg.prefix}{value ?? '—'}</span>
-                        <span className="text-sm text-on-surface-variant">{cfg.suffix}</span>
-                        <button onClick={() => setEditing(cfg.key)} className="ml-4 px-4 py-2 bg-surface-container-high text-on-surface-variant text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer flex items-center gap-1.5">
-                          <span className="material-symbols-outlined text-sm">edit</span>
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <span className="text-2xl md:text-3xl font-headline font-black text-on-surface">{cfg.prefix}{value ?? '—'}</span>
+                        <span className="text-xs md:text-sm text-on-surface-variant">{cfg.suffix}</span>
+                        <button onClick={() => setEditing(cfg.key)} className="ml-2 md:ml-4 px-3 md:px-4 py-1.5 md:py-2 bg-surface-container-high text-on-surface-variant text-xs md:text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-xs md:text-sm">edit</span>
                           {t('admin.settings.edit')}
                         </button>
                       </div>
@@ -261,43 +265,47 @@ function AdminSettingsContent() {
         })()}
 
         {/* Storage + Upload — side by side */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           {SETTINGS_CONFIG.slice(1).map(cfg => {
             const isEditingCfg = editing === cfg.key;
             const value = settings?.[cfg.key];
             const isSavedCfg = saved === cfg.key;
             return (
               <div key={cfg.key} className="bg-surface-container rounded-lg overflow-hidden">
-                <div className="p-6">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0">
-                      <span className={`material-symbols-outlined text-2xl ${cfg.iconColor}`}>{cfg.icon}</span>
+                <div className="p-4 md:p-6">
+                  <div className="flex items-start gap-3 md:gap-4">
+                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0">
+                      <span className={`material-symbols-outlined text-xl md:text-2xl ${cfg.iconColor}`}>{cfg.icon}</span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-base font-headline font-bold text-on-surface">{cfg.title}</h3>
+                        <h3 className="text-sm md:text-base font-headline font-bold text-on-surface">{cfg.title}</h3>
                         {isSavedCfg && (
-                          <span className="flex items-center gap-1 text-sm text-success font-bold">
-                            <span className="material-symbols-outlined text-sm">check_circle</span>
+                          <span className="flex items-center gap-1 text-xs md:text-sm text-success font-bold">
+                            <span className="material-symbols-outlined text-xs md:text-sm">check_circle</span>
                             {t('admin.settings.saved')}
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-on-surface-variant leading-relaxed mb-4">{cfg.description}</p>
+                      <p className="text-xs md:text-sm text-on-surface-variant leading-relaxed mb-3 md:mb-4">{cfg.description}</p>
                       {isEditingCfg ? (
-                        <div className="flex items-center gap-3 flex-wrap">
-                          {cfg.prefix && <span className="text-on-surface-variant text-base font-bold">{cfg.prefix}</span>}
-                          <input type="number" value={form[cfg.key]} onChange={e => setForm(prev => ({ ...prev, [cfg.key]: e.target.value }))} className="w-32 px-4 py-2.5 bg-surface-container-highest text-on-surface text-base rounded border border-outline-variant/20 focus:border-primary focus:outline-none font-mono" min={cfg.min} max={cfg.max} step={cfg.step} />
-                          <span className="text-sm text-on-surface-variant">{cfg.unit}</span>
-                          <button onClick={() => saveSetting(cfg.key)} disabled={saving} className="px-4 py-2.5 bg-primary text-on-primary text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50">{saving ? t('admin.settings.saving') : t('admin.settings.save')}</button>
-                          <button onClick={() => { setEditing(null); if (settings) setForm(prev => ({ ...prev, [cfg.key]: String(settings[cfg.key]) })); }} className="px-4 py-2.5 bg-surface-container-high text-on-surface-variant text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer">{t('admin.settings.cancel')}</button>
+                        <div className="space-y-2 md:space-y-0 md:flex md:items-center md:gap-3">
+                          <div className="flex items-center gap-2 md:gap-3">
+                            {cfg.prefix && <span className="text-on-surface-variant text-sm md:text-base font-bold">{cfg.prefix}</span>}
+                            <input type="number" value={form[cfg.key]} onChange={e => setForm(prev => ({ ...prev, [cfg.key]: e.target.value }))} className="w-24 md:w-32 px-3 md:px-4 py-2 md:py-2.5 bg-surface-container-highest text-on-surface text-sm md:text-base rounded border border-outline-variant/20 focus:border-primary focus:outline-none font-mono" min={cfg.min} max={cfg.max} step={cfg.step} />
+                            <span className="text-xs md:text-sm text-on-surface-variant">{cfg.unit}</span>
+                          </div>
+                          <div className="flex items-center gap-2 justify-end md:justify-start">
+                            <button onClick={() => saveSetting(cfg.key)} disabled={saving} className="px-3 md:px-4 py-2 md:py-2.5 bg-primary text-on-primary text-xs md:text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50">{saving ? t('admin.settings.saving') : t('admin.settings.save')}</button>
+                            <button onClick={() => { setEditing(null); if (settings) setForm(prev => ({ ...prev, [cfg.key]: String(settings[cfg.key]) })); }} className="px-3 md:px-4 py-2 md:py-2.5 bg-surface-container-high text-on-surface-variant text-xs md:text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer">{t('admin.settings.cancel')}</button>
+                          </div>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-3">
-                          <span className="text-3xl font-headline font-black text-on-surface">{cfg.prefix}{value ?? '—'}</span>
-                          <span className="text-sm text-on-surface-variant">{cfg.suffix}</span>
-                          <button onClick={() => setEditing(cfg.key)} className="ml-4 px-4 py-2 bg-surface-container-high text-on-surface-variant text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-sm">edit</span>
+                        <div className="flex items-center gap-2 md:gap-3">
+                          <span className="text-2xl md:text-3xl font-headline font-black text-on-surface">{cfg.prefix}{value ?? '—'}</span>
+                          <span className="text-xs md:text-sm text-on-surface-variant">{cfg.suffix}</span>
+                          <button onClick={() => setEditing(cfg.key)} className="ml-2 md:ml-4 px-3 md:px-4 py-1.5 md:py-2 bg-surface-container-high text-on-surface-variant text-xs md:text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-xs md:text-sm">edit</span>
                             {t('admin.settings.edit')}
                           </button>
                         </div>
@@ -311,24 +319,24 @@ function AdminSettingsContent() {
         </div>
 
         {/* Info Section — fixed at bottom */}
-        <div className="mt-auto bg-surface-container-low border border-outline-variant/5 p-6 relative overflow-hidden">
+        <div className="mt-auto bg-surface-container-low border border-outline-variant/5 p-4 md:p-6 relative overflow-hidden rounded-lg">
           <div className="absolute right-4 bottom-4 opacity-[0.04] pointer-events-none">
-            <span className="material-symbols-outlined text-[6rem]">info</span>
+            <span className="material-symbols-outlined max-md:!text-[3rem]" style={{ fontSize: '6rem' }}>info</span>
           </div>
           <div className="relative z-10">
-            <h3 className="text-base font-headline font-bold text-on-surface mb-3">{t('admin.settings.info.title')}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-surface-container p-4 border-l-2 border-warning">
-                <h4 className="text-sm text-on-surface font-bold mb-1">{t('admin.settings.info.usageLimitTitle')}</h4>
-                <p className="text-sm text-on-surface-variant">{t('admin.settings.info.usageLimitDesc')}</p>
+            <h3 className="text-sm md:text-base font-headline font-bold text-on-surface mb-2 md:mb-3">{t('admin.settings.info.title')}</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+              <div className="bg-surface-container p-3 md:p-4 border-l-2 border-warning">
+                <h4 className="text-xs md:text-sm text-on-surface font-bold mb-0.5 md:mb-1">{t('admin.settings.info.usageLimitTitle')}</h4>
+                <p className="text-xs md:text-sm text-on-surface-variant">{t('admin.settings.info.usageLimitDesc')}</p>
               </div>
-              <div className="bg-surface-container p-4 border-l-2 border-primary">
-                <h4 className="text-sm text-on-surface font-bold mb-1">{t('admin.settings.info.storageTitle')}</h4>
-                <p className="text-sm text-on-surface-variant">{t('admin.settings.info.storageDesc')}</p>
+              <div className="bg-surface-container p-3 md:p-4 border-l-2 border-primary">
+                <h4 className="text-xs md:text-sm text-on-surface font-bold mb-0.5 md:mb-1">{t('admin.settings.info.storageTitle')}</h4>
+                <p className="text-xs md:text-sm text-on-surface-variant">{t('admin.settings.info.storageDesc')}</p>
               </div>
-              <div className="bg-surface-container p-4 border-l-2 border-tertiary">
-                <h4 className="text-sm text-on-surface font-bold mb-1">{t('admin.settings.info.uploadTitle')}</h4>
-                <p className="text-sm text-on-surface-variant">{t('admin.settings.info.uploadDesc')}</p>
+              <div className="bg-surface-container p-3 md:p-4 border-l-2 border-tertiary">
+                <h4 className="text-xs md:text-sm text-on-surface font-bold mb-0.5 md:mb-1">{t('admin.settings.info.uploadTitle')}</h4>
+                <p className="text-xs md:text-sm text-on-surface-variant">{t('admin.settings.info.uploadDesc')}</p>
               </div>
             </div>
           </div>

@@ -2,10 +2,25 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://agents-office.zhgpt.org'),
   title: 'AI Agents Office',
-  description: 'AI 驅動的智能文件生成平台',
+  description: 'AI 驅動的智能文件生成平台 — 透過自然語言快速產出 PPT、Word、Excel、PDF 等專業文件',
   icons: {
     icon: '/logo.png',
+  },
+  openGraph: {
+    title: 'AI Agents Office',
+    description: 'AI 驅動的智能文件生成平台 — 透過自然語言快速產出 PPT、Word、Excel、PDF 等專業文件',
+    siteName: 'AI Agents Office',
+    images: [{ url: '/meta.png', width: 1200, height: 630, alt: 'AI Agents Office' }],
+    locale: 'zh_TW',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'AI Agents Office',
+    description: 'AI 驅動的智能文件生成平台 — 透過自然語言快速產出 PPT、Word、Excel、PDF 等專業文件',
+    images: ['/meta.png'],
   },
 };
 

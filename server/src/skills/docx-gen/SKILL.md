@@ -20,6 +20,7 @@ cat > document.json << 'DOCEOF'
 {
   "title": "Document Title",
   "author": "Author Name",
+  "style": "modern",
   "sections": [
     {
       "heading": "Introduction",
@@ -37,6 +38,26 @@ cat > document.json << 'DOCEOF'
 DOCEOF
 node --import tsx generate-docx.ts document.json output.docx
 ```
+
+## Available Styles
+
+Use the `"style"` field to apply a built-in visual theme. **Always use these pre-built styles instead of writing custom code for styling.**
+
+| Style | Description |
+|-------|-------------|
+| `"formal"` | Times New Roman, centered title, navy headings, classic formal look |
+| `"modern"` | Calibri, left-aligned, blue accent borders on headings, light shading (default) |
+| `"academic"` | Times New Roman, double-spaced, centered title, black text throughout |
+| `"compact"` | Arial, small fonts, tight spacing, efficient use of space |
+
+If the user mentions a style preference (e.g. "formal report", "academic paper", "modern"), pick the closest matching style. If no style is mentioned, use `"modern"`.
+
+## Section Options
+
+- `"heading"` — Section heading text
+- `"level"` — Heading level: 1, 2, or 3
+- `"paragraphs"` — Array of paragraph texts
+- `"bullets"` — Array of bullet point texts
 
 ## Custom Generation
 For complex requirements (tables, images, headers/footers), write custom Node.js code using `docx`:

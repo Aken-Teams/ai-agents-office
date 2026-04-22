@@ -6,28 +6,28 @@ const router = Router();
 router.use(authMiddleware);
 
 // GET /api/usage — Token usage summary
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const { from, to } = req.query;
 
-  const summary = getUserUsageSummary(
+  const summary = await getUserUsageSummary(
     userId,
     from as string | undefined,
     to as string | undefined,
   );
 
-  const total = getUserTotalUsage(userId);
+  const total = await getUserTotalUsage(userId);
 
   res.json({ summary, total });
 });
 
 // GET /api/usage/daily — Daily breakdown for current month
-router.get('/daily', (req: Request, res: Response) => {
+router.get('/daily', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const now = new Date();
   const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
-  const daily = getUserUsageSummary(userId, firstOfMonth);
+  const daily = await getUserUsageSummary(userId, firstOfMonth);
   res.json(daily);
 });
 

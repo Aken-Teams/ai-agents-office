@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
-import db from '../db.js';
+import { dbGet, dbAll } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { getFileDownloadPath, deleteFile } from '../services/fileManager.js';
+import { getFileDownloadPath, deleteFile, getFileVersions } from '../services/fileManager.js';
 import { convertOfficeFile } from '../services/filePreview.js';
 import { applyWatermark } from '../services/watermark.js';
 import { config } from '../config.js';
@@ -11,17 +11,22 @@ import { getStorageQuotaGb } from '../services/usageLimit.js';
 import type { GeneratedFile } from '../types.js';
 
 /** Sum file_size for a given user from generated_files table */
-export function getUserStorageUsed(userId: string): number {
-  const row = db.prepare(
-    'SELECT COALESCE(SUM(file_size), 0) AS total FROM generated_files WHERE user_id = ?'
-  ).get(userId) as { total: number };
-  return row.total;
+export async function getUserStorageUsed(userId: string): Promise<number> {
+  const row = await dbGet<{ total: number }>(
+    'SELECT COALESCE(SUM(file_size), 0) AS total FROM generated_files WHERE user_id = ?',
+    userId
+  );
+  return row?.total ?? 0;
 }
 
 const MIME_MAP: Record<string, string> = {
   pdf: 'application/pdf',
-  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', svg: 'image/svg+xml',
-  txt: 'text/plain', csv: 'text/plain', md: 'text/plain', html: 'text/html', htm: 'text/html',
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif',
+  svg: 'image/svg+xml', webp: 'image/webp', bmp: 'image/bmp',
+  tiff: 'image/tiff', tif: 'image/tiff', ico: 'image/x-icon',
+  txt: 'text/plain', csv: 'text/plain', md: 'text/plain',
+  json: 'application/json', xml: 'text/xml', yaml: 'text/plain', yml: 'text/plain',
+  html: 'text/html', htm: 'text/html',
 };
 
 const OFFICE_EXTENSIONS = new Set(['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt']);
@@ -29,38 +34,41 @@ const OFFICE_EXTENSIONS = new Set(['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt'])
 const router = Router();
 router.use(authMiddleware);
 
-// GET /api/files
-router.get('/', (req: Request, res: Response) => {
+// GET /api/files — returns only the LATEST version of each file
+router.get('/', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const { type, conversationId } = req.query;
 
-  let query = 'SELECT * FROM generated_files WHERE user_id = ?';
+  let where = 'WHERE gf.user_id = ?';
   const params: unknown[] = [userId];
 
-  if (type) {
-    query += ' AND file_type = ?';
-    params.push(type);
-  }
-  if (conversationId) {
-    query += ' AND conversation_id = ?';
-    params.push(conversationId);
-  }
+  if (type) { where += ' AND gf.file_type = ?'; params.push(type); }
+  if (conversationId) { where += ' AND gf.conversation_id = ?'; params.push(conversationId); }
 
-  query += ' ORDER BY created_at DESC';
+  const query = `
+    SELECT gf.* FROM generated_files gf
+    INNER JOIN (
+      SELECT file_path, conversation_id, MAX(version) AS max_ver
+      FROM generated_files
+      WHERE user_id = ?
+      GROUP BY file_path, conversation_id
+    ) latest ON gf.file_path = latest.file_path
+      AND (gf.conversation_id = latest.conversation_id OR (gf.conversation_id IS NULL AND latest.conversation_id IS NULL))
+      AND gf.version = latest.max_ver
+    ${where}
+    ORDER BY gf.created_at DESC
+  `;
 
-  const files = db.prepare(query).all(...params) as GeneratedFile[];
-  res.json(files);
+  const rows = await dbAll(query, userId, ...params);
+  res.json(rows);
 });
 
 // GET /api/files/:id/download
 router.get('/:id/download', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const filePath = getFileDownloadPath(userId, req.params.id as string);
+  const filePath = await getFileDownloadPath(userId, req.params.id as string);
 
-  if (!filePath) {
-    res.status(404).json({ error: 'File not found' });
-    return;
-  }
+  if (!filePath) { res.status(404).json({ error: 'File not found' }); return; }
 
   const filename = path.basename(filePath);
 
@@ -69,45 +77,33 @@ router.get('/:id/download', async (req: Request, res: Response) => {
     if (watermarked) {
       res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
       res.setHeader('Content-Length', watermarked.length);
-      res.end(watermarked);
-      return;
+      res.end(watermarked); return;
     }
-  } catch (err) {
-    console.warn('[Download] Watermark failed, serving original:', err);
-  }
+  } catch (err) { console.warn('[Download] Watermark failed, serving original:', err); }
 
   res.download(filePath, filename);
 });
 
-// GET /api/files/:id/preview — serve file inline for preview
+// GET /api/files/:id/preview
 router.get('/:id/preview', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const filePath = getFileDownloadPath(userId, req.params.id as string);
+  const filePath = await getFileDownloadPath(userId, req.params.id as string);
 
-  if (!filePath) {
-    res.status(404).json({ error: 'File not found' });
-    return;
-  }
+  if (!filePath) { res.status(404).json({ error: 'File not found' }); return; }
 
   const ext = path.extname(filePath).slice(1).toLowerCase();
-
-  // Direct-serve for natively previewable types
   const mime = MIME_MAP[ext];
   if (mime) {
-    // Apply watermark for PDF previews too
-    if (ext === 'pdf') {
+    if (ext === 'pdf' || ext === 'html' || ext === 'htm') {
       try {
         const watermarked = await applyWatermark(filePath);
         if (watermarked) {
           res.setHeader('Content-Type', mime);
           res.setHeader('Content-Disposition', 'inline');
           res.setHeader('Content-Length', watermarked.length);
-          res.end(watermarked);
-          return;
+          res.end(watermarked); return;
         }
-      } catch (err) {
-        console.warn('[Preview] PDF watermark failed, serving original:', err);
-      }
+      } catch (err) { console.warn('[Preview] Watermark failed, serving original:', err); }
     }
     const stat = fs.statSync(filePath);
     res.setHeader('Content-Type', mime);
@@ -117,7 +113,6 @@ router.get('/:id/preview', async (req: Request, res: Response) => {
     return;
   }
 
-  // Office files: convert via LibreOffice (preferred) or JS fallback
   if (OFFICE_EXTENSIONS.has(ext)) {
     try {
       const result = await convertOfficeFile(filePath, ext);
@@ -139,22 +134,17 @@ router.get('/:id/preview', async (req: Request, res: Response) => {
   res.status(415).json({ error: 'Preview not supported for this file type', file_type: ext });
 });
 
-// GET /api/files/storage — Return user's storage usage + quota
-router.get('/storage', (req: Request, res: Response) => {
+// GET /api/files/storage
+router.get('/storage', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const used = getUserStorageUsed(userId);
-  const quota = getStorageQuotaGb() * 1024 * 1024 * 1024;
+  const used = await getUserStorageUsed(userId);
+  const quota = (await getStorageQuotaGb()) * 1024 * 1024 * 1024;
   const percentage = quota > 0 ? used / quota : 0;
 
   res.json({
-    used,
-    quota,
-    percentage,
+    used, quota, percentage,
     warning: percentage >= config.storageWarningThreshold,
-    formatted: {
-      used: formatBytes(used),
-      quota: formatBytes(quota),
-    },
+    formatted: { used: formatBytes(used), quota: formatBytes(quota) },
   });
 });
 
@@ -165,16 +155,18 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
-// DELETE /api/files/:id
-router.delete('/:id', (req: Request, res: Response) => {
+// GET /api/files/:id/versions
+router.get('/:id/versions', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const success = deleteFile(userId, req.params.id as string);
+  const versions = await getFileVersions(userId, req.params.id as string);
+  res.json(versions);
+});
 
-  if (!success) {
-    res.status(404).json({ error: 'File not found' });
-    return;
-  }
-
+// DELETE /api/files/:id
+router.delete('/:id', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const success = await deleteFile(userId, req.params.id as string);
+  if (!success) { res.status(404).json({ error: 'File not found' }); return; }
   res.json({ success: true });
 });
 

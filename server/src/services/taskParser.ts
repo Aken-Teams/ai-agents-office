@@ -84,6 +84,10 @@ export function parsePipelineBlocks(text: string): {
  * Keeps head and tail to preserve context without exceeding limits.
  */
 export function truncateResultForRouter(result: string, maxChars = 1500): string {
+  // If result contains code blocks (charts/diagrams), use a larger limit to preserve them
+  if (/```(?:chart|mermaid|mindmap|map)\b/.test(result)) {
+    maxChars = Math.max(maxChars, 4000);
+  }
   if (result.length <= maxChars) return result;
 
   const headSize = Math.floor(maxChars * 0.7);

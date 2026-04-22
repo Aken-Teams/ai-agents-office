@@ -1,10 +1,11 @@
+import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { EventEmitter } from 'events';
-import db from '../db.js';
+import { dbGet, dbAll, dbRun } from '../db.js';
 import { spawnClaude } from './claudeCli.js';
 import { parsePipelineBlocks, truncateResultForRouter } from './taskParser.js';
-import { getSkill, buildSystemPrompt, getRouterSkill, buildRouterPrompt } from '../skills/loader.js';
-import { getUserUploadsForPrompt } from './uploadContext.js';
+import { getSkill, buildSystemPrompt, buildMemoryContext, getRouterSkill, buildRouterPrompt } from '../skills/loader.js';
+import { getUserUploadsForPrompt, getConversationFilesForPrompt } from './uploadContext.js';
 import { getSandboxPath } from './sandbox.js';
 import { config } from '../config.js';
 import type { SSEEvent, ParsedTask, ParsedPipeline, TaskExecution } from '../types.js';
@@ -14,14 +15,18 @@ const ORCHESTRATION_TIMEOUT_MS = 900_000; // 15 minutes total orchestration limi
 
 // Per-skill timeout (ms) — text-only agents are fast, generators need more time
 const SKILL_TIMEOUT: Record<string, number> = {
-  router:    120_000,   // 2 min — just analyze and delegate
-  research:  180_000,   // 3 min — web search
+  router:    90_000,    // 1.5 min — analyze and delegate (no tools, just text)
+  research:  480_000,   // 8 min — web search + charts/visualizations
   planner:   300_000,   // 5 min — text planning (complex outlines need time)
   reviewer:  120_000,   // 2 min — text review
   'pptx-gen': 600_000,  // 10 min — write code + run node to generate PPT
   'docx-gen': 480_000,  // 8 min — write code + run node to generate Word
   'xlsx-gen': 300_000,  // 5 min — write code + run node to generate Excel
   'pdf-gen':  300_000,  // 5 min — write code + run node to generate PDF
+  'slides-gen': 480_000,  // 8 min — generate HTML slides
+  'webapp-gen': 480_000,  // 8 min — generate HTML dashboard page
+  'data-analyst': 600_000, // 10 min — data analysis + charts/visualizations
+  'rag-analyst': 600_000, // 10 min — cross-file analysis + charts/visualizations
 };
 const DEFAULT_TASK_TIMEOUT_MS = 300_000; // 5 min fallback for unknown skills
 
@@ -75,12 +80,26 @@ export class Orchestrator {
     let allAssistantText = '';
 
     // Get or create Router's session for this conversation
-    const { sessionId: routerSessionId, initialized: routerInitialized } = this.getOrCreateAgentSession('router');
+    const { sessionId: routerSessionId, initialized: routerInitialized } = await this.getOrCreateAgentSession('router');
 
-    const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale);
+    // Inject user memories into router prompt
+    const userMemories = await dbAll<{ content: string }>(
+      'SELECT content FROM user_memories WHERE user_id = ? ORDER BY created_at DESC LIMIT 10', this.userId
+    );
+    const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale) + buildMemoryContext(userMemories);
+
+    // If user attached files, prepend file info to message so Router knows to delegate to data-analyst/rag-analyst
+    let messageWithFileContext = message;
+    if (this.uploadIds.length > 0) {
+      const baseSandbox = getSandboxPath(this.userId, this.conversationId);
+      const fileContext = await getUserUploadsForPrompt(this.userId, baseSandbox, { uploadIds: this.uploadIds });
+      if (fileContext) {
+        messageWithFileContext = message + '\n\n[System: The user has attached files for this request.]\n' + fileContext;
+      }
+    }
 
     // Recursive orchestration loop
-    let currentMessage = message;
+    let currentMessage = messageWithFileContext;
     let depth = 0;
     let routerResumed = routerInitialized; // Track if we should resume within this run
     const orchestrationStart = Date.now();
@@ -95,19 +114,44 @@ export class Orchestrator {
       }
       depth++;
 
-      // Step 1: Send to Router Agent
+      // Step 1: Send to Router Agent (with retry on transient failure)
       this.sseWriter({ type: 'agent_status', data: { agent: 'router', status: 'thinking' } });
 
-      const routerResult = await this.spawnAgent(
-        currentMessage,
-        routerSystemPrompt,
-        {
-          sessionId: routerSessionId,
-          isResume: routerResumed, // Resume if session was already initialized
-          role: 'router' as const,
-          skillId: 'router',
+      let routerResult: { text: string; inputTokens: number; outputTokens: number; model: string };
+      try {
+        routerResult = await this.spawnAgent(
+          currentMessage,
+          routerSystemPrompt,
+          {
+            sessionId: routerSessionId,
+            isResume: routerResumed,
+            role: 'router' as const,
+            skillId: 'router',
+          }
+        );
+      } catch (routerErr) {
+        // Retry once with a brand-new session on transient failure (exit code 1, "session already in use")
+        console.warn(`[Orchestrator] Router failed, retrying with fresh session:`, routerErr);
+        const freshSession = await this.resetAgentSession('router');
+        try {
+          routerResult = await this.spawnAgent(
+            currentMessage,
+            routerSystemPrompt,
+            {
+              sessionId: freshSession.sessionId,
+              isResume: false,
+              role: 'router' as const,
+              skillId: 'router',
+            }
+          );
+        } catch (retryErr) {
+          // Both attempts failed — bail out
+          const errMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+          allAssistantText += `\n\nRouter agent failed: ${errMsg}`;
+          this.sseWriter({ type: 'text', data: `\n\nRouter agent failed: ${errMsg}` });
+          break;
         }
-      );
+      }
       routerResumed = true; // After first call in this run, always resume
 
       if (this.aborted) break;
@@ -187,7 +231,7 @@ export class Orchestrator {
           .map((r, i) => `### Task ${i + 1} Result:\n${truncateResultForRouter(r)}`)
           .join('\n\n');
 
-        let instruction = 'Please summarize the results for the user. If more tasks are needed, dispatch them. Otherwise, provide a final response.';
+        let instruction = 'Please summarize the results for the user. If more tasks are needed, dispatch them. Otherwise, provide a final response.\n\nIMPORTANT: If the results contain fenced code blocks (```chart, ```mermaid, ```mindmap, ```map), you MUST include them VERBATIM in your response — do NOT describe them in text, do NOT omit them, do NOT paraphrase them. These code blocks render as interactive visualizations for the user.';
         if (hasFailures) {
           instruction = 'Some tasks failed or were skipped. Summarize what succeeded and what failed for the user. Do NOT retry failed tasks — just report the status clearly. Provide a final response.';
         }
@@ -278,10 +322,11 @@ export class Orchestrator {
     this.tasks.push(execution);
 
     // Save to DB
-    db.prepare(
+    await dbRun(
       `INSERT INTO task_executions (id, conversation_id, pipeline_id, skill_id, description, status, started_at)
-       VALUES (?, ?, ?, ?, ?, 'dispatched', datetime('now'))`
-    ).run(taskId, this.conversationId, pipelineId || null, task.skillId, task.description.substring(0, 500));
+       VALUES (?, ?, ?, ?, ?, 'dispatched', NOW())`,
+      taskId, this.conversationId, pipelineId || null, task.skillId, task.description.substring(0, 500)
+    );
 
     const taskStartTime = Date.now();
 
@@ -295,24 +340,28 @@ export class Orchestrator {
       const error = `Unknown skill: ${task.skillId}`;
       execution.status = 'failed';
       execution.result = error;
-      this.updateTaskInDb(taskId, 'failed', error);
+      await this.updateTaskInDb(taskId, 'failed', error);
       this.sseWriter({ type: 'task_failed', data: { taskId, skillId: task.skillId, error } });
       return `Error: ${error}`;
     }
 
     // Build system prompt for this skill (with user upload context)
-    const sandboxPath = getSandboxPath(this.userId, this.conversationId);
-    const uploadContext = getUserUploadsForPrompt(this.userId, sandboxPath, {
-      uploadIds: this.uploadIds.length > 0 ? this.uploadIds : undefined,
-      conversationId: this.conversationId,
-    });
+    // Use the actual agent CWD (including _agents/{skillId} subdirectory) for relative path calculation
+    const baseSandboxPath = getSandboxPath(this.userId, this.conversationId);
+    const agentCwd = path.join(baseSandboxPath, '_agents', task.skillId);
+    const uploadContext = task.skillId === 'rag-analyst'
+      ? await getConversationFilesForPrompt(this.userId, agentCwd, this.conversationId)
+      : await getUserUploadsForPrompt(this.userId, agentCwd, {
+          uploadIds: this.uploadIds.length > 0 ? this.uploadIds : undefined,
+          conversationId: this.conversationId,
+        });
     const systemPrompt = buildSystemPrompt(skill, config.generatorsDir, this.userLocale) + uploadContext;
 
     // Get or create session for this skill agent
-    const { sessionId: agentSessionId, initialized: agentInitialized } = this.getOrCreateAgentSession(task.skillId);
+    const { sessionId: agentSessionId, initialized: agentInitialized } = await this.getOrCreateAgentSession(task.skillId);
 
     execution.status = 'running';
-    this.updateTaskInDb(taskId, 'running');
+    await this.updateTaskInDb(taskId, 'running');
 
     try {
       // Stream agent activity to client under agent_stream
@@ -332,7 +381,7 @@ export class Orchestrator {
       execution.result = result.text;
       execution.tokenUsage = { inputTokens: result.inputTokens, outputTokens: result.outputTokens };
 
-      this.updateTaskInDb(taskId, 'completed', result.text.substring(0, 2000), result.inputTokens, result.outputTokens);
+      await this.updateTaskInDb(taskId, 'completed', result.text.substring(0, 2000), result.inputTokens, result.outputTokens);
 
       const elapsedMs = Date.now() - taskStartTime;
       this.sseWriter({
@@ -345,7 +394,7 @@ export class Orchestrator {
       const error = err instanceof Error ? err.message : String(err);
       execution.status = 'failed';
       execution.result = error;
-      this.updateTaskInDb(taskId, 'failed', error);
+      await this.updateTaskInDb(taskId, 'failed', error);
       this.sseWriter({ type: 'task_failed', data: { taskId, skillId: task.skillId, error } });
       return `Error executing ${task.skillId}: ${error}`;
     }
@@ -367,6 +416,9 @@ export class Orchestrator {
     taskId?: string,
   ): Promise<{ text: string; inputTokens: number; outputTokens: number; model: string }> {
     return new Promise((resolve, reject) => {
+      // Look up skill-level tool restrictions
+      const skillDef = opts.role !== 'router' ? getSkill(opts.skillId) : undefined;
+
       const { emitter, abort } = spawnClaude(message, systemPrompt, {
         userId: this.userId,
         conversationId: this.conversationId,
@@ -374,6 +426,8 @@ export class Orchestrator {
         isResume: opts.isResume,
         role: opts.role,
         skillId: opts.skillId,
+        customAllowedTools: skillDef?.allowedTools,
+        customDisallowedTools: skillDef?.disallowedTools,
         // Each agent gets its own subdirectory to avoid CLAUDE.md conflicts
         sandboxSubdir: `_agents/${opts.skillId}`,
       });
@@ -387,7 +441,11 @@ export class Orchestrator {
 
       // Per-skill timeout: text agents get short limits, generators get long ones
       const timeoutMs = SKILL_TIMEOUT[opts.skillId] ?? DEFAULT_TASK_TIMEOUT_MS;
+      let settled = false; // Guard against race between timeout and done event
+
       const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
         console.warn(`[Orchestrator] Agent ${opts.skillId} timed out after ${timeoutMs / 1000}s`);
         abort();
         // Remove abort fn
@@ -403,7 +461,7 @@ export class Orchestrator {
       }, timeoutMs);
 
       emitter.on('event', (event: SSEEvent) => {
-        if (this.aborted) return;
+        if (this.aborted || settled) return;
 
         // Forward worker agent's streaming events to client (prefixed with taskId)
         if (taskId) {
@@ -440,10 +498,11 @@ export class Orchestrator {
         if (event.type === 'session_id') {
           const sid = event.data as string;
           if (sid) {
-            // Update agent session in DB
-            db.prepare(
-              `UPDATE agent_sessions SET session_uuid = ?, initialized = 1 WHERE conversation_id = ? AND skill_id = ?`
-            ).run(sid, this.conversationId, opts.skillId);
+            // Update agent session in DB (fire and forget)
+            dbRun(
+              `UPDATE agent_sessions SET session_uuid = ?, initialized = 1 WHERE conversation_id = ? AND skill_id = ?`,
+              sid, this.conversationId, opts.skillId
+            ).catch(e => console.error('Failed to update agent session:', e));
           }
         }
 
@@ -454,6 +513,8 @@ export class Orchestrator {
 
         if (event.type === 'done') {
           clearTimeout(timeout);
+          if (settled) return; // Already resolved by timeout
+          settled = true;
           // Remove abort fn
           this.activeAbortFns = this.activeAbortFns.filter(fn => fn !== abort);
 
@@ -475,17 +536,38 @@ export class Orchestrator {
    * Get or create a persistent session ID for an agent in this conversation.
    * Returns sessionId and whether it was already initialized (used for resume logic).
    */
-  private getOrCreateAgentSession(skillId: string): { sessionId: string; initialized: boolean } {
-    const existing = db.prepare(
-      'SELECT session_uuid, initialized FROM agent_sessions WHERE conversation_id = ? AND skill_id = ?'
-    ).get(this.conversationId, skillId) as { session_uuid: string; initialized: number } | undefined;
+  private async getOrCreateAgentSession(skillId: string): Promise<{ sessionId: string; initialized: boolean }> {
+    const existing = await dbGet<{ session_uuid: string; initialized: number }>(
+      'SELECT session_uuid, initialized FROM agent_sessions WHERE conversation_id = ? AND skill_id = ?',
+      this.conversationId, skillId
+    );
 
     if (existing) return { sessionId: existing.session_uuid, initialized: existing.initialized === 1 };
 
     const sessionUuid = uuidv4();
-    db.prepare(
-      'INSERT INTO agent_sessions (id, conversation_id, skill_id, session_uuid) VALUES (?, ?, ?, ?)'
-    ).run(uuidv4(), this.conversationId, skillId, sessionUuid);
+    await dbRun(
+      'INSERT INTO agent_sessions (id, conversation_id, skill_id, session_uuid) VALUES (?, ?, ?, ?)',
+      uuidv4(), this.conversationId, skillId, sessionUuid
+    );
+
+    return { sessionId: sessionUuid, initialized: false };
+  }
+
+  /**
+   * Reset an agent's session — delete old record and create a fresh UUID.
+   * Used when --resume fails with "session already in use".
+   */
+  private async resetAgentSession(skillId: string): Promise<{ sessionId: string; initialized: boolean }> {
+    await dbRun(
+      'DELETE FROM agent_sessions WHERE conversation_id = ? AND skill_id = ?',
+      this.conversationId, skillId
+    );
+
+    const sessionUuid = uuidv4();
+    await dbRun(
+      'INSERT INTO agent_sessions (id, conversation_id, skill_id, session_uuid) VALUES (?, ?, ?, ?)',
+      uuidv4(), this.conversationId, skillId, sessionUuid
+    );
 
     return { sessionId: sessionUuid, initialized: false };
   }
@@ -493,21 +575,22 @@ export class Orchestrator {
   /**
    * Update task execution status in DB.
    */
-  private updateTaskInDb(
+  private async updateTaskInDb(
     taskId: string,
     status: string,
     resultSummary?: string,
     inputTokens?: number,
     outputTokens?: number,
-  ): void {
+  ): Promise<void> {
     if (status === 'completed' || status === 'failed') {
-      db.prepare(
+      await dbRun(
         `UPDATE task_executions
-         SET status = ?, result_summary = ?, input_tokens = ?, output_tokens = ?, completed_at = datetime('now')
-         WHERE id = ?`
-      ).run(status, resultSummary || null, inputTokens || 0, outputTokens || 0, taskId);
+         SET status = ?, result_summary = ?, input_tokens = ?, output_tokens = ?, completed_at = NOW()
+         WHERE id = ?`,
+        status, resultSummary || null, inputTokens || 0, outputTokens || 0, taskId
+      );
     } else {
-      db.prepare('UPDATE task_executions SET status = ? WHERE id = ?').run(status, taskId);
+      await dbRun('UPDATE task_executions SET status = ? WHERE id = ?', status, taskId);
     }
   }
 

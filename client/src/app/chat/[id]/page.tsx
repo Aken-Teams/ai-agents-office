@@ -1,16 +1,59 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import dynamic from 'next/dynamic';
 import { AuthProvider, useAuth } from '../../components/AuthProvider';
 import Navbar from '../../components/Navbar';
+import UploadAlertModal, { type UploadAlertItem } from '../../components/UploadAlertModal';
+import ShareModal from '../../components/ShareModal';
 import { I18nProvider, useTranslation } from '../../../i18n';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 
-// SSE streaming via Next.js rewrites proxy (relative path for production).
-const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { ssr: false });
+const ChatEChart = dynamic(() => import('../../components/charts/ChatEChart'), { ssr: false });
+const ChatVisual = dynamic(() => import('../../components/charts/ChatVisual'), { ssr: false });
+const ChatMermaid = dynamic(() => import('../../components/charts/ChatMermaid'), { ssr: false });
+const ChatMindmap = dynamic(() => import('../../components/charts/ChatMindmap'), { ssr: false });
+const ChatMap = dynamic(() => import('../../components/charts/ChatMap'), { ssr: false });
+
+// Convert mermaid mindmap syntax to markdown headings for markmap
+function convertMermaidMindmapToMarkdown(mermaidCode: string): string {
+  const lines = mermaidCode.split('\n');
+  const result: string[] = [];
+  let baseIndent = -1;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || /^mindmap\b/i.test(trimmed)) continue;
+
+    // Detect indentation level
+    const match = line.match(/^(\s*)/);
+    const indent = match ? match[1].length : 0;
+    if (baseIndent < 0) baseIndent = indent;
+
+    const level = Math.max(1, Math.floor((indent - baseIndent) / 2) + 1);
+
+    // Clean node text: remove root((..)), ((..)),(..),[[..]],..[..] etc.
+    let text = trimmed
+      .replace(/^root\(\((.+?)\)\)$/, '$1')
+      .replace(/^\(\((.+?)\)\)$/, '$1')
+      .replace(/^\((.+?)\)$/, '$1')
+      .replace(/^\[(.+?)\]$/, '$1')
+      .replace(/^"(.+?)"$/, '$1');
+
+    if (!text) continue;
+    result.push(`${'#'.repeat(Math.min(level, 6))} ${text}`);
+  }
+
+  return result.join('\n');
+}
+
+// Direct connection to Express for SSE streaming.
+// Next.js rewrites proxy buffers the entire response, preventing real-time updates.
+const SSE_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:12054';
 
 interface Message {
   id: string;
@@ -22,8 +65,11 @@ interface Message {
 interface GeneratedFile {
   id: string;
   filename: string;
+  file_path: string;
   file_type: string;
   file_size: number;
+  version?: number;
+  created_at?: string;
 }
 
 interface AttachedFile {
@@ -32,6 +78,7 @@ interface AttachedFile {
   fileType: string;
   fileSize: number;
   scanStatus: string;
+  scanDetail?: string;
   uploading?: boolean;
 }
 
@@ -50,22 +97,20 @@ interface AgentTask {
   error?: string;
 }
 
-const SKILL_LABELS: Record<string, string> = {
-  'pptx-gen': 'PowerPoint',
-  'docx-gen': 'Word',
-  'xlsx-gen': 'Excel',
-  'pdf-gen': 'PDF',
-  'research': 'Research',
-  'planner': 'Planner',
-  'reviewer': 'Reviewer',
-  'router': 'Router',
-};
+const SKILL_IDS = [
+  'pptx-gen', 'docx-gen', 'xlsx-gen', 'pdf-gen', 'slides-gen', 'webapp-gen',
+  'research', 'data-analyst', 'rag-analyst', 'planner', 'reviewer', 'router',
+] as const;
 
 const SKILL_ICONS: Record<string, string> = {
   'pptx-gen': 'present_to_all',
   'docx-gen': 'description',
   'xlsx-gen': 'table_chart',
   'pdf-gen': 'picture_as_pdf',
+  'slides-gen': 'slideshow',
+  'webapp-gen': 'dashboard',
+  'data-analyst': 'analytics',
+  'rag-analyst': 'search_insights',
 };
 
 /** Parse tool_use input JSON into a friendly, human-readable one-liner */
@@ -166,15 +211,108 @@ function parseToolInput(tool: string, rawInput: string | undefined, t: (key: any
   }
   if (baseTool === 'Glob') return `${t('chat.toolInfo.searchFiles')} ${input.pattern || ''}`.trim();
   if (baseTool === 'Grep') return `${t('chat.toolInfo.searchCode')} "${input.pattern || ''}"`;
+  if (baseTool === 'Task') {
+    // Show human-readable task description from Task tool input
+    try {
+      const parsed = JSON.parse(rawInput);
+      const desc = parsed?.description || parsed?.prompt || '';
+      if (desc) return desc.length > 80 ? desc.substring(0, 80) + '…' : desc;
+    } catch {
+      // Try regex extraction for truncated JSON
+      const descMatch = rawInput.match(/"(?:description|prompt)"\s*:\s*"((?:[^"\\]|\\.)*)(?:"|$)/);
+      if (descMatch) {
+        const desc = descMatch[1].replace(/\\"/g, '"');
+        return desc.length > 80 ? desc.substring(0, 80) + '…' : desc;
+      }
+    }
+    return t('chat.toolInfo.executeCommand');
+  }
+  if (baseTool === 'TodoWrite') {
+    // Parse the todos array and show human-readable task descriptions
+    try {
+      const parsed = JSON.parse(rawInput);
+      const todos: Array<{ content?: string; status?: string; activeForm?: string }> = parsed?.todos || [];
+      if (todos.length === 0) return t('chat.toolInfo.updateTask');
+      const inProgress = todos.find(td => td.status === 'in_progress');
+      if (inProgress) {
+        const label = inProgress.activeForm || inProgress.content || '';
+        return label.length > 80 ? label.substring(0, 80) + '…' : label;
+      }
+      // No in_progress: show count summary
+      const completed = todos.filter(td => td.status === 'completed').length;
+      const pending = todos.filter(td => td.status === 'pending').length;
+      return `${completed}/${todos.length} ${t('chat.toolInfo.tasksCompleted')}${pending > 0 ? ` · ${pending} ${t('chat.toolInfo.tasksPending')}` : ''}`;
+    } catch {
+      return t('chat.toolInfo.updateTask');
+    }
+  }
+  if (baseTool === 'Skill') {
+    // Show which skill is being invoked
+    const skillName = input.skill || '';
+    if (skillName) return `${t('chat.toolInfo.invokeSkill')} ${skillName}`;
+    return t('chat.toolInfo.invokeSkill');
+  }
+  if (baseTool === 'AskUserQuestion') {
+    // Show the question being asked
+    try {
+      const parsed = JSON.parse(rawInput);
+      const questions = parsed?.questions;
+      if (Array.isArray(questions) && questions.length > 0) {
+        const q = questions[0].question || '';
+        return q.length > 80 ? q.substring(0, 80) + '…' : q;
+      }
+    } catch {
+      const qMatch = rawInput.match(/"question"\s*:\s*"((?:[^"\\]|\\.)*)(?:"|$)/);
+      if (qMatch) {
+        const q = qMatch[1].replace(/\\"/g, '"');
+        return q.length > 80 ? q.substring(0, 80) + '…' : q;
+      }
+    }
+    return t('chat.toolInfo.askQuestion');
+  }
+  if (baseTool === 'EnterPlanMode' || baseTool === 'ExitPlanMode') {
+    return t('chat.toolInfo.planMode');
+  }
   // Fallback
   return rawInput.length > 80 ? rawInput.substring(0, 80) + '…' : rawInput;
+}
+
+/** Parse AskUserQuestion options from tool input JSON */
+function parseAskUserOptions(rawInput: string | undefined): { question: string; options: { label: string; description?: string }[] }[] | null {
+  if (!rawInput) return null;
+  try {
+    const parsed = JSON.parse(rawInput);
+    const questions = parsed?.questions;
+    if (!Array.isArray(questions) || questions.length === 0) return null;
+    return questions.map((q: any) => ({
+      question: q.question || '',
+      options: Array.isArray(q.options) ? q.options.map((o: any) => ({
+        label: o.label || '',
+        description: o.description || '',
+      })) : [],
+    })).filter((q: any) => q.options.length > 0);
+  } catch {
+    return null;
+  }
+}
+
+/** Parse [CHOICES]...[/CHOICES] blocks from assistant messages */
+function parseChoices(content: string): { text: string; choices: string[] } {
+  const match = content.match(/\[CHOICES\]\s*([\s\S]*?)\s*\[\/CHOICES\]/);
+  if (!match) return { text: content, choices: [] };
+  const choices = match[1]
+    .split('\n')
+    .map(line => line.replace(/^[-•*]\s*/, '').trim())
+    .filter(Boolean);
+  const text = content.replace(/\[CHOICES\][\s\S]*?\[\/CHOICES\]/, '').trim();
+  return { text, choices };
 }
 
 /** Get tool icon (material symbol name) and label */
 function getToolInfo(tool: string, t: (key: any, params?: Record<string, string | number>) => string): { icon: string; label: string } {
   if (tool.includes(':')) {
     const [agentId, baseTool] = tool.split(':');
-    const agentLabel = SKILL_LABELS[agentId] || agentId;
+    const agentLabel = t(`skill.${agentId}` as any) || agentId;
     const baseInfo = getToolInfo(baseTool, t);
     return { icon: baseInfo.icon, label: `${agentLabel}: ${baseInfo.label}` };
   }
@@ -187,7 +325,11 @@ function getToolInfo(tool: string, t: (key: any, params?: Record<string, string 
   if (tool === 'Grep') return { icon: 'search', label: t('chat.toolInfo.searchCode') };
   if (tool === 'WebSearch') return { icon: 'travel_explore', label: t('chat.toolInfo.webSearch') };
   if (tool === 'WebFetch') return { icon: 'language', label: t('chat.toolInfo.fetchWeb') };
+  if (tool === 'Task') return { icon: 'account_tree', label: t('chat.toolInfo.delegateTask') };
   if (tool === 'TodoWrite') return { icon: 'checklist', label: t('chat.toolInfo.updateTask') };
+  if (tool === 'Skill') return { icon: 'extension', label: t('chat.toolInfo.invokeSkill') };
+  if (tool === 'AskUserQuestion') return { icon: 'help', label: t('chat.toolInfo.askQuestion') };
+  if (tool === 'EnterPlanMode' || tool === 'ExitPlanMode') return { icon: 'architecture', label: t('chat.toolInfo.planMode') };
   if (tool === 'tool_result') return { icon: 'check_circle', label: t('chat.toolInfo.toolComplete') };
   return { icon: 'settings', label: tool };
 }
@@ -195,9 +337,14 @@ function getToolInfo(tool: string, t: (key: any, params?: Record<string, string 
 function getFileIcon(type: string): string {
   const icons: Record<string, string> = {
     docx: 'description', doc: 'description',
-    xlsx: 'table_chart', xls: 'table_chart',
+    xlsx: 'table_chart', xls: 'table_chart', csv: 'table_chart',
     pptx: 'present_to_all', ppt: 'present_to_all',
     pdf: 'picture_as_pdf',
+    html: 'slideshow', htm: 'slideshow',
+    png: 'image', jpg: 'image', jpeg: 'image', gif: 'image',
+    webp: 'image', bmp: 'image', svg: 'image', tiff: 'image', tif: 'image', ico: 'image',
+    json: 'data_object', xml: 'code', yaml: 'code', yml: 'code',
+    txt: 'text_snippet', md: 'text_snippet',
   };
   return icons[type] || 'attach_file';
 }
@@ -205,11 +352,110 @@ function getFileIcon(type: string): string {
 function getFileColor(type: string): string {
   const colors: Record<string, string> = {
     docx: 'text-tertiary', doc: 'text-tertiary',
-    xlsx: 'text-success', xls: 'text-success',
+    xlsx: 'text-success', xls: 'text-success', csv: 'text-success',
     pptx: 'text-warning', ppt: 'text-warning',
     pdf: 'text-error',
+    html: 'text-secondary', htm: 'text-secondary',
+    png: 'text-purple-400', jpg: 'text-purple-400', jpeg: 'text-purple-400',
+    gif: 'text-purple-400', webp: 'text-purple-400', bmp: 'text-purple-400',
+    svg: 'text-purple-400', tiff: 'text-purple-400', tif: 'text-purple-400', ico: 'text-purple-400',
+    json: 'text-amber-400', xml: 'text-amber-400', yaml: 'text-amber-400', yml: 'text-amber-400',
+    txt: 'text-on-surface-variant', md: 'text-on-surface-variant',
   };
   return colors[type] || 'text-primary';
+}
+
+function InlineHtmlPreview({ file, token, onFullscreen }: { file: GeneratedFile; token: string; onFullscreen: () => void }) {
+  const { t } = useTranslation();
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let url: string | null = null;
+    fetch(`/api/files/${file.id}/download`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.text() : Promise.reject('fetch failed'))
+      .then(html => {
+        url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+        setBlobUrl(url);
+      })
+      .catch(console.error);
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [file.id, token]);
+
+  if (!blobUrl) return (
+    <div className="h-[240px] md:h-[360px] flex items-center justify-center text-on-surface-variant text-sm">
+      <span className="material-symbols-outlined animate-spin mr-2">progress_activity</span>
+      {t('chart.preview.loading' as any)}
+    </div>
+  );
+
+  return (
+    <div className="relative group rounded-t-xl overflow-hidden">
+      <iframe
+        src={blobUrl}
+        sandbox="allow-scripts allow-same-origin"
+        scrolling="no"
+        className="w-full h-[240px] md:h-[360px] border-b border-outline-variant/10 overflow-hidden"
+        style={{ overflow: 'hidden' }}
+        title={file.filename}
+      />
+      <button
+        onClick={onFullscreen}
+        className="absolute top-3 right-3 p-2 rounded-lg bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-black/70"
+        title={t('chat.preview.fullscreen' as any)}
+      >
+        <span className="material-symbols-outlined text-lg">fullscreen</span>
+      </button>
+    </div>
+  );
+}
+
+/** Inline preview for office/PDF files — shows first page via /preview endpoint */
+const PREVIEWABLE_TYPES = new Set(['pdf', 'pptx', 'ppt', 'docx', 'doc', 'xlsx', 'xls']);
+
+function InlineFilePreview({ file, token }: { file: GeneratedFile; token: string }) {
+  const { t } = useTranslation();
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [contentType, setContentType] = useState<string>('');
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let url: string | null = null;
+    fetch(`/api/files/${file.id}/preview`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => {
+        if (!r.ok) throw new Error('preview failed');
+        const ct = r.headers.get('Content-Type') || '';
+        setContentType(ct);
+        return r.blob().then(blob => ({ blob, ct }));
+      })
+      .then(({ blob, ct }) => {
+        const type = ct.includes('pdf') ? 'application/pdf' : ct.includes('html') ? 'text/html' : ct;
+        url = URL.createObjectURL(new Blob([blob], { type }));
+        setBlobUrl(url);
+      })
+      .catch(() => setFailed(true));
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [file.id, token]);
+
+  if (failed) return null; // Silently skip — file card still shows below
+  if (!blobUrl) return (
+    <div className="h-[240px] md:h-[360px] flex items-center justify-center text-on-surface-variant text-sm rounded-t-xl bg-surface-container-lowest">
+      <span className="material-symbols-outlined animate-spin mr-2 text-base">progress_activity</span>
+      {t('chart.preview.loading' as any)}
+    </div>
+  );
+
+  const isPdf = contentType.includes('pdf');
+  return (
+    <div className="relative rounded-t-xl overflow-hidden bg-surface-container-lowest">
+      <iframe
+        src={isPdf ? `${blobUrl}#toolbar=0&navpanes=0&scrollbar=0` : blobUrl}
+        className="w-full h-[240px] md:h-[360px] border-b border-outline-variant/10"
+        scrolling="no"
+        title={file.filename}
+        sandbox={isPdf ? undefined : 'allow-same-origin'}
+        style={{ overflow: 'hidden', pointerEvents: 'none' }}
+      />
+    </div>
+  );
 }
 
 function ChatContent() {
@@ -227,6 +473,7 @@ function ChatContent() {
   const [thinkingText, setThinkingText] = useState('');
   const [tools, setTools] = useState<ToolActivity[]>([]);
   const [files, setFiles] = useState<GeneratedFile[]>([]);
+  const [latestFiles, setLatestFiles] = useState<GeneratedFile[]>([]);
   const [title, setTitle] = useState('');
   const [skillId, setSkillId] = useState('');
   const [elapsed, setElapsed] = useState(0);
@@ -234,10 +481,66 @@ function ChatContent() {
   const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [agentTasks, setAgentTasks] = useState<AgentTask[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [uploadAlerts, setUploadAlerts] = useState<UploadAlertItem[]>([]);
+  const [pendingTemplate, setPendingTemplate] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<GeneratedFile | null>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [totalUsage, setTotalUsage] = useState<{ inputTokens: number; outputTokens: number } | null>(null);
+  const [versionDropdown, setVersionDropdown] = useState<string | null>(null); // file ID whose dropdown is open
+  const [versionCache, setVersionCache] = useState<Record<string, GeneratedFile[]>>({});
+  const [mobileFilesOpen, setMobileFilesOpen] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sidebarMargin = useSidebarMargin();
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  // Custom ReactMarkdown components — intercept ```chart and ```mermaid blocks
+  // Memoized to prevent chart/map components from re-mounting on every render
+  const markdownComponents = useMemo(() => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    pre({ children, node, ...props }: any) {
+      // Check if this <pre> contains a chart or mermaid code block — unwrap to avoid <pre> wrapper
+      const codeEl = node?.children?.[0];
+      const cls = codeEl?.properties?.className?.[0] || '';
+      if (cls === 'language-chart' || cls === 'language-echart' || cls === 'language-visual' || cls === 'language-mermaid' || cls === 'language-mindmap' || cls === 'language-map') {
+        return <>{children}</>;
+      }
+      return <pre {...props}>{children}</pre>;
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    code({ className, children, ...props }: any) {
+      const text = String(children).trim();
+      if (className === 'language-chart') {
+        return <ChatChart rawJson={text} />;
+      }
+      if (className === 'language-echart') {
+        return <ChatEChart rawJson={text} />;
+      }
+      if (className === 'language-visual') {
+        return <ChatVisual rawHtml={text} />;
+      }
+      if (className === 'language-mermaid') {
+        // Auto-detect mermaid mindmap → convert to interactive markmap
+        if (/^\s*mindmap\b/i.test(text)) {
+          return <ChatMindmap code={convertMermaidMindmapToMarkdown(text)} />;
+        }
+        return <ChatMermaid code={text} />;
+      }
+      if (className === 'language-mindmap') {
+        return <ChatMindmap code={text} />;
+      }
+      if (className === 'language-map') {
+        return <ChatMap rawJson={text} />;
+      }
+      return <code className={className} {...props}>{children}</code>;
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    table({ children, ...props }: any) {
+      return <div className="table-wrapper"><table {...props}>{children}</table></div>;
+    },
+  }), []);
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
@@ -270,9 +573,48 @@ function ChatContent() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then(setFiles)
+      .then((allFiles: GeneratedFile[]) => {
+        setFiles(allFiles);
+        // Restore latestFiles: only the latest version of each filename from the most recent batch
+        if (allFiles.length > 0) {
+          const sorted = [...allFiles].sort((a, b) =>
+            new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+          );
+          const latestTime = new Date(sorted[0].created_at || 0).getTime();
+          const recentFiles = sorted.filter(f =>
+            latestTime - new Date(f.created_at || 0).getTime() < 60000
+          );
+          // Deduplicate by filename, keep highest version
+          const byName = new Map<string, GeneratedFile>();
+          for (const f of recentFiles) {
+            const existing = byName.get(f.filename);
+            if (!existing || (f.version || 1) > (existing.version || 1)) {
+              byName.set(f.filename, f);
+            }
+          }
+          setLatestFiles(Array.from(byName.values()));
+        }
+      })
       .catch(console.error);
   }, [token, conversationId]);
+
+  // Load persisted token usage
+  const fetchUsage = useCallback(() => {
+    if (!token || !conversationId) return;
+    fetch(`/api/conversations/${conversationId}/usage`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setTotalUsage(data); })
+      .catch(console.error);
+  }, [token, conversationId]);
+
+  useEffect(() => { fetchUsage(); }, [fetchUsage]);
+
+  // Refresh usage when streaming completes
+  useEffect(() => {
+    if (!streaming && lastUsage) fetchUsage();
+  }, [streaming, lastUsage, fetchUsage]);
 
   // Load conversation's uploaded files for the right sidebar display
   const [conversationUploads, setConversationUploads] = useState<AttachedFile[]>([]);
@@ -295,6 +637,19 @@ function ChatContent() {
       .catch(console.error);
   }, [token, conversationId]);
   useEffect(() => { reloadConversationUploads(); }, [reloadConversationUploads]);
+
+  // Close version dropdown on outside click
+  useEffect(() => {
+    if (!versionDropdown) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-version-dropdown]')) {
+        setVersionDropdown(null);
+      }
+    };
+    document.addEventListener('click', handler, true);
+    return () => document.removeEventListener('click', handler, true);
+  }, [versionDropdown]);
 
   // Auto-scroll
   useEffect(() => {
@@ -320,14 +675,27 @@ function ChatContent() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [streaming]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sendMessage = useCallback(async (directMessage?: string) => {
+  const sendMessage = useCallback(async (directMessage?: string, extraUploadIds?: string[]) => {
     const messageToSend = directMessage || input.trim();
     if (!messageToSend || streaming || !token) return;
 
-    const userMessage = messageToSend;
+    // Pre-create AudioContext on user gesture (required by browser autoplay policy)
+    if (!audioCtxRef.current) {
+      try { audioCtxRef.current = new AudioContext(); } catch { /* unsupported */ }
+    } else if (audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume().catch(() => {});
+    }
+
+    // Inject template instruction if a template was selected
+    const userMessage = pendingTemplate
+      ? `[${t('templates.instruction' as any)}：${pendingTemplate}]\n\n${messageToSend}`
+      : messageToSend;
+    if (pendingTemplate) setPendingTemplate(null);
     // Capture attached file names for display in the message
     const currentAttached = attachedFiles.filter(f => !f.uploading && f.scanStatus !== 'rejected');
-    const currentUploadIds = currentAttached.map(f => f.id);
+    const currentUploadIds = extraUploadIds && extraUploadIds.length > 0
+      ? extraUploadIds
+      : currentAttached.map(f => f.id);
     const attachmentNote = currentAttached.length > 0
       ? `\n\n📎 ${currentAttached.map(f => f.originalName).join(', ')}`
       : '';
@@ -347,6 +715,7 @@ function ChatContent() {
     setPanelCollapsed(false);
     setAgentTasks([]);
     setAttachedFiles([]);
+    setLatestFiles([]);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -431,7 +800,33 @@ function ChatContent() {
             }
             if (event.type === 'file_generated') {
               const newFiles = event.data as GeneratedFile[];
-              setFiles(prev => [...prev, ...newFiles]);
+              // Track latest generation for inline preview (deduplicate by filename, keep latest version)
+              setLatestFiles(prev => {
+                const updated = [...prev];
+                for (const nf of newFiles) {
+                  const existingIdx = updated.findIndex(f => f.filename === nf.filename);
+                  if (existingIdx >= 0) {
+                    updated[existingIdx] = nf;
+                  } else {
+                    updated.push(nf);
+                  }
+                }
+                return updated;
+              });
+              // Deduplicate: replace older versions of same file_path, keep latest
+              setFiles(prev => {
+                const updated = [...prev];
+                for (const nf of newFiles) {
+                  const existingIdx = updated.findIndex(f => f.file_path === nf.file_path);
+                  if (existingIdx >= 0) {
+                    // Replace old version with new version
+                    updated[existingIdx] = nf;
+                  } else {
+                    updated.push(nf);
+                  }
+                }
+                return updated;
+              });
             }
             if (event.type === 'task_dispatched') {
               const task = event.data as { taskId: string; skillId: string; description: string };
@@ -492,7 +887,7 @@ function ChatContent() {
             }
             if (event.type === 'error') {
               const errMsg = typeof event.data === 'string' ? event.data : 'Unknown error';
-              fullText += `\n\n> **Error:** ${errMsg}`;
+              fullText += `\n\n> **${t('chat.error.prefix')}:** ${errMsg}`;
               setStreamText(fullText);
             }
             if (event.type === 'done') {
@@ -517,8 +912,37 @@ function ChatContent() {
     } finally {
       setStreaming(false);
       abortRef.current = null;
+      // Play notification sound when task completes (uses pre-created AudioContext)
+      try {
+        const ctx = audioCtxRef.current;
+        if (ctx && ctx.state === 'running') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.setValueAtTime(880, ctx.currentTime);
+          osc.frequency.setValueAtTime(1047, ctx.currentTime + 0.1);
+          gain.gain.setValueAtTime(0.15, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.3);
+        }
+      } catch { /* audio not available */ }
+      // Reload sidebar uploads — dashboard uploads now linked to this conversation
+      reloadConversationUploads();
     }
-  }, [input, streaming, token, conversationId, skillId, attachedFiles, t]);
+  }, [input, streaming, token, conversationId, skillId, attachedFiles, pendingTemplate, t, reloadConversationUploads]);
+
+  // Load pending template from sessionStorage (set by Navbar modal)
+  useEffect(() => {
+    if (!conversationLoaded) return;
+    const tplKey = `pending_template_${conversationId}`;
+    const tpl = sessionStorage.getItem(tplKey);
+    if (tpl) {
+      sessionStorage.removeItem(tplKey);
+      setPendingTemplate(tpl);
+    }
+  }, [conversationLoaded, conversationId]);
 
   // Auto-send pending message from dashboard smart input
   useEffect(() => {
@@ -528,6 +952,19 @@ function ChatContent() {
     if (pending) {
       sessionStorage.removeItem(key);
       pendingHandled.current = true;
+
+      // Restore uploaded files from dashboard smart input
+      const uploadsKey = `pending_uploads_${conversationId}`;
+      const pendingUploads = sessionStorage.getItem(uploadsKey);
+      if (pendingUploads) {
+        sessionStorage.removeItem(uploadsKey);
+        try {
+          const files = JSON.parse(pendingUploads) as Array<{ id: string; name: string }>;
+          const uploadIds = files.map(f => f.id);
+          sendMessage(pending, uploadIds);
+          return;
+        } catch { /* ignore parse errors */ }
+      }
       sendMessage(pending);
     }
   }, [conversationLoaded, token, conversationId, streaming, sendMessage]);
@@ -568,7 +1005,11 @@ function ChatContent() {
       const data = await resp.json();
 
       if (!resp.ok) {
-        alert(data.error || t('chat.error.uploadFailed'));
+        setUploadAlerts([{
+          fileName: '',
+          status: data.code === 'UPLOAD_QUOTA_EXCEEDED' ? 'quota' : 'error',
+          detail: data.error || t('chat.error.uploadFailed'),
+        }]);
         setAttachedFiles(prev => prev.filter(f => !f.uploading));
         return;
       }
@@ -580,6 +1021,7 @@ function ChatContent() {
         fileType: u.fileType,
         fileSize: u.fileSize,
         scanStatus: u.scanStatus,
+        scanDetail: u.scanDetail,
         uploading: false,
       }));
 
@@ -592,15 +1034,21 @@ function ChatContent() {
       // Refresh sidebar upload list
       reloadConversationUploads();
 
-      // Notify about rejected files
-      const rejected = uploaded.filter(u => u.scanStatus === 'rejected');
-      if (rejected.length > 0) {
-        alert(t('chat.error.scanBlocked', { count: rejected.length }));
+      // Show modal for rejected/suspicious files with details
+      const alertItems: UploadAlertItem[] = uploaded
+        .filter(u => u.scanStatus === 'rejected' || u.scanStatus === 'suspicious')
+        .map(u => ({
+          fileName: u.originalName,
+          status: u.scanStatus as 'rejected' | 'suspicious',
+          detail: u.scanDetail || '',
+        }));
+      if (alertItems.length > 0) {
+        setUploadAlerts(alertItems);
       }
     } catch (err) {
       console.error('Upload error:', err);
       setAttachedFiles(prev => prev.filter(f => !f.uploading));
-      alert(t('chat.error.uploadRetry'));
+      setUploadAlerts([{ fileName: '', status: 'error', detail: t('chat.error.uploadRetry') }]);
     }
   }
 
@@ -635,9 +1083,67 @@ function ChatContent() {
     }
   }
 
+  async function openPreview(file: GeneratedFile) {
+    try {
+      const res = await fetch(`/api/files/${file.id}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Preview fetch failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(
+        file.file_type === 'html' ? new Blob([await blob.text()], { type: 'text/html' }) : blob
+      );
+      setPreviewBlobUrl(url);
+      setPreviewFile(file);
+    } catch (err) {
+      console.error('Preview error:', err);
+    }
+  }
+
+  function closePreview() {
+    if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
+    setPreviewBlobUrl(null);
+    setPreviewFile(null);
+  }
+
+  async function toggleVersionDropdown(dropdownKey: string) {
+    if (versionDropdown === dropdownKey) {
+      setVersionDropdown(null);
+      return;
+    }
+    setVersionDropdown(dropdownKey);
+    // Extract real file ID (strip "preview-" or "sidebar-" prefix if present)
+    const realFileId = dropdownKey.replace(/^(preview|sidebar|mobile)-/, '');
+    if (!versionCache[realFileId]) {
+      try {
+        const res = await fetch(`/api/files/${realFileId}/versions`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const versions = await res.json() as GeneratedFile[];
+          setVersionCache(prev => ({ ...prev, [realFileId]: versions }));
+        }
+      } catch (err) {
+        console.error('Fetch versions error:', err);
+      }
+    }
+  }
+
+  function switchToVersion(versionFile: GeneratedFile) {
+    // Replace the file in our files list with this version
+    setFiles(prev => prev.map(f =>
+      f.filename === versionFile.filename ? versionFile : f
+    ));
+    setVersionDropdown(null);
+    // If previewing, switch preview too
+    if (previewFile && previewFile.filename === versionFile.filename) {
+      openPreview(versionFile);
+    }
+  }
+
   function formatElapsed(s: number): string {
-    if (s < 60) return `${s}s`;
-    return `${Math.floor(s / 60)}m ${s % 60}s`;
+    if (s < 60) return t('chat.time.seconds', { n: s } as any);
+    return t('chat.time.minutes', { m: Math.floor(s / 60), s: s % 60 } as any);
   }
 
   if (isLoading || !user) return null;
@@ -668,70 +1174,124 @@ function ChatContent() {
     <div className="h-screen bg-surface-container-lowest overflow-hidden">
       <Navbar />
 
-      <div className={`${sidebarMargin} h-screen flex overflow-hidden transition-all duration-300`}>
+      {/* Upload Security Alert Modal */}
+      {uploadAlerts.length > 0 && (
+        <UploadAlertModal items={uploadAlerts} onClose={() => setUploadAlerts([])} />
+      )}
+
+      {/* Share Modal */}
+      {showShareModal && conversationId && (
+        <ShareModal conversationId={conversationId} onClose={() => setShowShareModal(false)} />
+      )}
+
+      <div className={`${sidebarMargin} h-[100svh] md:h-screen flex overflow-hidden transition-all duration-300`}>
         {/* === Central Chat Area === */}
-        <section className="flex flex-col flex-1 min-h-0">
+        <section className="flex flex-col flex-1 min-h-0 min-w-0">
           {/* Title Bar */}
-          <header className="flex items-center gap-4 px-8 h-14 bg-surface/80 backdrop-blur-xl shrink-0 border-b border-outline-variant/10">
+          <header className="flex items-center gap-2 md:gap-4 px-3 md:px-8 h-11 md:h-14 bg-surface/80 backdrop-blur-xl shrink-0 border-b border-outline-variant/10">
             <button
               onClick={() => router.push('/conversations')}
-              className="text-on-surface-variant hover:text-on-surface transition-colors bg-transparent cursor-pointer"
+              className="text-on-surface-variant hover:text-on-surface active:text-on-surface transition-colors bg-transparent cursor-pointer p-1"
             >
               <span className="material-symbols-outlined text-sm">arrow_back</span>
             </button>
-            <h2 className="text-sm font-headline font-bold text-on-surface truncate">{title}</h2>
+            <h2 className="text-xs md:text-sm font-headline font-bold text-on-surface truncate">{title}</h2>
             {skillId && (
-              <span className="text-sm px-2 py-0.5 bg-primary/10 text-primary rounded font-bold tracking-wider uppercase shrink-0">
+              <span className="text-[10px] md:text-sm px-1.5 md:px-2 py-0.5 bg-primary/10 text-primary rounded font-bold tracking-wider uppercase shrink-0">
                 {skillId.replace('-gen', '')}
               </span>
             )}
+            <span className="flex-1" />
+            {/* Share button */}
+            <button
+              onClick={() => setShowShareModal(true)}
+              className="p-1 text-on-surface-variant hover:text-primary active:text-primary transition-colors bg-transparent cursor-pointer shrink-0"
+              title={t('share.button' as any)}
+            >
+              <span className="material-symbols-outlined text-base">share</span>
+            </button>
+            {/* Mobile: file drawer toggle */}
+            {(files.length > 0 || conversationUploads.length > 0) && (
+              <button
+                onClick={() => setMobileFilesOpen(true)}
+                className="lg:hidden relative p-1 text-on-surface-variant active:text-primary transition-colors bg-transparent cursor-pointer shrink-0"
+              >
+                <span className="material-symbols-outlined text-base">folder_open</span>
+                {files.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-primary text-on-primary text-[9px] font-bold rounded-full flex items-center justify-center">
+                    {files.length}
+                  </span>
+                )}
+              </button>
+            )}
             {streaming && (
-              <span className="ml-auto text-sm px-2 py-0.5 bg-surface-container-high text-primary rounded font-mono shrink-0">
+              <span className="text-xs md:text-sm px-1.5 md:px-2 py-0.5 bg-surface-container-high text-primary rounded font-mono shrink-0">
                 {formatElapsed(elapsed)}
               </span>
             )}
           </header>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-8 py-8 space-y-8">
-            {messages.map(msg => {
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 md:px-8 py-4 md:py-8 space-y-4 md:space-y-8">
+            {messages.map((msg, idx) => {
               const sources = msg.role === 'assistant' ? extractSources(msg.content) : [];
               return (
-                <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : 'flex gap-4'}>
+                <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : 'flex gap-2 md:gap-4'}>
                   {msg.role === 'assistant' && (
-                    <div className="w-9 h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
-                      <span className="material-symbols-outlined text-primary text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
+                    <div className="w-7 h-7 md:w-9 md:h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
+                      <span className="material-symbols-outlined text-primary text-xs md:text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
                     </div>
                   )}
                   <div className={
                     msg.role === 'user'
-                      ? 'max-w-[70%] bg-surface-container px-5 py-4 rounded-xl rounded-tr-sm text-on-surface shadow-lg'
-                      : 'max-w-[85%]'
+                      ? 'max-w-[85%] md:max-w-[70%] bg-surface-container px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tr-sm text-on-surface shadow-lg'
+                      : 'max-w-[90%] md:max-w-[85%] min-w-0'
                   }>
                     {msg.role === 'user' ? (
                       <>
                         <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                        <span className="block mt-2 text-sm text-outline">
+                        <span className="block mt-1.5 md:mt-2 text-xs md:text-sm text-outline">
                           {new Date(msg.created_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </>
                     ) : (
-                      <div className="bg-surface-container-low px-5 py-4 rounded-xl rounded-tl-sm border border-outline-variant/10">
-                        <div className="chat-markdown text-sm leading-relaxed text-on-surface-variant">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                        </div>
+                      <div className="bg-surface-container-low px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tl-sm border border-outline-variant/10 overflow-hidden">
+                        {(() => {
+                          const { text: msgText, choices } = parseChoices(msg.content);
+                          const isLatestMsg = idx === messages.length - 1;
+                          return (
+                            <>
+                              <div className="chat-markdown text-sm leading-relaxed text-on-surface-variant">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{msgText}</ReactMarkdown>
+                              </div>
+                              {choices.length > 0 && isLatestMsg && !streaming && (
+                                <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-outline-variant/10">
+                                  {choices.map((choice, ci) => (
+                                    <button
+                                      key={ci}
+                                      onClick={() => sendMessage(choice)}
+                                      className="px-3.5 py-2 text-sm rounded-lg border border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 hover:border-primary/50 active:bg-primary/20 transition-colors cursor-pointer"
+                                    >
+                                      {choice}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
                         {sources.length > 0 && (
-                          <details className="mt-3 border-t border-outline-variant/10 pt-2">
-                            <summary className="text-sm text-primary cursor-pointer font-bold uppercase tracking-wider">
+                          <details className="mt-2 md:mt-3 border-t border-outline-variant/10 pt-2">
+                            <summary className="text-xs md:text-sm text-primary cursor-pointer font-bold uppercase tracking-wider">
                               {t('chat.sources', { count: sources.length })}
                             </summary>
                             <div className="flex flex-col gap-1.5 mt-2">
                               {sources.map((src, i) => (
                                 <a key={i} href={src.url} target="_blank" rel="noopener noreferrer"
-                                  className="flex items-center gap-2 px-3 py-2 bg-surface-container rounded text-sm hover:bg-surface-container-high transition-colors no-underline">
-                                  <span className="material-symbols-outlined text-primary text-sm">link</span>
+                                  className="flex items-center gap-2 px-2 md:px-3 py-1.5 md:py-2 bg-surface-container rounded text-xs md:text-sm active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors no-underline">
+                                  <span className="material-symbols-outlined text-primary text-xs md:text-sm">link</span>
                                   <span className="text-on-surface truncate flex-1">{src.title}</span>
-                                  <span className="text-outline text-sm shrink-0">{new URL(src.url).hostname}</span>
+                                  <span className="text-outline text-xs md:text-sm shrink-0 hidden md:inline">{new URL(src.url).hostname}</span>
                                 </a>
                               ))}
                             </div>
@@ -746,14 +1306,14 @@ function ChatContent() {
 
             {/* Streaming text preview */}
             {streamText && streamText.trim() && (
-              <div className="flex gap-4">
-                <div className="w-9 h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
-                  <span className="material-symbols-outlined text-primary text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
+              <div className="flex gap-2 md:gap-4">
+                <div className="w-7 h-7 md:w-9 md:h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
+                  <span className="material-symbols-outlined text-primary text-xs md:text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
                 </div>
-                <div className="max-w-[85%]">
-                  <div className="bg-surface-container-low px-5 py-4 rounded-xl rounded-tl-sm border border-primary/20 border-dashed">
+                <div className="max-w-[90%] md:max-w-[85%] min-w-0">
+                  <div className="bg-surface-container-low px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tl-sm border border-primary/20 border-dashed overflow-hidden">
                     <div className="chat-markdown text-sm leading-relaxed text-on-surface-variant">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamText}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{streamText}</ReactMarkdown>
                       <span className="inline-block w-0.5 h-4 bg-primary ml-0.5 align-text-bottom animate-pulse" />
                     </div>
                   </div>
@@ -763,9 +1323,9 @@ function ChatContent() {
 
             {/* Processing Panel */}
             {(hasActivity || showCompletedPanel) && (
-              <div className="bg-surface-container-low rounded-lg border-l-2 border-primary/40 max-w-[85%] overflow-hidden">
+              <div className="bg-surface-container-low rounded-lg border-l-2 border-primary/40 max-w-full md:max-w-[85%] overflow-hidden">
                 <div
-                  className="flex items-center gap-3 px-4 py-3 bg-surface-container cursor-pointer select-none hover:bg-surface-container-high transition-colors"
+                  className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-3 bg-surface-container cursor-pointer select-none active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors"
                   onClick={() => setPanelCollapsed(c => !c)}
                   role="button"
                   tabIndex={0}
@@ -774,16 +1334,16 @@ function ChatContent() {
                     ? <span className="w-2 h-2 rounded-full bg-primary animate-pulse shrink-0" />
                     : <span className="material-symbols-outlined text-sm text-green-400">check_circle</span>
                   }
-                  <span className="text-sm font-headline font-bold text-on-surface uppercase tracking-wider flex-1">
+                  <span className="text-xs md:text-sm font-headline font-bold text-on-surface uppercase tracking-wider flex-1 truncate">
                     {streaming ? t('chat.processing.title') : t('chat.processing.completed')}
                     {panelCollapsed && tools.length > 0 && (
-                      <span className="font-normal text-on-surface-variant ml-2">
+                      <span className="font-normal text-on-surface-variant ml-1.5 md:ml-2">
                         {completedTools}/{tools.length}
                         {webSearchTools.length > 0 && ` · ${webSearchTools.length}`}
                       </span>
                     )}
                   </span>
-                  <span className="text-sm font-mono text-primary">{formatElapsed(elapsed)}</span>
+                  <span className="text-xs md:text-sm font-mono text-primary shrink-0">{formatElapsed(elapsed)}</span>
                   <span className={`material-symbols-outlined text-sm text-on-surface-variant transition-transform ${panelCollapsed ? '-rotate-90' : ''}`}>
                     expand_more
                   </span>
@@ -791,7 +1351,7 @@ function ChatContent() {
 
                 {!panelCollapsed && (
                   <>
-                    <div className="px-4 py-2 space-y-1 font-mono text-sm">
+                    <div className="px-3 md:px-4 py-2 space-y-1 font-mono text-xs md:text-sm">
                       {/* Connected */}
                       <div className="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant">
                         <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
@@ -824,18 +1384,44 @@ function ChatContent() {
                         const info = getToolInfo(tool.tool, t);
                         const detail = parseToolInput(tool.tool, tool.input, t);
                         const isDone = tool.status === 'completed';
+                        const baseTool = tool.tool.includes(':') ? tool.tool.split(':')[1] : tool.tool;
+                        const askOptions = baseTool === 'AskUserQuestion' ? parseAskUserOptions(tool.input) : null;
                         return (
-                          <div key={tool.id || i} className={`flex items-center gap-2 px-2 py-1.5 rounded ${isDone ? 'text-outline' : 'text-on-surface-variant bg-surface-container/50'}`}>
-                            {isDone
-                              ? <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
-                              : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
-                            }
-                            <span className="material-symbols-outlined text-sm">{info.icon}</span>
-                            <span className={isDone ? 'line-through opacity-60' : ''}>{info.label}</span>
-                            {detail && (
-                              <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[400px]">
-                                {detail}
-                              </span>
+                          <div key={tool.id || i}>
+                            <div className={`flex items-center gap-2 px-2 py-1.5 rounded ${isDone ? 'text-outline' : 'text-on-surface-variant bg-surface-container/50'}`}>
+                              {isDone
+                                ? <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
+                                : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
+                              }
+                              <span className="material-symbols-outlined text-sm">{info.icon}</span>
+                              <span className={isDone ? 'line-through opacity-60' : ''}>{info.label}</span>
+                              {detail && (
+                                <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[150px] md:max-w-[400px]">
+                                  {detail}
+                                </span>
+                              )}
+                            </div>
+                            {/* AskUserQuestion interactive options */}
+                            {askOptions && !streaming && (
+                              <div className="mt-2 ml-6 space-y-3">
+                                {askOptions.map((q, qi) => (
+                                  <div key={qi} className="space-y-2">
+                                    <p className="text-sm text-on-surface-variant font-medium">{q.question}</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {q.options.map((opt, oi) => (
+                                        <button
+                                          key={oi}
+                                          onClick={() => sendMessage(opt.label)}
+                                          className="px-3 py-1.5 text-sm rounded-lg border border-primary/30 bg-primary/5 text-primary hover:bg-primary/15 hover:border-primary/50 transition-colors cursor-pointer"
+                                          title={opt.description}
+                                        >
+                                          {opt.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
                             )}
                           </div>
                         );
@@ -858,10 +1444,10 @@ function ChatContent() {
                             : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
                           }
                           <span className="material-symbols-outlined text-sm">smart_toy</span>
-                          <span>{SKILL_LABELS[task.skillId] || task.skillId}</span>
-                          <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[400px]">
+                          <span>{t(`skill.${task.skillId}` as any) || task.skillId}</span>
+                          <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[150px] md:max-w-[400px]">
                             {task.status === 'failed'
-                              ? (task.error || 'Timed out').substring(0, 50)
+                              ? (task.error || t('chat.error.timedOut')).substring(0, 50)
                               : task.description.substring(0, 60)}
                           </span>
                         </div>
@@ -886,12 +1472,12 @@ function ChatContent() {
 
                     {/* Token usage */}
                     {lastUsage && !streaming && (
-                      <div className="flex items-center justify-between px-4 py-2 border-t border-outline-variant/10 text-sm text-outline">
-                        <span>Tokens: {lastUsage.inputTokens.toLocaleString()} in / {lastUsage.outputTokens.toLocaleString()} out
-                          <span className="ml-2 text-primary/70">${(((lastUsage.inputTokens / 1_000_000) * 3 + (lastUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)}</span>
+                      <div className="flex items-center justify-between px-3 md:px-4 py-2 border-t border-outline-variant/10 text-xs md:text-sm text-outline gap-2">
+                        <span className="truncate">{t('chat.token.usage', { input: lastUsage.inputTokens.toLocaleString(), output: lastUsage.outputTokens.toLocaleString() } as any)}
+                          <span className="ml-1 md:ml-2 text-primary/70">${(((lastUsage.inputTokens / 1_000_000) * 3 + (lastUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)}</span>
                         </span>
                         {lastUsage.model && (
-                          <span className="px-2 py-0.5 bg-primary/10 text-primary rounded text-sm">
+                          <span className="px-1.5 md:px-2 py-0.5 bg-primary/10 text-primary rounded text-xs md:text-sm shrink-0">
                             {lastUsage.model.split('-').slice(0, 2).join('-')}
                           </span>
                         )}
@@ -914,19 +1500,226 @@ function ChatContent() {
               </div>
             )}
 
+            {/* Inline File Preview — only show files from latest generation */}
+            {latestFiles.length > 0 && !streaming && (
+              <div className="max-w-full md:max-w-[85%] space-y-3 ml-0 md:ml-13">
+                {latestFiles.map(file => (
+                  <div key={file.id} className="bg-surface-container-low rounded-xl border border-outline-variant/10 overflow-visible">
+                    {/* HTML slides — iframe preview */}
+                    {file.file_type === 'html' && (
+                      <InlineHtmlPreview file={file} token={token!} onFullscreen={() => openPreview(file)} />
+                    )}
+                    {/* Office/PDF — first page preview */}
+                    {PREVIEWABLE_TYPES.has(file.file_type) && (
+                      <InlineFilePreview file={file} token={token!} />
+                    )}
+                    {/* Other file types — card only */}
+                    <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-3">
+                      <div className={`w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                        file.file_type === 'html' ? 'bg-secondary/10' :
+                        file.file_type === 'pdf' ? 'bg-error/10' :
+                        file.file_type === 'pptx' ? 'bg-warning/10' :
+                        file.file_type === 'xlsx' ? 'bg-success/10' :
+                        'bg-tertiary/10'
+                      }`}>
+                        <span className={`material-symbols-outlined ${getFileColor(file.file_type)} text-base md:text-xl`}>
+                          {getFileIcon(file.file_type)}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs md:text-sm font-medium text-on-surface block truncate">{file.filename}</span>
+                        <span className="text-xs md:text-sm text-outline">
+                          {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-0.5 md:gap-1">
+                        {/* Version selector */}
+                        <div className="relative" data-version-dropdown>
+                          <button
+                            onClick={() => toggleVersionDropdown(file.id)}
+                            className={`flex items-center gap-0.5 md:gap-1 px-1.5 md:px-2 py-1 rounded-lg text-[10px] md:text-xs font-bold transition-colors cursor-pointer ${
+                              versionDropdown === file.id
+                                ? 'bg-primary/20 text-primary'
+                                : 'bg-primary/10 text-primary active:bg-primary/20 md:hover:bg-primary/20'
+                            }`}
+                            title={t('chat.preview.versions' as any)}
+                          >
+                            <span>v{file.version || 1}</span>
+                            <span className="material-symbols-outlined text-[10px] md:text-xs">expand_more</span>
+                          </button>
+                          {versionDropdown === file.id && versionCache[file.id] && (
+                            <div className="absolute right-0 top-full mt-2 z-50 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl min-w-[200px] md:min-w-[260px] py-1.5 max-h-[7.5rem] overflow-y-auto">
+                              {versionCache[file.id].map((ver, idx) => (
+                                <button
+                                  key={ver.id}
+                                  onClick={() => switchToVersion(ver)}
+                                  className={`w-full flex items-center gap-2 md:gap-3 px-2.5 md:px-3 py-1.5 md:py-2 text-left active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors cursor-pointer ${
+                                    ver.id === file.id ? 'bg-primary/10' : ''
+                                  }`}
+                                >
+                                  <span className={`text-[10px] md:text-xs font-bold px-1 md:px-1.5 py-0.5 rounded ${
+                                    ver.id === file.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
+                                  }`}>
+                                    v{ver.version || 1}
+                                  </span>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-[10px] md:text-xs text-on-surface-variant block">
+                                      {formatSize(ver.file_size)}
+                                      {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
+                                    </span>
+                                    <span className="text-[10px] md:text-xs text-outline block">
+                                      {new Date(ver.created_at || '').toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </div>
+                                  {ver.id === file.id && (
+                                    <span className="material-symbols-outlined text-primary text-xs md:text-sm">check</span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        {file.file_type === 'html' && (
+                          <button
+                            onClick={() => openPreview(file)}
+                            className="p-1.5 md:p-2 rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-primary md:hover:text-primary transition-colors cursor-pointer"
+                            title={t('chat.preview.fullscreen' as any)}
+                          >
+                            <span className="material-symbols-outlined text-base md:text-lg">fullscreen</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDownload(file.id, file.filename)}
+                          className="p-1.5 md:p-2 rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-primary md:hover:text-primary transition-colors cursor-pointer"
+                          title={t('chat.preview.download' as any)}
+                        >
+                          <span className="material-symbols-outlined text-base md:text-lg">download</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Fullscreen Preview Modal */}
+          {previewFile && previewBlobUrl && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col">
+              <div className="flex items-center justify-between px-3 md:px-6 py-2 md:py-3 bg-surface/90 border-b border-outline-variant/20 gap-2">
+                <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+                  <span className={`material-symbols-outlined ${getFileColor(previewFile.file_type)} text-base md:text-xl shrink-0`}>
+                    {getFileIcon(previewFile.file_type)}
+                  </span>
+                  <span className="text-xs md:text-base text-on-surface font-medium truncate">{previewFile.filename}</span>
+                  <span className="text-xs md:text-sm text-outline shrink-0 hidden md:inline">{formatSize(previewFile.file_size)}</span>
+                  {/* Version selector in fullscreen */}
+                  <div className="relative" data-version-dropdown>
+                    <button
+                      onClick={() => toggleVersionDropdown(`preview-${previewFile.id}`)}
+                      className={`flex items-center gap-0.5 md:gap-1 px-1.5 md:px-2.5 py-1 rounded-lg text-[10px] md:text-xs font-bold transition-colors cursor-pointer ${
+                        versionDropdown === `preview-${previewFile.id}`
+                          ? 'bg-primary/30 text-primary'
+                          : 'bg-primary/15 text-primary active:bg-primary/25 md:hover:bg-primary/25'
+                      }`}
+                    >
+                      <span>v{previewFile.version || 1}</span>
+                      <span className="material-symbols-outlined text-[10px] md:text-xs">expand_more</span>
+                    </button>
+                    {versionDropdown === `preview-${previewFile.id}` && (versionCache[previewFile.id] || versionCache[`preview-${previewFile.id}`]) && (
+                      <div className="absolute left-0 top-full mt-2 z-50 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl min-w-[180px] md:min-w-[220px] py-1.5 max-h-[7.5rem] overflow-y-auto">
+                        {(versionCache[previewFile.id] || []).map((ver, idx) => (
+                          <button
+                            key={ver.id}
+                            onClick={() => { switchToVersion(ver); openPreview(ver); }}
+                            className={`w-full flex items-center gap-2 md:gap-3 px-2.5 md:px-3 py-1.5 md:py-2 text-left active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors cursor-pointer ${
+                              ver.id === previewFile.id ? 'bg-primary/10' : ''
+                            }`}
+                          >
+                            <span className={`text-[10px] md:text-xs font-bold px-1 md:px-1.5 py-0.5 rounded ${
+                              ver.id === previewFile.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
+                            }`}>
+                              v{ver.version || 1}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-[10px] md:text-xs text-on-surface-variant block">
+                                {formatSize(ver.file_size)}
+                                {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
+                              </span>
+                              <span className="text-[10px] md:text-xs text-outline block">
+                                {new Date(ver.created_at || '').toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            {ver.id === previewFile.id && (
+                              <span className="material-symbols-outlined text-primary text-xs md:text-sm">check</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 md:gap-2 shrink-0">
+                  <button
+                    onClick={() => handleDownload(previewFile.id, previewFile.filename)}
+                    className="flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1.5 rounded-lg bg-primary/10 text-primary active:bg-primary/20 md:hover:bg-primary/20 transition-colors cursor-pointer text-xs md:text-sm font-bold"
+                  >
+                    <span className="material-symbols-outlined text-xs md:text-sm">download</span>
+                    <span className="hidden md:inline">{t('chat.preview.download' as any)}</span>
+                  </button>
+                  <button
+                    onClick={closePreview}
+                    className="p-1.5 md:p-2 rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-on-surface md:hover:text-on-surface transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-lg md:text-2xl">close</span>
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 p-2 md:p-4">
+                {previewFile.file_type === 'html' ? (
+                  <iframe
+                    src={previewBlobUrl}
+                    sandbox="allow-scripts allow-same-origin"
+                    className="w-full h-full rounded-lg border border-outline-variant/20"
+                    title={previewFile.filename}
+                  />
+                ) : (
+                  <iframe
+                    src={previewBlobUrl}
+                    className="w-full h-full rounded-lg border border-outline-variant/20 bg-surface-container-lowest"
+                    title={previewFile.filename}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Input Area */}
-          <div className="p-6 pt-0">
-            <div className="bg-surface-container rounded-lg border border-outline-variant/20 focus-within:border-primary/40 transition-all p-2">
+          <div className="p-2 md:p-6 md:pt-0">
+            {/* Template banner */}
+            {pendingTemplate && (
+              <div className="mb-2 flex items-center gap-2 px-2.5 md:px-3 py-1.5 md:py-2 bg-primary/10 border border-primary/20 rounded-lg text-xs md:text-sm text-primary">
+                <span className="material-symbols-outlined text-xs md:text-sm">style</span>
+                <span className="font-bold">{t('templates.active' as any)}:</span>
+                <span className="flex-1 truncate">{pendingTemplate}</span>
+                <button
+                  onClick={() => setPendingTemplate(null)}
+                  className="hover:text-error transition-colors cursor-pointer shrink-0"
+                >
+                  <span className="material-symbols-outlined text-xs md:text-sm">close</span>
+                </button>
+              </div>
+            )}
+            <div className="bg-surface-container rounded-lg border border-outline-variant/20 focus-within:border-primary/40 transition-all p-1.5 md:p-2">
               {/* Attached files chips */}
               {attachedFiles.length > 0 && (
-                <div className="flex flex-wrap gap-2 px-2 pt-2 pb-1">
+                <div className="flex flex-wrap gap-1.5 md:gap-2 px-1.5 md:px-2 pt-1.5 md:pt-2 pb-0.5 md:pb-1">
                   {attachedFiles.map(file => (
                     <div
                       key={file.id}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-sm border ${
+                      className={`flex items-center gap-1 md:gap-1.5 px-2 md:px-2.5 py-0.5 md:py-1 rounded text-xs md:text-sm border ${
                         file.uploading ? 'bg-surface-container-high border-outline-variant/20 text-on-surface-variant' :
                         file.scanStatus === 'rejected' ? 'bg-error/10 border-error/30 text-error' :
                         file.scanStatus === 'suspicious' ? 'bg-warning/10 border-warning/30 text-warning' :
@@ -934,45 +1727,45 @@ function ChatContent() {
                       }`}
                     >
                       {file.uploading ? (
-                        <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                        <span className="material-symbols-outlined text-xs md:text-sm animate-spin">progress_activity</span>
                       ) : file.scanStatus === 'rejected' ? (
-                        <span className="material-symbols-outlined text-sm">gpp_bad</span>
+                        <span className="material-symbols-outlined text-xs md:text-sm">gpp_bad</span>
                       ) : (
-                        <span className="material-symbols-outlined text-sm">attach_file</span>
+                        <span className="material-symbols-outlined text-xs md:text-sm">attach_file</span>
                       )}
-                      <span className="max-w-[120px] truncate">{file.originalName}</span>
+                      <span className="max-w-[80px] md:max-w-[120px] truncate">{file.originalName}</span>
                       {!file.uploading && (
                         <button
                           onClick={() => removeAttachedFile(file.id)}
                           className="hover:text-error transition-colors cursor-pointer ml-0.5"
                         >
-                          <span className="material-symbols-outlined text-sm">close</span>
+                          <span className="material-symbols-outlined text-xs md:text-sm">close</span>
                         </button>
                       )}
                     </div>
                   ))}
                 </div>
               )}
-              <div className="flex items-center gap-3 px-2 py-1">
+              <div className="flex items-center gap-1.5 md:gap-3 px-1 md:px-2 py-0.5 md:py-1">
                 {/* Attach file button */}
                 <input
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept=".csv,.xlsx,.xls,.pdf,.txt,.md,.json,.docx,.doc"
+                  accept=".csv,.xlsx,.xls,.pdf,.txt,.md,.json,.docx,.doc,.pptx,.ppt,.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.tiff,.tif,.ico,.xml,.yaml,.yml,.html,.htm"
                   className="hidden"
                   onChange={e => { handleFileAttach(e.target.files); e.target.value = ''; }}
                 />
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={streaming}
-                  className="w-9 h-9 flex items-center justify-center rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                  className="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-primary md:hover:text-primary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                   title={t('chat.input.uploadFile')}
                 >
-                  <span className="material-symbols-outlined text-lg">attach_file</span>
+                  <span className="material-symbols-outlined text-base md:text-lg">attach_file</span>
                 </button>
                 <textarea
-                  className="bg-transparent border-none focus:ring-0 text-sm flex-1 text-on-surface placeholder:text-outline/50 font-body resize-none min-h-[40px] max-h-[120px]"
+                  className="bg-transparent border-none focus:ring-0 text-base md:text-sm flex-1 text-on-surface placeholder:text-outline/50 font-body resize-none min-h-[36px] md:min-h-[40px] max-h-[100px] md:max-h-[120px]"
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => {
@@ -987,14 +1780,14 @@ function ChatContent() {
                 />
                 {streaming ? (
                   <button
-                    className="bg-error/20 text-error font-headline font-bold text-sm uppercase px-5 py-2.5 rounded tracking-widest hover:bg-error/30 active:scale-95 transition-all cursor-pointer"
+                    className="bg-error/20 text-error font-headline font-bold text-xs md:text-sm uppercase px-3 md:px-5 py-2 md:py-2.5 rounded tracking-widest active:bg-error/30 md:hover:bg-error/30 active:scale-95 transition-all cursor-pointer shrink-0"
                     onClick={handleAbort}
                   >
                     {t('chat.input.stop')}
                   </button>
                 ) : (
                   <button
-                    className="cyber-gradient text-on-primary font-headline font-bold text-sm uppercase px-5 py-2.5 rounded tracking-widest shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    className="cyber-gradient text-on-primary font-headline font-bold text-xs md:text-sm uppercase px-3 md:px-5 py-2 md:py-2.5 rounded tracking-widest shadow-lg active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shrink-0"
                     onClick={() => sendMessage()}
                     disabled={!input.trim()}
                   >
@@ -1004,21 +1797,154 @@ function ChatContent() {
               </div>
             </div>
             {/* Input footer info */}
-            <div className="mt-2 flex justify-between items-center px-2">
-              <div className="flex gap-4">
-                <span className="text-sm text-outline uppercase tracking-widest">
-                  {skillId ? `${SKILL_LABELS[skillId] || skillId}` : t('chat.input.autoDetect')}
-                </span>
-              </div>
-              {lastUsage && (
-                <div className="text-sm font-mono text-on-secondary-container/60 bg-surface-container-low px-3 py-1 rounded-full">
-                  Session: <span className="text-primary">{((lastUsage.inputTokens + lastUsage.outputTokens) / 1000).toFixed(1)}k Tokens</span>
-                  <span className="text-primary/60 ml-1">(${(((lastUsage.inputTokens / 1_000_000) * 3 + (lastUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)})</span>
+            <div className="mt-1.5 md:mt-2 flex justify-between items-center px-1 md:px-2">
+              <span className="text-[10px] md:text-sm text-outline uppercase tracking-widest truncate">
+                {skillId ? (t(`skill.${skillId}` as any) || skillId) : t('chat.input.autoDetect')}
+              </span>
+              {(totalUsage || lastUsage) && (
+                <div className="text-[10px] md:text-sm font-mono text-on-secondary-container/60 bg-surface-container-low px-2 md:px-3 py-0.5 md:py-1 rounded-full shrink-0">
+                  {totalUsage ? (
+                    <>
+                      <span className="text-primary">{((totalUsage.inputTokens + totalUsage.outputTokens) / 1000).toFixed(1)}k</span>
+                      <span className="text-primary/60 ml-1 hidden md:inline">(${(((totalUsage.inputTokens / 1_000_000) * 3 + (totalUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)})</span>
+                    </>
+                  ) : lastUsage ? (
+                    <>
+                      <span className="text-primary">{((lastUsage.inputTokens + lastUsage.outputTokens) / 1000).toFixed(1)}k</span>
+                      <span className="text-primary/60 ml-1 hidden md:inline">(${(((lastUsage.inputTokens / 1_000_000) * 3 + (lastUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)})</span>
+                    </>
+                  ) : null}
                 </div>
               )}
             </div>
           </div>
         </section>
+
+        {/* === Mobile Files Drawer === */}
+        {mobileFilesOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setMobileFilesOpen(false)}>
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-black/50" />
+            {/* Drawer */}
+            <div
+              className="absolute bottom-0 left-0 right-0 bg-surface-container rounded-t-2xl max-h-[70vh] flex flex-col animate-in slide-in-from-bottom duration-200"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Handle bar */}
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 bg-outline-variant/30 rounded-full" />
+              </div>
+              {/* Header */}
+              <div className="flex items-center justify-between px-4 pb-3 border-b border-outline-variant/10">
+                <h3 className="text-sm font-headline font-bold text-on-surface">{t('chat.sidebar.generatedFiles')}</h3>
+                <button onClick={() => setMobileFilesOpen(false)} className="p-1 text-on-surface-variant active:text-on-surface bg-transparent cursor-pointer">
+                  <span className="material-symbols-outlined text-lg">close</span>
+                </button>
+              </div>
+              {/* Content */}
+              <div className="overflow-y-auto p-4 space-y-4">
+                {/* Generated files */}
+                {files.length === 0 ? (
+                  <p className="text-xs text-on-surface-variant text-center py-4">{t('chat.sidebar.noFiles')}</p>
+                ) : (
+                  <div className="space-y-1">
+                    {files.map(file => {
+                      const fc = getFileColor(file.file_type);
+                      return (
+                        <div key={file.id} className="group">
+                          <div
+                            className="flex items-center justify-between p-3 active:bg-surface-container-high rounded-lg cursor-pointer transition-colors"
+                            onClick={() => { handleDownload(file.id, file.filename); setMobileFilesOpen(false); }}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className={`material-symbols-outlined ${fc} text-base`}>
+                                {getFileIcon(file.file_type)}
+                              </span>
+                              <div className="min-w-0">
+                                <span className="text-sm text-on-surface font-medium block truncate">{file.filename}</span>
+                                <span className="text-xs text-outline">
+                                  {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0 relative" data-version-dropdown>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleVersionDropdown(`mobile-${file.id}`); }}
+                                className="flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold bg-primary/10 text-primary rounded active:bg-primary/20 transition-colors cursor-pointer"
+                              >
+                                v{file.version || 1}
+                                <span className="material-symbols-outlined text-[10px]">expand_more</span>
+                              </button>
+                              <span className="material-symbols-outlined text-sm text-outline">download</span>
+                              {/* Mobile version dropdown — absolute overlay */}
+                              {versionDropdown === `mobile-${file.id}` && versionCache[file.id] && (
+                                <div className="absolute right-0 top-full mt-2 z-50 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl min-w-[230px] py-1.5 max-h-[7.5rem] overflow-y-auto">
+                                  {versionCache[file.id].map((ver, idx) => (
+                                    <button
+                                      key={ver.id}
+                                      onClick={() => { switchToVersion(ver); setMobileFilesOpen(false); }}
+                                      className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-left active:bg-surface-container-high transition-colors cursor-pointer ${
+                                        ver.id === file.id ? 'bg-primary/10' : ''
+                                      }`}
+                                    >
+                                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                                        ver.id === file.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
+                                      }`}>
+                                        v{ver.version || 1}
+                                      </span>
+                                      <div className="flex-1 min-w-0">
+                                        <span className="text-xs text-on-surface-variant block">
+                                          {formatSize(ver.file_size)}
+                                          {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
+                                        </span>
+                                        <span className="text-[10px] text-outline block">
+                                          {new Date(ver.created_at || '').toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                      </div>
+                                      {ver.id === file.id && (
+                                        <span className="material-symbols-outlined text-primary text-xs shrink-0">check</span>
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Uploaded files */}
+                {conversationUploads.length > 0 && (
+                  <div className="border-t border-outline-variant/10 pt-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-headline font-bold text-outline tracking-widest uppercase">{t('chat.sidebar.uploadedFiles')}</h4>
+                      <span className="text-xs font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">{conversationUploads.length}</span>
+                    </div>
+                    <div className="space-y-1">
+                      {conversationUploads.map(file => (
+                        <div key={file.id} className="flex items-center gap-3 p-3 rounded-lg">
+                          <span className={`material-symbols-outlined ${getFileColor(file.fileType)} text-base`}>
+                            {getFileIcon(file.fileType)}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-sm text-on-surface font-medium block truncate">{file.originalName}</span>
+                            <span className="text-xs text-outline">{file.fileType.toUpperCase()} · {formatSize(file.fileSize)}</span>
+                          </div>
+                          {file.scanStatus === 'clean' && (
+                            <span className="material-symbols-outlined text-green-400 text-sm shrink-0">verified_user</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* === Right Sidebar === */}
         <aside className="w-72 bg-surface-container-low border-l border-outline-variant/10 overflow-y-auto p-5 hidden lg:flex flex-col gap-6 shrink-0">
@@ -1048,27 +1974,70 @@ function ChatContent() {
             ) : (
               <div className="space-y-1.5">
                 {files.map(file => (
-                  <div
-                    key={file.id}
-                    className="flex items-center justify-between p-3 hover:bg-surface-container rounded-lg group cursor-pointer transition-colors border border-transparent hover:border-primary/20"
-                    onClick={() => handleDownload(file.id, file.filename)}
-                    role="button"
-                    tabIndex={0}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className={`material-symbols-outlined ${getFileColor(file.file_type)} text-lg`}>
-                        {getFileIcon(file.file_type)}
-                      </span>
-                      <div className="min-w-0">
-                        <span className="text-sm text-on-surface font-medium block truncate">{file.filename}</span>
-                        <span className="text-sm text-outline">
-                          {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
+                  <div key={file.id} className="group relative">
+                    <div
+                      className="flex items-center justify-between p-3 hover:bg-surface-container rounded-lg cursor-pointer transition-colors border border-transparent hover:border-primary/20"
+                      onClick={() => handleDownload(file.id, file.filename)}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`material-symbols-outlined ${getFileColor(file.file_type)} text-lg`}>
+                          {getFileIcon(file.file_type)}
                         </span>
+                        <div className="min-w-0">
+                          <span className="text-sm text-on-surface font-medium block truncate">{file.filename}</span>
+                          <span className="text-sm text-outline">
+                            {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0 relative" data-version-dropdown>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleVersionDropdown(`sidebar-${file.id}`); }}
+                          className="flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors cursor-pointer"
+                          title={t('chat.preview.versions' as any)}
+                        >
+                          v{file.version || 1}
+                          <span className="material-symbols-outlined text-[10px]">expand_more</span>
+                        </button>
+                        <span className="material-symbols-outlined text-sm text-outline group-hover:text-primary transition-colors">
+                          download
+                        </span>
+                        {/* Sidebar version dropdown — absolute overlay */}
+                        {versionDropdown === `sidebar-${file.id}` && versionCache[file.id] && (
+                          <div className="absolute right-0 top-full mt-2 z-50 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl min-w-[220px] py-1.5 max-h-[7.5rem] overflow-y-auto">
+                            {versionCache[file.id].map((ver, idx) => (
+                              <button
+                                key={ver.id}
+                                onClick={() => switchToVersion(ver)}
+                                className={`w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-surface-container-high transition-colors cursor-pointer ${
+                                  ver.id === file.id ? 'bg-primary/10' : ''
+                                }`}
+                              >
+                                <span className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                                  ver.id === file.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
+                                }`}>
+                                  v{ver.version || 1}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-xs text-on-surface-variant block">
+                                    {formatSize(ver.file_size)}
+                                    {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
+                                  </span>
+                                  <span className="text-[10px] text-outline block">
+                                    {new Date(ver.created_at || '').toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                                {ver.id === file.id && (
+                                  <span className="material-symbols-outlined text-primary text-xs">check</span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <span className="material-symbols-outlined text-sm text-outline group-hover:text-primary transition-colors shrink-0">
-                      download
-                    </span>
                   </div>
                 ))}
               </div>
@@ -1124,7 +2093,7 @@ function ChatContent() {
                       : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
                     }
                     <span className="text-sm text-on-surface-variant truncate">
-                      {SKILL_LABELS[task.skillId] || task.skillId}
+                      {t(`skill.${task.skillId}` as any) || task.skillId}
                     </span>
                   </div>
                 ))}

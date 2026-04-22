@@ -4,11 +4,12 @@ export interface User {
   password_hash: string;
   display_name: string | null;
   role: 'user' | 'admin';
-  status: 'active' | 'pending' | 'suspended';
+  status: 'active' | 'pending' | 'pending_verification' | 'suspended';
   locale: 'zh-TW' | 'zh-CN' | 'en';
   theme: 'dark' | 'light';
   oauth_provider: string | null;
   oauth_id: string | null;
+  quota_override: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -40,6 +41,7 @@ export interface GeneratedFile {
   file_path: string;
   file_type: string;
   file_size: number;
+  version: number;
   created_at: string;
 }
 

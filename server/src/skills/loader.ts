@@ -172,6 +172,7 @@ export function buildSystemPrompt(
     '- generate-docx.ts — Generate Word documents from JSON structure',
     '- generate-xlsx.ts — Generate Excel spreadsheets from JSON structure',
     '- generate-pdf.ts — Generate PDF documents from JSON structure',
+    '- generate-slides.ts — Generate interactive web presentations (HTML/Reveal.js) from JSON structure',
     '',
     '## How to Call Generator Scripts',
     `IMPORTANT: Dependencies (tsx, pptxgenjs, docx, exceljs, pdfkit) are installed in: ${serverDir}`,
@@ -188,4 +189,14 @@ export function buildSystemPrompt(
   ];
 
   return parts.join('\n');
+}
+
+/**
+ * Build a memory context block to append to system prompts.
+ * Contains user's work-related facts from previous conversations.
+ */
+export function buildMemoryContext(memories: { content: string }[]): string {
+  if (!memories.length) return '';
+  return '\n\n## User Context (from previous conversations)\n' +
+    memories.map(m => `- ${m.content}`).join('\n') + '\n';
 }

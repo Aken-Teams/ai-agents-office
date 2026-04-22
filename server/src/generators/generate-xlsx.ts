@@ -2,11 +2,51 @@
 /**
  * XLSX Generator Script
  * Usage: node --import tsx generate-xlsx.ts <input.json> <output.xlsx>
+ *
+ * Supports "style" field: "dashboard" | "clean" | "financial" | "colorful"
  */
 
 import ExcelJS from 'exceljs';
 import fs from 'fs';
 
+// ── Style Presets ──────────────────────────────────────────────
+interface StylePreset {
+  headerBg: string;
+  headerFont: string;
+  headerFontSize: number;
+  bodyFontSize: number;
+  borderStyle: 'thin' | 'medium' | 'hair' | 'none';
+  alternateRowBg?: string;
+  font: string;
+  headerFontColor: string;
+}
+
+const STYLES: Record<string, StylePreset> = {
+  'dashboard': {
+    headerBg: 'FF2B6CB0', headerFont: 'Calibri', headerFontSize: 12,
+    bodyFontSize: 11, borderStyle: 'thin', font: 'Calibri',
+    headerFontColor: 'FFFFFFFF', alternateRowBg: 'FFF0F4F8',
+  },
+  'clean': {
+    headerBg: 'FFF5F5F5', headerFont: 'Calibri', headerFontSize: 11,
+    bodyFontSize: 11, borderStyle: 'hair', font: 'Calibri',
+    headerFontColor: 'FF333333',
+  },
+  'financial': {
+    headerBg: 'FF1B3A5C', headerFont: 'Arial', headerFontSize: 11,
+    bodyFontSize: 10, borderStyle: 'thin', font: 'Arial',
+    headerFontColor: 'FFFFFFFF',
+  },
+  'colorful': {
+    headerBg: 'FF6C5CE7', headerFont: 'Calibri', headerFontSize: 12,
+    bodyFontSize: 11, borderStyle: 'thin', font: 'Calibri',
+    headerFontColor: 'FFFFFFFF', alternateRowBg: 'FFF8F7FF',
+  },
+};
+
+const DEFAULT_STYLE = STYLES['clean'];
+
+// ── Types ──────────────────────────────────────────────────────
 interface SheetData {
   name: string;
   headers: string[];
@@ -15,11 +55,13 @@ interface SheetData {
 
 interface XlsxInput {
   title: string;
+  style?: string;
   sheets: SheetData[];
 }
 
 async function generateXlsx(inputPath: string, outputPath: string) {
   const input: XlsxInput = JSON.parse(fs.readFileSync(inputPath, 'utf-8'));
+  const s = STYLES[input.style || ''] || DEFAULT_STYLE;
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'AI Agents Office';
@@ -31,38 +73,47 @@ async function generateXlsx(inputPath: string, outputPath: string) {
     // Headers
     if (sheetData.headers) {
       const headerRow = sheet.addRow(sheetData.headers);
-      headerRow.font = { bold: true, size: 12 };
-      headerRow.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' },
-      };
+      headerRow.font = { bold: true, size: s.headerFontSize, name: s.headerFont, color: { argb: s.headerFontColor } };
+      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: s.headerBg } };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+      headerRow.height = 28;
 
       // Auto-width columns
       sheetData.headers.forEach((header, i) => {
         const col = sheet.getColumn(i + 1);
-        col.width = Math.max(header.length + 4, 12);
+        col.width = Math.max(header.length * 1.5 + 4, 14);
       });
     }
 
     // Data rows
     if (sheetData.rows) {
-      for (const row of sheetData.rows) {
-        sheet.addRow(row);
-      }
+      sheetData.rows.forEach((row, idx) => {
+        const excelRow = sheet.addRow(row);
+        excelRow.font = { size: s.bodyFontSize, name: s.font };
+
+        // Alternate row shading
+        if (s.alternateRowBg && idx % 2 === 1) {
+          excelRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: s.alternateRowBg } };
+        }
+      });
     }
 
-    // Add table borders
-    sheet.eachRow((row) => {
-      row.eachCell((cell) => {
-        cell.border = {
-          top: { style: 'thin' },
-          left: { style: 'thin' },
-          bottom: { style: 'thin' },
-          right: { style: 'thin' },
-        };
+    // Borders
+    if (s.borderStyle !== 'none') {
+      sheet.eachRow((row) => {
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: s.borderStyle as any },
+            left: { style: s.borderStyle as any },
+            bottom: { style: s.borderStyle as any },
+            right: { style: s.borderStyle as any },
+          };
+        });
       });
-    });
+    }
+
+    // Freeze header row
+    sheet.views = [{ state: 'frozen', ySplit: 1 }];
   }
 
   await workbook.xlsx.writeFile(outputPath);

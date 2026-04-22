@@ -101,12 +101,10 @@ const DISALLOWED_TOOLS = [
   'Bash(net:*)',
 ];
 
-// Router agents: minimal tools — no file access, no code execution
-// Router only analyzes user requests and outputs [TASK] blocks
-const ROUTER_ALLOWED_TOOLS = [
-  'WebSearch',
-  'WebFetch',
-];
+// Router agents: NO tools — they only analyze requests and output [TASK] blocks.
+// Having tools (even WebSearch) causes the router to attempt searches itself
+// instead of delegating to research agent, which leads to hanging/timeouts.
+const ROUTER_ALLOWED_TOOLS: string[] = [];
 
 const ROUTER_DISALLOWED_TOOLS = [
   ...DISALLOWED_TOOLS,
@@ -117,6 +115,11 @@ const ROUTER_DISALLOWED_TOOLS = [
   'Grep',
   'Task',
   'Edit',
+  'WebSearch',
+  'WebFetch',
+  'ToolSearch',
+  'TodoWrite',
+  'NotebookEdit',
 ];
 
 /**
@@ -164,15 +167,25 @@ export function spawnClaude(
   }
 
   // Role-based tool selection
-  // Router agents get read-only tools; workers get full tool access
+  // Router agents get NO tools; workers get full tool access
   const allowedTools = options.customAllowedTools
     || (options.role === 'router' ? ROUTER_ALLOWED_TOOLS : ALLOWED_TOOLS);
+  // Disallowed tools: merge global + per-skill restrictions (additive, not replace)
+  const baseDisallowed = options.role === 'router' ? ROUTER_DISALLOWED_TOOLS : DISALLOWED_TOOLS;
   const disallowedTools = options.customDisallowedTools
-    || (options.role === 'router' ? ROUTER_DISALLOWED_TOOLS : DISALLOWED_TOOLS);
+    ? [...new Set([...baseDisallowed, ...options.customDisallowedTools])]
+    : baseDisallowed;
 
   // Tool restrictions (security layer 2)
-  args.push('--allowedTools', allowedTools.join(','));
+  if (allowedTools.length > 0) {
+    args.push('--allowedTools', allowedTools.join(','));
+  }
   args.push('--disallowedTools', disallowedTools.join(','));
+
+  // Router: limit to 1 turn (no tool loops, just analyze and delegate)
+  if (options.role === 'router') {
+    args.push('--max-turns', '1');
+  }
 
   // Clean environment to prevent nested Claude session detection
   // Remove ALL Claude-related env vars (inherited from VSCode extension, etc.)

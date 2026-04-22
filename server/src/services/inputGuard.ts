@@ -5,7 +5,7 @@
  * a risk assessment with flags and sanitized output.
  */
 
-import db from '../db.js';
+import { dbRun } from '../db.js';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config.js';
 
@@ -339,17 +339,16 @@ export function logSecurityEvent(
   rawInput?: string,
 ): void {
   try {
-    db.prepare(`
-      INSERT INTO security_events (id, user_id, event_type, severity, detail, raw_input, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-    `).run(
+    dbRun(
+      `INSERT INTO security_events (id, user_id, event_type, severity, detail, raw_input, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, NOW())`,
       uuidv4(),
       userId,
       eventType,
       severity,
       detail,
-      rawInput ? rawInput.slice(0, 500) : null,  // truncate for storage
-    );
+      rawInput ? rawInput.slice(0, 500) : null,
+    ).catch(e => console.error('Failed to log security event:', e));
   } catch (e) {
     console.error('Failed to log security event:', e);
   }

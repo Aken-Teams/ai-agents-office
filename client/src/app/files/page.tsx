@@ -12,6 +12,7 @@ interface FileItem {
   filename: string;
   file_type: string;
   file_size: number;
+  version?: number;
   conversation_id: string | null;
   created_at: string;
 }
@@ -57,13 +58,7 @@ const TEXT_TYPES = new Set(['md', 'txt', 'csv']);
 // Types that render as images
 const IMAGE_TYPES = new Set(['png', 'jpg', 'jpeg', 'gif', 'svg']);
 
-const FILTER_TABS = [
-  { value: '', label: '' },
-  { value: 'pptx', label: 'PPT' },
-  { value: 'docx', label: 'Word' },
-  { value: 'xlsx', label: 'Excel' },
-  { value: 'pdf', label: 'PDF' },
-];
+const FILTER_TAB_VALUES = ['', 'pptx', 'docx', 'xlsx', 'pdf'] as const;
 
 const PAGE_SIZE = 12;
 
@@ -95,27 +90,27 @@ function DeleteConfirmModal({
         onClick={e => e.stopPropagation()}
       >
         {/* Icon */}
-        <div className="flex flex-col items-center pt-8 pb-4 px-6">
-          <div className="w-14 h-14 rounded-full bg-error/10 flex items-center justify-center mb-4">
-            <span className="material-symbols-outlined text-error text-3xl">delete_forever</span>
+        <div className="flex flex-col items-center pt-6 md:pt-8 pb-3 md:pb-4 px-5 md:px-6">
+          <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-error/10 flex items-center justify-center mb-3 md:mb-4">
+            <span className="material-symbols-outlined text-error text-2xl md:text-3xl">delete_forever</span>
           </div>
-          <h3 className="font-headline font-bold text-lg text-on-surface mb-2">{t('files.deleteModal.title')}</h3>
+          <h3 className="font-headline font-bold text-base md:text-lg text-on-surface mb-1.5 md:mb-2">{t('files.deleteModal.title')}</h3>
           <p className="text-sm text-on-surface-variant text-center leading-relaxed">
             {t('files.deleteModal.message', { filename })}
           </p>
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 p-6 pt-2">
+        <div className="flex gap-3 px-5 md:px-6 pb-5 md:pb-6 pt-2">
           <button
             onClick={onCancel}
-            className="flex-1 py-2.5 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-sm uppercase tracking-widest rounded cursor-pointer hover:bg-surface-variant transition-colors"
+            className="flex-1 py-2.5 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-sm uppercase tracking-widest rounded cursor-pointer active:bg-surface-variant hover:bg-surface-variant transition-colors"
           >
             {t('common.cancel')}
           </button>
           <button
             onClick={onConfirm}
-            className="flex-1 py-2.5 px-4 bg-error text-on-error font-bold text-sm uppercase tracking-widest rounded cursor-pointer hover:bg-error/80 transition-colors"
+            className="flex-1 py-2.5 px-4 bg-error text-on-error font-bold text-sm uppercase tracking-widest rounded cursor-pointer active:bg-error/80 hover:bg-error/80 transition-colors"
           >
             {t('common.delete')}
           </button>
@@ -129,27 +124,74 @@ function DeleteConfirmModal({
    Preview Modal
    ============================================================ */
 function PreviewModal({
-  file, token, onClose, onDownload,
+  file: initialFile, token, onClose, onDownload,
 }: {
   file: FileItem;
   token: string;
   onClose: () => void;
   onDownload: (id: string, name: string) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const [currentFile, setCurrentFile] = useState(initialFile);
+  const file = currentFile;
   const [textContent, setTextContent] = useState<string | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [versions, setVersions] = useState<FileItem[]>([]);
+  const [versionOpen, setVersionOpen] = useState(false);
+  const [infoExpanded, setInfoExpanded] = useState(false);
   const config = FILE_TYPE_CONFIG[file.file_type] || { icon: 'attach_file', color: '#8f9097', bgColor: 'rgba(143,144,151,0.1)' };
   const isText = TEXT_TYPES.has(file.file_type);
   const isImage = IMAGE_TYPES.has(file.file_type);
+  const isNativeHtml = file.file_type === 'html'; // e.g. Reveal.js slides
+
+  // Fetch versions
+  useEffect(() => {
+    fetch(`/api/files/${initialFile.id}/versions`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then(setVersions)
+      .catch(() => setVersions([]));
+  }, [initialFile.id, token]);
+
+  // Close version dropdown on click outside
+  useEffect(() => {
+    if (!versionOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('[data-version-dropdown]')) setVersionOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [versionOpen]);
+
+  function switchVersion(ver: FileItem) {
+    setCurrentFile(ver);
+    setVersionOpen(false);
+    setLoading(true);
+    setError(false);
+    setTextContent(null);
+    setBlobUrl(null);
+  }
 
   useEffect(() => {
     let revoke: string | null = null;
     const headers = { Authorization: `Bearer ${token}` };
 
-    if (isText) {
+    if (isNativeHtml) {
+      // Native HTML files (slides): load as blob URL so iframe can execute scripts
+      fetch(`/api/files/${file.id}/preview`, { headers })
+        .then(r => {
+          if (!r.ok) throw new Error();
+          return r.blob();
+        })
+        .then(blob => {
+          const url = URL.createObjectURL(new Blob([blob], { type: 'text/html' }));
+          revoke = url;
+          setBlobUrl(url);
+          setLoading(false);
+        })
+        .catch(() => { setError(true); setLoading(false); });
+    } else if (isText) {
       // Text files: fetch as text
       fetch(`/api/files/${file.id}/preview`, { headers })
         .then(r => { if (!r.ok) throw new Error(); return r.text(); })
@@ -177,7 +219,7 @@ function PreviewModal({
     }
 
     return () => { if (revoke) URL.revokeObjectURL(revoke); };
-  }, [file.id, token, isText, isImage]);
+  }, [file.id, token, isText, isImage, isNativeHtml]);
 
   // Close on Escape
   useEffect(() => {
@@ -193,39 +235,40 @@ function PreviewModal({
   }
 
   // Determine what to render
-  const isPdfBlob = blobUrl && !isImage;
-  const isHtmlContent = !isText && textContent !== null; // HTML from Office conversion
+  const isHtmlSlides = isNativeHtml && blobUrl; // Reveal.js slides — needs scripts
+  const isPdfBlob = blobUrl && !isImage && !isHtmlSlides;
+  const isHtmlContent = !isText && !isNativeHtml && textContent !== null; // HTML from Office conversion
 
   return (
     <div className="fixed inset-0 z-[100] flex" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
-      <div className="relative flex w-full h-full animate-in" onClick={e => e.stopPropagation()}>
+      <div className="relative flex flex-col md:flex-row w-full h-full animate-in" onClick={e => e.stopPropagation()}>
         {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-20 w-10 h-10 flex items-center justify-center rounded bg-surface-container-high/80 hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface cursor-pointer transition-colors"
+          className="absolute top-3 right-3 md:top-4 md:right-4 z-20 w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded bg-surface-container-high/80 active:bg-surface-container-highest md:hover:bg-surface-container-highest text-on-surface-variant active:text-on-surface md:hover:text-on-surface cursor-pointer transition-colors"
         >
-          <span className="material-symbols-outlined">close</span>
+          <span className="material-symbols-outlined text-xl md:text-2xl">close</span>
         </button>
 
         {/* ===== Preview Area ===== */}
-        <div className="flex-1 flex items-center justify-center p-8 relative overflow-hidden">
+        <div className="flex-1 flex items-center justify-center p-4 md:p-8 relative overflow-hidden">
           {/* Background grid */}
           <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-pattern" />
 
           {/* Content */}
-          <div className="relative w-full max-w-5xl max-h-[calc(100vh-6rem)]">
+          <div className="relative w-full max-w-5xl max-h-[calc(100vh-6rem)] md:max-h-[calc(100vh-6rem)]">
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-20">
+              <div className="flex flex-col items-center justify-center py-16 md:py-20">
                 <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin mb-4" />
-                <p className="text-sm text-on-surface-variant uppercase tracking-widest">{t('files.preview.converting')}</p>
+                <p className="text-xs md:text-sm text-on-surface-variant uppercase tracking-widest">{t('files.preview.converting')}</p>
               </div>
             ) : error ? (
-              <div className="flex flex-col items-center justify-center py-20 bg-surface-container/50 rounded-lg border border-outline-variant/10">
-                <span className="material-symbols-outlined text-4xl text-error mb-4">error</span>
-                <p className="text-sm text-on-surface-variant mb-2">{t('files.preview.loadFailed')}</p>
-                <p className="text-sm text-on-surface-variant/60 mb-6">{t('files.preview.loadFailedHint')}</p>
+              <div className="flex flex-col items-center justify-center py-12 md:py-20 bg-surface-container/50 rounded-lg border border-outline-variant/10 px-4">
+                <span className="material-symbols-outlined text-3xl md:text-4xl text-error mb-3 md:mb-4">error</span>
+                <p className="text-xs md:text-sm text-on-surface-variant mb-2">{t('files.preview.loadFailed')}</p>
+                <p className="text-xs md:text-sm text-on-surface-variant/60 mb-4 md:mb-6">{t('files.preview.loadFailedHint')}</p>
                 <button
                   onClick={() => onDownload(file.id, file.filename)}
                   className="px-6 py-2.5 cyber-gradient text-on-primary font-bold text-sm uppercase tracking-widest flex items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity"
@@ -234,11 +277,20 @@ function PreviewModal({
                   {t('files.preview.download')}
                 </button>
               </div>
+            ) : isHtmlSlides ? (
+              /* Native HTML (Reveal.js slides) — embedded with scripts enabled */
+              <iframe
+                src={blobUrl!}
+                className="w-full h-[calc(100svh-14rem)] md:h-[calc(100vh-8rem)] bg-white rounded"
+                title={file.filename}
+                sandbox="allow-scripts allow-same-origin"
+                style={{ border: 'none' }}
+              />
             ) : isPdfBlob ? (
               /* PDF (native or LibreOffice converted) */
               <iframe
                 src={`${blobUrl}#toolbar=0`}
-                className="w-full h-[calc(100vh-8rem)] bg-white rounded"
+                className="w-full h-[calc(100svh-14rem)] md:h-[calc(100vh-8rem)] bg-white rounded"
                 title={file.filename}
               />
             ) : isImage && blobUrl ? (
@@ -248,24 +300,24 @@ function PreviewModal({
                 <img
                   src={blobUrl}
                   alt={file.filename}
-                  className="max-w-full max-h-[calc(100vh-8rem)] object-contain rounded"
+                  className="max-w-full max-h-[calc(100svh-14rem)] md:max-h-[calc(100vh-8rem)] object-contain rounded"
                 />
               </div>
             ) : isHtmlContent ? (
               /* HTML from Office JS-fallback conversion */
-              <div className="bg-surface-container rounded border border-outline-variant/10 overflow-auto max-h-[calc(100vh-8rem)]">
+              <div className="bg-surface-container rounded border border-outline-variant/10 overflow-auto max-h-[calc(100svh-14rem)] md:max-h-[calc(100vh-8rem)]">
                 <iframe
                   srcDoc={textContent!}
-                  className="w-full h-[calc(100vh-8rem)] rounded"
+                  className="w-full h-[calc(100svh-14rem)] md:h-[calc(100vh-8rem)] rounded"
                   title={file.filename}
                   sandbox="allow-same-origin"
                 />
               </div>
             ) : isText && textContent !== null ? (
               /* Plain text / CSV / Markdown */
-              <div className="bg-surface-container rounded border border-outline-variant/10 overflow-auto max-h-[calc(100vh-8rem)]">
-                <div className="p-6">
-                  <pre className="text-sm text-on-surface-variant leading-relaxed whitespace-pre-wrap font-body break-words">
+              <div className="bg-surface-container rounded border border-outline-variant/10 overflow-auto max-h-[calc(100svh-14rem)] md:max-h-[calc(100vh-8rem)]">
+                <div className="p-4 md:p-6">
+                  <pre className="text-xs md:text-sm text-on-surface-variant leading-relaxed whitespace-pre-wrap font-body break-words">
                     {textContent}
                   </pre>
                 </div>
@@ -278,15 +330,116 @@ function PreviewModal({
             <div className="absolute inset-[-50%] flex flex-wrap gap-24 rotate-[-30deg]">
               {Array.from({ length: 40 }).map((_, i) => (
                 <span key={i} className="text-3xl font-headline font-bold tracking-[0.3em] uppercase whitespace-nowrap" style={{ color: 'rgba(128,128,128,0.18)' }}>
-                  CONFIDENTIAL 機密文件 · 測試版
+                  {t('files.watermark' as any)}
                 </span>
               ))}
             </div>
           </div>
         </div>
 
-        {/* ===== Right Sidebar ===== */}
-        <aside className="w-80 bg-surface-container border-l border-outline-variant/10 flex flex-col shrink-0">
+        {/* ===== Right Sidebar (desktop) / Bottom Panel (mobile) ===== */}
+        {/* Mobile: collapsible bottom bar */}
+        <aside className="md:hidden w-full bg-surface-container border-t border-outline-variant/10 flex flex-col shrink-0">
+          {/* Collapsed bar — always visible */}
+          <div
+            onClick={() => setInfoExpanded(e => !e)}
+            className="flex items-center gap-3 px-4 py-3 cursor-pointer w-full text-left"
+            role="button"
+            tabIndex={0}
+          >
+            <span className="material-symbols-outlined text-base" style={{ color: config.color }}>
+              {config.icon}
+            </span>
+            <div className="flex-1 min-w-0">
+              <span className="text-sm font-medium text-on-surface block truncate">{file.filename}</span>
+              <span className="text-xs text-outline">{file.file_type.toUpperCase()} · {formatSize(file.file_size)}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={(e) => { e.stopPropagation(); onDownload(file.id, file.filename); }}
+                className="p-1.5 rounded-lg bg-primary/10 text-primary active:bg-primary/20 transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-sm">download</span>
+              </button>
+              <span className={`material-symbols-outlined text-sm text-on-surface-variant transition-transform ${infoExpanded ? 'rotate-180' : ''}`}>expand_more</span>
+            </div>
+          </div>
+
+          {/* Expanded details */}
+          {infoExpanded && (
+            <div className="px-4 pb-4 space-y-3 border-t border-outline-variant/10 pt-3">
+              <div className="flex items-center gap-3 text-xs text-on-surface-variant">
+                <span className="font-bold uppercase" style={{ color: config.color }}>{file.file_type}</span>
+                <span>·</span>
+                <span>{formatSize(file.file_size)}</span>
+                <span>·</span>
+                <span>{new Date(file.created_at).toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+              {/* Version selector */}
+              {versions.length > 1 && (
+                <div>
+                  <p className="text-xs text-on-surface-variant uppercase font-medium mb-1.5 tracking-wider">{t('chat.preview.version' as any)}</p>
+                  <div className="relative" data-version-dropdown>
+                    <button
+                      onClick={() => setVersionOpen(!versionOpen)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-bold transition-colors cursor-pointer ${
+                        versionOpen ? 'bg-primary/20 text-primary' : 'bg-surface-container-low text-on-surface active:bg-primary/10'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-primary text-on-primary text-xs font-bold">v{file.version || 1}</span>
+                        <span className="text-xs text-on-surface-variant">{formatSize(file.file_size)}</span>
+                      </div>
+                      <span className={`material-symbols-outlined text-sm transition-transform ${versionOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                    </button>
+                    {versionOpen && (
+                      <div className="absolute left-0 right-0 bottom-full mb-2 z-50 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl py-1.5 max-h-[7.5rem] overflow-y-auto">
+                        {versions.map((ver, idx) => (
+                          <button
+                            key={ver.id}
+                            onClick={() => switchVersion(ver)}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 text-left active:bg-surface-container-high transition-colors cursor-pointer ${
+                              ver.id === file.id ? 'bg-primary/10' : ''
+                            }`}
+                          >
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                              ver.id === file.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
+                            }`}>
+                              v{ver.version || 1}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-xs text-on-surface-variant block">
+                                {formatSize(ver.file_size)}
+                                {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
+                              </span>
+                              <span className="text-[10px] text-outline block">
+                                {new Date(ver.created_at).toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            {ver.id === file.id && (
+                              <span className="material-symbols-outlined text-primary text-xs">check</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {/* Download button */}
+              <button
+                onClick={() => onDownload(file.id, file.filename)}
+                className="w-full py-2.5 px-4 cyber-gradient text-on-primary font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer active:opacity-90 transition-opacity"
+              >
+                <span className="material-symbols-outlined text-sm">download</span>
+                {t('files.preview.downloadLocal')}
+              </button>
+            </div>
+          )}
+        </aside>
+
+        {/* Desktop: full sidebar */}
+        <aside className="hidden md:flex w-80 bg-surface-container border-l border-outline-variant/10 flex-col shrink-0 overflow-y-auto">
           {/* File info */}
           <div className="p-6 border-b border-outline-variant/10">
             <h3 className="text-sm font-headline font-bold uppercase tracking-widest text-primary mb-4 flex items-center gap-2">
@@ -309,7 +462,7 @@ function PreviewModal({
               </div>
               <div className="p-3 bg-surface-container-low rounded">
                 <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">{t('files.preview.createdDate')}</p>
-                <p className="text-sm text-on-surface">{new Date(file.created_at).toLocaleString('zh-TW')}</p>
+                <p className="text-sm text-on-surface">{new Date(file.created_at).toLocaleString(locale)}</p>
               </div>
               <div className="p-3 bg-surface-container-low rounded">
                 <p className="text-sm text-on-surface-variant uppercase font-medium mb-1 tracking-wider">{t('files.preview.securityLevel')}</p>
@@ -321,21 +474,71 @@ function PreviewModal({
             </div>
           </div>
 
+          {/* Version selector */}
+          {versions.length > 1 && (
+            <div className="px-6 pb-4 border-b border-outline-variant/10">
+              <p className="text-sm text-on-surface-variant uppercase font-medium mb-2 tracking-wider">{t('chat.preview.version' as any)}</p>
+              <div className="relative" data-version-dropdown>
+                <button
+                  onClick={() => setVersionOpen(!versionOpen)}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-bold transition-colors cursor-pointer ${
+                    versionOpen ? 'bg-primary/20 text-primary' : 'bg-surface-container-low text-on-surface hover:bg-primary/10'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-primary text-on-primary text-xs font-bold">v{file.version || 1}</span>
+                    <span className="text-xs text-on-surface-variant">{formatSize(file.file_size)}</span>
+                  </div>
+                  <span className={`material-symbols-outlined text-sm transition-transform ${versionOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                </button>
+                {versionOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-2 z-50 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl py-1.5 max-h-[7.5rem] overflow-y-auto">
+                    {versions.map((ver, idx) => (
+                      <button
+                        key={ver.id}
+                        onClick={() => switchVersion(ver)}
+                        className={`w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-surface-container-high transition-colors cursor-pointer ${
+                          ver.id === file.id ? 'bg-primary/10' : ''
+                        }`}
+                      >
+                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                          ver.id === file.id ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface-variant'
+                        }`}>
+                          v{ver.version || 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs text-on-surface-variant block">
+                            {formatSize(ver.file_size)}
+                            {idx === 0 && <span className="ml-1 text-primary font-bold">{t('chat.preview.latestVersion' as any)}</span>}
+                          </span>
+                          <span className="text-xs text-outline block">
+                            {new Date(ver.created_at).toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        {ver.id === file.id && (
+                          <span className="material-symbols-outlined text-primary text-sm">check</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Actions */}
           <div className="p-6 flex-1">
-            <div className="space-y-2">
-              <button
-                onClick={() => onDownload(file.id, file.filename)}
-                className="w-full py-2.5 px-4 cyber-gradient text-on-primary font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer hover:opacity-90 transition-opacity"
-              >
-                <span className="material-symbols-outlined text-sm">download</span>
-                {t('files.preview.downloadLocal')}
-              </button>
-            </div>
+            <button
+              onClick={() => onDownload(file.id, file.filename)}
+              className="w-full py-2.5 px-4 cyber-gradient text-on-primary font-bold text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer hover:opacity-90 transition-opacity"
+            >
+              <span className="material-symbols-outlined text-sm">download</span>
+              {t('files.preview.downloadLocal')}
+            </button>
           </div>
 
           {/* Bottom indicator */}
-          <div className="p-4 bg-primary/5 flex items-center gap-3 border-t border-outline-variant/10">
+          <div className="flex p-4 bg-primary/5 items-center gap-3 border-t border-outline-variant/10">
             <span className="material-symbols-outlined text-primary text-base">shield</span>
             <div>
               <p className="text-sm font-bold text-on-surface">{t('files.preview.localSandbox')}</p>
@@ -361,7 +564,7 @@ interface StorageInfo {
 
 function FilesContent() {
   const { user, token, isLoading } = useAuth();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const router = useRouter();
   const [files, setFiles] = useState<FileItem[]>([]);
   const [filter, setFilter] = useState('');
@@ -375,11 +578,18 @@ function FilesContent() {
   const [uploadStorage, setUploadStorage] = useState<UploadStorageInfo | null>(null);
   const [conversations, setConversations] = useState<ConversationInfo[]>([]);
   const [deleteUploadTarget, setDeleteUploadTarget] = useState<UploadItem | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
   }, [user, isLoading, router]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   const fetchStorage = useCallback(() => {
     if (!token) return;
@@ -449,7 +659,10 @@ function FilesContent() {
       const res = await fetch(`/api/files/${fileId}/download`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) throw new Error('Download failed');
+      if (!res.ok) {
+        setToast(t('files.downloadError' as any));
+        return;
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -459,10 +672,10 @@ function FilesContent() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Download error:', err);
+    } catch {
+      setToast(t('files.downloadError' as any));
     }
-  }, [token]);
+  }, [token, t]);
 
   function formatSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -521,32 +734,32 @@ function FilesContent() {
         />
       )}
 
-      <main className={`${sidebarMargin} pt-8 pb-12 px-10 transition-all duration-300`}>
+      <main className={`${sidebarMargin} md:pt-10 pb-12 px-4 md:px-10 transition-all duration-300`}>
         {/* Header Section */}
-        <div className="flex justify-between items-end mb-10">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4 mt-4 md:mt-0 mb-6 md:mb-10">
           <div className="max-w-2xl">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-tertiary text-sm font-bold tracking-[0.3em] uppercase">{t('files.header.subtitle')}</span>
-              <div className="h-px w-12 bg-tertiary/30" />
+              <span className="text-tertiary text-xs md:text-sm font-bold tracking-[0.3em] uppercase">{t('files.header.subtitle')}</span>
+              <div className="h-px w-8 md:w-12 bg-tertiary/30" />
             </div>
-            <h2 className="text-4xl font-headline font-bold text-on-surface tracking-tight mb-2">{t('files.header.title')}</h2>
-            <p className="text-on-surface-variant leading-relaxed">
+            <h2 className="text-2xl md:text-4xl font-headline font-bold text-on-surface tracking-tight mb-1 md:mb-2">{t('files.header.title')}</h2>
+            <p className="text-sm md:text-base text-on-surface-variant leading-relaxed">
               {t('files.header.description')}
             </p>
           </div>
 
           {/* Storage Widget */}
-          <div className={`rounded-lg p-5 w-72 flex flex-col gap-3 relative overflow-hidden shrink-0 ${
+          <div className={`rounded-lg p-4 md:p-5 w-full md:w-72 flex flex-col gap-2.5 md:gap-3 relative overflow-hidden shrink-0 ${
             storageInfo?.warning ? 'bg-error/10 border border-error/30' : 'bg-surface-container'
           }`}>
-            <div className="absolute top-0 right-0 p-4 opacity-10">
-              <span className={`material-symbols-outlined text-4xl ${storageInfo?.warning ? 'text-error' : ''}`}>
+            <div className="absolute top-0 right-0 p-3 md:p-4 opacity-10">
+              <span className={`material-symbols-outlined text-3xl md:text-4xl ${storageInfo?.warning ? 'text-error' : ''}`}>
                 {storageInfo?.warning ? 'warning' : 'database'}
               </span>
             </div>
-            <div className="flex justify-between items-center text-sm font-bold tracking-widest uppercase text-on-surface-variant">
-              <span>{user?.displayName || user?.email?.split('@')[0] || ''}{t('files.storage.myStorage')}</span>
-              <span className={storageInfo?.warning ? 'text-error' : 'text-primary'}>{t('files.storage.fileCount', { count: files.length })}</span>
+            <div className="flex justify-between items-center gap-2 text-xs md:text-sm font-bold tracking-widest uppercase text-on-surface-variant">
+              <span className="truncate min-w-0">{user?.displayName || user?.email?.split('@')[0] || ''}{t('files.storage.myStorage')}</span>
+              <span className={`shrink-0 ${storageInfo?.warning ? 'text-error' : 'text-primary'}`}>{t('files.storage.fileCount', { count: files.length })}</span>
             </div>
             <div className="h-1.5 bg-surface-container-lowest rounded-full overflow-hidden">
               <div
@@ -555,15 +768,15 @@ function FilesContent() {
               />
             </div>
             <div className="flex justify-between items-baseline">
-              <span className="font-headline text-lg font-bold">
+              <span className="font-headline text-base md:text-lg font-bold">
                 {storageInfo?.formatted.used ?? formatSize(totalSize)}
               </span>
-              <span className="text-sm text-on-surface-variant uppercase tracking-tighter">
+              <span className="text-xs md:text-sm text-on-surface-variant uppercase tracking-tighter">
                 / {storageInfo?.formatted.quota ?? '—'}
               </span>
             </div>
             {storageInfo?.warning && (
-              <p className="text-sm text-error font-medium">
+              <p className="text-xs md:text-sm text-error font-medium">
                 {t('files.storage.warning')}
               </p>
             )}
@@ -571,10 +784,10 @@ function FilesContent() {
         </div>
 
         {/* Main Tab Switcher: Generated vs Uploads */}
-        <div className="flex items-center gap-6 mb-8 border-b border-outline-variant/10">
+        <div className="flex items-center gap-4 md:gap-6 mb-6 md:mb-8 border-b border-outline-variant/10">
           <button
             onClick={() => setActiveTab('generated')}
-            className={`pb-3 text-sm font-bold tracking-widest uppercase transition-colors cursor-pointer border-b-2 ${
+            className={`pb-2.5 md:pb-3 text-xs md:text-sm font-bold tracking-widest uppercase transition-colors cursor-pointer border-b-2 ${
               activeTab === 'generated'
                 ? 'text-primary border-primary'
                 : 'text-on-surface-variant border-transparent hover:text-on-surface'
@@ -585,7 +798,7 @@ function FilesContent() {
           </button>
           <button
             onClick={() => setActiveTab('uploads')}
-            className={`pb-3 text-sm font-bold tracking-widest uppercase transition-colors cursor-pointer border-b-2 ${
+            className={`pb-2.5 md:pb-3 text-xs md:text-sm font-bold tracking-widest uppercase transition-colors cursor-pointer border-b-2 ${
               activeTab === 'uploads'
                 ? 'text-primary border-primary'
                 : 'text-on-surface-variant border-transparent hover:text-on-surface'
@@ -594,7 +807,7 @@ function FilesContent() {
             <span className="material-symbols-outlined text-sm align-middle mr-1">upload_file</span>
             {t('files.tabs.uploads')}
             {uploads.length > 0 && (
-              <span className="ml-2 px-1.5 py-0.5 bg-primary/10 text-primary rounded text-sm font-bold">{uploads.length}</span>
+              <span className="ml-1.5 md:ml-2 px-1.5 py-0.5 bg-primary/10 text-primary rounded text-xs md:text-sm font-bold">{uploads.length}</span>
             )}
           </button>
         </div>
@@ -602,19 +815,19 @@ function FilesContent() {
         {activeTab === 'generated' ? (
         <>
         {/* Filter Tabs + Search */}
-        <div className="flex items-center justify-between gap-4 mb-8">
-          <div className="flex items-center gap-3">
-            {FILTER_TABS.map(tab => (
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4 mb-6 md:mb-8">
+          <div className="flex items-center gap-2 md:gap-3 overflow-x-auto no-scrollbar">
+            {FILTER_TAB_VALUES.map(val => (
               <button
-                key={tab.value}
-                onClick={() => setFilter(tab.value)}
-                className={`px-4 py-2 rounded text-sm font-bold tracking-widest uppercase transition-colors cursor-pointer ${
-                  filter === tab.value
+                key={val}
+                onClick={() => setFilter(val)}
+                className={`px-3 md:px-4 py-2 rounded text-xs md:text-sm font-bold tracking-widest uppercase transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                  filter === val
                     ? 'bg-surface-container text-on-surface border-b-2 border-primary'
                     : 'bg-transparent text-on-surface-variant hover:bg-surface-container'
                 }`}
               >
-                {tab.value === '' ? t('files.filter.all') : tab.label}
+                {val === '' ? t('files.filter.all') : t(`files.filter.${val}` as any)}
               </button>
             ))}
           </div>
@@ -625,7 +838,7 @@ function FilesContent() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder={t('files.search.placeholder')}
-              className="pl-9 pr-4 py-2 bg-surface-container border border-outline-variant/20 rounded text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/40 w-64 transition-colors"
+              className="pl-9 pr-4 py-2 bg-surface-container border border-outline-variant/20 rounded text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/40 w-full md:w-64 transition-colors"
             />
             {search && (
               <button
@@ -640,77 +853,82 @@ function FilesContent() {
 
         {/* File Grid */}
         {filteredFiles.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 border border-dashed border-outline-variant/20 rounded-lg">
-            <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-4">
-              <span className="material-symbols-outlined text-on-surface-variant text-3xl">
+          <div className="flex flex-col items-center justify-center py-16 md:py-20 border border-dashed border-outline-variant/20 rounded-lg">
+            <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-surface-container flex items-center justify-center mb-4">
+              <span className="material-symbols-outlined text-on-surface-variant text-2xl md:text-3xl">
                 {search ? 'search_off' : 'upload_file'}
               </span>
             </div>
-            <p className="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-sm">
+            <p className="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-xs md:text-sm">
               {search ? t('files.empty.noSearchResults') : t('files.empty.noFiles')}
             </p>
-            <p className="text-sm text-on-surface-variant/40 mt-1">
+            <p className="text-xs md:text-sm text-on-surface-variant/40 mt-1">
               {search ? t('files.empty.tryOtherKeyword') : t('files.empty.startGenerating')}
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-5">
             {pagedFiles.map(file => {
               const config = getTypeConfig(file.file_type);
               return (
                 <div
                   key={file.id}
-                  className="bg-surface-container hover:bg-surface-container-high transition-colors p-5 flex flex-col gap-4 group cursor-pointer"
+                  className="bg-surface-container active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors p-4 md:p-5 flex flex-col gap-3 md:gap-4 group cursor-pointer rounded-lg md:rounded-none"
                   onClick={() => setPreviewFile(file)}
                 >
                   {/* Top: Icon + Type badge */}
                   <div className="flex justify-between items-start">
                     <div
-                      className="w-10 h-10 rounded flex items-center justify-center"
+                      className="w-5 h-5 md:w-10 md:h-10 rounded flex items-center justify-center"
                       style={{ background: config.bgColor }}
                     >
-                      <span className="material-symbols-outlined" style={{ color: config.color }}>
+                      <span className="material-symbols-outlined text-[10px] md:text-base" style={{ color: config.color }}>
                         {config.icon}
                       </span>
                     </div>
-                    <span className="text-sm font-bold tracking-widest uppercase" style={{ color: config.color }}>
-                      {file.file_type.toUpperCase()}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs md:text-sm font-bold tracking-widest uppercase" style={{ color: config.color }}>
+                        {file.file_type.toUpperCase()}
+                      </span>
+                      {file.version && file.version > 1 && (
+                        <span className="px-1.5 py-0.5 bg-primary/10 text-primary rounded text-xs font-bold">v{file.version}</span>
+                      )}
+                    </div>
                   </div>
 
                   {/* File name + date */}
                   <div>
-                    <h3 className="font-headline font-bold text-base leading-tight mb-1 truncate text-on-surface">
+                    <h3 className="font-headline font-bold text-sm md:text-base leading-tight mb-1 truncate text-on-surface">
                       {file.filename}
                     </h3>
-                    <p className="text-sm text-on-surface-variant uppercase tracking-widest">
-                      {new Date(file.created_at).toLocaleDateString('zh-TW')}
+                    <p className="text-xs md:text-sm text-on-surface-variant uppercase tracking-widest">
+                      {new Date(file.created_at).toLocaleDateString(locale)}
                     </p>
                   </div>
 
                   {/* Bottom: Size + Actions */}
-                  <div className="mt-auto pt-3 flex items-center justify-between border-t border-outline-variant/10">
-                    <span className="text-sm bg-surface-container-lowest px-2 py-0.5 rounded text-on-surface-variant uppercase tracking-widest">
+                  <div className="mt-auto pt-2.5 md:pt-3 flex items-center justify-between border-t border-outline-variant/10">
+                    <span className="text-xs md:text-sm bg-surface-container-lowest px-2 py-0.5 rounded text-on-surface-variant uppercase tracking-widest">
                       {formatSize(file.file_size)}
                     </span>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-0.5 md:gap-1">
                       <button
                         onClick={e => { e.stopPropagation(); setPreviewFile(file); }}
-                        className="w-8 h-8 flex items-center justify-center rounded bg-transparent hover:bg-tertiary/10 text-on-surface-variant hover:text-tertiary cursor-pointer transition-colors"
+                        className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded bg-transparent active:bg-tertiary/10 md:hover:bg-tertiary/10 text-on-surface-variant active:text-tertiary md:hover:text-tertiary cursor-pointer transition-colors"
                         title={t('files.tooltip.preview')}
                       >
                         <span className="material-symbols-outlined text-sm">visibility</span>
                       </button>
                       <button
                         onClick={e => { e.stopPropagation(); handleDownload(file.id, file.filename); }}
-                        className="w-8 h-8 flex items-center justify-center rounded bg-transparent hover:bg-primary/10 text-on-surface-variant hover:text-primary cursor-pointer transition-colors"
+                        className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded bg-transparent active:bg-primary/10 md:hover:bg-primary/10 text-on-surface-variant active:text-primary md:hover:text-primary cursor-pointer transition-colors"
                         title={t('files.tooltip.download')}
                       >
                         <span className="material-symbols-outlined text-sm">download</span>
                       </button>
                       <button
                         onClick={e => { e.stopPropagation(); setDeleteTarget(file); }}
-                        className="w-8 h-8 flex items-center justify-center rounded bg-transparent hover:bg-error/10 text-on-surface-variant hover:text-error cursor-pointer transition-colors"
+                        className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded bg-transparent active:bg-error/10 md:hover:bg-error/10 text-on-surface-variant active:text-error md:hover:text-error cursor-pointer transition-colors"
                         title={t('files.tooltip.delete')}
                       >
                         <span className="material-symbols-outlined text-sm">delete</span>
@@ -725,8 +943,8 @@ function FilesContent() {
 
         {/* Pagination */}
         {filteredFiles.length > 0 && (
-          <div className="mt-8 flex items-center justify-between">
-            <p className="text-on-surface-variant/60 text-sm uppercase tracking-widest">
+          <div className="mt-6 md:mt-8 flex flex-col md:flex-row items-center md:justify-between gap-3">
+            <p className="text-on-surface-variant/60 text-xs md:text-sm uppercase tracking-widest">
               {t('files.pagination.totalFiles', { count: filteredFiles.length })}
             </p>
             {totalPages > 1 && (
@@ -768,22 +986,22 @@ function FilesContent() {
         <>
           {/* Upload storage summary */}
           {uploadStorage && (
-            <div className="flex items-center gap-6 mb-6 px-1 text-sm text-on-surface-variant">
+            <div className="flex items-center gap-3 md:gap-6 mb-6 px-1 text-xs md:text-sm text-on-surface-variant flex-wrap">
               <span>{t('files.uploads.totalFiles', { count: uploadStorage.count })}</span>
               <span>·</span>
               <span>{uploadStorage.formatted.used} / {uploadStorage.formatted.quota}</span>
-              <div className="w-24 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+              <div className="w-20 md:w-24 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
                 <div className="h-full bg-primary/60 rounded-full" style={{ width: `${Math.min(uploadStorage.percentage * 100, 100)}%` }} />
               </div>
             </div>
           )}
 
-          {/* Uploaded Files List (read-only view) */}
+          {/* Uploaded Files List */}
           {uploads.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 border border-dashed border-outline-variant/20 rounded-lg">
-              <span className="material-symbols-outlined text-on-surface-variant text-3xl mb-3 opacity-30">upload_file</span>
-              <p className="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-sm">{t('files.uploads.empty')}</p>
-              <p className="text-sm text-on-surface-variant/40 mt-1">{t('files.uploads.emptyHint')}</p>
+            <div className="flex flex-col items-center justify-center py-16 md:py-20 border border-dashed border-outline-variant/20 rounded-lg">
+              <span className="material-symbols-outlined text-on-surface-variant text-2xl md:text-3xl mb-3 opacity-30">upload_file</span>
+              <p className="text-on-surface-variant font-medium uppercase tracking-[0.2em] text-xs md:text-sm">{t('files.uploads.empty')}</p>
+              <p className="text-xs md:text-sm text-on-surface-variant/40 mt-1">{t('files.uploads.emptyHint')}</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -800,29 +1018,35 @@ function FilesContent() {
                   ? files.filter(f => f.conversation_id === up.conversation_id)
                   : [];
                 return (
-                  <div key={up.id} className="bg-surface-container rounded-lg group hover:bg-surface-container-high transition-colors overflow-hidden">
-                    <div className="p-4 flex items-center gap-4">
-                      <div className="w-10 h-10 rounded flex items-center justify-center shrink-0" style={{ background: cfg.bgColor }}>
-                        <span className="material-symbols-outlined" style={{ color: cfg.color }}>{cfg.icon}</span>
+                  <div key={up.id} className="bg-surface-container rounded-lg group active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors overflow-hidden">
+                    <div className="p-3 md:p-4 flex items-start md:items-center gap-3 md:gap-4">
+                      <div className="w-9 h-9 md:w-10 md:h-10 rounded flex items-center justify-center shrink-0" style={{ background: cfg.bgColor }}>
+                        <span className="material-symbols-outlined text-sm md:text-base" style={{ color: cfg.color }}>{cfg.icon}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-on-surface truncate">{up.original_name}</p>
-                        <p className="text-sm text-on-surface-variant">
-                          {formatSize(up.file_size)} · {new Date(up.created_at.endsWith('Z') ? up.created_at : up.created_at + 'Z').toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
+                        <p className="text-xs md:text-sm text-on-surface-variant">
+                          {formatSize(up.file_size)} · {new Date(up.created_at.endsWith('Z') ? up.created_at : up.created_at + 'Z').toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </p>
+                        {/* Mobile scan status inline */}
+                        <div className={`md:hidden flex items-center gap-1 mt-1 ${scanColor}`}>
+                          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{scanIcon}</span>
+                          <span className="text-xs font-bold uppercase">{scanLabel}</span>
+                        </div>
                       </div>
-                      <div className={`flex flex-col items-end gap-0.5 shrink-0`}>
+                      {/* Desktop scan status */}
+                      <div className="hidden md:flex flex-col items-end gap-0.5 shrink-0">
                         <div className={`flex items-center gap-1 ${scanColor}`}>
                           <span className="material-symbols-outlined text-sm">{scanIcon}</span>
                           <span className="text-sm font-bold uppercase">{scanLabel}</span>
                         </div>
                         <span className="text-sm text-on-surface-variant/60 max-w-[200px] text-right leading-tight">
-                          {up.scan_status === 'clean' ? '通過所有安全檢查' : up.scan_status === 'suspicious' ? (up.scan_detail || '發現可疑內容') : (up.scan_detail || '已被系統拒絕')}
+                          {up.scan_status === 'clean' ? t('files.scan.clean' as any) : up.scan_status === 'suspicious' ? (up.scan_detail || t('files.scan.suspicious' as any)) : (up.scan_detail || t('files.scan.rejected' as any))}
                         </span>
                       </div>
                       <button
                         onClick={() => setDeleteUploadTarget(up)}
-                        className="w-8 h-8 flex items-center justify-center rounded hover:bg-error/10 text-on-surface-variant hover:text-error cursor-pointer transition-colors opacity-0 group-hover:opacity-100"
+                        className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded active:bg-error/10 md:hover:bg-error/10 text-on-surface-variant active:text-error md:hover:text-error cursor-pointer transition-colors md:opacity-0 md:group-hover:opacity-100 shrink-0"
                         title={t('files.tooltip.delete')}
                       >
                         <span className="material-symbols-outlined text-sm">delete</span>
@@ -830,29 +1054,29 @@ function FilesContent() {
                     </div>
                     {/* Linked conversation + generated files */}
                     {(conv || linkedFiles.length > 0) && (
-                      <div className="px-4 pb-3 pt-0 flex items-center gap-3 flex-wrap border-t border-outline-variant/5 mt-0">
+                      <div className="px-3 md:px-4 pb-2.5 md:pb-3 pt-0 flex items-center gap-2 md:gap-3 flex-wrap border-t border-outline-variant/5 mt-0">
                         {conv && (
                           <button
                             onClick={() => router.push(`/chat/${up.conversation_id}`)}
-                            className="flex items-center gap-1.5 text-sm text-primary hover:text-primary/80 cursor-pointer transition-colors mt-2"
+                            className="flex items-center gap-1.5 text-xs md:text-sm text-primary active:text-primary/80 md:hover:text-primary/80 cursor-pointer transition-colors mt-2"
                           >
                             <span className="material-symbols-outlined text-sm">chat</span>
-                            <span className="truncate max-w-[200px]">{conv.title}</span>
+                            <span className="truncate max-w-[150px] md:max-w-[200px]">{conv.title}</span>
                           </button>
                         )}
                         {linkedFiles.length > 0 && (
-                          <div className="flex items-center gap-2 mt-2">
+                          <div className="flex items-center gap-1.5 md:gap-2 mt-2">
                             <span className="material-symbols-outlined text-sm text-on-surface-variant">arrow_forward</span>
                             {linkedFiles.map(lf => {
                               const lfCfg = getTypeConfig(lf.file_type);
                               return (
                                 <span
                                   key={lf.id}
-                                  className="flex items-center gap-1 text-sm px-2 py-0.5 bg-surface-container-lowest rounded cursor-pointer hover:bg-surface-container-highest transition-colors"
+                                  className="flex items-center gap-1 text-xs md:text-sm px-1.5 md:px-2 py-0.5 bg-surface-container-lowest rounded cursor-pointer active:bg-surface-container-highest md:hover:bg-surface-container-highest transition-colors"
                                   onClick={() => setPreviewFile(lf)}
                                 >
                                   <span className="material-symbols-outlined text-sm" style={{ color: lfCfg.color }}>{lfCfg.icon}</span>
-                                  <span className="text-on-surface truncate max-w-[100px]">{lf.filename}</span>
+                                  <span className="text-on-surface truncate max-w-[80px] md:max-w-[100px]">{lf.filename}</span>
                                 </span>
                               );
                             })}
@@ -868,6 +1092,19 @@ function FilesContent() {
         </>
         )}
       </main>
+
+      {/* Toast notification */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center gap-2 bg-error-container text-on-error-container px-4 py-3 rounded-lg shadow-lg text-sm font-medium">
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>error</span>
+            {toast}
+            <button onClick={() => setToast(null)} className="ml-2 opacity-70 hover:opacity-100 cursor-pointer">
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

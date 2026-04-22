@@ -72,7 +72,7 @@ function SkillsContent() {
     <div className="min-h-screen bg-surface-container-lowest">
       <Navbar />
 
-      <main className={`${sidebarMargin} pt-8 pb-12 px-10 transition-all duration-300`}>
+      <main className={`${sidebarMargin} pt-8 md:pt-10 pb-12 px-10 transition-all duration-300`}>
         {/* Page Header */}
         <header className="mb-10">
           <div className="flex items-center gap-2 mb-2">

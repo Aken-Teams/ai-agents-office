@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import db from '../db.js';
+import { dbGet, dbAll, dbRun } from '../db.js';
 
 interface TokenUsageRecord {
   userId: string;
@@ -10,12 +10,11 @@ interface TokenUsageRecord {
   durationMs?: number;
 }
 
-export function recordTokenUsage(record: TokenUsageRecord): string {
+export async function recordTokenUsage(record: TokenUsageRecord): Promise<string> {
   const id = uuidv4();
-  db.prepare(`
-    INSERT INTO token_usage (id, user_id, conversation_id, input_tokens, output_tokens, model, duration_ms)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  await dbRun(
+    `INSERT INTO token_usage (id, user_id, conversation_id, input_tokens, output_tokens, model, duration_ms)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     id,
     record.userId,
     record.conversationId,
@@ -27,19 +26,19 @@ export function recordTokenUsage(record: TokenUsageRecord): string {
   return id;
 }
 
-export function getUserUsageSummary(
+export async function getUserUsageSummary(
   userId: string,
   from?: string,
   to?: string
-): Array<{
+): Promise<Array<{
   date: string;
   total_input: number;
   total_output: number;
   invocation_count: number;
-}> {
+}>> {
   let query = `
     SELECT
-      date(created_at) as date,
+      DATE_FORMAT(created_at, '%Y-%m-%d') as date,
       SUM(input_tokens) as total_input,
       SUM(output_tokens) as total_output,
       COUNT(*) as invocation_count
@@ -57,33 +56,29 @@ export function getUserUsageSummary(
     params.push(to);
   }
 
-  query += ' GROUP BY date(created_at) ORDER BY date DESC';
+  query += ' GROUP BY DATE_FORMAT(created_at, \'%Y-%m-%d\') ORDER BY date DESC';
 
-  return db.prepare(query).all(...params) as Array<{
-    date: string;
-    total_input: number;
-    total_output: number;
-    invocation_count: number;
-  }>;
+  return await dbAll(query, ...params);
 }
 
-export function getUserTotalUsage(userId: string): {
+export async function getUserTotalUsage(userId: string): Promise<{
   totalInput: number;
   totalOutput: number;
   totalInvocations: number;
-} {
-  const result = db.prepare(`
-    SELECT
+}> {
+  const result = await dbGet<{ total_input: number; total_output: number; total_invocations: number }>(
+    `SELECT
       COALESCE(SUM(input_tokens), 0) as total_input,
       COALESCE(SUM(output_tokens), 0) as total_output,
       COUNT(*) as total_invocations
     FROM token_usage
-    WHERE user_id = ?
-  `).get(userId) as { total_input: number; total_output: number; total_invocations: number };
+    WHERE user_id = ?`,
+    userId
+  );
 
   return {
-    totalInput: result.total_input,
-    totalOutput: result.total_output,
-    totalInvocations: result.total_invocations,
+    totalInput: result?.total_input ?? 0,
+    totalOutput: result?.total_output ?? 0,
+    totalInvocations: result?.total_invocations ?? 0,
   };
 }

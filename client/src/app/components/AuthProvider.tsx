@@ -18,9 +18,12 @@ interface AuthContextType {
   token: string | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: (token: string, tokenType?: 'credential' | 'access_token') => Promise<void>;
-  register: (email: string, password: string, displayName: string) => Promise<{ pending: boolean; message?: string }>;
+  loginWithGoogle: (token: string, tokenType?: 'credential' | 'access_token') => Promise<{ needsVerification?: boolean; email?: string } | void>;
+  register: (email: string, password: string, displayName: string) => Promise<{ pending: boolean; needsVerification: boolean; email?: string; message?: string }>;
+  verifyEmail: (email: string, code: string) => Promise<void>;
+  resendCode: (email: string) => Promise<void>;
   logout: () => void;
+  updateUser: (partial: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -73,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const data = await res.json();
     localStorage.setItem('token', data.token);
+    localStorage.setItem('greeting_login_id', String(Date.now()));
     setToken(data.token);
     setUser(data.user);
   }, []);
@@ -86,14 +90,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error || 'Google login failed');
-    }
     const data = await res.json();
+    if (!res.ok) {
+      // Handle verification needed (new Google user or pending_verification)
+      if (data.needsVerification) {
+        return { needsVerification: true, email: data.email };
+      }
+      throw new Error(data.error || 'Google login failed');
+    }
     localStorage.setItem('token', data.token);
+    localStorage.setItem('greeting_login_id', String(Date.now()));
     setToken(data.token);
-    // Fetch full user profile (including oauthProvider, hasPassword, locale, theme)
     await fetchMe(data.token);
   }, []);
 
@@ -108,27 +115,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error(err.error || 'Registration failed');
     }
     const data = await res.json();
-    // New flow: registration returns pending status, no auto-login
-    if (data.pending) {
-      return { pending: true, message: data.message };
+    // Email verification flow
+    if (data.needsVerification) {
+      return { pending: false, needsVerification: true, email: data.email };
     }
-    // Fallback: if server returns token (e.g. admin-created accounts)
+    // Admin approval flow (fallback)
+    if (data.pending) {
+      return { pending: true, needsVerification: false, message: data.message };
+    }
+    // Fallback: if server returns token
     if (data.token) {
       localStorage.setItem('token', data.token);
       setToken(data.token);
       setUser(data.user);
     }
-    return { pending: false };
+    return { pending: false, needsVerification: false };
+  }, []);
+
+  const verifyEmail = useCallback(async (email: string, code: string) => {
+    const res = await fetch('/api/auth/verify-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Verification failed');
+    }
+    const data = await res.json();
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('greeting_login_id', String(Date.now()));
+    setToken(data.token);
+    setUser(data.user);
+  }, []);
+
+  const resendCode = useCallback(async (email: string) => {
+    const res = await fetch('/api/auth/resend-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to resend code');
+    }
   }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem('token');
+    localStorage.removeItem('greeting_login_id');
+    localStorage.removeItem('greeting_shown_for');
     setToken(null);
     setUser(null);
   }, []);
 
+  const updateUser = useCallback((partial: Partial<User>) => {
+    setUser(prev => prev ? { ...prev, ...partial } : prev);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, loginWithGoogle, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, loginWithGoogle, register, verifyEmail, resendCode, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

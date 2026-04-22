@@ -114,6 +114,9 @@ export function scanSandboxFiles(sandboxPath: string): Array<{
         // Skip internal/intermediate files
         if (entry.name === 'CLAUDE.md') continue;
         const ext = path.extname(entry.name).toLowerCase();
+        // Skip versioned backup files (e.g., report.v1.docx, chart.v2.html)
+        const baseName = entry.name.slice(0, -ext.length);
+        if (/\.v\d+$/.test(baseName)) continue;
         // Only register actual document output files, not intermediate scripts/data
         const DOCUMENT_EXTENSIONS = new Set([
           '.docx', '.doc', '.xlsx', '.xls', '.pptx', '.ppt',

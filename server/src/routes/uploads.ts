@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import db from '../db.js';
+import { dbGet, dbAll, dbRun } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
 import {
@@ -95,18 +95,19 @@ function getUserUploadDir(userId: string): string {
 // Helper: get user's total upload size
 // ---------------------------------------------------------------------------
 
-function getUserUploadSize(userId: string): number {
-  const row = db.prepare(
-    "SELECT COALESCE(SUM(file_size), 0) AS total FROM user_uploads WHERE user_id = ? AND scan_status != 'rejected'"
-  ).get(userId) as { total: number };
-  return row.total;
+async function getUserUploadSize(userId: string): Promise<number> {
+  const row = await dbGet<{ total: number }>(
+    "SELECT COALESCE(SUM(file_size), 0) AS total FROM user_uploads WHERE user_id = ? AND scan_status != 'rejected'",
+    userId
+  );
+  return row?.total ?? 0;
 }
 
 // ---------------------------------------------------------------------------
 // POST /api/uploads — Upload file(s)
 // ---------------------------------------------------------------------------
 
-router.post('/', upload.array('files', 10), (req: Request, res: Response) => {
+router.post('/', upload.array('files', 10), async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const conversationId = (req.body?.conversationId as string) || null;
   const files = req.files as Express.Multer.File[];
@@ -117,9 +118,9 @@ router.post('/', upload.array('files', 10), (req: Request, res: Response) => {
   }
 
   // Check upload quota
-  const currentUsage = getUserUploadSize(userId);
+  const currentUsage = await getUserUploadSize(userId);
   const incomingSize = files.reduce((sum, f) => sum + f.size, 0);
-  const uploadQuotaBytes = getUploadQuotaMb() * 1024 * 1024;
+  const uploadQuotaBytes = (await getUploadQuotaMb()) * 1024 * 1024;
   if (currentUsage + incomingSize > uploadQuotaBytes) {
     // Clean up temp files
     for (const f of files) {
@@ -160,10 +161,11 @@ router.post('/', upload.array('files', 10), (req: Request, res: Response) => {
       try { fs.unlinkSync(file.path); } catch { /* ignore */ }
 
       // Still record in DB for audit trail
-      db.prepare(`
-        INSERT INTO user_uploads (id, user_id, conversation_id, filename, original_name, file_type, mime_type, file_size, scan_status, scan_detail, storage_path)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(fileId, userId, conversationId, destName, file.originalname, ext.replace('.', ''), file.mimetype, file.size, 'rejected', scanResult.detail, '');
+      await dbRun(
+        `INSERT INTO user_uploads (id, user_id, conversation_id, filename, original_name, file_type, mime_type, file_size, scan_status, scan_detail, storage_path)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        fileId, userId, conversationId, destName, file.originalname, ext.replace('.', ''), file.mimetype, file.size, 'rejected', scanResult.detail, ''
+      );
 
       results.push({
         id: fileId,
@@ -187,10 +189,11 @@ router.post('/', upload.array('files', 10), (req: Request, res: Response) => {
     }
 
     // Save to DB
-    db.prepare(`
-      INSERT INTO user_uploads (id, user_id, conversation_id, filename, original_name, file_type, mime_type, file_size, scan_status, scan_detail, storage_path)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(fileId, userId, conversationId, destName, file.originalname, ext.replace('.', ''), file.mimetype, file.size, scanResult.status, scanResult.detail, relPath);
+    await dbRun(
+      `INSERT INTO user_uploads (id, user_id, conversation_id, filename, original_name, file_type, mime_type, file_size, scan_status, scan_detail, storage_path)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      fileId, userId, conversationId, destName, file.originalname, ext.replace('.', ''), file.mimetype, file.size, scanResult.status, scanResult.detail, relPath
+    );
 
     results.push({
       id: fileId,
@@ -210,7 +213,7 @@ router.post('/', upload.array('files', 10), (req: Request, res: Response) => {
 // GET /api/uploads — List user's uploads
 // ---------------------------------------------------------------------------
 
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const status = req.query.status as string;
   const conversationId = req.query.conversationId as string;
@@ -234,7 +237,7 @@ router.get('/', (req: Request, res: Response) => {
 
   query += ' ORDER BY created_at DESC';
 
-  const uploads = db.prepare(query).all(...params);
+  const uploads = await dbAll(query, ...params);
   res.json(uploads);
 });
 
@@ -242,18 +245,19 @@ router.get('/', (req: Request, res: Response) => {
 // GET /api/uploads/storage — Upload storage usage
 // ---------------------------------------------------------------------------
 
-router.get('/storage', (req: Request, res: Response) => {
+router.get('/storage', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const used = getUserUploadSize(userId);
-  const quota = getUploadQuotaMb() * 1024 * 1024;
-  const count = (db.prepare(
-    "SELECT COUNT(*) as count FROM user_uploads WHERE user_id = ? AND scan_status != 'rejected'"
-  ).get(userId) as any).count;
+  const used = await getUserUploadSize(userId);
+  const quota = (await getUploadQuotaMb()) * 1024 * 1024;
+  const countRow = await dbGet<{ count: number }>(
+    "SELECT COUNT(*) as count FROM user_uploads WHERE user_id = ? AND scan_status != 'rejected'",
+    userId
+  );
 
   res.json({
     used,
     quota,
-    count,
+    count: countRow?.count ?? 0,
     percentage: quota > 0 ? used / quota : 0,
     formatted: {
       used: formatBytes(used),
@@ -266,27 +270,28 @@ router.get('/storage', (req: Request, res: Response) => {
 // DELETE /api/uploads/:id — Delete an upload
 // ---------------------------------------------------------------------------
 
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const uploadId = req.params.id;
 
-  const upload = db.prepare(
-    'SELECT * FROM user_uploads WHERE id = ? AND user_id = ?'
-  ).get(uploadId, userId) as any;
+  const uploadRow = await dbGet<any>(
+    'SELECT * FROM user_uploads WHERE id = ? AND user_id = ?',
+    uploadId, userId
+  );
 
-  if (!upload) {
+  if (!uploadRow) {
     res.status(404).json({ error: '檔案不存在' });
     return;
   }
 
   // Delete physical file
-  if (upload.storage_path) {
-    const fullPath = path.join(config.workspaceRoot, upload.storage_path);
+  if (uploadRow.storage_path) {
+    const fullPath = path.join(config.workspaceRoot, uploadRow.storage_path);
     try { fs.unlinkSync(fullPath); } catch { /* already gone */ }
   }
 
   // Delete DB record
-  db.prepare('DELETE FROM user_uploads WHERE id = ?').run(uploadId);
+  await dbRun('DELETE FROM user_uploads WHERE id = ?', uploadId);
 
   res.json({ success: true });
 });
@@ -299,16 +304,17 @@ router.get('/:id/download', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const uploadId = req.params.id;
 
-  const upload = db.prepare(
-    'SELECT * FROM user_uploads WHERE id = ? AND user_id = ?'
-  ).get(uploadId, userId) as any;
+  const uploadRow = await dbGet<any>(
+    'SELECT * FROM user_uploads WHERE id = ? AND user_id = ?',
+    uploadId, userId
+  );
 
-  if (!upload || !upload.storage_path) {
+  if (!uploadRow || !uploadRow.storage_path) {
     res.status(404).json({ error: '檔案不存在' });
     return;
   }
 
-  const fullPath = path.join(config.workspaceRoot, upload.storage_path);
+  const fullPath = path.join(config.workspaceRoot, uploadRow.storage_path);
   if (!fs.existsSync(fullPath)) {
     res.status(404).json({ error: '檔案不存在' });
     return;
@@ -317,7 +323,7 @@ router.get('/:id/download', async (req: Request, res: Response) => {
   try {
     const watermarked = await applyWatermark(fullPath);
     if (watermarked) {
-      const filename = upload.original_name;
+      const filename = uploadRow.original_name;
       res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
       res.setHeader('Content-Length', watermarked.length);
       res.end(watermarked);
@@ -327,7 +333,7 @@ router.get('/:id/download', async (req: Request, res: Response) => {
     console.warn('[Download] Watermark failed, serving original:', err);
   }
 
-  res.download(fullPath, upload.original_name);
+  res.download(fullPath, uploadRow.original_name);
 });
 
 // ---------------------------------------------------------------------------

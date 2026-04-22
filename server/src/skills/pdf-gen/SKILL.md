@@ -20,6 +20,7 @@ cat > pdfdoc.json << 'PDFEOF'
 {
   "title": "Document Title",
   "author": "Author Name",
+  "style": "modern",
   "pageSize": "A4",
   "sections": [
     {
@@ -32,6 +33,48 @@ cat > pdfdoc.json << 'PDFEOF'
 PDFEOF
 node --import tsx generate-pdf.ts pdfdoc.json output.pdf
 ```
+
+## Available Styles
+
+Use the `"style"` field to apply a built-in visual theme. **Always use these pre-built styles instead of writing custom code for styling.**
+
+| Style | Description |
+|-------|-------------|
+| `"formal"` | Times-Roman, centered title, navy blue accents, decorative title line |
+| `"modern"` | Helvetica, left-aligned, blue accents, header rules under headings (default) |
+| `"magazine"` | Helvetica, large centered title, red/purple accents, editorial feel |
+| `"technical"` | Courier (monospace), compact spacing, minimal decoration, technical docs |
+
+If the user mentions a style preference (e.g. "formal report", "technical manual", "magazine style"), pick the closest matching style. If no style is mentioned, use `"modern"`.
+
+## CRITICAL: Default Quality Standards
+
+**ALWAYS** produce visually professional PDFs, even without explicit user style requests:
+
+1. **Structure content with clear sections** — Use headings to break up long text. Every 2-3 paragraphs should have a heading.
+2. **Use bullet points** for lists, key takeaways, or action items — don't bury them in paragraph text.
+3. **Keep paragraphs focused** — 3-5 sentences max per paragraph. Split longer content.
+4. **Include an author name** — Use "AI Agents Office" if none specified.
+5. The `"modern"` style produces a **premium business look**: colored top banner, accent sidebar bars on headings, styled bullet dots, page numbers with separator line, and clean typography. It is NOT a plain white document.
+
+## CJK (Chinese/Japanese/Korean) Support
+
+The generator **automatically detects** CJK characters in the content and switches to **Noto Sans SC** font. No special configuration needed — just write Chinese (繁體/簡體), Japanese, or Korean text in the JSON fields and it works.
+
+- Font file: `assets/fonts/NotoSansSC-VariableFont.ttf` (auto-loaded)
+- Detection: scans title, author, all headings, paragraphs, and bullets
+- When CJK is detected, all fonts (title, heading, body) switch to Noto Sans SC
+- Latin text within CJK documents also renders correctly (the font supports both)
+
+## Features
+
+All styles include:
+- Styled title with configurable alignment
+- Accent lines or header rules (style-dependent)
+- Bullet point formatting
+- Justified paragraph text with configurable line spacing
+- Custom page margins per style
+- Automatic CJK font support (Chinese, Japanese, Korean)
 
 ## Custom Generation
 For complex requirements (graphics, tables, forms), write custom Node.js code using `pdfkit`:

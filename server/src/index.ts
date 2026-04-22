@@ -10,38 +10,52 @@ import usageRoutes from './routes/usage.js';
 import skillRoutes from './routes/skills.js';
 import adminRoutes from './routes/admin.js';
 import uploadRoutes from './routes/uploads.js';
+import shareRoutes from './routes/share.js';
+import greetingRoutes from './routes/greeting.js';
 
-// Initialize database
-initializeDatabase();
-console.log('Database initialized');
+async function main() {
+  // Initialize database
+  await initializeDatabase();
+  console.log('Database initialized');
 
-const app = express();
+  const app = express();
 
-// Middleware
-app.use(cors({
-  origin: ['http://localhost:12053', 'http://localhost:12054', 'https://agents-office.zhgpt.org'],
-  credentials: true,
-}));
-app.use(express.json({ limit: '1mb' }));
+  // Middleware
+  const corsOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+    : [`http://localhost:${config.port - 1}`, `http://localhost:${config.port}`];
+  app.use(cors({
+    origin: corsOrigins,
+    credentials: true,
+  }));
+  app.use(express.json({ limit: '1mb' }));
 
-// Health check
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+  // Health check
+  app.get('/api/health', (_req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  });
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/conversations', conversationRoutes);
-app.use('/api/generate', generateRoutes);
-app.use('/api/files', fileRoutes);
-app.use('/api/usage', usageRoutes);
-app.use('/api/skills', skillRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/uploads', uploadRoutes);
+  // Routes
+  app.use('/api/auth', authRoutes);
+  app.use('/api/conversations', conversationRoutes);
+  app.use('/api/generate', generateRoutes);
+  app.use('/api/files', fileRoutes);
+  app.use('/api/usage', usageRoutes);
+  app.use('/api/skills', skillRoutes);
+  app.use('/api/admin', adminRoutes);
+  app.use('/api/uploads', uploadRoutes);
+  app.use('/api/share', shareRoutes);
+  app.use('/api/greeting', greetingRoutes);
 
-// Start server
-app.listen(config.port, () => {
-  console.log(`AI Agents Office server running on http://localhost:${config.port}`);
-  console.log(`Environment: ${config.nodeEnv}`);
-  console.log(`Workspace: ${config.workspaceRoot}`);
+  // Start server
+  app.listen(config.port, () => {
+    console.log(`AI Agents Office server running on http://localhost:${config.port}`);
+    console.log(`Environment: ${config.nodeEnv}`);
+    console.log(`Workspace: ${config.workspaceRoot}`);
+  });
+}
+
+main().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });
