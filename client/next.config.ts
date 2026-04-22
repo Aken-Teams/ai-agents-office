@@ -16,11 +16,13 @@ if (fs.existsSync(rootEnvPath)) {
 // API_URL for proxy: must NOT use process.env.PORT (Next.js sets it to its own port)
 const backendPort = (process.env.BACKEND_PORT || '12054').trim();
 const apiUrl = (process.env.API_URL || `http://localhost:${backendPort}`).trim();
+// Public API URL baked into the client bundle. Falls back to apiUrl for local dev.
+const publicApiUrl = (process.env.NEXT_PUBLIC_API_URL || apiUrl).trim();
 
 const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || '',
-    NEXT_PUBLIC_API_URL: apiUrl,
+    NEXT_PUBLIC_API_URL: publicApiUrl,
     NEXT_PUBLIC_DEPLOY_MODE: process.env.DEPLOY_MODE || 'pro-panjit',
   },
   async rewrites() {
