@@ -36,6 +36,31 @@ function convertMermaidMindmapToMarkdown(mermaidCode: string): string {
   return result.join('\n');
 }
 
+/**
+ * Truncate content without cutting inside a fenced code block (``` ... ```).
+ * If the cut point lands inside an open fence, extend to close it or
+ * pull back to before it opened.
+ */
+function truncateSafe(content: string, limit: number): string {
+  if (content.length <= limit) return content;
+  const fenceRe = /^```/gm;
+  let openIdx = -1;
+  let match: RegExpExecArray | null;
+  while ((match = fenceRe.exec(content)) !== null) {
+    if (match.index > limit) break;
+    if (openIdx < 0) {
+      openIdx = match.index; // opening fence
+    } else {
+      openIdx = -1; // closing fence
+    }
+  }
+  // If we're inside an open code block at the cut point, pull back to before it
+  if (openIdx >= 0) {
+    return content.slice(0, openIdx);
+  }
+  return content.slice(0, limit);
+}
+
 /** Parse [CHOICES]...[/CHOICES] blocks from assistant messages */
 function parseChoices(content: string): { text: string; choices: string[] } {
   const match = content.match(/\[CHOICES\]\s*([\s\S]*?)\s*\[\/CHOICES\]/);
@@ -270,7 +295,7 @@ function ConversationDetailPanel({
               const isSystem = msg.role === 'system';
               const isLong = msg.content?.length > 3000;
               const isMsgExpanded = expandedMessages.has(msg.id);
-              const displayContent = isLong && !isMsgExpanded ? msg.content.slice(0, 3000) : msg.content;
+              const displayContent = isLong && !isMsgExpanded ? truncateSafe(msg.content, 3000) : msg.content;
               return (
                 <div key={msg.id} className={`flex gap-2.5 ${isUser ? 'flex-row-reverse' : ''}`}>
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${

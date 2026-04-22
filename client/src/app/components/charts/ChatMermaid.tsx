@@ -22,6 +22,7 @@ export default function ChatMermaid({ code }: ChatMermaidProps) {
         const mermaid = (await import('mermaid')).default;
         mermaid.initialize({
           startOnLoad: false,
+          suppressErrorRendering: true,
           theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
           fontFamily: 'Inter, system-ui, sans-serif',
           flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
@@ -51,6 +52,7 @@ export default function ChatMermaid({ code }: ChatMermaidProps) {
           const mermaid = (await import('mermaid')).default;
           mermaid.initialize({
             startOnLoad: false,
+            suppressErrorRendering: true,
             theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
             fontFamily: 'Inter, system-ui, sans-serif',
           });
