@@ -17,6 +17,7 @@ const NAV_GROUPS = [
     icon: 'people',
     items: [
       { href: '/admin/users', labelKey: 'admin.sidebar.users' as const, icon: 'corporate_fare' },
+      { href: '/admin/quota-groups', labelKey: 'admin.sidebar.quotaGroups' as const, icon: 'category' },
       { href: '/admin/conversations', labelKey: 'admin.sidebar.conversations' as const, icon: 'forum' },
     ],
   },

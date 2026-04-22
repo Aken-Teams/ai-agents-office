@@ -38,11 +38,18 @@ export async function getUserDisplayCost(userId: string): Promise<number> {
  * Falls back to global limit.
  */
 export async function getEffectiveUserLimit(userId: string): Promise<number> {
-  const user = await dbGet<{ quota_override: number | null }>(
-    'SELECT quota_override FROM users WHERE id = ?', userId
+  const user = await dbGet<{ quota_override: number | null; quota_group_id: string | null }>(
+    'SELECT quota_override, quota_group_id FROM users WHERE id = ?', userId
   );
+  // Priority: personal override > group > global
   if (user?.quota_override != null) {
     return user.quota_override;
+  }
+  if (user?.quota_group_id) {
+    const group = await dbGet<{ limit_usd: number }>(
+      'SELECT limit_usd FROM quota_groups WHERE id = ?', user.quota_group_id
+    );
+    if (group) return group.limit_usd;
   }
   return getUserUsageLimitUsd();
 }

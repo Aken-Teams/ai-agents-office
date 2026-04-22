@@ -125,12 +125,14 @@ router.get('/users', async (req: Request, res: Response) => {
   const rows = await dbAll(`
     SELECT
       u.id, u.email, u.display_name, u.status, u.role, u.created_at, u.last_login_at,
+      u.quota_group_id, qg.name as quota_group_name,
       COALESCE(t.total_tokens, 0) as total_tokens,
       COALESCE(t.total_input, 0) as total_input_tokens,
       COALESCE(t.total_output, 0) as total_output_tokens,
       COALESCE(f.file_count, 0) as file_count,
       COALESCE(c.conv_count, 0) as conversation_count
     FROM users u
+    LEFT JOIN quota_groups qg ON qg.id = u.quota_group_id
     LEFT JOIN (
       SELECT user_id, SUM(input_tokens + output_tokens) as total_tokens,
         SUM(input_tokens) as total_input, SUM(output_tokens) as total_output
@@ -168,8 +170,11 @@ router.get('/users/:id', async (req: Request, res: Response) => {
   const userId = req.params.id as string;
 
   const user = await dbGet<any>(`
-    SELECT id, email, display_name, status, role, quota_override, created_at, updated_at
-    FROM users WHERE id = ?
+    SELECT u.id, u.email, u.display_name, u.status, u.role, u.quota_override, u.quota_group_id, u.created_at, u.updated_at,
+      qg.name as quota_group_name
+    FROM users u
+    LEFT JOIN quota_groups qg ON qg.id = u.quota_group_id
+    WHERE u.id = ?
   `, userId);
 
   if (!user) {
@@ -1035,6 +1040,104 @@ router.patch('/announcements/:id', async (req: Request, res: Response) => {
 router.delete('/announcements/:id', async (req: Request, res: Response) => {
   await dbRun('DELETE FROM announcements WHERE id = ?', req.params.id);
   res.json({ ok: true });
+});
+
+// ==================== Quota Groups ====================
+
+// GET /api/admin/quota-groups
+router.get('/quota-groups', async (_req: Request, res: Response) => {
+  const groups = await dbAll(`
+    SELECT qg.*, COUNT(u.id) as member_count
+    FROM quota_groups qg
+    LEFT JOIN users u ON u.quota_group_id = qg.id
+    GROUP BY qg.id
+    ORDER BY qg.limit_usd ASC
+  `);
+  res.json(groups);
+});
+
+// GET /api/admin/quota-groups/:id/members
+router.get('/quota-groups/:id/members', async (req: Request, res: Response) => {
+  const members = await dbAll(`
+    SELECT u.id, u.email, u.display_name, u.status, u.quota_override,
+      COALESCE(SUM(t.input_tokens), 0) as total_input,
+      COALESCE(SUM(t.output_tokens), 0) as total_output
+    FROM users u
+    LEFT JOIN token_usage t ON t.user_id = u.id
+    WHERE u.quota_group_id = ?
+    GROUP BY u.id
+    ORDER BY u.display_name ASC, u.email ASC
+  `, req.params.id);
+  res.json(members);
+});
+
+// POST /api/admin/quota-groups
+router.post('/quota-groups', async (req: Request, res: Response) => {
+  const { name, limit_usd, description } = req.body;
+  if (!name || limit_usd == null || limit_usd < 0) {
+    res.status(400).json({ error: 'name and limit_usd are required' }); return;
+  }
+  const id = uuidv4();
+  await dbRun(
+    'INSERT INTO quota_groups (id, name, limit_usd, description) VALUES (?, ?, ?, ?)',
+    id, name.trim(), limit_usd, description?.trim() || null
+  );
+  const group = await dbGet('SELECT * FROM quota_groups WHERE id = ?', id);
+  res.json(group);
+});
+
+// PATCH /api/admin/quota-groups/:id
+router.patch('/quota-groups/:id', async (req: Request, res: Response) => {
+  const { name, limit_usd, description } = req.body;
+  const sets: string[] = [];
+  const params: any[] = [];
+  if (name != null) { sets.push('name = ?'); params.push(name.trim()); }
+  if (limit_usd != null) {
+    if (limit_usd < 0) { res.status(400).json({ error: 'limit_usd cannot be negative' }); return; }
+    sets.push('limit_usd = ?'); params.push(limit_usd);
+  }
+  if (description !== undefined) { sets.push('description = ?'); params.push(description?.trim() || null); }
+  if (sets.length === 0) { res.status(400).json({ error: 'No fields to update' }); return; }
+  params.push(req.params.id);
+  await dbRun(`UPDATE quota_groups SET ${sets.join(', ')} WHERE id = ?`, ...params);
+  const group = await dbGet('SELECT * FROM quota_groups WHERE id = ?', req.params.id);
+  res.json(group);
+});
+
+// DELETE /api/admin/quota-groups/:id
+router.delete('/quota-groups/:id', async (req: Request, res: Response) => {
+  // Unassign all members first
+  await dbRun('UPDATE users SET quota_group_id = NULL WHERE quota_group_id = ?', req.params.id);
+  await dbRun('DELETE FROM quota_groups WHERE id = ?', req.params.id);
+  res.json({ ok: true });
+});
+
+// POST /api/admin/quota-groups/:id/assign
+router.post('/quota-groups/:id/assign', async (req: Request, res: Response) => {
+  const { userIds } = req.body;
+  if (!Array.isArray(userIds) || userIds.length === 0) {
+    res.status(400).json({ error: 'userIds array is required' }); return;
+  }
+  const placeholders = userIds.map(() => '?').join(',');
+  await dbRun(
+    `UPDATE users SET quota_group_id = ? WHERE id IN (${placeholders})`,
+    req.params.id, ...userIds
+  );
+  res.json({ ok: true, count: userIds.length });
+});
+
+// POST /api/admin/quota-groups/unassign
+router.post('/quota-groups/unassign', async (req: Request, res: Response) => {
+  const { userIds } = req.body;
+  if (!Array.isArray(userIds) || userIds.length === 0) {
+    res.status(400).json({ error: 'userIds array is required' }); return;
+  }
+  const placeholders = userIds.map(() => '?').join(',');
+  await dbRun(
+    `UPDATE users SET quota_group_id = NULL WHERE id IN (${placeholders})`,
+    ...userIds
+  );
+  res.json({ ok: true, count: userIds.length });
 });
 
 export default router;

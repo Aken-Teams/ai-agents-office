@@ -326,6 +326,21 @@ export async function initializeDatabase(): Promise<void> {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS quota_groups (
+        id          VARCHAR(36) PRIMARY KEY,
+        name        VARCHAR(100) NOT NULL,
+        limit_usd   DECIMAL(10,2) NOT NULL,
+        description VARCHAR(255),
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Add quota_group_id column to users if not exists
+    try {
+      await conn.query('ALTER TABLE users ADD COLUMN quota_group_id VARCHAR(36) DEFAULT NULL');
+    } catch { /* column already exists */ }
+
     // Add summary column to conversations if not exists
     try {
       await conn.query('ALTER TABLE conversations ADD COLUMN summary VARCHAR(500) DEFAULT NULL');

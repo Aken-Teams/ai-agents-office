@@ -381,17 +381,26 @@ export default function AdminUsers() {
               {t('admin.users.detail.quotaSave' as any)}
             </button>
           </div>
-          {detail.quota_override != null && (
-            <div className="flex items-center gap-1 mt-1.5">
-              <span className="text-[10px] text-on-surface-variant">{t('admin.users.detail.quotaOverride' as any)}: ${detail.quota_override}</span>
-              <button
-                onClick={() => { setQuotaInput(''); updateQuota(detail.id); }}
-                className="text-[10px] text-error hover:text-error/80 transition-colors cursor-pointer ml-1"
-              >
-                {t('admin.users.detail.quotaReset' as any)}
-              </button>
-            </div>
-          )}
+          {/* Quota source indicator */}
+          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            {detail.quota_override != null ? (
+              <>
+                <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 rounded-full">{t('admin.quotaGroups.source.personal' as any)}: ${detail.quota_override}</span>
+                <button
+                  onClick={() => { setQuotaInput(''); updateQuota(detail.id); }}
+                  className="text-[10px] text-error hover:text-error/80 transition-colors cursor-pointer"
+                >
+                  {t('admin.users.detail.quotaReset' as any)}
+                </button>
+              </>
+            ) : (detail as any).quota_group_name ? (
+              <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded-full">
+                {t('admin.quotaGroups.source.group' as any)}: {(detail as any).quota_group_name}
+              </span>
+            ) : (
+              <span className="text-[10px] px-1.5 py-0.5 bg-surface-container-highest text-on-surface-variant rounded-full">{t('admin.quotaGroups.source.global' as any)}</span>
+            )}
+          </div>
         </div>
 
         {/* Recent Files */}
