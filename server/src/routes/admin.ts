@@ -126,6 +126,7 @@ router.get('/users', async (req: Request, res: Response) => {
     SELECT
       u.id, u.email, u.display_name, u.status, u.role, u.created_at, u.last_login_at,
       u.quota_group_id, qg.name as quota_group_name,
+      u.invite_code_id, ic.code as invite_code, ic.label as invite_code_label,
       COALESCE(t.total_tokens, 0) as total_tokens,
       COALESCE(t.total_input, 0) as total_input_tokens,
       COALESCE(t.total_output, 0) as total_output_tokens,
@@ -133,6 +134,7 @@ router.get('/users', async (req: Request, res: Response) => {
       COALESCE(c.conv_count, 0) as conversation_count
     FROM users u
     LEFT JOIN quota_groups qg ON qg.id = u.quota_group_id
+    LEFT JOIN invite_codes ic ON ic.id = u.invite_code_id
     LEFT JOIN (
       SELECT user_id, SUM(input_tokens + output_tokens) as total_tokens,
         SUM(input_tokens) as total_input, SUM(output_tokens) as total_output
@@ -171,9 +173,11 @@ router.get('/users/:id', async (req: Request, res: Response) => {
 
   const user = await dbGet<any>(`
     SELECT u.id, u.email, u.display_name, u.status, u.role, u.quota_override, u.quota_group_id, u.created_at, u.updated_at,
-      qg.name as quota_group_name
+      qg.name as quota_group_name,
+      u.invite_code_id, ic.code as invite_code, ic.label as invite_code_label
     FROM users u
     LEFT JOIN quota_groups qg ON qg.id = u.quota_group_id
+    LEFT JOIN invite_codes ic ON ic.id = u.invite_code_id
     WHERE u.id = ?
   `, userId);
 
@@ -1138,6 +1142,67 @@ router.post('/quota-groups/unassign', async (req: Request, res: Response) => {
     ...userIds
   );
   res.json({ ok: true, count: userIds.length });
+});
+
+// ==================== Invite Codes ====================
+
+// GET /api/admin/invite-codes
+router.get('/invite-codes', async (_req: Request, res: Response) => {
+  const codes = await dbAll(`
+    SELECT id, code, label, is_active, used_count, created_at
+    FROM invite_codes
+    ORDER BY created_at DESC
+  `);
+  res.json(codes);
+});
+
+// POST /api/admin/invite-codes
+router.post('/invite-codes', async (req: Request, res: Response) => {
+  const { code, label } = req.body;
+  if (!code || !code.trim()) { res.status(400).json({ error: 'code is required' }); return; }
+  if (!label || !label.trim()) { res.status(400).json({ error: 'label is required' }); return; }
+  if (code.trim().length > 50) { res.status(400).json({ error: 'code max 50 chars' }); return; }
+  if (label.trim().length > 100) { res.status(400).json({ error: 'label max 100 chars' }); return; }
+
+  const existing = await dbGet('SELECT id FROM invite_codes WHERE code = ?', code.trim());
+  if (existing) { res.status(409).json({ error: '此邀請碼已存在' }); return; }
+
+  const id = uuidv4();
+  await dbRun(
+    'INSERT INTO invite_codes (id, code, label) VALUES (?, ?, ?)',
+    id, code.trim(), label.trim()
+  );
+  res.status(201).json({ id, code: code.trim(), label: label.trim(), is_active: 1, used_count: 0 });
+});
+
+// PATCH /api/admin/invite-codes/:id
+router.patch('/invite-codes/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const record = await dbGet('SELECT id FROM invite_codes WHERE id = ?', id);
+  if (!record) { res.status(404).json({ error: 'Invite code not found' }); return; }
+
+  const { label, is_active } = req.body;
+  if (label !== undefined) {
+    if (!label.trim()) { res.status(400).json({ error: 'label cannot be empty' }); return; }
+    await dbRun('UPDATE invite_codes SET label = ? WHERE id = ?', label.trim(), id);
+  }
+  if (is_active !== undefined) {
+    await dbRun('UPDATE invite_codes SET is_active = ? WHERE id = ?', is_active ? 1 : 0, id);
+  }
+  const updated = await dbGet('SELECT * FROM invite_codes WHERE id = ?', id);
+  res.json(updated);
+});
+
+// DELETE /api/admin/invite-codes/:id
+router.delete('/invite-codes/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const record = await dbGet('SELECT id FROM invite_codes WHERE id = ?', id);
+  if (!record) { res.status(404).json({ error: 'Invite code not found' }); return; }
+
+  // Nullify references on users
+  await dbRun('UPDATE users SET invite_code_id = NULL WHERE invite_code_id = ?', id);
+  await dbRun('DELETE FROM invite_codes WHERE id = ?', id);
+  res.json({ ok: true });
 });
 
 export default router;

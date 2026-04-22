@@ -341,6 +341,22 @@ export async function initializeDatabase(): Promise<void> {
       await conn.query('ALTER TABLE users ADD COLUMN quota_group_id VARCHAR(36) DEFAULT NULL');
     } catch { /* column already exists */ }
 
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS invite_codes (
+        id          VARCHAR(36) PRIMARY KEY,
+        code        VARCHAR(50) NOT NULL UNIQUE,
+        label       VARCHAR(100) NOT NULL,
+        is_active   TINYINT NOT NULL DEFAULT 1,
+        used_count  INT NOT NULL DEFAULT 0,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Add invite_code_id column to users if not exists
+    try {
+      await conn.query('ALTER TABLE users ADD COLUMN invite_code_id VARCHAR(36) DEFAULT NULL');
+    } catch { /* column already exists */ }
+
     // Add summary column to conversations if not exists
     try {
       await conn.query('ALTER TABLE conversations ADD COLUMN summary VARCHAR(500) DEFAULT NULL');

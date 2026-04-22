@@ -78,6 +78,14 @@ function isValidEmail(email: string): boolean { return EMAIL_REGEX.test(email) &
 function generateVerificationCode(): string { return String(Math.floor(100000 + Math.random() * 900000)); }
 
 /* ============================================================
+   GET /api/auth/invite-code-required
+   Public endpoint — tells frontend whether invite code is needed
+   ============================================================ */
+router.get('/invite-code-required', (_req: Request, res: Response) => {
+  res.json({ required: config.deployMode === 'pro-out' });
+});
+
+/* ============================================================
    POST /api/auth/register
    Step 1: Create user + send verification code (if email enabled)
    ============================================================ */
@@ -88,7 +96,7 @@ router.post('/register', async (req: Request, res: Response) => {
       res.status(429).json({ error: '註冊請求過於頻繁，請 15 分鐘後再試' }); return;
     }
 
-    const { email, password, displayName } = req.body;
+    const { email, password, displayName, inviteCode } = req.body;
     if (req.body.website || req.body.phone_number) {
       res.status(201).json({ pending: true, message: '帳號已建立，請等待管理者審核通過後即可登入' }); return;
     }
@@ -101,6 +109,24 @@ router.post('/register', async (req: Request, res: Response) => {
     const trimmedName = (displayName || '').trim();
     if (trimmedName && trimmedName.length > 50) { res.status(400).json({ error: '顯示名稱最多 50 個字元' }); return; }
 
+    // Invite code validation (pro-out mode only)
+    let inviteCodeId: string | null = null;
+    if (config.deployMode === 'pro-out') {
+      if (!inviteCode || !inviteCode.trim()) {
+        res.status(400).json({ error: '邀請碼為必填' }); return;
+      }
+      const codeRecord = await dbGet<{ id: string; is_active: number }>(
+        'SELECT id, is_active FROM invite_codes WHERE code = ?', inviteCode.trim()
+      );
+      if (!codeRecord) {
+        res.status(400).json({ error: '邀請碼無效' }); return;
+      }
+      if (!codeRecord.is_active) {
+        res.status(400).json({ error: '此邀請碼已停用' }); return;
+      }
+      inviteCodeId = codeRecord.id;
+    }
+
     const normalizedEmail = email.toLowerCase().trim();
     const existing = await dbGet('SELECT id, status FROM users WHERE email = ?', normalizedEmail);
     if (existing) { res.status(409).json({ error: '此電子信箱已被註冊' }); return; }
@@ -108,12 +134,17 @@ router.post('/register', async (req: Request, res: Response) => {
     const id = uuidv4();
     const passwordHash = await bcrypt.hash(password, config.bcryptRounds);
 
+    // Increment invite code usage counter
+    if (inviteCodeId) {
+      await dbRun('UPDATE invite_codes SET used_count = used_count + 1 WHERE id = ?', inviteCodeId);
+    }
+
     // If email service is available, send verification code
     if (isEmailEnabled()) {
       // Create user as 'pending_verification' (not yet active)
       await dbRun(
-        'INSERT INTO users (id, email, password_hash, display_name, role, status) VALUES (?, ?, ?, ?, ?, ?)',
-        id, normalizedEmail, passwordHash, trimmedName || null, 'user', 'pending_verification'
+        'INSERT INTO users (id, email, password_hash, display_name, role, status, invite_code_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        id, normalizedEmail, passwordHash, trimmedName || null, 'user', 'pending_verification', inviteCodeId
       );
 
       // Generate and send code
@@ -139,8 +170,8 @@ router.post('/register', async (req: Request, res: Response) => {
     } else {
       // No email service — admin approval flow
       await dbRun(
-        'INSERT INTO users (id, email, password_hash, display_name, role, status) VALUES (?, ?, ?, ?, ?, ?)',
-        id, normalizedEmail, passwordHash, trimmedName || null, 'user', 'pending'
+        'INSERT INTO users (id, email, password_hash, display_name, role, status, invite_code_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        id, normalizedEmail, passwordHash, trimmedName || null, 'user', 'pending', inviteCodeId
       );
       res.status(201).json({ pending: true, message: '帳號已建立，請等待管理者審核通過後即可登入' });
     }

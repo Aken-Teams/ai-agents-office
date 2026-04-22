@@ -105,6 +105,8 @@ const en = {
   'register.verifyLoading': 'Verifying...',
   'register.resendCode': 'Resend verification code',
   'register.resendCooldown': 'Resend',
+  'register.inviteCodeLabel': 'Invite Code',
+  'register.inviteCodePlaceholder': 'Enter invite code',
 
   // Forgot Password
   'login.forgotPassword': 'Forgot password?',
@@ -582,6 +584,7 @@ const en = {
   'admin.sidebar.expand': 'Expand Sidebar',
   'admin.sidebar.logout': 'Logout',
   'admin.sidebar.quotaGroups': 'Quota Groups',
+  'admin.sidebar.inviteCodes': 'Invite Codes',
   'admin.sidebar.poweredBy': 'Powered by Zhaoi Tech',
 
   // Admin Quota Groups
@@ -611,6 +614,29 @@ const en = {
   'admin.quotaGroups.assignModal.confirm': 'Confirm',
   'admin.quotaGroups.assignModal.alreadyIn': 'Already in group',
   'admin.quotaGroups.showMore': 'Show more ({remaining} remaining)',
+
+  // Admin Invite Codes
+  'admin.inviteCodes.title': 'Invite Code Management',
+  'admin.inviteCodes.create': 'Create Code',
+  'admin.inviteCodes.createTitle': 'Create Invite Code',
+  'admin.inviteCodes.editTitle': 'Edit Invite Code',
+  'admin.inviteCodes.codeLabel': 'Invite Code',
+  'admin.inviteCodes.labelLabel': 'Description',
+  'admin.inviteCodes.labelPlaceholder': 'e.g., VIP Clients, Partners',
+  'admin.inviteCodes.codeReadonly': 'Code cannot be changed after creation',
+  'admin.inviteCodes.active': 'Active',
+  'admin.inviteCodes.inactive': 'Inactive',
+  'admin.inviteCodes.used': 'used',
+  'admin.inviteCodes.activate': 'Activate',
+  'admin.inviteCodes.deactivate': 'Deactivate',
+  'admin.inviteCodes.edit': 'Edit',
+  'admin.inviteCodes.delete': 'Delete',
+  'admin.inviteCodes.save': 'Save',
+  'admin.inviteCodes.cancel': 'Cancel',
+  'admin.inviteCodes.confirmDelete': 'Confirm Delete',
+  'admin.inviteCodes.deleteMessage': 'Users who registered with this code will no longer be associated with it. Are you sure you want to delete this invite code?',
+  'admin.inviteCodes.empty': 'No invite codes created yet',
+  'admin.inviteCodes.errorRequired': 'Code and description are required',
 
   'admin.overview.title': 'System Control Center',
   'admin.overview.allNodesNormal': 'All nodes normal',

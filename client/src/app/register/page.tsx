@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
@@ -62,18 +62,27 @@ function RegisterForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
+  const [inviteCodeRequired, setInviteCodeRequired] = useState(false);
   // Verification code step
   const [step, setStep] = useState<'form' | 'verify'>('form');
   const [verifyEmail_, setVerifyEmail] = useState('');
   const [code, setCode] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
 
+  useEffect(() => {
+    fetch('/api/auth/invite-code-required')
+      .then(r => r.json())
+      .then(d => { if (d.required) setInviteCodeRequired(true); })
+      .catch(() => {});
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const result = await register(email, password, displayName);
+      const result = await register(email, password, displayName, inviteCodeRequired ? inviteCode : undefined);
       if (result.needsVerification) {
         setVerifyEmail(result.email || email);
         setStep('verify');
@@ -287,6 +296,24 @@ function RegisterForm() {
                   {error && (
                     <div className="bg-error-container/30 border border-error/20 text-on-error-container px-4 py-3 rounded text-sm">
                       {error}
+                    </div>
+                  )}
+
+                  {inviteCodeRequired && (
+                    <div className="space-y-1.5">
+                      <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
+                        {t('register.inviteCodeLabel' as any)}
+                      </label>
+                      <input
+                        className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-base md:text-sm font-mono tracking-widest rounded placeholder:text-outline placeholder:font-body placeholder:tracking-normal"
+                        type="text"
+                        value={inviteCode}
+                        onChange={e => setInviteCode(e.target.value)}
+                        placeholder={t('register.inviteCodePlaceholder' as any)}
+                        required
+                        maxLength={50}
+                        autoComplete="off"
+                      />
                     </div>
                   )}
 
