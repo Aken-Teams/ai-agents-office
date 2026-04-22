@@ -109,6 +109,8 @@ const zhTW = {
   'register.verifyLoading': '驗證中...',
   'register.resendCode': '重新發送驗證碼',
   'register.resendCooldown': '重新發送',
+  'register.inviteCodeLabel': '邀請碼',
+  'register.inviteCodePlaceholder': '請輸入邀請碼',
 
   // Forgot Password
   'login.forgotPassword': '忘記密碼？',
@@ -597,6 +599,7 @@ const zhTW = {
   'admin.sidebar.expand': '展開側邊欄',
   'admin.sidebar.logout': '登出',
   'admin.sidebar.quotaGroups': '額度群組',
+  'admin.sidebar.inviteCodes': '邀請碼管理',
   'admin.sidebar.poweredBy': 'Powered by 智合科技',
 
   // Admin Quota Groups
@@ -626,6 +629,29 @@ const zhTW = {
   'admin.quotaGroups.assignModal.confirm': '確認分配',
   'admin.quotaGroups.assignModal.alreadyIn': '已在此群組',
   'admin.quotaGroups.showMore': '顯示更多（剩餘 {remaining} 位）',
+
+  // Admin Invite Codes
+  'admin.inviteCodes.title': '邀請碼管理',
+  'admin.inviteCodes.create': '新增邀請碼',
+  'admin.inviteCodes.createTitle': '新增邀請碼',
+  'admin.inviteCodes.editTitle': '編輯邀請碼',
+  'admin.inviteCodes.codeLabel': '邀請碼',
+  'admin.inviteCodes.labelLabel': '說明標籤',
+  'admin.inviteCodes.labelPlaceholder': '例如：VIP 客戶、合作夥伴',
+  'admin.inviteCodes.codeReadonly': '邀請碼建立後無法修改',
+  'admin.inviteCodes.active': '啟用',
+  'admin.inviteCodes.inactive': '停用',
+  'admin.inviteCodes.used': '人使用',
+  'admin.inviteCodes.activate': '啟用',
+  'admin.inviteCodes.deactivate': '停用',
+  'admin.inviteCodes.edit': '編輯',
+  'admin.inviteCodes.delete': '刪除',
+  'admin.inviteCodes.save': '儲存',
+  'admin.inviteCodes.cancel': '取消',
+  'admin.inviteCodes.confirmDelete': '確認刪除',
+  'admin.inviteCodes.deleteMessage': '刪除後使用此邀請碼的用戶將不再關聯此碼。確定要刪除以下邀請碼嗎？',
+  'admin.inviteCodes.empty': '尚未建立任何邀請碼',
+  'admin.inviteCodes.errorRequired': '邀請碼和說明標籤為必填',
 
   // Admin Overview
   'admin.overview.title': '系統控制中心',

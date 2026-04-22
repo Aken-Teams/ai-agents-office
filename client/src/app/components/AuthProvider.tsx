@@ -19,7 +19,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (token: string, tokenType?: 'credential' | 'access_token') => Promise<{ needsVerification?: boolean; email?: string } | void>;
-  register: (email: string, password: string, displayName: string) => Promise<{ pending: boolean; needsVerification: boolean; email?: string; message?: string }>;
+  register: (email: string, password: string, displayName: string, inviteCode?: string) => Promise<{ pending: boolean; needsVerification: boolean; email?: string; message?: string }>;
   verifyEmail: (email: string, code: string) => Promise<void>;
   resendCode: (email: string) => Promise<void>;
   logout: () => void;
@@ -104,11 +104,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await fetchMe(data.token);
   }, []);
 
-  const register = useCallback(async (email: string, password: string, displayName: string) => {
+  const register = useCallback(async (email: string, password: string, displayName: string, inviteCode?: string) => {
     const res = await fetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, displayName }),
+      body: JSON.stringify({ email, password, displayName, ...(inviteCode ? { inviteCode } : {}) }),
     });
     if (!res.ok) {
       const err = await res.json();

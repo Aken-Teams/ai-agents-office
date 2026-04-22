@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAdminAuth } from './AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
 
+const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
 const ADMIN_SIDEBAR_KEY = 'admin-sidebar-collapsed';
 
 const PINNED_NAV = { href: '/admin/overview', labelKey: 'admin.sidebar.overview' as const, icon: 'dashboard' };
@@ -17,8 +18,9 @@ const NAV_GROUPS = [
     icon: 'people',
     items: [
       { href: '/admin/users', labelKey: 'admin.sidebar.users' as const, icon: 'corporate_fare' },
-      { href: '/admin/quota-groups', labelKey: 'admin.sidebar.quotaGroups' as const, icon: 'category' },
       { href: '/admin/conversations', labelKey: 'admin.sidebar.conversations' as const, icon: 'forum' },
+      { href: '/admin/quota-groups', labelKey: 'admin.sidebar.quotaGroups' as const, icon: 'category' },
+      ...(deployMode === 'pro-out' ? [{ href: '/admin/invite-codes', labelKey: 'admin.sidebar.inviteCodes' as const, icon: 'card_membership' }] : []),
     ],
   },
   {

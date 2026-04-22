@@ -403,6 +403,18 @@ export default function AdminUsers() {
           </div>
         </div>
 
+        {/* Invite Code */}
+        {(detail as any).invite_code_label && (
+          <div className="px-4 py-2 border-b border-outline-variant/10">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-sm text-on-surface-variant">card_membership</span>
+              <span className="text-xs text-on-surface-variant">{t('admin.inviteCodes.title' as any)}:</span>
+              <span className="text-xs font-mono font-bold text-primary">{(detail as any).invite_code}</span>
+              <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded-full">{(detail as any).invite_code_label}</span>
+            </div>
+          </div>
+        )}
+
         {/* Recent Files */}
         <div className="px-4 py-3 border-b border-outline-variant/10 flex-1 min-h-0 overflow-y-auto">
           <p className="text-xs uppercase tracking-wider text-on-surface-variant font-bold mb-2">{t('admin.users.detail.recentFiles')} ({detail.file_count})</p>
