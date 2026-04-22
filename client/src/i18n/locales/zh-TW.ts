@@ -625,6 +625,7 @@ const zhTW = {
   'admin.quotaGroups.assignModal.selected': '已選擇 {count} 位',
   'admin.quotaGroups.assignModal.confirm': '確認分配',
   'admin.quotaGroups.assignModal.alreadyIn': '已在此群組',
+  'admin.quotaGroups.showMore': '顯示更多（剩餘 {remaining} 位）',
 
   // Admin Overview
   'admin.overview.title': '系統控制中心',

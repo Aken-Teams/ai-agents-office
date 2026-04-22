@@ -610,6 +610,7 @@ const en = {
   'admin.quotaGroups.assignModal.selected': '{count} selected',
   'admin.quotaGroups.assignModal.confirm': 'Confirm',
   'admin.quotaGroups.assignModal.alreadyIn': 'Already in group',
+  'admin.quotaGroups.showMore': 'Show more ({remaining} remaining)',
 
   'admin.overview.title': 'System Control Center',
   'admin.overview.allNodesNormal': 'All nodes normal',

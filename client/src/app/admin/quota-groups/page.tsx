@@ -60,6 +60,8 @@ function QuotaGroupsContent() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
+  const [memberShowCount, setMemberShowCount] = useState(10);
+  const MEMBER_PAGE_SIZE = 10;
 
   // Assign modal
   const [showAssign, setShowAssign] = useState(false);
@@ -143,6 +145,7 @@ function QuotaGroupsContent() {
       setMembers([]);
     } else {
       setExpandedId(groupId);
+      setMemberShowCount(MEMBER_PAGE_SIZE);
       fetchMembers(groupId);
     }
   }
@@ -226,11 +229,11 @@ function QuotaGroupsContent() {
             <div key={g.id} className="bg-surface-container rounded-xl border border-outline-variant/10 overflow-hidden">
               {/* Group Card */}
               <div
-                className="flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-surface-container-high/30 transition-colors"
+                className="flex items-center gap-3 md:gap-4 px-3 md:px-5 py-3 md:py-4 cursor-pointer hover:bg-surface-container-high/30 transition-colors"
                 onClick={() => toggleExpand(g.id)}
               >
-                <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-primary">category</span>
+                <div className="w-9 h-9 md:w-11 md:h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-primary text-xl md:text-2xl">category</span>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -244,23 +247,23 @@ function QuotaGroupsContent() {
                       <span className="material-symbols-outlined text-xs">group</span>
                       {t('admin.quotaGroups.memberCount' as any, { count: g.member_count })}
                     </span>
-                    {g.description && <span className="truncate">{g.description}</span>}
+                    {g.description && <span className="hidden md:inline truncate">{g.description}</span>}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
                   <button
                     onClick={e => { e.stopPropagation(); openEdit(g); }}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                    className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
                   >
-                    <span className="material-symbols-outlined text-lg">edit</span>
+                    <span className="material-symbols-outlined text-base md:text-lg">edit</span>
                   </button>
                   <button
                     onClick={e => { e.stopPropagation(); setDeleteTarget(g); }}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer"
+                    className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer"
                   >
-                    <span className="material-symbols-outlined text-lg">delete</span>
+                    <span className="material-symbols-outlined text-base md:text-lg">delete</span>
                   </button>
-                  <span className={`material-symbols-outlined text-on-surface-variant text-lg transition-transform ${expandedId === g.id ? 'rotate-180' : ''}`}>
+                  <span className={`material-symbols-outlined text-on-surface-variant text-base md:text-lg transition-transform ${expandedId === g.id ? 'rotate-180' : ''}`}>
                     expand_more
                   </span>
                 </div>
@@ -269,7 +272,7 @@ function QuotaGroupsContent() {
               {/* Expanded Members */}
               {expandedId === g.id && (
                 <div className="border-t border-outline-variant/10 bg-surface-container-low/30">
-                  <div className="flex items-center justify-between px-5 py-3">
+                  <div className="flex items-center justify-between px-3 md:px-5 py-3">
                     <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">
                       {t('admin.quotaGroups.members' as any)}
                     </span>
@@ -289,17 +292,17 @@ function QuotaGroupsContent() {
                     <p className="text-center py-6 text-xs text-on-surface-variant">{t('admin.quotaGroups.noMembers' as any)}</p>
                   ) : (
                     <div className="divide-y divide-outline-variant/10">
-                      {members.map(m => {
+                      {members.slice(0, memberShowCount).map(m => {
                         const cost = calcCost(m.total_input, m.total_output);
                         const effectiveLimit = m.quota_override != null ? m.quota_override : g.limit_usd;
                         const pct = effectiveLimit > 0 ? Math.min(cost / effectiveLimit * 100, 100) : 0;
                         return (
-                          <div key={m.id} className="flex items-center gap-3 px-5 py-3 hover:bg-surface-container/50 transition-colors group">
-                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                          <div key={m.id} className="flex items-start md:items-center gap-2.5 md:gap-3 px-3 md:px-5 py-3 hover:bg-surface-container/50 transition-colors group">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0 mt-0.5 md:mt-0">
                               {(m.display_name || m.email).slice(0, 1).toUpperCase()}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <p className="text-sm text-on-surface truncate font-medium">{m.display_name || m.email.split('@')[0]}</p>
                                 {m.quota_override != null && (
                                   <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 rounded-full shrink-0">
@@ -308,8 +311,22 @@ function QuotaGroupsContent() {
                                 )}
                               </div>
                               <p className="text-xs text-on-surface-variant/60 truncate">{m.email}</p>
+                              {/* Mobile: cost + progress below name */}
+                              <div className="flex items-center gap-2 mt-1.5 md:hidden">
+                                <div className="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full transition-all ${pct >= 80 ? 'bg-error' : pct >= 50 ? 'bg-warning' : 'bg-primary'}`}
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <span className="text-[11px] font-mono text-on-surface-variant shrink-0">
+                                  <span className={pct >= 80 ? 'text-error' : pct >= 50 ? 'text-warning' : ''}>${cost.toFixed(2)}</span>
+                                  <span className="text-on-surface-variant/40">/{effectiveLimit}</span>
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex flex-col items-end gap-1 shrink-0 min-w-[100px]">
+                            {/* Desktop: cost + progress on right */}
+                            <div className="hidden md:flex flex-col items-end gap-1 shrink-0 min-w-[100px]">
                               <span className="text-xs font-mono text-on-surface-variant">
                                 <span className={pct >= 80 ? 'text-error font-bold' : pct >= 50 ? 'text-warning font-bold' : ''}>${cost.toFixed(2)}</span>
                                 <span className="text-on-surface-variant/40"> / ${effectiveLimit}</span>
@@ -323,13 +340,22 @@ function QuotaGroupsContent() {
                             </div>
                             <button
                               onClick={() => handleUnassign([m.id])}
-                              className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant/40 hover:text-error hover:bg-error/10 transition-colors cursor-pointer opacity-0 group-hover:opacity-100 shrink-0"
+                              className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant/40 hover:text-error hover:bg-error/10 transition-colors cursor-pointer md:opacity-0 md:group-hover:opacity-100 shrink-0"
                             >
                               <span className="material-symbols-outlined text-sm">close</span>
                             </button>
                           </div>
                         );
                       })}
+                      {members.length > memberShowCount && (
+                        <button
+                          onClick={() => setMemberShowCount(prev => prev + MEMBER_PAGE_SIZE)}
+                          className="w-full py-3 text-xs font-bold text-primary hover:bg-primary/5 transition-colors cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-sm">expand_more</span>
+                          {t('admin.quotaGroups.showMore' as any, { remaining: members.length - memberShowCount })}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

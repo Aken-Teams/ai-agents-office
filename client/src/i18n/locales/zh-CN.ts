@@ -621,6 +621,7 @@ const zhCN = {
   'admin.quotaGroups.assignModal.selected': '已选择 {count} 位',
   'admin.quotaGroups.assignModal.confirm': '确认分配',
   'admin.quotaGroups.assignModal.alreadyIn': '已在此群组',
+  'admin.quotaGroups.showMore': '显示更多（剩余 {remaining} 位）',
 
   // Admin Overview
   'admin.overview.title': '系统控制中心',
