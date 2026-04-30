@@ -1372,4 +1372,83 @@ router.get('/analytics/top-users', async (req: Request, res: Response) => {
   res.json(rows);
 });
 
+// POST /api/admin/analytics/topic-analysis  { period: '7d'|'30d' }
+router.post('/analytics/topic-analysis', async (req: Request, res: Response) => {
+  const period = (req.body?.period as string) || '7d';
+  const days = period === '7d' ? 7 : 30;
+
+  if (!config.deepseekApiKey) {
+    res.status(503).json({ error: 'DeepSeek API key not configured' });
+    return;
+  }
+
+  // Fetch top 40 conversation titles for analysis
+  const rows = await dbAll<{ title: string | null; category: string | null; total_tokens: number }>(`
+    SELECT c.title, c.category,
+      COALESCE(SUM(tu.input_tokens + tu.output_tokens), 0) as total_tokens
+    FROM conversations c
+    LEFT JOIN token_usage tu ON tu.conversation_id = c.id
+    WHERE c.created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+      AND c.title IS NOT NULL AND c.title != ''
+    GROUP BY c.id, c.title, c.category
+    ORDER BY total_tokens DESC
+    LIMIT 40
+  `);
+
+  if (rows.length === 0) {
+    res.json({ analysis: null, categories: [] });
+    return;
+  }
+
+  const titleList = rows.map((r, i) => `${i + 1}. ${r.title}`).join('\n');
+
+  const prompt = `以下是一個 AI 文件生成平台近 ${days} 天內，使用者發起的對話標題列表（共 ${rows.length} 筆）。
+
+${titleList}
+
+請分析這些對話的主題類型，並以 JSON 格式回傳分析結果，格式如下：
+{
+  "summary": "一句話摘要使用者最常做什麼任務",
+  "categories": [
+    { "name": "類型名稱（繁體中文，3-8字）", "count": 數量, "pct": 百分比整數, "examples": ["範例標題1", "範例標題2"] }
+  ]
+}
+
+要求：
+- categories 最多 6 個，按數量降序排列
+- 類型名稱使用繁體中文，清楚描述任務類型（如「財務報表分析」「簡報製作」「資料整理與計算」「競爭分析報告」等）
+- 只回傳 JSON，不加任何說明文字`;
+
+  const dsRes = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${config.deepseekApiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+    }),
+  });
+
+  if (!dsRes.ok) {
+    const err = await dsRes.text();
+    console.error('DeepSeek error:', err);
+    res.status(502).json({ error: 'DeepSeek API error' });
+    return;
+  }
+
+  const dsData = await dsRes.json() as { choices: Array<{ message: { content: string } }> };
+  const content = dsData.choices?.[0]?.message?.content ?? '{}';
+
+  try {
+    const parsed = JSON.parse(content);
+    res.json(parsed);
+  } catch {
+    res.status(502).json({ error: 'Failed to parse DeepSeek response' });
+  }
+});
+
 export default router;

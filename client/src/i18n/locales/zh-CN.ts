@@ -650,6 +650,16 @@ const zhCN = {
   'admin.analytics.convTitle': '对话主题',
   'admin.analytics.user': '用户',
   'admin.analytics.messages': '消息',
+  'admin.analytics.topicAnalysis': 'AI 主题分析',
+  'admin.analytics.topicAnalyzing': 'AI 分析中…',
+  'admin.analytics.topicAnalyzeBtn': '重新分析',
+  'admin.analytics.topicSummary': '任务摘要',
+  'admin.analytics.topicNoKey': '未设置 DeepSeek API',
+  'admin.analytics.cat.document': '文件生成',
+  'admin.analytics.cat.assistant': 'AI 助手',
+  'admin.analytics.mode.orchestrated': '多智能体',
+  'admin.analytics.mode.direct': '直接执行',
+  'admin.analytics.mode.null': '未指定',
 
   // Admin Quota Groups
   'admin.quotaGroups.title': '额度群组管理',

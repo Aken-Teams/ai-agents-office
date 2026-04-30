@@ -654,6 +654,16 @@ const zhTW = {
   'admin.analytics.convTitle': '對話主題',
   'admin.analytics.user': '用戶',
   'admin.analytics.messages': '訊息',
+  'admin.analytics.topicAnalysis': 'AI 主題分析',
+  'admin.analytics.topicAnalyzing': 'AI 分析中…',
+  'admin.analytics.topicAnalyzeBtn': '重新分析',
+  'admin.analytics.topicSummary': '任務摘要',
+  'admin.analytics.topicNoKey': '未設定 DeepSeek API',
+  'admin.analytics.cat.document': '文件生成',
+  'admin.analytics.cat.assistant': 'AI 助手',
+  'admin.analytics.mode.orchestrated': '多智能體',
+  'admin.analytics.mode.direct': '直接執行',
+  'admin.analytics.mode.null': '未指定',
 
   // Admin Quota Groups
   'admin.quotaGroups.title': '額度群組管理',

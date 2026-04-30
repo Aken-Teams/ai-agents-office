@@ -639,6 +639,16 @@ const en = {
   'admin.analytics.convTitle': 'Topic',
   'admin.analytics.user': 'User',
   'admin.analytics.messages': 'Messages',
+  'admin.analytics.topicAnalysis': 'AI Topic Analysis',
+  'admin.analytics.topicAnalyzing': 'Analyzing…',
+  'admin.analytics.topicAnalyzeBtn': 'Re-analyze',
+  'admin.analytics.topicSummary': 'Task Summary',
+  'admin.analytics.topicNoKey': 'DeepSeek API not configured',
+  'admin.analytics.cat.document': 'Document Generation',
+  'admin.analytics.cat.assistant': 'AI Assistant',
+  'admin.analytics.mode.orchestrated': 'Multi-Agent',
+  'admin.analytics.mode.direct': 'Direct',
+  'admin.analytics.mode.null': 'Unspecified',
 
   // Admin Quota Groups
   'admin.quotaGroups.title': 'Quota Group Management',
