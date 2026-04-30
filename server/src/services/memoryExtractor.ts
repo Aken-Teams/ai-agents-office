@@ -43,6 +43,7 @@ export async function extractMemoryAndSummary(
   userId: string,
   conversationId: string,
   locale: string = 'zh-TW',
+  conversationCategory: string = 'document',
 ): Promise<void> {
   try {
     // Gate: need at least 1 user message for summary
@@ -53,10 +54,11 @@ export async function extractMemoryAndSummary(
     if (!msgCount || msgCount.cnt < MIN_MSGS_FOR_SUMMARY) return;
 
     // Skip if summary already exists (avoid duplicate extraction)
+    // Exception: assistant conversations always re-extract to keep work_log current
     const conv = await dbGet<{ summary: string | null }>(
       'SELECT summary FROM conversations WHERE id = ?', conversationId
     );
-    if (conv?.summary) return;
+    if (conv?.summary && conversationCategory !== 'assistant') return;
 
     // Only extract memories if enough user messages
     const skipMemories = msgCount.cnt < MIN_MSGS_FOR_MEMORIES;
@@ -105,9 +107,29 @@ export async function extractMemoryAndSummary(
         parsed.summary.substring(0, 500), conversationId
       );
       console.log(`[MemoryExtractor] Summary saved for conversation ${conversationId}`);
+
+      // For assistant conversations: upsert a work_log memory (update if exists, insert if new)
+      // so cross-assistant context always reflects the latest state
+      if (conversationCategory === 'assistant') {
+        const existingWorkLog = await dbGet<{ id: string }>(
+          "SELECT id FROM user_memories WHERE source_conversation_id = ? AND memory_type = 'work_log'",
+          conversationId
+        );
+        if (existingWorkLog) {
+          await dbRun('UPDATE user_memories SET content = ? WHERE id = ?',
+            parsed.summary.substring(0, 200), existingWorkLog.id);
+          console.log(`[MemoryExtractor] work_log updated for assistant conversation ${conversationId}`);
+        } else if (!atMemoryLimit) {
+          await dbRun(
+            'INSERT INTO user_memories (id, user_id, content, category, memory_type, source_conversation_id) VALUES (?, ?, ?, ?, ?, ?)',
+            uuidv4(), userId, parsed.summary.substring(0, 200), 'general', 'work_log', conversationId
+          );
+          console.log(`[MemoryExtractor] work_log created for assistant conversation ${conversationId}`);
+        }
+      }
     }
 
-    // Save memories
+    // Save preference memories
     if (!atMemoryLimit && parsed.memories.length > 0) {
       const validCategories = ['preference', 'company', 'project', 'style', 'general'];
       let saved = 0;
@@ -115,13 +137,13 @@ export async function extractMemoryAndSummary(
         if (!mem.content || mem.content.length < 3) continue;
         const category = validCategories.includes(mem.category) ? mem.category : 'general';
         await dbRun(
-          'INSERT INTO user_memories (id, user_id, content, category, source_conversation_id) VALUES (?, ?, ?, ?, ?)',
-          uuidv4(), userId, mem.content.substring(0, 200), category, conversationId
+          'INSERT INTO user_memories (id, user_id, content, category, memory_type, source_conversation_id) VALUES (?, ?, ?, ?, ?, ?)',
+          uuidv4(), userId, mem.content.substring(0, 200), category, 'preference', conversationId
         );
         saved++;
       }
       if (saved > 0) {
-        console.log(`[MemoryExtractor] ${saved} memories saved for user ${userId}`);
+        console.log(`[MemoryExtractor] ${saved} preference memories saved for user ${userId}`);
       }
     }
   } catch (err) {

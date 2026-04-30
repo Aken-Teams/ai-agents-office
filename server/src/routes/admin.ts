@@ -1205,4 +1205,278 @@ router.delete('/invite-codes/:id', async (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
+// ==================== Analytics ====================
+
+// GET /api/admin/analytics/overview?period=7d|30d
+router.get('/analytics/overview', async (req: Request, res: Response) => {
+  const period = (req.query.period as string) || '30d';
+  const days = period === '7d' ? 7 : 30;
+
+  // Conversation trend by day
+  const convTrend = await dbAll<{ date: string; count: number }>(`
+    SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date, COUNT(*) as count
+    FROM conversations
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
+    ORDER BY date ASC
+  `);
+
+  // File generation trend by day
+  const fileTrend = await dbAll<{ date: string; count: number }>(`
+    SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date, COUNT(*) as count
+    FROM generated_files
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
+    ORDER BY date ASC
+  `);
+
+  // Fill missing dates
+  const convMap = new Map(convTrend.map(r => [r.date, r.count]));
+  const fileMap = new Map(fileTrend.map(r => [r.date, r.count]));
+  const trend = [];
+  const now = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    trend.push({ date: dateStr, conversations: convMap.get(dateStr) ?? 0, files: fileMap.get(dateStr) ?? 0 });
+  }
+
+  // Conversation breakdown by category
+  const byCategory = await dbAll<{ category: string | null; count: number }>(`
+    SELECT category, COUNT(*) as count
+    FROM conversations
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY category
+    ORDER BY count DESC
+  `);
+
+  // Conversation breakdown by mode
+  const byMode = await dbAll<{ mode: string | null; count: number }>(`
+    SELECT mode, COUNT(*) as count
+    FROM conversations
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY mode
+    ORDER BY count DESC
+  `);
+
+  // File breakdown by type
+  const byFileType = await dbAll<{ file_type: string | null; count: number }>(`
+    SELECT file_type, COUNT(*) as count
+    FROM generated_files
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY file_type
+    ORDER BY count DESC
+  `);
+
+  // Skill usage from task_executions
+  const bySkill = await dbAll<{ skill_id: string | null; count: number }>(`
+    SELECT skill_id, COUNT(*) as count
+    FROM task_executions
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY skill_id
+    ORDER BY count DESC
+    LIMIT 15
+  `);
+
+  // Summary counts
+  const totalConvRow = await dbGet<{ count: number }>(`
+    SELECT COUNT(*) as count FROM conversations
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+  `);
+  const totalFileRow = await dbGet<{ count: number }>(`
+    SELECT COUNT(*) as count FROM generated_files
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+  `);
+  const newUsersRow = await dbGet<{ count: number }>(`
+    SELECT COUNT(*) as count FROM users
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+  `);
+  const activeUsersRow = await dbGet<{ count: number }>(`
+    SELECT COUNT(DISTINCT user_id) as count FROM conversations
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+  `);
+
+  res.json({
+    period,
+    summary: {
+      totalConversations: totalConvRow?.count ?? 0,
+      totalFiles: totalFileRow?.count ?? 0,
+      newUsers: newUsersRow?.count ?? 0,
+      activeUsers: activeUsersRow?.count ?? 0,
+    },
+    trend,
+    byCategory,
+    byMode,
+    byFileType,
+    bySkill,
+  });
+});
+
+// GET /api/admin/analytics/hot-topics?period=7d|30d&limit=15
+router.get('/analytics/hot-topics', async (req: Request, res: Response) => {
+  const period = (req.query.period as string) || '7d';
+  const days = period === '7d' ? 7 : 30;
+  const limit = Math.min(parseInt(req.query.limit as string) || 15, 50);
+
+  const rows = await dbAll<{
+    id: string; title: string | null;
+    user_email: string; user_name: string | null;
+    category: string | null;
+    total_tokens: number; message_count: number;
+  }>(`
+    SELECT
+      c.id, c.title, c.category,
+      u.email as user_email, u.display_name as user_name,
+      COALESCE(SUM(tu.input_tokens + tu.output_tokens), 0) as total_tokens,
+      COUNT(DISTINCT m.id) as message_count
+    FROM conversations c
+    JOIN users u ON c.user_id = u.id
+    LEFT JOIN token_usage tu ON tu.conversation_id = c.id
+    LEFT JOIN messages m ON m.conversation_id = c.id
+    WHERE c.created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY c.id, c.title, c.category, u.email, u.display_name
+    ORDER BY total_tokens DESC, message_count DESC
+    LIMIT ${limit}
+  `);
+
+  res.json(rows);
+});
+
+// GET /api/admin/analytics/top-users?period=7d|30d&limit=10
+router.get('/analytics/top-users', async (req: Request, res: Response) => {
+  const period = (req.query.period as string) || '30d';
+  const days = period === '7d' ? 7 : 30;
+  const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+
+  const rows = await dbAll<{
+    id: string; email: string; display_name: string | null;
+    conversations: number; files: number;
+    total_input: number; total_output: number;
+  }>(`
+    SELECT
+      u.id, u.email, u.display_name,
+      COUNT(DISTINCT c.id) as conversations,
+      COUNT(DISTINCT f.id) as files,
+      COALESCE(SUM(tu.input_tokens), 0) as total_input,
+      COALESCE(SUM(tu.output_tokens), 0) as total_output
+    FROM users u
+    LEFT JOIN conversations c ON c.user_id = u.id AND c.created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    LEFT JOIN generated_files f ON f.user_id = u.id AND f.created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    LEFT JOIN token_usage tu ON tu.user_id = u.id AND tu.created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY u.id, u.email, u.display_name
+    ORDER BY (COALESCE(SUM(tu.input_tokens), 0) + COALESCE(SUM(tu.output_tokens), 0)) DESC, conversations DESC
+    LIMIT ${limit}
+  `);
+
+  res.json(rows);
+});
+
+// POST /api/admin/analytics/topic-analysis  { period: '7d'|'30d' }
+router.post('/analytics/topic-analysis', async (req: Request, res: Response) => {
+  const period = (req.body?.period as string) || '7d';
+  const days = period === '7d' ? 7 : 30;
+
+  if (!config.deepseekApiKey) {
+    res.status(503).json({ error: 'DeepSeek API key not configured' });
+    return;
+  }
+
+  // Fetch top 40 conversation titles for analysis
+  const rows = await dbAll<{ title: string | null; category: string | null; total_tokens: number }>(`
+    SELECT c.title, c.category,
+      COALESCE(SUM(tu.input_tokens + tu.output_tokens), 0) as total_tokens
+    FROM conversations c
+    LEFT JOIN token_usage tu ON tu.conversation_id = c.id
+    WHERE c.created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+      AND c.title IS NOT NULL AND c.title != ''
+    GROUP BY c.id, c.title, c.category
+    ORDER BY total_tokens DESC
+    LIMIT 40
+  `);
+
+  if (rows.length === 0) {
+    res.json({ analysis: null, categories: [] });
+    return;
+  }
+
+  const titleList = rows.map((r, i) => `${i + 1}. ${r.title}`).join('\n');
+
+  const prompt = `以下是一個 AI 文件生成平台近 ${days} 天內，使用者發起的對話標題列表（共 ${rows.length} 筆）。
+
+${titleList}
+
+請分析這些對話的主題類型，並以 JSON 格式回傳分析結果，格式如下：
+{
+  "summary": "一句話摘要使用者最常做什麼任務",
+  "categories": [
+    { "name": "類型名稱（繁體中文，3-8字）", "count": 數量, "pct": 百分比整數, "examples": ["範例標題1", "範例標題2"] }
+  ]
+}
+
+要求：
+- categories 最多 6 個，按數量降序排列
+- 類型名稱使用繁體中文，清楚描述任務類型（如「財務報表分析」「簡報製作」「資料整理與計算」「競爭分析報告」等）
+- 只回傳 JSON，不加任何說明文字`;
+
+  const dsRes = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${config.deepseekApiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [{ role: 'user', content: prompt }],
+      response_format: { type: 'json_object' },
+      temperature: 0.3,
+    }),
+  });
+
+  if (!dsRes.ok) {
+    const err = await dsRes.text();
+    console.error('DeepSeek error:', err);
+    res.status(502).json({ error: 'DeepSeek API error' });
+    return;
+  }
+
+  const dsData = await dsRes.json() as { choices: Array<{ message: { content: string } }> };
+  const content = dsData.choices?.[0]?.message?.content ?? '{}';
+
+  try {
+    const parsed = JSON.parse(content);
+    res.json(parsed);
+  } catch {
+    res.status(502).json({ error: 'Failed to parse DeepSeek response' });
+  }
+});
+
+// GET /api/admin/tokens/monthly-summary?from=YYYY-MM&to=YYYY-MM
+router.get('/tokens/monthly-summary', async (req: Request, res: Response) => {
+  const from = (req.query.from as string) || '';
+  const to   = (req.query.to   as string) || '';
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+  if (from) { conditions.push("DATE_FORMAT(tu.created_at, '%Y-%m') >= ?"); params.push(from); }
+  if (to)   { conditions.push("DATE_FORMAT(tu.created_at, '%Y-%m') <= ?"); params.push(to); }
+  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+  const rows = await dbAll(`
+    SELECT
+      DATE_FORMAT(tu.created_at, '%Y-%m') AS month,
+      u.email,
+      COALESCE(u.display_name, u.email) AS display_name,
+      SUM(tu.input_tokens)  AS input_tokens,
+      SUM(tu.output_tokens) AS output_tokens,
+      SUM(tu.input_tokens + tu.output_tokens) AS total_tokens,
+      COUNT(DISTINCT tu.conversation_id) AS conversations,
+      COUNT(*) AS sessions
+    FROM token_usage tu
+    LEFT JOIN users u ON u.id = tu.user_id
+    ${where}
+    GROUP BY DATE_FORMAT(tu.created_at, '%Y-%m'), tu.user_id, u.email, u.display_name
+    ORDER BY month DESC, total_tokens DESC
+  `, ...params);
+  res.json(rows);
+});
+
 export default router;

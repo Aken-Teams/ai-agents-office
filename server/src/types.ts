@@ -20,7 +20,9 @@ export interface Conversation {
   title: string;
   skill_id: string | null;
   session_id: string | null;
+  mode: string | null;
   status: 'active' | 'completed' | 'failed';
+  category: 'document' | 'assistant';
   created_at: string;
 }
 

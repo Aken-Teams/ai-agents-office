@@ -4,7 +4,7 @@ import { EventEmitter } from 'events';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { spawnClaude } from './claudeCli.js';
 import { parsePipelineBlocks, truncateResultForRouter } from './taskParser.js';
-import { getSkill, buildSystemPrompt, buildMemoryContext, getRouterSkill, buildRouterPrompt } from '../skills/loader.js';
+import { getSkill, buildSystemPrompt, buildMemoryContext, buildCrossAssistantContext, getRouterSkill, buildRouterPrompt } from '../skills/loader.js';
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from './uploadContext.js';
 import { getSandboxPath } from './sandbox.js';
 import { config } from '../config.js';
@@ -53,19 +53,23 @@ type SSEWriter = (event: SSEEvent) => void;
 export class Orchestrator {
   private userId: string;
   private conversationId: string;
+  private conversationCategory: string;
   private sseWriter: SSEWriter;
   private aborted = false;
   private activeAbortFns: Array<() => void> = [];
   private tasks: TaskExecution[] = [];
   private uploadIds: string[];
   private userLocale: string;
+  private referenceContext: string;
 
-  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = [], userLocale: string = 'zh-TW') {
+  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document', referenceContext: string = '') {
     this.userId = userId;
     this.conversationId = conversationId;
+    this.conversationCategory = conversationCategory;
     this.sseWriter = sseWriter;
     this.userLocale = userLocale;
     this.uploadIds = uploadIds;
+    this.referenceContext = referenceContext;
   }
 
   async run(message: string): Promise<OrchestratorResult> {
@@ -84,17 +88,59 @@ export class Orchestrator {
 
     // Inject user memories into router prompt
     const userMemories = await dbAll<{ content: string }>(
-      'SELECT content FROM user_memories WHERE user_id = ? ORDER BY created_at DESC LIMIT 10', this.userId
+      "SELECT content FROM user_memories WHERE user_id = ? AND memory_type = 'preference' ORDER BY created_at DESC LIMIT 10", this.userId
     );
-    const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale) + buildMemoryContext(userMemories);
 
-    // If user attached files, prepend file info to message so Router knows to delegate to data-analyst/rag-analyst
-    let messageWithFileContext = message;
+    // For assistant conversations: inject cross-assistant context
+    let crossAssistantContext = '';
+    if (this.conversationCategory === 'assistant') {
+      const otherSummaries = await dbAll<{ title: string; summary: string; created_at: string }>(
+        "SELECT title, summary, created_at FROM conversations WHERE user_id = ? AND category = 'assistant' AND id != ? AND summary IS NOT NULL ORDER BY created_at DESC LIMIT 3",
+        this.userId, this.conversationId
+      );
+      crossAssistantContext = buildCrossAssistantContext(otherSummaries, this.conversationId);
+    }
+
+    const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale) + buildMemoryContext(userMemories) + crossAssistantContext;
+
+    // Load conversation history so Router has full context of what was discussed/generated
+    const historyMsgs = await dbAll<{ role: string; content: string }>(
+      'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT 40',
+      this.conversationId
+    );
+    // Filter out the current user message if it was already saved, keep last 20
+    const prevMsgs = historyMsgs
+      .filter(m => !(m.role === 'user' && m.content.trim() === message.trim()))
+      .slice(-20);
+    let chatHistoryBlock = '';
+    if (prevMsgs.length > 0) {
+      const lines = prevMsgs.map(m => {
+        const role = m.role === 'user' ? 'User' : 'Assistant';
+        const content = m.content.length > 2000 ? m.content.substring(0, 2000) + '... (truncated)' : m.content;
+        return `[${role}]: ${content}`;
+      });
+      chatHistoryBlock =
+        '## Conversation History\n' +
+        'Below is what has already been discussed and generated in this conversation. ' +
+        'Use this context to understand previous work and user references.\n\n' +
+        lines.join('\n\n') +
+        '\n\n---\n\n';
+    }
+
+    // Build effective message — inject referenced data inline so Router uses it directly (no re-research)
+    let messageWithFileContext = chatHistoryBlock ? chatHistoryBlock + '用戶最新指令：' + message : message;
+    if (this.referenceContext) {
+      // Prepend reference data with explicit instruction to use existing content
+      messageWithFileContext =
+        '[System: 用戶已引用以下 AI 助手的工作成果。請直接運用這些資料來完成需求，' +
+        '不要重新對這些主題進行網路搜尋或重複研究。將引用資料作為主要來源，直接委派給適合的 Worker。]\n' +
+        this.referenceContext + '\n\n---\n\n用戶需求：' + messageWithFileContext;
+    }
     if (this.uploadIds.length > 0) {
       const baseSandbox = getSandboxPath(this.userId, this.conversationId);
       const fileContext = await getUserUploadsForPrompt(this.userId, baseSandbox, { uploadIds: this.uploadIds });
       if (fileContext) {
-        messageWithFileContext = message + '\n\n[System: The user has attached files for this request.]\n' + fileContext;
+        messageWithFileContext = messageWithFileContext + '\n\n[System: The user has attached files for this request.]\n' + fileContext;
       }
     }
 

@@ -12,24 +12,25 @@ router.use(authMiddleware);
 // GET /api/conversations
 router.get('/', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const conversations = await dbAll<Conversation>(
-    'SELECT * FROM conversations WHERE user_id = ? ORDER BY created_at DESC',
-    userId
-  );
+  const { category } = req.query;
+  const conversations = category
+    ? await dbAll<Conversation>("SELECT * FROM conversations WHERE user_id = ? AND category = ? AND status != 'deleted' ORDER BY created_at DESC", userId, category)
+    : await dbAll<Conversation>("SELECT * FROM conversations WHERE user_id = ? AND status != 'deleted' ORDER BY created_at DESC", userId);
   res.json(conversations);
 });
 
 // POST /api/conversations
 router.post('/', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { title, skillId } = req.body;
+  const { title, skillId, category } = req.body;
   const id = uuidv4();
 
   const effectiveSkillId = skillId || null;
   const mode = effectiveSkillId ? 'direct' : null;
+  const effectiveCategory = category === 'assistant' ? 'assistant' : 'document';
   await dbRun(
-    'INSERT INTO conversations (id, user_id, title, skill_id, mode) VALUES (?, ?, ?, ?, ?)',
-    id, userId, title || 'New Conversation', effectiveSkillId, mode
+    'INSERT INTO conversations (id, user_id, title, skill_id, mode, category) VALUES (?, ?, ?, ?, ?, ?)',
+    id, userId, title || 'New Conversation', effectiveSkillId, mode, effectiveCategory
   );
 
   const conversation = await dbGet<Conversation>('SELECT * FROM conversations WHERE id = ?', id);

@@ -31,6 +31,7 @@ const NAV_GROUPS = [
       { href: '/admin/announcements', labelKey: 'admin.sidebar.announcements' as const, icon: 'campaign' },
       { href: '/admin/skills', labelKey: 'admin.sidebar.skills' as const, icon: 'hub' },
       { href: '/admin/tokens', labelKey: 'admin.sidebar.tokens' as const, icon: 'payments' },
+      { href: '/admin/analytics', labelKey: 'admin.sidebar.analytics' as const, icon: 'bar_chart' },
     ],
   },
   {

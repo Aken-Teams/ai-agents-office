@@ -9,7 +9,7 @@ import { analyzeInput, logSecurityEvent, WARN_THRESHOLD } from '../services/inpu
 import { recordTokenUsage } from '../services/tokenTracker.js';
 import { registerNewFiles, getExistingFilePaths, snapshotExistingFiles } from '../services/fileManager.js';
 import { getUserStorageUsed } from './files.js';
-import { getSkill, buildSystemPrompt, buildMemoryContext, loadSkills, getRouterSkill } from '../skills/loader.js';
+import { getSkill, buildSystemPrompt, buildMemoryContext, buildCrossAssistantContext, loadSkills, getRouterSkill } from '../skills/loader.js';
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from '../services/uploadContext.js';
 import { Orchestrator } from '../services/orchestrator.js';
 import { extractMemoryAndSummary } from '../services/memoryExtractor.js';
@@ -23,6 +23,51 @@ router.use(authMiddleware);
 router.use(rateLimit);
 
 const activeGenerations = new Map<string, () => void>();
+
+/**
+ * Build context block from referenced assistant conversations.
+ * Injects title, summary, and recent messages from each referenced conversation.
+ */
+async function buildCrossReferenceContext(userId: string, referencedConvIds: string[]): Promise<string> {
+  if (!referencedConvIds.length) return '';
+
+  const sections: string[] = [];
+
+  for (const refId of referencedConvIds.slice(0, 3)) {
+    const refConv = await dbGet<{ title: string; summary: string | null }>(
+      'SELECT title, summary FROM conversations WHERE id = ? AND user_id = ?',
+      refId, userId
+    );
+    if (!refConv) continue;
+
+    const refMessages = await dbAll<{ role: string; content: string }>(
+      'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 10',
+      refId
+    );
+
+    const lines: string[] = [`### 引用：${refConv.title}`];
+    if (refConv.summary) lines.push(`摘要：${refConv.summary}`);
+    if (refMessages.length > 0) {
+      lines.push('');
+      for (const msg of refMessages.reverse()) {
+        const role = msg.role === 'user' ? 'User' : 'Assistant';
+        const content = msg.content.length > 1500 ? msg.content.substring(0, 1500) + '...' : msg.content;
+        lines.push(`[${role}]: ${content}`);
+      }
+    }
+    sections.push(lines.join('\n'));
+  }
+
+  if (!sections.length) return '';
+
+  return [
+    '\n\n## 引用的 AI 助手工作成果',
+    '以下是用戶引用的其他 AI 助手對話內容，請善用這些成果來完成當前需求：',
+    '',
+    ...sections,
+    '',
+  ].join('\n');
+}
 
 // GET /api/generate/skills
 router.get('/skills', (_req: Request, res: Response) => {
@@ -70,7 +115,10 @@ async function buildChatHistory(conversationId: string): Promise<string> {
 router.post('/:conversationId', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const conversationId = req.params.conversationId as string;
-  const { message, skillId, uploadIds } = req.body;
+  const { message, skillId, uploadIds, referencedConvIds: rawRefIds } = req.body;
+  const referencedConvIds: string[] = Array.isArray(rawRefIds)
+    ? rawRefIds.filter((id: unknown) => typeof id === 'string').slice(0, 3)
+    : [];
 
   if (!message) { res.status(400).json({ error: 'Message is required' }); return; }
 
@@ -113,9 +161,24 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
   }
 
   const userMsgId = uuidv4();
+  // Append refs metadata tag for display purposes (strip before AI usage)
+  let storedUserMessage = sanitizedMessage;
+  if (referencedConvIds.length > 0) {
+    const refTitles: Array<{id: string; title: string}> = [];
+    for (const refId of referencedConvIds) {
+      const refConv = await dbGet<{title: string}>(
+        'SELECT title FROM conversations WHERE id = ? AND user_id = ?',
+        refId, userId
+      );
+      if (refConv) refTitles.push({ id: refId, title: refConv.title });
+    }
+    if (refTitles.length > 0) {
+      storedUserMessage = sanitizedMessage + '\n\n[refs:' + JSON.stringify(refTitles) + ']';
+    }
+  }
   await dbRun(
     'INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)',
-    userMsgId, conversationId, 'user', sanitizedMessage
+    userMsgId, conversationId, 'user', storedUserMessage
   );
 
   const routerSkill = getRouterSkill();
@@ -139,17 +202,22 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
   const userRow = await dbGet<{ locale: string }>('SELECT locale FROM users WHERE id = ?', userId);
   const userLocale = userRow?.locale || 'zh-TW';
 
+  const refContext = referencedConvIds.length > 0
+    ? await buildCrossReferenceContext(userId, referencedConvIds)
+    : '';
+
   if (useOrchestrator) {
-    await handleOrchestrated(req, res, userId, conversationId, sanitizedMessage, validUploadIds, userLocale);
+    await handleOrchestrated(req, res, userId, conversationId, sanitizedMessage, validUploadIds, userLocale, conversation.category || 'document', refContext);
   } else {
-    await handleDirect(req, res, userId, conversationId, conversation, sanitizedMessage, skillId, validUploadIds, userLocale);
+    await handleDirect(req, res, userId, conversationId, conversation, sanitizedMessage, skillId, validUploadIds, userLocale, refContext);
   }
 });
 
 async function handleOrchestrated(
   _req: Request, res: Response,
   userId: string, conversationId: string, message: string,
-  uploadIds: string[] = [], userLocale: string = 'zh-TW',
+  uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document',
+  refContext: string = '',
 ) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
@@ -168,7 +236,7 @@ async function handleOrchestrated(
     try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* closed */ }
   };
 
-  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds, userLocale);
+  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds, userLocale, conversationCategory, refContext);
   activeGenerations.set(conversationId, () => orchestrator.abort());
 
   try {
@@ -210,10 +278,10 @@ async function handleOrchestrated(
     clearInterval(keepaliveTimer);
     activeGenerations.delete(conversationId);
     sseWriter({ type: 'done', data: { exitCode: 0 } });
-    res.end();
+    try { res.end(); } catch { /* SSE already closed */ }
 
     // Fire-and-forget: extract conversation summary + user memories
-    extractMemoryAndSummary(userId, conversationId, userLocale).catch(e =>
+    extractMemoryAndSummary(userId, conversationId, userLocale, conversationCategory).catch(e =>
       console.error('[Generate] Memory extraction failed (non-blocking):', e)
     );
   }
@@ -223,7 +291,7 @@ async function handleDirect(
   _req: Request, res: Response,
   userId: string, conversationId: string, conversation: Conversation,
   sanitizedMessage: string, skillId?: string, uploadIds: string[] = [],
-  userLocale: string = 'zh-TW',
+  userLocale: string = 'zh-TW', refContext: string = '',
 ) {
   const effectiveSkillId = skillId || conversation.skill_id || 'pptx-gen';
   const skill = getSkill(effectiveSkillId);
@@ -238,10 +306,21 @@ async function handleDirect(
       });
   // Fetch user memories for context injection
   const userMemories = await dbAll<{ content: string }>(
-    'SELECT content FROM user_memories WHERE user_id = ? ORDER BY created_at DESC LIMIT 10', userId
+    "SELECT content FROM user_memories WHERE user_id = ? AND memory_type = 'preference' ORDER BY created_at DESC LIMIT 10", userId
   );
   const memoryContext = buildMemoryContext(userMemories);
-  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + uploadContext + memoryContext;
+
+  // For assistant conversations: inject cross-assistant context from other assistant conversations
+  let crossAssistantContext = '';
+  if (conversation.category === 'assistant') {
+    const otherSummaries = await dbAll<{ title: string; summary: string; created_at: string }>(
+      "SELECT title, summary, created_at FROM conversations WHERE user_id = ? AND category = 'assistant' AND id != ? AND summary IS NOT NULL ORDER BY created_at DESC LIMIT 3",
+      userId, conversationId
+    );
+    crossAssistantContext = buildCrossAssistantContext(otherSummaries, conversationId);
+  }
+
+  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + uploadContext + memoryContext + crossAssistantContext + refContext;
 
   if (skillId && skillId !== conversation.skill_id) {
     await dbRun('UPDATE conversations SET skill_id = ? WHERE id = ?', skillId, conversationId);
@@ -264,6 +343,14 @@ async function handleDirect(
   const keepaliveTimer = setInterval(() => {
     try { res.write(': keepalive\n\n'); } catch { /* closed */ }
   }, 10000);
+
+  // Track SSE connection state — process continues even if SSE closes
+  let sseOpen = true;
+  function sseWrite(event: SSEEvent) {
+    if (!sseOpen) return;
+    try { res.write(`data: ${JSON.stringify(event)}\n\n`); }
+    catch { sseOpen = false; }
+  }
 
   async function startClaude(sid: string, isResume: boolean) {
     let systemPrompt = baseSystemPrompt;
@@ -302,9 +389,7 @@ async function handleDirect(
         }
       }
 
-      try { res.write(`data: ${JSON.stringify(event)}\n\n`); }
-      catch (err) { console.error(`[Generate] SSE write failed for ${conversationId}:`, err); clearInterval(keepaliveTimer); return; }
-
+      // Always accumulate state regardless of SSE connection
       if (event.type === 'text') assistantText += event.data as string;
 
       if (event.type === 'usage') {
@@ -319,6 +404,9 @@ async function handleDirect(
             .catch(e => console.error('Failed to update session_id:', e));
         }
       }
+
+      // Forward to SSE (best-effort — SSE may be closed)
+      sseWrite(event);
 
       if (event.type === 'done') {
         clearInterval(keepaliveTimer);
@@ -340,23 +428,21 @@ async function handleDirect(
           const sandboxPath = getSandboxPath(userId, conversationId);
           const newFiles = await registerNewFiles(userId, conversationId, sandboxPath, existingFiles);
           if (newFiles.length > 0) {
-            try {
-              res.write(`data: ${JSON.stringify({
-                type: 'file_generated',
-                data: newFiles.map(f => ({ id: f.id, filename: f.filename, file_path: f.file_path, file_type: f.file_type, file_size: f.file_size, version: f.version })),
-              })}\n\n`);
-            } catch { /* closed */ }
+            sseWrite({
+              type: 'file_generated',
+              data: newFiles.map(f => ({ id: f.id, filename: f.filename, file_path: f.file_path, file_type: f.file_type, file_size: f.file_size, version: f.version })),
+            });
           }
 
           // Fire-and-forget: extract conversation summary + user memories
-          extractMemoryAndSummary(userId, conversationId, userLocale).catch(e =>
+          extractMemoryAndSummary(userId, conversationId, userLocale, conversation.category || 'document').catch(e =>
             console.error('[Generate] Memory extraction failed (non-blocking):', e)
           );
 
-          res.end();
+          if (sseOpen) { try { res.end(); } catch { /* closed */ } }
         })().catch(e => {
           console.error('Error in done handler:', e);
-          res.end();
+          if (sseOpen) { try { res.end(); } catch { /* closed */ } }
         });
       }
     });
@@ -366,10 +452,40 @@ async function handleDirect(
 
   res.on('close', () => {
     clearInterval(keepaliveTimer);
-    const abortFn = activeGenerations.get(conversationId);
-    if (abortFn) { activeGenerations.delete(conversationId); abortFn(); }
+    sseOpen = false;
+    // Do NOT abort — Claude process continues in background and saves result to DB
+    console.log(`[Generate] SSE closed for ${conversationId}, process continues in background`);
   });
 }
+
+// GET /api/generate/:conversationId/status — check if a generation is in progress
+router.get('/:conversationId/status', (req: Request, res: Response) => {
+  const conversationId = req.params.conversationId as string;
+  res.json({ processing: activeGenerations.has(conversationId) });
+});
+
+// GET /api/generate/:conversationId/tasks — get recent agent task executions
+router.get('/:conversationId/tasks', async (req: Request, res: Response) => {
+  const conversationId = req.params.conversationId as string;
+  const userId = req.user!.userId;
+
+  const conversation = await dbGet<{ id: string }>(
+    'SELECT id FROM conversations WHERE id = ? AND user_id = ?',
+    conversationId, userId
+  );
+  if (!conversation) { res.status(404).json({ error: 'Not found' }); return; }
+
+  const tasks = await dbAll<{
+    id: string; skill_id: string; description: string; status: string; result_summary: string | null;
+  }>(
+    `SELECT id, skill_id, description, status, result_summary
+     FROM task_executions
+     WHERE conversation_id = ? AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)
+     ORDER BY created_at ASC`,
+    conversationId
+  );
+  res.json({ tasks });
+});
 
 // POST /api/generate/:conversationId/abort
 router.post('/:conversationId/abort', (req: Request, res: Response) => {

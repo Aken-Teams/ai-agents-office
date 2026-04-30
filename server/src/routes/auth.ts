@@ -594,7 +594,7 @@ router.post('/reset-password', async (req: Request, res: Response) => {
 router.get('/memories', authMiddleware, async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const memories = await dbAll(
-    'SELECT id, content, category, source_conversation_id, created_at FROM user_memories WHERE user_id = ? ORDER BY created_at DESC',
+    'SELECT id, content, category, memory_type, source_conversation_id, created_at FROM user_memories WHERE user_id = ? ORDER BY created_at DESC',
     userId
   );
   res.json(memories);

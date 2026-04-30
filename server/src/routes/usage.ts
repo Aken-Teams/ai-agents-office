@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { getUserUsageSummary, getUserTotalUsage } from '../services/tokenTracker.js';
+import { getEffectiveUserLimit } from '../services/usageLimit.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -17,8 +18,9 @@ router.get('/', async (req: Request, res: Response) => {
   );
 
   const total = await getUserTotalUsage(userId);
+  const limit = await getEffectiveUserLimit(userId);
 
-  res.json({ summary, total });
+  res.json({ summary, total, limit });
 });
 
 // GET /api/usage/daily — Daily breakdown for current month

@@ -46,6 +46,9 @@ export const config = {
   emailFrom: process.env.EMAIL_FROM || '',
   emailBcc: process.env.EMAIL_BCC || '',
 
+  // DeepSeek
+  deepseekApiKey: process.env.DEEPSEEK_API_KEY || '',
+
   // Deploy mode: 'pro-panjit' (internal) | 'pro-out' (external, per-user quota)
   deployMode: (process.env.DEPLOY_MODE || 'pro-panjit') as 'pro-panjit' | 'pro-out',
 

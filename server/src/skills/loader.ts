@@ -200,3 +200,19 @@ export function buildMemoryContext(memories: { content: string }[]): string {
   return '\n\n## User Context (from previous conversations)\n' +
     memories.map(m => `- ${m.content}`).join('\n') + '\n';
 }
+
+/**
+ * Build a cross-assistant context block.
+ * Shows the user's other assistant conversations so the AI knows what's been done.
+ */
+export function buildCrossAssistantContext(
+  summaries: Array<{ title: string; summary: string; created_at: string }>,
+  currentConvId: string
+): string {
+  if (!summaries.length) return '';
+  const lines = summaries.map(s => `- [${s.title}] ${s.summary}`);
+  return '\n\n## Cross-Assistant Shared Memory\n' +
+    'The user has other AI Assistant conversations with the following history:\n' +
+    lines.join('\n') + '\n' +
+    'You may reference this context when relevant to help the user connect insights across conversations.\n';
+}
