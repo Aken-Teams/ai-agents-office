@@ -1365,7 +1365,7 @@ router.get('/analytics/top-users', async (req: Request, res: Response) => {
     LEFT JOIN generated_files f ON f.user_id = u.id AND f.created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
     LEFT JOIN token_usage tu ON tu.user_id = u.id AND tu.created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
     GROUP BY u.id, u.email, u.display_name
-    ORDER BY conversations DESC, total_input DESC
+    ORDER BY (COALESCE(SUM(tu.input_tokens), 0) + COALESCE(SUM(tu.output_tokens), 0)) DESC, conversations DESC
     LIMIT ${limit}
   `);
 
