@@ -69,6 +69,7 @@ function AssistantContent() {
   const [deleteTarget, setDeleteTarget] = useState<AssistantConversation | null>(null);
   const [memoryCount, setMemoryCount] = useState(0);
   const [workLogCount, setWorkLogCount] = useState(0);
+  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
@@ -78,7 +79,20 @@ function AssistantContent() {
     if (!token) return;
     fetch('/api/conversations?category=assistant', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
-      .then(data => setConversations(Array.isArray(data) ? data : []))
+      .then(data => {
+        const convs = Array.isArray(data) ? data : [];
+        setConversations(convs);
+        // Check processing status for each conversation
+        Promise.all(convs.map((c: AssistantConversation) =>
+          fetch(`/api/generate/${c.id}/status`, { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.json())
+            .then(({ processing }: { processing: boolean }) => processing ? c.id : null)
+            .catch(() => null)
+        )).then(results => {
+          const ids = new Set<string>(results.filter(Boolean) as string[]);
+          setProcessingIds(ids);
+        });
+      })
       .catch(console.error);
 
     fetch('/api/auth/memories', { headers: { Authorization: `Bearer ${token}` } })
@@ -226,10 +240,17 @@ function AssistantContent() {
 
                   {/* Meta — single line */}
                   <div className="flex items-center gap-2 text-xs text-on-surface-variant mb-5 flex-wrap">
-                    <span className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
-                      {t('conversations.status.active' as any) || '進行中'}
-                    </span>
+                    {processingIds.has(conv.id) ? (
+                      <span className="flex items-center gap-1 text-primary">
+                        <span className="material-symbols-outlined text-[13px] animate-spin">progress_activity</span>
+                        AI 處理中
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
+                        {t('conversations.status.active' as any) || '進行中'}
+                      </span>
+                    )}
                     <span className="text-outline-variant/40">·</span>
                     <span>{formatDate(conv.created_at)}</span>
                     <span className="text-outline-variant/40">·</span>

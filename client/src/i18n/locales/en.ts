@@ -342,6 +342,7 @@ const en = {
   'chat.error.scanBlocked': 'Security scan blocked {count} file(s)',
   'chat.sources': 'Sources ({count})',
   'chat.streamingWarning': 'AI is processing — do not navigate away or close the browser or the task will be interrupted',
+  'chat.backgroundProcessing': 'AI is running in background — results will appear automatically when done...',
   'chat.processing.title': 'AI Processing',
   'chat.processing.completed': 'Completed',
   'chat.processing.connected': 'Connected',

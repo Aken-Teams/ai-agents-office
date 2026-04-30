@@ -348,6 +348,7 @@ const zhCN = {
   'chat.error.scanBlocked': '安全扫描拦截了 {count} 个文件',
   'chat.sources': '来源 ({count})',
   'chat.streamingWarning': 'AI 正在处理中，请勿切换页面或关闭浏览器，否则任务将中断',
+  'chat.backgroundProcessing': 'AI 正在后台执行中，完成后将自动显示结果...',
   'chat.processing.title': 'AI 处理中',
   'chat.processing.completed': '已完成',
   'chat.processing.connected': '已连线',

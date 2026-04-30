@@ -210,7 +210,7 @@ async function handleOrchestrated(
     clearInterval(keepaliveTimer);
     activeGenerations.delete(conversationId);
     sseWriter({ type: 'done', data: { exitCode: 0 } });
-    res.end();
+    try { res.end(); } catch { /* SSE already closed */ }
 
     // Fire-and-forget: extract conversation summary + user memories
     extractMemoryAndSummary(userId, conversationId, userLocale, conversationCategory).catch(e =>
@@ -276,6 +276,14 @@ async function handleDirect(
     try { res.write(': keepalive\n\n'); } catch { /* closed */ }
   }, 10000);
 
+  // Track SSE connection state — process continues even if SSE closes
+  let sseOpen = true;
+  function sseWrite(event: SSEEvent) {
+    if (!sseOpen) return;
+    try { res.write(`data: ${JSON.stringify(event)}\n\n`); }
+    catch { sseOpen = false; }
+  }
+
   async function startClaude(sid: string, isResume: boolean) {
     let systemPrompt = baseSystemPrompt;
     if (!isResume) {
@@ -313,9 +321,7 @@ async function handleDirect(
         }
       }
 
-      try { res.write(`data: ${JSON.stringify(event)}\n\n`); }
-      catch (err) { console.error(`[Generate] SSE write failed for ${conversationId}:`, err); clearInterval(keepaliveTimer); return; }
-
+      // Always accumulate state regardless of SSE connection
       if (event.type === 'text') assistantText += event.data as string;
 
       if (event.type === 'usage') {
@@ -330,6 +336,9 @@ async function handleDirect(
             .catch(e => console.error('Failed to update session_id:', e));
         }
       }
+
+      // Forward to SSE (best-effort — SSE may be closed)
+      sseWrite(event);
 
       if (event.type === 'done') {
         clearInterval(keepaliveTimer);
@@ -351,23 +360,21 @@ async function handleDirect(
           const sandboxPath = getSandboxPath(userId, conversationId);
           const newFiles = await registerNewFiles(userId, conversationId, sandboxPath, existingFiles);
           if (newFiles.length > 0) {
-            try {
-              res.write(`data: ${JSON.stringify({
-                type: 'file_generated',
-                data: newFiles.map(f => ({ id: f.id, filename: f.filename, file_path: f.file_path, file_type: f.file_type, file_size: f.file_size, version: f.version })),
-              })}\n\n`);
-            } catch { /* closed */ }
+            sseWrite({
+              type: 'file_generated',
+              data: newFiles.map(f => ({ id: f.id, filename: f.filename, file_path: f.file_path, file_type: f.file_type, file_size: f.file_size, version: f.version })),
+            });
           }
 
           // Fire-and-forget: extract conversation summary + user memories
-          extractMemoryAndSummary(userId, conversationId, userLocale).catch(e =>
+          extractMemoryAndSummary(userId, conversationId, userLocale, conversation.category || 'document').catch(e =>
             console.error('[Generate] Memory extraction failed (non-blocking):', e)
           );
 
-          res.end();
+          if (sseOpen) { try { res.end(); } catch { /* closed */ } }
         })().catch(e => {
           console.error('Error in done handler:', e);
-          res.end();
+          if (sseOpen) { try { res.end(); } catch { /* closed */ } }
         });
       }
     });
@@ -377,10 +384,17 @@ async function handleDirect(
 
   res.on('close', () => {
     clearInterval(keepaliveTimer);
-    const abortFn = activeGenerations.get(conversationId);
-    if (abortFn) { activeGenerations.delete(conversationId); abortFn(); }
+    sseOpen = false;
+    // Do NOT abort — Claude process continues in background and saves result to DB
+    console.log(`[Generate] SSE closed for ${conversationId}, process continues in background`);
   });
 }
+
+// GET /api/generate/:conversationId/status — check if a generation is in progress
+router.get('/:conversationId/status', (req: Request, res: Response) => {
+  const conversationId = req.params.conversationId as string;
+  res.json({ processing: activeGenerations.has(conversationId) });
+});
 
 // POST /api/generate/:conversationId/abort
 router.post('/:conversationId/abort', (req: Request, res: Response) => {

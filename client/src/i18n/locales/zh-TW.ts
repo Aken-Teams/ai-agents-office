@@ -352,6 +352,7 @@ const zhTW = {
   'chat.error.scanBlocked': '安全掃描攔截了 {count} 個檔案',
   'chat.sources': '來源 ({count})',
   'chat.streamingWarning': 'AI 正在處理中，請勿切換頁面或關閉瀏覽器，否則任務將中斷',
+  'chat.backgroundProcessing': 'AI 正在背景執行中，完成後將自動顯示結果...',
   'chat.processing.title': 'AI 處理中',
   'chat.processing.completed': '已完成',
   'chat.processing.connected': '已連線',

@@ -567,6 +567,49 @@ function ChatContent() {
   }, [token, conversationId, router]);
 
   const pendingHandled = useRef(false);
+  const [backgroundProcessing, setBackgroundProcessing] = useState(false);
+
+  // Poll status when user returns to a conversation that's running in background
+  useEffect(() => {
+    if (!token || !conversationId || !conversationLoaded || streaming) return;
+    let cancelled = false;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+    fetch(`/api/generate/${conversationId}/status`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(({ processing }: { processing: boolean }) => {
+        if (cancelled || !processing) return;
+        setBackgroundProcessing(true);
+        pollInterval = setInterval(() => {
+          fetch(`/api/generate/${conversationId}/status`, { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.json())
+            .then(({ processing: still }: { processing: boolean }) => {
+              if (cancelled) return;
+              if (!still) {
+                setBackgroundProcessing(false);
+                if (pollInterval) clearInterval(pollInterval);
+                // Reload messages to show the completed result
+                fetch(`/api/conversations/${conversationId}`, { headers: { Authorization: `Bearer ${token}` } })
+                  .then(r => r.json())
+                  .then(data => { setMessages(data.messages || []); })
+                  .catch(() => {});
+                // Reload files
+                fetch(`/api/files?conversationId=${conversationId}`, { headers: { Authorization: `Bearer ${token}` } })
+                  .then(r => r.json())
+                  .then((allFiles: GeneratedFile[]) => setFiles(allFiles))
+                  .catch(() => {});
+              }
+            })
+            .catch(() => {});
+        }, 3000);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [token, conversationId, conversationLoaded, streaming]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load files
   useEffect(() => {
@@ -1244,11 +1287,11 @@ function ChatContent() {
             )}
           </header>
 
-          {/* Persistence warning banner — shown while streaming */}
-          {streaming && (
-            <div className="mx-3 md:mx-8 mt-2 flex items-center gap-2 px-3 py-2 bg-warning/10 border border-warning/20 rounded-lg text-xs text-warning">
-              <span className="material-symbols-outlined text-sm shrink-0">warning</span>
-              <span>{t('chat.streamingWarning' as any) || 'AI 正在處理中，請勿切換頁面或關閉瀏覽器，否則任務將中斷'}</span>
+          {/* Background processing indicator */}
+          {backgroundProcessing && !streaming && (
+            <div className="mx-3 md:mx-8 mt-2 flex items-center gap-2 px-3 py-2 bg-primary/8 border border-primary/15 rounded-lg text-xs text-primary/70">
+              <span className="material-symbols-outlined text-sm animate-spin shrink-0">progress_activity</span>
+              <span>{t('chat.backgroundProcessing' as any) || 'AI 正在背景執行中，完成後將自動顯示結果...'}</span>
             </div>
           )}
 
