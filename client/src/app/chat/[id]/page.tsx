@@ -677,6 +677,17 @@ function ChatContent() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [streaming]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Warn user before navigating away while AI is running
+  useEffect(() => {
+    if (!streaming) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [streaming]);
+
   const sendMessage = useCallback(async (directMessage?: string, extraUploadIds?: string[]) => {
     const messageToSend = directMessage || input.trim();
     if (!messageToSend || streaming || !token) return;
@@ -1232,6 +1243,14 @@ function ChatContent() {
               </span>
             )}
           </header>
+
+          {/* Persistence warning banner — shown while streaming */}
+          {streaming && (
+            <div className="mx-3 md:mx-8 mt-2 flex items-center gap-2 px-3 py-2 bg-warning/10 border border-warning/20 rounded-lg text-xs text-warning">
+              <span className="material-symbols-outlined text-sm shrink-0">warning</span>
+              <span>{t('chat.streamingWarning' as any) || 'AI 正在處理中，請勿切換頁面或關閉瀏覽器，否則任務將中斷'}</span>
+            </div>
+          )}
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 md:px-8 py-4 md:py-8 space-y-4 md:space-y-8">

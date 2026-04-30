@@ -367,6 +367,11 @@ export async function initializeDatabase(): Promise<void> {
       await conn.query("ALTER TABLE conversations ADD COLUMN category VARCHAR(20) NOT NULL DEFAULT 'document'");
     } catch { /* column already exists */ }
 
+    // Add memory_type column to user_memories if not exists
+    try {
+      await conn.query("ALTER TABLE user_memories ADD COLUMN memory_type VARCHAR(20) NOT NULL DEFAULT 'preference'");
+    } catch { /* column already exists */ }
+
     // Default system settings
     const defaults: Record<string, string> = {
       user_usage_limit_usd: '50',

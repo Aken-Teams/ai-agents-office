@@ -11,6 +11,7 @@ interface Memory {
   id: string;
   content: string;
   category: string;
+  memory_type: string;
   source_conversation_id: string | null;
   created_at: string;
 }
@@ -35,6 +36,7 @@ function MemoriesContent() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
   const [catOpen, setCatOpen] = useState(false);
   const catRef = useRef<HTMLDivElement>(null);
   const [detail, setDetail] = useState<Memory | null>(null);
@@ -43,19 +45,20 @@ function MemoriesContent() {
   // Filtered list
   const filtered = useMemo(() => {
     let list = memories;
+    if (typeFilter) list = list.filter(m => (m.memory_type || 'preference') === typeFilter);
     if (catFilter) list = list.filter(m => m.category === catFilter);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(m => m.content.toLowerCase().includes(q));
     }
     return list;
-  }, [memories, catFilter, search]);
+  }, [memories, catFilter, typeFilter, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const paged = filtered.slice((page - 1) * perPage, page * perPage);
 
   // Reset page when filter changes
-  useEffect(() => { setPage(1); }, [search, catFilter]);
+  useEffect(() => { setPage(1); }, [search, catFilter, typeFilter]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -128,8 +131,35 @@ function MemoriesContent() {
           </p>
         </header>
 
-        {/* Search & Filter Bar */}
+        {/* Memory type tabs */}
         {!loading && memories.length > 0 && (
+          <div className="flex items-center gap-2 mb-3">
+            {[
+              { key: '', label: '全部', icon: 'psychology' },
+              { key: 'preference', label: '偏好記憶', icon: 'tune' },
+              { key: 'work_log', label: '工作紀錄', icon: 'work_history' },
+            ].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => { setTypeFilter(tab.key); setCatFilter(''); }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer border ${
+                  typeFilter === tab.key
+                    ? 'bg-primary text-on-primary border-primary'
+                    : 'bg-surface-container text-on-surface-variant border-outline-variant/20 hover:border-outline-variant/40'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">{tab.icon}</span>
+                {tab.label}
+                <span className={`text-[10px] px-1 rounded ${typeFilter === tab.key ? 'bg-on-primary/20' : 'bg-surface-container-high'}`}>
+                  {tab.key === '' ? memories.length : memories.filter(m => (m.memory_type || 'preference') === tab.key).length}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Search & Filter Bar */}
+        {!loading && memories.length > 0 && typeFilter !== 'work_log' && (
           <div className="flex items-center gap-2 mb-3 md:mb-4">
             <div className="relative flex-1 min-w-0">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 text-lg">search</span>
@@ -205,9 +235,16 @@ function MemoriesContent() {
                 onClick={() => setDetail(m)}
                 className="flex items-start gap-3 bg-surface-container rounded-lg px-4 py-3 border border-outline-variant/10 hover:border-outline-variant/20 transition-colors group cursor-pointer"
               >
-                <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 mt-0.5 ${CAT_COLORS[m.category] || CAT_COLORS.general}`}>
-                  {t(`userMenu.memory.category.${m.category}` as any)}
-                </span>
+                {m.memory_type === 'work_log' ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 mt-0.5 bg-surface-container-high text-on-surface-variant">
+                    <span className="material-symbols-outlined text-[11px]">work_history</span>
+                    工作紀錄
+                  </span>
+                ) : (
+                  <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 mt-0.5 ${CAT_COLORS[m.category] || CAT_COLORS.general}`}>
+                    {t(`userMenu.memory.category.${m.category}` as any)}
+                  </span>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-on-surface line-clamp-2">{m.content}</p>
                   <p className="text-[11px] text-on-surface-variant/50 mt-1">
@@ -276,11 +313,20 @@ function MemoriesContent() {
                 </button>
               </div>
               <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-on-surface-variant">{t('memories.detail.category' as any)}</span>
-                  <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${CAT_COLORS[detail.category] || CAT_COLORS.general}`}>
-                    {t(`userMenu.memory.category.${detail.category}` as any)}
-                  </span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {detail.memory_type === 'work_log' ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant">
+                      <span className="material-symbols-outlined text-[11px]">work_history</span>
+                      工作紀錄
+                    </span>
+                  ) : (
+                    <>
+                      <span className="text-xs text-on-surface-variant">{t('memories.detail.category' as any)}</span>
+                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${CAT_COLORS[detail.category] || CAT_COLORS.general}`}>
+                        {t(`userMenu.memory.category.${detail.category}` as any)}
+                      </span>
+                    </>
+                  )}
                 </div>
                 <div>
                   <span className="text-xs text-on-surface-variant block mb-1">{t('memories.detail.createdAt' as any)}</span>

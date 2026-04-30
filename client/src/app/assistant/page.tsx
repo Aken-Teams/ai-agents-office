@@ -16,6 +16,7 @@ interface AssistantConversation {
   status: string;
   created_at: string;
   category: string;
+  summary: string | null;
 }
 
 function DeleteConfirmModal({ title, onConfirm, onCancel }: { title: string; onConfirm: () => void; onCancel: () => void }) {
@@ -67,6 +68,7 @@ function AssistantContent() {
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AssistantConversation | null>(null);
   const [memoryCount, setMemoryCount] = useState(0);
+  const [workLogCount, setWorkLogCount] = useState(0);
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
@@ -81,7 +83,12 @@ function AssistantContent() {
 
     fetch('/api/auth/memories', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
-      .then(data => setMemoryCount(Array.isArray(data) ? data.length : 0))
+      .then(data => {
+        if (Array.isArray(data)) {
+          setMemoryCount(data.length);
+          setWorkLogCount(data.filter((m: any) => m.memory_type === 'work_log').length);
+        }
+      })
       .catch(() => {});
   }, [token]);
 
@@ -160,7 +167,13 @@ function AssistantContent() {
             <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-tertiary/10 border border-tertiary/20 rounded-full text-sm text-tertiary">
               <span className="material-symbols-outlined text-base">psychology</span>
               <span className="font-medium">
-                {t('assistant.memoryBadge' as any) || `AI 已累積 ${memoryCount} 條跨對話記憶`}
+                {t('assistant.memoryBadge' as any) || `AI 已累積跨對話記憶`}
+              </span>
+              <span className="text-tertiary/70">
+                {workLogCount > 0
+                  ? `偏好 ${memoryCount - workLogCount} · 工作紀錄 ${workLogCount}`
+                  : `${memoryCount} 條`
+                }
               </span>
             </div>
           )}
@@ -196,9 +209,20 @@ function AssistantContent() {
                   </div>
 
                   {/* Title */}
-                  <h3 className="font-headline font-bold text-on-surface text-base mb-2 group-hover:text-primary transition-colors line-clamp-1">
+                  <h3 className="font-headline font-bold text-on-surface text-base mb-1 group-hover:text-primary transition-colors line-clamp-1">
                     {conv.title}
                   </h3>
+
+                  {/* Summary snippet */}
+                  {conv.summary ? (
+                    <p className="text-xs text-on-surface-variant/80 line-clamp-2 mb-2 leading-relaxed">
+                      {conv.summary}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-outline/50 mb-2 italic">
+                      {t('assistant.noSummary' as any) || '對話中...'}
+                    </p>
+                  )}
 
                   {/* Meta — single line */}
                   <div className="flex items-center gap-2 text-xs text-on-surface-variant mb-5 flex-wrap">

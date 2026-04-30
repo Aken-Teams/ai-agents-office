@@ -43,6 +43,7 @@ export async function extractMemoryAndSummary(
   userId: string,
   conversationId: string,
   locale: string = 'zh-TW',
+  conversationCategory: string = 'document',
 ): Promise<void> {
   try {
     // Gate: need at least 1 user message for summary
@@ -105,9 +106,19 @@ export async function extractMemoryAndSummary(
         parsed.summary.substring(0, 500), conversationId
       );
       console.log(`[MemoryExtractor] Summary saved for conversation ${conversationId}`);
+
+      // For assistant conversations: also save summary as a work_log memory
+      // so it appears in the cross-assistant context and memory count
+      if (conversationCategory === 'assistant' && !atMemoryLimit) {
+        await dbRun(
+          'INSERT INTO user_memories (id, user_id, content, category, memory_type, source_conversation_id) VALUES (?, ?, ?, ?, ?, ?)',
+          uuidv4(), userId, parsed.summary.substring(0, 200), 'general', 'work_log', conversationId
+        );
+        console.log(`[MemoryExtractor] work_log saved for assistant conversation ${conversationId}`);
+      }
     }
 
-    // Save memories
+    // Save preference memories
     if (!atMemoryLimit && parsed.memories.length > 0) {
       const validCategories = ['preference', 'company', 'project', 'style', 'general'];
       let saved = 0;
@@ -115,13 +126,13 @@ export async function extractMemoryAndSummary(
         if (!mem.content || mem.content.length < 3) continue;
         const category = validCategories.includes(mem.category) ? mem.category : 'general';
         await dbRun(
-          'INSERT INTO user_memories (id, user_id, content, category, source_conversation_id) VALUES (?, ?, ?, ?, ?)',
-          uuidv4(), userId, mem.content.substring(0, 200), category, conversationId
+          'INSERT INTO user_memories (id, user_id, content, category, memory_type, source_conversation_id) VALUES (?, ?, ?, ?, ?, ?)',
+          uuidv4(), userId, mem.content.substring(0, 200), category, 'preference', conversationId
         );
         saved++;
       }
       if (saved > 0) {
-        console.log(`[MemoryExtractor] ${saved} memories saved for user ${userId}`);
+        console.log(`[MemoryExtractor] ${saved} preference memories saved for user ${userId}`);
       }
     }
   } catch (err) {

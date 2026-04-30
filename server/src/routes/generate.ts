@@ -9,7 +9,7 @@ import { analyzeInput, logSecurityEvent, WARN_THRESHOLD } from '../services/inpu
 import { recordTokenUsage } from '../services/tokenTracker.js';
 import { registerNewFiles, getExistingFilePaths, snapshotExistingFiles } from '../services/fileManager.js';
 import { getUserStorageUsed } from './files.js';
-import { getSkill, buildSystemPrompt, buildMemoryContext, loadSkills, getRouterSkill } from '../skills/loader.js';
+import { getSkill, buildSystemPrompt, buildMemoryContext, buildCrossAssistantContext, loadSkills, getRouterSkill } from '../skills/loader.js';
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from '../services/uploadContext.js';
 import { Orchestrator } from '../services/orchestrator.js';
 import { extractMemoryAndSummary } from '../services/memoryExtractor.js';
@@ -140,7 +140,7 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
   const userLocale = userRow?.locale || 'zh-TW';
 
   if (useOrchestrator) {
-    await handleOrchestrated(req, res, userId, conversationId, sanitizedMessage, validUploadIds, userLocale);
+    await handleOrchestrated(req, res, userId, conversationId, sanitizedMessage, validUploadIds, userLocale, conversation.category || 'document');
   } else {
     await handleDirect(req, res, userId, conversationId, conversation, sanitizedMessage, skillId, validUploadIds, userLocale);
   }
@@ -149,7 +149,7 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
 async function handleOrchestrated(
   _req: Request, res: Response,
   userId: string, conversationId: string, message: string,
-  uploadIds: string[] = [], userLocale: string = 'zh-TW',
+  uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document',
 ) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
@@ -168,7 +168,7 @@ async function handleOrchestrated(
     try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* closed */ }
   };
 
-  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds, userLocale);
+  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds, userLocale, conversationCategory);
   activeGenerations.set(conversationId, () => orchestrator.abort());
 
   try {
@@ -213,7 +213,7 @@ async function handleOrchestrated(
     res.end();
 
     // Fire-and-forget: extract conversation summary + user memories
-    extractMemoryAndSummary(userId, conversationId, userLocale).catch(e =>
+    extractMemoryAndSummary(userId, conversationId, userLocale, conversationCategory).catch(e =>
       console.error('[Generate] Memory extraction failed (non-blocking):', e)
     );
   }
@@ -238,10 +238,21 @@ async function handleDirect(
       });
   // Fetch user memories for context injection
   const userMemories = await dbAll<{ content: string }>(
-    'SELECT content FROM user_memories WHERE user_id = ? ORDER BY created_at DESC LIMIT 10', userId
+    "SELECT content FROM user_memories WHERE user_id = ? AND memory_type = 'preference' ORDER BY created_at DESC LIMIT 10", userId
   );
   const memoryContext = buildMemoryContext(userMemories);
-  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + uploadContext + memoryContext;
+
+  // For assistant conversations: inject cross-assistant context from other assistant conversations
+  let crossAssistantContext = '';
+  if (conversation.category === 'assistant') {
+    const otherSummaries = await dbAll<{ title: string; summary: string; created_at: string }>(
+      "SELECT title, summary, created_at FROM conversations WHERE user_id = ? AND category = 'assistant' AND id != ? AND summary IS NOT NULL ORDER BY created_at DESC LIMIT 3",
+      userId, conversationId
+    );
+    crossAssistantContext = buildCrossAssistantContext(otherSummaries, conversationId);
+  }
+
+  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + uploadContext + memoryContext + crossAssistantContext;
 
   if (skillId && skillId !== conversation.skill_id) {
     await dbRun('UPDATE conversations SET skill_id = ? WHERE id = ?', skillId, conversationId);

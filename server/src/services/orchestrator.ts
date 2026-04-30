@@ -4,7 +4,7 @@ import { EventEmitter } from 'events';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { spawnClaude } from './claudeCli.js';
 import { parsePipelineBlocks, truncateResultForRouter } from './taskParser.js';
-import { getSkill, buildSystemPrompt, buildMemoryContext, getRouterSkill, buildRouterPrompt } from '../skills/loader.js';
+import { getSkill, buildSystemPrompt, buildMemoryContext, buildCrossAssistantContext, getRouterSkill, buildRouterPrompt } from '../skills/loader.js';
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from './uploadContext.js';
 import { getSandboxPath } from './sandbox.js';
 import { config } from '../config.js';
@@ -53,6 +53,7 @@ type SSEWriter = (event: SSEEvent) => void;
 export class Orchestrator {
   private userId: string;
   private conversationId: string;
+  private conversationCategory: string;
   private sseWriter: SSEWriter;
   private aborted = false;
   private activeAbortFns: Array<() => void> = [];
@@ -60,9 +61,10 @@ export class Orchestrator {
   private uploadIds: string[];
   private userLocale: string;
 
-  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = [], userLocale: string = 'zh-TW') {
+  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document') {
     this.userId = userId;
     this.conversationId = conversationId;
+    this.conversationCategory = conversationCategory;
     this.sseWriter = sseWriter;
     this.userLocale = userLocale;
     this.uploadIds = uploadIds;
@@ -84,9 +86,20 @@ export class Orchestrator {
 
     // Inject user memories into router prompt
     const userMemories = await dbAll<{ content: string }>(
-      'SELECT content FROM user_memories WHERE user_id = ? ORDER BY created_at DESC LIMIT 10', this.userId
+      "SELECT content FROM user_memories WHERE user_id = ? AND memory_type = 'preference' ORDER BY created_at DESC LIMIT 10", this.userId
     );
-    const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale) + buildMemoryContext(userMemories);
+
+    // For assistant conversations: inject cross-assistant context
+    let crossAssistantContext = '';
+    if (this.conversationCategory === 'assistant') {
+      const otherSummaries = await dbAll<{ title: string; summary: string; created_at: string }>(
+        "SELECT title, summary, created_at FROM conversations WHERE user_id = ? AND category = 'assistant' AND id != ? AND summary IS NOT NULL ORDER BY created_at DESC LIMIT 3",
+        this.userId, this.conversationId
+      );
+      crossAssistantContext = buildCrossAssistantContext(otherSummaries, this.conversationId);
+    }
+
+    const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale) + buildMemoryContext(userMemories) + crossAssistantContext;
 
     // If user attached files, prepend file info to message so Router knows to delegate to data-analyst/rag-analyst
     let messageWithFileContext = message;
