@@ -1205,4 +1205,171 @@ router.delete('/invite-codes/:id', async (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
+// ==================== Analytics ====================
+
+// GET /api/admin/analytics/overview?period=7d|30d
+router.get('/analytics/overview', async (req: Request, res: Response) => {
+  const period = (req.query.period as string) || '30d';
+  const days = period === '7d' ? 7 : 30;
+
+  // Conversation trend by day
+  const convTrend = await dbAll<{ date: string; count: number }>(`
+    SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date, COUNT(*) as count
+    FROM conversations
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
+    ORDER BY date ASC
+  `);
+
+  // File generation trend by day
+  const fileTrend = await dbAll<{ date: string; count: number }>(`
+    SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date, COUNT(*) as count
+    FROM generated_files
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
+    ORDER BY date ASC
+  `);
+
+  // Fill missing dates
+  const convMap = new Map(convTrend.map(r => [r.date, r.count]));
+  const fileMap = new Map(fileTrend.map(r => [r.date, r.count]));
+  const trend = [];
+  const now = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    trend.push({ date: dateStr, conversations: convMap.get(dateStr) ?? 0, files: fileMap.get(dateStr) ?? 0 });
+  }
+
+  // Conversation breakdown by category
+  const byCategory = await dbAll<{ category: string | null; count: number }>(`
+    SELECT category, COUNT(*) as count
+    FROM conversations
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY category
+    ORDER BY count DESC
+  `);
+
+  // Conversation breakdown by mode
+  const byMode = await dbAll<{ mode: string | null; count: number }>(`
+    SELECT mode, COUNT(*) as count
+    FROM conversations
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY mode
+    ORDER BY count DESC
+  `);
+
+  // File breakdown by type
+  const byFileType = await dbAll<{ file_type: string | null; count: number }>(`
+    SELECT file_type, COUNT(*) as count
+    FROM generated_files
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY file_type
+    ORDER BY count DESC
+  `);
+
+  // Skill usage from task_executions
+  const bySkill = await dbAll<{ skill_id: string | null; count: number }>(`
+    SELECT skill_id, COUNT(*) as count
+    FROM task_executions
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY skill_id
+    ORDER BY count DESC
+    LIMIT 15
+  `);
+
+  // Summary counts
+  const totalConvRow = await dbGet<{ count: number }>(`
+    SELECT COUNT(*) as count FROM conversations
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+  `);
+  const totalFileRow = await dbGet<{ count: number }>(`
+    SELECT COUNT(*) as count FROM generated_files
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+  `);
+  const newUsersRow = await dbGet<{ count: number }>(`
+    SELECT COUNT(*) as count FROM users
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+  `);
+  const activeUsersRow = await dbGet<{ count: number }>(`
+    SELECT COUNT(DISTINCT user_id) as count FROM conversations
+    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+  `);
+
+  res.json({
+    period,
+    summary: {
+      totalConversations: totalConvRow?.count ?? 0,
+      totalFiles: totalFileRow?.count ?? 0,
+      newUsers: newUsersRow?.count ?? 0,
+      activeUsers: activeUsersRow?.count ?? 0,
+    },
+    trend,
+    byCategory,
+    byMode,
+    byFileType,
+    bySkill,
+  });
+});
+
+// GET /api/admin/analytics/hot-topics?period=7d|30d&limit=15
+router.get('/analytics/hot-topics', async (req: Request, res: Response) => {
+  const period = (req.query.period as string) || '7d';
+  const days = period === '7d' ? 7 : 30;
+  const limit = Math.min(parseInt(req.query.limit as string) || 15, 50);
+
+  const rows = await dbAll<{
+    id: string; title: string | null;
+    user_email: string; user_name: string | null;
+    category: string | null;
+    total_tokens: number; message_count: number;
+  }>(`
+    SELECT
+      c.id, c.title, c.category,
+      u.email as user_email, u.display_name as user_name,
+      COALESCE(SUM(tu.input_tokens + tu.output_tokens), 0) as total_tokens,
+      COUNT(DISTINCT m.id) as message_count
+    FROM conversations c
+    JOIN users u ON c.user_id = u.id
+    LEFT JOIN token_usage tu ON tu.conversation_id = c.id
+    LEFT JOIN messages m ON m.conversation_id = c.id
+    WHERE c.created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY c.id, c.title, c.category, u.email, u.display_name
+    ORDER BY total_tokens DESC, message_count DESC
+    LIMIT ${limit}
+  `);
+
+  res.json(rows);
+});
+
+// GET /api/admin/analytics/top-users?period=7d|30d&limit=10
+router.get('/analytics/top-users', async (req: Request, res: Response) => {
+  const period = (req.query.period as string) || '30d';
+  const days = period === '7d' ? 7 : 30;
+  const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+
+  const rows = await dbAll<{
+    id: string; email: string; display_name: string | null;
+    conversations: number; files: number;
+    total_input: number; total_output: number;
+  }>(`
+    SELECT
+      u.id, u.email, u.display_name,
+      COUNT(DISTINCT c.id) as conversations,
+      COUNT(DISTINCT f.id) as files,
+      COALESCE(SUM(tu.input_tokens), 0) as total_input,
+      COALESCE(SUM(tu.output_tokens), 0) as total_output
+    FROM users u
+    LEFT JOIN conversations c ON c.user_id = u.id AND c.created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    LEFT JOIN generated_files f ON f.user_id = u.id AND f.created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    LEFT JOIN token_usage tu ON tu.user_id = u.id AND tu.created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    GROUP BY u.id, u.email, u.display_name
+    ORDER BY conversations DESC, total_input DESC
+    LIMIT ${limit}
+  `);
+
+  res.json(rows);
+});
+
 export default router;

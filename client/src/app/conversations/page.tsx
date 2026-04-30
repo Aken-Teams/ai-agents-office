@@ -269,8 +269,8 @@ function ConversationsContent() {
               <span className="text-tertiary text-xs md:text-sm font-bold tracking-[0.3em] uppercase">{t('conversations.header.subtitle')}</span>
               <div className="h-px w-8 md:w-12 bg-tertiary/30" />
             </div>
-            <div className="flex items-center gap-2.5 mb-1 md:mb-2">
-              <h2 className="text-2xl md:text-4xl font-headline font-bold text-on-surface tracking-tight">{t('conversations.header.title')}</h2>
+            <div className="flex items-center gap-2 mb-1 md:mb-2">
+              <h2 className="text-2xl md:text-4xl font-headline font-bold text-on-surface tracking-tight leading-none">{t('conversations.header.title')}</h2>
               <HelpButton pageId="conversations" />
             </div>
             <p className="text-sm md:text-base text-on-surface-variant leading-relaxed">

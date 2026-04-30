@@ -88,8 +88,8 @@ function UsageContent() {
                 <span className="text-tertiary text-xs md:text-sm font-bold tracking-[0.3em] uppercase">{t('usage.header.subtitle')}</span>
                 <div className="h-px w-8 md:w-12 bg-tertiary/30" />
               </div>
-              <div className="flex items-center gap-2.5 mb-1 md:mb-2">
-                <h2 className="text-2xl md:text-4xl font-headline font-bold text-on-surface tracking-tight">{t('usage.header.title')}</h2>
+              <div className="flex items-center gap-2 mb-1 md:mb-2">
+                <h2 className="text-2xl md:text-4xl font-headline font-bold text-on-surface tracking-tight leading-none">{t('usage.header.title')}</h2>
                 <HelpButton pageId="usage" />
               </div>
               <p className="text-sm md:text-base text-on-surface-variant leading-relaxed max-w-xl">

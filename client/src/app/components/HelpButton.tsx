@@ -161,14 +161,25 @@ export default function HelpButton({ pageId }: { pageId: HelpPageId }) {
         onClick={() => setOpen(false)}
       />
 
-      {/* Slide-in Panel */}
+      {/*
+        Mobile: bottom sheet (slides up from bottom)
+        Desktop md+: right side panel (slides in from right)
+      */}
       <div
-        className={`fixed top-0 right-0 z-[9999] h-screen w-full max-w-[340px] bg-surface shadow-2xl border-l border-outline-variant/20 flex flex-col transition-transform duration-300 ${
-          open ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        className={`fixed z-[9999] bg-surface shadow-2xl flex flex-col transition-transform duration-300
+          bottom-0 left-0 right-0 rounded-t-2xl max-h-[90vh]
+          border-t border-outline-variant/20
+          md:top-0 md:bottom-auto md:left-auto md:right-0 md:h-screen md:max-h-none md:w-full md:max-w-[340px] md:rounded-none md:border-t-0 md:border-l
+          ${open ? 'translate-y-0 md:translate-y-0 md:translate-x-0' : 'translate-y-full md:translate-y-0 md:translate-x-full'}
+        `}
       >
+        {/* Mobile drag handle */}
+        <div className="md:hidden flex justify-center pt-3 pb-1 shrink-0">
+          <div className="w-10 h-1 rounded-full bg-outline-variant/40" />
+        </div>
+
         {/* Header */}
-        <div className="flex items-start justify-between px-5 py-4 border-b border-outline-variant/15 shrink-0">
+        <div className="flex items-start justify-between px-5 py-3 md:py-4 border-b border-outline-variant/15 shrink-0">
           <div>
             <span className="text-primary text-xs font-bold tracking-[0.2em] uppercase block mb-0.5">{content.subtitle}</span>
             <h3 className="text-lg font-headline font-bold text-on-surface">{content.title}</h3>

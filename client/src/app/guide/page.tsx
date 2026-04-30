@@ -324,7 +324,8 @@ function GuideContent() {
           </div>
           <h1 className="text-2xl md:text-4xl font-headline font-bold text-on-surface tracking-tight mb-2">使用說明</h1>
           <p className="text-sm text-on-surface-variant max-w-xl">
-            選擇左側的功能分類，查看詳細的使用步驟與技巧。
+            <span className="md:hidden">選擇上方的功能分類，查看詳細的使用步驟與技巧。</span>
+            <span className="hidden md:inline">選擇左側的功能分類，查看詳細的使用步驟與技巧。</span>
           </p>
         </div>
 
@@ -333,7 +334,7 @@ function GuideContent() {
           {/* ── Left Tab Nav (desktop: sidebar, mobile: horizontal scroll) ── */}
           <nav className="shrink-0 md:w-48 lg:w-56">
             {/* Mobile: horizontal scroll */}
-            <div className="md:hidden flex gap-1.5 overflow-x-auto px-4 pb-3 scrollbar-hide">
+            <div className="md:hidden flex gap-1.5 overflow-x-auto px-4 py-3 scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
               {SECTIONS.map(sec => (
                 <button
                   key={sec.id}
@@ -378,30 +379,35 @@ function GuideContent() {
           </nav>
 
           {/* ── Right Content ── */}
-          <div className="flex-1 min-w-0 px-4 md:px-6 lg:px-8 md:border-l border-outline-variant/15">
+          <div className="flex-1 min-w-0 px-4 md:px-6 lg:px-8 pt-2 md:pt-0 md:border-l border-outline-variant/15">
 
             {/* Section Header */}
-            <div className={`rounded-2xl border p-5 md:p-6 mb-5 md:mb-6 ${active.bg}`}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-surface/50`}>
-                    <span className={`material-symbols-outlined text-xl ${active.color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{active.icon}</span>
-                  </div>
-                  <div>
-                    <h2 className="text-lg md:text-2xl font-headline font-bold text-on-surface">{active.label}</h2>
-                  </div>
+            <div className={`rounded-2xl border p-4 md:p-6 mb-5 md:mb-6 ${active.bg}`}>
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center bg-surface/50 shrink-0">
+                  <span className={`material-symbols-outlined text-lg md:text-xl ${active.color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{active.icon}</span>
                 </div>
+                <h2 className="text-base md:text-2xl font-headline font-bold text-on-surface flex-1">{active.label}</h2>
                 {active.pageLink && (
                   <Link
                     href={active.pageLink}
-                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border ${active.bg} ${active.color} hover:opacity-80 transition-opacity shrink-0`}
+                    className={`hidden md:flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border ${active.bg} ${active.color} hover:opacity-80 transition-opacity shrink-0`}
                   >
                     {active.pageLinkLabel}
                     <span className="material-symbols-outlined text-sm">arrow_forward</span>
                   </Link>
                 )}
               </div>
-              <p className="text-sm text-on-surface-variant leading-relaxed mt-3">{active.intro}</p>
+              <p className="text-xs md:text-sm text-on-surface-variant leading-relaxed">{active.intro}</p>
+              {active.pageLink && (
+                <Link
+                  href={active.pageLink}
+                  className={`md:hidden mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border ${active.bg} ${active.color}`}
+                >
+                  {active.pageLinkLabel}
+                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                </Link>
+              )}
             </div>
 
             {/* Steps */}

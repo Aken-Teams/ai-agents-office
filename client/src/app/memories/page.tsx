@@ -115,9 +115,9 @@ function MemoriesContent() {
             <span className="text-tertiary text-xs md:text-sm font-bold tracking-[0.3em] uppercase">{t('memories.header.subtitle' as any)}</span>
             <div className="h-px w-8 md:w-12 bg-tertiary/30" />
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <h2 className="text-xl md:text-4xl font-headline font-bold text-on-surface tracking-tight">{t('userMenu.memory' as any)}</h2>
+          <div className="flex items-center gap-2 justify-between">
+            <div className="flex items-center gap-2 min-w-0">
+              <h2 className="text-xl md:text-4xl font-headline font-bold text-on-surface tracking-tight leading-none">{t('userMenu.memory' as any)}</h2>
               <HelpButton pageId="memories" />
             </div>
             {memories.length > 0 && (
@@ -137,7 +137,7 @@ function MemoriesContent() {
 
         {/* Memory type tabs */}
         {!loading && memories.length > 0 && (
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-0.5 scrollbar-hide">
             {[
               { key: '', label: '全部', icon: 'psychology' },
               { key: 'preference', label: '偏好記憶', icon: 'tune' },
@@ -146,7 +146,7 @@ function MemoriesContent() {
               <button
                 key={tab.key}
                 onClick={() => { setTypeFilter(tab.key); setCatFilter(''); }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer border ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer border whitespace-nowrap shrink-0 ${
                   typeFilter === tab.key
                     ? 'bg-primary text-on-primary border-primary'
                     : 'bg-surface-container text-on-surface-variant border-outline-variant/20 hover:border-outline-variant/40'

@@ -170,8 +170,8 @@ function AssistantContent() {
             </span>
             <div className="h-px w-8 md:w-12 bg-tertiary/30" />
           </div>
-          <div className="flex items-center gap-2.5 mb-2 md:mb-3">
-            <h2 className="text-2xl md:text-4xl font-headline font-bold text-on-surface tracking-tight">
+          <div className="flex items-center gap-2 mb-2 md:mb-3">
+            <h2 className="text-2xl md:text-4xl font-headline font-bold text-on-surface tracking-tight leading-none">
               {t('nav.assistant' as any)}
             </h2>
             <HelpButton pageId="assistant" />
