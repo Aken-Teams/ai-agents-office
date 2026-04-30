@@ -24,6 +24,51 @@ router.use(rateLimit);
 
 const activeGenerations = new Map<string, () => void>();
 
+/**
+ * Build context block from referenced assistant conversations.
+ * Injects title, summary, and recent messages from each referenced conversation.
+ */
+async function buildCrossReferenceContext(userId: string, referencedConvIds: string[]): Promise<string> {
+  if (!referencedConvIds.length) return '';
+
+  const sections: string[] = [];
+
+  for (const refId of referencedConvIds.slice(0, 3)) {
+    const refConv = await dbGet<{ title: string; summary: string | null }>(
+      'SELECT title, summary FROM conversations WHERE id = ? AND user_id = ?',
+      refId, userId
+    );
+    if (!refConv) continue;
+
+    const refMessages = await dbAll<{ role: string; content: string }>(
+      'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 10',
+      refId
+    );
+
+    const lines: string[] = [`### 引用：${refConv.title}`];
+    if (refConv.summary) lines.push(`摘要：${refConv.summary}`);
+    if (refMessages.length > 0) {
+      lines.push('');
+      for (const msg of refMessages.reverse()) {
+        const role = msg.role === 'user' ? 'User' : 'Assistant';
+        const content = msg.content.length > 1500 ? msg.content.substring(0, 1500) + '...' : msg.content;
+        lines.push(`[${role}]: ${content}`);
+      }
+    }
+    sections.push(lines.join('\n'));
+  }
+
+  if (!sections.length) return '';
+
+  return [
+    '\n\n## 引用的 AI 助手工作成果',
+    '以下是用戶引用的其他 AI 助手對話內容，請善用這些成果來完成當前需求：',
+    '',
+    ...sections,
+    '',
+  ].join('\n');
+}
+
 // GET /api/generate/skills
 router.get('/skills', (_req: Request, res: Response) => {
   const skills = loadSkills();
@@ -70,7 +115,10 @@ async function buildChatHistory(conversationId: string): Promise<string> {
 router.post('/:conversationId', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const conversationId = req.params.conversationId as string;
-  const { message, skillId, uploadIds } = req.body;
+  const { message, skillId, uploadIds, referencedConvIds: rawRefIds } = req.body;
+  const referencedConvIds: string[] = Array.isArray(rawRefIds)
+    ? rawRefIds.filter((id: unknown) => typeof id === 'string').slice(0, 3)
+    : [];
 
   if (!message) { res.status(400).json({ error: 'Message is required' }); return; }
 
@@ -113,9 +161,24 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
   }
 
   const userMsgId = uuidv4();
+  // Append refs metadata tag for display purposes (strip before AI usage)
+  let storedUserMessage = sanitizedMessage;
+  if (referencedConvIds.length > 0) {
+    const refTitles: Array<{id: string; title: string}> = [];
+    for (const refId of referencedConvIds) {
+      const refConv = await dbGet<{title: string}>(
+        'SELECT title FROM conversations WHERE id = ? AND user_id = ?',
+        refId, userId
+      );
+      if (refConv) refTitles.push({ id: refId, title: refConv.title });
+    }
+    if (refTitles.length > 0) {
+      storedUserMessage = sanitizedMessage + '\n\n[refs:' + JSON.stringify(refTitles) + ']';
+    }
+  }
   await dbRun(
     'INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)',
-    userMsgId, conversationId, 'user', sanitizedMessage
+    userMsgId, conversationId, 'user', storedUserMessage
   );
 
   const routerSkill = getRouterSkill();
@@ -139,10 +202,14 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
   const userRow = await dbGet<{ locale: string }>('SELECT locale FROM users WHERE id = ?', userId);
   const userLocale = userRow?.locale || 'zh-TW';
 
+  const refContext = referencedConvIds.length > 0
+    ? await buildCrossReferenceContext(userId, referencedConvIds)
+    : '';
+
   if (useOrchestrator) {
-    await handleOrchestrated(req, res, userId, conversationId, sanitizedMessage, validUploadIds, userLocale, conversation.category || 'document');
+    await handleOrchestrated(req, res, userId, conversationId, sanitizedMessage, validUploadIds, userLocale, conversation.category || 'document', refContext);
   } else {
-    await handleDirect(req, res, userId, conversationId, conversation, sanitizedMessage, skillId, validUploadIds, userLocale);
+    await handleDirect(req, res, userId, conversationId, conversation, sanitizedMessage, skillId, validUploadIds, userLocale, refContext);
   }
 });
 
@@ -150,6 +217,7 @@ async function handleOrchestrated(
   _req: Request, res: Response,
   userId: string, conversationId: string, message: string,
   uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document',
+  refContext: string = '',
 ) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
@@ -168,7 +236,7 @@ async function handleOrchestrated(
     try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* closed */ }
   };
 
-  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds, userLocale, conversationCategory);
+  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds, userLocale, conversationCategory, refContext);
   activeGenerations.set(conversationId, () => orchestrator.abort());
 
   try {
@@ -223,7 +291,7 @@ async function handleDirect(
   _req: Request, res: Response,
   userId: string, conversationId: string, conversation: Conversation,
   sanitizedMessage: string, skillId?: string, uploadIds: string[] = [],
-  userLocale: string = 'zh-TW',
+  userLocale: string = 'zh-TW', refContext: string = '',
 ) {
   const effectiveSkillId = skillId || conversation.skill_id || 'pptx-gen';
   const skill = getSkill(effectiveSkillId);
@@ -252,7 +320,7 @@ async function handleDirect(
     crossAssistantContext = buildCrossAssistantContext(otherSummaries, conversationId);
   }
 
-  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + uploadContext + memoryContext + crossAssistantContext;
+  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + uploadContext + memoryContext + crossAssistantContext + refContext;
 
   if (skillId && skillId !== conversation.skill_id) {
     await dbRun('UPDATE conversations SET skill_id = ? WHERE id = ?', skillId, conversationId);

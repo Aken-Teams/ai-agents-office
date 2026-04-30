@@ -425,10 +425,24 @@ html.locale-zh-CN {
   display: inline;
 }
 
-.chat-markdown ul,
+.chat-markdown ul {
+  margin: 4px 0;
+  padding-left: 22px;
+  list-style-type: disc;
+}
+
 .chat-markdown ol {
   margin: 4px 0;
   padding-left: 22px;
+  list-style-type: decimal;
+}
+
+.chat-markdown ul ul {
+  list-style-type: circle;
+}
+
+.chat-markdown ul ul ul {
+  list-style-type: square;
 }
 
 .chat-markdown li {

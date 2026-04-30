@@ -105,6 +105,12 @@ interface BgTask {
   result_summary: string | null;
 }
 
+interface RefConv {
+  id: string;
+  title: string;
+  summary: string | null;
+}
+
 const SKILL_IDS = [
   'pptx-gen', 'docx-gen', 'xlsx-gen', 'pdf-gen', 'slides-gen', 'webapp-gen',
   'research', 'data-analyst', 'rag-analyst', 'planner', 'reviewer', 'router',
@@ -304,6 +310,18 @@ function parseAskUserOptions(rawInput: string | undefined): { question: string; 
   }
 }
 
+/** Parse [refs:...] metadata tag from user messages for displaying referenced assistants */
+function parseMessageRefs(content: string): { text: string; refs: Array<{id: string; title: string}> } {
+  const match = content.match(/\n\n\[refs:(\[.*\])\]$/s);
+  if (!match) return { text: content, refs: [] };
+  try {
+    const refs = JSON.parse(match[1]) as Array<{id: string; title: string}>;
+    return { text: content.slice(0, content.length - match[0].length), refs };
+  } catch {
+    return { text: content, refs: [] };
+  }
+}
+
 /** Parse [CHOICES]...[/CHOICES] blocks from assistant messages */
 function parseChoices(content: string): { text: string; choices: string[] } {
   const match = content.match(/\[CHOICES\]\s*([\s\S]*?)\s*\[\/CHOICES\]/);
@@ -499,6 +517,11 @@ function ChatContent() {
   const [versionCache, setVersionCache] = useState<Record<string, GeneratedFile[]>>({});
   const [mobileFilesOpen, setMobileFilesOpen] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  // Cross-assistant reference (@mention) state — only active for assistant conversations
+  const [refAssistants, setRefAssistants] = useState<RefConv[]>([]);
+  const [selectedRefs, setSelectedRefs] = useState<RefConv[]>([]);
+  const [showRefPicker, setShowRefPicker] = useState(false);
+  const refPickerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sidebarMargin = useSidebarMargin();
   const abortRef = useRef<AbortController | null>(null);
@@ -573,6 +596,25 @@ function ChatContent() {
       })
       .catch(() => router.replace('/dashboard'));
   }, [token, conversationId, router]);
+
+  // Load other assistant conversations for @mention picker
+  useEffect(() => {
+    if (!token || !conversationId || convCategory !== 'assistant') return;
+    fetch('/api/conversations?category=assistant', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then((convs: RefConv[]) => setRefAssistants(convs.filter(c => c.id !== conversationId)))
+      .catch(() => {});
+  }, [token, conversationId, convCategory]);
+
+  // Close ref picker on outside click
+  useEffect(() => {
+    if (!showRefPicker) return;
+    const handler = (e: MouseEvent) => {
+      if (!refPickerRef.current?.contains(e.target as Node)) setShowRefPicker(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showRefPicker]);
 
   const pendingHandled = useRef(false);
   const [backgroundProcessing, setBackgroundProcessing] = useState(false);
@@ -785,10 +827,13 @@ function ChatContent() {
       ? `\n\n📎 ${currentAttached.map(f => f.originalName).join(', ')}`
       : '';
     if (!directMessage) setInput('');
+    const refsTag = selectedRefs.length > 0
+      ? '\n\n[refs:' + JSON.stringify(selectedRefs.map(r => ({ id: r.id, title: r.title }))) + ']'
+      : '';
     setMessages(prev => [...prev, {
       id: `temp-${Date.now()}`,
       role: 'user',
-      content: userMessage + attachmentNote,
+      content: userMessage + attachmentNote + refsTag,
       created_at: new Date().toISOString(),
     }]);
 
@@ -801,6 +846,7 @@ function ChatContent() {
     setAgentTasks([]);
     setAttachedFiles([]);
     setLatestFiles([]);
+    setSelectedRefs([]);
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -816,6 +862,7 @@ function ChatContent() {
           message: userMessage,
           ...(skillId && { skillId }),
           ...(currentUploadIds.length > 0 && { uploadIds: currentUploadIds }),
+          ...(selectedRefs.length > 0 && { referencedConvIds: selectedRefs.map(r => r.id) }),
         }),
         signal: controller.signal,
       });
@@ -1348,6 +1395,9 @@ function ChatContent() {
           <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 md:px-8 py-4 md:py-8 space-y-4 md:space-y-8">
             {messages.map((msg, idx) => {
               const sources = msg.role === 'assistant' ? extractSources(msg.content) : [];
+              const { text: userMsgText, refs: userMsgRefs } = msg.role === 'user'
+                ? parseMessageRefs(msg.content)
+                : { text: msg.content, refs: [] };
               return (
                 <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : 'flex gap-2 md:gap-4'}>
                   {msg.role === 'assistant' && (
@@ -1362,7 +1412,17 @@ function ChatContent() {
                   }>
                     {msg.role === 'user' ? (
                       <>
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{userMsgText}</p>
+                        {userMsgRefs.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {userMsgRefs.map(ref => (
+                              <div key={ref.id} className="flex items-center gap-1 px-2 py-0.5 rounded text-xs border bg-secondary/10 border-secondary/20 text-secondary">
+                                <span className="material-symbols-outlined text-xs" style={{ fontVariationSettings: "'FILL' 1" }}>psychology</span>
+                                <span className="max-w-[120px] truncate">{ref.title}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         <span className="block mt-1.5 md:mt-2 text-xs md:text-sm text-outline">
                           {new Date(msg.created_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
                         </span>
@@ -1826,8 +1886,8 @@ function ChatContent() {
               </div>
             )}
             <div className="bg-surface-container rounded-lg border border-outline-variant/20 focus-within:border-primary/40 transition-all p-1.5 md:p-2">
-              {/* Attached files chips */}
-              {attachedFiles.length > 0 && (
+              {/* Attached files chips + reference chips */}
+              {(attachedFiles.length > 0 || selectedRefs.length > 0) && (
                 <div className="flex flex-wrap gap-1.5 md:gap-2 px-1.5 md:px-2 pt-1.5 md:pt-2 pb-0.5 md:pb-1">
                   {attachedFiles.map(file => (
                     <div
@@ -1857,6 +1917,16 @@ function ChatContent() {
                       )}
                     </div>
                   ))}
+                  {/* Reference assistant chips */}
+                  {selectedRefs.map(ref => (
+                    <div key={ref.id} className="flex items-center gap-1 md:gap-1.5 px-2 md:px-2.5 py-0.5 md:py-1 rounded text-xs md:text-sm border bg-secondary/10 border-secondary/20 text-secondary">
+                      <span className="material-symbols-outlined text-xs md:text-sm">psychology</span>
+                      <span className="max-w-[80px] md:max-w-[120px] truncate">{ref.title}</span>
+                      <button onClick={() => setSelectedRefs(prev => prev.filter(r => r.id !== ref.id))} className="hover:text-error transition-colors cursor-pointer ml-0.5">
+                        <span className="material-symbols-outlined text-xs md:text-sm">close</span>
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
               <div className="flex items-center gap-1.5 md:gap-3 px-1 md:px-2 py-0.5 md:py-1">
@@ -1877,6 +1947,50 @@ function ChatContent() {
                 >
                   <span className="material-symbols-outlined text-base md:text-lg">attach_file</span>
                 </button>
+                {/* @ Reference button — only for assistant conversations */}
+                {convCategory === 'assistant' && refAssistants.length > 0 && (
+                  <div className="relative shrink-0" ref={refPickerRef}>
+                    <button
+                      onClick={() => setShowRefPicker(p => !p)}
+                      disabled={streaming}
+                      className={`w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${showRefPicker || selectedRefs.length > 0 ? 'bg-secondary/15 text-secondary' : 'active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-secondary md:hover:text-secondary'}`}
+                      title={t('chat.input.referenceAssistant' as any)}
+                    >
+                      <span className="material-symbols-outlined text-base md:text-lg">alternate_email</span>
+                    </button>
+                    {showRefPicker && (
+                      <div className="absolute bottom-full left-0 mb-1 w-64 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl overflow-hidden z-50">
+                        <div className="px-3 py-2 border-b border-outline-variant/10">
+                          <p className="text-xs font-medium text-on-surface-variant">{t('chat.input.referenceAssistant' as any)}</p>
+                        </div>
+                        <div className="max-h-48 overflow-y-auto">
+                          {refAssistants.map(ref => {
+                            const isSelected = selectedRefs.some(r => r.id === ref.id);
+                            return (
+                              <button
+                                key={ref.id}
+                                onClick={() => {
+                                  setSelectedRefs(prev =>
+                                    isSelected ? prev.filter(r => r.id !== ref.id) : [...prev, ref]
+                                  );
+                                  setShowRefPicker(false);
+                                }}
+                                className={`w-full flex items-start gap-2.5 px-3 py-2.5 text-left transition-colors cursor-pointer ${isSelected ? 'bg-secondary/10' : 'md:hover:bg-surface-container-high active:bg-surface-container-high'}`}
+                              >
+                                <span className={`material-symbols-outlined text-sm shrink-0 mt-0.5 ${isSelected ? 'text-secondary' : 'text-on-surface-variant'}`} style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
+                                <div className="min-w-0 flex-1">
+                                  <p className={`text-xs font-medium truncate ${isSelected ? 'text-secondary' : 'text-on-surface'}`}>{ref.title}</p>
+                                  {ref.summary && <p className="text-[11px] text-on-surface-variant/70 truncate mt-0.5">{ref.summary}</p>}
+                                </div>
+                                {isSelected && <span className="material-symbols-outlined text-sm text-secondary shrink-0">check</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <textarea
                   className="bg-transparent border-none focus:ring-0 text-base md:text-sm flex-1 text-on-surface placeholder:text-outline/50 font-body resize-none min-h-[36px] md:min-h-[40px] max-h-[100px] md:max-h-[120px]"
                   value={input}

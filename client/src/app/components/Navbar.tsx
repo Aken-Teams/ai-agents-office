@@ -16,6 +16,7 @@ const NAV_LINKS = [
   { href: '/files', labelKey: 'nav.files' as const, icon: 'folder_open' },
   { href: '/usage', labelKey: 'nav.usage' as const, icon: 'bar_chart' },
   { href: '/memories', labelKey: 'nav.memories' as const, icon: 'psychology' },
+  { href: '/guide', labelKey: 'nav.guide' as const, icon: 'menu_book' },
 ];
 
 const DOC_TYPES = [

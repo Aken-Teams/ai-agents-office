@@ -60,14 +60,16 @@ export class Orchestrator {
   private tasks: TaskExecution[] = [];
   private uploadIds: string[];
   private userLocale: string;
+  private referenceContext: string;
 
-  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document') {
+  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document', referenceContext: string = '') {
     this.userId = userId;
     this.conversationId = conversationId;
     this.conversationCategory = conversationCategory;
     this.sseWriter = sseWriter;
     this.userLocale = userLocale;
     this.uploadIds = uploadIds;
+    this.referenceContext = referenceContext;
   }
 
   async run(message: string): Promise<OrchestratorResult> {
@@ -101,13 +103,20 @@ export class Orchestrator {
 
     const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale) + buildMemoryContext(userMemories) + crossAssistantContext;
 
-    // If user attached files, prepend file info to message so Router knows to delegate to data-analyst/rag-analyst
+    // Build effective message — inject referenced data inline so Router uses it directly (no re-research)
     let messageWithFileContext = message;
+    if (this.referenceContext) {
+      // Prepend reference data with explicit instruction to use existing content
+      messageWithFileContext =
+        '[System: 用戶已引用以下 AI 助手的工作成果。請直接運用這些資料來完成需求，' +
+        '不要重新對這些主題進行網路搜尋或重複研究。將引用資料作為主要來源，直接委派給適合的 Worker。]\n' +
+        this.referenceContext + '\n\n---\n\n用戶需求：' + messageWithFileContext;
+    }
     if (this.uploadIds.length > 0) {
       const baseSandbox = getSandboxPath(this.userId, this.conversationId);
       const fileContext = await getUserUploadsForPrompt(this.userId, baseSandbox, { uploadIds: this.uploadIds });
       if (fileContext) {
-        messageWithFileContext = message + '\n\n[System: The user has attached files for this request.]\n' + fileContext;
+        messageWithFileContext = messageWithFileContext + '\n\n[System: The user has attached files for this request.]\n' + fileContext;
       }
     }
 
