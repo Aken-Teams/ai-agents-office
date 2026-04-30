@@ -1451,4 +1451,32 @@ ${titleList}
   }
 });
 
+// GET /api/admin/tokens/monthly-summary?from=YYYY-MM&to=YYYY-MM
+router.get('/tokens/monthly-summary', async (req: Request, res: Response) => {
+  const from = (req.query.from as string) || '';
+  const to   = (req.query.to   as string) || '';
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+  if (from) { conditions.push("DATE_FORMAT(tu.created_at, '%Y-%m') >= ?"); params.push(from); }
+  if (to)   { conditions.push("DATE_FORMAT(tu.created_at, '%Y-%m') <= ?"); params.push(to); }
+  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+  const rows = await dbAll(`
+    SELECT
+      DATE_FORMAT(tu.created_at, '%Y-%m') AS month,
+      u.email,
+      COALESCE(u.display_name, u.email) AS display_name,
+      SUM(tu.input_tokens)  AS input_tokens,
+      SUM(tu.output_tokens) AS output_tokens,
+      SUM(tu.input_tokens + tu.output_tokens) AS total_tokens,
+      COUNT(DISTINCT tu.conversation_id) AS conversations,
+      COUNT(*) AS sessions
+    FROM token_usage tu
+    LEFT JOIN users u ON u.id = tu.user_id
+    ${where}
+    GROUP BY DATE_FORMAT(tu.created_at, '%Y-%m'), tu.user_id, u.email, u.display_name
+    ORDER BY month DESC, total_tokens DESC
+  `, ...params);
+  res.json(rows);
+});
+
 export default router;

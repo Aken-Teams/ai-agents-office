@@ -60,38 +60,42 @@ export default function AdminTokens() {
   const [ledgerTotalPages, setLedgerTotalPages] = useState(1);
   const [period, setPeriod] = useState<'7d' | '30d'>('7d');
   const [exporting, setExporting] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFrom, setExportFrom] = useState('');
+  const [exportTo, setExportTo] = useState('');
+  const [dateError, setDateError] = useState('');
 
   async function exportCsv() {
     if (!token || exporting) return;
+    if (exportFrom && exportTo && exportTo < exportFrom) {
+      setDateError('結束月份不可早於開始月份');
+      return;
+    }
+    setDateError('');
     setExporting(true);
     try {
-      const res = await fetch('/api/admin/tokens/ledger?page=1&limit=9999', { headers: { Authorization: `Bearer ${token}` } });
-      const data = await res.json();
-      const entries: LedgerEntry[] = data.entries;
-      const header = ['ID', 'User Email', 'User Name', 'Conversation Title', 'User Prompt', 'Input Tokens', 'Output Tokens', 'Total Tokens', 'Cost (USD)', 'Model', 'Duration (ms)', 'Created At'];
-      const csvRows = entries.map(e => {
-        const cost = ((e.input_tokens / 1_000_000) * 3 + (e.output_tokens / 1_000_000) * 15) * 10;
-        return [
-          e.id,
-          e.email,
-          e.display_name || '',
-          e.conversation_title || '',
-          (e.user_prompt || '').replace(/\n/g, ' '),
-          e.input_tokens,
-          e.output_tokens,
-          e.input_tokens + e.output_tokens,
-          cost.toFixed(4),
-          e.model || '',
-          e.duration_ms ?? '',
-          e.created_at,
-        ];
+      const params = new URLSearchParams();
+      if (exportFrom) params.set('from', exportFrom);
+      if (exportTo)   params.set('to',   exportTo);
+      const res = await fetch(`/api/admin/tokens/monthly-summary?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      const rows: Array<{
+        month: string; email: string; display_name: string;
+        input_tokens: number; output_tokens: number; total_tokens: number;
+        conversations: number; sessions: number;
+      }> = await res.json();
+      const header = ['月份', 'Email', '姓名', '輸入 Token', '輸出 Token', '總 Token', '預估費用 (USD)', '對話次數', 'API 呼叫次數'];
+      const csvRows = rows.map(r => {
+        const cost = ((r.input_tokens / 1_000_000) * 3 + (r.output_tokens / 1_000_000) * 15) * 10;
+        return [r.month, r.email, r.display_name, r.input_tokens, r.output_tokens, r.total_tokens, cost.toFixed(4), r.conversations, r.sessions];
       });
       const csv = '\uFEFF' + [header, ...csvRows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `token_ledger_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+      const label = exportFrom || exportTo ? `${exportFrom || 'all'}_${exportTo || 'all'}` : 'all';
+      a.href = url; a.download = `token_billing_${label}.csv`; a.click();
       URL.revokeObjectURL(url);
+      setShowExportModal(false);
     } finally { setExporting(false); }
   }
 
@@ -157,15 +161,70 @@ export default function AdminTokens() {
           <span className="text-[10px] md:text-sm px-1.5 md:px-2 py-0.5 bg-success/10 text-success rounded font-bold tracking-wider uppercase shrink-0">{t('admin.tokens.syncStatus')}</span>
         </div>
         <button
-          onClick={exportCsv}
+          onClick={() => setShowExportModal(true)}
           disabled={exporting}
           className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer shrink-0 disabled:opacity-50"
         >
-          <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'download'}</span>
+          <span className="material-symbols-outlined text-sm">download</span>
           <span className="hidden md:inline">{t('admin.tokens.exportCsv')}</span>
           <span className="md:hidden">CSV</span>
         </button>
       </header>
+
+      {/* Export Range Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) setShowExportModal(false); }}>
+          <div className="bg-surface-container-highest rounded-2xl shadow-2xl border border-outline-variant/20 w-72">
+            <div className="flex items-center gap-2 px-5 pt-5 pb-4 border-b border-outline-variant/10">
+              <span className="material-symbols-outlined text-primary text-[20px]">date_range</span>
+              <h3 className="text-sm font-black text-on-surface">選擇匯出月份範圍</h3>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-on-surface-variant w-10 shrink-0">開始</span>
+                <input
+                  type="month"
+                  value={exportFrom}
+                  max={exportTo || undefined}
+                  onChange={e => { setExportFrom(e.target.value); setDateError(''); }}
+                  className="flex-1 bg-surface-container border border-outline-variant/30 rounded-lg px-3 py-1.5 text-sm text-on-surface focus:outline-none focus:border-primary"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-on-surface-variant w-10 shrink-0">結束</span>
+                <input
+                  type="month"
+                  value={exportTo}
+                  min={exportFrom || undefined}
+                  onChange={e => { setExportTo(e.target.value); setDateError(''); }}
+                  className={`flex-1 bg-surface-container border rounded-lg px-3 py-1.5 text-sm text-on-surface focus:outline-none focus:border-primary ${dateError ? 'border-error' : 'border-outline-variant/30'}`}
+                />
+              </div>
+              {dateError ? (
+                <p className="text-[11px] text-error pl-[52px] flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[13px]">error</span>{dateError}
+                </p>
+              ) : (
+                <p className="text-[11px] text-on-surface-variant pl-[52px]">留空則匯出全部資料</p>
+              )}
+            </div>
+            <div className="flex gap-2 px-5 pb-5">
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="flex-1 py-2 rounded-lg text-sm font-bold text-on-surface-variant bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer"
+              >取消</button>
+              <button
+                onClick={exportCsv}
+                disabled={exporting}
+                className="flex-1 py-2 rounded-lg text-sm font-bold text-on-primary bg-primary hover:brightness-110 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'download'}</span>
+                下載 CSV
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="p-4 md:p-8 flex-1 space-y-4 md:space-y-6 overflow-y-auto">
         {/* Summary Cards */}
