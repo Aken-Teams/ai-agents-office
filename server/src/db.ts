@@ -362,6 +362,11 @@ export async function initializeDatabase(): Promise<void> {
       await conn.query('ALTER TABLE conversations ADD COLUMN summary VARCHAR(500) DEFAULT NULL');
     } catch { /* column already exists */ }
 
+    // Add category column to conversations if not exists
+    try {
+      await conn.query("ALTER TABLE conversations ADD COLUMN category VARCHAR(20) NOT NULL DEFAULT 'document'");
+    } catch { /* column already exists */ }
+
     // Default system settings
     const defaults: Record<string, string> = {
       user_usage_limit_usd: '50',

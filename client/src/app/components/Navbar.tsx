@@ -11,6 +11,7 @@ const SIDEBAR_KEY = 'sidebar-collapsed';
 
 const NAV_LINKS = [
   { href: '/dashboard', labelKey: 'nav.dashboard' as const, icon: 'dashboard' },
+  { href: '/assistant', labelKey: 'nav.assistant' as const, icon: 'smart_toy' },
   { href: '/conversations', labelKey: 'nav.conversations' as const, icon: 'chat' },
   { href: '/files', labelKey: 'nav.files' as const, icon: 'folder_open' },
   { href: '/usage', labelKey: 'nav.usage' as const, icon: 'bar_chart' },

@@ -476,6 +476,7 @@ function ChatContent() {
   const [latestFiles, setLatestFiles] = useState<GeneratedFile[]>([]);
   const [title, setTitle] = useState('');
   const [skillId, setSkillId] = useState('');
+  const [convCategory, setConvCategory] = useState('');
   const [elapsed, setElapsed] = useState(0);
   const [lastUsage, setLastUsage] = useState<{ inputTokens: number; outputTokens: number; model: string } | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
@@ -558,6 +559,7 @@ function ChatContent() {
       .then(data => {
         setTitle(data.title);
         setSkillId(data.skill_id || '');
+        setConvCategory(data.category || '');
         setMessages(data.messages || []);
         setConversationLoaded(true);
       })
@@ -1190,7 +1192,7 @@ function ChatContent() {
           {/* Title Bar */}
           <header className="flex items-center gap-2 md:gap-4 px-3 md:px-8 h-11 md:h-14 bg-surface/80 backdrop-blur-xl shrink-0 border-b border-outline-variant/10">
             <button
-              onClick={() => router.push('/conversations')}
+              onClick={() => router.push(convCategory === 'assistant' ? '/assistant' : '/conversations')}
               className="text-on-surface-variant hover:text-on-surface active:text-on-surface transition-colors bg-transparent cursor-pointer p-1"
             >
               <span className="material-symbols-outlined text-sm">arrow_back</span>
