@@ -97,6 +97,14 @@ interface AgentTask {
   error?: string;
 }
 
+interface BgTask {
+  id: string;
+  skill_id: string;
+  description: string;
+  status: string;
+  result_summary: string | null;
+}
+
 const SKILL_IDS = [
   'pptx-gen', 'docx-gen', 'xlsx-gen', 'pdf-gen', 'slides-gen', 'webapp-gen',
   'research', 'data-analyst', 'rag-analyst', 'planner', 'reviewer', 'router',
@@ -568,39 +576,59 @@ function ChatContent() {
 
   const pendingHandled = useRef(false);
   const [backgroundProcessing, setBackgroundProcessing] = useState(false);
+  const [bgTasks, setBgTasks] = useState<BgTask[]>([]);
 
-  // Poll status when user returns to a conversation that's running in background
+  // Poll status + tasks when user returns to a conversation that's running in background
   useEffect(() => {
     if (!token || !conversationId || !conversationLoaded || streaming) return;
     let cancelled = false;
     let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+    const fetchTasks = () => {
+      fetch(`/api/generate/${conversationId}/tasks`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.json())
+        .then(({ tasks }: { tasks: BgTask[] }) => {
+          if (!cancelled) setBgTasks(tasks || []);
+        })
+        .catch(() => {});
+    };
+
+    const stopPolling = (done: boolean) => {
+      if (pollInterval) clearInterval(pollInterval);
+      clearTimeout(maxTimeout);
+      if (cancelled) return;
+      setBackgroundProcessing(false);
+      setBgTasks([]);
+      if (done) {
+        fetch(`/api/conversations/${conversationId}`, { headers: { Authorization: `Bearer ${token}` } })
+          .then(r => r.json()).then(data => { setMessages(data.messages || []); }).catch(() => {});
+        fetch(`/api/files?conversationId=${conversationId}`, { headers: { Authorization: `Bearer ${token}` } })
+          .then(r => r.json()).then((f: GeneratedFile[]) => setFiles(f)).catch(() => {});
+      }
+    };
+
+    // Safety net: auto-clear banner after 20 minutes regardless
+    let maxTimeout: ReturnType<typeof setTimeout> = setTimeout(() => stopPolling(false), 20 * 60 * 1000);
+    let errorCount = 0;
 
     fetch(`/api/generate/${conversationId}/status`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(({ processing }: { processing: boolean }) => {
         if (cancelled || !processing) return;
         setBackgroundProcessing(true);
+        fetchTasks();
         pollInterval = setInterval(() => {
+          fetchTasks();
           fetch(`/api/generate/${conversationId}/status`, { headers: { Authorization: `Bearer ${token}` } })
             .then(r => r.json())
             .then(({ processing: still }: { processing: boolean }) => {
+              errorCount = 0;
               if (cancelled) return;
-              if (!still) {
-                setBackgroundProcessing(false);
-                if (pollInterval) clearInterval(pollInterval);
-                // Reload messages to show the completed result
-                fetch(`/api/conversations/${conversationId}`, { headers: { Authorization: `Bearer ${token}` } })
-                  .then(r => r.json())
-                  .then(data => { setMessages(data.messages || []); })
-                  .catch(() => {});
-                // Reload files
-                fetch(`/api/files?conversationId=${conversationId}`, { headers: { Authorization: `Bearer ${token}` } })
-                  .then(r => r.json())
-                  .then((allFiles: GeneratedFile[]) => setFiles(allFiles))
-                  .catch(() => {});
-              }
+              if (!still) stopPolling(true);
             })
-            .catch(() => {});
+            .catch(() => {
+              if (++errorCount >= 3) stopPolling(false); // server unreachable → clear banner
+            });
         }, 3000);
       })
       .catch(() => {});
@@ -608,6 +636,7 @@ function ChatContent() {
     return () => {
       cancelled = true;
       if (pollInterval) clearInterval(pollInterval);
+      clearTimeout(maxTimeout);
     };
   }, [token, conversationId, conversationLoaded, streaming]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1289,9 +1318,29 @@ function ChatContent() {
 
           {/* Background processing indicator */}
           {backgroundProcessing && !streaming && (
-            <div className="mx-3 md:mx-8 mt-2 flex items-center gap-2 px-3 py-2 bg-primary/8 border border-primary/15 rounded-lg text-xs text-primary/70">
-              <span className="material-symbols-outlined text-sm animate-spin shrink-0">progress_activity</span>
-              <span>{t('chat.backgroundProcessing' as any) || 'AI 正在背景執行中，完成後將自動顯示結果...'}</span>
+            <div className="mx-3 md:mx-8 mt-2 px-3 py-2 bg-primary/8 border border-primary/15 rounded-lg">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="material-symbols-outlined text-sm animate-spin text-primary/60 shrink-0">progress_activity</span>
+                <span className="text-xs text-primary/60 mr-1">{t('chat.backgroundProcessing' as any)}</span>
+                {bgTasks.map(task => {
+                  const isDone = task.status === 'completed';
+                  const isFail = task.status === 'failed';
+                  const skillIcon = SKILL_ICONS[task.skill_id] || 'smart_toy';
+                  const skillName = (t(`skill.${task.skill_id}` as any) as string) || task.skill_id;
+                  return (
+                    <span key={task.id} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium ${
+                      isDone ? 'bg-success/10 text-success' :
+                      isFail ? 'bg-error/10 text-error' :
+                      'bg-primary/10 text-primary'
+                    }`}>
+                      <span className={`material-symbols-outlined shrink-0 ${!isDone && !isFail ? 'animate-spin' : ''}`} style={{ fontSize: '11px' }}>
+                        {isDone ? 'check_circle' : isFail ? 'error' : skillIcon}
+                      </span>
+                      {skillName}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           )}
 

@@ -54,10 +54,11 @@ export async function extractMemoryAndSummary(
     if (!msgCount || msgCount.cnt < MIN_MSGS_FOR_SUMMARY) return;
 
     // Skip if summary already exists (avoid duplicate extraction)
+    // Exception: assistant conversations always re-extract to keep work_log current
     const conv = await dbGet<{ summary: string | null }>(
       'SELECT summary FROM conversations WHERE id = ?', conversationId
     );
-    if (conv?.summary) return;
+    if (conv?.summary && conversationCategory !== 'assistant') return;
 
     // Only extract memories if enough user messages
     const skipMemories = msgCount.cnt < MIN_MSGS_FOR_MEMORIES;
@@ -107,14 +108,24 @@ export async function extractMemoryAndSummary(
       );
       console.log(`[MemoryExtractor] Summary saved for conversation ${conversationId}`);
 
-      // For assistant conversations: also save summary as a work_log memory
-      // so it appears in the cross-assistant context and memory count
-      if (conversationCategory === 'assistant' && !atMemoryLimit) {
-        await dbRun(
-          'INSERT INTO user_memories (id, user_id, content, category, memory_type, source_conversation_id) VALUES (?, ?, ?, ?, ?, ?)',
-          uuidv4(), userId, parsed.summary.substring(0, 200), 'general', 'work_log', conversationId
+      // For assistant conversations: upsert a work_log memory (update if exists, insert if new)
+      // so cross-assistant context always reflects the latest state
+      if (conversationCategory === 'assistant') {
+        const existingWorkLog = await dbGet<{ id: string }>(
+          "SELECT id FROM user_memories WHERE source_conversation_id = ? AND memory_type = 'work_log'",
+          conversationId
         );
-        console.log(`[MemoryExtractor] work_log saved for assistant conversation ${conversationId}`);
+        if (existingWorkLog) {
+          await dbRun('UPDATE user_memories SET content = ? WHERE id = ?',
+            parsed.summary.substring(0, 200), existingWorkLog.id);
+          console.log(`[MemoryExtractor] work_log updated for assistant conversation ${conversationId}`);
+        } else if (!atMemoryLimit) {
+          await dbRun(
+            'INSERT INTO user_memories (id, user_id, content, category, memory_type, source_conversation_id) VALUES (?, ?, ?, ?, ?, ?)',
+            uuidv4(), userId, parsed.summary.substring(0, 200), 'general', 'work_log', conversationId
+          );
+          console.log(`[MemoryExtractor] work_log created for assistant conversation ${conversationId}`);
+        }
       }
     }
 

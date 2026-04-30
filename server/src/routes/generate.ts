@@ -396,6 +396,29 @@ router.get('/:conversationId/status', (req: Request, res: Response) => {
   res.json({ processing: activeGenerations.has(conversationId) });
 });
 
+// GET /api/generate/:conversationId/tasks — get recent agent task executions
+router.get('/:conversationId/tasks', async (req: Request, res: Response) => {
+  const conversationId = req.params.conversationId as string;
+  const userId = req.user!.userId;
+
+  const conversation = await dbGet<{ id: string }>(
+    'SELECT id FROM conversations WHERE id = ? AND user_id = ?',
+    conversationId, userId
+  );
+  if (!conversation) { res.status(404).json({ error: 'Not found' }); return; }
+
+  const tasks = await dbAll<{
+    id: string; skill_id: string; description: string; status: string; result_summary: string | null;
+  }>(
+    `SELECT id, skill_id, description, status, result_summary
+     FROM task_executions
+     WHERE conversation_id = ? AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)
+     ORDER BY created_at ASC`,
+    conversationId
+  );
+  res.json({ tasks });
+});
+
 // POST /api/generate/:conversationId/abort
 router.post('/:conversationId/abort', (req: Request, res: Response) => {
   const conversationId = req.params.conversationId as string;
