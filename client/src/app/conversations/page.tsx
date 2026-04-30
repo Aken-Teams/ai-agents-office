@@ -7,6 +7,7 @@ import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
 import ShareModal from '../components/ShareModal';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
+import HelpButton from '../components/HelpButton';
 
 interface Conversation {
   id: string;
@@ -268,7 +269,10 @@ function ConversationsContent() {
               <span className="text-tertiary text-xs md:text-sm font-bold tracking-[0.3em] uppercase">{t('conversations.header.subtitle')}</span>
               <div className="h-px w-8 md:w-12 bg-tertiary/30" />
             </div>
-            <h2 className="text-2xl md:text-4xl font-headline font-bold text-on-surface tracking-tight mb-1 md:mb-2">{t('conversations.header.title')}</h2>
+            <div className="flex items-center gap-2.5 mb-1 md:mb-2">
+              <h2 className="text-2xl md:text-4xl font-headline font-bold text-on-surface tracking-tight">{t('conversations.header.title')}</h2>
+              <HelpButton pageId="conversations" />
+            </div>
             <p className="text-sm md:text-base text-on-surface-variant leading-relaxed">
               {t('conversations.header.description')}
             </p>

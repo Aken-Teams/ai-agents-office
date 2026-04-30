@@ -8,6 +8,7 @@ import GreetingPopup from '../components/GreetingPopup';
 import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
+import HelpButton from '../components/HelpButton';
 
 interface Conversation {
   id: string;
@@ -244,11 +245,12 @@ function DashboardContent() {
               <span className="text-tertiary font-bold">Workspace: /workspace/{user.email?.split('@')[0]}</span>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 px-3 py-1 bg-primary/10 rounded-full">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="text-sm text-primary font-bold tracking-widest uppercase">{t('dashboard.statusRunning')}</span>
             </div>
+            <HelpButton pageId="dashboard" />
           </div>
         </header>
 

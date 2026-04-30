@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from '../components/AuthProvider';
 import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
+import HelpButton from '../components/HelpButton';
 
 interface FileItem {
   id: string;
@@ -742,7 +743,10 @@ function FilesContent() {
               <span className="text-tertiary text-xs md:text-sm font-bold tracking-[0.3em] uppercase">{t('files.header.subtitle')}</span>
               <div className="h-px w-8 md:w-12 bg-tertiary/30" />
             </div>
-            <h2 className="text-2xl md:text-4xl font-headline font-bold text-on-surface tracking-tight mb-1 md:mb-2">{t('files.header.title')}</h2>
+            <div className="flex items-center gap-2.5 mb-1 md:mb-2">
+              <h2 className="text-2xl md:text-4xl font-headline font-bold text-on-surface tracking-tight">{t('files.header.title')}</h2>
+              <HelpButton pageId="files" />
+            </div>
             <p className="text-sm md:text-base text-on-surface-variant leading-relaxed">
               {t('files.header.description')}
             </p>

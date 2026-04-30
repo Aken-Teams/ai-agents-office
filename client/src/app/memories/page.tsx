@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from '../components/AuthProvider';
 import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
+import HelpButton from '../components/HelpButton';
 
 interface Memory {
   id: string;
@@ -115,7 +116,10 @@ function MemoriesContent() {
             <div className="h-px w-8 md:w-12 bg-tertiary/30" />
           </div>
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-xl md:text-4xl font-headline font-bold text-on-surface tracking-tight">{t('userMenu.memory' as any)}</h2>
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-xl md:text-4xl font-headline font-bold text-on-surface tracking-tight">{t('userMenu.memory' as any)}</h2>
+              <HelpButton pageId="memories" />
+            </div>
             {memories.length > 0 && (
               <button
                 onClick={clearAll}
