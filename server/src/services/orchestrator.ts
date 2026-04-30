@@ -103,8 +103,32 @@ export class Orchestrator {
 
     const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale) + buildMemoryContext(userMemories) + crossAssistantContext;
 
+    // Load conversation history so Router has full context of what was discussed/generated
+    const historyMsgs = await dbAll<{ role: string; content: string }>(
+      'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT 40',
+      this.conversationId
+    );
+    // Filter out the current user message if it was already saved, keep last 20
+    const prevMsgs = historyMsgs
+      .filter(m => !(m.role === 'user' && m.content.trim() === message.trim()))
+      .slice(-20);
+    let chatHistoryBlock = '';
+    if (prevMsgs.length > 0) {
+      const lines = prevMsgs.map(m => {
+        const role = m.role === 'user' ? 'User' : 'Assistant';
+        const content = m.content.length > 2000 ? m.content.substring(0, 2000) + '... (truncated)' : m.content;
+        return `[${role}]: ${content}`;
+      });
+      chatHistoryBlock =
+        '## Conversation History\n' +
+        'Below is what has already been discussed and generated in this conversation. ' +
+        'Use this context to understand previous work and user references.\n\n' +
+        lines.join('\n\n') +
+        '\n\n---\n\n';
+    }
+
     // Build effective message — inject referenced data inline so Router uses it directly (no re-research)
-    let messageWithFileContext = message;
+    let messageWithFileContext = chatHistoryBlock ? chatHistoryBlock + '用戶最新指令：' + message : message;
     if (this.referenceContext) {
       // Prepend reference data with explicit instruction to use existing content
       messageWithFileContext =
