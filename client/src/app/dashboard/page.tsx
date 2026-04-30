@@ -73,6 +73,7 @@ function DashboardContent() {
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [usage, setUsage] = useState<UsageTotal | null>(null);
+  const [usageLimit, setUsageLimit] = useState<number | null>(null);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [smartInput, setSmartInput] = useState('');
   const [creating, setCreating] = useState(false);
@@ -115,7 +116,7 @@ function DashboardContent() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then(data => setUsage(data.total))
+      .then(data => { setUsage(data.total); if (data.limit != null) setUsageLimit(data.limit); })
       .catch(console.error);
 
     fetch('/api/files', {
@@ -384,8 +385,9 @@ function DashboardContent() {
               <span className="material-symbols-outlined text-success text-base">token</span>
               <span className="font-medium">{t('dashboard.stats.tokenTitle')}</span>
               <span className="font-headline font-bold text-on-surface">{usage ? ((usage.totalInput + usage.totalOutput) / 1000).toFixed(1) + 'k' : '0'}</span>
-              <span className="font-bold text-success">${usage ? (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10).toFixed(2) : '0.00'}</span>
-              <span className="text-xs text-on-surface-variant/60 font-mono">{t('dashboard.stats.tokenInputLabel')}: {usage ? (usage.totalInput / 1000).toFixed(1) + 'k' : '0'} / {t('dashboard.stats.tokenOutputLabel')}: {usage ? (usage.totalOutput / 1000).toFixed(1) + 'k' : '0'}</span>
+              <span className="text-outline-variant/40 mx-0.5">·</span>
+              <span className="font-medium text-on-surface-variant text-xs">{t('dashboard.stats.costLabel' as any)}</span>
+              <span className="font-bold text-success">${usage ? (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10).toFixed(2) : '0.00'}{usageLimit != null ? <span className="text-warning font-bold"> / ${usageLimit.toFixed(0)}</span> : null}</span>
             </div>
             <div className="w-px h-4 bg-outline-variant/20" />
             <div className="flex items-center gap-1.5">

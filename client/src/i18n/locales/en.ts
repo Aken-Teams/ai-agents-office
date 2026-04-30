@@ -143,6 +143,7 @@ const en = {
   'dashboard.stats.invocationsUnit': 'times',
   'dashboard.stats.invocationsFormats': 'Supports: PPTX / DOCX / XLSX / PDF',
   'dashboard.stats.tokenTitle': 'Token Usage',
+  'dashboard.stats.costLabel': 'Cost',
   'dashboard.stats.tokenInputLabel': 'Input',
   'dashboard.stats.tokenOutputLabel': 'Output',
   'dashboard.stats.conversationsTitle': 'Total Conversations',

@@ -148,6 +148,7 @@ const zhTW = {
   'dashboard.stats.invocationsUnit': '次',
   'dashboard.stats.invocationsFormats': '支援: PPTX / DOCX / XLSX / PDF',
   'dashboard.stats.tokenTitle': 'Token 用量',
+  'dashboard.stats.costLabel': '費用',
   'dashboard.stats.tokenInputLabel': '輸入',
   'dashboard.stats.tokenOutputLabel': '輸出',
   'dashboard.stats.conversationsTitle': '對話總數',

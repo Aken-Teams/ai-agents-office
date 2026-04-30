@@ -148,6 +148,7 @@ const zhCN = {
   'dashboard.stats.invocationsUnit': '次',
   'dashboard.stats.invocationsFormats': '支持: PPTX / DOCX / XLSX / PDF',
   'dashboard.stats.tokenTitle': 'Token 用量',
+  'dashboard.stats.costLabel': '费用',
   'dashboard.stats.tokenInputLabel': '输入',
   'dashboard.stats.tokenOutputLabel': '输出',
   'dashboard.stats.conversationsTitle': '对话总数',
