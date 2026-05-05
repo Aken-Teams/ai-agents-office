@@ -18,7 +18,7 @@ const NAV_GROUPS = [
     icon: 'people',
     items: [
       { href: '/admin/users', labelKey: 'admin.sidebar.users' as const, icon: 'corporate_fare' },
-      { href: '/admin/conversations', labelKey: 'admin.sidebar.conversations' as const, icon: 'forum' },
+      { href: '/admin/conversations', labelKey: 'admin.sidebar.conversations' as const, icon: 'forum', readonlyHidden: true },
       { href: '/admin/quota-groups', labelKey: 'admin.sidebar.quotaGroups' as const, icon: 'category' },
       ...(deployMode === 'pro-out' ? [{ href: '/admin/invite-codes', labelKey: 'admin.sidebar.inviteCodes' as const, icon: 'card_membership' }] : []),
     ],
@@ -28,7 +28,7 @@ const NAV_GROUPS = [
     labelKey: 'admin.sidebar.group.operations' as const,
     icon: 'tune',
     items: [
-      { href: '/admin/announcements', labelKey: 'admin.sidebar.announcements' as const, icon: 'campaign' },
+      { href: '/admin/announcements', labelKey: 'admin.sidebar.announcements' as const, icon: 'campaign', readonlyHidden: true },
       { href: '/admin/skills', labelKey: 'admin.sidebar.skills' as const, icon: 'hub' },
       { href: '/admin/tokens', labelKey: 'admin.sidebar.tokens' as const, icon: 'payments' },
       { href: '/admin/analytics', labelKey: 'admin.sidebar.analytics' as const, icon: 'bar_chart' },
@@ -163,7 +163,7 @@ export default function AdminSidebar() {
                         expand_more
                       </span>
                     </button>
-                    {isOpen && group.items.map(link => {
+                    {isOpen && group.items.filter(link => !(isReadonly && (link as any).readonlyHidden)).map(link => {
                       const isActive = pathname.startsWith(link.href);
                       return (
                         <Link
@@ -276,7 +276,7 @@ export default function AdminSidebar() {
                     <div className="absolute left-full top-0 pl-2 opacity-0 group-hover/gh:opacity-100 pointer-events-none group-hover/gh:pointer-events-auto transition-opacity duration-200 z-[60]">
                       <div className="py-1.5 bg-surface-container-highest rounded-lg shadow-lg border border-outline-variant/10 min-w-[160px]">
                       <div className="px-3 py-1.5 text-xs font-bold text-on-surface-variant uppercase tracking-widest">{t(group.labelKey)}</div>
-                      {group.items.map(link => {
+                      {group.items.filter(link => !(isReadonly && (link as any).readonlyHidden)).map(link => {
                         const isActive = pathname.startsWith(link.href);
                         return (
                           <Link
@@ -315,7 +315,7 @@ export default function AdminSidebar() {
                 {/* Group Children — only in expanded sidebar */}
                 {!collapsed && isOpen && (
                   <div className="space-y-0.5">
-                    {group.items.map(link => {
+                    {group.items.filter(link => !(isReadonly && (link as any).readonlyHidden)).map(link => {
                       const isActive = pathname.startsWith(link.href);
                       return (
                         <Link

@@ -552,7 +552,7 @@ export default function Navbar() {
                       </Link>
                     );
                   })}
-                  {user.role === 'admin' && (
+                  {(user.role === 'admin' || user.role === 'readonly') && (
                     <Link
                       href="/admin/overview"
                       onClick={() => setMobileMenuOpen(false)}
@@ -621,8 +621,8 @@ export default function Navbar() {
 
         {/* Bottom */}
         <div className={`mt-auto pt-6 space-y-1 ${collapsed ? 'px-2' : 'px-4'}`}>
-          {/* Switch to Admin (admin only) */}
-          {user.role === 'admin' && (
+          {/* Switch to Admin (admin + readonly) */}
+          {(user.role === 'admin' || user.role === 'readonly') && (
             <Link
               href="/admin/overview"
               className={`relative group flex items-center gap-3 py-2.5 no-underline text-primary hover:bg-primary/10 transition-all rounded-lg mb-1 ${collapsed ? 'justify-center px-0' : 'px-3'}`}
@@ -734,8 +734,8 @@ export default function Navbar() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${user.role === 'admin' ? 'bg-warning/20 text-warning' : 'bg-primary/10 text-primary'}`}>
-                      {user.role === 'admin' ? t('userMenu.role.admin') : t('userMenu.role.user')}
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${user.role === 'admin' ? 'bg-warning/20 text-warning' : user.role === 'readonly' ? 'bg-amber-500/15 text-amber-600' : 'bg-primary/10 text-primary'}`}>
+                      {user.role === 'admin' ? t('userMenu.role.admin') : user.role === 'readonly' ? 'Readonly' : t('userMenu.role.user')}
                     </span>
                     {user.oauthProvider === 'google' && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-surface-container-high text-on-surface-variant">

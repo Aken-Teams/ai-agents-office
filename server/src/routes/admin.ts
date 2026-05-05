@@ -1425,9 +1425,9 @@ router.get('/analytics/top-users', async (req: Request, res: Response) => {
   res.json(rows);
 });
 
-// POST /api/admin/analytics/topic-analysis  { period: '7d'|'30d' }
-router.post('/analytics/topic-analysis', async (req: Request, res: Response) => {
-  const period = (req.body?.period as string) || '7d';
+// GET /api/admin/analytics/topic-analysis?period=7d|30d
+router.get('/analytics/topic-analysis', async (req: Request, res: Response) => {
+  const period = (req.query?.period as string) || '7d';
   const days = period === '7d' ? 7 : 30;
 
   if (!config.deepseekApiKey) {

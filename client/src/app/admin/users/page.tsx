@@ -402,12 +402,14 @@ export default function AdminUsers() {
             {detail.quota_override != null ? (
               <>
                 <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 rounded-full">{t('admin.quotaGroups.source.personal' as any)}: ${detail.quota_override}</span>
-                <button
-                  onClick={() => { setQuotaInput(''); updateQuota(detail.id); }}
-                  className="text-[10px] text-error hover:text-error/80 transition-colors cursor-pointer"
-                >
-                  {t('admin.users.detail.quotaReset' as any)}
-                </button>
+                {!isReadonly && (
+                  <button
+                    onClick={() => { setQuotaInput(''); updateQuota(detail.id); }}
+                    className="text-[10px] text-error hover:text-error/80 transition-colors cursor-pointer"
+                  >
+                    {t('admin.users.detail.quotaReset' as any)}
+                  </button>
+                )}
               </>
             ) : (detail as any).quota_group_name ? (
               <span className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded-full">
@@ -524,17 +526,15 @@ export default function AdminUsers() {
           <span className="text-base md:text-lg font-black text-on-surface font-headline">{t('admin.users.title')}</span>
           <span className="text-xs md:text-sm text-on-surface-variant font-mono">{t('admin.users.count', { count: total })}</span>
         </div>
-        {!isReadonly && (
-          <button
-            onClick={exportCsv}
-            disabled={exporting}
-            className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50"
-          >
-            <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'download'}</span>
-            <span className="hidden md:inline">{t('admin.users.exportCsv')}</span>
-            <span className="md:hidden">CSV</span>
-          </button>
-        )}
+        <button
+          onClick={exportCsv}
+          disabled={exporting}
+          className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50"
+        >
+          <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'download'}</span>
+          <span className="hidden md:inline">{t('admin.users.exportCsv')}</span>
+          <span className="md:hidden">CSV</span>
+        </button>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
