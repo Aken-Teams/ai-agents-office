@@ -49,7 +49,7 @@ function formatTokens(n: number): string {
 }
 
 export default function AdminTokens() {
-  const { token } = useAdminAuth();
+  const { token, isReadonly } = useAdminAuth();
   const { t } = useTranslation();
   const [summary, setSummary] = useState<TokenSummary | null>(null);
   const [chart, setChart] = useState<ChartPoint[]>([]);
@@ -428,15 +428,17 @@ export default function AdminTokens() {
           <span className="text-base md:text-lg font-black text-on-surface font-headline truncate">{t('admin.tokens.title')}</span>
           <span className="text-[10px] md:text-sm px-1.5 md:px-2 py-0.5 bg-success/10 text-success rounded font-bold tracking-wider uppercase shrink-0">{t('admin.tokens.syncStatus')}</span>
         </div>
-        <button
-          onClick={() => setShowExportModal(true)}
-          disabled={exporting}
-          className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer shrink-0 disabled:opacity-50"
-        >
-          <span className="material-symbols-outlined text-sm">download</span>
-          <span className="hidden md:inline">{t('admin.tokens.exportCsv')}</span>
-          <span className="md:hidden">CSV</span>
-        </button>
+        {!isReadonly && (
+          <button
+            onClick={() => setShowExportModal(true)}
+            disabled={exporting}
+            className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined text-sm">download</span>
+            <span className="hidden md:inline">{t('admin.tokens.exportCsv')}</span>
+            <span className="md:hidden">CSV</span>
+          </button>
+        )}
       </header>
 
       {/* Export / Quote Modal */}

@@ -3,7 +3,7 @@ export interface User {
   email: string;
   password_hash: string;
   display_name: string | null;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'readonly';
   status: 'active' | 'pending' | 'pending_verification' | 'suspended';
   locale: 'zh-TW' | 'zh-CN' | 'en';
   theme: 'dark' | 'light';
@@ -105,7 +105,7 @@ export interface TaskExecution {
 export interface AuthPayload {
   userId: string;
   email: string;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'readonly';
 }
 
 declare global {

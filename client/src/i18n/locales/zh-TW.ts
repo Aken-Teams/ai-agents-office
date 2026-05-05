@@ -622,6 +622,8 @@ const zhTW = {
   'admin.sidebar.settings': '系統設定',
   'admin.sidebar.roleLabel': '系統管理員',
   'admin.sidebar.roleDescription': '最高權限',
+  'admin.sidebar.readonlyLabel': '唯讀管理員',
+  'admin.sidebar.readonlyDescription': '純唯讀・無操作權限',
   'admin.sidebar.switchToUser': '切換到用戶畫面',
   'admin.sidebar.collapse': '收合',
   'admin.sidebar.expand': '展開側邊欄',

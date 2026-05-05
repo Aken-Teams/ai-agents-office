@@ -80,12 +80,17 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function RoleBadge({ role }: { role: string }) {
-  const cls = role === 'admin' ? 'bg-primary/15 text-primary' : 'bg-surface-container text-on-surface-variant';
-  return <span className={`px-2 py-0.5 text-xs font-bold uppercase tracking-wider rounded ${cls}`}>{role === 'admin' ? 'Admin' : 'User'}</span>;
+  const cls = role === 'admin'
+    ? 'bg-primary/15 text-primary'
+    : role === 'readonly'
+      ? 'bg-amber-500/15 text-amber-600'
+      : 'bg-surface-container text-on-surface-variant';
+  const label = role === 'admin' ? 'Admin' : role === 'readonly' ? 'Readonly' : 'User';
+  return <span className={`px-2 py-0.5 text-xs font-bold uppercase tracking-wider rounded ${cls}`}>{label}</span>;
 }
 
 export default function AdminUsers() {
-  const { token } = useAdminAuth();
+  const { token, isReadonly } = useAdminAuth();
   const { t } = useTranslation();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -103,7 +108,13 @@ export default function AdminUsers() {
   const [sortBy, setSortBy] = useState('');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
   const [exporting, setExporting] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
   const limit = 10;
+
+  function showToast(msg: string) {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(''), 3500);
+  }
 
   async function exportCsv() {
     if (!token || exporting) return;
@@ -224,7 +235,7 @@ export default function AdminUsers() {
       });
       if (!res.ok) {
         const err = await res.json();
-        alert(err.error || 'Failed to change role');
+        showToast(err.error || 'Failed to change role');
         return;
       }
       fetchUsers();
@@ -305,22 +316,25 @@ export default function AdminUsers() {
         <div className="px-4 py-3 border-b border-outline-variant/10">
           <div className="flex items-center gap-2">
             <span className="text-xs uppercase tracking-wider text-on-surface-variant font-bold">{t('admin.users.detail.roleLabel')}</span>
-            <div className="flex rounded overflow-hidden border border-outline-variant/15 ml-auto">
-              {(['user', 'admin'] as const).map(r => (
-                <button
-                  key={r}
-                  onClick={() => changeRole(detail.id, r)}
-                  disabled={actionLoading || detail.role === r}
-                  className={`px-3 py-1 text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors disabled:cursor-default ${
-                    detail.role === r
-                      ? r === 'admin' ? 'bg-primary/15 text-primary' : 'bg-surface-container-high text-on-surface'
-                      : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
-                  }`}
-                >
-                  {r === 'admin' ? 'Admin' : 'User'}
-                </button>
-              ))}
-            </div>
+            {!isReadonly && (
+              <div className="flex rounded overflow-hidden border border-outline-variant/15 ml-auto">
+                {(['user', 'readonly', 'admin'] as const).map(r => (
+                  <button
+                    key={r}
+                    onClick={() => changeRole(detail.id, r)}
+                    disabled={actionLoading || detail.role === r}
+                    className={`px-3 py-1 text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors disabled:cursor-default ${
+                      detail.role === r
+                        ? r === 'admin' ? 'bg-primary/15 text-primary' : 'bg-surface-container-high text-on-surface'
+                        : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                    }`}
+                  >
+                    {r === 'admin' ? 'Admin' : r === 'readonly' ? 'Readonly' : 'User'}
+                  </button>
+                ))}
+              </div>
+            )}
+            {isReadonly && <RoleBadge role={detail.role} />}
           </div>
         </div>
 
@@ -373,13 +387,15 @@ export default function AdminUsers() {
               onChange={e => { if (/^\d*\.?\d{0,2}$/.test(e.target.value) || e.target.value === '') setQuotaInput(e.target.value); }}
               className="flex-1 bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-1.5 px-2.5 text-xs font-mono rounded placeholder:text-outline min-w-0 [appearance:textfield]"
             />
-            <button
-              onClick={() => updateQuota(detail.id)}
-              disabled={quotaLoading}
-              className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
-            >
-              {t('admin.users.detail.quotaSave' as any)}
-            </button>
+            {!isReadonly && (
+              <button
+                onClick={() => updateQuota(detail.id)}
+                disabled={quotaLoading}
+                className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                {t('admin.users.detail.quotaSave' as any)}
+              </button>
+            )}
           </div>
           {/* Quota source indicator */}
           <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
@@ -446,7 +462,7 @@ export default function AdminUsers() {
         </div>
 
         {/* Actions */}
-        <div className="px-4 py-3 space-y-2">
+        {!isReadonly && <div className="px-4 py-3 space-y-2">
           {(detail.status === 'pending' || detail.status === 'pending_verification') ? (
             <div className="flex gap-2">
               <button
@@ -488,28 +504,37 @@ export default function AdminUsers() {
             <span className="material-symbols-outlined text-xs">delete_forever</span>
             {t('admin.users.detail.delete')}
           </button>
-        </div>
+        </div>}
       </>
     );
   }
 
   return (
     <>
+      {/* Error Toast */}
+      {toastMsg && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 px-4 py-3 bg-error text-on-error text-sm font-bold rounded-xl shadow-lg animate-in fade-in slide-in-from-bottom-2">
+          <span className="material-symbols-outlined text-base">error</span>
+          {toastMsg}
+        </div>
+      )}
       {/* Header */}
       <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
         <div className="flex items-center gap-2 md:gap-4">
           <span className="text-base md:text-lg font-black text-on-surface font-headline">{t('admin.users.title')}</span>
           <span className="text-xs md:text-sm text-on-surface-variant font-mono">{t('admin.users.count', { count: total })}</span>
         </div>
-        <button
-          onClick={exportCsv}
-          disabled={exporting}
-          className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50"
-        >
-          <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'download'}</span>
-          <span className="hidden md:inline">{t('admin.users.exportCsv')}</span>
-          <span className="md:hidden">CSV</span>
-        </button>
+        {!isReadonly && (
+          <button
+            onClick={exportCsv}
+            disabled={exporting}
+            className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50"
+          >
+            <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'download'}</span>
+            <span className="hidden md:inline">{t('admin.users.exportCsv')}</span>
+            <span className="md:hidden">CSV</span>
+          </button>
+        )}
       </header>
 
       <div className="flex flex-1 overflow-hidden">
@@ -674,7 +699,14 @@ export default function AdminUsers() {
                 >
                   {t('common.prev')}
                 </button>
-                {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map(p => (
+                {(() => {
+                  const window = 5;
+                  const half = Math.floor(window / 2);
+                  let start = Math.max(1, page - half);
+                  let end = start + window - 1;
+                  if (end > totalPages) { end = totalPages; start = Math.max(1, end - window + 1); }
+                  return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+                })().map(p => (
                   <button
                     key={p}
                     onClick={() => setPage(p)}

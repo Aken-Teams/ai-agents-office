@@ -15,8 +15,12 @@ export function adminMiddleware(req: Request, res: Response, next: NextFunction)
 
   try {
     const payload = jwt.verify(token, config.jwtSecret) as AuthPayload;
-    if (payload.role !== 'admin') {
+    if (payload.role !== 'admin' && payload.role !== 'readonly') {
       res.status(403).json({ error: 'Admin access required' });
+      return;
+    }
+    if (payload.role === 'readonly' && req.method !== 'GET') {
+      res.status(403).json({ error: 'Read-only access: modifications not permitted' });
       return;
     }
     req.user = payload;

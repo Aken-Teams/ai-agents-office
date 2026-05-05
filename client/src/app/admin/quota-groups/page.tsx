@@ -40,7 +40,7 @@ export default function AdminQuotaGroups() {
 }
 
 function QuotaGroupsContent() {
-  const { token } = useAdminAuth();
+  const { token, isReadonly } = useAdminAuth();
   const { t } = useTranslation();
   const [groups, setGroups] = useState<QuotaGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -203,13 +203,15 @@ function QuotaGroupsContent() {
           <span className="text-base md:text-lg font-black text-on-surface font-headline shrink-0">{t('admin.quotaGroups.title' as any)}</span>
           <span className="hidden md:inline text-sm text-on-surface-variant font-mono truncate">{t('admin.quotaGroups.description' as any)}</span>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-1.5 ml-3 px-3 md:px-4 py-2 md:py-2.5 cyber-gradient rounded-xl text-on-primary text-xs md:text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all cursor-pointer shrink-0"
-        >
-          <span className="material-symbols-outlined text-lg">add</span>
-          <span className="hidden sm:inline">{t('admin.quotaGroups.create' as any)}</span>
-        </button>
+        {!isReadonly && (
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-1.5 ml-3 px-3 md:px-4 py-2 md:py-2.5 cyber-gradient rounded-xl text-on-primary text-xs md:text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all cursor-pointer shrink-0"
+          >
+            <span className="material-symbols-outlined text-lg">add</span>
+            <span className="hidden sm:inline">{t('admin.quotaGroups.create' as any)}</span>
+          </button>
+        )}
       </header>
 
       <div className="flex-1 p-4 md:p-8 space-y-4 md:space-y-6 overflow-y-auto">
@@ -251,18 +253,20 @@ function QuotaGroupsContent() {
                   </div>
                 </div>
                 <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
-                  <button
-                    onClick={e => { e.stopPropagation(); openEdit(g); }}
-                    className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined text-base md:text-lg">edit</span>
-                  </button>
-                  <button
-                    onClick={e => { e.stopPropagation(); setDeleteTarget(g); }}
-                    className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined text-base md:text-lg">delete</span>
-                  </button>
+                  {!isReadonly && (<>
+                    <button
+                      onClick={e => { e.stopPropagation(); openEdit(g); }}
+                      className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-base md:text-lg">edit</span>
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); setDeleteTarget(g); }}
+                      className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-base md:text-lg">delete</span>
+                    </button>
+                  </>)}
                   <span className={`material-symbols-outlined text-on-surface-variant text-base md:text-lg transition-transform ${expandedId === g.id ? 'rotate-180' : ''}`}>
                     expand_more
                   </span>
@@ -276,13 +280,15 @@ function QuotaGroupsContent() {
                     <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">
                       {t('admin.quotaGroups.members' as any)}
                     </span>
-                    <button
-                      onClick={() => openAssignModal(g.id)}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-sm">person_add</span>
-                      {t('admin.quotaGroups.assign' as any)}
-                    </button>
+                    {!isReadonly && (
+                      <button
+                        onClick={() => openAssignModal(g.id)}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-sm">person_add</span>
+                        {t('admin.quotaGroups.assign' as any)}
+                      </button>
+                    )}
                   </div>
                   {membersLoading ? (
                     <div className="flex justify-center py-6">
@@ -338,12 +344,14 @@ function QuotaGroupsContent() {
                                 />
                               </div>
                             </div>
-                            <button
-                              onClick={() => handleUnassign([m.id])}
-                              className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant/40 hover:text-error hover:bg-error/10 transition-colors cursor-pointer md:opacity-0 md:group-hover:opacity-100 shrink-0"
-                            >
-                              <span className="material-symbols-outlined text-sm">close</span>
-                            </button>
+                            {!isReadonly && (
+                              <button
+                                onClick={() => handleUnassign([m.id])}
+                                className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant/40 hover:text-error hover:bg-error/10 transition-colors cursor-pointer md:opacity-0 md:group-hover:opacity-100 shrink-0"
+                              >
+                                <span className="material-symbols-outlined text-sm">close</span>
+                              </button>
+                            )}
                           </div>
                         );
                       })}

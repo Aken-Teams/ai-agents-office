@@ -607,6 +607,8 @@ const en = {
   'admin.sidebar.settings': 'System Settings',
   'admin.sidebar.roleLabel': 'System Admin',
   'admin.sidebar.roleDescription': 'Full Access',
+  'admin.sidebar.readonlyLabel': 'Read-Only Admin',
+  'admin.sidebar.readonlyDescription': 'View Only · No Write Access',
   'admin.sidebar.switchToUser': 'Switch to User View',
   'admin.sidebar.collapse': 'Collapse',
   'admin.sidebar.expand': 'Expand Sidebar',

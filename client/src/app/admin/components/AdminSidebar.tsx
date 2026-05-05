@@ -53,7 +53,7 @@ function findGroupForPath(path: string): string | null {
 export default function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAdminAuth();
+  const { user, logout, isReadonly } = useAdminAuth();
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem(ADMIN_SIDEBAR_KEY) === '1';
@@ -226,8 +226,8 @@ export default function AdminSidebar() {
       {/* Role Label */}
       {!collapsed && (
         <div className="px-6 py-4">
-          <p className="text-sm uppercase tracking-[0.3em] text-on-surface-variant font-bold">{t('admin.sidebar.roleLabel')}</p>
-          <p className="text-xs text-outline mt-0.5">{t('admin.sidebar.roleDescription')}</p>
+          <p className="text-sm uppercase tracking-[0.3em] text-on-surface-variant font-bold">{isReadonly ? t('admin.sidebar.readonlyLabel' as any) : t('admin.sidebar.roleLabel')}</p>
+          <p className="text-xs text-outline mt-0.5">{isReadonly ? t('admin.sidebar.readonlyDescription' as any) : t('admin.sidebar.roleDescription')}</p>
         </div>
       )}
 

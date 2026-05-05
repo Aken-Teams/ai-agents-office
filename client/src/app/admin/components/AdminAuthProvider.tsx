@@ -16,6 +16,7 @@ interface AdminAuthContextType {
   user: AdminUser | null;
   token: string | null;
   isLoading: boolean;
+  isReadonly: boolean;
   logout: () => void;
 }
 
@@ -49,7 +50,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
         return r.json();
       })
       .then(data => {
-        if (data.role !== 'admin') {
+        if (data.role !== 'admin' && data.role !== 'readonly') {
           router.replace('/dashboard');
           return;
         }
@@ -69,8 +70,10 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     router.push('/login');
   }, [router]);
 
+  const isReadonly = user?.role === 'readonly';
+
   return (
-    <AdminAuthContext.Provider value={{ user, token, isLoading, logout }}>
+    <AdminAuthContext.Provider value={{ user, token, isLoading, isReadonly, logout }}>
       {children}
     </AdminAuthContext.Provider>
   );

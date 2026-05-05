@@ -618,6 +618,8 @@ const zhCN = {
   'admin.sidebar.settings': '系统设置',
   'admin.sidebar.roleLabel': '系统管理员',
   'admin.sidebar.roleDescription': '最高权限',
+  'admin.sidebar.readonlyLabel': '只读管理员',
+  'admin.sidebar.readonlyDescription': '纯只读・无操作权限',
   'admin.sidebar.switchToUser': '切换到用户界面',
   'admin.sidebar.collapse': '收起',
   'admin.sidebar.expand': '展开侧边栏',
