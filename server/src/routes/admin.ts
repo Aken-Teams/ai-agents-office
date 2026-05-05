@@ -125,7 +125,7 @@ router.get('/users', async (req: Request, res: Response) => {
   const rows = await dbAll(`
     SELECT
       u.id, u.email, u.display_name, u.status, u.role, u.created_at, u.last_login_at,
-      u.quota_group_id, qg.name as quota_group_name,
+      u.company, u.quota_group_id, qg.name as quota_group_name,
       u.invite_code_id, ic.code as invite_code, ic.label as invite_code_label,
       COALESCE(t.total_tokens, 0) as total_tokens,
       COALESCE(t.total_input, 0) as total_input_tokens,
@@ -173,7 +173,7 @@ router.get('/users/:id', async (req: Request, res: Response) => {
 
   const user = await dbGet<any>(`
     SELECT u.id, u.email, u.display_name, u.status, u.role, u.quota_override, u.quota_group_id, u.created_at, u.updated_at,
-      qg.name as quota_group_name,
+      u.company, qg.name as quota_group_name,
       u.invite_code_id, ic.code as invite_code, ic.label as invite_code_label
     FROM users u
     LEFT JOIN quota_groups qg ON qg.id = u.quota_group_id
