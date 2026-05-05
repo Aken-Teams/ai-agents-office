@@ -421,6 +421,17 @@ export default function AdminUsers() {
           </div>
         </div>
 
+        {/* Company */}
+        {(detail as any).company && (
+          <div className="px-4 py-2 border-b border-outline-variant/10">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-sm text-on-surface-variant">business</span>
+              <span className="text-xs text-on-surface-variant">公司:</span>
+              <span className="text-xs font-bold text-on-surface">{(detail as any).company}</span>
+            </div>
+          </div>
+        )}
+
         {/* Invite Code */}
         {(detail as any).invite_code_label && (
           <div className="px-4 py-2 border-b border-outline-variant/10">
