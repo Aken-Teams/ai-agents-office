@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import { I18nProvider, useTranslation } from '../../i18n';
 
 const FEATURES = [
-  { key: 'ppt',  icon: 'slideshow',       color: 'text-amber-500',   bg: 'bg-amber-500/10' },
-  { key: 'word', icon: 'description',     color: 'text-blue-500',    bg: 'bg-blue-500/10' },
-  { key: 'excel',icon: 'table_chart',     color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-  { key: 'pdf',  icon: 'picture_as_pdf',  color: 'text-red-500',     bg: 'bg-red-500/10' },
-  { key: 'chat', icon: 'smart_toy',       color: 'text-primary',     bg: 'bg-primary/10' },
+  { key: 'ppt',  icon: 'slideshow',       color: 'text-amber-500',   bg: 'bg-amber-500/10',   border: 'border-amber-500/20' },
+  { key: 'word', icon: 'description',     color: 'text-blue-500',    bg: 'bg-blue-500/10',    border: 'border-blue-500/20' },
+  { key: 'excel',icon: 'table_chart',     color: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
+  { key: 'pdf',  icon: 'picture_as_pdf',  color: 'text-red-500',     bg: 'bg-red-500/10',     border: 'border-red-500/20' },
+  { key: 'chat', icon: 'smart_toy',       color: 'text-primary',     bg: 'bg-primary/10',     border: 'border-primary/20' },
 ] as const;
 
 function StepDots({ current, total }: { current: number; total: number }) {
@@ -31,6 +31,7 @@ function OnboardingContent() {
   const { t } = useTranslation();
   const router = useRouter();
   const [step, setStep] = useState(0);
+  const [featureIdx, setFeatureIdx] = useState(0);
   const [company, setCompany] = useState('');
   const [companyError, setCompanyError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -72,6 +73,8 @@ function OnboardingContent() {
       </div>
     );
   }
+
+  const currentFeature = FEATURES[featureIdx];
 
   return (
     <div className="bg-surface-container-lowest text-on-surface font-body min-h-[100svh] flex flex-col items-center justify-center p-5 md:p-6 relative overflow-hidden selection:bg-primary/30">
@@ -163,29 +166,72 @@ function OnboardingContent() {
             </div>
           )}
 
-          {/* Step 3: Feature tour */}
+          {/* Step 3: Feature carousel */}
           {step === 2 && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-300">
               <p className="text-xs font-bold uppercase tracking-widest text-primary mb-2">3 / 3</p>
-              <h1 className="font-headline text-2xl md:text-3xl font-black text-on-surface mb-3">
+              <h1 className="font-headline text-2xl md:text-3xl font-black text-on-surface mb-1">
                 {t('onboarding.step3.title')}
               </h1>
               <p className="text-on-surface-variant text-sm leading-relaxed mb-6">
                 {t('onboarding.step3.description')}
               </p>
-              <div className="grid grid-cols-1 gap-2 mb-7">
-                {FEATURES.map(f => (
-                  <div key={f.key} className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-high border border-outline-variant/10">
-                    <div className={`w-9 h-9 rounded-lg ${f.bg} flex items-center justify-center shrink-0`}>
-                      <span className={`material-symbols-outlined text-[20px] ${f.color}`}>{f.icon}</span>
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-on-surface leading-none">{t(`onboarding.feature.${f.key}` as any)}</div>
-                      <div className="text-xs text-on-surface-variant mt-0.5">{t(`onboarding.feature.${f.key}Desc` as any)}</div>
-                    </div>
-                  </div>
-                ))}
+
+              {/* Feature card */}
+              <div className={`rounded-2xl border ${currentFeature.border} bg-surface-container-high p-6 mb-4 transition-all duration-300`}>
+                <div className={`w-14 h-14 rounded-2xl ${currentFeature.bg} flex items-center justify-center mb-5`}>
+                  <span className={`material-symbols-outlined text-[32px] ${currentFeature.color}`}>{currentFeature.icon}</span>
+                </div>
+                <div className="text-lg font-bold text-on-surface mb-1">
+                  {t(`onboarding.feature.${currentFeature.key}` as any)}
+                </div>
+                <div className="text-sm text-on-surface-variant mb-4">
+                  {t(`onboarding.feature.${currentFeature.key}Desc` as any)}
+                </div>
+                <ul className="space-y-2">
+                  {(['Bullet1', 'Bullet2', 'Bullet3'] as const).map(b => (
+                    <li key={b} className="flex items-start gap-2 text-sm text-on-surface-variant">
+                      <span className={`material-symbols-outlined text-[16px] mt-0.5 shrink-0 ${currentFeature.color}`}>check_circle</span>
+                      {t(`onboarding.feature.${currentFeature.key}${b}` as any)}
+                    </li>
+                  ))}
+                </ul>
               </div>
+
+              {/* Feature navigation */}
+              <div className="flex items-center justify-between mb-7">
+                <div className="flex gap-1.5 items-center">
+                  {FEATURES.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setFeatureIdx(i)}
+                      className={`rounded-full transition-all duration-300 ${
+                        i === featureIdx ? 'w-5 h-2 bg-primary' : 'w-2 h-2 bg-surface-variant hover:bg-outline-variant'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setFeatureIdx(i => Math.max(0, i - 1))}
+                    disabled={featureIdx === 0}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 disabled:opacity-30 transition-colors cursor-pointer disabled:cursor-default"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+                  </button>
+                  <span className="text-xs text-on-surface-variant w-8 text-center tabular-nums">
+                    {featureIdx + 1} / {FEATURES.length}
+                  </span>
+                  <button
+                    onClick={() => setFeatureIdx(i => Math.min(FEATURES.length - 1, i + 1))}
+                    disabled={featureIdx === FEATURES.length - 1}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 disabled:opacity-30 transition-colors cursor-pointer disabled:cursor-default"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="flex gap-3">
                 <button
                   onClick={() => setStep(1)}
