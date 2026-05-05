@@ -18,7 +18,7 @@ export default function AdminInviteCodes() {
 }
 
 function InviteCodesContent() {
-  const { token } = useAdminAuth();
+  const { token, isReadonly } = useAdminAuth();
   const { t } = useTranslation();
   const [codes, setCodes] = useState<InviteCode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,13 +112,15 @@ function InviteCodesContent() {
           <span className="material-symbols-outlined text-primary" style={{ fontSize: 22 }}>card_membership</span>
           <h1 className="font-headline text-lg md:text-xl font-bold tracking-tight truncate">{t('admin.inviteCodes.title' as any)}</h1>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary text-on-primary rounded-lg hover:brightness-110 transition-all cursor-pointer shrink-0"
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>add</span>
-          {t('admin.inviteCodes.create' as any)}
-        </button>
+        {!isReadonly && (
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary text-on-primary rounded-lg hover:brightness-110 transition-all cursor-pointer shrink-0"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>add</span>
+            {t('admin.inviteCodes.create' as any)}
+          </button>
+        )}
       </header>
 
       <div className="flex-1 p-4 md:p-8 space-y-4 md:space-y-6 overflow-y-auto">
@@ -154,31 +156,33 @@ function InviteCodesContent() {
                 </div>
 
                 {/* Actions — compact row */}
-                <div className="flex items-center shrink-0">
-                  <button
-                    onClick={() => handleToggle(c)}
-                    className={`p-2 rounded-lg transition-colors cursor-pointer ${c.is_active ? 'hover:bg-amber-500/10 text-amber-600' : 'hover:bg-green-500/10 text-green-600'}`}
-                    title={c.is_active ? t('admin.inviteCodes.deactivate' as any) : t('admin.inviteCodes.activate' as any)}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: 22 }}>
-                      {c.is_active ? 'toggle_on' : 'toggle_off'}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => openEdit(c)}
-                    className="p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant transition-colors cursor-pointer"
-                    title={t('admin.inviteCodes.edit' as any)}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: 22 }}>edit</span>
-                  </button>
-                  <button
-                    onClick={() => setDeleteTarget(c)}
-                    className="p-2 rounded-lg hover:bg-error/10 text-error transition-colors cursor-pointer"
-                    title={t('admin.inviteCodes.delete' as any)}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: 22 }}>delete</span>
-                  </button>
-                </div>
+                {!isReadonly && (
+                  <div className="flex items-center shrink-0">
+                    <button
+                      onClick={() => handleToggle(c)}
+                      className={`p-2 rounded-lg transition-colors cursor-pointer ${c.is_active ? 'hover:bg-amber-500/10 text-amber-600' : 'hover:bg-green-500/10 text-green-600'}`}
+                      title={c.is_active ? t('admin.inviteCodes.deactivate' as any) : t('admin.inviteCodes.activate' as any)}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 22 }}>
+                        {c.is_active ? 'toggle_on' : 'toggle_off'}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => openEdit(c)}
+                      className="p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant transition-colors cursor-pointer"
+                      title={t('admin.inviteCodes.edit' as any)}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 22 }}>edit</span>
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget(c)}
+                      className="p-2 rounded-lg hover:bg-error/10 text-error transition-colors cursor-pointer"
+                      title={t('admin.inviteCodes.delete' as any)}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 22 }}>delete</span>
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -22,7 +22,7 @@ export default function AdminSettings() {
 }
 
 function AdminSettingsContent() {
-  const { token } = useAdminAuth();
+  const { token, isReadonly } = useAdminAuth();
   const { locale, theme, setLocale, setTheme, t } = useTranslation();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [form, setForm] = useState({ usageLimitUsd: '', storageQuotaGb: '', uploadQuotaMb: '' });
@@ -251,10 +251,10 @@ function AdminSettingsContent() {
                       <div className="flex items-center gap-2 md:gap-3">
                         <span className="text-2xl md:text-3xl font-headline font-black text-on-surface">{cfg.prefix}{value ?? '—'}</span>
                         <span className="text-xs md:text-sm text-on-surface-variant">{cfg.suffix}</span>
-                        <button onClick={() => setEditing(cfg.key)} className="ml-2 md:ml-4 px-3 md:px-4 py-1.5 md:py-2 bg-surface-container-high text-on-surface-variant text-xs md:text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer flex items-center gap-1.5">
+                        {!isReadonly && <button onClick={() => setEditing(cfg.key)} className="ml-2 md:ml-4 px-3 md:px-4 py-1.5 md:py-2 bg-surface-container-high text-on-surface-variant text-xs md:text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer flex items-center gap-1.5">
                           <span className="material-symbols-outlined text-xs md:text-sm">edit</span>
                           {t('admin.settings.edit')}
-                        </button>
+                        </button>}
                       </div>
                     )}
                   </div>
@@ -304,10 +304,10 @@ function AdminSettingsContent() {
                         <div className="flex items-center gap-2 md:gap-3">
                           <span className="text-2xl md:text-3xl font-headline font-black text-on-surface">{cfg.prefix}{value ?? '—'}</span>
                           <span className="text-xs md:text-sm text-on-surface-variant">{cfg.suffix}</span>
-                          <button onClick={() => setEditing(cfg.key)} className="ml-2 md:ml-4 px-3 md:px-4 py-1.5 md:py-2 bg-surface-container-high text-on-surface-variant text-xs md:text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer flex items-center gap-1.5">
+                          {!isReadonly && <button onClick={() => setEditing(cfg.key)} className="ml-2 md:ml-4 px-3 md:px-4 py-1.5 md:py-2 bg-surface-container-high text-on-surface-variant text-xs md:text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer flex items-center gap-1.5">
                             <span className="material-symbols-outlined text-xs md:text-sm">edit</span>
                             {t('admin.settings.edit')}
-                          </button>
+                          </button>}
                         </div>
                       )}
                     </div>

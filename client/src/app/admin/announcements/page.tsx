@@ -58,7 +58,7 @@ export default function AdminAnnouncements() {
 }
 
 function AnnouncementsContent() {
-  const { token } = useAdminAuth();
+  const { token, isReadonly } = useAdminAuth();
   const { t } = useTranslation();
   const [items, setItems] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -162,13 +162,15 @@ function AnnouncementsContent() {
           <span className="text-base md:text-lg font-black text-on-surface font-headline shrink-0">{t('admin.announcements.title' as any)}</span>
           <span className="hidden md:inline text-sm text-on-surface-variant font-mono truncate">{t('admin.announcements.description' as any)}</span>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-1.5 ml-3 px-3 md:px-4 py-2 md:py-2.5 cyber-gradient rounded-xl text-on-primary text-xs md:text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all cursor-pointer shrink-0"
-        >
-          <span className="material-symbols-outlined text-lg">add</span>
-          <span className="hidden sm:inline">{t('admin.announcements.create' as any)}</span>
-        </button>
+        {!isReadonly && (
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-1.5 ml-3 px-3 md:px-4 py-2 md:py-2.5 cyber-gradient rounded-xl text-on-primary text-xs md:text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all cursor-pointer shrink-0"
+          >
+            <span className="material-symbols-outlined text-lg">add</span>
+            <span className="hidden sm:inline">{t('admin.announcements.create' as any)}</span>
+          </button>
+        )}
       </header>
 
       <div className="p-4 md:p-8 flex-1 space-y-4 md:space-y-6 flex flex-col">
@@ -279,30 +281,32 @@ function AnnouncementsContent() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-0.5 shrink-0 -mt-0.5">
-                    <button
-                      onClick={() => toggleActive(a)}
-                      className={`w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer ${a.is_active ? 'text-success' : 'text-on-surface-variant/50'}`}
-                      title={a.is_active ? 'Disable' : 'Enable'}
-                    >
-                      <span className="material-symbols-outlined text-xl md:text-2xl">
-                        {a.is_active ? 'toggle_on' : 'toggle_off'}
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => openEdit(a)}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-lg">edit</span>
-                    </button>
-                    <button
-                      onClick={() => { if (confirm(t('admin.announcements.deleteConfirm' as any))) handleDelete(a.id); }}
-                      disabled={deleting === a.id}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors cursor-pointer disabled:opacity-50"
-                    >
-                      <span className="material-symbols-outlined text-lg">delete</span>
-                    </button>
-                  </div>
+                  {!isReadonly && (
+                    <div className="flex items-center gap-0.5 shrink-0 -mt-0.5">
+                      <button
+                        onClick={() => toggleActive(a)}
+                        className={`w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer ${a.is_active ? 'text-success' : 'text-on-surface-variant/50'}`}
+                        title={a.is_active ? 'Disable' : 'Enable'}
+                      >
+                        <span className="material-symbols-outlined text-xl md:text-2xl">
+                          {a.is_active ? 'toggle_on' : 'toggle_off'}
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => openEdit(a)}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-lg">edit</span>
+                      </button>
+                      <button
+                        onClick={() => { if (confirm(t('admin.announcements.deleteConfirm' as any))) handleDelete(a.id); }}
+                        disabled={deleting === a.id}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-error/10 hover:text-error transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <span className="material-symbols-outlined text-lg">delete</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {/* Row 2: Content */}
                 <p className="text-xs text-on-surface-variant line-clamp-2 mb-2">{a.content}</p>

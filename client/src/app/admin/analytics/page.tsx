@@ -277,10 +277,9 @@ function TopicAnalysisCard({ period, token }: { period: string; token: string })
   const analyze = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const res = await fetch('/api/admin/analytics/topic-analysis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ period }),
+      const res = await fetch(`/api/admin/analytics/topic-analysis?period=${period}`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
       });
       const j = await res.json();
       if (!res.ok) setError(j.error || 'Error');

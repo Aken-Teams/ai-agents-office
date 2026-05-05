@@ -428,7 +428,7 @@ router.post('/google', async (req: Request, res: Response) => {
    ============================================================ */
 router.get('/me', authMiddleware, async (req: Request, res: Response) => {
   const user = await dbGet<User>(
-    'SELECT id, email, password_hash, display_name, role, status, locale, theme, oauth_provider, created_at FROM users WHERE id = ?',
+    'SELECT id, email, password_hash, display_name, role, status, locale, theme, oauth_provider, company, onboarding_completed, created_at FROM users WHERE id = ?',
     req.user!.userId
   );
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
@@ -440,7 +440,32 @@ router.get('/me', authMiddleware, async (req: Request, res: Response) => {
     oauthProvider: user.oauth_provider || null,
     hasPassword: user.password_hash !== OAUTH_NO_PASSWORD,
     createdAt: user.created_at,
+    company: user.company || null,
+    onboardingRequired: !user.onboarding_completed && config.deployMode === 'pro-out',
   });
+});
+
+/* ============================================================
+   POST /api/auth/onboarding
+   ============================================================ */
+router.post('/onboarding', authMiddleware, async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const { company } = req.body;
+
+  if (!company || typeof company !== 'string' || company.trim().length === 0) {
+    res.status(400).json({ error: 'Company name is required' });
+    return;
+  }
+  if (company.trim().length > 100) {
+    res.status(400).json({ error: 'Company name must be 100 characters or less' });
+    return;
+  }
+
+  await dbRun(
+    'UPDATE users SET company = ?, onboarding_completed = 1, updated_at = NOW() WHERE id = ?',
+    company.trim(), userId
+  );
+  res.json({ success: true });
 });
 
 /* ============================================================

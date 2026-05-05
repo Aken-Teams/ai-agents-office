@@ -3,13 +3,15 @@ export interface User {
   email: string;
   password_hash: string;
   display_name: string | null;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'readonly';
   status: 'active' | 'pending' | 'pending_verification' | 'suspended';
   locale: 'zh-TW' | 'zh-CN' | 'en';
   theme: 'dark' | 'light';
   oauth_provider: string | null;
   oauth_id: string | null;
   quota_override: number | null;
+  company: string | null;
+  onboarding_completed: 0 | 1;
   created_at: string;
   updated_at: string;
 }
@@ -105,7 +107,7 @@ export interface TaskExecution {
 export interface AuthPayload {
   userId: string;
   email: string;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'readonly';
 }
 
 declare global {
