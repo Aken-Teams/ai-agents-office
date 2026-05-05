@@ -68,7 +68,7 @@ export default function AdminTokens() {
   const [quoteMonth, setQuoteMonth] = useState('');
   const [quoteCurrency, setQuoteCurrency] = useState<'USD' | 'TWD'>('USD');
   const [quoteRate, setQuoteRate] = useState('32');
-  const [quoteType, setQuoteType] = useState<'summary' | 'detail'>('summary');
+  const [quoteSections, setQuoteSections] = useState({ summary: true, detail: false, analytics: false });
 
   async function exportCsv() {
     if (!token || exporting) return;
@@ -149,11 +149,9 @@ export default function AdminTokens() {
         .then(b => new Promise<string>(res => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.readAsDataURL(b); }))
         .catch(() => '');
 
-      // Detail table rows (per user)
-      const detailRowsHtml = quoteType === 'detail' ? rows.map((r, i) => {
-        const uInput  = r.input_tokens  * fx;
-        const uOutput = r.output_tokens * fx;
-        const uCost   = ((r.input_tokens / 1_000_000) * INPUT_RATE + (r.output_tokens / 1_000_000) * OUTPUT_RATE) * fx;
+      // Detail table rows (per user cost)
+      const detailRowsHtml = rows.map((r, i) => {
+        const uCost = ((r.input_tokens / 1_000_000) * INPUT_RATE + (r.output_tokens / 1_000_000) * OUTPUT_RATE) * fx;
         return `<tr>
           <td style="color:#bbb;font-size:12px;width:32px">${i + 1}</td>
           <td style="color:#333"><strong>${r.display_name || r.email.split('@')[0]}</strong></td>
@@ -162,7 +160,110 @@ export default function AdminTokens() {
           <td style="text-align:right;font-family:'Courier New',monospace;font-size:13px;color:#666">${r.output_tokens.toLocaleString()}</td>
           <td style="text-align:right;font-family:'Courier New',monospace;font-weight:700;color:#111">${sym}${Math.ceil(uCost).toLocaleString()}</td>
         </tr>`;
-      }).join('') : '';
+      }).join('');
+
+      // Fetch monthly analytics for dashboard charts (only if needed)
+      let analyticsData: {
+        byCategory: { category: string | null; count: number }[];
+        byMode: { mode: string | null; count: number }[];
+        byFileType: { file_type: string | null; count: number }[];
+        bySkill: { skill_id: string | null; count: number }[];
+        summary: { totalConversations: number; totalFiles: number; activeUsers: number };
+      } | null = null;
+      if (quoteSections.analytics) {
+        const ar = await fetch(`/api/admin/analytics/monthly?month=${quoteMonth}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => null);
+        if (ar?.ok) analyticsData = await ar.json();
+      }
+
+      // SVG donut chart helper
+      const donutSvg = (segs: { label: string; count: number; color: string }[], total: number) => {
+        const R = 38, CX = 50, CY = 50, circ = 2 * Math.PI * R;
+        let off = 0;
+        const arcs = segs.filter(s => s.count > 0).map(s => {
+          const dash = (s.count / total) * circ;
+          const arc = `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="${s.color}" stroke-width="14" stroke-dasharray="${dash.toFixed(2)} ${(circ - dash + 0.01).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 ${CX} ${CY})"/>`;
+          off += dash;
+          return arc;
+        });
+        return `<svg viewBox="0 0 100 100" width="96" height="96"><circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="#f0f0f0" stroke-width="14"/>${arcs.join('')}<text x="${CX}" y="${CY - 3}" text-anchor="middle" font-size="16" font-weight="900" fill="#111" font-family="'Segoe UI',system-ui,sans-serif">${total}</text><text x="${CX}" y="${CY + 11}" text-anchor="middle" font-size="8" fill="#9ca3af" font-family="system-ui,sans-serif">筆</text></svg>`;
+      };
+      const donutCard = (title: string, segs: { label: string; count: number; color: string }[], total: number) => {
+        const legend = segs.filter(s => s.count > 0).map(s =>
+          `<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><div style="width:8px;height:8px;border-radius:2px;background:${s.color};flex-shrink:0"></div><div style="font-size:10px;color:#555;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.label}</div><div style="font-size:10px;font-weight:700;color:#111;font-family:'Courier New',monospace">${s.count}</div></div>`
+        ).join('');
+        return `<div style="background:#f9fafb;border-radius:12px;padding:16px 14px;border:1px solid #e5e7eb;display:flex;flex-direction:column;align-items:center"><div style="font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9ca3af;margin-bottom:10px;align-self:flex-start">${title}</div>${donutSvg(segs, total)}<div style="margin-top:12px;width:100%">${legend}</div></div>`;
+      };
+
+      // ECharts-inspired palette: distinct but harmonious
+      const PALETTE = ['#5470c6','#91cc75','#fac858','#ee6666','#73c0de','#3ba272','#fc8452','#9a60b4','#ea7ccc','#48b8d0'];
+      const CATEGORY_COLORS: Record<string, string> = { document: '#0D9488', assistant: '#9a60b4', '': '#b8bcc8' };
+      const CATEGORY_LABELS: Record<string, string> = { document: '文件生成', assistant: '智慧助手', '': '未分類' };
+      const MODE_COLORS: Record<string, string> = { direct: '#0D9488', orchestrated: '#fac858', '': '#b8bcc8' };
+      const MODE_LABELS: Record<string, string> = { direct: '直接模式', orchestrated: '多代理', '': '未知' };
+      const FTYPE_COLORS: Record<string, string> = {
+        pptx: '#fac858', ppt: '#fac858',    // warm yellow (PPT orange feel)
+        docx: '#5470c6', doc: '#5470c6',    // cornflower blue (Word feel)
+        xlsx: '#91cc75', xls: '#91cc75', csv: '#3ba272',  // green (Excel feel)
+        pdf: '#ee6666',                     // coral red (PDF feel)
+        png: '#73c0de',                     // sky blue
+        jpg: '#fc8452', jpeg: '#fc8452',    // soft orange
+        html: '#48b8d0', htm: '#48b8d0',   // teal blue
+        gif: '#ea7ccc',                     // pink
+        webp: '#9a60b4', svg: '#0D9488',
+        txt: '#8d97a5', zip: '#6e7d8c', '': '#b0b8c4',
+      };
+      const FTYPE_LABELS: Record<string, string> = {
+        pptx: 'PPT', ppt: 'PPT', docx: 'Word', doc: 'Word',
+        xlsx: 'Excel', xls: 'Excel', csv: 'CSV', pdf: 'PDF',
+        html: 'Web', htm: 'Web', png: 'PNG', jpg: 'JPG', jpeg: 'JPEG',
+        gif: 'GIF', webp: 'WebP', svg: 'SVG', txt: 'TXT', zip: 'ZIP', '': '其他',
+      };
+      const SKILL_LABELS: Record<string, string> = {
+        'pptx-gen': 'PPT 簡報生成', 'slides-gen': 'PPT 簡報生成',
+        'docx-gen': 'Word 文件生成',
+        'xlsx-gen': 'Excel 試算表',
+        'pdf-gen': 'PDF 生成',
+        'research': '研究調查',
+        'planner': '規劃分析', 'reviewer': '評估審查', 'router': '智能路由',
+        'data-analysis': '資料分析', 'data-analyst': '資料分析',
+        'web-app': '網頁應用生成', 'webapp-gen': '網頁應用生成',
+        'rag-analysis': 'RAG 文件分析', 'rag-analyst': 'RAG 文件分析',
+      };
+      const SKILL_COLORS = PALETTE;
+
+      let analyticsSectionHtml = '';
+      if (quoteSections.analytics) {
+        const ad = analyticsData;
+        const catSegs = (ad?.byCategory ?? []).map(r => ({ label: CATEGORY_LABELS[r.category ?? ''] ?? (r.category ?? '未分類'), count: r.count, color: CATEGORY_COLORS[r.category ?? ''] ?? '#d1d5db' }));
+        const catTotal = catSegs.reduce((s, r) => s + r.count, 0);
+        const modeSegs = (ad?.byMode ?? []).map(r => ({ label: MODE_LABELS[r.mode ?? ''] ?? (r.mode ?? '未知'), count: r.count, color: MODE_COLORS[r.mode ?? ''] ?? '#d1d5db' }));
+        const modeTotal = modeSegs.reduce((s, r) => s + r.count, 0);
+        const ftSegs = (ad?.byFileType ?? []).slice(0, 6).map(r => ({ label: FTYPE_LABELS[r.file_type ?? ''] ?? (r.file_type ?? '其他'), count: r.count, color: FTYPE_COLORS[r.file_type ?? ''] ?? '#6b7280' }));
+        const ftTotal = ftSegs.reduce((s, r) => s + r.count, 0);
+        const allSkills = ad?.bySkill ?? [];
+        const maxSkill = Math.max(...allSkills.map(s => s.count), 1);
+        const half = Math.ceil(allSkills.length / 2);
+        const skillColHtml = (skills: typeof allSkills, offset: number) => skills.map((s, i) => {
+          const label = SKILL_LABELS[s.skill_id ?? ''] ?? (s.skill_id ?? '未知');
+          const pct = (s.count / maxSkill * 100).toFixed(1);
+          const color = SKILL_COLORS[(offset + i) % SKILL_COLORS.length];
+          return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;margin-bottom:3px"><div style="font-size:11px;color:#333;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px">${label}</div><div style="font-size:11px;color:#999;font-family:'Courier New',monospace;margin-left:6px">${s.count}</div></div><div style="background:#f0f0f0;border-radius:4px;height:5px;overflow:hidden"><div style="width:${pct}%;background:${color};height:100%;border-radius:4px"></div></div></div>`;
+        }).join('');
+
+        analyticsSectionHtml = `
+  <div style="margin-top:36px;padding-top:28px;border-top:2px solid #e5e7eb">
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#0D9488;margin-bottom:4px">使用分析報表</div>
+    <div style="font-size:12px;color:#aaa;margin-bottom:20px">${year} 年 ${month} 月・${ad?.summary.activeUsers ?? rows.length} 位使用者・共 ${ad?.summary.totalConversations ?? totalConversations} 次對話・生成 ${ad?.summary.totalFiles ?? 0} 份文件</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px">
+      ${donutCard('對話類型分佈', catSegs, catTotal)}
+      ${donutCard('執行模式分佈', modeSegs, modeTotal)}
+      ${donutCard('文件類型分佈', ftSegs, ftTotal)}
+    </div>
+    ${allSkills.length > 0 ? `<div style="background:#f9fafb;border-radius:12px;padding:18px;border:1px solid #e5e7eb"><div style="font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#9ca3af;margin-bottom:14px">Skill 使用統計</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:0 32px"><div>${skillColHtml(allSkills.slice(0, half), 0)}</div><div>${skillColHtml(allSkills.slice(half), half)}</div></div></div>` : ''}
+  </div>`;
+      }
 
       const html = `<!DOCTYPE html>
 <html lang="zh-TW">
@@ -259,45 +360,16 @@ export default function AdminTokens() {
   </div>
   <hr>
 
-  ${quoteType === 'detail' ? `
-  <div class="info-row">
-    <div class="info-block">
-      <div class="info-label">服務項目</div>
-      <div class="info-value">AI Token 使用服務費</div>
-    </div>
-    <div class="info-block">
-      <div class="info-label">使用人數</div>
-      <div class="info-value">${rows.length} 位</div>
-      <div class="info-sub">已啟用帳號</div>
-    </div>
-    <div class="info-block">
-      <div class="info-label">總 Token 用量</div>
-      <div class="info-value">${totalTokens.toLocaleString()}</div>
-      <div class="info-sub">輸入 + 輸出</div>
-    </div>
-  </div>` : ''}
-
+  ${quoteSections.summary ? `
   <table>
-    <thead>
-      <tr>
-        ${quoteType === 'summary' ? `
-        <th style="width:36px">#</th>
-        <th>服務項目</th>
-        <th class="r">用量</th>
-        <th class="r">單價</th>
-        <th class="r">小計 (${quoteCurrency})</th>
-        ` : `
-        <th style="width:32px">#</th>
-        <th>使用者</th>
-        <th>Email</th>
-        <th class="r">輸入 Token</th>
-        <th class="r">輸出 Token</th>
-        <th class="r">費用 (${quoteCurrency})</th>
-        `}
-      </tr>
-    </thead>
+    <thead><tr>
+      <th style="width:36px">#</th>
+      <th>服務項目</th>
+      <th class="r">用量</th>
+      <th class="r">單價</th>
+      <th class="r">小計 (${quoteCurrency})</th>
+    </tr></thead>
     <tbody>
-      ${quoteType === 'summary' ? `
       <tr>
         <td style="color:#bbb;font-size:12px">1</td>
         <td class="desc"><strong>輸入 Token 使用費</strong><br><span style="font-size:12px;color:#888">Prompt / Input tokens</span></td>
@@ -312,10 +384,8 @@ export default function AdminTokens() {
         <td class="price">${outputUnitPrice}</td>
         <td class="amount">${sym}${Math.ceil(outputCost).toLocaleString()}</td>
       </tr>
-      ` : detailRowsHtml}
     </tbody>
   </table>
-
   <div class="subtotal-block">
     <table class="subtotal-table">
       <tr><td class="s-label">服務小計</td><td class="s-value">${sym}${Math.ceil(inputCost + outputCost).toLocaleString()}</td></tr>
@@ -323,18 +393,55 @@ export default function AdminTokens() {
       <tr><td class="s-label">稅額</td><td class="s-value">—</td></tr>
       <tr class="total-row-final"><td class="s-label">合計 (${quoteCurrency})</td><td class="s-value">${sym}${Math.ceil(totalCost * 1.2).toLocaleString()}</td></tr>
     </table>
-  </div>
+  </div>` : ''}
 
-  ${quoteType === 'detail' ? `
-  <div class="stats-box">
-    <div class="stats-title">本月使用統計</div>
-    <div class="stats-grid">
-      <div class="stat-item"><div class="s-num">${rows.length}</div><div class="s-lbl">使用人數</div></div>
-      <div class="stat-item"><div class="s-num">${totalConversations}</div><div class="s-lbl">對話次數</div></div>
-      <div class="stat-item"><div class="s-num">${totalSessions}</div><div class="s-lbl">API 呼叫次數</div></div>
-      <div class="stat-item"><div class="s-num">${(totalTokens / 1000).toFixed(1)}k</div><div class="s-lbl">總 Token 用量</div></div>
+  ${quoteSections.detail ? `
+  <div style="margin-top:${quoteSections.summary ? '36px' : '0'}">
+    ${quoteSections.summary ? '<div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#0D9488;margin-bottom:12px">用戶費用明細</div>' : ''}
+    <table>
+      <thead><tr>
+        <th style="width:32px">#</th>
+        <th>使用者</th>
+        <th>Email</th>
+        <th class="r">輸入 Token</th>
+        <th class="r">輸出 Token</th>
+        <th class="r">費用 (${quoteCurrency})</th>
+      </tr></thead>
+      <tbody>${detailRowsHtml}</tbody>
+    </table>
+    ${!quoteSections.summary ? `
+    <div class="subtotal-block">
+      <table class="subtotal-table">
+        <tr><td class="s-label">服務小計</td><td class="s-value">${sym}${Math.ceil(inputCost + outputCost).toLocaleString()}</td></tr>
+        <tr><td class="s-label">服務費 (20%)</td><td class="s-value">${sym}${Math.ceil((inputCost + outputCost) * 0.2).toLocaleString()}</td></tr>
+        <tr><td class="s-label">稅額</td><td class="s-value">—</td></tr>
+        <tr class="total-row-final"><td class="s-label">合計 (${quoteCurrency})</td><td class="s-value">${sym}${Math.ceil(totalCost * 1.2).toLocaleString()}</td></tr>
+      </table>
+    </div>` : ''}
+  </div>` : ''}
+
+  ${!quoteSections.summary && !quoteSections.detail && quoteSections.analytics ? `
+  <div style="background:#f9fafb;border-radius:10px;padding:20px 24px;border:1px solid #e5e7eb">
+    <div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#0D9488;margin-bottom:14px">費用彙總</div>
+    <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f0f0f0">
+      <span style="font-size:13px;color:#555">輸入 Token（${inputUnitPrice}）</span>
+      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${Math.ceil(inputCost).toLocaleString()}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f0f0f0">
+      <span style="font-size:13px;color:#555">輸出 Token（${outputUnitPrice}）</span>
+      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${Math.ceil(outputCost).toLocaleString()}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f0f0f0">
+      <span style="font-size:13px;color:#555">服務費（20%）</span>
+      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${Math.ceil((inputCost + outputCost) * 0.2).toLocaleString()}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:baseline;padding:14px 0 0;border-top:2px solid #0D9488;margin-top:6px">
+      <span style="font-size:15px;font-weight:800;color:#111">合計（${quoteCurrency}）</span>
+      <span style="font-size:22px;font-weight:900;color:#0D9488;font-family:'Courier New',monospace">${sym}${Math.ceil(totalCost * 1.2).toLocaleString()}</span>
     </div>
   </div>` : ''}
+
+  ${analyticsSectionHtml}
 
   <div class="payment-section">
     <div class="payment-section-title">付款資訊</div>
@@ -444,7 +551,7 @@ export default function AdminTokens() {
       {/* Export / Quote Modal */}
       {showExportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) setShowExportModal(false); }}>
-          <div className="bg-surface-container-highest rounded-2xl shadow-2xl border border-outline-variant/20 w-80">
+          <div className="bg-surface-container-highest rounded-2xl shadow-2xl border border-outline-variant/20 w-96">
             {/* Header */}
             <div className="flex items-center gap-2 px-5 pt-5 pb-0">
               <span className="material-symbols-outlined text-primary text-[20px]">description</span>
@@ -513,54 +620,90 @@ export default function AdminTokens() {
             {/* Quote Tab */}
             {modalTab === 'quote' && (
               <>
-                <div className="px-5 py-4 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-on-surface-variant w-10 shrink-0">月份</span>
+                <div className="px-5 py-4 space-y-4">
+                  {/* Month */}
+                  <div>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">計費月份</label>
                     <input
                       type="month"
                       value={quoteMonth}
                       onChange={e => setQuoteMonth(e.target.value)}
-                      className="flex-1 bg-surface-container border border-outline-variant/30 rounded-lg px-3 py-1.5 text-sm text-on-surface focus:outline-none focus:border-primary"
+                      className="w-full bg-surface-container border border-outline-variant/30 rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary"
                     />
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-on-surface-variant w-10 shrink-0">類型</span>
-                    <div className="flex flex-1 rounded-lg overflow-hidden border border-outline-variant/30">
-                      {([['summary', '總額'] , ['detail', '明細']] as const).map(([type, label]) => (
-                        <button
-                          key={type}
-                          onClick={() => setQuoteType(type)}
-                          className={`flex-1 py-1.5 text-sm font-bold cursor-pointer transition-colors ${quoteType === type ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'}`}
-                        >{label}</button>
+
+                  {/* Content Sections */}
+                  <div>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">報告內容</label>
+                    <div className="space-y-2">
+                      {([
+                        ['summary',   '費用總額', '輸入/輸出用量與合計金額', 'receipt_long'],
+                        ['detail',    '用戶明細', '每位用戶的費用明細',       'group'],
+                        ['analytics', '使用分析', '各用戶使用次數與用量統計', 'bar_chart'],
+                      ] as const).map(([key, label, desc, icon]) => (
+                        <label
+                          key={key}
+                          className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl border cursor-pointer transition-all select-none ${
+                            quoteSections[key]
+                              ? 'border-primary/30 bg-primary/[0.05]'
+                              : 'border-outline-variant/20 bg-surface-container hover:bg-surface-container-high'
+                          }`}
+                        >
+                          <span className={`material-symbols-outlined text-[18px] shrink-0 transition-colors ${quoteSections[key] ? 'text-primary' : 'text-on-surface-variant'}`}>{icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className={`text-[15px] font-bold leading-snug transition-colors ${quoteSections[key] ? 'text-primary' : 'text-on-surface'}`}>{label}</div>
+                            <div className={`text-xs transition-colors ${quoteSections[key] ? 'text-primary/60' : 'text-on-surface-variant'}`}>{desc}</div>
+                          </div>
+                          {/* Custom checkbox */}
+                          <input
+                            type="checkbox"
+                            checked={quoteSections[key]}
+                            onChange={e => setQuoteSections(prev => ({ ...prev, [key]: e.target.checked }))}
+                            className="sr-only"
+                          />
+                          <div className={`w-5 h-5 rounded-md border-2 shrink-0 flex items-center justify-center transition-all ${
+                            quoteSections[key]
+                              ? 'bg-primary border-primary'
+                              : 'border-outline-variant/50 bg-transparent'
+                          }`}>
+                            {quoteSections[key] && (
+                              <span className="material-symbols-outlined text-on-primary" style={{ fontSize: 14, fontVariationSettings: "'wght' 700" }}>check</span>
+                            )}
+                          </div>
+                        </label>
                       ))}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-on-surface-variant w-10 shrink-0">幣別</span>
-                    <div className="flex flex-1 rounded-lg overflow-hidden border border-outline-variant/30">
+
+                  {/* Currency */}
+                  <div>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">幣別</label>
+                    <div className="flex rounded-lg overflow-hidden border border-outline-variant/30">
                       {(['USD', 'TWD'] as const).map(c => (
                         <button
                           key={c}
                           onClick={() => setQuoteCurrency(c)}
-                          className={`flex-1 py-1.5 text-sm font-bold cursor-pointer transition-colors ${quoteCurrency === c ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'}`}
+                          className={`flex-1 py-2 text-sm font-bold cursor-pointer transition-colors ${quoteCurrency === c ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'}`}
                         >{c}</button>
                       ))}
                     </div>
                   </div>
+
+                  {/* Exchange Rate */}
                   {quoteCurrency === 'TWD' && (
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-on-surface-variant w-10 shrink-0">匯率</span>
-                      <div className="flex-1 flex items-center gap-1.5">
-                        <span className="text-xs text-on-surface-variant">1 USD =</span>
+                    <div>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">匯率</label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-on-surface-variant shrink-0">1 USD =</span>
                         <input
                           type="number"
                           value={quoteRate}
                           min="1"
                           step="0.1"
                           onChange={e => setQuoteRate(e.target.value)}
-                          className="w-20 bg-surface-container border border-outline-variant/30 rounded-lg px-3 py-1.5 text-sm text-on-surface focus:outline-none focus:border-primary text-center"
+                          className="w-24 bg-surface-container border border-outline-variant/30 rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary text-center"
                         />
-                        <span className="text-xs text-on-surface-variant">TWD</span>
+                        <span className="text-xs text-on-surface-variant shrink-0">TWD</span>
                       </div>
                     </div>
                   )}
@@ -569,7 +712,7 @@ export default function AdminTokens() {
                   <button onClick={() => setShowExportModal(false)} className="flex-1 py-2 rounded-lg text-sm font-bold text-on-surface-variant bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer">取消</button>
                   <button
                     onClick={generateQuote}
-                    disabled={exporting || !quoteMonth}
+                    disabled={exporting || !quoteMonth || (!quoteSections.summary && !quoteSections.detail && !quoteSections.analytics)}
                     className="flex-1 py-2 rounded-lg text-sm font-bold text-on-primary bg-primary hover:brightness-110 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
                   >
                     <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'receipt'}</span>

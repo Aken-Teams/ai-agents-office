@@ -1313,6 +1313,59 @@ router.get('/analytics/overview', async (req: Request, res: Response) => {
   });
 });
 
+// GET /api/admin/analytics/monthly?month=YYYY-MM
+router.get('/analytics/monthly', async (req: Request, res: Response) => {
+  const month = (req.query.month as string) || '';
+  if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+    res.status(400).json({ error: 'Invalid month format. Use YYYY-MM' });
+    return;
+  }
+
+  const byCategory = await dbAll<{ category: string | null; count: number }>(`
+    SELECT category, COUNT(*) as count
+    FROM conversations
+    WHERE DATE_FORMAT(created_at, '%Y-%m') = ?
+    GROUP BY category ORDER BY count DESC
+  `, [month]);
+
+  const byMode = await dbAll<{ mode: string | null; count: number }>(`
+    SELECT mode, COUNT(*) as count
+    FROM conversations
+    WHERE DATE_FORMAT(created_at, '%Y-%m') = ?
+    GROUP BY mode ORDER BY count DESC
+  `, [month]);
+
+  const byFileType = await dbAll<{ file_type: string | null; count: number }>(`
+    SELECT file_type, COUNT(*) as count
+    FROM generated_files
+    WHERE DATE_FORMAT(created_at, '%Y-%m') = ?
+    GROUP BY file_type ORDER BY count DESC
+  `, [month]);
+
+  const bySkill = await dbAll<{ skill_id: string | null; count: number }>(`
+    SELECT skill_id, COUNT(*) as count
+    FROM task_executions
+    WHERE DATE_FORMAT(created_at, '%Y-%m') = ?
+    GROUP BY skill_id ORDER BY count DESC LIMIT 10
+  `, [month]);
+
+  const totalConvRow = await dbGet<{ count: number }>(`SELECT COUNT(*) as count FROM conversations WHERE DATE_FORMAT(created_at, '%Y-%m') = ?`, [month]);
+  const totalFileRow = await dbGet<{ count: number }>(`SELECT COUNT(*) as count FROM generated_files WHERE DATE_FORMAT(created_at, '%Y-%m') = ?`, [month]);
+  const activeUsersRow = await dbGet<{ count: number }>(`SELECT COUNT(DISTINCT user_id) as count FROM conversations WHERE DATE_FORMAT(created_at, '%Y-%m') = ?`, [month]);
+
+  res.json({
+    byCategory,
+    byMode,
+    byFileType,
+    bySkill,
+    summary: {
+      totalConversations: totalConvRow?.count ?? 0,
+      totalFiles: totalFileRow?.count ?? 0,
+      activeUsers: activeUsersRow?.count ?? 0,
+    },
+  });
+});
+
 // GET /api/admin/analytics/hot-topics?period=7d|30d&limit=15
 router.get('/analytics/hot-topics', async (req: Request, res: Response) => {
   const period = (req.query.period as string) || '7d';
