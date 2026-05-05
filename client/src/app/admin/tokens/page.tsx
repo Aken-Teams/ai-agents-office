@@ -68,6 +68,7 @@ export default function AdminTokens() {
   const [quoteMonth, setQuoteMonth] = useState('');
   const [quoteCurrency, setQuoteCurrency] = useState<'USD' | 'TWD'>('USD');
   const [quoteRate, setQuoteRate] = useState('32');
+  const [quoteType, setQuoteType] = useState<'summary' | 'detail'>('summary');
 
   async function exportCsv() {
     if (!token || exporting) return;
@@ -111,11 +112,14 @@ export default function AdminTokens() {
       const res = await fetch(`/api/admin/tokens/monthly-summary?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const rows: Array<{
+      const allRows: Array<{
         month: string; email: string; display_name: string;
         input_tokens: number; output_tokens: number; total_tokens: number;
         conversations: number; sessions: number;
       }> = await res.json();
+
+      const EXCLUDE_NAMES = ['System Admin', 'test', '李忠軒'];
+      const rows = allRows.filter(r => !EXCLUDE_NAMES.includes(r.display_name));
 
       const totalInput = rows.reduce((sum, r) => sum + r.input_tokens, 0);
       const totalOutput = rows.reduce((sum, r) => sum + r.output_tokens, 0);
@@ -140,6 +144,25 @@ export default function AdminTokens() {
       const [year, month] = quoteMonth.split('-');
       const quoteNo = `Q-${year}${month}-001`;
       const generatedAt = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+      const logoDataUrl = await fetch('/zh-logo.png')
+        .then(r => r.blob())
+        .then(b => new Promise<string>(res => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.readAsDataURL(b); }))
+        .catch(() => '');
+
+      // Detail table rows (per user)
+      const detailRowsHtml = quoteType === 'detail' ? rows.map((r, i) => {
+        const uInput  = r.input_tokens  * fx;
+        const uOutput = r.output_tokens * fx;
+        const uCost   = ((r.input_tokens / 1_000_000) * INPUT_RATE + (r.output_tokens / 1_000_000) * OUTPUT_RATE) * fx;
+        return `<tr>
+          <td style="color:#bbb;font-size:12px;width:32px">${i + 1}</td>
+          <td style="color:#333"><strong>${r.display_name || r.email.split('@')[0]}</strong></td>
+          <td style="color:#888;font-size:12px">${r.email}</td>
+          <td style="text-align:right;font-family:'Courier New',monospace;font-size:13px;color:#666">${r.input_tokens.toLocaleString()}</td>
+          <td style="text-align:right;font-family:'Courier New',monospace;font-size:13px;color:#666">${r.output_tokens.toLocaleString()}</td>
+          <td style="text-align:right;font-family:'Courier New',monospace;font-weight:700;color:#111">${sym}${Math.ceil(uCost).toLocaleString()}</td>
+        </tr>`;
+      }).join('') : '';
 
       const html = `<!DOCTYPE html>
 <html lang="zh-TW">
@@ -152,13 +175,18 @@ export default function AdminTokens() {
     .print-btn{position:fixed;top:24px;right:24px;padding:9px 22px;background:#0D9488;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.04em;box-shadow:0 2px 8px rgba(13,148,136,0.3)}
     .print-btn:hover{background:#0b7b72}
     /* Header */
-    .doc-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px}
-    .brand-name{font-size:12px;font-weight:800;letter-spacing:0.18em;text-transform:uppercase;color:#0D9488}
-    .doc-title{font-size:32px;font-weight:900;color:#111;letter-spacing:-1px;margin-top:6px}
-    .doc-no{font-size:12px;color:#999;margin-top:4px;font-family:'Courier New',monospace}
-    .doc-meta{text-align:right;line-height:2}
-    .doc-meta .label{font-size:11px;color:#aaa;text-transform:uppercase;letter-spacing:0.08em}
-    .doc-meta .value{font-size:13px;color:#333;font-weight:600}
+    .doc-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:36px}
+    .doc-left{flex:1}
+    .doc-type-label{font-size:10px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#0D9488;margin-bottom:8px}
+    .doc-title{font-size:36px;font-weight:900;color:#111;letter-spacing:-1.5px;line-height:1}
+    .doc-no{font-size:12px;color:#bbb;margin-top:8px;font-family:'Courier New',monospace;letter-spacing:0.04em}
+    .doc-right{text-align:right;min-width:260px}
+    .company-block{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding-bottom:14px;border-bottom:1px solid #e5e7eb;margin-bottom:14px}
+    .company-name{font-size:16px;font-weight:800;color:#111;line-height:1.3}
+    .company-sub{font-size:11px;color:#aaa;margin-top:3px}
+    .meta-row{display:flex;justify-content:flex-end;align-items:baseline;gap:12px;line-height:2.2}
+    .meta-label{font-size:10px;color:#bbb;text-transform:uppercase;letter-spacing:0.1em}
+    .meta-value{font-size:13px;color:#333;font-weight:700}
     /* Divider */
     hr{border:none;border-top:2px solid #0D9488;margin-bottom:36px}
     /* Info row */
@@ -195,29 +223,43 @@ export default function AdminTokens() {
     /* Footer */
     .doc-footer{margin-top:36px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#bbb;line-height:1.9}
     /* Signature */
+    .payment-section{margin-top:40px;border-top:2px solid #e5e7eb;padding-top:20px}
+    .payment-section-title{font-size:11px;font-weight:700;color:#6b7280;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px}
+    .payment-table{width:100%;border-collapse:collapse;font-size:13px}
+    .payment-table th{background:#f9fafb;color:#374151;font-weight:700;padding:9px 14px;text-align:left;border:1px solid #e5e7eb;white-space:nowrap;width:1%}
+    .payment-table td{padding:9px 14px;border:1px solid #e5e7eb;color:#111;font-family:'Courier New',monospace;letter-spacing:0.02em}
     .sign-row{display:flex;justify-content:flex-end;margin-top:48px;gap:64px}
     .sign-block{text-align:center;width:140px}
     .sign-line{border-top:1px solid #ccc;margin-bottom:6px}
     .sign-label{font-size:11px;color:#aaa;letter-spacing:0.06em}
     @media print{.print-btn{display:none}body{padding:32px 40px}}
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   </style>
 </head>
 <body>
   <button class="print-btn" onclick="window.print()">列印 / 儲存 PDF</button>
 
   <div class="doc-header">
-    <div>
-      <div class="brand-name">AI Agents Office</div>
+    <div class="doc-left">
+      <div class="doc-type-label">AI Agents Office</div>
       <div class="doc-title">服務報價單</div>
       <div class="doc-no">No. ${quoteNo}</div>
     </div>
-    <div class="doc-meta">
-      <div><span class="label">報價日期</span><br><span class="value">${generatedAt.split(' ')[0]}</span></div>
-      <div><span class="label">計費月份</span><br><span class="value">${year} 年 ${month} 月</span></div>
+    <div class="doc-right">
+      <div class="company-block">
+        ${logoDataUrl ? `<img src="${logoDataUrl}" alt="智合科技" style="height:44px;display:block">` : ''}
+        <div>
+          <div class="company-name">智合科技股份有限公司</div>
+          <div class="company-sub">AI Agents Office 服務部門</div>
+        </div>
+      </div>
+      <div class="meta-row"><span class="meta-label">報價日期</span><span class="meta-value">${generatedAt.split(' ')[0]}</span></div>
+      <div class="meta-row"><span class="meta-label">計費月份</span><span class="meta-value">${year} 年 ${month} 月</span></div>
     </div>
   </div>
   <hr>
 
+  ${quoteType === 'detail' ? `
   <div class="info-row">
     <div class="info-block">
       <div class="info-label">服務項目</div>
@@ -233,44 +275,57 @@ export default function AdminTokens() {
       <div class="info-value">${totalTokens.toLocaleString()}</div>
       <div class="info-sub">輸入 + 輸出</div>
     </div>
-  </div>
+  </div>` : ''}
 
   <table>
     <thead>
       <tr>
+        ${quoteType === 'summary' ? `
         <th style="width:36px">#</th>
         <th>服務項目</th>
         <th class="r">用量</th>
         <th class="r">單價</th>
-        <th class="r">小計 (USD)</th>
+        <th class="r">小計 (${quoteCurrency})</th>
+        ` : `
+        <th style="width:32px">#</th>
+        <th>使用者</th>
+        <th>Email</th>
+        <th class="r">輸入 Token</th>
+        <th class="r">輸出 Token</th>
+        <th class="r">費用 (${quoteCurrency})</th>
+        `}
       </tr>
     </thead>
     <tbody>
+      ${quoteType === 'summary' ? `
       <tr>
         <td style="color:#bbb;font-size:12px">1</td>
         <td class="desc"><strong>輸入 Token 使用費</strong><br><span style="font-size:12px;color:#888">Prompt / Input tokens</span></td>
         <td class="qty">${totalInput.toLocaleString()} tok</td>
         <td class="price">${inputUnitPrice}</td>
-        <td class="amount">${sym}${inputCost.toFixed(2)}</td>
+        <td class="amount">${sym}${Math.ceil(inputCost).toLocaleString()}</td>
       </tr>
       <tr>
         <td style="color:#bbb;font-size:12px">2</td>
         <td class="desc"><strong>輸出 Token 使用費</strong><br><span style="font-size:12px;color:#888">Completion / Output tokens</span></td>
         <td class="qty">${totalOutput.toLocaleString()} tok</td>
         <td class="price">${outputUnitPrice}</td>
-        <td class="amount">${sym}${outputCost.toFixed(2)}</td>
+        <td class="amount">${sym}${Math.ceil(outputCost).toLocaleString()}</td>
       </tr>
+      ` : detailRowsHtml}
     </tbody>
   </table>
 
   <div class="subtotal-block">
     <table class="subtotal-table">
-      <tr><td class="s-label">服務小計</td><td class="s-value">${sym}${(inputCost + outputCost).toFixed(2)}</td></tr>
+      <tr><td class="s-label">服務小計</td><td class="s-value">${sym}${Math.ceil(inputCost + outputCost).toLocaleString()}</td></tr>
+      <tr><td class="s-label">服務費 (20%)</td><td class="s-value">${sym}${Math.ceil((inputCost + outputCost) * 0.2).toLocaleString()}</td></tr>
       <tr><td class="s-label">稅額</td><td class="s-value">—</td></tr>
-      <tr class="total-row-final"><td class="s-label">合計 (${quoteCurrency})</td><td class="s-value">${sym}${totalCost.toFixed(2)}</td></tr>
+      <tr class="total-row-final"><td class="s-label">合計 (${quoteCurrency})</td><td class="s-value">${sym}${Math.ceil(totalCost * 1.2).toLocaleString()}</td></tr>
     </table>
   </div>
 
+  ${quoteType === 'detail' ? `
   <div class="stats-box">
     <div class="stats-title">本月使用統計</div>
     <div class="stats-grid">
@@ -279,6 +334,20 @@ export default function AdminTokens() {
       <div class="stat-item"><div class="s-num">${totalSessions}</div><div class="s-lbl">API 呼叫次數</div></div>
       <div class="stat-item"><div class="s-num">${(totalTokens / 1000).toFixed(1)}k</div><div class="s-lbl">總 Token 用量</div></div>
     </div>
+  </div>` : ''}
+
+  <div class="payment-section">
+    <div class="payment-section-title">付款資訊</div>
+    <table class="payment-table">
+      <tr>
+        <th>付款方式</th><td>銀行匯款</td>
+        <th>戶名</th><td>智合科技股份有限公司</td>
+      </tr>
+      <tr>
+        <th>銀行</th><td>華南銀行仁武分行</td>
+        <th>帳號</th><td>722100015701</td>
+      </tr>
+    </table>
   </div>
 
   <div class="sign-row">
@@ -451,6 +520,18 @@ export default function AdminTokens() {
                       onChange={e => setQuoteMonth(e.target.value)}
                       className="flex-1 bg-surface-container border border-outline-variant/30 rounded-lg px-3 py-1.5 text-sm text-on-surface focus:outline-none focus:border-primary"
                     />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-on-surface-variant w-10 shrink-0">類型</span>
+                    <div className="flex flex-1 rounded-lg overflow-hidden border border-outline-variant/30">
+                      {([['summary', '總額'] , ['detail', '明細']] as const).map(([type, label]) => (
+                        <button
+                          key={type}
+                          onClick={() => setQuoteType(type)}
+                          className={`flex-1 py-1.5 text-sm font-bold cursor-pointer transition-colors ${quoteType === type ? 'bg-primary text-on-primary' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'}`}
+                        >{label}</button>
+                      ))}
+                    </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-bold text-on-surface-variant w-10 shrink-0">幣別</span>
