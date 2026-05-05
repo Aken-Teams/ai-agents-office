@@ -5,11 +5,15 @@ import { useRouter } from 'next/navigation';
 import { I18nProvider, useTranslation } from '../../i18n';
 
 const FEATURES = [
-  { key: 'ppt',  icon: 'slideshow',       color: 'text-amber-500',   bg: 'bg-amber-500/10',   border: 'border-amber-500/20' },
-  { key: 'word', icon: 'description',     color: 'text-blue-500',    bg: 'bg-blue-500/10',    border: 'border-blue-500/20' },
-  { key: 'excel',icon: 'table_chart',     color: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
-  { key: 'pdf',  icon: 'picture_as_pdf',  color: 'text-red-500',     bg: 'bg-red-500/10',     border: 'border-red-500/20' },
-  { key: 'chat', icon: 'smart_toy',       color: 'text-primary',     bg: 'bg-primary/10',     border: 'border-primary/20' },
+  { key: 'ppt',    icon: 'slideshow',       color: 'text-amber-500',   bg: 'bg-amber-500/10',   border: 'border-amber-500/20' },
+  { key: 'slides', icon: 'web_stories',     color: 'text-purple-500',  bg: 'bg-purple-500/10',  border: 'border-purple-500/20' },
+  { key: 'word',   icon: 'description',     color: 'text-blue-500',    bg: 'bg-blue-500/10',    border: 'border-blue-500/20' },
+  { key: 'excel',  icon: 'table_chart',     color: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
+  { key: 'pdf',    icon: 'picture_as_pdf',  color: 'text-red-500',     bg: 'bg-red-500/10',     border: 'border-red-500/20' },
+  { key: 'webapp', icon: 'dashboard',       color: 'text-indigo-500',  bg: 'bg-indigo-500/10',  border: 'border-indigo-500/20' },
+  { key: 'data',   icon: 'query_stats',     color: 'text-cyan-500',    bg: 'bg-cyan-500/10',    border: 'border-cyan-500/20' },
+  { key: 'rag',    icon: 'find_in_page',    color: 'text-sky-500',     bg: 'bg-sky-500/10',     border: 'border-sky-500/20' },
+  { key: 'chat',   icon: 'smart_toy',       color: 'text-primary',     bg: 'bg-primary/10',     border: 'border-primary/20' },
 ] as const;
 
 function StepDots({ current, total }: { current: number; total: number }) {
