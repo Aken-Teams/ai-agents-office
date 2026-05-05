@@ -10,6 +10,8 @@ export interface User {
   oauth_provider: string | null;
   oauth_id: string | null;
   quota_override: number | null;
+  company: string | null;
+  onboarding_completed: 0 | 1;
   created_at: string;
   updated_at: string;
 }
