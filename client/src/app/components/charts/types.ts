@@ -75,6 +75,72 @@ export type ChartData =
 export function normalizeChartData(input: any): any {
   if (!input || typeof input !== 'object' || !input.type) return input;
 
+  // Normalize bar/pie/donut: AI sometimes uses series[], categories+values, labels+values
+  if (input.type === 'bar' || input.type === 'pie' || input.type === 'donut') {
+    // Already canonical
+    if (Array.isArray(input.data) && input.data.length > 0 && input.data[0]?.name !== undefined) {
+      return input;
+    }
+
+    // series format: series[{name, data:[{name,value}]}] → flat data[]
+    if (Array.isArray(input.series) && input.series.length > 0) {
+      const s = input.series[0];
+      if (Array.isArray(s?.data) && s.data.length > 0 && s.data[0]?.name !== undefined) {
+        return { ...input, data: s.data };
+      }
+      // series[{name, value}] directly (misplaced)
+      if (input.series[0]?.value !== undefined) {
+        return { ...input, data: input.series };
+      }
+    }
+
+    // categories/labels + values arrays
+    const names: string[] | undefined = input.categories || input.labels || input.xAxis?.data;
+    const values: number[] | undefined = Array.isArray(input.values)
+      ? input.values
+      : Array.isArray(input.series) && input.series[0]?.data && input.series[0].data.every((v: any) => typeof v === 'number')
+        ? input.series[0].data
+        : undefined;
+    if (Array.isArray(names) && Array.isArray(values) && names.length === values.length) {
+      const data = names.map((n: string, i: number) => ({ name: n, value: values[i] }));
+      return { ...input, data };
+    }
+
+    // data as [{label, value}] or [{category, value}] or [{x, y}]
+    if (Array.isArray(input.data) && input.data.length > 0) {
+      const first = input.data[0];
+      const nameKey = ['label', 'category', 'x', 'key', 'item'].find(k => first[k] !== undefined);
+      const valueKey = ['value', 'y', 'count', 'amount'].find(k => typeof first[k] === 'number');
+      if (nameKey && valueKey) {
+        const data = input.data.map((d: any) => ({ name: String(d[nameKey]), value: d[valueKey] }));
+        return { ...input, data };
+      }
+    }
+  }
+
+  // Normalize line/area: AI sometimes uses flat data with multiple numeric keys
+  if (input.type === 'line' || input.type === 'area') {
+    if (Array.isArray(input.series) && input.series.length > 0) return input;
+
+    // Flat data array: [{name, seriesA: num, seriesB: num, ...}]
+    if (Array.isArray(input.data) && input.data.length > 0) {
+      const rows = input.data;
+      const nameKey = ['name', 'date', 'month', 'year', 'label', 'x', 'category'].find(k =>
+        rows.every((r: any) => r && (typeof r[k] === 'string' || typeof r[k] === 'number')),
+      );
+      const dataKeys: string[] = Array.isArray(input.dataKeys) && input.dataKeys.length
+        ? input.dataKeys
+        : Object.keys(rows[0]).filter(k => k !== nameKey && typeof rows[0][k] === 'number');
+      if (nameKey && dataKeys.length) {
+        const series = dataKeys.map(dk => ({
+          name: dk,
+          data: rows.map((r: any) => ({ name: String(r[nameKey]), value: Number(r[dk] ?? 0) })),
+        }));
+        return { ...input, series };
+      }
+    }
+  }
+
   if (input.type === 'radar') {
     // Already canonical — nothing to do.
     if (Array.isArray(input.axes) && Array.isArray(input.series)

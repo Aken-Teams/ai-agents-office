@@ -43,19 +43,27 @@ function convertMermaidMindmapToMarkdown(mermaidCode: string): string {
  */
 function truncateSafe(content: string, limit: number): string {
   if (content.length <= limit) return content;
-  const fenceRe = /^```/gm;
+  const fenceRe = /^`{3,}/gm;
+  let insideBlock = false;
   let openIdx = -1;
   let match: RegExpExecArray | null;
   while ((match = fenceRe.exec(content)) !== null) {
-    if (match.index > limit) break;
-    if (openIdx < 0) {
-      openIdx = match.index; // opening fence
+    if (!insideBlock) {
+      insideBlock = true;
+      openIdx = match.index;
     } else {
-      openIdx = -1; // closing fence
+      insideBlock = false;
+      // If this closing fence is past the limit but the opening was before,
+      // extend to include the complete block
+      if (match.index > limit && openIdx < limit) {
+        const endOfLine = content.indexOf('\n', match.index + match[0].length);
+        return content.slice(0, endOfLine > 0 ? endOfLine : match.index + match[0].length);
+      }
+      openIdx = -1;
     }
   }
   // If we're inside an open code block at the cut point, pull back to before it
-  if (openIdx >= 0) {
+  if (insideBlock && openIdx >= 0 && openIdx < limit) {
     return content.slice(0, openIdx);
   }
   return content.slice(0, limit);

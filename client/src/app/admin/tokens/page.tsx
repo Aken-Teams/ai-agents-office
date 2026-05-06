@@ -64,7 +64,7 @@ export default function AdminTokens() {
   const [exportFrom, setExportFrom] = useState('');
   const [exportTo, setExportTo] = useState('');
   const [dateError, setDateError] = useState('');
-  const [modalTab, setModalTab] = useState<'csv' | 'quote'>('csv');
+  const [modalTab, setModalTab] = useState<'csv' | 'quote'>('quote');
   const [quoteMonth, setQuoteMonth] = useState('');
   const [quoteCurrency, setQuoteCurrency] = useState<'USD' | 'TWD'>('USD');
   const [quoteRate, setQuoteRate] = useState('32');
@@ -557,7 +557,7 @@ export default function AdminTokens() {
             </div>
             {/* Tabs */}
             <div className="flex px-5 mt-3 gap-1 border-b border-outline-variant/10">
-              {([['csv', 'download', 'CSV 匯出'], ['quote', 'receipt', '產生報價單']] as const).map(([tab, icon, label]) => (
+              {([['quote', 'receipt', '產生報價單']] as const).map(([tab, icon, label]) => (
                 <button
                   key={tab}
                   onClick={() => setModalTab(tab)}

@@ -152,15 +152,6 @@ export default function AdminOverview() {
             <span className="text-sm text-primary font-bold tracking-widest uppercase">{t('admin.overview.allNodesNormal')}</span>
           </div>
         </div>
-        <button
-          onClick={exportReport}
-          disabled={exporting}
-          className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50"
-        >
-          <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'download'}</span>
-          <span className="hidden md:inline">{t('admin.overview.exportReport')}</span>
-          <span className="md:hidden">CSV</span>
-        </button>
       </header>
 
       {/* Content */}
