@@ -84,6 +84,10 @@ function DashboardContent() {
   const mobileFileRef = useRef<HTMLInputElement>(null);
   const sidebarMargin = useSidebarMargin();
   const [showGreeting, setShowGreeting] = useState(false);
+  const [quotaHasPending, setQuotaHasPending] = useState(false);
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [quotaReason, setQuotaReason] = useState('');
+  const [quotaSubmitting, setQuotaSubmitting] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -125,6 +129,13 @@ function DashboardContent() {
     })
       .then(r => r.json())
       .then(setFiles)
+      .catch(console.error);
+
+    fetch('/api/quota-request', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(data => setQuotaHasPending(data.hasPending))
       .catch(console.error);
   }, [token]);
 
@@ -216,6 +227,27 @@ function DashboardContent() {
     }
   }
 
+  async function handleQuotaRequest() {
+    if (!token || quotaSubmitting || !quotaReason.trim()) return;
+    setQuotaSubmitting(true);
+    try {
+      const res = await fetch('/api/quota-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reason: quotaReason.trim() }),
+      });
+      if (res.ok) {
+        setQuotaHasPending(true);
+        setShowQuotaModal(false);
+        setQuotaReason('');
+      }
+    } finally {
+      setQuotaSubmitting(false);
+    }
+  }
+
+  const costExceeded = usage && usageLimit != null && (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10) >= usageLimit;
+
   if (isLoading || !user) return null;
 
   return (
@@ -234,6 +266,61 @@ function DashboardContent() {
           userId={user.id}
           onClose={() => setShowGreeting(false)}
         />
+      )}
+
+      {/* Quota Request Modal */}
+      {showQuotaModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowQuotaModal(false)}>
+          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-error/10 flex items-center justify-center">
+                <span className="material-symbols-outlined text-error">request_quote</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-headline font-bold text-on-surface">{t('quotaRequest.modalTitle' as any)}</h3>
+                <p className="text-xs text-on-surface-variant">{t('quotaRequest.limitReached' as any)}</p>
+              </div>
+            </div>
+
+            <div className="flex gap-4 mb-4 text-sm">
+              <div className="flex-1 bg-surface-container rounded-xl p-3">
+                <div className="text-on-surface-variant text-xs">{t('quotaRequest.currentUsage' as any)}</div>
+                <div className="font-bold text-on-surface mt-0.5">${usage ? (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10).toFixed(2) : '0.00'}</div>
+              </div>
+              <div className="flex-1 bg-surface-container rounded-xl p-3">
+                <div className="text-on-surface-variant text-xs">{t('quotaRequest.currentLimit' as any)}</div>
+                <div className="font-bold text-on-surface mt-0.5">${usageLimit?.toFixed(0) ?? '-'}</div>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-bold text-on-surface mb-1.5">{t('quotaRequest.reason' as any)}</label>
+              <textarea
+                className="w-full bg-surface-container border border-outline-variant/20 focus:border-primary focus:ring-1 focus:ring-primary/30 rounded-xl py-3 px-4 text-sm text-on-surface placeholder:text-outline font-body resize-none"
+                value={quotaReason}
+                onChange={e => setQuotaReason(e.target.value)}
+                placeholder={t('quotaRequest.reasonPlaceholder' as any)}
+                rows={3}
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowQuotaModal(false)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={handleQuotaRequest}
+                disabled={!quotaReason.trim() || quotaSubmitting}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-on-primary cyber-gradient disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+              >
+                {quotaSubmitting ? t('quotaRequest.submitting' as any) : t('quotaRequest.submit' as any)}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <main className={`${sidebarMargin} transition-all duration-300`}>
@@ -265,6 +352,31 @@ function DashboardContent() {
               {t('dashboard.mobile.guidance')}
             </p>
           </div>
+
+          {/* Mobile quota request banner */}
+          {costExceeded && (
+            <div className="flex items-center gap-3 p-3.5 bg-error/5 border border-error/15 rounded-2xl">
+              <div className="w-9 h-9 rounded-xl bg-error/10 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-error text-lg">warning</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-on-surface">{t('quotaRequest.limitReached' as any)}</p>
+                <p className="text-xs text-on-surface-variant mt-0.5">
+                  ${usage ? (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10).toFixed(2) : '0'} / ${usageLimit?.toFixed(0)}
+                </p>
+              </div>
+              {quotaHasPending ? (
+                <span className="px-3 py-1.5 text-xs bg-warning/10 text-warning rounded-full font-bold shrink-0">{t('quotaRequest.pending' as any)}</span>
+              ) : (
+                <button
+                  onClick={() => setShowQuotaModal(true)}
+                  className="px-3 py-1.5 text-xs bg-error/10 text-error active:bg-error/20 rounded-full font-bold transition-colors cursor-pointer shrink-0"
+                >
+                  {t('quotaRequest.button' as any)}
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Template Wizard button */}
           <button
@@ -390,6 +502,18 @@ function DashboardContent() {
               <span className="text-outline-variant/40 mx-0.5">·</span>
               <span className="font-medium text-on-surface-variant text-xs">{t('dashboard.stats.costLabel' as any)}</span>
               <span className="font-bold text-success">${usage ? (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10).toFixed(2) : '0.00'}{usageLimit != null ? <span className="text-warning font-bold"> / ${usageLimit.toFixed(0)}</span> : null}</span>
+              {costExceeded && (
+                quotaHasPending ? (
+                  <span className="ml-2 px-2 py-0.5 text-xs bg-warning/10 text-warning rounded-full font-bold">{t('quotaRequest.pending' as any)}</span>
+                ) : (
+                  <button
+                    onClick={() => setShowQuotaModal(true)}
+                    className="ml-2 px-2.5 py-0.5 text-xs bg-error/10 text-error hover:bg-error/20 rounded-full font-bold transition-colors cursor-pointer"
+                  >
+                    {t('quotaRequest.button' as any)}
+                  </button>
+                )
+              )}
             </div>
             <div className="w-px h-4 bg-outline-variant/20" />
             <div className="flex items-center gap-1.5">

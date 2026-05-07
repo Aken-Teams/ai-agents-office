@@ -372,6 +372,22 @@ export async function initializeDatabase(): Promise<void> {
       await conn.query("ALTER TABLE user_memories ADD COLUMN memory_type VARCHAR(20) NOT NULL DEFAULT 'preference'");
     } catch { /* column already exists */ }
 
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS quota_requests (
+        id            VARCHAR(36) PRIMARY KEY,
+        user_id       VARCHAR(36) NOT NULL,
+        current_limit DECIMAL(10,2) NOT NULL,
+        current_cost  DECIMAL(10,2) NOT NULL,
+        reason        TEXT NOT NULL,
+        status        VARCHAR(20) NOT NULL DEFAULT 'pending',
+        new_limit     DECIMAL(10,2) DEFAULT NULL,
+        admin_notes   TEXT DEFAULT NULL,
+        reviewed_by   VARCHAR(36) DEFAULT NULL,
+        created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        reviewed_at   DATETIME DEFAULT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     // Add onboarding columns to users if not exists
     try {
       await conn.query('ALTER TABLE users ADD COLUMN company VARCHAR(100) DEFAULT NULL');

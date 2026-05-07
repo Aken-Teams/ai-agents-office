@@ -20,6 +20,7 @@ const NAV_GROUPS = [
       { href: '/admin/users', labelKey: 'admin.sidebar.users' as const, icon: 'corporate_fare' },
       { href: '/admin/conversations', labelKey: 'admin.sidebar.conversations' as const, icon: 'forum', readonlyHidden: true },
       { href: '/admin/quota-groups', labelKey: 'admin.sidebar.quotaGroups' as const, icon: 'category' },
+      { href: '/admin/quota-requests', labelKey: 'admin.sidebar.quotaRequests' as const, icon: 'request_quote' },
       ...(deployMode === 'pro-out' ? [{ href: '/admin/invite-codes', labelKey: 'admin.sidebar.inviteCodes' as const, icon: 'card_membership' }] : []),
     ],
   },

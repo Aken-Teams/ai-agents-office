@@ -12,6 +12,7 @@ import adminRoutes from './routes/admin.js';
 import uploadRoutes from './routes/uploads.js';
 import shareRoutes from './routes/share.js';
 import greetingRoutes from './routes/greeting.js';
+import quotaRequestRoutes from './routes/quota-request.js';
 
 async function main() {
   // Initialize database
@@ -46,6 +47,7 @@ async function main() {
   app.use('/api/uploads', uploadRoutes);
   app.use('/api/share', shareRoutes);
   app.use('/api/greeting', greetingRoutes);
+  app.use('/api/quota-request', quotaRequestRoutes);
 
   // Start server
   app.listen(config.port, () => {

@@ -1532,4 +1532,91 @@ router.get('/tokens/monthly-summary', async (req: Request, res: Response) => {
   res.json(rows);
 });
 
+// ==================== Quota Requests ====================
+
+// GET /api/admin/quota-requests — List quota increase requests
+router.get('/quota-requests', async (req: Request, res: Response) => {
+  const status = req.query.status as string | undefined;
+  let where = '';
+  const params: any[] = [];
+  if (status && ['pending', 'approved', 'denied'].includes(status)) {
+    where = 'WHERE qr.status = ?';
+    params.push(status);
+  }
+
+  const rows = await dbAll<any>(`
+    SELECT qr.*, u.email, u.display_name
+    FROM quota_requests qr
+    LEFT JOIN users u ON u.id = qr.user_id
+    ${where}
+    ORDER BY CASE qr.status WHEN 'pending' THEN 0 ELSE 1 END, qr.created_at DESC
+    LIMIT 100
+  `, ...params);
+
+  res.json(rows);
+});
+
+// PATCH /api/admin/quota-requests/:id — Approve or deny a quota request
+router.patch('/quota-requests/:id', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { action, new_limit, admin_notes } = req.body;
+
+  if (!action || !['approve', 'deny'].includes(action)) {
+    res.status(400).json({ error: 'action must be "approve" or "deny"' });
+    return;
+  }
+
+  const request = await dbGet<any>('SELECT * FROM quota_requests WHERE id = ?', id);
+  if (!request) {
+    res.status(404).json({ error: 'Request not found' });
+    return;
+  }
+  if (request.status !== 'pending') {
+    res.status(400).json({ error: 'Request already reviewed' });
+    return;
+  }
+
+  if (action === 'approve') {
+    if (new_limit == null || isNaN(parseFloat(new_limit)) || parseFloat(new_limit) <= 0) {
+      res.status(400).json({ error: 'new_limit is required for approval' });
+      return;
+    }
+    const limitVal = parseFloat(new_limit);
+
+    // Update request
+    await dbRun(
+      "UPDATE quota_requests SET status = 'approved', new_limit = ?, admin_notes = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?",
+      limitVal, admin_notes || null, req.user!.userId, id
+    );
+
+    // Update user's quota_override
+    await dbRun(
+      'UPDATE users SET quota_override = ?, updated_at = NOW() WHERE id = ?',
+      limitVal, request.user_id
+    );
+
+    // Audit log
+    await dbRun(
+      'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+      uuidv4(), req.user!.userId, 'approve_quota_request', 'quota_request', id,
+      JSON.stringify({ user_id: request.user_id, new_limit: limitVal })
+    );
+  } else {
+    // Deny
+    await dbRun(
+      "UPDATE quota_requests SET status = 'denied', admin_notes = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?",
+      admin_notes || null, req.user!.userId, id
+    );
+
+    // Audit log
+    await dbRun(
+      'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+      uuidv4(), req.user!.userId, 'deny_quota_request', 'quota_request', id,
+      JSON.stringify({ user_id: request.user_id, admin_notes })
+    );
+  }
+
+  res.json({ success: true });
+});
+
 export default router;
