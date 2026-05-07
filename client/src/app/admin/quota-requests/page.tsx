@@ -108,30 +108,34 @@ function QuotaRequestsContent() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-headline font-bold text-on-surface">{t('admin.quotaRequests.title' as any)}</h1>
-        <p className="text-sm text-on-surface-variant mt-1">{t('admin.quotaRequests.description' as any)}</p>
-      </div>
+    <>
+      {/* Sticky Header */}
+      <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
+        <div className="flex items-center gap-2 md:gap-4 min-w-0">
+          <span className="material-symbols-outlined text-primary text-xl md:text-2xl">request_quote</span>
+          <div className="min-w-0">
+            <h1 className="text-base md:text-xl font-headline font-bold text-on-surface truncate">{t('admin.quotaRequests.title' as any)}</h1>
+            <p className="text-xs text-on-surface-variant hidden md:block">{t('admin.quotaRequests.description' as any)}</p>
+          </div>
+        </div>
+        <div className="flex gap-1.5">
+          {(['pending', 'all'] as const).map(tabKey => (
+            <button
+              key={tabKey}
+              onClick={() => setTab(tabKey)}
+              className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-bold transition-colors cursor-pointer ${
+                tab === tabKey
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-on-surface-variant hover:bg-surface-container'
+              }`}
+            >
+              {t(`admin.quotaRequests.tab.${tabKey}` as any)}
+            </button>
+          ))}
+        </div>
+      </header>
 
-      {/* Tabs */}
-      <div className="flex gap-2">
-        {(['pending', 'all'] as const).map(tabKey => (
-          <button
-            key={tabKey}
-            onClick={() => setTab(tabKey)}
-            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors cursor-pointer ${
-              tab === tabKey
-                ? 'bg-primary/10 text-primary'
-                : 'text-on-surface-variant hover:bg-surface-container'
-            }`}
-          >
-            {t(`admin.quotaRequests.tab.${tabKey}` as any)}
-          </button>
-        ))}
-      </div>
-
+      <div className="flex-1 p-4 md:p-8 space-y-4 md:space-y-6 overflow-y-auto">
       {/* List */}
       {loading ? (
         <div className="text-center py-12 text-on-surface-variant">{t('common.loading')}</div>
@@ -278,6 +282,7 @@ function QuotaRequestsContent() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
