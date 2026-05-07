@@ -19,20 +19,23 @@ function resolveClaudeCliPath(cliPath: string): { bin: string; prefix: string[] 
   }
 
   // Try to find the actual CLI script from the npm global prefix
+  const cliNames = ['cli.js', 'cli-wrapper.cjs'];
   try {
     const npmPrefix = execSync('npm prefix -g', { encoding: 'utf-8' }).trim();
-    const cliScript = path.join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
-    if (fs.existsSync(cliScript)) {
-      return { bin: process.execPath, prefix: [cliScript] };
+    for (const name of cliNames) {
+      const cliScript = path.join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code', name);
+      if (fs.existsSync(cliScript)) {
+        return { bin: process.execPath, prefix: [cliScript] };
+      }
     }
   } catch { /* fall through */ }
 
   // Fallback: try common Windows npm global paths
   const home = process.env.USERPROFILE || process.env.HOME || '';
-  const candidates = [
-    path.join(home, 'AppData', 'Roaming', 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js'),
-    path.join(home, '.npm-global', 'lib', 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js'),
-  ];
+  const candidates = cliNames.flatMap(name => [
+    path.join(home, 'AppData', 'Roaming', 'npm', 'node_modules', '@anthropic-ai', 'claude-code', name),
+    path.join(home, '.npm-global', 'lib', 'node_modules', '@anthropic-ai', 'claude-code', name),
+  ]);
   for (const candidate of candidates) {
     if (fs.existsSync(candidate)) {
       return { bin: process.execPath, prefix: [candidate] };

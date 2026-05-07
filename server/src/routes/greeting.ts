@@ -14,16 +14,29 @@ router.use(authMiddleware);
  * (Simplified version from claudeCli.ts)
  */
 function resolveClaudeCliPath(cliPath: string): { bin: string; prefix: string[] } {
-  if (cliPath.endsWith('.js')) {
+  if (cliPath.endsWith('.js') || cliPath.endsWith('.cjs')) {
     return { bin: process.execPath, prefix: [cliPath] };
   }
+  const cliNames = ['cli.js', 'cli-wrapper.cjs'];
   try {
     const npmPrefix = execSync('npm prefix -g', { encoding: 'utf-8' }).trim();
-    const cliScript = path.join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
-    if (fs.existsSync(cliScript)) {
-      return { bin: process.execPath, prefix: [cliScript] };
+    for (const name of cliNames) {
+      const cliScript = path.join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code', name);
+      if (fs.existsSync(cliScript)) {
+        return { bin: process.execPath, prefix: [cliScript] };
+      }
     }
   } catch { /* fall through */ }
+  const home = process.env.USERPROFILE || process.env.HOME || '';
+  const candidates = cliNames.flatMap(name => [
+    path.join(home, 'AppData', 'Roaming', 'npm', 'node_modules', '@anthropic-ai', 'claude-code', name),
+    path.join(home, '.npm-global', 'lib', 'node_modules', '@anthropic-ai', 'claude-code', name),
+  ]);
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return { bin: process.execPath, prefix: [candidate] };
+    }
+  }
   return { bin: cliPath, prefix: [] };
 }
 
@@ -229,14 +242,26 @@ Write a warm, concise greeting (2-4 sentences max). Be human, natural, and carin
     console.error(`[Greeting CLI stderr] ${data.toString().trim()}`);
   });
 
+  proc.on('error', (err) => {
+    console.error(`[Greeting] CLI spawn error: ${err.message}`);
+    clearInterval(keepalive);
+    try {
+      res.write(`data: ${JSON.stringify({ type: 'error', data: 'AI engine unavailable' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+      res.end();
+    } catch { /* already closed */ }
+  });
+
   req.on('close', () => {
     try { proc.kill(); } catch { /* already dead */ }
   });
 
   proc.on('exit', () => {
     clearInterval(keepalive);
-    res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
-    res.end();
+    try {
+      res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+      res.end();
+    } catch { /* already closed */ }
   });
 });
 
