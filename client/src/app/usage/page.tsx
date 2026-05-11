@@ -36,8 +36,11 @@ function UsageContent() {
   const [total, setTotal] = useState<UsageTotal | null>(null);
   const [isBeta, setIsBeta] = useState(true);
   const [chartPeriod, setChartPeriod] = useState<'7d' | '30d'>('7d');
-  const [filterFrom, setFilterFrom] = useState('');
-  const [filterTo, setFilterTo] = useState('');
+  const [filterFrom, setFilterFrom] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  });
+  const [filterTo, setFilterTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [ledgerPage, setLedgerPage] = useState(1);
   const PAGE_SIZE = 6;
   const sidebarMargin = useSidebarMargin();

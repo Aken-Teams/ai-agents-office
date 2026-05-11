@@ -59,6 +59,12 @@ export default function AdminTokens() {
   const [ledgerPage, setLedgerPage] = useState(1);
   const [ledgerTotalPages, setLedgerTotalPages] = useState(1);
   const [period, setPeriod] = useState<'7d' | '30d' | 'monthly'>('7d');
+  const [filterFrom, setFilterFrom] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  });
+  const [filterTo, setFilterTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const hasFilter = !!(filterFrom || filterTo);
   const [exporting, setExporting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFrom, setExportFrom] = useState('');
@@ -492,25 +498,35 @@ export default function AdminTokens() {
   useEffect(() => {
     if (!token) return;
     const headers = { Authorization: `Bearer ${token}` };
+    const p = new URLSearchParams();
+    if (filterFrom) p.set('from', filterFrom);
+    if (filterTo)   p.set('to',   filterTo);
+    const qs = p.toString() ? `?${p}` : '';
 
-    fetch('/api/admin/tokens/summary', { headers })
+    fetch(`/api/admin/tokens/summary${qs}`, { headers })
       .then(r => r.json()).then(setSummary).catch(console.error);
 
-    fetch('/api/admin/tokens/by-user?limit=10', { headers })
+    fetch(`/api/admin/tokens/by-user?limit=10&${p}`, { headers })
       .then(r => r.json()).then(setByUser).catch(console.error);
-  }, [token]);
+  }, [token, filterFrom, filterTo]);
 
   useEffect(() => {
     if (!token) return;
-    fetch(`/api/admin/tokens/chart?period=${period}`, {
+    const p = new URLSearchParams({ period });
+    if (filterFrom) p.set('from', filterFrom);
+    if (filterTo)   p.set('to',   filterTo);
+    fetch(`/api/admin/tokens/chart?${p}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json()).then(setChart).catch(console.error);
-  }, [token, period]);
+  }, [token, period, filterFrom, filterTo]);
 
   const fetchLedger = useCallback(() => {
     if (!token) return;
-    fetch(`/api/admin/tokens/ledger?page=${ledgerPage}&limit=10`, {
+    const p = new URLSearchParams({ page: String(ledgerPage), limit: '10' });
+    if (filterFrom) p.set('from', filterFrom);
+    if (filterTo)   p.set('to',   filterTo);
+    fetch(`/api/admin/tokens/ledger?${p}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
@@ -520,7 +536,7 @@ export default function AdminTokens() {
         setLedgerTotalPages(data.totalPages);
       })
       .catch(console.error);
-  }, [token, ledgerPage]);
+  }, [token, ledgerPage, filterFrom, filterTo]);
 
   useEffect(() => { fetchLedger(); }, [fetchLedger]);
 
@@ -545,6 +561,36 @@ export default function AdminTokens() {
             <span className="md:hidden">CSV</span>
           </button>
       </header>
+
+      {/* Date filter bar */}
+      <div className={`sticky top-14 md:top-16 z-30 flex flex-wrap items-center gap-2 px-4 md:px-8 py-2 border-b transition-colors ${hasFilter ? 'bg-tertiary/5 border-tertiary/20' : 'bg-surface/60 backdrop-blur-sm border-outline-variant/10'}`}>
+        <span className={`material-symbols-outlined text-sm ${hasFilter ? 'text-tertiary' : 'text-on-surface-variant/50'}`}>date_range</span>
+        <input
+          type="date"
+          value={filterFrom}
+          onChange={e => { setFilterFrom(e.target.value); setLedgerPage(1); }}
+          className="bg-surface-container text-on-surface text-xs font-mono px-2 py-1 border border-outline-variant/20 focus:outline-none focus:border-primary/50 cursor-pointer"
+        />
+        <span className="text-xs text-on-surface-variant/40">—</span>
+        <input
+          type="date"
+          value={filterTo}
+          onChange={e => { setFilterTo(e.target.value); setLedgerPage(1); }}
+          className="bg-surface-container text-on-surface text-xs font-mono px-2 py-1 border border-outline-variant/20 focus:outline-none focus:border-primary/50 cursor-pointer"
+        />
+        {hasFilter && (
+          <button
+            onClick={() => { setFilterFrom(''); setFilterTo(''); setLedgerPage(1); }}
+            className="flex items-center gap-1 text-xs text-on-surface-variant/60 hover:text-primary transition-colors cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-sm">close</span>
+            清除
+          </button>
+        )}
+        <span className="text-xs text-on-surface-variant/40 ml-auto">
+          {hasFilter ? '篩選中' : '全部時間'}
+        </span>
+      </div>
 
       {/* Export / Quote Modal */}
       {showExportModal && (

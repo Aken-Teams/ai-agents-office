@@ -443,15 +443,23 @@ router.delete('/users/:id', async (req: Request, res: Response) => {
 
 // ==================== Token Ledger ====================
 
-// GET /api/admin/tokens/summary
-router.get('/tokens/summary', async (_req: Request, res: Response) => {
+// GET /api/admin/tokens/summary?from=YYYY-MM-DD&to=YYYY-MM-DD
+router.get('/tokens/summary', async (req: Request, res: Response) => {
+  const { from, to } = req.query as { from?: string; to?: string };
+  const conds: string[] = [];
+  const params: string[] = [];
+  if (from) { conds.push('DATE(created_at) >= ?'); params.push(from); }
+  if (to)   { conds.push('DATE(created_at) <= ?'); params.push(to); }
+  const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+
   const row = await dbGet<{ total_input: number; total_output: number; total_invocations: number }>(`
     SELECT
       COALESCE(SUM(input_tokens), 0) as total_input,
       COALESCE(SUM(output_tokens), 0) as total_output,
       COUNT(*) as total_invocations
     FROM token_usage
-  `);
+    ${where}
+  `, ...params);
 
   // Claude Sonnet 4 pricing: $3/M input, $15/M output (×10 billing markup)
   const totalInput = row?.total_input ?? 0;
@@ -466,9 +474,38 @@ router.get('/tokens/summary', async (_req: Request, res: Response) => {
   });
 });
 
-// GET /api/admin/tokens/chart?period=7d|30d|monthly
+// GET /api/admin/tokens/chart?period=7d|30d|monthly&from=YYYY-MM-DD&to=YYYY-MM-DD
 router.get('/tokens/chart', async (req: Request, res: Response) => {
   const period = (req.query.period as string) || '7d';
+  const { from, to } = req.query as { from?: string; to?: string };
+
+  // Custom date range — return daily data between from and to
+  if (from || to) {
+    const conds: string[] = [];
+    const params: string[] = [];
+    if (from) { conds.push('DATE(created_at) >= ?'); params.push(from); }
+    if (to)   { conds.push('DATE(created_at) <= ?'); params.push(to); }
+    const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`
+      SELECT
+        DATE_FORMAT(created_at, '%Y-%m-%d') as date,
+        SUM(input_tokens) as total_input,
+        SUM(output_tokens) as total_output,
+        COUNT(*) as invocation_count
+      FROM token_usage
+      WHERE ${conds.join(' AND ')}
+      GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
+      ORDER BY date ASC
+    `, ...params);
+    const dataMap = new Map(rows.map(r => [r.date, r]));
+    const result = [];
+    const start = new Date(from || rows[0]?.date || new Date().toISOString().slice(0, 10));
+    const end   = new Date(to   || new Date().toISOString().slice(0, 10));
+    for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().slice(0, 10);
+      result.push(dataMap.get(dateStr) || { date: dateStr, total_input: 0, total_output: 0, invocation_count: 0 });
+    }
+    return res.json(result);
+  }
 
   if (period === 'monthly') {
     // Return last 12 months of data grouped by month
@@ -524,9 +561,15 @@ router.get('/tokens/chart', async (req: Request, res: Response) => {
   res.json(result);
 });
 
-// GET /api/admin/tokens/by-user?limit=10
+// GET /api/admin/tokens/by-user?limit=10&from=YYYY-MM-DD&to=YYYY-MM-DD
 router.get('/tokens/by-user', async (req: Request, res: Response) => {
   const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+  const { from, to } = req.query as { from?: string; to?: string };
+  const dateConds: string[] = [];
+  const params: (string | number)[] = [];
+  if (from) { dateConds.push('DATE(tu.created_at) >= ?'); params.push(from); }
+  if (to)   { dateConds.push('DATE(tu.created_at) <= ?'); params.push(to); }
+  const dateWhere = dateConds.length ? `AND ${dateConds.join(' AND ')}` : '';
 
   const rows = await dbAll(`
     SELECT
@@ -536,22 +579,31 @@ router.get('/tokens/by-user', async (req: Request, res: Response) => {
       COUNT(*) as invocation_count
     FROM token_usage tu
     JOIN users u ON u.id = tu.user_id
-    WHERE u.role != 'admin'
+    WHERE u.role != 'admin' ${dateWhere}
     GROUP BY tu.user_id
     ORDER BY (SUM(tu.input_tokens) + SUM(tu.output_tokens)) DESC
     LIMIT ?
-  `, limit);
+  `, ...params, limit);
 
   res.json(rows);
 });
 
-// GET /api/admin/tokens/ledger?page=1&limit=20
+// GET /api/admin/tokens/ledger?page=1&limit=20&from=YYYY-MM-DD&to=YYYY-MM-DD
 router.get('/tokens/ledger', async (req: Request, res: Response) => {
   const page = Math.max(parseInt(req.query.page as string) || 1, 1);
   const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
   const offset = (page - 1) * limit;
+  const { from, to } = req.query as { from?: string; to?: string };
+  const conds: string[] = [];
+  const filterParams: string[] = [];
+  if (from) { conds.push('DATE(tu.created_at) >= ?'); filterParams.push(from); }
+  if (to)   { conds.push('DATE(tu.created_at) <= ?'); filterParams.push(to); }
+  const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
 
-  const countRow = await dbGet<{ total: number }>('SELECT COUNT(*) as total FROM token_usage');
+  const countRow = await dbGet<{ total: number }>(
+    `SELECT COUNT(*) as total FROM token_usage tu ${where}`,
+    ...filterParams
+  );
 
   const rows = await dbAll(`
     SELECT
@@ -567,9 +619,10 @@ router.get('/tokens/ledger', async (req: Request, res: Response) => {
     FROM token_usage tu
     LEFT JOIN users u ON u.id = tu.user_id
     LEFT JOIN conversations c ON c.id = tu.conversation_id
+    ${where}
     ORDER BY tu.created_at DESC
     LIMIT ? OFFSET ?
-  `, limit, offset);
+  `, ...filterParams, limit, offset);
 
   res.json({
     entries: rows,
