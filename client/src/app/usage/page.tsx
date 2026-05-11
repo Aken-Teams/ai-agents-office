@@ -39,7 +39,7 @@ function UsageContent() {
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
   const [ledgerPage, setLedgerPage] = useState(1);
-  const PAGE_SIZE = 5;
+  const PAGE_SIZE = 6;
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
@@ -61,26 +61,26 @@ function UsageContent() {
 
   if (isLoading || !user) return null;
 
-  const totalTokens = total ? total.totalInput + total.totalOutput : 0;
-  const inputRatio = totalTokens > 0 ? ((total!.totalInput / totalTokens) * 100).toFixed(1) : '0';
-  const outputRatio = totalTokens > 0 ? ((total!.totalOutput / totalTokens) * 100).toFixed(1) : '0';
-
-  // AI model pricing: Input $3/M, Output $15/M (×10 billing markup)
-  const estimatedCost = total
-    ? ((total.totalInput / 1_000_000) * 3 + (total.totalOutput / 1_000_000) * 15) * 10
-    : 0;
-
-  // Chart data: fixed 7 or 30 days based on chartPeriod
+  // Chart data: filtered range when filter active, else fixed 7D/30D
   const chartData = (() => {
     const dataMap = new Map(daily.map(d => [d.date.slice(0, 10), d]));
     const days: DailyUsage[] = [];
-    const today = new Date();
-    const totalDays = chartPeriod === '30d' ? 30 : 7;
-    for (let i = totalDays - 1; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
-      days.push(dataMap.get(key) ?? { date: key, total_input: 0, total_output: 0, invocation_count: 0 });
+    if (filterFrom || filterTo) {
+      const start = new Date(filterFrom || daily[daily.length - 1]?.date.slice(0, 10) || new Date().toISOString().slice(0, 10));
+      const end = new Date(filterTo || new Date().toISOString().slice(0, 10));
+      for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const key = d.toISOString().slice(0, 10);
+        days.push(dataMap.get(key) ?? { date: key, total_input: 0, total_output: 0, invocation_count: 0 });
+      }
+    } else {
+      const today = new Date();
+      const totalDays = chartPeriod === '30d' ? 30 : 7;
+      for (let i = totalDays - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().slice(0, 10);
+        days.push(dataMap.get(key) ?? { date: key, total_input: 0, total_output: 0, invocation_count: 0 });
+      }
     }
     return days;
   })();
@@ -94,13 +94,31 @@ function UsageContent() {
     return true;
   });
 
+  // When date filter is active, overview card reflects filtered range
+  const hasFilter = !!(filterFrom || filterTo);
+  const activeTotal = hasFilter
+    ? {
+        totalInput: filteredDaily.reduce((s, d) => s + d.total_input, 0),
+        totalOutput: filteredDaily.reduce((s, d) => s + d.total_output, 0),
+        totalInvocations: filteredDaily.reduce((s, d) => s + d.invocation_count, 0),
+      }
+    : total;
+
+  const totalTokens = activeTotal ? activeTotal.totalInput + activeTotal.totalOutput : 0;
+  const inputRatio = totalTokens > 0 ? ((activeTotal!.totalInput / totalTokens) * 100).toFixed(1) : '0';
+  const outputRatio = totalTokens > 0 ? ((activeTotal!.totalOutput / totalTokens) * 100).toFixed(1) : '0';
+  const estimatedCost = activeTotal
+    ? ((activeTotal.totalInput / 1_000_000) * 3 + (activeTotal.totalOutput / 1_000_000) * 15) * 10
+    : 0;
+
   return (
     <div className="min-h-screen bg-surface-container-lowest">
       <Navbar />
 
       <main className={`${sidebarMargin} md:pt-10 pb-12 px-4 md:px-10 transition-all duration-300`}>
           {/* Page Header */}
-          <header className="mt-4 md:mt-0 mb-6 md:mb-10 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
+          <header className="mt-4 md:mt-0 mb-6 md:mb-10 flex flex-col md:flex-row md:justify-between md:items-end gap-4 md:gap-8">
+            {/* Left: Title */}
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-tertiary text-xs md:text-sm font-bold tracking-[0.3em] uppercase">{t('usage.header.subtitle')}</span>
@@ -114,29 +132,61 @@ function UsageContent() {
                 {t('usage.header.description')}
               </p>
             </div>
-            <button
-              onClick={() => {
-                if (!token || daily.length === 0) return;
-                const q = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-                const header = [t('usage.ledger.date'), t('usage.ledger.generations'), t('usage.ledger.inputTokens'), t('usage.ledger.outputTokens'), t('usage.ledger.total'), t('usage.overview.estimatedCost') + ' (USD)'].map(q).join(',');
-                const csvRows = daily.map(d => {
-                  const total = d.total_input + d.total_output;
-                  const cost = ((d.total_input / 1_000_000) * 3 + (d.total_output / 1_000_000) * 15) * 10;
-                  return [d.date.slice(0, 10), d.invocation_count, d.total_input, d.total_output, total, `$${cost.toFixed(4)}`].map(q).join(',');
-                });
-                const csv = '\uFEFF' + [header, ...csvRows].join('\n');
-                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url; a.download = `token_usage_${new Date().toISOString().slice(0, 10)}.csv`;
-                document.body.appendChild(a); a.click(); a.remove();
-                URL.revokeObjectURL(url);
-              }}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-surface-container-high text-on-surface-variant hover:text-primary active:bg-surface-container-highest transition-colors text-sm font-bold uppercase tracking-widest shrink-0 w-full md:w-auto"
-            >
-              <span className="material-symbols-outlined text-sm">download</span>
-              {t('usage.header.exportCsv')}
-            </button>
+            {/* Right: Date filter + CSV */}
+            <div className="flex flex-col gap-2 shrink-0">
+              {/* Date filter bar */}
+              <div className={`flex items-center gap-2 px-3 py-2 border transition-colors ${hasFilter ? 'bg-tertiary/5 border-tertiary/30' : 'bg-surface-container border-outline-variant/20'}`}>
+                <span className={`material-symbols-outlined text-sm ${hasFilter ? 'text-tertiary' : 'text-on-surface-variant/50'}`}>date_range</span>
+                <input
+                  type="date"
+                  value={filterFrom}
+                  onChange={e => { setFilterFrom(e.target.value); setLedgerPage(1); }}
+                  className="bg-transparent text-on-surface text-xs font-mono focus:outline-none cursor-pointer min-w-0"
+                />
+                <span className="text-xs text-on-surface-variant/40 shrink-0">—</span>
+                <input
+                  type="date"
+                  value={filterTo}
+                  onChange={e => { setFilterTo(e.target.value); setLedgerPage(1); }}
+                  className="bg-transparent text-on-surface text-xs font-mono focus:outline-none cursor-pointer min-w-0"
+                />
+                {hasFilter && (
+                  <>
+                    <span className="text-xs text-tertiary font-bold font-mono shrink-0">{filteredDaily.length}d</span>
+                    <button
+                      onClick={() => { setFilterFrom(''); setFilterTo(''); setLedgerPage(1); }}
+                      className="text-on-surface-variant/50 hover:text-primary transition-colors cursor-pointer shrink-0"
+                      title={locale === 'en' ? 'Clear filter' : '清除篩選'}
+                    >
+                      <span className="material-symbols-outlined text-sm">close</span>
+                    </button>
+                  </>
+                )}
+              </div>
+              {/* CSV export button */}
+              <button
+                onClick={() => {
+                  if (!token || daily.length === 0) return;
+                  const q = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+                  const header = [t('usage.ledger.date'), t('usage.ledger.generations'), t('usage.ledger.inputTokens'), t('usage.ledger.outputTokens'), t('usage.ledger.total'), t('usage.overview.estimatedCost') + ' (USD)'].map(q).join(',');
+                  const csvRows = daily.map(d => {
+                    const cost = ((d.total_input / 1_000_000) * 3 + (d.total_output / 1_000_000) * 15) * 10;
+                    return [d.date.slice(0, 10), d.invocation_count, d.total_input * 10, d.total_output * 10, (d.total_input + d.total_output) * 10, `$${cost.toFixed(4)}`].map(q).join(',');
+                  });
+                  const csv = '\uFEFF' + [header, ...csvRows].join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url; a.download = `token_usage_${new Date().toISOString().slice(0, 10)}.csv`;
+                  document.body.appendChild(a); a.click(); a.remove();
+                  URL.revokeObjectURL(url);
+                }}
+                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-surface-container-high text-on-surface-variant hover:text-primary active:bg-surface-container-highest transition-colors text-sm font-bold uppercase tracking-widest w-full"
+              >
+                <span className="material-symbols-outlined text-sm">download</span>
+                {t('usage.header.exportCsv')}
+              </button>
+            </div>
           </header>
 
           {/* ===== Top Bento: Stats + Chart ===== */}
@@ -148,16 +198,23 @@ function UsageContent() {
               <div>
                 <div className="flex items-center gap-2 mb-2 md:mb-3">
                   <span className="text-xs md:text-sm uppercase tracking-[0.2em] text-primary font-bold">{t('usage.overview.title')}</span>
-                  {!isBeta && (
+                  {!isBeta && !hasFilter && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold uppercase tracking-wider">
                       {locale === 'en' ? 'This Month' : '本月'}
                     </span>
                   )}
+                  {hasFilter && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-tertiary/10 text-tertiary font-bold uppercase tracking-wider">
+                      {locale === 'en' ? 'Filtered' : '篩選中'}
+                    </span>
+                  )}
                 </div>
                 <h3 className="text-on-surface-variant text-xs md:text-sm mb-1">
-                  {!isBeta ? (locale === 'en' ? 'This Month\'s Token Usage' : '本月 Token 用量') : t('usage.overview.totalTokenUsage')}
+                  {hasFilter
+                    ? (locale === 'en' ? 'Filtered Token Usage' : '篩選期間 Token 用量')
+                    : !isBeta ? (locale === 'en' ? 'This Month\'s Token Usage' : '本月 Token 用量') : t('usage.overview.totalTokenUsage')}
                 </h3>
-                <div className="text-3xl md:text-5xl font-bold text-on-surface font-headline">{totalTokens.toLocaleString()}</div>
+                <div className="text-3xl md:text-5xl font-bold text-on-surface font-headline">{(totalTokens * 10).toLocaleString()}</div>
                 <p className="text-xs md:text-sm text-on-surface-variant mt-1.5 md:mt-2">
                   {t('usage.overview.estimatedCost')} <span className="text-primary font-bold font-headline text-base md:text-lg">${estimatedCost.toFixed(4)}</span> <span className="text-xs md:text-sm uppercase tracking-wider">USD</span>
                 </p>
@@ -165,15 +222,15 @@ function UsageContent() {
               <div className="grid grid-cols-3 gap-3 md:gap-4">
                 <div>
                   <p className="text-xs md:text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.generations')}</p>
-                  <p className="text-xl md:text-2xl font-headline font-bold text-primary">{total?.totalInvocations ?? 0}</p>
+                  <p className="text-xl md:text-2xl font-headline font-bold text-primary">{activeTotal?.totalInvocations ?? 0}</p>
                 </div>
                 <div>
                   <p className="text-xs md:text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.input')}</p>
-                  <p className="text-xl md:text-2xl font-headline font-bold text-tertiary">{total?.totalInput.toLocaleString() ?? 0}</p>
+                  <p className="text-xl md:text-2xl font-headline font-bold text-tertiary">{((activeTotal?.totalInput ?? 0) * 10).toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-xs md:text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.output')}</p>
-                  <p className="text-xl md:text-2xl font-headline font-bold text-secondary">{total?.totalOutput.toLocaleString() ?? 0}</p>
+                  <p className="text-xl md:text-2xl font-headline font-bold text-secondary">{((activeTotal?.totalOutput ?? 0) * 10).toLocaleString()}</p>
                 </div>
               </div>
             </div>
@@ -194,7 +251,7 @@ function UsageContent() {
                     <span className="w-2 h-2 bg-tertiary inline-block" />
                     <span className="text-on-surface-variant uppercase tracking-wider">Output</span>
                   </span>
-                  <div className="flex gap-1 ml-2 border-l border-outline-variant/20 pl-3">
+                  {!hasFilter && <div className="flex gap-1 ml-2 border-l border-outline-variant/20 pl-3">
                     {(['7d', '30d'] as const).map(p => (
                       <button
                         key={p}
@@ -208,7 +265,7 @@ function UsageContent() {
                         {p}
                       </button>
                     ))}
-                  </div>
+                  </div>}
                 </div>
               </div>
 
@@ -235,7 +292,7 @@ function UsageContent() {
                       return (
                         <div key={day.date} className="flex-1 min-w-0 h-full flex items-end relative z-10 group">
                           <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-surface-container-highest text-on-surface px-2 py-0.5 text-[10px] md:text-xs font-mono whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
-                            {day.date.slice(5)} · {dayTotal.toLocaleString()}
+                            {day.date.slice(5)} · {(dayTotal * 10).toLocaleString()}
                           </div>
                           <div
                             className="w-full rounded-t-sm overflow-hidden transition-all duration-300 group-hover:brightness-125"
@@ -328,10 +385,10 @@ function UsageContent() {
                       <div className="min-w-0 flex-1">
                         <p className="text-xs md:text-sm font-bold text-on-surface">{new Date(day.date).toLocaleDateString(locale === 'en' ? 'en-US' : 'zh-TW', { month: 'short', day: 'numeric', weekday: 'short' })}</p>
                         <p className="text-xs md:text-sm text-on-surface-variant truncate">
-                          {t('usage.activity.generationCount', { count: day.invocation_count })} · {(day.total_input + day.total_output).toLocaleString()} tokens
+                          {t('usage.activity.generationCount', { count: day.invocation_count })} · {((day.total_input + day.total_output) * 10).toLocaleString()} tokens
                         </p>
                       </div>
-                      <span className="text-xs md:text-sm font-mono text-primary ml-2 shrink-0">{day.total_output.toLocaleString()}</span>
+                      <span className="text-xs md:text-sm font-mono text-primary ml-2 shrink-0">{(day.total_output * 10).toLocaleString()}</span>
                     </div>
                   ))}
                   {daily.length === 0 && (
@@ -351,31 +408,6 @@ function UsageContent() {
                       ? `${filteredDaily.length} / ${daily.length}`
                       : t('usage.ledger.totalRecords', { count: daily.length })}
                   </span>
-                </div>
-                {/* Date range filter */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="material-symbols-outlined text-sm text-on-surface-variant/60">filter_list</span>
-                  <input
-                    type="date"
-                    value={filterFrom}
-                    onChange={e => { setFilterFrom(e.target.value); setLedgerPage(1); }}
-                    className="bg-surface-container-high text-on-surface text-xs font-mono px-2 py-1 border border-outline-variant/20 focus:outline-none focus:border-primary/50 cursor-pointer"
-                  />
-                  <span className="text-xs text-on-surface-variant/40">—</span>
-                  <input
-                    type="date"
-                    value={filterTo}
-                    onChange={e => { setFilterTo(e.target.value); setLedgerPage(1); }}
-                    className="bg-surface-container-high text-on-surface text-xs font-mono px-2 py-1 border border-outline-variant/20 focus:outline-none focus:border-primary/50 cursor-pointer"
-                  />
-                  {(filterFrom || filterTo) && (
-                    <button
-                      onClick={() => { setFilterFrom(''); setFilterTo(''); }}
-                      className="flex items-center gap-1 text-xs text-on-surface-variant/60 hover:text-primary transition-colors cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-sm">close</span>
-                    </button>
-                  )}
                 </div>
               </div>
 
@@ -416,10 +448,10 @@ function UsageContent() {
                                 <span className="text-sm text-on-surface font-medium">{day.invocation_count}</span>
                               </div>
                             </td>
-                            <td className="px-6 py-4 text-sm font-mono text-on-surface">{day.total_input.toLocaleString()}</td>
-                            <td className="px-6 py-4 text-sm font-mono text-on-surface">{day.total_output.toLocaleString()}</td>
+                            <td className="px-6 py-4 text-sm font-mono text-on-surface">{(day.total_input * 10).toLocaleString()}</td>
+                            <td className="px-6 py-4 text-sm font-mono text-on-surface">{(day.total_output * 10).toLocaleString()}</td>
                             <td className="px-6 py-4 text-sm font-mono text-primary font-bold text-right">
-                              {(day.total_input + day.total_output).toLocaleString()}
+                              {((day.total_input + day.total_output) * 10).toLocaleString()}
                             </td>
                           </tr>
                         ))}
@@ -438,7 +470,7 @@ function UsageContent() {
                         <div className="flex justify-between items-center mb-1.5">
                           <span className="text-xs font-mono text-on-surface-variant">{day.date.slice(0, 10)}</span>
                           <span className="text-sm font-mono text-primary font-bold">
-                            {(day.total_input + day.total_output).toLocaleString()}
+                            {((day.total_input + day.total_output) * 10).toLocaleString()}
                           </span>
                         </div>
                         {/* Row 2: Generations + Input/Output breakdown */}
@@ -448,8 +480,8 @@ function UsageContent() {
                             {day.invocation_count}
                           </span>
                           <span className="text-on-surface-variant/40">|</span>
-                          <span>In: <span className="font-mono text-on-surface">{day.total_input.toLocaleString()}</span></span>
-                          <span>Out: <span className="font-mono text-on-surface">{day.total_output.toLocaleString()}</span></span>
+                          <span>In: <span className="font-mono text-on-surface">{(day.total_input * 10).toLocaleString()}</span></span>
+                          <span>Out: <span className="font-mono text-on-surface">{(day.total_output * 10).toLocaleString()}</span></span>
                         </div>
                       </div>
                     ))}
