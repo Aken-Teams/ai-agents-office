@@ -52,6 +52,9 @@ export const config = {
   // Deploy mode: 'pro-panjit' (internal) | 'pro-out' (external, per-user quota)
   deployMode: (process.env.DEPLOY_MODE || 'pro-panjit') as 'pro-panjit' | 'pro-out',
 
+  // Version: 'Beta' = apply watermarks, 'Official' = no watermarks
+  isBeta: (process.env.Version || 'Beta').toLowerCase() !== 'official',
+
   // Security
   maxMessageLength: 10_000,
   bcryptRounds: 12,

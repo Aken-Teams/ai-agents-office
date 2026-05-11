@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 import JSZip from 'jszip';
+import { config } from '../config.js';
 
 /**
  * Unified watermark config — matches the web preview tiled style.
@@ -24,6 +25,9 @@ const WM_OPACITY = 0.15; // 15%
  * For unsupported types, returns null (caller should serve original).
  */
 export async function applyWatermark(filePath: string): Promise<Buffer | null> {
+  // Official version: skip watermarking entirely
+  if (!config.isBeta) return null;
+
   const ext = path.extname(filePath).slice(1).toLowerCase();
 
   switch (ext) {
