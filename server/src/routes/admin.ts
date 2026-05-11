@@ -40,9 +40,35 @@ router.get('/overview/stats', async (_req: Request, res: Response) => {
   });
 });
 
-// GET /api/admin/overview/token-velocity?period=7d|30d
+// GET /api/admin/overview/token-velocity?period=7d|30d|monthly
 router.get('/overview/token-velocity', async (req: Request, res: Response) => {
   const period = (req.query.period as string) || '7d';
+
+  if (period === 'monthly') {
+    const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`
+      SELECT
+        DATE_FORMAT(created_at, '%Y-%m') as date,
+        SUM(input_tokens) as total_input,
+        SUM(output_tokens) as total_output,
+        COUNT(*) as invocation_count
+      FROM token_usage
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+      GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+      ORDER BY date ASC
+    `);
+
+    const dataMap = new Map(rows.map(r => [r.date, r]));
+    const result = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const existing = dataMap.get(monthStr);
+      result.push(existing || { date: monthStr, total_input: 0, total_output: 0, invocation_count: 0 });
+    }
+    return res.json(result);
+  }
+
   const days = period === '30d' ? 30 : 7;
 
   const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`
@@ -440,9 +466,36 @@ router.get('/tokens/summary', async (_req: Request, res: Response) => {
   });
 });
 
-// GET /api/admin/tokens/chart?period=7d|30d
+// GET /api/admin/tokens/chart?period=7d|30d|monthly
 router.get('/tokens/chart', async (req: Request, res: Response) => {
   const period = (req.query.period as string) || '7d';
+
+  if (period === 'monthly') {
+    // Return last 12 months of data grouped by month
+    const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`
+      SELECT
+        DATE_FORMAT(created_at, '%Y-%m') as date,
+        SUM(input_tokens) as total_input,
+        SUM(output_tokens) as total_output,
+        COUNT(*) as invocation_count
+      FROM token_usage
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
+      GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+      ORDER BY date ASC
+    `);
+
+    const dataMap = new Map(rows.map(r => [r.date, r]));
+    const result = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const existing = dataMap.get(monthStr);
+      result.push(existing || { date: monthStr, total_input: 0, total_output: 0, invocation_count: 0 });
+    }
+    return res.json(result);
+  }
+
   const days = period === '30d' ? 30 : 7;
 
   const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`

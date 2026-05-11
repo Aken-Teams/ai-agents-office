@@ -48,7 +48,7 @@ export default function AdminOverview() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [velocity, setVelocity] = useState<VelocityPoint[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
-  const [period, setPeriod] = useState<'7d' | '30d'>('7d');
+  const [period, setPeriod] = useState<'7d' | '30d' | 'monthly'>('7d');
   const [exporting, setExporting] = useState(false);
 
   function exportReport() {
@@ -209,7 +209,7 @@ export default function AdminOverview() {
                 <span className="text-xs md:text-sm font-bold uppercase tracking-widest">{t('admin.overview.chart.title')}</span>
               </div>
               <div className="flex gap-1">
-                {(['7d', '30d'] as const).map(p => (
+                {(['7d', '30d', 'monthly'] as const).map(p => (
                   <button
                     key={p}
                     onClick={() => setPeriod(p)}
@@ -221,7 +221,7 @@ export default function AdminOverview() {
                         : 'text-on-surface-variant hover:text-on-surface'
                     }`}
                   >
-                    {p}
+                    {p === 'monthly' ? '12M' : p}
                   </button>
                 ))}
               </div>
@@ -235,7 +235,7 @@ export default function AdminOverview() {
               ) : (
                 <div>
                   {/* Bars */}
-                  <div className={`flex items-end h-52 ${period === '30d' ? 'gap-px' : 'gap-1.5'}`}>
+                  <div className={`flex items-end h-52 ${period === '30d' ? 'gap-px' : period === 'monthly' ? 'gap-2' : 'gap-1.5'}`}>
                     {velocity.map((v, i) => {
                       const total = v.total_input + v.total_output;
                       const pct = (total / maxTokens) * 100;
@@ -244,12 +244,12 @@ export default function AdminOverview() {
                       return (
                         <div key={i} className="flex-1 min-w-0 h-full flex items-end group/bar relative">
                           <div className="w-full rounded-t overflow-hidden relative transition-all group-hover/bar:brightness-125" style={{ height: `${barHeight}%` }}>
-                            <div className="absolute inset-0 bg-primary/70" style={{ top: `${100 - inputPct}%` }} />
-                            <div className="absolute inset-0 bg-tertiary/50" style={{ bottom: `${inputPct}%` }} />
+                            <div className={`absolute inset-0 ${period === 'monthly' ? 'bg-tertiary/70' : 'bg-primary/70'}`} style={{ top: `${100 - inputPct}%` }} />
+                            <div className={`absolute inset-0 ${period === 'monthly' ? 'bg-primary/50' : 'bg-tertiary/50'}`} style={{ bottom: `${inputPct}%` }} />
                           </div>
                           {/* Tooltip inside chart area */}
                           <span className="absolute top-0 left-1/2 -translate-x-1/2 text-[10px] bg-surface-container-highest text-on-surface px-1.5 py-0.5 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity font-mono font-bold whitespace-nowrap pointer-events-none z-10">
-                            {v.date.slice(5)} · {formatTokens(total)}
+                            {period === 'monthly' ? `${v.date} · ${formatTokens(total)}` : `${v.date.slice(5)} · ${formatTokens(total)}`}
                           </span>
                         </div>
                       );
@@ -264,6 +264,14 @@ export default function AdminOverview() {
                             {v.date.slice(5)}
                           </span>
                         </div>
+                      ))}
+                    </div>
+                  ) : period === 'monthly' ? (
+                    <div className="flex gap-2 mt-1.5">
+                      {velocity.map((v, i) => (
+                        <span key={i} className="flex-1 min-w-0 text-[10px] text-center text-outline font-mono truncate">
+                          {v.date.slice(2, 7).replace('-', '/')}
+                        </span>
                       ))}
                     </div>
                   ) : (

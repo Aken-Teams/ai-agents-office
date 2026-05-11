@@ -58,7 +58,7 @@ export default function AdminTokens() {
   const [ledgerTotal, setLedgerTotal] = useState(0);
   const [ledgerPage, setLedgerPage] = useState(1);
   const [ledgerTotalPages, setLedgerTotalPages] = useState(1);
-  const [period, setPeriod] = useState<'7d' | '30d'>('7d');
+  const [period, setPeriod] = useState<'7d' | '30d' | 'monthly'>('7d');
   const [exporting, setExporting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFrom, setExportFrom] = useState('');
@@ -778,7 +778,7 @@ export default function AdminTokens() {
                 <span className="text-xs md:text-sm font-bold uppercase tracking-widest">{t('admin.tokens.chart.title')}</span>
               </div>
               <div className="flex gap-1">
-                {(['7d', '30d'] as const).map(p => (
+                {(['7d', '30d', 'monthly'] as const).map(p => (
                   <button
                     key={p}
                     onClick={() => setPeriod(p)}
@@ -788,7 +788,7 @@ export default function AdminTokens() {
                       period === p ? 'text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:text-on-surface'
                     }`}
                   >
-                    {p}
+                    {p === 'monthly' ? '12M' : p}
                   </button>
                 ))}
               </div>
@@ -800,16 +800,19 @@ export default function AdminTokens() {
                 </div>
               ) : (
                 <div>
-                  <div className={`flex items-end ${period === '30d' ? 'h-52 gap-px' : 'h-40 md:h-48 gap-1.5'}`}>
+                  <div className={`flex items-end ${period === '30d' ? 'h-52 gap-px' : period === 'monthly' ? 'h-40 md:h-52 gap-2 md:gap-3' : 'h-40 md:h-48 gap-1.5'}`}>
                     {chart.map((v, i) => {
                       const total = v.total_input + v.total_output;
                       const pct = (total / maxChart) * 100;
                       const barHeight = Math.max(pct, 3);
+                      const tooltipLabel = period === 'monthly'
+                        ? `${v.date} · ${formatTokens(total)}`
+                        : `${v.date.slice(5)} · ${formatTokens(total)}`;
                       return (
                         <div key={i} className="flex-1 min-w-0 h-full flex items-end group/bar relative">
-                          <div className="w-full bg-primary/60 rounded-t transition-all group-hover/bar:brightness-125" style={{ height: `${barHeight}%` }} />
+                          <div className={`w-full rounded-t transition-all group-hover/bar:brightness-125 ${period === 'monthly' ? 'bg-tertiary/70' : 'bg-primary/60'}`} style={{ height: `${barHeight}%` }} />
                           <span className="absolute top-0 left-1/2 -translate-x-1/2 text-[10px] bg-surface-container-highest text-on-surface px-1.5 py-0.5 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity font-mono font-bold whitespace-nowrap pointer-events-none z-10">
-                            {v.date.slice(5)} · {formatTokens(total)}
+                            {tooltipLabel}
                           </span>
                         </div>
                       );
@@ -824,6 +827,14 @@ export default function AdminTokens() {
                             {v.date.slice(5)}
                           </span>
                         </div>
+                      ))}
+                    </div>
+                  ) : period === 'monthly' ? (
+                    <div className="flex gap-2 md:gap-3 mt-2">
+                      {chart.map((v, i) => (
+                        <span key={i} className="flex-1 min-w-0 text-[10px] md:text-xs text-center text-outline font-mono truncate">
+                          {v.date.slice(2, 7).replace('-', '/')}
+                        </span>
                       ))}
                     </div>
                   ) : (
