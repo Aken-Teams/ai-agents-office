@@ -35,8 +35,11 @@ function UsageContent() {
   const [daily, setDaily] = useState<DailyUsage[]>([]);
   const [total, setTotal] = useState<UsageTotal | null>(null);
   const [isBeta, setIsBeta] = useState(true);
-  const [showAllRows, setShowAllRows] = useState(false);
-  const LEDGER_DEFAULT_ROWS = 8;
+  const [chartPeriod, setChartPeriod] = useState<'7d' | '30d'>('7d');
+  const [filterFrom, setFilterFrom] = useState('');
+  const [filterTo, setFilterTo] = useState('');
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const PAGE_SIZE = 5;
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
@@ -67,14 +70,12 @@ function UsageContent() {
     ? ((total.totalInput / 1_000_000) * 3 + (total.totalOutput / 1_000_000) * 15) * 10
     : 0;
 
-  // Chart data: always show at least 7 days, fill missing days with 0
-  const CHART_MIN_DAYS = 7;
+  // Chart data: fixed 7 or 30 days based on chartPeriod
   const chartData = (() => {
     const dataMap = new Map(daily.map(d => [d.date.slice(0, 10), d]));
     const days: DailyUsage[] = [];
     const today = new Date();
-    // Determine how many days to show: max(7, actual data range)
-    const totalDays = Math.max(CHART_MIN_DAYS, daily.length);
+    const totalDays = chartPeriod === '30d' ? 30 : 7;
     for (let i = totalDays - 1; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
@@ -84,6 +85,14 @@ function UsageContent() {
     return days;
   })();
   const maxTokens = Math.max(...chartData.map(d => d.total_input + d.total_output), 1);
+
+  // Ledger: filter by date range
+  const filteredDaily = daily.filter(d => {
+    const date = d.date.slice(0, 10);
+    if (filterFrom && date < filterFrom) return false;
+    if (filterTo && date > filterTo) return false;
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-surface-container-lowest">
@@ -176,15 +185,30 @@ function UsageContent() {
                   <span className="text-xs md:text-sm uppercase tracking-[0.2em] text-tertiary font-bold block mb-1">{t('usage.chart.title')}</span>
                   <h3 className="text-base md:text-xl font-bold font-headline text-on-surface">{t('usage.chart.subtitle')}</h3>
                 </div>
-                <div className="flex items-center gap-3 md:gap-4 text-xs md:text-sm">
+                <div className="flex items-center gap-3 md:gap-4 text-xs">
                   <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 md:w-2.5 md:h-2.5 bg-primary inline-block" />
+                    <span className="w-2 h-2 bg-primary inline-block" />
                     <span className="text-on-surface-variant uppercase tracking-wider">Input</span>
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 md:w-2.5 md:h-2.5 bg-tertiary inline-block" />
+                    <span className="w-2 h-2 bg-tertiary inline-block" />
                     <span className="text-on-surface-variant uppercase tracking-wider">Output</span>
                   </span>
+                  <div className="flex gap-1 ml-2 border-l border-outline-variant/20 pl-3">
+                    {(['7d', '30d'] as const).map(p => (
+                      <button
+                        key={p}
+                        onClick={() => setChartPeriod(p)}
+                        className={`px-2 py-0.5 text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors ${
+                          chartPeriod === p
+                            ? 'text-primary border-b-2 border-primary'
+                            : 'text-on-surface-variant hover:text-on-surface'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -193,33 +217,66 @@ function UsageContent() {
                   <p className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">{t('usage.chart.noData')}</p>
                 </div>
               ) : (
-                <div className="flex items-end gap-1 md:gap-1.5 px-1 pt-8 overflow-x-auto no-scrollbar">
-                  {chartData.map(day => {
-                    const dayTotal = day.total_input + day.total_output;
-                    const pct = (dayTotal / maxTokens) * 100;
-                    const inputPct = dayTotal > 0 ? (day.total_input / dayTotal) * 100 : 0;
-                    return (
-                      <div key={day.date} className="flex-1 min-w-[28px] flex flex-col items-center group">
-                        {/* Bar area */}
-                        <div className="w-full h-28 md:h-40 flex flex-col justify-end relative">
-                          {/* Tooltip */}
-                          <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-surface-container-highest text-on-surface px-2 py-0.5 md:px-2.5 md:py-1 text-xs md:text-sm font-mono whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
-                            {dayTotal.toLocaleString()}
+                <div className="pt-7">
+                  {/* Bars */}
+                  <div className={`relative flex items-end h-36 md:h-52 ${
+                    chartData.length > 20 ? 'gap-px' :
+                    chartData.length > 10 ? 'gap-0.5 md:gap-1' :
+                    'gap-1 md:gap-1.5'
+                  }`}>
+                    {/* Reference lines */}
+                    {[75, 50, 25].map(pct => (
+                      <div key={pct} className="absolute left-0 right-0 h-px bg-outline-variant/10 pointer-events-none" style={{ bottom: `${pct}%` }} />
+                    ))}
+                    {chartData.map(day => {
+                      const dayTotal = day.total_input + day.total_output;
+                      const pct = (dayTotal / maxTokens) * 100;
+                      const inputPct = dayTotal > 0 ? (day.total_input / dayTotal) * 100 : 0;
+                      return (
+                        <div key={day.date} className="flex-1 min-w-0 h-full flex items-end relative z-10 group">
+                          <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-surface-container-highest text-on-surface px-2 py-0.5 text-[10px] md:text-xs font-mono whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
+                            {day.date.slice(5)} · {dayTotal.toLocaleString()}
                           </div>
                           <div
-                            className="w-full rounded-t-sm overflow-hidden transition-all duration-300"
+                            className="w-full rounded-t-sm overflow-hidden transition-all duration-300 group-hover:brightness-125"
                             style={{ height: `${Math.max(pct, 2)}%` }}
                           >
                             <div className="bg-tertiary/70" style={{ height: `${100 - inputPct}%` }} />
                             <div className="bg-primary" style={{ height: `${inputPct}%` }} />
                           </div>
                         </div>
-                        {/* Date label — show MM/DD on mobile, full date on desktop */}
-                        <span className="mt-1.5 md:mt-2 text-[10px] md:text-sm text-on-surface-variant/60 font-mono md:hidden">{day.date.slice(0, 10).slice(5)}</span>
-                        <span className="mt-2 text-sm text-on-surface-variant/60 font-mono hidden md:block">{day.date.slice(0, 10)}</span>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
+                  {/* Date labels */}
+                  {chartData.length > 10 ? (
+                    <div className={`flex mt-2 h-14 ${chartData.length > 20 ? 'gap-px' : 'gap-0.5 md:gap-1'}`}>
+                      {chartData.map((day, i) => {
+                        const step = Math.ceil(chartData.length / 10);
+                        const show = i % step === 0 || i === chartData.length - 1;
+                        return (
+                          <div key={day.date} className="flex-1 min-w-0 relative overflow-visible">
+                            {show && (
+                              <span
+                                className="absolute top-0 left-0 text-[10px] text-outline/60 font-mono whitespace-nowrap leading-none"
+                                style={{ transform: 'rotate(45deg)', transformOrigin: 'top left' }}
+                              >
+                                {day.date.slice(5)}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex mt-1.5 gap-1 md:gap-1.5">
+                      {chartData.map(day => (
+                        <span key={day.date} className="flex-1 min-w-0 text-[10px] md:text-xs text-center text-outline/60 font-mono truncate">
+                          {day.date.slice(5)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -286,17 +343,51 @@ function UsageContent() {
 
             {/* Right Column: Session Ledger */}
             <div className="col-span-12 lg:col-span-8 bg-surface-container overflow-hidden">
-              <div className="p-4 md:p-6 border-b border-white/5 flex justify-between items-center">
-                <h4 className="text-xs md:text-sm font-bold font-headline uppercase tracking-widest text-on-surface">{t('usage.ledger.title')}</h4>
-                <span className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">
-                  {t('usage.ledger.totalRecords', { count: daily.length })}
-                </span>
+              <div className="p-4 md:p-6 border-b border-white/5">
+                <div className="flex justify-between items-center mb-3 md:mb-4">
+                  <h4 className="text-xs md:text-sm font-bold font-headline uppercase tracking-widest text-on-surface">{t('usage.ledger.title')}</h4>
+                  <span className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">
+                    {filterFrom || filterTo
+                      ? `${filteredDaily.length} / ${daily.length}`
+                      : t('usage.ledger.totalRecords', { count: daily.length })}
+                  </span>
+                </div>
+                {/* Date range filter */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="material-symbols-outlined text-sm text-on-surface-variant/60">filter_list</span>
+                  <input
+                    type="date"
+                    value={filterFrom}
+                    onChange={e => { setFilterFrom(e.target.value); setLedgerPage(1); }}
+                    className="bg-surface-container-high text-on-surface text-xs font-mono px-2 py-1 border border-outline-variant/20 focus:outline-none focus:border-primary/50 cursor-pointer"
+                  />
+                  <span className="text-xs text-on-surface-variant/40">—</span>
+                  <input
+                    type="date"
+                    value={filterTo}
+                    onChange={e => { setFilterTo(e.target.value); setLedgerPage(1); }}
+                    className="bg-surface-container-high text-on-surface text-xs font-mono px-2 py-1 border border-outline-variant/20 focus:outline-none focus:border-primary/50 cursor-pointer"
+                  />
+                  {(filterFrom || filterTo) && (
+                    <button
+                      onClick={() => { setFilterFrom(''); setFilterTo(''); }}
+                      className="flex items-center gap-1 text-xs text-on-surface-variant/60 hover:text-primary transition-colors cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-sm">close</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {daily.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 md:py-16">
                   <span className="material-symbols-outlined text-2xl md:text-3xl text-on-surface-variant/30 mb-3">analytics</span>
                   <p className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">{t('usage.ledger.noData')}</p>
+                </div>
+              ) : filteredDaily.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 md:py-16">
+                  <span className="material-symbols-outlined text-2xl md:text-3xl text-on-surface-variant/30 mb-3">search_off</span>
+                  <p className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">查無資料</p>
                 </div>
               ) : (
                 <>
@@ -313,7 +404,7 @@ function UsageContent() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
-                        {(showAllRows ? daily : daily.slice(0, LEDGER_DEFAULT_ROWS)).map((day, i) => (
+                        {filteredDaily.slice((ledgerPage - 1) * PAGE_SIZE, ledgerPage * PAGE_SIZE).map((day, i) => (
                           <tr
                             key={day.date}
                             className={`hover:bg-primary/5 transition-colors ${i % 2 === 1 ? 'bg-surface-container-high/20' : ''}`}
@@ -338,7 +429,7 @@ function UsageContent() {
 
                   {/* Mobile Card List */}
                   <div className="md:hidden divide-y divide-white/5">
-                    {(showAllRows ? daily : daily.slice(0, LEDGER_DEFAULT_ROWS)).map((day, i) => (
+                    {filteredDaily.slice((ledgerPage - 1) * PAGE_SIZE, ledgerPage * PAGE_SIZE).map((day, i) => (
                       <div
                         key={day.date}
                         className={`p-3.5 active:bg-primary/5 transition-colors ${i % 2 === 1 ? 'bg-surface-container-high/20' : ''}`}
@@ -365,17 +456,45 @@ function UsageContent() {
                   </div>
                 </>
               )}
-              {daily.length > LEDGER_DEFAULT_ROWS && (
-                <div className="p-3 md:p-4 border-t border-white/5 flex justify-center">
-                  <button
-                    onClick={() => setShowAllRows(v => !v)}
-                    className="text-xs md:text-sm font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary active:text-primary transition-colors cursor-pointer flex items-center gap-1"
-                  >
-                    {showAllRows ? t('usage.ledger.collapse') : t('usage.ledger.showAll', { count: daily.length })}
-                    <span className={`material-symbols-outlined text-xs md:text-sm transition-transform ${showAllRows ? 'rotate-180' : ''}`}>expand_more</span>
-                  </button>
-                </div>
-              )}
+              {(() => {
+                const totalPages = Math.ceil(filteredDaily.length / PAGE_SIZE);
+                if (totalPages <= 1) return null;
+                return (
+                  <div className="p-3 md:p-4 border-t border-white/5 flex items-center justify-between">
+                    <button
+                      onClick={() => setLedgerPage(p => Math.max(1, p - 1))}
+                      disabled={ledgerPage === 1}
+                      className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-sm">chevron_left</span>
+                      上一頁
+                    </button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                        <button
+                          key={p}
+                          onClick={() => setLedgerPage(p)}
+                          className={`w-7 h-7 text-xs font-bold font-mono transition-colors cursor-pointer ${
+                            p === ledgerPage
+                              ? 'bg-primary text-on-primary'
+                              : 'text-on-surface-variant hover:text-primary'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => setLedgerPage(p => Math.min(totalPages, p + 1))}
+                      disabled={ledgerPage === totalPages}
+                      className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                    >
+                      下一頁
+                      <span className="material-symbols-outlined text-sm">chevron_right</span>
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
