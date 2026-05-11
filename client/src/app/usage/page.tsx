@@ -21,12 +21,20 @@ interface UsageTotal {
   totalInvocations: number;
 }
 
+interface UsageResponse {
+  summary: DailyUsage[];
+  total: UsageTotal;
+  limit: number;
+  isBeta: boolean;
+}
+
 function UsageContent() {
   const { user, token, isLoading } = useAuth();
   const { t, locale } = useTranslation();
   const router = useRouter();
   const [daily, setDaily] = useState<DailyUsage[]>([]);
   const [total, setTotal] = useState<UsageTotal | null>(null);
+  const [isBeta, setIsBeta] = useState(true);
   const [showAllRows, setShowAllRows] = useState(false);
   const LEDGER_DEFAULT_ROWS = 8;
   const sidebarMargin = useSidebarMargin();
@@ -40,9 +48,10 @@ function UsageContent() {
 
     fetch('/api/usage', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
-      .then(data => {
+      .then((data: UsageResponse) => {
         setDaily(data.summary);
         setTotal(data.total);
+        setIsBeta(data.isBeta ?? true);
       })
       .catch(console.error);
   }, [token]);
@@ -128,8 +137,17 @@ function UsageContent() {
             <div className="col-span-12 lg:col-span-4 bg-surface-container p-5 md:p-8 relative overflow-hidden flex flex-col justify-between gap-5 md:gap-0">
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-10 -mt-10 blur-3xl" />
               <div>
-                <span className="text-xs md:text-sm uppercase tracking-[0.2em] text-primary font-bold mb-2 md:mb-3 block">{t('usage.overview.title')}</span>
-                <h3 className="text-on-surface-variant text-xs md:text-sm mb-1">{t('usage.overview.totalTokenUsage')}</h3>
+                <div className="flex items-center gap-2 mb-2 md:mb-3">
+                  <span className="text-xs md:text-sm uppercase tracking-[0.2em] text-primary font-bold">{t('usage.overview.title')}</span>
+                  {!isBeta && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold uppercase tracking-wider">
+                      {locale === 'en' ? 'This Month' : '本月'}
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-on-surface-variant text-xs md:text-sm mb-1">
+                  {!isBeta ? (locale === 'en' ? 'This Month\'s Token Usage' : '本月 Token 用量') : t('usage.overview.totalTokenUsage')}
+                </h3>
                 <div className="text-3xl md:text-5xl font-bold text-on-surface font-headline">{totalTokens.toLocaleString()}</div>
                 <p className="text-xs md:text-sm text-on-surface-variant mt-1.5 md:mt-2">
                   {t('usage.overview.estimatedCost')} <span className="text-primary font-bold font-headline text-base md:text-lg">${estimatedCost.toFixed(4)}</span> <span className="text-xs md:text-sm uppercase tracking-wider">USD</span>

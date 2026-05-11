@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { getUserUsageSummary, getUserTotalUsage } from '../services/tokenTracker.js';
 import { getEffectiveUserLimit } from '../services/usageLimit.js';
+import { config } from '../config.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -17,10 +18,11 @@ router.get('/', async (req: Request, res: Response) => {
     to as string | undefined,
   );
 
-  const total = await getUserTotalUsage(userId);
+  // Official mode: total reflects current month only (monthly quota reset)
+  const total = await getUserTotalUsage(userId, !config.isBeta);
   const limit = await getEffectiveUserLimit(userId);
 
-  res.json({ summary, total, limit });
+  res.json({ summary, total, limit, isBeta: config.isBeta });
 });
 
 // GET /api/usage/daily — Daily breakdown for current month

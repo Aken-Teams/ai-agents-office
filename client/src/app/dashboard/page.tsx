@@ -75,6 +75,7 @@ function DashboardContent() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [usage, setUsage] = useState<UsageTotal | null>(null);
   const [usageLimit, setUsageLimit] = useState<number | null>(null);
+  const [isBeta, setIsBeta] = useState(true);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [smartInput, setSmartInput] = useState('');
   const [creating, setCreating] = useState(false);
@@ -121,7 +122,7 @@ function DashboardContent() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then(data => { setUsage(data.total); if (data.limit != null) setUsageLimit(data.limit); })
+      .then(data => { setUsage(data.total); if (data.limit != null) setUsageLimit(data.limit); setIsBeta(data.isBeta ?? true); })
       .catch(console.error);
 
     fetch('/api/files', {
@@ -501,6 +502,7 @@ function DashboardContent() {
               <span className="font-headline font-bold text-on-surface">{usage ? ((usage.totalInput + usage.totalOutput) / 1000).toFixed(1) + 'k' : '0'}</span>
               <span className="text-outline-variant/40 mx-0.5">·</span>
               <span className="font-medium text-on-surface-variant text-xs">{t('dashboard.stats.costLabel' as any)}</span>
+              {!isBeta && <span className="text-[10px] px-1 py-0.5 rounded bg-primary/10 text-primary font-bold uppercase tracking-wider">本月</span>}
               <span className="font-bold text-success">${usage ? (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10).toFixed(2) : '0.00'}{usageLimit != null ? <span className="text-warning font-bold"> / ${usageLimit.toFixed(0)}</span> : null}</span>
               {costExceeded && (
                 quotaHasPending ? (

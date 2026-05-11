@@ -61,19 +61,28 @@ export async function getUserUsageSummary(
   return await dbAll(query, ...params);
 }
 
-export async function getUserTotalUsage(userId: string): Promise<{
+export async function getUserTotalUsage(userId: string, monthlyOnly = false): Promise<{
   totalInput: number;
   totalOutput: number;
   totalInvocations: number;
 }> {
+  let query = `SELECT
+    COALESCE(SUM(input_tokens), 0) as total_input,
+    COALESCE(SUM(output_tokens), 0) as total_output,
+    COUNT(*) as total_invocations
+  FROM token_usage
+  WHERE user_id = ?`;
+  const params: unknown[] = [userId];
+
+  if (monthlyOnly) {
+    const now = new Date();
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    query += ' AND created_at >= ?';
+    params.push(monthStart);
+  }
+
   const result = await dbGet<{ total_input: number; total_output: number; total_invocations: number }>(
-    `SELECT
-      COALESCE(SUM(input_tokens), 0) as total_input,
-      COALESCE(SUM(output_tokens), 0) as total_output,
-      COUNT(*) as total_invocations
-    FROM token_usage
-    WHERE user_id = ?`,
-    userId
+    query, ...params
   );
 
   return {
