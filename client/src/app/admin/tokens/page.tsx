@@ -546,12 +546,41 @@ export default function AdminTokens() {
   return (
     <>
       {/* Header */}
-      <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
-        <div className="flex items-center gap-2 md:gap-4 min-w-0">
-          <span className="text-base md:text-lg font-black text-on-surface font-headline truncate">{t('admin.tokens.title')}</span>
-          <span className="text-[10px] md:text-sm px-1.5 md:px-2 py-0.5 bg-success/10 text-success rounded font-bold tracking-wider uppercase shrink-0">{t('admin.tokens.syncStatus')}</span>
-        </div>
-        <button
+      {/* Sticky header — title row + inline date filter */}
+      <header className="sticky top-0 z-40 bg-surface/90 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
+        {/* Row 1: title + CSV */}
+        <div className="flex justify-between items-center px-4 md:px-8 h-14 md:h-16">
+          <div className="flex items-center gap-2 md:gap-4 min-w-0">
+            <span className="text-base md:text-lg font-black text-on-surface font-headline truncate">{t('admin.tokens.title')}</span>
+            <span className="text-[10px] md:text-sm px-1.5 md:px-2 py-0.5 bg-success/10 text-success rounded font-bold tracking-wider uppercase shrink-0">{t('admin.tokens.syncStatus')}</span>
+          </div>
+          {/* Desktop: filter inline */}
+          <div className="hidden md:flex items-center gap-2 mx-6">
+            <span className={`material-symbols-outlined text-sm ${hasFilter ? 'text-tertiary' : 'text-on-surface-variant/40'}`}>date_range</span>
+            <input
+              type="date"
+              value={filterFrom}
+              onChange={e => { setFilterFrom(e.target.value); setLedgerPage(1); }}
+              className={`text-on-surface text-xs font-mono px-2 py-1 border focus:outline-none focus:border-primary/50 cursor-pointer transition-colors ${hasFilter ? 'bg-tertiary/5 border-tertiary/30' : 'bg-surface-container border-outline-variant/20'}`}
+            />
+            <span className="text-xs text-on-surface-variant/40">—</span>
+            <input
+              type="date"
+              value={filterTo}
+              onChange={e => { setFilterTo(e.target.value); setLedgerPage(1); }}
+              className={`text-on-surface text-xs font-mono px-2 py-1 border focus:outline-none focus:border-primary/50 cursor-pointer transition-colors ${hasFilter ? 'bg-tertiary/5 border-tertiary/30' : 'bg-surface-container border-outline-variant/20'}`}
+            />
+            {hasFilter && (
+              <button
+                onClick={() => { setFilterFrom(''); setFilterTo(''); setLedgerPage(1); }}
+                className="text-on-surface-variant/50 hover:text-primary transition-colors cursor-pointer"
+                title="清除篩選"
+              >
+                <span className="material-symbols-outlined text-sm">close</span>
+              </button>
+            )}
+          </div>
+          <button
             onClick={() => setShowExportModal(true)}
             disabled={exporting}
             className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer shrink-0 disabled:opacity-50"
@@ -560,37 +589,33 @@ export default function AdminTokens() {
             <span className="hidden md:inline">{t('admin.tokens.exportCsv')}</span>
             <span className="md:hidden">CSV</span>
           </button>
+        </div>
+        {/* Row 2 (mobile only): date filter */}
+        <div className={`md:hidden flex items-center gap-2 px-4 py-2 border-t transition-colors ${hasFilter ? 'bg-tertiary/5 border-tertiary/20' : 'border-outline-variant/10'}`}>
+          <span className={`material-symbols-outlined text-sm shrink-0 ${hasFilter ? 'text-tertiary' : 'text-on-surface-variant/40'}`}>date_range</span>
+          <input
+            type="date"
+            value={filterFrom}
+            onChange={e => { setFilterFrom(e.target.value); setLedgerPage(1); }}
+            className="bg-transparent text-on-surface text-xs font-mono focus:outline-none cursor-pointer flex-1 min-w-0"
+          />
+          <span className="text-xs text-on-surface-variant/40 shrink-0">—</span>
+          <input
+            type="date"
+            value={filterTo}
+            onChange={e => { setFilterTo(e.target.value); setLedgerPage(1); }}
+            className="bg-transparent text-on-surface text-xs font-mono focus:outline-none cursor-pointer flex-1 min-w-0"
+          />
+          {hasFilter && (
+            <button
+              onClick={() => { setFilterFrom(''); setFilterTo(''); setLedgerPage(1); }}
+              className="text-on-surface-variant/50 hover:text-primary transition-colors cursor-pointer shrink-0"
+            >
+              <span className="material-symbols-outlined text-sm">close</span>
+            </button>
+          )}
+        </div>
       </header>
-
-      {/* Date filter bar */}
-      <div className={`sticky top-14 md:top-16 z-30 flex flex-wrap items-center gap-2 px-4 md:px-8 py-2 border-b transition-colors ${hasFilter ? 'bg-tertiary/5 border-tertiary/20' : 'bg-surface/60 backdrop-blur-sm border-outline-variant/10'}`}>
-        <span className={`material-symbols-outlined text-sm ${hasFilter ? 'text-tertiary' : 'text-on-surface-variant/50'}`}>date_range</span>
-        <input
-          type="date"
-          value={filterFrom}
-          onChange={e => { setFilterFrom(e.target.value); setLedgerPage(1); }}
-          className="bg-surface-container text-on-surface text-xs font-mono px-2 py-1 border border-outline-variant/20 focus:outline-none focus:border-primary/50 cursor-pointer"
-        />
-        <span className="text-xs text-on-surface-variant/40">—</span>
-        <input
-          type="date"
-          value={filterTo}
-          onChange={e => { setFilterTo(e.target.value); setLedgerPage(1); }}
-          className="bg-surface-container text-on-surface text-xs font-mono px-2 py-1 border border-outline-variant/20 focus:outline-none focus:border-primary/50 cursor-pointer"
-        />
-        {hasFilter && (
-          <button
-            onClick={() => { setFilterFrom(''); setFilterTo(''); setLedgerPage(1); }}
-            className="flex items-center gap-1 text-xs text-on-surface-variant/60 hover:text-primary transition-colors cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-sm">close</span>
-            清除
-          </button>
-        )}
-        <span className="text-xs text-on-surface-variant/40 ml-auto">
-          {hasFilter ? '篩選中' : '全部時間'}
-        </span>
-      </div>
 
       {/* Export / Quote Modal */}
       {showExportModal && (

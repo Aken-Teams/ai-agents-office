@@ -49,53 +49,12 @@ export default function AdminOverview() {
   const [velocity, setVelocity] = useState<VelocityPoint[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [period, setPeriod] = useState<'7d' | '30d' | 'monthly'>('7d');
-  const [exporting, setExporting] = useState(false);
-
-  function exportReport() {
-    if (exporting) return;
-    setExporting(true);
-    try {
-      const parts: string[] = [];
-
-      // Summary
-      if (stats) {
-        parts.push('--- System Summary ---');
-        parts.push(['Metric', 'Value'].join(','));
-        parts.push(['Total Users', stats.totalUsers].join(','));
-        parts.push(['Active Skills', stats.activeSkills].join(','));
-        parts.push(['Total Tokens', stats.totalTokens].join(','));
-        parts.push(['Total Files', stats.totalFiles].join(','));
-        parts.push(['System Uptime (s)', stats.systemUptime].join(','));
-        parts.push('');
-      }
-
-      // Velocity chart
-      if (velocity.length > 0) {
-        parts.push(`--- Token Velocity (${period}) ---`);
-        parts.push(['Date', 'Input Tokens', 'Output Tokens', 'Total', 'Invocations'].join(','));
-        velocity.forEach(v => {
-          parts.push([v.date, v.total_input, v.total_output, v.total_input + v.total_output, v.invocation_count].join(','));
-        });
-        parts.push('');
-      }
-
-      // Recent activity
-      if (activity.length > 0) {
-        parts.push('--- Recent Activity ---');
-        parts.push(['Event Type', 'Description', 'Created At'].join(','));
-        activity.forEach(a => {
-          parts.push([a.event_type, `"${a.description.replace(/"/g, '""')}"`, a.created_at].join(','));
-        });
-      }
-
-      const csv = '\uFEFF' + parts.join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `overview_report_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
-      URL.revokeObjectURL(url);
-    } finally { setExporting(false); }
-  }
+  const [filterFrom, setFilterFrom] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  });
+  const [filterTo, setFilterTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const hasFilter = !!(filterFrom || filterTo);
 
   const EVENT_META: Record<string, { icon: string; color: string; label: string }> = {
     user_registered:      { icon: 'person_add', color: 'text-primary', label: t('admin.overview.event.userRegistered') },
@@ -123,34 +82,96 @@ export default function AdminOverview() {
   useEffect(() => {
     if (!token) return;
     const headers = { Authorization: `Bearer ${token}` };
+    const p = new URLSearchParams();
+    if (filterFrom) p.set('from', filterFrom);
+    if (filterTo)   p.set('to',   filterTo);
+    const qs = p.toString() ? `?${p}` : '';
 
-    fetch('/api/admin/overview/stats', { headers })
+    fetch(`/api/admin/overview/stats${qs}`, { headers })
       .then(r => r.json()).then(setStats).catch(console.error);
 
     fetch('/api/admin/overview/recent-activity?limit=3', { headers })
       .then(r => r.json()).then(setActivity).catch(console.error);
-  }, [token]);
+  }, [token, filterFrom, filterTo]);
 
   useEffect(() => {
     if (!token) return;
-    fetch(`/api/admin/overview/token-velocity?period=${period}`, {
+    const p = new URLSearchParams();
+    if (filterFrom) p.set('from', filterFrom);
+    if (filterTo)   p.set('to',   filterTo);
+    if (!filterFrom && !filterTo) p.set('period', period);
+    fetch(`/api/admin/overview/token-velocity?${p}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json()).then(setVelocity).catch(console.error);
-  }, [token, period]);
+  }, [token, period, filterFrom, filterTo]);
 
   const maxTokens = Math.max(...velocity.map(v => v.total_input + v.total_output), 1);
 
   return (
     <>
       {/* Header */}
-      <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
-        <div className="flex items-center gap-3">
-          <span className="text-base md:text-lg font-black text-on-surface font-headline">{t('admin.overview.title')}</span>
-          <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-primary/10 rounded-full">
-            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-            <span className="text-sm text-primary font-bold tracking-widest uppercase">{t('admin.overview.allNodesNormal')}</span>
+      <header className="sticky top-0 z-40 bg-surface/90 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
+        {/* Row 1: title + status badge + desktop filter */}
+        <div className="flex justify-between items-center px-4 md:px-8 h-14 md:h-16">
+          <div className="flex items-center gap-2 md:gap-4 min-w-0">
+            <span className="text-base md:text-lg font-black text-on-surface font-headline truncate">{t('admin.overview.title')}</span>
+            <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-primary/10 rounded-full shrink-0">
+              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              <span className="text-sm text-primary font-bold tracking-widest uppercase">{t('admin.overview.allNodesNormal')}</span>
+            </div>
           </div>
+          {/* Desktop filter */}
+          <div className="hidden md:flex items-center gap-2 mx-6">
+            <span className={`material-symbols-outlined text-sm ${hasFilter ? 'text-tertiary' : 'text-on-surface-variant/40'}`}>date_range</span>
+            <input
+              type="date"
+              value={filterFrom}
+              onChange={e => setFilterFrom(e.target.value)}
+              className={`text-on-surface text-xs font-mono px-2 py-1 border focus:outline-none focus:border-primary/50 cursor-pointer transition-colors ${hasFilter ? 'bg-tertiary/5 border-tertiary/30' : 'bg-surface-container border-outline-variant/20'}`}
+            />
+            <span className="text-xs text-on-surface-variant/40">—</span>
+            <input
+              type="date"
+              value={filterTo}
+              onChange={e => setFilterTo(e.target.value)}
+              className={`text-on-surface text-xs font-mono px-2 py-1 border focus:outline-none focus:border-primary/50 cursor-pointer transition-colors ${hasFilter ? 'bg-tertiary/5 border-tertiary/30' : 'bg-surface-container border-outline-variant/20'}`}
+            />
+            {hasFilter && (
+              <button
+                onClick={() => { setFilterFrom(''); setFilterTo(''); }}
+                className="text-on-surface-variant/50 hover:text-primary transition-colors cursor-pointer"
+                title="清除篩選"
+              >
+                <span className="material-symbols-outlined text-sm">close</span>
+              </button>
+            )}
+          </div>
+        </div>
+        {/* Row 2 (mobile only): date filter */}
+        <div className={`md:hidden flex items-center gap-2 px-4 py-2 border-t transition-colors ${hasFilter ? 'bg-tertiary/5 border-tertiary/20' : 'border-outline-variant/10'}`}>
+          <span className={`material-symbols-outlined text-sm shrink-0 ${hasFilter ? 'text-tertiary' : 'text-on-surface-variant/40'}`}>date_range</span>
+          <input
+            type="date"
+            value={filterFrom}
+            onChange={e => setFilterFrom(e.target.value)}
+            className="bg-transparent text-on-surface text-xs font-mono focus:outline-none cursor-pointer flex-1 min-w-0"
+          />
+          <span className="text-xs text-on-surface-variant/40 shrink-0">—</span>
+          <input
+            type="date"
+            value={filterTo}
+            onChange={e => setFilterTo(e.target.value)}
+            className="bg-transparent text-on-surface text-xs font-mono focus:outline-none cursor-pointer flex-1 min-w-0"
+          />
+          {hasFilter && (
+            <button
+              onClick={() => { setFilterFrom(''); setFilterTo(''); }}
+              className="text-on-surface-variant/50 hover:text-primary transition-colors cursor-pointer shrink-0"
+            >
+              <span className="material-symbols-outlined text-sm">close</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -208,23 +229,27 @@ export default function AdminOverview() {
                 <span className="material-symbols-outlined text-tertiary text-base md:text-[24px]">show_chart</span>
                 <span className="text-xs md:text-sm font-bold uppercase tracking-widest">{t('admin.overview.chart.title')}</span>
               </div>
-              <div className="flex gap-1">
-                {(['7d', '30d', 'monthly'] as const).map(p => (
-                  <button
-                    key={p}
-                    onClick={() => setPeriod(p)}
-                    className={`px-2 md:px-3 py-0.5 md:py-1 text-xs md:text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
-                      p === '30d' ? 'hidden md:inline-block' : ''
-                    } ${
-                      period === p
-                        ? 'text-primary border-b-2 border-primary'
-                        : 'text-on-surface-variant hover:text-on-surface'
-                    }`}
-                  >
-                    {p === 'monthly' ? '12M' : p}
-                  </button>
-                ))}
-              </div>
+              {hasFilter ? (
+                <span className="text-xs text-tertiary font-mono px-2 py-0.5 bg-tertiary/10 rounded">篩選中</span>
+              ) : (
+                <div className="flex gap-1">
+                  {(['7d', '30d', 'monthly'] as const).map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setPeriod(p)}
+                      className={`px-2 md:px-3 py-0.5 md:py-1 text-xs md:text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
+                        p === '30d' ? 'hidden md:inline-block' : ''
+                      } ${
+                        period === p
+                          ? 'text-primary border-b-2 border-primary'
+                          : 'text-on-surface-variant hover:text-on-surface'
+                      }`}
+                    >
+                      {p === 'monthly' ? '12M' : p}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="p-4 md:p-6">
               {velocity.length === 0 ? (

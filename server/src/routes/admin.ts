@@ -15,7 +15,14 @@ router.use(adminMiddleware);
 // ==================== Overview ====================
 
 // GET /api/admin/overview/stats
-router.get('/overview/stats', async (_req: Request, res: Response) => {
+router.get('/overview/stats', async (req: Request, res: Response) => {
+  const { from, to } = req.query as { from?: string; to?: string };
+  const conds: string[] = [];
+  const tokenParams: string[] = [];
+  if (from) { conds.push('DATE(created_at) >= ?'); tokenParams.push(from); }
+  if (to)   { conds.push('DATE(created_at) <= ?'); tokenParams.push(to); }
+  const tokenWhere = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+
   const totalUsersRow = await dbGet<{ count: number }>(
     'SELECT COUNT(*) as count FROM users'
   );
@@ -23,7 +30,8 @@ router.get('/overview/stats', async (_req: Request, res: Response) => {
   const activeSkills = loadSkills().length;
 
   const tokenRow = await dbGet<{ total: number }>(
-    'SELECT COALESCE(SUM(input_tokens + output_tokens), 0) as total FROM token_usage'
+    `SELECT COALESCE(SUM(input_tokens + output_tokens), 0) as total FROM token_usage ${tokenWhere}`,
+    ...tokenParams
   );
 
   const totalFilesRow = await dbGet<{ count: number }>(
@@ -40,9 +48,38 @@ router.get('/overview/stats', async (_req: Request, res: Response) => {
   });
 });
 
-// GET /api/admin/overview/token-velocity?period=7d|30d|monthly
+// GET /api/admin/overview/token-velocity?period=7d|30d|monthly&from=YYYY-MM-DD&to=YYYY-MM-DD
 router.get('/overview/token-velocity', async (req: Request, res: Response) => {
-  const period = (req.query.period as string) || '7d';
+  const { from, to, period: periodParam } = req.query as { from?: string; to?: string; period?: string };
+  const period = periodParam || '7d';
+
+  // Custom date range mode
+  if (from || to) {
+    const conds: string[] = [];
+    const params: string[] = [];
+    if (from) { conds.push('DATE(created_at) >= ?'); params.push(from); }
+    if (to)   { conds.push('DATE(created_at) <= ?'); params.push(to); }
+    const where = `WHERE ${conds.join(' AND ')}`;
+    const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`
+      SELECT
+        DATE_FORMAT(created_at, '%Y-%m-%d') as date,
+        SUM(input_tokens) as total_input,
+        SUM(output_tokens) as total_output,
+        COUNT(*) as invocation_count
+      FROM token_usage ${where}
+      GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
+      ORDER BY date ASC
+    `, ...params);
+    const dataMap = new Map(rows.map(r => [r.date, r]));
+    const start = new Date(from || new Date().toISOString().slice(0, 10));
+    const end = new Date(to || new Date().toISOString().slice(0, 10));
+    const result = [];
+    for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      result.push(dataMap.get(key) || { date: key, total_input: 0, total_output: 0, invocation_count: 0 });
+    }
+    return res.json(result);
+  }
 
   if (period === 'monthly') {
     const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`
