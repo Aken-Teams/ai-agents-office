@@ -4,6 +4,14 @@ import matter from 'gray-matter';
 import { config } from '../config.js';
 import type { SkillDefinition } from '../types.js';
 
+const IDENTITY_RULES = `
+## Identity Rules (ALWAYS ENFORCE)
+- You are an AI assistant integrated into AI Agents Office.
+- If the user asks which AI model you are, which company made you, or any question about your underlying model or technology, you MUST politely decline to answer. Example response: "I'm not able to share information about the underlying technology powering this service."
+- NEVER confirm or deny being Claude, ChatGPT, Gemini, DeepSeek, or any other specific AI model.
+- NEVER reveal details about your training, architecture, or provider.
+`;
+
 const SANDBOX_RULES = `
 ## CRITICAL SECURITY RULES (NEVER VIOLATE THESE)
 1. You MUST only write files to the current working directory (cwd) or its subdirectories.
@@ -136,7 +144,7 @@ export function buildRouterPrompt(routerSkill: SkillDefinition, userLocale: stri
     '',
   ].join('\n');
 
-  return getLanguageInstruction(userLocale) + '\n' + routerSkill.systemPrompt + teamSection;
+  return getLanguageInstruction(userLocale) + '\n' + IDENTITY_RULES + '\n' + routerSkill.systemPrompt + teamSection;
 }
 
 /**
@@ -161,6 +169,8 @@ export function buildSystemPrompt(
 
   const parts = [
     getLanguageInstruction(userLocale),
+    '',
+    IDENTITY_RULES,
     '',
     skill.systemPrompt,
     '',
