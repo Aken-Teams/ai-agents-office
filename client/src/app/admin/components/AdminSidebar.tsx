@@ -17,6 +17,7 @@ const NAV_GROUPS = [
     labelKey: 'admin.sidebar.group.members' as const,
     icon: 'people',
     items: [
+      ...(deployMode === 'pro-panjit' ? [{ href: '/admin/org', labelKey: 'admin.sidebar.orgChart' as const, icon: 'account_tree' }] : []),
       { href: '/admin/users', labelKey: 'admin.sidebar.users' as const, icon: 'corporate_fare' },
       { href: '/admin/conversations', labelKey: 'admin.sidebar.conversations' as const, icon: 'forum', readonlyHidden: true },
       { href: '/admin/quota-groups', labelKey: 'admin.sidebar.quotaGroups' as const, icon: 'category' },

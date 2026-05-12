@@ -1762,4 +1762,45 @@ router.patch('/quota-requests/:id', async (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
+// ==================== AD Org Chart (pro-panjit only) ====================
+
+const AD_DOMAINS = ['PANJIT', 'PYNMAX', 'WXPJ', 'PJWS', 'GDPJ', 'PJXZ', 'PJSD'];
+
+// GET /api/admin/org/tree?domain=PANJIT
+router.get('/org/tree', async (req: Request, res: Response) => {
+  if (config.deployMode !== 'pro-panjit') {
+    return res.status(403).json({ error: 'Not available in this deployment mode' });
+  }
+  const adUrl = process.env.AD_URL;
+  const adApi = process.env.AD_API;
+  if (!adUrl || !adApi) {
+    return res.status(500).json({ error: 'AD integration not configured' });
+  }
+  const domain = (req.query.domain as string || 'PANJIT').toUpperCase();
+  if (!AD_DOMAINS.includes(domain)) {
+    return res.status(400).json({ error: `Invalid domain. Allowed: ${AD_DOMAINS.join(', ')}` });
+  }
+  try {
+    const upstream = await fetch(`${adUrl}/ldap/api/v1/organizations/tree?domain=${domain}`, {
+      headers: { 'X-API-Key': adApi },
+    });
+    const data = await upstream.json() as Record<string, unknown>;
+    if (!upstream.ok) {
+      return res.status(upstream.status).json({ error: 'AD API error', detail: data });
+    }
+    res.json(data);
+  } catch (err) {
+    console.error('[AD Org] fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch AD org tree' });
+  }
+});
+
+// GET /api/admin/org/domains
+router.get('/org/domains', (_req: Request, res: Response) => {
+  if (config.deployMode !== 'pro-panjit') {
+    return res.status(403).json({ error: 'Not available in this deployment mode' });
+  }
+  res.json({ domains: AD_DOMAINS });
+});
+
 export default router;

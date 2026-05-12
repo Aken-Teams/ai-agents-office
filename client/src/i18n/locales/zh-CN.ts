@@ -626,6 +626,7 @@ const zhCN = {
   'admin.sidebar.logout': '退出登录',
   'admin.sidebar.quotaGroups': '额度群组',
   'admin.sidebar.inviteCodes': '邀请码管理',
+  'admin.sidebar.orgChart': '组织图',
   'admin.sidebar.analytics': '使用分析',
   'admin.sidebar.poweredBy': 'Powered by 智合科技',
   'admin.analytics.title': '使用分析报表',

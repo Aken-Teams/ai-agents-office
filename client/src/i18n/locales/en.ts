@@ -615,6 +615,7 @@ const en = {
   'admin.sidebar.logout': 'Logout',
   'admin.sidebar.quotaGroups': 'Quota Groups',
   'admin.sidebar.inviteCodes': 'Invite Codes',
+  'admin.sidebar.orgChart': 'Org Chart',
   'admin.sidebar.analytics': 'Usage Analytics',
   'admin.sidebar.poweredBy': 'Powered by Zhaoi Tech',
   'admin.analytics.title': 'Usage Analytics',

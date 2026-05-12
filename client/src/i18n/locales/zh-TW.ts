@@ -630,6 +630,7 @@ const zhTW = {
   'admin.sidebar.logout': '登出',
   'admin.sidebar.quotaGroups': '額度群組',
   'admin.sidebar.inviteCodes': '邀請碼管理',
+  'admin.sidebar.orgChart': '組織圖',
   'admin.sidebar.analytics': '使用分析',
   'admin.sidebar.poweredBy': 'Powered by 智合科技',
   'admin.analytics.title': '使用分析報表',
