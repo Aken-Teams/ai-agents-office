@@ -8,6 +8,8 @@ import { useTranslation } from '../../i18n';
 import type { Locale, Theme } from '../../i18n/types';
 
 const SIDEBAR_KEY = 'sidebar-collapsed';
+const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
+const isPanjit = deployMode === 'pro-panjit';
 
 const NAV_LINKS = [
   { href: '/dashboard', labelKey: 'nav.dashboard' as const, icon: 'dashboard' },
@@ -552,6 +554,16 @@ export default function Navbar() {
                       </Link>
                     );
                   })}
+                  {isPanjit && (user.role === 'admin' || user.role === 'readonly') && (
+                    <Link
+                      href="/admin/org"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-3 px-5 py-3.5 no-underline text-on-surface-variant active:bg-surface-container transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-xl">account_tree</span>
+                      <span className="text-sm font-headline font-bold">{t('admin.sidebar.orgChart' as any)}</span>
+                    </Link>
+                  )}
                   {(user.role === 'admin' || user.role === 'readonly') && (
                     <Link
                       href="/admin/overview"
@@ -621,6 +633,22 @@ export default function Navbar() {
 
         {/* Bottom */}
         <div className={`mt-auto pt-6 space-y-1 ${collapsed ? 'px-2' : 'px-4'}`}>
+          {/* Org Chart — panjit + admin/readonly */}
+          {isPanjit && (user.role === 'admin' || user.role === 'readonly') && (
+            <Link
+              href="/admin/org"
+              className={`relative group flex items-center gap-3 py-2.5 no-underline text-on-surface-variant hover:text-on-surface hover:bg-surface-container/50 transition-all rounded-lg ${collapsed ? 'justify-center px-0' : 'px-3'} ${pathname.startsWith('/admin/org') ? 'text-primary bg-surface-container border-l-2 border-primary' : ''}`}
+            >
+              <span className="material-symbols-outlined text-[20px]">account_tree</span>
+              {!collapsed && <span className="text-sm font-bold">{t('admin.sidebar.orgChart' as any)}</span>}
+              {collapsed && (
+                <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
+                  {t('admin.sidebar.orgChart' as any)}
+                </span>
+              )}
+            </Link>
+          )}
+
           {/* Switch to Admin (admin + readonly) */}
           {(user.role === 'admin' || user.role === 'readonly') && (
             <Link

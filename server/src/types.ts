@@ -12,6 +12,9 @@ export interface User {
   quota_override: number | null;
   company: string | null;
   onboarding_completed: 0 | 1;
+  ad_username: string | null;
+  ad_domain: string | null;
+  auth_provider: string | null;
   created_at: string;
   updated_at: string;
 }

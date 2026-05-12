@@ -396,6 +396,36 @@ export async function initializeDatabase(): Promise<void> {
       await conn.query('ALTER TABLE users ADD COLUMN onboarding_completed TINYINT(1) NOT NULL DEFAULT 0');
     } catch { /* column already exists */ }
 
+    // AD integration columns
+    try {
+      await conn.query('ALTER TABLE users ADD COLUMN ad_username VARCHAR(50) DEFAULT NULL');
+    } catch { /* column already exists */ }
+    try {
+      await conn.query('ALTER TABLE users ADD COLUMN ad_domain VARCHAR(50) DEFAULT NULL');
+    } catch { /* column already exists */ }
+    try {
+      await conn.query('ALTER TABLE users ADD COLUMN auth_provider VARCHAR(20) DEFAULT NULL');
+    } catch { /* column already exists */ }
+    try {
+      await conn.query('ALTER TABLE users ADD UNIQUE INDEX idx_users_ad (ad_username, ad_domain)');
+    } catch { /* index already exists */ }
+
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS ad_claim_tokens (
+        id          VARCHAR(36) PRIMARY KEY,
+        ad_username VARCHAR(50) NOT NULL,
+        ad_domain   VARCHAR(50) NOT NULL,
+        claim_email VARCHAR(255) NOT NULL,
+        code        VARCHAR(10) NOT NULL,
+        attempts    INT NOT NULL DEFAULT 0,
+        expires_at  DATETIME NOT NULL,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY idx_claim_unique (ad_username, ad_domain),
+        INDEX idx_claim_email (claim_email),
+        INDEX idx_claim_expires (expires_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     // Default system settings
     const defaults: Record<string, string> = {
       user_usage_limit_usd: '50',

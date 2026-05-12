@@ -308,6 +308,11 @@ router.post('/login', async (req: Request, res: Response) => {
       res.status(400).json({ error: '此帳號使用 Google 登入，請使用 Google 按鈕登入', code: 'OAUTH_ONLY' }); return;
     }
 
+    // pro-panjit mode: only whitelisted emails can use email/password login
+    if (config.deployMode === 'pro-panjit' && !config.emailLoginWhitelist.includes(email.toLowerCase().trim())) {
+      res.status(403).json({ error: '此帳號需使用 AD 工號登入', code: 'AD_LOGIN_REQUIRED' }); return;
+    }
+
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) { recordLoginFailure(email.toLowerCase().trim()); res.status(401).json({ error: '電子信箱或密碼錯誤' }); return; }
 
@@ -648,6 +653,286 @@ router.delete('/memories', authMiddleware, async (req: Request, res: Response) =
   const userId = req.user!.userId;
   await dbRun('DELETE FROM user_memories WHERE user_id = ?', userId);
   res.json({ success: true });
+});
+
+/* ============================================================
+   AD Login Routes (pro-panjit only)
+   ============================================================ */
+
+interface AdUser {
+  username: string;
+  displayName: string;
+  mail: string | null;
+  department: string | null;
+  telephoneNumber: string | null;
+  domain: string;
+}
+
+async function callAdAuth(username: string, password: string, domain?: string): Promise<AdUser | null> {
+  try {
+    const body: Record<string, string> = { username, password };
+    if (domain) body.domain = domain;
+    const res = await fetch(`${config.adApiUrl}/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { success?: boolean; user?: AdUser };
+    if (!data.success || !data.user) return null;
+    return data.user;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchAdUserDetail(username: string, domain: string): Promise<Partial<AdUser>> {
+  if (!config.adApiKey) return {};
+  try {
+    const res = await fetch(`${config.adApiUrl}/users/${encodeURIComponent(username)}?domain=${encodeURIComponent(domain)}`, {
+      headers: { 'X-API-Key': config.adApiKey },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return {};
+    const data = await res.json() as Partial<AdUser>;
+    return data;
+  } catch {
+    return {};
+  }
+}
+
+/* POST /api/auth/ad/login */
+router.post('/ad/login', async (req: Request, res: Response) => {
+  try {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    if (!checkAuthRate(ip, 'adlogin', 10, 15 * 60_000)) {
+      res.status(429).json({ error: '登入請求過於頻繁，請 15 分鐘後再試' }); return;
+    }
+
+    const { username, password, domain } = req.body;
+    if (!username || !password) {
+      res.status(400).json({ error: '工號和密碼為必填' }); return;
+    }
+
+    // Call AD API
+    const adUser = await callAdAuth(username.trim(), password, domain?.trim() || undefined);
+    if (!adUser) {
+      res.status(401).json({ error: '工號或密碼錯誤，請確認後重試' }); return;
+    }
+
+    const adUsername = adUser.username || username.trim();
+    const adDomain = adUser.domain || domain?.trim() || 'PANJIT';
+
+    // Try to fetch detailed info (for mail) if not already returned
+    let mail = adUser.mail || null;
+    if (!mail && config.adApiKey) {
+      const detail = await fetchAdUserDetail(adUsername, adDomain);
+      mail = detail.mail || null;
+    }
+
+    const fullAdUser: AdUser = { ...adUser, username: adUsername, domain: adDomain, mail };
+
+    // Check if user already exists in DB
+    const existing = await dbGet<{ id: string; role: string; status: string; display_name: string | null }>(
+      'SELECT id, role, status, display_name FROM users WHERE ad_username = ? AND ad_domain = ?',
+      adUsername, adDomain
+    );
+
+    if (existing) {
+      // Returning AD user
+      const status = existing.status || 'active';
+      if (status === 'suspended') {
+        res.status(403).json({ error: '您的帳號已被停用，如有疑問請聯繫管理者', code: 'SUSPENDED' }); return;
+      }
+      // Update display name from AD if changed
+      if (fullAdUser.displayName && fullAdUser.displayName !== existing.display_name) {
+        await dbRun('UPDATE users SET display_name = ?, updated_at = NOW() WHERE id = ?', fullAdUser.displayName, existing.id);
+      }
+      await dbRun('UPDATE users SET last_login_at = NOW() WHERE id = ?', existing.id);
+      const user = await dbGet<{ email: string }>('SELECT email FROM users WHERE id = ?', existing.id);
+      const token = jwt.sign({ userId: existing.id, email: user?.email || '', role: existing.role || 'user' }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+      res.json({ token, user: { id: existing.id, email: user?.email || '', displayName: fullAdUser.displayName || existing.display_name, role: existing.role || 'user' } });
+      return;
+    }
+
+    // First-time AD login — issue a short-lived session token for the wizard
+    const adSessionToken = jwt.sign(
+      { adUsername, adDomain, displayName: fullAdUser.displayName, mail, department: fullAdUser.department, type: 'ad_session' },
+      config.jwtSecret,
+      { expiresIn: '30m' }
+    );
+
+    res.json({ firstLogin: true, adSessionToken, adUser: fullAdUser });
+  } catch (error) {
+    console.error('AD login error:', error);
+    res.status(500).json({ error: '登入失敗，請稍後再試' });
+  }
+});
+
+/* POST /api/auth/ad/register — complete first-time AD user setup (no inheritance) */
+router.post('/ad/register', async (req: Request, res: Response) => {
+  try {
+    const { adSessionToken, displayName: customDisplayName } = req.body;
+    if (!adSessionToken) { res.status(400).json({ error: '缺少必要參數' }); return; }
+
+    let payload: { adUsername: string; adDomain: string; displayName: string; mail: string | null; department: string | null; type: string };
+    try {
+      payload = jwt.verify(adSessionToken, config.jwtSecret) as typeof payload;
+    } catch {
+      res.status(401).json({ error: '登入憑證已過期，請重新登入' }); return;
+    }
+    if (payload.type !== 'ad_session') { res.status(401).json({ error: '無效的登入憑證' }); return; }
+
+    const { adUsername, adDomain, displayName: adDisplayName, mail } = payload;
+
+    // Check again (race condition guard)
+    const existing = await dbGet('SELECT id FROM users WHERE ad_username = ? AND ad_domain = ?', adUsername, adDomain);
+    if (existing) { res.status(409).json({ error: '此 AD 帳號已完成註冊' }); return; }
+
+    const finalDisplayName = (customDisplayName || adDisplayName || adUsername).trim();
+    // Use AD mail or synthetic email
+    const email = mail ? mail.toLowerCase().trim() : `${adUsername.toLowerCase()}@${adDomain.toLowerCase()}.panjit.local`;
+
+    // Check if email already used (could be taken by another user)
+    const emailConflict = await dbGet('SELECT id, ad_username FROM users WHERE email = ?', email);
+    if (emailConflict) {
+      if (emailConflict.ad_username) {
+        res.status(409).json({ error: '此帳號已被其他 AD 使用者繼承' }); return;
+      }
+      // Email exists but no AD — suggest inheritance
+      res.status(409).json({ error: '此信箱已有帳號，請選擇繼承流程', code: 'USE_CLAIM_FLOW' }); return;
+    }
+
+    const id = uuidv4();
+    await dbRun(
+      'INSERT INTO users (id, email, password_hash, display_name, role, status, auth_provider, ad_username, ad_domain, onboarding_completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      id, email, 'AD_NO_PASSWORD', finalDisplayName, 'user', 'active', 'ad', adUsername, adDomain, 1
+    );
+    await dbRun('UPDATE users SET last_login_at = NOW() WHERE id = ?', id);
+
+    const token = jwt.sign({ userId: id, email, role: 'user' }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+    res.json({ token, user: { id, email, displayName: finalDisplayName, role: 'user' } });
+  } catch (error) {
+    console.error('AD register error:', error);
+    res.status(500).json({ error: '註冊失敗，請稍後再試' });
+  }
+});
+
+/* POST /api/auth/ad/claim/request — send inheritance claim code to old email */
+router.post('/ad/claim/request', async (req: Request, res: Response) => {
+  try {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    if (!checkAuthRate(ip, 'adclaim', 5, 15 * 60_000)) {
+      res.status(429).json({ error: '請求過於頻繁，請稍後再試' }); return;
+    }
+
+    const { adSessionToken, claimEmail } = req.body;
+    if (!adSessionToken || !claimEmail) { res.status(400).json({ error: '缺少必要參數' }); return; }
+    if (!isValidEmail(claimEmail)) { res.status(400).json({ error: '電子信箱格式不正確' }); return; }
+
+    let payload: { adUsername: string; adDomain: string; type: string };
+    try {
+      payload = jwt.verify(adSessionToken, config.jwtSecret) as typeof payload;
+    } catch {
+      res.status(401).json({ error: '登入憑證已過期，請重新登入' }); return;
+    }
+    if (payload.type !== 'ad_session') { res.status(401).json({ error: '無效的登入憑證' }); return; }
+
+    const { adUsername, adDomain } = payload;
+    const normalizedEmail = claimEmail.toLowerCase().trim();
+
+    // Check target email account exists and is not already linked to AD
+    const targetUser = await dbGet<{ id: string; ad_username: string | null }>(
+      'SELECT id, ad_username FROM users WHERE email = ?', normalizedEmail
+    );
+    if (!targetUser) { res.status(404).json({ error: '找不到此電子信箱的帳號' }); return; }
+    if (targetUser.ad_username) { res.status(409).json({ error: '此帳號已被其他 AD 使用者繼承' }); return; }
+
+    // Check email service
+    if (!isEmailEnabled()) {
+      res.status(400).json({ error: '郵件服務暫時不可用，請聯繫管理者' }); return;
+    }
+
+    // Generate code and store in ad_claim_tokens
+    const code = generateVerificationCode();
+    const expiresAt = new Date(Date.now() + 15 * 60_000); // 15 min
+    await dbRun('DELETE FROM ad_claim_tokens WHERE ad_username = ? AND ad_domain = ?', adUsername, adDomain);
+    await dbRun(
+      'INSERT INTO ad_claim_tokens (id, ad_username, ad_domain, claim_email, code, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
+      uuidv4(), adUsername, adDomain, normalizedEmail, code, expiresAt
+    );
+
+    await sendVerificationCode(normalizedEmail, code, 'zh-TW');
+    res.json({ sent: true });
+  } catch (error) {
+    console.error('AD claim request error:', error);
+    res.status(500).json({ error: '發送失敗，請稍後再試' });
+  }
+});
+
+/* POST /api/auth/ad/claim/verify — verify claim code and link AD to existing account */
+router.post('/ad/claim/verify', async (req: Request, res: Response) => {
+  try {
+    const { adSessionToken, claimEmail, code } = req.body;
+    if (!adSessionToken || !claimEmail || !code) { res.status(400).json({ error: '缺少必要參數' }); return; }
+
+    let payload: { adUsername: string; adDomain: string; displayName: string; mail: string | null; type: string };
+    try {
+      payload = jwt.verify(adSessionToken, config.jwtSecret) as typeof payload;
+    } catch {
+      res.status(401).json({ error: '登入憑證已過期，請重新登入' }); return;
+    }
+    if (payload.type !== 'ad_session') { res.status(401).json({ error: '無效的登入憑證' }); return; }
+
+    const { adUsername, adDomain, displayName, mail: adMail } = payload;
+    const normalizedEmail = claimEmail.toLowerCase().trim();
+
+    // Look up claim token
+    const record = await dbGet<{ id: string; code: string; attempts: number; expires_at: Date; claim_email: string }>(
+      'SELECT id, code, attempts, expires_at, claim_email FROM ad_claim_tokens WHERE ad_username = ? AND ad_domain = ?',
+      adUsername, adDomain
+    );
+
+    if (!record) { res.status(400).json({ error: '找不到驗證碼，請重新申請' }); return; }
+    if (record.claim_email !== normalizedEmail) { res.status(400).json({ error: '信箱不一致，請重新申請' }); return; }
+    if (new Date(record.expires_at) < new Date()) {
+      await dbRun('DELETE FROM ad_claim_tokens WHERE id = ?', record.id);
+      res.status(400).json({ error: '驗證碼已過期，請重新申請', expired: true }); return;
+    }
+    if (record.attempts >= 5) {
+      await dbRun('DELETE FROM ad_claim_tokens WHERE id = ?', record.id);
+      res.status(400).json({ error: '驗證碼嘗試次數過多，請重新申請', expired: true }); return;
+    }
+
+    await dbRun('UPDATE ad_claim_tokens SET attempts = attempts + 1 WHERE id = ?', record.id);
+
+    if (record.code !== code.trim()) {
+      res.status(400).json({ error: '驗證碼不正確' }); return;
+    }
+
+    // Code correct — link AD to existing account
+    const user = await dbGet<{ id: string; role: string; status: string; ad_username: string | null }>(
+      'SELECT id, role, status, ad_username FROM users WHERE email = ?', normalizedEmail
+    );
+    if (!user) { res.status(404).json({ error: '找不到對應的帳號' }); return; }
+    if (user.ad_username) { res.status(409).json({ error: '此帳號已被繼承' }); return; }
+
+    // Use AD mail as the new email if available, otherwise keep old email
+    const newEmail = adMail ? adMail.toLowerCase().trim() : normalizedEmail;
+
+    await dbRun(
+      'UPDATE users SET ad_username = ?, ad_domain = ?, auth_provider = ?, display_name = ?, email = ?, onboarding_completed = 1, last_login_at = NOW(), updated_at = NOW() WHERE id = ?',
+      adUsername, adDomain, 'ad', displayName || null, newEmail, user.id
+    );
+    await dbRun('DELETE FROM ad_claim_tokens WHERE id = ?', record.id);
+
+    const token = jwt.sign({ userId: user.id, email: newEmail, role: user.role || 'user' }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+    res.json({ token, user: { id: user.id, email: newEmail, displayName: displayName || null, role: user.role || 'user' } });
+  } catch (error) {
+    console.error('AD claim verify error:', error);
+    res.status(500).json({ error: '驗證失敗，請稍後再試' });
+  }
 });
 
 export default router;

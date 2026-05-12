@@ -52,6 +52,12 @@ export const config = {
   // Deploy mode: 'pro-panjit' (internal) | 'pro-out' (external, per-user quota)
   deployMode: (process.env.DEPLOY_MODE || 'pro-panjit') as 'pro-panjit' | 'pro-out',
 
+  // AD (Active Directory) integration — pro-panjit only
+  adApiUrl: process.env.AD_API_URL || 'https://apigw.panjit.com.tw/ldap/api/v1',
+  adApiKey: process.env.AD_API_KEY || '',
+  // Whitelist: these emails can still use email/password login even in pro-panjit mode
+  emailLoginWhitelist: (process.env.EMAIL_LOGIN_WHITELIST || 'admin@zhaoi.ai,aken1023@gmail.com').split(',').map(e => e.trim().toLowerCase()),
+
   // Version: 'Beta' = apply watermarks, 'Official' = no watermarks
   isBeta: (process.env.Version || 'Beta').toLowerCase() !== 'official',
 
