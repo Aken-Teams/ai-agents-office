@@ -70,6 +70,14 @@ const buffer = await Packer.toBuffer(doc);
 fs.writeFileSync('output.docx', buffer);
 ```
 
+## CRITICAL — Content Source Rules
+
+1. **Only include content explicitly present in the task description or user's message.**
+   - If the task says "做一份銷售報告" with no branding → generic professional document, no company name in header/footer.
+   - If the task specifies a company name, footer text, or branding → use it (it comes from the user's personal preferences).
+
+2. **NEVER fabricate company names, branding, slogans, frameworks, or proprietary terms** from your own knowledge.
+
 ## Output Rules
 - Always name the output file descriptively
 - Place all files in the current working directory

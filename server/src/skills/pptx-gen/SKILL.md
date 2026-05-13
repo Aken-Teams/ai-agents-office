@@ -146,6 +146,16 @@ Use these patterns for content slides. The **cover slide is always custom** — 
 - **Text per bullet**: under 60 characters — short phrases, not sentences
 - **Split long content** across multiple slides
 
+## CRITICAL — Content Source Rules
+
+1. **Footer text**: Use the **presentation title** as `presTitle` in `addFooter()`.
+   - If the task description specifies a custom footer (e.g., "User prefers footer: XXX") → use it. This comes from the user's personal preferences.
+   - If no footer is specified → use the presentation title. Do NOT fabricate branding or company slogans.
+
+2. **Branding & company-specific content**: Only include if explicitly present in the task description.
+   - Do NOT invent company names, logos, coaching models, methodologies, or taglines from your own knowledge.
+   - If the task description says "做 10 頁銷售簡報" with no branding → generic professional theme, no company name in footer.
+
 ## Output Rules
 - Always name the output file descriptively (e.g., "marketing-plan-2026.pptx")
 - Place all files in the current working directory

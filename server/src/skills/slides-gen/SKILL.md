@@ -865,6 +865,14 @@ Unsplash URL parameters:
 - `?w=400&h=400&fit=crop&crop=face` — Profile / team portraits (1:1, face-focused)
 - `?w=1280&h=720&fit=crop` — General slides (16:9)
 
+## CRITICAL — Content Source Rules
+
+1. **Only include content explicitly present in the task description or user's message.**
+   - If the task says "做簡報" with no branding → generic professional theme, no company name in title/footer.
+   - If the task specifies a company name, tagline, or branding → use it (it comes from the user's personal preferences).
+
+2. **NEVER fabricate company names, branding, slogans, frameworks, or proprietary terms** from your own knowledge.
+
 ## Output Rules
 - Name output descriptively (e.g., "ai-agent-trends-2026.html")
 - Place files in the current working directory

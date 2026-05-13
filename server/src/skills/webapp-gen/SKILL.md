@@ -275,6 +275,14 @@ Pick and combine these sections based on the user's needs:
 | **Summary Cards** | Text-heavy insights or recommendations |
 | **Legend/Filter Row** | When the page has multiple status types |
 
+## CRITICAL — Content Source Rules
+
+1. **Only include content explicitly present in the task description or user's message.**
+   - If the task says "做儀表板" with no branding → generic professional dashboard, no company name in header.
+   - If the task specifies a company name or branding → use it (it comes from the user's personal preferences).
+
+2. **NEVER fabricate company names, branding, slogans, frameworks, or proprietary terms** from your own knowledge.
+
 ## Output Rules
 
 - File name should be descriptive: `{topic}-dashboard.html` or `{topic}-report.html`
