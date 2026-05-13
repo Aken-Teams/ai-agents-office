@@ -437,13 +437,19 @@ export async function initializeDatabase(): Promise<void> {
     // Outlook mail token cache (pro-panjit only)
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS outlook_tokens (
-        user_id     VARCHAR(36) PRIMARY KEY,
-        mail_token  TEXT NOT NULL,
-        expires_at  DATETIME NOT NULL,
-        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        user_id         VARCHAR(36) PRIMARY KEY,
+        mail_token      TEXT NOT NULL,
+        expires_at      DATETIME NOT NULL,
+        credentials_enc TEXT,
+        created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    // Migration: add credentials_enc column to outlook_tokens
+    try {
+      await conn.query('ALTER TABLE outlook_tokens ADD COLUMN credentials_enc TEXT DEFAULT NULL');
+    } catch { /* column already exists */ }
 
     // Default system settings
     const defaults: Record<string, string> = {

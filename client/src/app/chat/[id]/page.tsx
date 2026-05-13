@@ -391,65 +391,23 @@ function getFileColor(type: string): string {
   return colors[type] || 'text-primary';
 }
 
-function InlineHtmlPreview({ file, token, onFullscreen }: { file: GeneratedFile; token: string; onFullscreen: () => void }) {
-  const { t } = useTranslation();
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let url: string | null = null;
-    fetch(`/api/files/${file.id}/download`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.text() : Promise.reject('fetch failed'))
-      .then(html => {
-        url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
-        setBlobUrl(url);
-      })
-      .catch(console.error);
-    return () => { if (url) URL.revokeObjectURL(url); };
-  }, [file.id, token]);
-
-  if (!blobUrl) return (
-    <div className="h-[240px] md:h-[360px] flex items-center justify-center text-on-surface-variant text-sm">
-      <span className="material-symbols-outlined animate-spin mr-2">progress_activity</span>
-      {t('chart.preview.loading' as any)}
-    </div>
-  );
-
-  return (
-    <div className="relative group rounded-t-xl overflow-hidden">
-      <iframe
-        src={blobUrl}
-        sandbox="allow-scripts allow-same-origin"
-        scrolling="no"
-        className="w-full h-[240px] md:h-[360px] border-b border-outline-variant/10 overflow-hidden"
-        style={{ overflow: 'hidden' }}
-        title={file.filename}
-      />
-      <button
-        onClick={onFullscreen}
-        className="absolute top-3 right-3 p-2 rounded-lg bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-black/70"
-        title={t('chat.preview.fullscreen' as any)}
-      >
-        <span className="material-symbols-outlined text-lg">fullscreen</span>
-      </button>
-    </div>
-  );
-}
-
-/** Inline preview for office/PDF files — shows first page via /preview endpoint */
+/** Static first-page thumbnail — clickable to open full preview */
 const PREVIEWABLE_TYPES = new Set(['pdf', 'pptx', 'ppt', 'docx', 'doc', 'xlsx', 'xls']);
 
-function InlineFilePreview({ file, token }: { file: GeneratedFile; token: string }) {
+function FileThumbnail({ file, token, onClick }: { file: GeneratedFile; token: string; onClick: () => void }) {
   const { t } = useTranslation();
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [contentType, setContentType] = useState<string>('');
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let url: string | null = null;
-    fetch(`/api/files/${file.id}/preview`, { headers: { Authorization: `Bearer ${token}` } })
+    const endpoint = file.file_type === 'html'
+      ? `/api/files/${file.id}/download`
+      : `/api/files/${file.id}/preview`;
+    fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => {
         if (!r.ok) throw new Error('preview failed');
         const ct = r.headers.get('Content-Type') || '';
-        setContentType(ct);
         return r.blob().then(blob => ({ blob, ct }));
       })
       .then(({ blob, ct }) => {
@@ -459,28 +417,42 @@ function InlineFilePreview({ file, token }: { file: GeneratedFile; token: string
       })
       .catch(() => setFailed(true));
     return () => { if (url) URL.revokeObjectURL(url); };
-  }, [file.id, token]);
+  }, [file.id, file.file_type, token]);
 
-  if (failed) return null; // Silently skip — file card still shows below
+  if (failed) return null;
   if (!blobUrl) return (
-    <div className="h-[240px] md:h-[360px] flex items-center justify-center text-on-surface-variant text-sm rounded-t-xl bg-surface-container-lowest">
+    <div className="h-[160px] md:h-[200px] flex items-center justify-center text-on-surface-variant text-sm rounded-t-xl bg-surface-container-lowest">
       <span className="material-symbols-outlined animate-spin mr-2 text-base">progress_activity</span>
       {t('chart.preview.loading' as any)}
     </div>
   );
 
-  const isPdf = contentType.includes('pdf');
   return (
-    <div className="relative rounded-t-xl overflow-hidden bg-surface-container-lowest">
-      <iframe
-        src={isPdf ? `${blobUrl}#toolbar=0&navpanes=0&scrollbar=0` : blobUrl}
-        className="w-full h-[240px] md:h-[360px] border-b border-outline-variant/10"
-        scrolling="no"
-        title={file.filename}
-        sandbox={isPdf ? undefined : 'allow-same-origin'}
-        style={{ overflow: 'hidden', pointerEvents: 'none' }}
-      />
-    </div>
+    <button
+      onClick={onClick}
+      className="relative w-full rounded-t-xl overflow-hidden bg-surface-container-lowest cursor-pointer group block"
+      title={t('chat.preview.fullscreen' as any)}
+    >
+      <div className="h-[160px] md:h-[200px] overflow-hidden">
+        <iframe
+          src={blobUrl.endsWith('.pdf') || blobUrl.includes('application/pdf') ? `${blobUrl}#toolbar=0&navpanes=0&scrollbar=0&page=1` : blobUrl}
+          className="w-full h-[400px] border-0 scale-[0.5] origin-top-left"
+          style={{ width: '200%', pointerEvents: 'none' }}
+          scrolling="no"
+          tabIndex={-1}
+          title={file.filename}
+          sandbox={file.file_type === 'html' ? 'allow-scripts allow-same-origin' : 'allow-same-origin'}
+        />
+      </div>
+      {/* Gradient fade at bottom */}
+      <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-surface-container-low to-transparent" />
+      {/* Hover overlay */}
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+        <span className="material-symbols-outlined text-white text-2xl opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg">
+          open_in_full
+        </span>
+      </div>
+    </button>
   );
 }
 
@@ -1678,13 +1650,9 @@ function ChatContent() {
               <div className="max-w-full md:max-w-[85%] space-y-3 ml-0 md:ml-13">
                 {latestFiles.map(file => (
                   <div key={file.id} className="bg-surface-container-low rounded-xl border border-outline-variant/10 overflow-visible">
-                    {/* HTML slides — iframe preview */}
-                    {file.file_type === 'html' && (
-                      <InlineHtmlPreview file={file} token={token!} onFullscreen={() => openPreview(file)} />
-                    )}
-                    {/* Office/PDF — first page preview */}
-                    {PREVIEWABLE_TYPES.has(file.file_type) && (
-                      <InlineFilePreview file={file} token={token!} />
+                    {/* File thumbnail — static first-page preview */}
+                    {(file.file_type === 'html' || PREVIEWABLE_TYPES.has(file.file_type)) && (
+                      <FileThumbnail file={file} token={token!} onClick={() => openPreview(file)} />
                     )}
                     {/* Other file types — card only */}
                     <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-3">

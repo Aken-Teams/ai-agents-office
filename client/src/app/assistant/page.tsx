@@ -611,7 +611,7 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
               {selectedMsg.body ? (
                 selectedMsg.body_type === 'html' ? (
                   <iframe
-                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1d1b20;margin:0;padding:0;word-break:break-word;}a{color:#6750A4;}img{max-width:100%;height:auto;}</style></head><body>${selectedMsg.body}</body></html>`}
+                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1d1b20;margin:0;padding:0;word-break:break-word;}a{color:#6750A4;}img[src^="cid:"]{display:none;}img{max-width:100%;height:auto;}</style></head><body>${selectedMsg.body}</body></html>`}
                     className="w-full border-0 min-h-[300px]"
                     sandbox="allow-same-origin"
                     title="Email body"
@@ -946,14 +946,14 @@ function AssistantContent() {
             {/* Header buttons */}
             <div className="shrink-0 flex items-center gap-2 mt-1 md:mt-2">
               {/* Email button — pro-panjit only */}
-              {deployMode === 'pro-panjit' && emailConnected && (
+              {deployMode === 'pro-panjit' && (
                 <button
                   onClick={() => setEmailModalOpen(true)}
                   className="relative w-10 h-10 flex items-center justify-center rounded-xl border border-tertiary/20 bg-tertiary/5 text-tertiary hover:bg-tertiary/15 active:scale-95 transition-all cursor-pointer"
                   title={t('assistant.email.title' as any)}
                 >
                   <span className="material-symbols-outlined text-xl">mail</span>
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-success rounded-full border-2 border-surface-container-lowest" />
+                  {emailConnected && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-success rounded-full border-2 border-surface-container-lowest" />}
                 </button>
               )}
               {/* New assistant button */}

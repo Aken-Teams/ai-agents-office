@@ -2,10 +2,29 @@
  * Outlook API Service — wraps the Panjit Outlook API for email access.
  * Only used in DEPLOY_MODE=pro-panjit.
  */
+import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto';
 import { config } from '../config.js';
 import { dbGet, dbRun } from '../db.js';
 
 const OUTLOOK_BASE = `${config.adApiUrl}/outlook`;
+
+// Derive a stable 32-byte AES key from jwtSecret
+const AES_KEY = createHash('sha256').update(config.jwtSecret).digest();
+
+function encrypt(text: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', AES_KEY, iv);
+  const enc = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return [iv.toString('base64'), enc.toString('base64'), tag.toString('base64')].join(':');
+}
+
+function decrypt(data: string): string {
+  const [ivB64, encB64, tagB64] = data.split(':');
+  const decipher = createDecipheriv('aes-256-gcm', AES_KEY, Buffer.from(ivB64, 'base64'));
+  decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
+  return decipher.update(Buffer.from(encB64, 'base64')) + decipher.final('utf8');
+}
 
 interface OutlookFolder {
   id: string;
@@ -26,10 +45,12 @@ interface OutlookMessage {
   has_attachments: boolean;
   size: number;
   preview: string;
+  body?: string;
+  body_type?: string;
 }
 
 /**
- * Authenticate with Outlook API and cache the mail_token in DB.
+ * Authenticate with Outlook API and cache the mail_token + encrypted credentials in DB.
  */
 export async function authenticateOutlook(userId: string, username: string, password: string): Promise<string | null> {
   console.log('[Outlook] Authenticating for user:', userId, 'username:', username);
@@ -51,37 +72,70 @@ export async function authenticateOutlook(userId: string, username: string, pass
   }
 
   const data = await res.json() as { success: boolean; mail_token?: string };
-  console.log('[Outlook] Auth response:', { success: data.success, hasToken: !!data.mail_token });
   const mailToken = data.mail_token;
   if (!mailToken) return null;
 
   // Cache token with 55-minute TTL (API grants 1 hour)
-  // Use local time (not UTC) so that JS Date parsing is consistent on read-back
   const d = new Date(Date.now() + 55 * 60_000);
   const pad = (n: number) => String(n).padStart(2, '0');
   const expiresAt = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-  console.log('[Outlook] Storing token, expires_at:', expiresAt);
+
+  const credEnc = encrypt(JSON.stringify({ username, password }));
+
   await dbRun(
-    `INSERT INTO outlook_tokens (user_id, mail_token, expires_at) VALUES (?, ?, ?)
-     ON DUPLICATE KEY UPDATE mail_token = VALUES(mail_token), expires_at = VALUES(expires_at)`,
-    userId, mailToken, expiresAt
+    `INSERT INTO outlook_tokens (user_id, mail_token, expires_at, credentials_enc) VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE mail_token = VALUES(mail_token), expires_at = VALUES(expires_at), credentials_enc = VALUES(credentials_enc)`,
+    userId, mailToken, expiresAt, credEnc
   );
-  console.log('[Outlook] Token stored successfully');
+  console.log('[Outlook] Token stored, expires_at:', expiresAt);
 
   return mailToken;
 }
 
+// Prevent concurrent refresh for the same user
+const refreshLocks = new Map<string, Promise<string | null>>();
+
 /**
- * Get a valid (non-expired) mail_token for a user.
+ * Get a valid mail_token for a user. Auto-refreshes if expired using stored credentials.
  */
 export async function getMailToken(userId: string): Promise<string | null> {
-  const row = await dbGet<{ mail_token: string; expires_at: string }>(
-    'SELECT mail_token, expires_at FROM outlook_tokens WHERE user_id = ?', userId
+  const row = await dbGet<{ mail_token: string; expires_at: string; credentials_enc?: string }>(
+    'SELECT mail_token, expires_at, credentials_enc FROM outlook_tokens WHERE user_id = ?', userId
   );
   if (!row) return null;
 
-  // Check expiry
-  if (new Date(row.expires_at) < new Date()) {
+  // Token still valid (>5 min remaining) — return as-is
+  const remaining = new Date(row.expires_at).getTime() - Date.now();
+  if (remaining > 5 * 60_000) {
+    return row.mail_token;
+  }
+
+  // Token expired or expiring soon — try auto-refresh
+  if (row.credentials_enc) {
+    // Deduplicate concurrent refresh attempts
+    if (refreshLocks.has(userId)) {
+      return refreshLocks.get(userId)!;
+    }
+    const promise = (async () => {
+      try {
+        const { username, password } = JSON.parse(decrypt(row.credentials_enc!));
+        console.log('[Outlook] Auto-refreshing token for user:', userId);
+        const newToken = await authenticateOutlook(userId, username, password);
+        if (newToken) return newToken;
+      } catch (err) {
+        console.warn('[Outlook] Auto-refresh failed:', err);
+      }
+      // Refresh failed — if token not yet expired, still usable
+      if (remaining > 0) return row.mail_token;
+      await dbRun('DELETE FROM outlook_tokens WHERE user_id = ?', userId);
+      return null;
+    })();
+    refreshLocks.set(userId, promise);
+    try { return await promise; } finally { refreshLocks.delete(userId); }
+  }
+
+  // No stored credentials — if expired, delete
+  if (remaining <= 0) {
     await dbRun('DELETE FROM outlook_tokens WHERE user_id = ?', userId);
     return null;
   }
@@ -118,15 +172,10 @@ export async function fetchMessages(mailToken: string, folder: string = 'Inbox',
   return data.messages || [];
 }
 
-interface OutlookMessageDetail extends OutlookMessage {
-  body?: string;
-  body_type?: string;
-}
-
 /**
  * Fetch a single message by ID (with full body).
  */
-export async function fetchMessageDetail(mailToken: string, messageId: string): Promise<OutlookMessageDetail | null> {
+export async function fetchMessageDetail(mailToken: string, messageId: string): Promise<OutlookMessage | null> {
   const res = await fetch(`${OUTLOOK_BASE}/messages/${encodeURIComponent(messageId)}`, {
     headers: { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${mailToken}` },
   });
@@ -134,13 +183,19 @@ export async function fetchMessageDetail(mailToken: string, messageId: string): 
     console.warn('[Outlook] fetchMessageDetail failed:', res.status, await res.text().catch(() => ''));
     return null;
   }
-  const data = await res.json() as OutlookMessageDetail & { message?: OutlookMessageDetail };
-  // API may return message at root or nested under .message
-  return data.message || (data.id ? data : null);
+  const data = await res.json() as any;
+
+  // Panjit API returns: { success, message: "查詢成功", message_detail: {...} }
+  const detail = data.message_detail;
+  if (!detail || typeof detail !== 'object') {
+    console.warn('[Outlook] fetchMessageDetail: no message_detail in response, keys:', Object.keys(data || {}));
+    return null;
+  }
+  return detail as OutlookMessage;
 }
 
 /**
- * Logout and remove cached token.
+ * Logout and remove cached token + credentials.
  */
 export async function logoutOutlook(userId: string): Promise<void> {
   const token = await getMailToken(userId);
