@@ -7,6 +7,49 @@ import { getSandboxPath } from './sandbox.js';
 import type { SSEEvent } from '../types.js';
 
 /**
+ * Translate known Claude CLI error messages to user-friendly Chinese.
+ * Returns translated string if matched, null otherwise.
+ */
+function humanizeClaudeError(text: string): string | null {
+  const t = text.trim();
+
+  // "You've hit your limit · resets 4pm (Asia/Taipei)"
+  const limitMatch = t.match(/You[''\u2019]ve hit your limit.*?resets?\s+(\d{1,2}(?::\d{2})?\s*[ap]m)(?:\s*\(([^)]+)\))?/i);
+  if (limitMatch) {
+    const time = limitMatch[1];
+    const tz = limitMatch[2] || '';
+    return `AI 服務使用額度已達上限，預計於 ${time}${tz ? ` (${tz})` : ''} 重置。請稍後再試。`;
+  }
+
+  // Generic "hit your limit" without reset time
+  if (/you[''\u2019]ve hit your limit/i.test(t)) {
+    return 'AI 服務使用額度已達上限，請稍後再試。';
+  }
+
+  // "rate limit" / "too many requests" / 429
+  if (/rate.?limit|too many requests|429/i.test(t) && t.length < 500) {
+    return '請求過於頻繁，請稍候幾秒再試。';
+  }
+
+  // "overloaded" / "capacity"
+  if (/overloaded|over.?capacity|503/i.test(t) && t.length < 500) {
+    return 'AI 服務目前繁忙，請稍後再試。';
+  }
+
+  // "credit" / "billing" / "payment"
+  if (/insufficient.?credit|billing|payment.*required/i.test(t) && t.length < 500) {
+    return 'AI 服務帳戶額度不足，請聯繫管理員。';
+  }
+
+  // "invalid api key" / "unauthorized" / 401
+  if (/invalid.?api.?key|unauthorized|401/i.test(t) && t.length < 500) {
+    return 'AI 服務認證失敗，請聯繫管理員檢查設定。';
+  }
+
+  return null;
+}
+
+/**
  * Resolve the Claude CLI to a direct node invocation.
  * On Windows, npm global installs create .cmd wrappers that break under
  * concurrently/tsx process groups. We find the actual .js entry point
@@ -268,9 +311,10 @@ export function spawnClaude(
 
     if (code !== 0 && !inputTokens) {
       console.error(`[Claude CLI] ${logRole}/${logSkill} FAILED: code=${code}, inputTokens=0, stderr=${stderrBuffer.substring(0, 500)}`);
+      const fallback = 'AI 處理程序發生非預期錯誤，請稍後再試。';
       emitter.emit('event', {
         type: 'error',
-        data: `Claude CLI exited with code ${code}. ${stderrBuffer || 'No error details.'}`,
+        data: humanizeClaudeError(stderrBuffer) || fallback,
       } satisfies SSEEvent);
     }
 
@@ -291,7 +335,7 @@ export function spawnClaude(
     console.error('[Claude CLI] Process error:', error);
     emitter.emit('event', {
       type: 'error',
-      data: `Claude CLI process error: ${error.message}`,
+      data: humanizeClaudeError(error.message) || `AI 處理程序發生錯誤，請稍後再試。`,
     } satisfies SSEEvent);
     emitter.emit('event', {
       type: 'done',
@@ -351,9 +395,11 @@ function processStreamEvent(
   if (type === 'content_block_delta') {
     const delta = parsed.delta as Record<string, unknown> | undefined;
     if (delta?.type === 'text_delta' && delta.text) {
+      const rawDelta = delta.text as string;
+      const translated = humanizeClaudeError(rawDelta);
       emitter.emit('event', {
-        type: 'text',
-        data: delta.text,
+        type: translated ? 'error' : 'text',
+        data: translated || rawDelta,
       } satisfies SSEEvent);
     }
     if (delta?.type === 'thinking_delta' && delta.thinking) {
@@ -377,9 +423,11 @@ function processStreamEvent(
     if (content) {
       for (const block of content) {
         if (block.type === 'text' && block.text) {
+          const rawText = block.text as string;
+          const translated = humanizeClaudeError(rawText);
           emitter.emit('event', {
-            type: 'text',
-            data: block.text as string,
+            type: translated ? 'error' : 'text',
+            data: translated || rawText,
           } satisfies SSEEvent);
         }
         if (block.type === 'tool_use') {
