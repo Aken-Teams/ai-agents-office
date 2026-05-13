@@ -220,7 +220,7 @@ export function buildMemoryContext(memories: { content: string }[]): string {
 }
 
 /**
- * Build a cross-assistant context block.
+ * Build a cross-assistant context block (same user only).
  * Shows the user's other assistant conversations so the AI knows what's been done.
  */
 export function buildCrossAssistantContext(
@@ -234,3 +234,4 @@ export function buildCrossAssistantContext(
     lines.join('\n') + '\n' +
     'You may reference this context when relevant to help the user connect insights across conversations.\n';
 }
+

@@ -35,7 +35,7 @@ router.post('/', async (req: Request, res: Response) => {
     system_prompt || null, icon || null
   );
 
-  const conversation = await dbGet<Conversation>('SELECT * FROM conversations WHERE id = ?', id);
+  const conversation = await dbGet<Conversation>('SELECT * FROM conversations WHERE id = ? AND user_id = ?', id, userId);
   res.status(201).json(conversation);
 });
 
@@ -69,17 +69,17 @@ router.patch('/:id', async (req: Request, res: Response) => {
 
   if (!conversation) { res.status(404).json({ error: 'Conversation not found' }); return; }
 
-  if (title) await dbRun('UPDATE conversations SET title = ? WHERE id = ?', title, conversation.id);
-  if (status) await dbRun('UPDATE conversations SET status = ? WHERE id = ?', status, conversation.id);
-  if (system_prompt !== undefined) await dbRun('UPDATE conversations SET system_prompt = ? WHERE id = ?', system_prompt || null, conversation.id);
-  if (icon !== undefined) await dbRun('UPDATE conversations SET icon = ? WHERE id = ?', icon || null, conversation.id);
+  if (title) await dbRun('UPDATE conversations SET title = ? WHERE id = ? AND user_id = ?', title, conversation.id, userId);
+  if (status) await dbRun('UPDATE conversations SET status = ? WHERE id = ? AND user_id = ?', status, conversation.id, userId);
+  if (system_prompt !== undefined) await dbRun('UPDATE conversations SET system_prompt = ? WHERE id = ? AND user_id = ?', system_prompt || null, conversation.id, userId);
+  if (icon !== undefined) await dbRun('UPDATE conversations SET icon = ? WHERE id = ? AND user_id = ?', icon || null, conversation.id, userId);
   if (skill_id !== undefined) {
-    await dbRun('UPDATE conversations SET skill_id = ? WHERE id = ?', skill_id || null, conversation.id);
+    await dbRun('UPDATE conversations SET skill_id = ? WHERE id = ? AND user_id = ?', skill_id || null, conversation.id, userId);
     // When skill is bound, set mode to direct; when unbound, allow orchestrator
-    await dbRun('UPDATE conversations SET mode = ? WHERE id = ?', skill_id ? 'direct' : null, conversation.id);
+    await dbRun('UPDATE conversations SET mode = ? WHERE id = ? AND user_id = ?', skill_id ? 'direct' : null, conversation.id, userId);
   }
 
-  const updated = await dbGet('SELECT * FROM conversations WHERE id = ?', conversation.id);
+  const updated = await dbGet('SELECT * FROM conversations WHERE id = ? AND user_id = ?', conversation.id, userId);
   res.json(updated);
 });
 
@@ -126,10 +126,10 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
   if (!conversation) { res.status(404).json({ error: 'Conversation not found' }); return; }
 
-  await dbRun('DELETE FROM messages WHERE conversation_id = ?', conversation.id);
-  await dbRun('DELETE FROM task_executions WHERE conversation_id = ?', conversation.id);
-  await dbRun('DELETE FROM agent_sessions WHERE conversation_id = ?', conversation.id);
-  await dbRun('DELETE FROM conversations WHERE id = ?', conversation.id);
+  await dbRun('DELETE FROM messages WHERE conversation_id = ? AND conversation_id IN (SELECT id FROM conversations WHERE user_id = ?)', conversation.id, userId);
+  await dbRun('DELETE FROM task_executions WHERE conversation_id = ? AND conversation_id IN (SELECT id FROM conversations WHERE user_id = ?)', conversation.id, userId);
+  await dbRun('DELETE FROM agent_sessions WHERE conversation_id = ? AND conversation_id IN (SELECT id FROM conversations WHERE user_id = ?)', conversation.id, userId);
+  await dbRun('DELETE FROM conversations WHERE id = ? AND user_id = ?', conversation.id, userId);
 
   res.json({ success: true });
 });

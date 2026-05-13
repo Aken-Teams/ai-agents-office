@@ -93,7 +93,7 @@ export class Orchestrator {
       "SELECT content FROM user_memories WHERE user_id = ? AND memory_type = 'preference' ORDER BY created_at DESC LIMIT 10", this.userId
     );
 
-    // For assistant conversations: inject cross-assistant context
+    // For assistant conversations: inject cross-assistant context (same user only)
     let crossAssistantContext = '';
     if (this.conversationCategory === 'assistant') {
       const otherSummaries = await dbAll<{ title: string; summary: string; created_at: string }>(

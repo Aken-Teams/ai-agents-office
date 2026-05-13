@@ -102,18 +102,27 @@ export default function AdminSkillsPage() {
         <section className="relative overflow-hidden bg-surface-container p-4 md:p-8 rounded-lg border border-outline-variant/10">
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none" />
           <div className="relative z-10">
-            <h3 className="text-lg md:text-2xl font-headline font-bold text-on-surface mb-1 md:mb-2">
-              {t('admin.skills.hero.loaded', { count: skills.length }).split(String(skills.length)).map((part, i, arr) =>
-                i < arr.length - 1 ? (
-                  <span key={i}>{part}<span className="text-primary">{skills.length}</span></span>
-                ) : (
-                  <span key={i}>{part}</span>
-                )
-              )}
-            </h3>
-            <p className="text-xs md:text-sm text-on-surface-variant">
-              {t('admin.skills.hero.summary', { generatorCount: generators.length, agentCount: agents.length })}
-            </p>
+            {(() => {
+              const extraMcp = deployMode === 'pro-panjit' ? 1 : 0;
+              const totalCount = skills.length + extraMcp;
+              const agentTotal = agents.length + extraMcp;
+              return (
+                <>
+                  <h3 className="text-lg md:text-2xl font-headline font-bold text-on-surface mb-1 md:mb-2">
+                    {t('admin.skills.hero.loaded', { count: totalCount }).split(String(totalCount)).map((part, i, arr) =>
+                      i < arr.length - 1 ? (
+                        <span key={i}>{part}<span className="text-primary">{totalCount}</span></span>
+                      ) : (
+                        <span key={i}>{part}</span>
+                      )
+                    )}
+                  </h3>
+                  <p className="text-xs md:text-sm text-on-surface-variant">
+                    {t('admin.skills.hero.summary', { generatorCount: generators.length, agentCount: agentTotal })}
+                  </p>
+                </>
+              );
+            })()}
           </div>
         </section>
 
@@ -166,39 +175,34 @@ export default function AdminSkillsPage() {
           })}
           {/* Email MCP — display-only card for pro-panjit */}
           {deployMode === 'pro-panjit' && (filter === 'all' || filter === 'agent') && (
-            <div className="group bg-surface-container hover:bg-surface-container-high transition-all duration-300 p-4 md:p-6 rounded-lg border border-dashed border-tertiary/30 hover:border-tertiary/50 flex flex-col justify-between relative overflow-hidden">
-              <div className="absolute top-3 right-3">
-                <span className="px-2 py-0.5 bg-tertiary/10 text-tertiary text-[10px] font-bold tracking-widest uppercase rounded-full">
-                  MCP
-                </span>
-              </div>
+            <div className="group bg-surface-container hover:bg-surface-container-high transition-all duration-300 p-4 md:p-6 rounded-lg border border-transparent hover:border-primary/10 flex flex-col justify-between">
               <div>
                 <div className="flex justify-between items-start mb-3 md:mb-5">
                   <div className="w-10 h-10 md:w-12 md:h-12 rounded flex items-center justify-center bg-tertiary/10">
                     <span className="material-symbols-outlined text-2xl md:text-3xl text-tertiary">mail</span>
                   </div>
-                  <span className="px-2 py-0.5 bg-surface-container-highest text-xs md:text-sm font-bold tracking-widest uppercase text-tertiary">
-                    {t('admin.skills.tag.dataSource' as any)}
+                  <span className="px-2 py-0.5 bg-surface-container-highest text-xs md:text-sm font-bold tracking-widest uppercase text-secondary">
+                    {t('admin.skills.tag.assistantAgent')}
                   </span>
                 </div>
                 <h3 className="text-base md:text-xl font-headline font-semibold text-on-surface mb-1">
-                  {t('admin.skills.emailMcp.name' as any)}
+                  Email Context Injector (Outlook)
                 </h3>
-                <p className="text-xs md:text-sm text-on-surface-variant mb-1 font-medium">
-                  ID: <span className="font-mono text-tertiary/80">email-mcp</span>
+                <p className="text-xs md:text-sm text-on-surface-variant mb-2 md:mb-3 font-medium">
+                  ID: <span className="font-mono text-primary/80">email-mcp</span>
                 </p>
                 <p className="text-xs md:text-sm text-on-surface-variant/80 mb-4 md:mb-6 leading-relaxed">
-                  {t('admin.skills.emailMcp.description' as any)}
+                  Auto-detect email-related conversations and inject Outlook inbox data as context. No skill binding needed — triggers on email keywords.
                 </p>
               </div>
               <div className="flex items-center justify-between text-xs md:text-sm text-on-surface-variant bg-surface-container-low p-2.5 md:p-3 rounded">
                 <span className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-xs md:text-sm">database</span>
-                  {t('admin.skills.emailMcp.type' as any)}
+                  <span className="material-symbols-outlined text-xs md:text-sm">psychology</span>
+                  {t('admin.skills.noFileType')}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-xs md:text-sm">auto_awesome</span>
-                  {t('admin.skills.emailMcp.autoInject' as any)}
+                  Keyword Trigger
                 </span>
               </div>
             </div>

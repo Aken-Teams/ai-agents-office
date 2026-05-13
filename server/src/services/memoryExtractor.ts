@@ -56,7 +56,7 @@ export async function extractMemoryAndSummary(
     // Skip if summary already exists (avoid duplicate extraction)
     // Exception: assistant conversations always re-extract to keep work_log current
     const conv = await dbGet<{ summary: string | null }>(
-      'SELECT summary FROM conversations WHERE id = ?', conversationId
+      'SELECT summary FROM conversations WHERE id = ? AND user_id = ?', conversationId, userId
     );
     if (conv?.summary && conversationCategory !== 'assistant') return;
 
@@ -103,8 +103,8 @@ export async function extractMemoryAndSummary(
     // Save summary
     if (parsed.summary) {
       await dbRun(
-        'UPDATE conversations SET summary = ? WHERE id = ?',
-        parsed.summary.substring(0, 500), conversationId
+        'UPDATE conversations SET summary = ? WHERE id = ? AND user_id = ?',
+        parsed.summary.substring(0, 500), conversationId, userId
       );
       console.log(`[MemoryExtractor] Summary saved for conversation ${conversationId}`);
 
@@ -112,12 +112,12 @@ export async function extractMemoryAndSummary(
       // so cross-assistant context always reflects the latest state
       if (conversationCategory === 'assistant') {
         const existingWorkLog = await dbGet<{ id: string }>(
-          "SELECT id FROM user_memories WHERE source_conversation_id = ? AND memory_type = 'work_log'",
-          conversationId
+          "SELECT id FROM user_memories WHERE source_conversation_id = ? AND memory_type = 'work_log' AND user_id = ?",
+          conversationId, userId
         );
         if (existingWorkLog) {
-          await dbRun('UPDATE user_memories SET content = ? WHERE id = ?',
-            parsed.summary.substring(0, 200), existingWorkLog.id);
+          await dbRun('UPDATE user_memories SET content = ? WHERE id = ? AND user_id = ?',
+            parsed.summary.substring(0, 200), existingWorkLog.id, userId);
           console.log(`[MemoryExtractor] work_log updated for assistant conversation ${conversationId}`);
         } else if (!atMemoryLimit) {
           await dbRun(

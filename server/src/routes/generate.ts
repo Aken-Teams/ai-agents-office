@@ -41,8 +41,10 @@ async function buildCrossReferenceContext(userId: string, referencedConvIds: str
     if (!refConv) continue;
 
     const refMessages = await dbAll<{ role: string; content: string }>(
-      'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 10',
-      refId
+      `SELECT m.role, m.content FROM messages m
+       INNER JOIN conversations c ON c.id = m.conversation_id AND c.user_id = ?
+       WHERE m.conversation_id = ? ORDER BY m.created_at DESC LIMIT 10`,
+      userId, refId
     );
 
     const lines: string[] = [`### 引用：${refConv.title}`];
@@ -313,7 +315,7 @@ async function handleDirect(
   );
   const memoryContext = buildMemoryContext(userMemories);
 
-  // For assistant conversations: inject cross-assistant context from other assistant conversations
+  // For assistant conversations: inject cross-assistant context (same user only)
   let crossAssistantContext = '';
   if (conversation.category === 'assistant') {
     const otherSummaries = await dbAll<{ title: string; summary: string; created_at: string }>(
