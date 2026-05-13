@@ -69,11 +69,11 @@ await workbook.xlsx.writeFile('output.xlsx');
 
 ## CRITICAL — Content Source Rules
 
-1. **Only include content explicitly present in the task description or user's message.**
-   - If the task says "做一個銷售表格" with no branding → generic professional spreadsheet, no company name in headers.
-   - If the task specifies a company name or branding → use it (it comes from the user's personal preferences).
+**All content in the generated spreadsheet** — sheet names, headers, cell data, branding, terminology, everything — must come from either:
+1. The **task description** provided to you, or
+2. The **user's message** in the conversation
 
-2. **NEVER fabricate company names, branding, slogans, frameworks, or proprietary terms** from your own knowledge.
+If specific content (company names, frameworks, slogans, methodologies, proprietary terms, etc.) is NOT present in those sources, do NOT include it **anywhere** in the output.
 
 ## Output Rules
 - Always name the output file descriptively
