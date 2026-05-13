@@ -750,6 +750,13 @@ router.post('/ad/login', async (req: Request, res: Response) => {
         await dbRun('UPDATE users SET display_name = ?, updated_at = NOW() WHERE id = ?', fullAdUser.displayName, existing.id);
       }
       await dbRun('UPDATE users SET last_login_at = NOW() WHERE id = ?', existing.id);
+      // Cache Outlook mail_token for email reading (fire-and-forget)
+      console.log('[Outlook] AD login check — deployMode:', config.deployMode, 'adApiKey:', config.adApiKey ? 'SET' : 'EMPTY');
+      if (config.deployMode === 'pro-panjit' && config.adApiKey) {
+        import('../services/outlookApi.js').then(({ authenticateOutlook }) =>
+          authenticateOutlook(existing.id, username.trim(), password)
+        ).catch(err => console.warn('[Outlook] Token acquisition failed:', err));
+      }
       const user = await dbGet<{ email: string }>('SELECT email FROM users WHERE id = ?', existing.id);
       const token = jwt.sign({ userId: existing.id, email: user?.email || '', role: existing.role || 'user' }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
       res.json({ token, user: { id: existing.id, email: user?.email || '', displayName: fullAdUser.displayName || existing.display_name, role: existing.role || 'user' } });

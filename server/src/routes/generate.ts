@@ -323,11 +323,20 @@ async function handleDirect(
     crossAssistantContext = buildCrossAssistantContext(otherSummaries, conversationId);
   }
 
+  // Pre-fetch email data when user mentions email keywords (any skill)
+  const { messageNeedsEmail, getEmailContextForPrompt } = await import('../services/emailContext.js');
+  const emailContext = messageNeedsEmail(sanitizedMessage)
+    ? await getEmailContextForPrompt(userId, sanitizedMessage)
+    : '';
+
   // Inject user-defined system_prompt (role description) for this assistant
   const customRolePrompt = conversation.system_prompt
     ? `\n\n## Custom Role Instructions\nThe user has configured this assistant with the following role:\n${conversation.system_prompt}\nPlease behave according to this role description.\n`
     : '';
   const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + customRolePrompt + uploadContext + memoryContext + crossAssistantContext + refContext;
+
+  // Inject email data into user message (not system prompt) so it persists on resume
+  const finalMessage = emailContext ? sanitizedMessage + emailContext : sanitizedMessage;
 
   if (skillId && skillId !== conversation.skill_id) {
     await dbRun('UPDATE conversations SET skill_id = ? WHERE id = ?', skillId, conversationId);
@@ -366,7 +375,7 @@ async function handleDirect(
       if (history) systemPrompt = baseSystemPrompt + history;
     }
 
-    const { emitter, abort } = spawnClaude(sanitizedMessage, systemPrompt, {
+    const { emitter, abort } = spawnClaude(finalMessage, systemPrompt, {
       userId, conversationId, sessionId: sid, isResume, skillId: effectiveSkillId,
       customAllowedTools: skill?.allowedTools,
       customDisallowedTools: skill?.disallowedTools,

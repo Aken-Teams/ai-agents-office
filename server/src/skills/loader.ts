@@ -63,6 +63,13 @@ export function loadSkills(): SkillDefinition[] {
         }
       }
 
+      const deployModes = Array.isArray(data.deployModes) ? data.deployModes : undefined;
+
+      // Skip skills restricted to other deploy modes
+      if (deployModes && deployModes.length > 0 && !deployModes.includes(config.deployMode)) {
+        continue;
+      }
+
       skills.push({
         id: entry.name,
         name: data.name || entry.name,
@@ -73,6 +80,7 @@ export function loadSkills(): SkillDefinition[] {
         order: typeof data.order === 'number' ? data.order : undefined,
         allowedTools: Array.isArray(data.allowedTools) ? data.allowedTools : undefined,
         disallowedTools: Array.isArray(data.disallowedTools) ? data.disallowedTools : undefined,
+        deployModes,
       });
     } catch (error) {
       console.error(`Failed to load skill ${entry.name}:`, error);

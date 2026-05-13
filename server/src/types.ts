@@ -86,6 +86,7 @@ export interface SkillDefinition {
   order?: number;
   allowedTools?: string[];
   disallowedTools?: string[];
+  deployModes?: string[];
 }
 
 // --- Multi-agent orchestration types ---

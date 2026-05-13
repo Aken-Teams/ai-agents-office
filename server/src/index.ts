@@ -13,6 +13,7 @@ import uploadRoutes from './routes/uploads.js';
 import shareRoutes from './routes/share.js';
 import greetingRoutes from './routes/greeting.js';
 import quotaRequestRoutes from './routes/quota-request.js';
+import outlookRoutes from './routes/outlook.js';
 
 async function main() {
   // Initialize database
@@ -33,7 +34,7 @@ async function main() {
 
   // Health check
   app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({ status: 'ok', timestamp: new Date().toISOString(), isBeta: config.isBeta, deployMode: config.deployMode });
   });
 
   // Routes
@@ -48,6 +49,7 @@ async function main() {
   app.use('/api/share', shareRoutes);
   app.use('/api/greeting', greetingRoutes);
   app.use('/api/quota-request', quotaRequestRoutes);
+  app.use('/api/outlook', outlookRoutes);
 
   // Start server
   app.listen(config.port, () => {

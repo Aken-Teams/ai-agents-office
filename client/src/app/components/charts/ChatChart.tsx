@@ -54,9 +54,9 @@ export default function ChatChart({ rawJson }: ChatChartProps) {
     try {
       const raw = JSON.parse(rawJson);
       if (!raw || !raw.type) return { data: null, error: 'Missing "type" field' };
-      const validTypes = ['bar', 'line', 'area', 'pie', 'donut', 'radar', 'scatter'];
-      if (!validTypes.includes(raw.type)) return { data: null, error: `Unknown type: "${raw.type}"` };
       const obj = normalizeChartData(raw);
+      const validTypes = ['bar', 'line', 'area', 'pie', 'donut', 'radar', 'scatter'];
+      if (!validTypes.includes(obj.type)) return { data: null, error: `Unknown type: "${obj.type}"` };
       const err = validateChartData(obj as ChartData);
       if (err) return { data: null, error: err };
       return { data: obj as ChartData, error: null };

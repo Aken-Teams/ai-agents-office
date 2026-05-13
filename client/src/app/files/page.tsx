@@ -125,12 +125,13 @@ function DeleteConfirmModal({
    Preview Modal
    ============================================================ */
 function PreviewModal({
-  file: initialFile, token, onClose, onDownload,
+  file: initialFile, token, onClose, onDownload, isBeta = true,
 }: {
   file: FileItem;
   token: string;
   onClose: () => void;
   onDownload: (id: string, name: string) => void;
+  isBeta?: boolean;
 }) {
   const { t, locale } = useTranslation();
   const [currentFile, setCurrentFile] = useState(initialFile);
@@ -326,16 +327,18 @@ function PreviewModal({
             ) : null}
           </div>
 
-          {/* Watermark overlay — rendered AFTER content so it sits ON TOP of document */}
-          <div className="absolute inset-0 pointer-events-none overflow-hidden z-30 select-none" aria-hidden>
-            <div className="absolute inset-[-50%] flex flex-wrap gap-24 rotate-[-30deg]">
-              {Array.from({ length: 40 }).map((_, i) => (
-                <span key={i} className="text-3xl font-headline font-bold tracking-[0.3em] uppercase whitespace-nowrap" style={{ color: 'rgba(128,128,128,0.18)' }}>
-                  {t('files.watermark' as any)}
-                </span>
-              ))}
+          {/* Watermark overlay — only in Beta mode */}
+          {isBeta && (
+            <div className="absolute inset-0 pointer-events-none overflow-hidden z-30 select-none" aria-hidden>
+              <div className="absolute inset-[-50%] flex flex-wrap gap-24 rotate-[-30deg]">
+                {Array.from({ length: 40 }).map((_, i) => (
+                  <span key={i} className="text-3xl font-headline font-bold tracking-[0.3em] uppercase whitespace-nowrap" style={{ color: 'rgba(128,128,128,0.18)' }}>
+                    {t('files.watermark' as any)}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* ===== Right Sidebar (desktop) / Bottom Panel (mobile) ===== */}
@@ -580,6 +583,7 @@ function FilesContent() {
   const [conversations, setConversations] = useState<ConversationInfo[]>([]);
   const [deleteUploadTarget, setDeleteUploadTarget] = useState<UploadItem | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [isBeta, setIsBeta] = useState(true);
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
@@ -591,6 +595,10 @@ function FilesContent() {
     const timer = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    fetch('/api/health').then(r => r.json()).then(d => setIsBeta(d.isBeta ?? true)).catch(() => {});
+  }, []);
 
   const fetchStorage = useCallback(() => {
     if (!token) return;
@@ -732,6 +740,7 @@ function FilesContent() {
           token={token}
           onClose={() => setPreviewFile(null)}
           onDownload={handleDownload}
+          isBeta={isBeta}
         />
       )}
 

@@ -145,6 +145,12 @@ export class Orchestrator {
         messageWithFileContext = messageWithFileContext + '\n\n[System: The user has attached files for this request.]\n' + fileContext;
       }
     }
+    // Inject email data when message mentions email keywords
+    const { messageNeedsEmail, getEmailContextForPrompt } = await import('./emailContext.js');
+    if (messageNeedsEmail(message)) {
+      const emailCtx = await getEmailContextForPrompt(this.userId, message);
+      if (emailCtx) messageWithFileContext += emailCtx;
+    }
 
     // Recursive orchestration loop
     let currentMessage = messageWithFileContext;
@@ -391,6 +397,15 @@ export class Orchestrator {
       await this.updateTaskInDb(taskId, 'failed', error);
       this.sseWriter({ type: 'task_failed', data: { taskId, skillId: task.skillId, error } });
       return `Error: ${error}`;
+    }
+
+    // Inject email data when worker task mentions email keywords
+    {
+      const { messageNeedsEmail: needsEmail, getEmailContextForPrompt: getEmailCtx } = await import('./emailContext.js');
+      if (needsEmail(task.description)) {
+        const emailCtx = await getEmailCtx(this.userId, task.description);
+        if (emailCtx) task.description += emailCtx;
+      }
     }
 
     // Build system prompt for this skill (with user upload context)

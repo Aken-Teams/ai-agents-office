@@ -54,7 +54,7 @@ export const config = {
 
   // AD (Active Directory) integration — pro-panjit only
   adApiUrl: process.env.AD_API_URL || 'https://apigw.panjit.com.tw/ldap/api/v1',
-  adApiKey: process.env.AD_API_KEY || '',
+  adApiKey: process.env.AD_API_KEY || process.env.AD_API || '',
   // Whitelist: these emails can still use email/password login even in pro-panjit mode
   emailLoginWhitelist: (process.env.EMAIL_LOGIN_WHITELIST || 'admin@zhaoi.ai,aken1023@gmail.com').split(',').map(e => e.trim().toLowerCase()),
 

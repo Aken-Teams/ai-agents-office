@@ -12,6 +12,28 @@ import HelpButton from '../components/HelpButton';
 
 const PAGE_SIZE = 6;
 
+interface EmailFolder {
+  id: string;
+  name: string;
+  displayName: string;
+  totalCount: number;
+  unreadCount: number;
+}
+
+interface EmailMessage {
+  id: string;
+  subject: string;
+  from: { name: string; address: string };
+  to?: Array<{ name: string; address: string }>;
+  cc?: Array<{ name: string; address: string }>;
+  received_at: string;
+  is_read: boolean;
+  has_attachments: boolean;
+  preview: string;
+  body?: string;
+  body_type?: string;
+}
+
 interface AssistantConversation {
   id: string;
   title: string;
@@ -425,6 +447,294 @@ function AssistantEditModal({
   );
 }
 
+// ── Email Modal ─────────────────────────────────────────────────────────────
+function EmailModal({ token, onClose }: { token: string; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [folders, setFolders] = useState<EmailFolder[]>([]);
+  const [messages, setMessages] = useState<EmailMessage[]>([]);
+  const [activeFolder, setActiveFolder] = useState('Inbox');
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [selectedMsg, setSelectedMsg] = useState<EmailMessage | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+
+  const fetchMessages = useCallback(async (folder: string) => {
+    setLoading(true);
+    setSelectedMsg(null);
+    try {
+      const res = await fetch(`${apiBase}/api/outlook/messages?folder=${encodeURIComponent(folder)}&limit=30`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.messages) setMessages(data.messages);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }, [token, apiBase]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [fRes, mRes] = await Promise.all([
+          fetch(`${apiBase}/api/outlook/folders`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+          fetch(`${apiBase}/api/outlook/messages?folder=Inbox&limit=30`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        ]);
+        if (fRes.folders) setFolders(fRes.folders);
+        if (mRes.messages) setMessages(mRes.messages);
+      } catch { /* ignore */ }
+      finally { setLoading(false); }
+    })();
+  }, [token, apiBase]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') { selectedMsg ? setSelectedMsg(null) : onClose(); } };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose, selectedMsg]);
+
+  async function openMessage(msg: EmailMessage) {
+    setSelectedMsg(msg);
+    if (!msg.body) {
+      setDetailLoading(true);
+      try {
+        const res = await fetch(`${apiBase}/api/outlook/messages/${encodeURIComponent(msg.id)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (data.message) {
+          const full = { ...msg, ...data.message };
+          setSelectedMsg(full);
+          setMessages(prev => prev.map(m => m.id === msg.id ? full : m));
+        }
+      } catch { /* ignore */ }
+      finally { setDetailLoading(false); }
+    }
+  }
+
+  const filtered = search.trim()
+    ? messages.filter(m =>
+        m.subject?.toLowerCase().includes(search.toLowerCase()) ||
+        m.from.name?.toLowerCase().includes(search.toLowerCase()) ||
+        m.from.address?.toLowerCase().includes(search.toLowerCase()) ||
+        m.preview?.toLowerCase().includes(search.toLowerCase())
+      )
+    : messages;
+
+  const totalUnread = folders.reduce((sum, f) => sum + f.unreadCount, 0);
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div
+        className="relative bg-surface-container rounded-2xl shadow-2xl border border-outline-variant/10 w-full max-w-3xl mx-4 overflow-hidden flex flex-col"
+        style={{ maxHeight: '85vh' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Modal header */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-outline-variant/10 shrink-0">
+          {selectedMsg ? (
+            <>
+              <button onClick={() => setSelectedMsg(null)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer">
+                <span className="material-symbols-outlined text-on-surface-variant text-lg">arrow_back</span>
+              </button>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-headline font-bold text-base text-on-surface truncate">{selectedMsg.subject || t('assistant.email.noSubject' as any)}</h3>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="w-9 h-9 rounded-lg bg-tertiary/15 flex items-center justify-center">
+                <span className="material-symbols-outlined text-tertiary text-xl">mail</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-headline font-bold text-base text-on-surface">{t('assistant.email.title' as any)}</h3>
+                {totalUnread > 0 && (
+                  <p className="text-xs text-on-surface-variant">{t('assistant.email.unreadCount' as any, { count: totalUnread })}</p>
+                )}
+              </div>
+            </>
+          )}
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer">
+            <span className="material-symbols-outlined text-on-surface-variant text-lg">close</span>
+          </button>
+        </div>
+
+        {selectedMsg ? (
+          /* ── Message Detail View ── */
+          <div className="flex-1 overflow-y-auto">
+            {/* Sender card */}
+            <div className="px-5 py-4 bg-surface-container-high/30 border-b border-outline-variant/10">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-tertiary/15 flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="material-symbols-outlined text-tertiary">person</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-on-surface">{selectedMsg.from.name || selectedMsg.from.address}</span>
+                    <span className="text-xs text-on-surface-variant/70">{'<'}{selectedMsg.from.address}{'>'}</span>
+                  </div>
+                  <p className="text-xs text-on-surface-variant/70 mt-0.5">
+                    {new Date(selectedMsg.received_at).toLocaleString(undefined, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  {selectedMsg.to && selectedMsg.to.length > 0 && (
+                    <p className="text-xs text-on-surface-variant mt-1.5">
+                      <span className="font-medium text-on-surface-variant/80">{t('assistant.email.to' as any)}:</span>{' '}
+                      {selectedMsg.to.map(r => r.name || r.address).join(', ')}
+                    </p>
+                  )}
+                  {selectedMsg.cc && selectedMsg.cc.length > 0 && (
+                    <p className="text-xs text-on-surface-variant mt-0.5">
+                      <span className="font-medium text-on-surface-variant/80">CC:</span>{' '}
+                      {selectedMsg.cc.map(r => r.name || r.address).join(', ')}
+                    </p>
+                  )}
+                  {selectedMsg.has_attachments && (
+                    <div className="flex items-center gap-1 text-xs text-tertiary mt-1.5">
+                      <span className="material-symbols-outlined text-sm">attach_file</span>
+                      {t('assistant.email.hasAttachments' as any)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Loading indicator */}
+            {detailLoading && (
+              <div className="flex items-center justify-center gap-2 text-on-surface-variant py-6">
+                <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                <span className="text-sm">{t('common.loading' as any)}</span>
+              </div>
+            )}
+
+            {/* Body content */}
+            <div className="px-5 py-5">
+              {selectedMsg.body ? (
+                selectedMsg.body_type === 'html' ? (
+                  <iframe
+                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1d1b20;margin:0;padding:0;word-break:break-word;}a{color:#6750A4;}img{max-width:100%;height:auto;}</style></head><body>${selectedMsg.body}</body></html>`}
+                    className="w-full border-0 min-h-[300px]"
+                    sandbox="allow-same-origin"
+                    title="Email body"
+                    onLoad={e => {
+                      const iframe = e.target as HTMLIFrameElement;
+                      if (iframe.contentDocument?.body) {
+                        iframe.style.height = iframe.contentDocument.body.scrollHeight + 20 + 'px';
+                      }
+                    }}
+                  />
+                ) : (
+                  <pre className="text-sm text-on-surface whitespace-pre-wrap font-sans leading-relaxed">{selectedMsg.body}</pre>
+                )
+              ) : !detailLoading ? (
+                <p className="text-sm text-on-surface leading-relaxed whitespace-pre-wrap">{selectedMsg.preview}</p>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          /* ── List View ── */
+          <>
+            {/* Search + folder tabs */}
+            <div className="shrink-0 border-b border-outline-variant/10">
+              {/* Search bar */}
+              <div className="px-4 pt-3 pb-2">
+                <div className="flex items-center gap-2 bg-surface-container-high rounded-lg border border-outline-variant/20 px-3 py-2">
+                  <span className="material-symbols-outlined text-on-surface-variant text-base">search</span>
+                  <input
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder={t('assistant.email.searchPlaceholder' as any)}
+                    className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none"
+                  />
+                  {search && (
+                    <button onClick={() => setSearch('')} className="cursor-pointer">
+                      <span className="material-symbols-outlined text-on-surface-variant text-base">close</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+              {/* Folder tabs */}
+              {folders.length > 0 && (
+                <div className="flex gap-1 px-4 pb-2 overflow-x-auto">
+                  {folders.map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => { setActiveFolder(f.name); setSearch(''); fetchMessages(f.name); }}
+                      className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                        activeFolder === f.name
+                          ? 'bg-tertiary/15 text-tertiary'
+                          : 'bg-surface-container-highest/50 text-on-surface-variant hover:bg-surface-container-highest'
+                      }`}
+                    >
+                      <span>{f.displayName}</span>
+                      {f.unreadCount > 0 && (
+                        <span className="bg-tertiary text-on-primary text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                          {f.unreadCount}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Message list */}
+            <div className="flex-1 overflow-y-auto">
+              {loading ? (
+                <div className="flex items-center justify-center py-12 gap-2 text-on-surface-variant">
+                  <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+                  <span className="text-sm">{t('common.loading' as any)}</span>
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="py-12 text-center text-sm text-on-surface-variant/60">
+                  {search ? t('assistant.email.noSearchResults' as any) : t('assistant.email.noMessages' as any)}
+                </div>
+              ) : (
+                <div className="divide-y divide-outline-variant/10">
+                  {filtered.map(msg => (
+                    <button
+                      key={msg.id}
+                      onClick={() => openMessage(msg)}
+                      className={`w-full text-left px-4 py-3 hover:bg-surface-container-high/50 transition-colors cursor-pointer ${!msg.is_read ? 'bg-tertiary/[0.03]' : ''}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                          !msg.is_read ? 'bg-tertiary/15' : 'bg-surface-container-highest'
+                        }`}>
+                          <span className={`material-symbols-outlined text-sm ${!msg.is_read ? 'text-tertiary' : 'text-on-surface-variant/60'}`}>
+                            {msg.has_attachments ? 'attach_file' : 'person'}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className={`text-sm truncate ${!msg.is_read ? 'font-bold text-on-surface' : 'font-medium text-on-surface/80'}`}>
+                              {msg.from.name || msg.from.address}
+                            </span>
+                            {!msg.is_read && <span className="w-2 h-2 rounded-full bg-tertiary shrink-0" />}
+                            <span className="ml-auto text-[11px] text-on-surface-variant/60 shrink-0">
+                              {new Date(msg.received_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className={`text-sm truncate mb-0.5 ${!msg.is_read ? 'text-on-surface' : 'text-on-surface-variant'}`}>
+                            {msg.subject || t('assistant.email.noSubject' as any)}
+                          </p>
+                          {msg.preview && (
+                            <p className="text-xs text-on-surface-variant/60 truncate">{msg.preview}</p>
+                          )}
+                        </div>
+                        <span className="material-symbols-outlined text-on-surface-variant/30 text-base mt-1 shrink-0">chevron_right</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Content ───────────────────────────────────────────────────────────
 function AssistantContent() {
   const { user, token, isLoading } = useAuth();
@@ -440,6 +750,9 @@ function AssistantContent() {
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
   const [skills, setSkills] = useState<SkillOption[]>([]);
+  const [emailConnected, setEmailConnected] = useState<boolean | null>(null); // null = loading/not available
+  const [deployMode, setDeployMode] = useState<string>('');
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
@@ -477,6 +790,21 @@ function AssistantContent() {
     fetch('/api/generate/skills', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(data => { if (Array.isArray(data)) setSkills(data); })
+      .catch(() => {});
+
+    // Check deploy mode + Outlook email status
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+    fetch(`${apiBase}/api/health`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.deployMode) setDeployMode(data.deployMode);
+        if (data.deployMode === 'pro-panjit') {
+          fetch(`${apiBase}/api/outlook/status`, { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.json())
+            .then(d => setEmailConnected(!!d.connected))
+            .catch(() => setEmailConnected(false));
+        }
+      })
       .catch(() => {});
   }, [token]);
 
@@ -578,6 +906,9 @@ function AssistantContent() {
           onCancel={() => setEditTarget(null)}
         />
       )}
+      {emailModalOpen && token && (
+        <EmailModal token={token} onClose={() => setEmailModalOpen(false)} />
+      )}
 
       <main className={`${sidebarMargin} md:pt-10 pb-12 px-4 md:px-10 transition-all duration-300`}>
         {/* Header */}
@@ -612,17 +943,31 @@ function AssistantContent() {
               )}
             </div>
 
-            {/* New assistant button */}
-            <button
-              onClick={() => setEditTarget('new')}
-              disabled={creating}
-              className="shrink-0 flex items-center gap-2 px-4 py-2.5 cyber-gradient text-on-primary rounded-xl font-bold text-sm hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm mt-1 md:mt-2"
-            >
-              <span className={`material-symbols-outlined text-base ${creating ? 'animate-spin' : ''}`}>
-                {creating ? 'progress_activity' : 'add'}
-              </span>
-              <span className="hidden sm:inline">{t('assistant.newButton' as any)}</span>
-            </button>
+            {/* Header buttons */}
+            <div className="shrink-0 flex items-center gap-2 mt-1 md:mt-2">
+              {/* Email button — pro-panjit only */}
+              {deployMode === 'pro-panjit' && emailConnected && (
+                <button
+                  onClick={() => setEmailModalOpen(true)}
+                  className="relative w-10 h-10 flex items-center justify-center rounded-xl border border-tertiary/20 bg-tertiary/5 text-tertiary hover:bg-tertiary/15 active:scale-95 transition-all cursor-pointer"
+                  title={t('assistant.email.title' as any)}
+                >
+                  <span className="material-symbols-outlined text-xl">mail</span>
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-success rounded-full border-2 border-surface-container-lowest" />
+                </button>
+              )}
+              {/* New assistant button */}
+              <button
+                onClick={() => setEditTarget('new')}
+                disabled={creating}
+                className="flex items-center gap-2 px-4 py-2.5 cyber-gradient text-on-primary rounded-xl font-bold text-sm hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              >
+                <span className={`material-symbols-outlined text-base ${creating ? 'animate-spin' : ''}`}>
+                  {creating ? 'progress_activity' : 'add'}
+                </span>
+                <span className="hidden sm:inline">{t('assistant.newButton' as any)}</span>
+              </button>
+            </div>
           </div>
         </div>
 

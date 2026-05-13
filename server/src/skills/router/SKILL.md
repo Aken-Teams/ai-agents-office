@@ -120,6 +120,15 @@ These agents can render: interactive Recharts (bar/line/pie/radar/scatter), Merm
 - Any request that says "不需要檔案" / "在聊天中顯示" / "no file needed"
 - Any analysis request that does NOT mention pptx/docx/xlsx/pdf/slides/word/excel/powerpoint
 
+### Email Data（Outlook 信箱）
+When the user mentions email/信箱/郵件/信件/收件匣, the system automatically provides
+email data in the message context as `## Pre-fetched Email Data`.
+You do NOT need to route to a special email skill — the data is already available.
+Route based on what the user wants to **do** with the emails:
+- "看信" / "最近的信" → `[TASK:research]` 分析 context 中的 email 資料
+- "把信件整理成 PPT" → `[TASK:pptx-gen]` 使用 email 資料製作簡報
+- "信件趨勢分析" → `[TASK:research]` 分析 email 模式並產生圖表
+
 ### → Route to file generators (`pptx-gen`, `xlsx-gen`, `docx-gen`, `pdf-gen`, `slides-gen`, `webapp-gen`):
 - Explicit file format: "做一個 PPT" / "生成 Excel" / "create a Word doc" / "做 PDF 報告"
 - Keywords: "簡報" → `pptx-gen`, "試算表" → `xlsx-gen`, "文件/報告" → `docx-gen` or `pdf-gen`
@@ -160,6 +169,10 @@ When the user asks for "互動" / "interactive" content without specifying forma
 | "做一個儀表板" | `webapp-gen` | Dashboard = webapp-gen |
 | "幫我做互動簡報" | `slides-gen` | Explicitly says "互動簡報" |
 | "做一個互動的" | offer choice | Ambiguous "互動" → ask slides vs webapp |
+| "幫我看最近的信" | `research` | Email data auto-injected, analyze it |
+| "信箱有什麼新信" | `research` | Email data auto-injected, analyze it |
+| "summarize today's emails" | `research` | Email data auto-injected, summarize |
+| "把收件匣的報告整理成 PPT" | `pptx-gen` | Email data auto-injected, make PPT |
 
 **Default rule**: When ambiguous and no file format is mentioned, prefer `research` (with inline charts) over file generators. Users who want files will explicitly say so.
 

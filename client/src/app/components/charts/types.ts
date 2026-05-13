@@ -75,11 +75,27 @@ export type ChartData =
 export function normalizeChartData(input: any): any {
   if (!input || typeof input !== 'object' || !input.type) return input;
 
+  // Normalize type aliases
+  if (input.type === 'doughnut') input = { ...input, type: 'donut' };
+
   // Normalize bar/pie/donut: AI sometimes uses series[], categories+values, labels+values
   if (input.type === 'bar' || input.type === 'pie' || input.type === 'donut') {
     // Already canonical
     if (Array.isArray(input.data) && input.data.length > 0 && input.data[0]?.name !== undefined) {
       return input;
+    }
+
+    // Chart.js format: data is an object { labels: [...], datasets: [{ data: [...] }] }
+    if (input.data && typeof input.data === 'object' && !Array.isArray(input.data)) {
+      const labels: string[] | undefined = input.data.labels;
+      const datasets: any[] | undefined = input.data.datasets;
+      if (Array.isArray(labels) && Array.isArray(datasets) && datasets.length > 0) {
+        const values = datasets[0]?.data;
+        if (Array.isArray(values) && labels.length === values.length) {
+          const data = labels.map((n: string, i: number) => ({ name: n, value: values[i] }));
+          return { ...input, data, title: input.title || input.data.title };
+        }
+      }
     }
 
     // series format: series[{name, data:[{name,value}]}] → flat data[]

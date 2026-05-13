@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
 
+const DEPLOY_MODE_FEATURES: Record<string, string[]> = {
+  'pro-panjit': ['email-mcp'],
+};
+
 interface Skill {
   id: string;
   name: string;
@@ -25,6 +29,7 @@ export default function AdminSkillsPage() {
   const { t } = useTranslation();
   const [skills, setSkills] = useState<Skill[]>([]);
   const [filter, setFilter] = useState<'all' | 'generator' | 'agent'>('all');
+  const [deployMode, setDeployMode] = useState<string>('');
 
   const SKILL_META: Record<string, { icon: string; iconColor: string; bgColor: string; tag: string; tagColor: string }> = {
     'pptx-gen': { icon: 'present_to_all', iconColor: 'text-warning', bgColor: 'bg-warning/10', tag: t('admin.skills.tag.docGen'), tagColor: 'text-primary' },
@@ -54,6 +59,12 @@ export default function AdminSkillsPage() {
       .then(r => r.json())
       .then(setSkills)
       .catch(console.error);
+
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+    fetch(`${apiBase}/api/health`)
+      .then(r => r.json())
+      .then(data => { if (data.deployMode) setDeployMode(data.deployMode); })
+      .catch(() => {});
   }, [token]);
 
   const generators = skills.filter(s => s.fileType && s.role !== 'router');
@@ -153,7 +164,47 @@ export default function AdminSkillsPage() {
               </div>
             );
           })}
-          {filtered.length === 0 && (
+          {/* Email MCP — display-only card for pro-panjit */}
+          {deployMode === 'pro-panjit' && (filter === 'all' || filter === 'agent') && (
+            <div className="group bg-surface-container hover:bg-surface-container-high transition-all duration-300 p-4 md:p-6 rounded-lg border border-dashed border-tertiary/30 hover:border-tertiary/50 flex flex-col justify-between relative overflow-hidden">
+              <div className="absolute top-3 right-3">
+                <span className="px-2 py-0.5 bg-tertiary/10 text-tertiary text-[10px] font-bold tracking-widest uppercase rounded-full">
+                  MCP
+                </span>
+              </div>
+              <div>
+                <div className="flex justify-between items-start mb-3 md:mb-5">
+                  <div className="w-10 h-10 md:w-12 md:h-12 rounded flex items-center justify-center bg-tertiary/10">
+                    <span className="material-symbols-outlined text-2xl md:text-3xl text-tertiary">mail</span>
+                  </div>
+                  <span className="px-2 py-0.5 bg-surface-container-highest text-xs md:text-sm font-bold tracking-widest uppercase text-tertiary">
+                    {t('admin.skills.tag.dataSource' as any)}
+                  </span>
+                </div>
+                <h3 className="text-base md:text-xl font-headline font-semibold text-on-surface mb-1">
+                  {t('admin.skills.emailMcp.name' as any)}
+                </h3>
+                <p className="text-xs md:text-sm text-on-surface-variant mb-1 font-medium">
+                  ID: <span className="font-mono text-tertiary/80">email-mcp</span>
+                </p>
+                <p className="text-xs md:text-sm text-on-surface-variant/80 mb-4 md:mb-6 leading-relaxed">
+                  {t('admin.skills.emailMcp.description' as any)}
+                </p>
+              </div>
+              <div className="flex items-center justify-between text-xs md:text-sm text-on-surface-variant bg-surface-container-low p-2.5 md:p-3 rounded">
+                <span className="flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-xs md:text-sm">database</span>
+                  {t('admin.skills.emailMcp.type' as any)}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-xs md:text-sm">auto_awesome</span>
+                  {t('admin.skills.emailMcp.autoInject' as any)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {filtered.length === 0 && deployMode !== 'pro-panjit' && (
             <div className="col-span-full py-12 text-center text-on-surface-variant">{t('admin.skills.empty')}</div>
           )}
         </section>

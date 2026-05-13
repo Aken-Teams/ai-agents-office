@@ -1279,7 +1279,7 @@ body { margin: 0; padding: 0; font-family: var(--font-body); color: var(--body-c
   transition: opacity 0.3s;
 }
 .slide-counter:hover { opacity: 0.9; }
-.watermark-overlay {
+${(process.env.Version || 'Beta').toLowerCase() !== 'official' ? `.watermark-overlay {
   position: fixed; inset: 0; z-index: 150;
   pointer-events: none; user-select: none;
   overflow: hidden;
@@ -1287,7 +1287,7 @@ body { margin: 0; padding: 0; font-family: var(--font-body); color: var(--body-c
   background-repeat: repeat;
   background-size: 480px 320px;
 }
-@media print { .watermark-overlay { position: absolute; } }
+@media print { .watermark-overlay { position: absolute; } }` : '.watermark-overlay { display: none; }'}
 .fullscreen-btn {
   position: fixed; bottom: 24px; right: 24px; z-index: 200;
   width: 44px; height: 44px; border-radius: 12px;
@@ -2289,7 +2289,7 @@ function generateHtml(input: SlidesInput): string {
     <div class="nav-progress"></div>
     <nav class="slide-nav" aria-label="Slide navigation"></nav>
     <div class="slide-counter"><span class="current-slide">1</span> / <span class="total-slides">${totalSlides}</span></div>
-    <div class="watermark-overlay" aria-hidden="true"></div>
+    ${(process.env.Version || 'Beta').toLowerCase() !== 'official' ? '<div class="watermark-overlay" aria-hidden="true"></div>' : ''}
     <button class="fullscreen-btn" aria-label="Toggle fullscreen">
       <span class="material-symbols-outlined">fullscreen</span>
     </button>
