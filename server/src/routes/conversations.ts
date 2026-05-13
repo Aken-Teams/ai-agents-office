@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { config } from '../config.js';
 import type { Conversation, Message } from '../types.js';
 
 const router = Router();
@@ -22,15 +23,16 @@ router.get('/', async (req: Request, res: Response) => {
 // POST /api/conversations
 router.post('/', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { title, skillId, category } = req.body;
+  const { title, skillId, category, system_prompt, icon } = req.body;
   const id = uuidv4();
 
   const effectiveSkillId = skillId || null;
   const mode = effectiveSkillId ? 'direct' : null;
   const effectiveCategory = category === 'assistant' ? 'assistant' : 'document';
   await dbRun(
-    'INSERT INTO conversations (id, user_id, title, skill_id, mode, category) VALUES (?, ?, ?, ?, ?, ?)',
-    id, userId, title || 'New Conversation', effectiveSkillId, mode, effectiveCategory
+    'INSERT INTO conversations (id, user_id, title, skill_id, mode, category, system_prompt, icon) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    id, userId, title || 'New Conversation', effectiveSkillId, mode, effectiveCategory,
+    system_prompt || null, icon || null
   );
 
   const conversation = await dbGet<Conversation>('SELECT * FROM conversations WHERE id = ?', id);
@@ -58,7 +60,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 // PATCH /api/conversations/:id
 router.patch('/:id', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { title, status } = req.body;
+  const { title, status, system_prompt, icon, skill_id } = req.body;
 
   const conversation = await dbGet<Conversation>(
     'SELECT * FROM conversations WHERE id = ? AND user_id = ?',
@@ -69,6 +71,13 @@ router.patch('/:id', async (req: Request, res: Response) => {
 
   if (title) await dbRun('UPDATE conversations SET title = ? WHERE id = ?', title, conversation.id);
   if (status) await dbRun('UPDATE conversations SET status = ? WHERE id = ?', status, conversation.id);
+  if (system_prompt !== undefined) await dbRun('UPDATE conversations SET system_prompt = ? WHERE id = ?', system_prompt || null, conversation.id);
+  if (icon !== undefined) await dbRun('UPDATE conversations SET icon = ? WHERE id = ?', icon || null, conversation.id);
+  if (skill_id !== undefined) {
+    await dbRun('UPDATE conversations SET skill_id = ? WHERE id = ?', skill_id || null, conversation.id);
+    // When skill is bound, set mode to direct; when unbound, allow orchestrator
+    await dbRun('UPDATE conversations SET mode = ? WHERE id = ?', skill_id ? 'direct' : null, conversation.id);
+  }
 
   const updated = await dbGet('SELECT * FROM conversations WHERE id = ?', conversation.id);
   res.json(updated);
@@ -123,6 +132,63 @@ router.delete('/:id', async (req: Request, res: Response) => {
   await dbRun('DELETE FROM conversations WHERE id = ?', conversation.id);
 
   res.json({ success: true });
+});
+
+// POST /api/conversations/generate-role — generate role description via DeepSeek
+router.post('/generate-role', async (req: Request, res: Response) => {
+  if (!config.deepseekApiKey) {
+    res.status(503).json({ error: 'AI service not configured' });
+    return;
+  }
+
+  const { name, skillId, locale, currentPrompt } = req.body;
+  if (!name) { res.status(400).json({ error: 'name is required' }); return; }
+
+  const langHint = locale === 'en' ? 'Respond in English.' : locale === 'zh-CN' ? '用简体中文回覆。' : '用繁體中文回覆。';
+  const skillHint = skillId ? `此助手綁定了「${skillId}」技能，請根據此技能的特性來描述角色。` : '';
+  const existingHint = currentPrompt
+    ? `\n用戶已寫了以下草稿描述，請以此為基礎來優化和擴展，保留用戶的核心意圖：\n「${currentPrompt}」\n`
+    : '';
+
+  const prompt = `你是一個 AI 助手角色描述產生器。根據以下資訊，產生一段簡潔、專業的角色描述（system prompt），用來設定 AI 助手的行為和風格。
+
+助手名稱：${name}
+${skillHint}${existingHint}
+要求：
+- 直接輸出角色描述文字，不要加標題或引號
+- 描述長度在 80-200 字之間
+- 包含：角色定位、專長領域、回答風格
+- 語氣專業但友善
+- ${langHint}`;
+
+  try {
+    const dsRes = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.deepseekApiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7,
+        max_tokens: 500,
+      }),
+    });
+
+    if (!dsRes.ok) {
+      console.error('DeepSeek error:', await dsRes.text());
+      res.status(502).json({ error: 'AI service error' });
+      return;
+    }
+
+    const data = await dsRes.json() as { choices: Array<{ message: { content: string } }> };
+    const text = data.choices?.[0]?.message?.content?.trim() || '';
+    res.json({ text });
+  } catch (err) {
+    console.error('DeepSeek request failed:', err);
+    res.status(502).json({ error: 'AI service unavailable' });
+  }
 });
 
 export default router;

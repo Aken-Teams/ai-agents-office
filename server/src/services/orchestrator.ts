@@ -61,8 +61,9 @@ export class Orchestrator {
   private uploadIds: string[];
   private userLocale: string;
   private referenceContext: string;
+  private customRolePrompt: string;
 
-  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document', referenceContext: string = '') {
+  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document', referenceContext: string = '', customRolePrompt: string = '') {
     this.userId = userId;
     this.conversationId = conversationId;
     this.conversationCategory = conversationCategory;
@@ -70,6 +71,7 @@ export class Orchestrator {
     this.userLocale = userLocale;
     this.uploadIds = uploadIds;
     this.referenceContext = referenceContext;
+    this.customRolePrompt = customRolePrompt;
   }
 
   async run(message: string): Promise<OrchestratorResult> {
@@ -101,7 +103,7 @@ export class Orchestrator {
       crossAssistantContext = buildCrossAssistantContext(otherSummaries, this.conversationId);
     }
 
-    const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale) + buildMemoryContext(userMemories) + crossAssistantContext;
+    const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale) + this.customRolePrompt + buildMemoryContext(userMemories) + crossAssistantContext;
 
     // Load conversation history so Router has full context of what was discussed/generated
     const historyMsgs = await dbAll<{ role: string; content: string }>(

@@ -207,7 +207,7 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
     : '';
 
   if (useOrchestrator) {
-    await handleOrchestrated(req, res, userId, conversationId, sanitizedMessage, validUploadIds, userLocale, conversation.category || 'document', refContext);
+    await handleOrchestrated(req, res, userId, conversationId, sanitizedMessage, validUploadIds, userLocale, conversation.category || 'document', refContext, conversation.system_prompt || '');
   } else {
     await handleDirect(req, res, userId, conversationId, conversation, sanitizedMessage, skillId, validUploadIds, userLocale, refContext);
   }
@@ -217,7 +217,7 @@ async function handleOrchestrated(
   _req: Request, res: Response,
   userId: string, conversationId: string, message: string,
   uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document',
-  refContext: string = '',
+  refContext: string = '', systemPrompt: string = '',
 ) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
@@ -236,7 +236,10 @@ async function handleOrchestrated(
     try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* closed */ }
   };
 
-  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds, userLocale, conversationCategory, refContext);
+  const customRolePrompt = systemPrompt
+    ? `\n\n## Custom Role Instructions\nThe user has configured this assistant with the following role:\n${systemPrompt}\nPlease behave according to this role description.\n`
+    : '';
+  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds, userLocale, conversationCategory, refContext, customRolePrompt);
   activeGenerations.set(conversationId, () => orchestrator.abort());
 
   try {
@@ -320,7 +323,11 @@ async function handleDirect(
     crossAssistantContext = buildCrossAssistantContext(otherSummaries, conversationId);
   }
 
-  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + uploadContext + memoryContext + crossAssistantContext + refContext;
+  // Inject user-defined system_prompt (role description) for this assistant
+  const customRolePrompt = conversation.system_prompt
+    ? `\n\n## Custom Role Instructions\nThe user has configured this assistant with the following role:\n${conversation.system_prompt}\nPlease behave according to this role description.\n`
+    : '';
+  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + customRolePrompt + uploadContext + memoryContext + crossAssistantContext + refContext;
 
   if (skillId && skillId !== conversation.skill_id) {
     await dbRun('UPDATE conversations SET skill_id = ? WHERE id = ?', skillId, conversationId);

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
@@ -18,7 +19,41 @@ interface AssistantConversation {
   created_at: string;
   category: string;
   summary: string | null;
+  skill_id: string | null;
+  system_prompt: string | null;
+  icon: string | null;
 }
+
+interface SkillOption {
+  id: string;
+  name: string;
+  description: string;
+  fileType: string;
+}
+
+const ICON_OPTIONS = [
+  'smart_toy', 'psychology', 'description', 'slideshow', 'table_chart',
+  'analytics', 'code', 'science', 'school', 'translate',
+  'brush', 'auto_fix_high', 'support_agent', 'travel_explore', 'calculate',
+];
+
+const SKILL_ICON_MAP: Record<string, string> = {
+  'pptx-gen': 'slideshow',
+  'docx-gen': 'description',
+  'xlsx-gen': 'table_chart',
+  'pdf-gen': 'picture_as_pdf',
+  'slides-gen': 'web',
+  'webapp-gen': 'code',
+  'research': 'travel_explore',
+  'planner': 'event_note',
+  'reviewer': 'rate_review',
+  'data-analyst': 'analytics',
+  'rag-analyst': 'search',
+};
+
+const DOC_SKILLS = new Set(['pptx-gen', 'docx-gen', 'xlsx-gen', 'pdf-gen', 'slides-gen', 'webapp-gen']);
+// Internal-only skills used by orchestrator, not exposed to users
+const INTERNAL_SKILLS = new Set(['planner', 'reviewer']);
 
 // ── Delete Confirm Modal ────────────────────────────────────────────────────
 function DeleteConfirmModal({ title, onConfirm, onCancel }: { title: string; onConfirm: () => void; onCancel: () => void }) {
@@ -61,55 +96,328 @@ function DeleteConfirmModal({ title, onConfirm, onCancel }: { title: string; onC
   );
 }
 
-// ── Rename Modal ───────────────────────────────────────────────────────────
-function RenameModal({ current, onConfirm, onCancel }: { current: string; onConfirm: (v: string) => void; onCancel: () => void }) {
+// ── Skill Picker (portal dropdown — floats above modal) ─────────────────────
+function SkillPicker({ skills, value, onChange }: { skills: SkillOption[]; value: string; onChange: (v: string) => void }) {
   const { t } = useTranslation();
-  const [value, setValue] = useState(current);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  useEffect(() => { inputRef.current?.select(); }, []);
+  const available = skills.filter(s => s.id && !INTERNAL_SKILLS.has(s.id));
+  const docSkills = available.filter(s => DOC_SKILLS.has(s.id));
+  const analysisSkills = available.filter(s => !DOC_SKILLS.has(s.id));
+  const selected = available.find(s => s.id === value);
+
+  // Position dropdown below trigger
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+  }, [open]);
+
+  // Close on outside click / scroll
+  useEffect(() => {
+    if (!open) return;
+    function handleClose(e: MouseEvent | Event) {
+      if (triggerRef.current?.contains(e.target as Node)) return;
+      if (dropRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClose);
+    // Close on modal scroll
+    const modal = triggerRef.current?.closest('.overflow-y-auto');
+    if (modal) modal.addEventListener('scroll', () => setOpen(false));
+    return () => {
+      document.removeEventListener('mousedown', handleClose);
+      if (modal) modal.removeEventListener('scroll', () => setOpen(false));
+    };
+  }, [open]);
+
+  function localName(id: string, fallback: string): string {
+    const key = `skill.${id}`;
+    const translated = t(key as any);
+    return (translated && translated !== key) ? translated : fallback;
+  }
+
+  function pick(id: string) {
+    onChange(id);
+    setOpen(false);
+  }
+
+  const dropdownContent = open && pos && createPortal(
+    <div
+      ref={dropRef}
+      style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 9999 }}
+      className="bg-surface-container-high rounded-xl border border-outline-variant/20 shadow-2xl overflow-hidden max-h-[260px] overflow-y-auto"
+    >
+      {/* Auto option */}
+      <button
+        type="button"
+        onClick={() => pick('')}
+        className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-surface-variant/50 transition-colors cursor-pointer ${!value ? 'bg-primary/5' : ''}`}
+      >
+        <span className="w-7 h-7 rounded-md bg-surface-container-highest flex items-center justify-center shrink-0">
+          <span className="material-symbols-outlined text-on-surface-variant text-base">auto_awesome</span>
+        </span>
+        <span className={`flex-1 text-left ${!value ? 'text-primary font-medium' : 'text-on-surface'}`}>
+          {t('assistant.editModal.skillNone' as any)}
+        </span>
+        {!value && <span className="material-symbols-outlined text-primary text-sm">check</span>}
+      </button>
+
+      {/* Document skills */}
+      {docSkills.length > 0 && (
+        <>
+          <div className="px-3 pt-2 pb-0.5 text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest border-t border-outline-variant/10">
+            {t('assistant.editModal.skillGroup.document' as any)}
+          </div>
+          {docSkills.map(s => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => pick(s.id)}
+              className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-sm hover:bg-surface-variant/50 transition-colors cursor-pointer ${value === s.id ? 'bg-primary/5' : ''}`}
+            >
+              <span className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-primary text-base">{SKILL_ICON_MAP[s.id] || 'extension'}</span>
+              </span>
+              <span className={`flex-1 text-left truncate ${value === s.id ? 'text-primary font-medium' : 'text-on-surface'}`}>
+                {localName(s.id, s.name)}
+              </span>
+              {s.fileType && (
+                <span className="text-[10px] font-mono font-bold text-on-surface-variant/60 bg-surface-container-highest px-1.5 py-0.5 rounded shrink-0">.{s.fileType}</span>
+              )}
+              {value === s.id && <span className="material-symbols-outlined text-primary text-sm">check</span>}
+            </button>
+          ))}
+        </>
+      )}
+
+      {/* Analysis skills */}
+      {analysisSkills.length > 0 && (
+        <>
+          <div className="px-3 pt-2 pb-0.5 text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-widest border-t border-outline-variant/10">
+            {t('assistant.editModal.skillGroup.analysis' as any)}
+          </div>
+          {analysisSkills.map(s => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => pick(s.id)}
+              className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-sm hover:bg-surface-variant/50 transition-colors cursor-pointer ${value === s.id ? 'bg-primary/5' : ''}`}
+            >
+              <span className="w-7 h-7 rounded-md bg-tertiary/10 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-tertiary text-base">{SKILL_ICON_MAP[s.id] || 'extension'}</span>
+              </span>
+              <span className={`flex-1 text-left truncate ${value === s.id ? 'text-primary font-medium' : 'text-on-surface'}`}>
+                {localName(s.id, s.name)}
+              </span>
+              {value === s.id && <span className="material-symbols-outlined text-primary text-sm">check</span>}
+            </button>
+          ))}
+        </>
+      )}
+    </div>,
+    document.body
+  );
+
+  return (
+    <div>
+      {/* Trigger button */}
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2.5 bg-surface-container-high border border-outline-variant/30 rounded-lg px-3 py-2.5 text-sm text-on-surface hover:border-primary/50 focus:outline-none focus:border-primary transition-colors cursor-pointer"
+      >
+        {selected ? (
+          <>
+            <span className="w-7 h-7 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-primary text-base">{SKILL_ICON_MAP[selected.id] || 'extension'}</span>
+            </span>
+            <span className="flex-1 text-left truncate font-medium">{localName(selected.id, selected.name)}</span>
+            {selected.fileType && (
+              <span className="text-[10px] font-mono font-bold text-on-surface-variant bg-surface-container-highest px-1.5 py-0.5 rounded shrink-0">.{selected.fileType}</span>
+            )}
+          </>
+        ) : (
+          <>
+            <span className="w-7 h-7 rounded-md bg-surface-container-highest flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-on-surface-variant text-base">auto_awesome</span>
+            </span>
+            <span className="flex-1 text-left text-on-surface-variant">{t('assistant.editModal.skillNone' as any)}</span>
+          </>
+        )}
+        <span className={`material-symbols-outlined text-on-surface-variant text-base transition-transform ${open ? 'rotate-180' : ''}`}>expand_more</span>
+      </button>
+      {dropdownContent}
+    </div>
+  );
+}
+
+// ── Assistant Edit/Create Modal ─────────────────────────────────────────────
+function AssistantEditModal({
+  conversation,
+  skills,
+  token,
+  locale,
+  onSave,
+  onCancel,
+}: {
+  conversation: AssistantConversation | null; // null = create new
+  skills: SkillOption[];
+  token: string | null;
+  locale?: string;
+  onSave: (data: { title: string; icon: string; system_prompt: string; skill_id: string }) => void;
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation();
+  const nameRef = useRef<HTMLInputElement>(null);
+  const [title, setTitle] = useState(conversation?.title || '');
+  const [icon, setIcon] = useState(conversation?.icon || 'smart_toy');
+  const [systemPrompt, setSystemPrompt] = useState(conversation?.system_prompt || '');
+  const [skillId, setSkillId] = useState(conversation?.skill_id || '');
+  const [generating, setGenerating] = useState(false);
+
+  useEffect(() => { nameRef.current?.focus(); }, []);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCancel();
-      if (e.key === 'Enter' && value.trim() && value.trim() !== current) onConfirm(value.trim());
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [value, current, onConfirm, onCancel]);
+  }, [onCancel]);
+
+  async function generateRole() {
+    if (!token || generating) return;
+    setGenerating(true);
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
+      const res = await fetch(`${apiBase}/api/conversations/generate-role`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: title.trim() || 'AI 助手', skillId: skillId || undefined, locale, currentPrompt: systemPrompt.trim() || undefined }),
+      });
+      if (res.ok) {
+        const { text } = await res.json();
+        if (text) setSystemPrompt(text);
+      } else {
+        console.error('generate-role failed:', res.status, await res.text());
+      }
+    } catch (err) { console.error('generate-role error:', err); }
+    finally { setGenerating(false); }
+  }
+
+  const isCreate = !conversation;
+  const canSave = title.trim().length > 0;
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center" onClick={onCancel}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative bg-surface-container rounded-xl shadow-2xl border border-outline-variant/10 w-full max-w-sm mx-4 overflow-hidden"
+        className="relative bg-surface-container rounded-xl shadow-2xl border border-outline-variant/10 w-full max-w-md mx-4 overflow-hidden max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
-        <div className="pt-6 pb-4 px-6">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="material-symbols-outlined text-primary">edit</span>
+        {/* Header */}
+        <div className="sticky top-0 bg-surface-container z-10 pt-6 pb-3 px-6 border-b border-outline-variant/10">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary">tune</span>
             <h3 className="font-headline font-bold text-base text-on-surface">
-              {t('conversations.renameModal.title' as any)}
+              {isCreate ? t('assistant.editModal.createTitle' as any) : t('assistant.editModal.title' as any)}
             </h3>
           </div>
-          <input
-            ref={inputRef}
-            value={value}
-            onChange={e => setValue(e.target.value)}
-            placeholder={t('conversations.renameModal.placeholder' as any)}
-            className="w-full bg-surface-container-high border border-outline-variant/30 rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary"
-            maxLength={80}
-          />
         </div>
-        <div className="flex gap-3 px-6 pb-6">
-          <button onClick={onCancel} className="flex-1 py-2 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-sm rounded cursor-pointer hover:bg-surface-variant transition-colors">
+
+        <div className="px-6 py-4 space-y-5">
+          {/* Name */}
+          <div>
+            <label className="block text-sm font-bold text-on-surface mb-1.5">
+              {t('assistant.editModal.name' as any)}
+            </label>
+            <input
+              ref={nameRef}
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder={t('assistant.editModal.namePlaceholder' as any)}
+              className="w-full bg-surface-container-high border border-outline-variant/30 rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary"
+              maxLength={80}
+            />
+          </div>
+
+          {/* Icon picker */}
+          <div>
+            <label className="block text-sm font-bold text-on-surface mb-1.5">
+              {t('assistant.editModal.icon' as any)}
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {ICON_OPTIONS.map(ic => (
+                <button
+                  key={ic}
+                  onClick={() => setIcon(ic)}
+                  className={`w-9 h-9 flex items-center justify-center rounded-lg transition-all cursor-pointer ${
+                    icon === ic
+                      ? 'cyber-gradient text-on-primary scale-110'
+                      : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-variant border border-outline-variant/10'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-lg">{ic}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Skill binding */}
+          <div>
+            <label className="block text-sm font-bold text-on-surface mb-1.5">
+              {t('assistant.editModal.skill' as any)}
+            </label>
+            <SkillPicker skills={skills} value={skillId} onChange={setSkillId} />
+            <p className="text-xs text-on-surface-variant/70 mt-1">
+              {t('assistant.editModal.skillHint' as any)}
+            </p>
+          </div>
+
+          {/* Role description */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-sm font-bold text-on-surface">
+                {t('assistant.editModal.role' as any)}
+              </label>
+              <button
+                type="button"
+                onClick={generateRole}
+                disabled={generating}
+                className="flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-primary hover:bg-primary/10 rounded-lg transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <span className={`material-symbols-outlined text-sm ${generating ? 'animate-spin' : ''}`}>
+                  {generating ? 'progress_activity' : 'auto_awesome'}
+                </span>
+                {generating ? t('assistant.editModal.roleGenerating' as any) : t('assistant.editModal.roleGenerate' as any)}
+              </button>
+            </div>
+            <textarea
+              value={systemPrompt}
+              onChange={e => setSystemPrompt(e.target.value)}
+              placeholder={t('assistant.editModal.rolePlaceholder' as any)}
+              rows={4}
+              className="w-full bg-surface-container-high border border-outline-variant/30 rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary resize-none"
+              maxLength={2000}
+            />
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="sticky bottom-0 bg-surface-container z-10 flex gap-3 px-6 py-4 border-t border-outline-variant/10">
+          <button onClick={onCancel} className="flex-1 py-2.5 px-4 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-sm rounded cursor-pointer hover:bg-surface-variant transition-colors">
             {t('common.cancel' as any)}
           </button>
           <button
-            onClick={() => value.trim() && value.trim() !== current && onConfirm(value.trim())}
-            disabled={!value.trim() || value.trim() === current}
-            className="flex-1 py-2 px-4 bg-primary text-on-primary font-bold text-sm rounded cursor-pointer hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={() => canSave && onSave({ title: title.trim(), icon, system_prompt: systemPrompt, skill_id: skillId })}
+            disabled={!canSave}
+            className="flex-1 py-2.5 px-4 bg-primary text-on-primary font-bold text-sm rounded cursor-pointer hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {t('common.save' as any) || '儲存'}
+            {t('common.save' as any)}
           </button>
         </div>
       </div>
@@ -126,11 +434,12 @@ function AssistantContent() {
   const [conversations, setConversations] = useState<AssistantConversation[]>([]);
   const [creating, setCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AssistantConversation | null>(null);
-  const [renameTarget, setRenameTarget] = useState<AssistantConversation | null>(null);
+  const [editTarget, setEditTarget] = useState<AssistantConversation | 'new' | null>(null); // null=closed, 'new'=create, conv=edit
   const [memoryCount, setMemoryCount] = useState(0);
   const [workLogCount, setWorkLogCount] = useState(0);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
+  const [skills, setSkills] = useState<SkillOption[]>([]);
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
@@ -163,26 +472,59 @@ function AssistantContent() {
         }
       })
       .catch(() => {});
+
+    // Load available skills for binding
+    fetch('/api/generate/skills', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setSkills(data); })
+      .catch(() => {});
   }, [token]);
 
-  async function createAssistant() {
-    if (!token || creating) return;
-    setCreating(true);
-    try {
-      const res = await fetch('/api/conversations', {
-        method: 'POST',
+  const handleCreateOrEdit = useCallback(async (data: { title: string; icon: string; system_prompt: string; skill_id: string }) => {
+    if (!token) return;
+
+    if (editTarget === 'new') {
+      // Create new assistant
+      setCreating(true);
+      try {
+        const res = await fetch('/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            title: data.title,
+            category: 'assistant',
+            skillId: data.skill_id || undefined,
+            system_prompt: data.system_prompt || undefined,
+            icon: data.icon || undefined,
+          }),
+        });
+        const conv = await res.json();
+        setEditTarget(null);
+        router.push(`/chat/${conv.id}`);
+      } finally {
+        setCreating(false);
+      }
+    } else if (editTarget) {
+      // Update existing assistant
+      const conv = editTarget as AssistantConversation;
+      await fetch(`/api/conversations/${conv.id}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          title: `${t('assistant.defaultTitle' as any) || 'AI 助手'} ${conversations.length + 1}`,
-          category: 'assistant',
+          title: data.title,
+          system_prompt: data.system_prompt,
+          icon: data.icon,
+          skill_id: data.skill_id,
         }),
       });
-      const conv = await res.json();
-      router.push(`/chat/${conv.id}`);
-    } finally {
-      setCreating(false);
+      setConversations(prev => prev.map(c =>
+        c.id === conv.id
+          ? { ...c, title: data.title, system_prompt: data.system_prompt, icon: data.icon, skill_id: data.skill_id || null }
+          : c
+      ));
+      setEditTarget(null);
     }
-  }
+  }, [editTarget, token, router]);
 
   async function handleDelete() {
     if (!token || !deleteTarget) return;
@@ -192,21 +534,9 @@ function AssistantContent() {
     });
     setConversations(prev => prev.filter(c => c.id !== deleteTarget.id));
     setDeleteTarget(null);
-    // Adjust page if last item on page was deleted
     const remaining = conversations.length - 1;
     const maxPage = Math.max(1, Math.ceil(remaining / PAGE_SIZE));
     if (currentPage > maxPage) setCurrentPage(maxPage);
-  }
-
-  async function handleRename(newTitle: string) {
-    if (!token || !renameTarget) return;
-    await fetch(`/api/conversations/${renameTarget.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ title: newTitle }),
-    });
-    setConversations(prev => prev.map(c => c.id === renameTarget.id ? { ...c, title: newTitle } : c));
-    setRenameTarget(null);
   }
 
   function formatDate(dateStr: string) {
@@ -217,6 +547,14 @@ function AssistantContent() {
     if (diffDays === 1) return t('assistant.yesterday' as any) || '昨天';
     if (diffDays < 7) return `${diffDays} ${t('assistant.daysAgo' as any) || '天前'}`;
     return d.toLocaleDateString();
+  }
+
+  function getSkillName(sid: string): string {
+    const key = `skill.${sid}`;
+    const translated = t(key as any);
+    if (translated && translated !== key) return translated;
+    const skill = skills.find(s => s.id === sid);
+    return skill?.name || sid;
   }
 
   if (isLoading || !user) return null;
@@ -230,8 +568,15 @@ function AssistantContent() {
       {deleteTarget && (
         <DeleteConfirmModal title={deleteTarget.title} onConfirm={handleDelete} onCancel={() => setDeleteTarget(null)} />
       )}
-      {renameTarget && (
-        <RenameModal current={renameTarget.title} onConfirm={handleRename} onCancel={() => setRenameTarget(null)} />
+      {editTarget && (
+        <AssistantEditModal
+          conversation={editTarget === 'new' ? null : editTarget}
+          skills={skills}
+          token={token}
+          locale={user?.locale}
+          onSave={handleCreateOrEdit}
+          onCancel={() => setEditTarget(null)}
+        />
       )}
 
       <main className={`${sidebarMargin} md:pt-10 pb-12 px-4 md:px-10 transition-all duration-300`}>
@@ -260,8 +605,8 @@ function AssistantContent() {
                   <span className="font-medium">{t('assistant.memoryBadge' as any)}</span>
                   <span className="text-tertiary/70">
                     {workLogCount > 0
-                      ? `偏好 ${memoryCount - workLogCount} · 工作紀錄 ${workLogCount}`
-                      : `${memoryCount} 條`}
+                      ? t('assistant.memoryPrefs' as any, { prefs: memoryCount - workLogCount, logs: workLogCount })
+                      : t('assistant.memoryItems' as any, { count: memoryCount })}
                   </span>
                 </div>
               )}
@@ -269,14 +614,14 @@ function AssistantContent() {
 
             {/* New assistant button */}
             <button
-              onClick={createAssistant}
+              onClick={() => setEditTarget('new')}
               disabled={creating}
               className="shrink-0 flex items-center gap-2 px-4 py-2.5 cyber-gradient text-on-primary rounded-xl font-bold text-sm hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm mt-1 md:mt-2"
             >
               <span className={`material-symbols-outlined text-base ${creating ? 'animate-spin' : ''}`}>
                 {creating ? 'progress_activity' : 'add'}
               </span>
-              <span className="hidden sm:inline">新增助手</span>
+              <span className="hidden sm:inline">{t('assistant.newButton' as any)}</span>
             </button>
           </div>
         </div>
@@ -285,7 +630,7 @@ function AssistantContent() {
         {conversations.length === 0 ? (
           /* Empty state */
           <button
-            onClick={createAssistant}
+            onClick={() => setEditTarget('new')}
             disabled={creating}
             className="w-full group flex flex-col items-center justify-center gap-4 bg-surface-container/40 rounded-2xl border-2 border-dashed border-outline-variant/25 hover:border-primary/40 hover:bg-surface-container/70 transition-all min-h-[260px] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed p-8"
           >
@@ -296,13 +641,14 @@ function AssistantContent() {
               <p className="text-base font-bold font-headline text-on-surface-variant group-hover:text-primary transition-colors">
                 {t('assistant.newChat' as any) || '建立第一個 AI 助手'}
               </p>
-              <p className="text-sm text-outline mt-1">點擊開始與 AI 助手對話</p>
+              <p className="text-sm text-outline mt-1">{t('assistant.emptyClickHint' as any)}</p>
             </div>
           </button>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             {pageConvs.map((conv, idx) => {
               const globalIdx = (currentPage - 1) * PAGE_SIZE + idx;
+              const cardIcon = conv.icon || 'smart_toy';
               return (
                 <div
                   key={conv.id}
@@ -313,7 +659,7 @@ function AssistantContent() {
                     <div className="flex items-start justify-between mb-4">
                       <div className="relative">
                         <div className="w-12 h-12 rounded-xl cyber-gradient flex items-center justify-center">
-                          <span className="material-symbols-outlined text-on-primary text-2xl">smart_toy</span>
+                          <span className="material-symbols-outlined text-on-primary text-2xl">{cardIcon}</span>
                         </div>
                         <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-success rounded-full border-2 border-surface-container">
                           <span className="absolute inset-0 rounded-full bg-success animate-ping opacity-60" />
@@ -334,11 +680,11 @@ function AssistantContent() {
                       <p className="text-xs text-outline/50 mb-2 italic">{t('assistant.noSummary' as any) || '對話中...'}</p>
                     )}
 
-                    <div className="flex items-center gap-2 text-xs text-on-surface-variant mb-5 flex-wrap">
+                    <div className="flex items-center gap-2 text-xs text-on-surface-variant mb-3 flex-wrap">
                       {processingIds.has(conv.id) ? (
                         <span className="flex items-center gap-1 text-primary">
                           <span className="material-symbols-outlined text-[13px] animate-spin">progress_activity</span>
-                          AI 處理中
+                          {t('assistant.processing' as any)}
                         </span>
                       ) : (
                         <span className="flex items-center gap-1">
@@ -348,11 +694,23 @@ function AssistantContent() {
                       )}
                       <span className="text-outline-variant/40">·</span>
                       <span>{formatDate(conv.created_at)}</span>
-                      <span className="text-outline-variant/40">·</span>
-                      <span className="flex items-center gap-1 text-tertiary">
-                        <span className="material-symbols-outlined text-[13px]">psychology</span>
-                        {t('assistant.memoryActive' as any) || '記憶中'}
-                      </span>
+                      {conv.skill_id ? (
+                        <>
+                          <span className="text-outline-variant/40">·</span>
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-primary/10 rounded text-primary font-medium">
+                            <span className="material-symbols-outlined text-[12px]">{SKILL_ICON_MAP[conv.skill_id] || 'bolt'}</span>
+                            {getSkillName(conv.skill_id)}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-outline-variant/40">·</span>
+                          <span className="flex items-center gap-1 text-tertiary">
+                            <span className="material-symbols-outlined text-[13px]">psychology</span>
+                            {t('assistant.memoryActive' as any) || '記憶中'}
+                          </span>
+                        </>
+                      )}
                     </div>
 
                     <div className="mt-auto flex items-center gap-2">
@@ -364,11 +722,11 @@ function AssistantContent() {
                         {t('assistant.openChat' as any) || '開啟對話'}
                       </Link>
                       <button
-                        onClick={() => setRenameTarget(conv)}
+                        onClick={() => setEditTarget(conv)}
                         className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer border border-outline-variant/10"
-                        title={t('conversations.tooltip.rename' as any) || '重新命名'}
+                        title={t('assistant.settings' as any) || '設定'}
                       >
-                        <span className="material-symbols-outlined text-[18px]">edit</span>
+                        <span className="material-symbols-outlined text-[18px]">tune</span>
                       </button>
                       <button
                         onClick={() => setDeleteTarget(conv)}
@@ -422,7 +780,7 @@ function AssistantContent() {
         <div className="mt-6 flex flex-wrap items-center gap-4 text-xs text-on-surface-variant">
           <div className="flex items-center gap-1.5">
             <span className="material-symbols-outlined text-sm text-primary">info</span>
-            <span>共 {conversations.length} 個助手，對話永久保留直到你刪除</span>
+            <span>{t('assistant.totalInfo' as any, { count: conversations.length })}</span>
           </div>
           {memoryCount > 0 && (
             <>

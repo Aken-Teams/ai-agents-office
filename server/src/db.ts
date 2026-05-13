@@ -367,6 +367,14 @@ export async function initializeDatabase(): Promise<void> {
       await conn.query("ALTER TABLE conversations ADD COLUMN category VARCHAR(20) NOT NULL DEFAULT 'document'");
     } catch { /* column already exists */ }
 
+    // Add system_prompt and icon columns to conversations if not exists
+    try {
+      await conn.query('ALTER TABLE conversations ADD COLUMN system_prompt TEXT DEFAULT NULL');
+    } catch { /* column already exists */ }
+    try {
+      await conn.query("ALTER TABLE conversations ADD COLUMN icon VARCHAR(50) DEFAULT NULL");
+    } catch { /* column already exists */ }
+
     // Add memory_type column to user_memories if not exists
     try {
       await conn.query("ALTER TABLE user_memories ADD COLUMN memory_type VARCHAR(20) NOT NULL DEFAULT 'preference'");

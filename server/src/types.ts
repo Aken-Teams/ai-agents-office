@@ -28,6 +28,8 @@ export interface Conversation {
   mode: string | null;
   status: 'active' | 'completed' | 'failed';
   category: 'document' | 'assistant';
+  system_prompt: string | null;
+  icon: string | null;
   created_at: string;
 }
 
