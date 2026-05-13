@@ -469,6 +469,8 @@ function ChatContent() {
   const [streaming, setStreaming] = useState(false);
   const [streamText, setStreamText] = useState('');
   const [thinkingText, setThinkingText] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounter = useRef(0);
   const [tools, setTools] = useState<ToolActivity[]>([]);
   const [files, setFiles] = useState<GeneratedFile[]>([]);
   const [latestFiles, setLatestFiles] = useState<GeneratedFile[]>([]);
@@ -1853,7 +1855,23 @@ function ChatContent() {
                 </button>
               </div>
             )}
-            <div className="bg-surface-container rounded-lg border border-outline-variant/20 focus-within:border-primary/40 transition-all p-1.5 md:p-2">
+            <div
+              className={`bg-surface-container rounded-lg border transition-all p-1.5 md:p-2 ${
+                isDragging
+                  ? 'border-primary border-dashed bg-primary/5'
+                  : 'border-outline-variant/20 focus-within:border-primary/40'
+              }`}
+              onDragEnter={e => { e.preventDefault(); e.stopPropagation(); dragCounter.current++; setIsDragging(true); }}
+              onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+              onDragLeave={e => { e.preventDefault(); e.stopPropagation(); dragCounter.current--; if (dragCounter.current <= 0) { dragCounter.current = 0; setIsDragging(false); } }}
+              onDrop={e => { e.preventDefault(); e.stopPropagation(); dragCounter.current = 0; setIsDragging(false); if (!streaming && e.dataTransfer.files.length > 0) handleFileAttach(e.dataTransfer.files); }}
+            >
+              {isDragging && (
+                <div className="flex items-center justify-center gap-2 py-3 text-primary pointer-events-none">
+                  <span className="material-symbols-outlined text-xl">upload_file</span>
+                  <span className="text-sm font-medium">{t('chat.input.dropHint' as any) || '放開以上傳檔案'}</span>
+                </div>
+              )}
               {/* Attached files chips + reference chips */}
               {(attachedFiles.length > 0 || selectedRefs.length > 0) && (
                 <div className="flex flex-wrap gap-1.5 md:gap-2 px-1.5 md:px-2 pt-1.5 md:pt-2 pb-0.5 md:pb-1">

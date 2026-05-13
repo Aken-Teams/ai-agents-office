@@ -423,6 +423,7 @@ const zhTW = {
   // Skill labels (shorter display names)
   'skill.router': '路由器',
   'chat.input.uploadFile': '上傳檔案',
+  'chat.input.dropHint': '放開以上傳檔案',
   'chat.input.referenceAssistant': '引用其他 AI 助手',
   'chat.sidebar.systemStatus': '系統狀態',
   'chat.sidebar.sandboxMode': '沙盒隔離模式',

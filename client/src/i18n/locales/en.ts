@@ -413,6 +413,7 @@ const en = {
   // Skill labels (shorter display names for chips/badges)
   'skill.router': 'Router',
   'chat.input.uploadFile': 'Upload File',
+  'chat.input.dropHint': 'Drop to upload files',
   'chat.input.referenceAssistant': 'Reference AI Assistant',
   'chat.sidebar.systemStatus': 'System Status',
   'chat.sidebar.sandboxMode': 'Sandbox Isolation Mode',

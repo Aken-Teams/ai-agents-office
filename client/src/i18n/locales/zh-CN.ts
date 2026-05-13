@@ -419,6 +419,7 @@ const zhCN = {
   // Skill labels (shorter display names)
   'skill.router': '路由器',
   'chat.input.uploadFile': '上传文件',
+  'chat.input.dropHint': '放开以上传文件',
   'chat.input.referenceAssistant': '引用其他 AI 助手',
   'chat.sidebar.systemStatus': '系统状态',
   'chat.sidebar.sandboxMode': '沙盒隔离模式',
