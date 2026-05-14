@@ -71,6 +71,76 @@ export default function EmailAgentWidget() {
     }
   }, [chatMessages, streamText, activeTab]);
 
+  // Markdown components for analysis reports (structured sections)
+  const analysisMd = useMemo<Record<string, React.ComponentType<any>>>(() => {
+    const sectionIcons: Record<string, string> = {
+      '摘要': 'description', '行動建議': 'checklist', '行動': 'checklist',
+      '資安標記': 'shield', '資安': 'shield', '緊急程度': 'priority_high', '緊急': 'priority_high',
+      '建議回覆': 'reply', '回覆': 'reply', '風險': 'warning',
+    };
+    const getIcon = (text: string) => {
+      const str = String(text).replace(/^\d+\.\s*/, '').replace(/\*\*/g, '');
+      for (const [key, icon] of Object.entries(sectionIcons)) {
+        if (str.includes(key)) return icon;
+      }
+      return 'article';
+    };
+    return {
+      h1: ({ children, ...props }: any) => (
+        <div className="flex items-center gap-2 mt-3 first:mt-0 mb-2 pb-1.5 border-b border-outline-variant/10" {...props}>
+          <span className="material-symbols-outlined text-primary text-base">{getIcon(children)}</span>
+          <span className="font-bold text-on-surface text-[15px]">{children}</span>
+        </div>
+      ),
+      h2: ({ children, ...props }: any) => (
+        <div className="flex items-center gap-2 mt-3 first:mt-0 mb-2 pb-1.5 border-b border-outline-variant/10" {...props}>
+          <span className="material-symbols-outlined text-primary text-base">{getIcon(children)}</span>
+          <span className="font-bold text-on-surface text-[15px]">{children}</span>
+        </div>
+      ),
+      h3: ({ children, ...props }: any) => (
+        <div className="flex items-center gap-1.5 mt-2.5 first:mt-0 mb-1.5" {...props}>
+          <span className="material-symbols-outlined text-primary/70 text-sm">{getIcon(children)}</span>
+          <span className="font-semibold text-on-surface text-sm">{children}</span>
+        </div>
+      ),
+      h4: ({ children, ...props }: any) => <p className="font-semibold text-on-surface mt-2 mb-1 text-[13px]" {...props}>{children}</p>,
+      p: ({ children, ...props }: any) => <p className="mb-2 last:mb-0 leading-relaxed text-on-surface-variant" {...props}>{children}</p>,
+      ul: ({ children, ...props }: any) => <ul className="list-none pl-0 mb-2 space-y-1.5" {...props}>{children}</ul>,
+      ol: ({ children, ...props }: any) => <ol className="list-none pl-0 mb-2 space-y-1.5 counter-reset-item" {...props}>{children}</ol>,
+      li: ({ children, ...props }: any) => (
+        <li className="flex gap-2 leading-relaxed text-on-surface-variant" {...props}>
+          <span className="material-symbols-outlined text-primary/50 text-sm mt-0.5 shrink-0">arrow_right</span>
+          <span className="flex-1">{children}</span>
+        </li>
+      ),
+      strong: ({ children, ...props }: any) => <strong className="font-semibold text-on-surface" {...props}>{children}</strong>,
+      blockquote: ({ children, ...props }: any) => (
+        <blockquote className="border-l-2 border-primary/30 pl-2.5 my-2 text-on-surface-variant italic bg-primary/3 rounded-r-lg py-1.5 pr-2" {...props}>{children}</blockquote>
+      ),
+      pre: ({ children, ...props }: any) => (
+        <pre className="bg-surface-container rounded-lg p-2.5 my-2 text-xs overflow-x-auto" {...props}>{children}</pre>
+      ),
+      code: ({ className, children, ...props }: any) => {
+        if (className) return <code className={className} {...props}>{children}</code>;
+        return <code className="bg-surface-container px-1.5 py-0.5 rounded text-xs text-primary font-mono" {...props}>{children}</code>;
+      },
+      a: ({ children, href, ...props }: any) => (
+        <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" {...props}>{children}</a>
+      ),
+      table: ({ children, ...props }: any) => (
+        <div className="overflow-x-auto my-2 rounded-lg border border-outline-variant/20">
+          <table className="w-full text-xs border-collapse" {...props}>{children}</table>
+        </div>
+      ),
+      thead: ({ children, ...props }: any) => <thead className="bg-surface-container" {...props}>{children}</thead>,
+      th: ({ children, ...props }: any) => <th className="text-left px-2.5 py-1.5 font-semibold text-on-surface border-b border-outline-variant/20 whitespace-nowrap" {...props}>{children}</th>,
+      td: ({ children, ...props }: any) => <td className="px-2.5 py-1.5 text-on-surface-variant border-b border-outline-variant/10" {...props}>{children}</td>,
+      tr: ({ children, ...props }: any) => <tr className="hover:bg-surface-container/50" {...props}>{children}</tr>,
+      hr: (props: any) => <hr className="my-3 border-outline-variant/15" {...props} />,
+    };
+  }, []);
+
   // Compact markdown components for widget (size = text-sm base)
   const compactMd = useMemo<Record<string, React.ComponentType<any>>>(() => ({
     h1: ({ children, ...props }: any) => <p className="font-bold text-on-surface mt-3 mb-1 text-[15px]" {...props}>{children}</p>,
@@ -498,10 +568,18 @@ export default function EmailAgentWidget() {
                               {expandedAnalysis.has(n.emailId) ? '收合分析' : '查看分析'}
                             </button>
                             {expandedAnalysis.has(n.emailId) && (
-                              <div className="mt-2 text-sm text-on-surface-variant leading-relaxed border-l-2 border-primary/20 pl-3 overflow-x-auto">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={compactMd}>
-                                  {n.analysis}
-                                </ReactMarkdown>
+                              <div className="mt-2.5 bg-surface-container-highest/50 rounded-xl border border-outline-variant/10 overflow-hidden">
+                                {/* Analysis header */}
+                                <div className="flex items-center gap-2 px-3.5 py-2 bg-primary/5 border-b border-outline-variant/10">
+                                  <span className="material-symbols-outlined text-primary text-base">auto_awesome</span>
+                                  <span className="text-xs font-semibold text-on-surface">AI 深度分析</span>
+                                </div>
+                                {/* Analysis body */}
+                                <div className="px-3.5 py-3 text-sm text-on-surface-variant leading-relaxed overflow-x-auto">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={analysisMd}>
+                                    {n.analysis}
+                                  </ReactMarkdown>
+                                </div>
                               </div>
                             )}
                           </>
