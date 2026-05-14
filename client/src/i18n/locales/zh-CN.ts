@@ -625,6 +625,8 @@ const zhCN = {
   'userMenu.memory.category.project': '项目',
   'userMenu.memory.category.style': '风格',
   'userMenu.memory.category.general': '一般',
+  'userMenu.memory.category.sender_priority': '重要发件人',
+  'userMenu.memory.category.email_pattern': '邮件偏好',
   'userMenu.logout': '退出登录',
   'userMenu.setPassword': '设置密码',
 

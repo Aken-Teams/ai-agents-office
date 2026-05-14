@@ -312,7 +312,7 @@ function parseAskUserOptions(rawInput: string | undefined): { question: string; 
 
 /** Parse [refs:...] metadata tag from user messages for displaying referenced assistants */
 function parseMessageRefs(content: string): { text: string; refs: Array<{id: string; title: string}> } {
-  const match = content.match(/\n\n\[refs:(\[.*\])\]$/s);
+  const match = content.match(/\n\n\[refs:(\[[\s\S]*\])\]$/);
   if (!match) return { text: content, refs: [] };
   try {
     const refs = JSON.parse(match[1]) as Array<{id: string; title: string}>;

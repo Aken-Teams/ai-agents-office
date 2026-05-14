@@ -629,6 +629,8 @@ const zhTW = {
   'userMenu.memory.category.project': '專案',
   'userMenu.memory.category.style': '風格',
   'userMenu.memory.category.general': '一般',
+  'userMenu.memory.category.sender_priority': '重要寄件者',
+  'userMenu.memory.category.email_pattern': '信件偏好',
   'userMenu.logout': '登出',
   'userMenu.setPassword': '設定密碼',
 

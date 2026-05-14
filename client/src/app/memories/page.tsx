@@ -22,10 +22,13 @@ const CAT_COLORS: Record<string, string> = {
   company: 'bg-green-500/15 text-green-400',
   project: 'bg-purple-500/15 text-purple-400',
   style: 'bg-orange-500/15 text-orange-400',
+  sender_priority: 'bg-surface-container-high text-on-surface-variant',
+  email_pattern: 'bg-surface-container-high text-on-surface-variant',
   general: 'bg-surface-container-high text-on-surface-variant',
 };
 
-const CATEGORIES = ['preference', 'company', 'project', 'style', 'general'];
+const CATEGORIES_PREFERENCE = ['preference', 'company', 'project', 'style', 'general'];
+const CATEGORIES_EMAIL = ['sender_priority', 'email_pattern', 'general'];
 
 function MemoriesContent() {
   const { user, token, isLoading } = useAuth();
@@ -55,6 +58,7 @@ function MemoriesContent() {
     return list;
   }, [memories, catFilter, typeFilter, search]);
 
+  const activeCats = typeFilter === 'email_agent' ? CATEGORIES_EMAIL : CATEGORIES_PREFERENCE;
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const paged = filtered.slice((page - 1) * perPage, page * perPage);
 
@@ -141,6 +145,7 @@ function MemoriesContent() {
             {[
               { key: '', label: '全部', icon: 'psychology' },
               { key: 'preference', label: '偏好記憶', icon: 'tune' },
+              { key: 'email_agent', label: '信件記憶', icon: 'mail' },
               { key: 'work_log', label: '工作紀錄', icon: 'work_history' },
             ].map(tab => (
               <button
@@ -197,7 +202,7 @@ function MemoriesContent() {
                   >
                     {t('memories.filter.all' as any)}
                   </button>
-                  {CATEGORIES.map(c => (
+                  {activeCats.map(c => (
                     <button
                       key={c}
                       onClick={() => { setCatFilter(c); setCatOpen(false); }}
@@ -237,30 +242,32 @@ function MemoriesContent() {
               <div
                 key={m.id}
                 onClick={() => setDetail(m)}
-                className="flex items-start gap-3 bg-surface-container rounded-lg px-4 py-3 border border-outline-variant/10 hover:border-outline-variant/20 transition-colors group cursor-pointer"
+                className="bg-surface-container rounded-lg px-4 py-3 border border-outline-variant/10 hover:border-outline-variant/20 transition-colors group cursor-pointer"
               >
-                {m.memory_type === 'work_log' ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 mt-0.5 bg-surface-container-high text-on-surface-variant">
-                    <span className="material-symbols-outlined text-[11px]">work_history</span>
-                    工作紀錄
-                  </span>
-                ) : (
-                  <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 mt-0.5 ${CAT_COLORS[m.category] || CAT_COLORS.general}`}>
-                    {t(`userMenu.memory.category.${m.category}` as any)}
-                  </span>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-on-surface line-clamp-2">{m.content}</p>
-                  <p className="text-[11px] text-on-surface-variant/50 mt-1">
-                    {new Date(m.created_at).toLocaleDateString()}
-                  </p>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <div className="flex items-center gap-2">
+                    {m.memory_type === 'work_log' ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant">
+                        <span className="material-symbols-outlined text-[11px]">work_history</span>
+                        工作紀錄
+                      </span>
+                    ) : (
+                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${CAT_COLORS[m.category] || CAT_COLORS.general}`}>
+                        {t(`userMenu.memory.category.${m.category}` as any)}
+                      </span>
+                    )}
+                    <span className="text-[11px] text-on-surface-variant/40">
+                      {new Date(m.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <button
+                    onClick={e => { e.stopPropagation(); deleteMemory(m.id); }}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant/30 hover:text-error hover:bg-error/10 transition-colors cursor-pointer md:opacity-0 md:group-hover:opacity-100 shrink-0"
+                  >
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
                 </div>
-                <button
-                  onClick={e => { e.stopPropagation(); deleteMemory(m.id); }}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant/40 hover:text-error hover:bg-error/10 transition-colors cursor-pointer md:opacity-0 md:group-hover:opacity-100 shrink-0"
-                >
-                  <span className="material-symbols-outlined text-lg">close</span>
-                </button>
+                <p className="text-sm text-on-surface leading-relaxed">{m.content}</p>
               </div>
             ))}
           </div>

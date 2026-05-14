@@ -616,6 +616,8 @@ const en = {
   'userMenu.memory.category.project': 'Project',
   'userMenu.memory.category.style': 'Style',
   'userMenu.memory.category.general': 'General',
+  'userMenu.memory.category.sender_priority': 'Key Sender',
+  'userMenu.memory.category.email_pattern': 'Email Pref',
   'userMenu.logout': 'Log Out',
   'userMenu.setPassword': 'Set Password',
 

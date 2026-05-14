@@ -150,7 +150,7 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
     return;
   }
 
-  const { messages, total } = await fetchMessages(token, 'Inbox', 10, 0);
+  const { messages, total } = await fetchMessages(token, 'Inbox', 30, 0);
   if (!messages.length) return;
 
   const lastSeenIds = getLastSeenIds(userId);
@@ -162,7 +162,7 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
   // On initial connect: send recent unread as welcome batch (even if already "seen")
   // On subsequent polls: only send genuinely new emails
   const emailsToSummarize = isInitial
-    ? messages.filter(m => !m.is_read).slice(0, 10)
+    ? messages.filter(m => !m.is_read).slice(0, 20)
     : messages.filter(m => !lastSeenIds.has(m.id));
 
   // Update last-seen IDs (keep the latest 50)

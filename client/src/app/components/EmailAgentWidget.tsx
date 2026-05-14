@@ -44,13 +44,25 @@ export default function EmailAgentWidget() {
   const [totalUnread, setTotalUnread] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [loadingStage, setLoadingStage] = useState(0);
   const [expandedAnalysis, setExpandedAnalysis] = useState<Set<string>>(new Set());
+  const [bubbleBounce, setBubbleBounce] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const reconnectTimer = useRef<NodeJS.Timeout | null>(null);
+  const isInitialLoad = useRef(true);
 
   useEffect(() => { setMounted(true); return () => setMounted(false); }, []);
+
+  // Cycle through loading stage messages while loading
+  useEffect(() => {
+    if (!initialLoading) return;
+    const timer = setInterval(() => {
+      setLoadingStage(prev => (prev + 1) % 3);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [initialLoading]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -59,12 +71,12 @@ export default function EmailAgentWidget() {
     }
   }, [chatMessages, streamText, activeTab]);
 
-  // Compact markdown components for widget
+  // Compact markdown components for widget (size = text-sm base)
   const compactMd = useMemo<Record<string, React.ComponentType<any>>>(() => ({
-    h1: ({ children, ...props }: any) => <p className="font-bold text-on-surface mt-2.5 mb-1 text-[13px]" {...props}>{children}</p>,
-    h2: ({ children, ...props }: any) => <p className="font-bold text-on-surface mt-2.5 mb-1 text-[13px]" {...props}>{children}</p>,
-    h3: ({ children, ...props }: any) => <p className="font-semibold text-on-surface mt-2 mb-0.5 text-xs" {...props}>{children}</p>,
-    h4: ({ children, ...props }: any) => <p className="font-semibold text-on-surface mt-1.5 mb-0.5 text-xs" {...props}>{children}</p>,
+    h1: ({ children, ...props }: any) => <p className="font-bold text-on-surface mt-3 mb-1 text-[15px]" {...props}>{children}</p>,
+    h2: ({ children, ...props }: any) => <p className="font-bold text-on-surface mt-3 mb-1 text-[15px]" {...props}>{children}</p>,
+    h3: ({ children, ...props }: any) => <p className="font-semibold text-on-surface mt-2 mb-0.5 text-sm" {...props}>{children}</p>,
+    h4: ({ children, ...props }: any) => <p className="font-semibold text-on-surface mt-1.5 mb-0.5 text-[13px]" {...props}>{children}</p>,
     p: ({ children, ...props }: any) => <p className="mb-1.5 last:mb-0 leading-relaxed" {...props}>{children}</p>,
     ul: ({ children, ...props }: any) => <ul className="list-disc pl-4 mb-1.5 space-y-0.5" {...props}>{children}</ul>,
     ol: ({ children, ...props }: any) => <ol className="list-decimal pl-4 mb-1.5 space-y-0.5" {...props}>{children}</ol>,
@@ -74,23 +86,23 @@ export default function EmailAgentWidget() {
       <blockquote className="border-l-2 border-primary/30 pl-2.5 my-1.5 text-on-surface-variant italic" {...props}>{children}</blockquote>
     ),
     pre: ({ children, ...props }: any) => (
-      <pre className="bg-surface-container rounded-lg p-2 my-1.5 text-[11px] overflow-x-auto" {...props}>{children}</pre>
+      <pre className="bg-surface-container rounded-lg p-2 my-1.5 text-xs overflow-x-auto" {...props}>{children}</pre>
     ),
     code: ({ className, children, ...props }: any) => {
       if (className) return <code className={className} {...props}>{children}</code>;
-      return <code className="bg-surface-container px-1 py-0.5 rounded text-[11px] text-primary" {...props}>{children}</code>;
+      return <code className="bg-surface-container px-1 py-0.5 rounded text-xs text-primary" {...props}>{children}</code>;
     },
     a: ({ children, href, ...props }: any) => (
       <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" {...props}>{children}</a>
     ),
     table: ({ children, ...props }: any) => (
       <div className="overflow-x-auto my-1.5 rounded-lg border border-outline-variant/20">
-        <table className="w-full text-[11px] border-collapse" {...props}>{children}</table>
+        <table className="w-full text-xs border-collapse" {...props}>{children}</table>
       </div>
     ),
     thead: ({ children, ...props }: any) => <thead className="bg-surface-container" {...props}>{children}</thead>,
-    th: ({ children, ...props }: any) => <th className="text-left px-2 py-1 font-semibold text-on-surface border-b border-outline-variant/20 whitespace-nowrap" {...props}>{children}</th>,
-    td: ({ children, ...props }: any) => <td className="px-2 py-1 text-on-surface-variant border-b border-outline-variant/10" {...props}>{children}</td>,
+    th: ({ children, ...props }: any) => <th className="text-left px-2.5 py-1.5 font-semibold text-on-surface border-b border-outline-variant/20 whitespace-nowrap" {...props}>{children}</th>,
+    td: ({ children, ...props }: any) => <td className="px-2.5 py-1.5 text-on-surface-variant border-b border-outline-variant/10" {...props}>{children}</td>,
     tr: ({ children, ...props }: any) => <tr className="hover:bg-surface-container/50" {...props}>{children}</tr>,
     hr: (props: any) => <hr className="my-2 border-outline-variant/20" {...props} />,
   }), []);
@@ -149,6 +161,12 @@ export default function EmailAgentWidget() {
         setNotifications(prev => {
           const existing = new Set(prev.map(n => n.emailId));
           const newOnes = (emails as EmailNotification[]).filter(e => !existing.has(e.emailId));
+          // Bounce bubble when new emails arrive (not initial load)
+          if (!isInitialLoad.current && newOnes.length > 0) {
+            setBubbleBounce(true);
+            setTimeout(() => setBubbleBounce(false), 2000);
+          }
+          isInitialLoad.current = false;
           return [...newOnes, ...prev].slice(0, 50);
         });
         if (unread !== undefined) setTotalUnread(unread);
@@ -161,7 +179,6 @@ export default function EmailAgentWidget() {
         setNotifications(prev => prev.map(n =>
           n.emailId === emailId ? { ...n, analysis, analyzing: false } : n
         ));
-        // Auto-expand the analysis
         setExpandedAnalysis(prev => new Set([...prev, emailId]));
         break;
       }
@@ -183,8 +200,13 @@ export default function EmailAgentWidget() {
       }
       case 'status': {
         if (event.data.connected) setConnected(true);
-        if (event.data.totalUnread !== undefined) setTotalUnread(event.data.totalUnread);
-        setInitialLoading(false);
+        // Only clear loading when we get actual poll data (totalUnread),
+        // not just the initial connection status event
+        if (event.data.totalUnread !== undefined) {
+          setTotalUnread(event.data.totalUnread);
+          setInitialLoading(false);
+          isInitialLoad.current = false;
+        }
         break;
       }
     }
@@ -196,7 +218,6 @@ export default function EmailAgentWidget() {
     abortRef.current = controller;
     connectSSE(controller.signal);
 
-    // Load chat history
     const token = localStorage.getItem('token');
     if (token) {
       fetch(`${SSE_BASE}/api/email-agent/history`, {
@@ -229,8 +250,7 @@ export default function EmailAgentWidget() {
     setStreaming(true);
     setStreamText('');
 
-    // Build compact email context from current notifications
-    const emailContext = notifications.slice(0, 10).map(n => ({
+    const emailContext = notifications.slice(0, 20).map(n => ({
       subject: n.subject,
       from: n.from.name || n.from.address,
       summary: n.summary,
@@ -251,7 +271,6 @@ export default function EmailAgentWidget() {
     }
   }, [streaming, notifications]);
 
-  // Send chat message (from input)
   const sendMessage = useCallback(async () => {
     const msg = chatInput.trim();
     if (!msg) return;
@@ -259,21 +278,17 @@ export default function EmailAgentWidget() {
     await sendMessageDirect(msg);
   }, [chatInput, sendMessageDirect]);
 
-  // Quick chip click
   const handleChipClick = useCallback((message: string) => {
     setActiveTab('chat');
     sendMessageDirect(message);
   }, [sendMessageDirect]);
 
-  // Request Layer 2 analysis
   const requestAnalysis = async (emailId: string) => {
     const token = localStorage.getItem('token');
     if (!token) return;
-
     setNotifications(prev => prev.map(n =>
       n.emailId === emailId ? { ...n, analyzing: true } : n
     ));
-
     try {
       await fetch(`${SSE_BASE}/api/email-agent/analyze/${emailId}`, {
         method: 'POST',
@@ -314,10 +329,10 @@ export default function EmailAgentWidget() {
     <>
       {/* Floating Bubble */}
       <button
-        onClick={() => setExpanded(!expanded)}
+        onClick={() => { setExpanded(!expanded); setBubbleBounce(false); }}
         className={`fixed bottom-6 right-6 z-[90] w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 ${
           expanded ? 'bg-surface-container-high text-on-surface scale-90' : 'bg-primary text-on-primary hover:shadow-2xl hover:scale-105'
-        }`}
+        } ${bubbleBounce && !expanded ? 'animate-bounce' : ''}`}
         title={t('emailAgent.title' as any) || '信件助手'}
       >
         <span className="material-symbols-outlined text-2xl">
@@ -335,11 +350,11 @@ export default function EmailAgentWidget() {
 
       {/* Expanded Panel */}
       {expanded && (
-        <div className="fixed bottom-24 right-6 z-[95] w-[480px] max-h-[640px] bg-surface-container-high rounded-2xl shadow-2xl border border-outline-variant/10 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-200">
+        <div className="fixed bottom-24 right-6 z-[95] w-[520px] max-h-[700px] bg-surface-container-high rounded-2xl shadow-2xl border border-outline-variant/10 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-200">
           {/* Header */}
           <div className="flex items-center gap-3 px-4 py-3 border-b border-outline-variant/10 bg-surface-container-high">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="material-symbols-outlined text-primary text-lg">smart_toy</span>
+            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+              <span className="material-symbols-outlined text-primary text-xl">smart_toy</span>
             </div>
             <div className="flex-1">
               <h3 className="text-sm font-semibold text-on-surface">
@@ -347,15 +362,15 @@ export default function EmailAgentWidget() {
               </h3>
               <div className="flex items-center gap-2">
                 <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-success' : 'bg-error'}`} />
-                <span className="text-[11px] text-on-surface-variant">
+                <span className="text-xs text-on-surface-variant">
                   {connected
                     ? (t('emailAgent.connected' as any) || '已連線')
                     : (t('emailAgent.disconnected' as any) || '未連線')}
                 </span>
                 {totalUnread > 0 && (
                   <>
-                    <span className="text-[11px] text-on-surface-variant/40">·</span>
-                    <span className="text-[11px] text-on-surface-variant">
+                    <span className="text-xs text-on-surface-variant/40">·</span>
+                    <span className="text-xs text-on-surface-variant">
                       {totalUnread} 封未讀
                     </span>
                   </>
@@ -364,9 +379,9 @@ export default function EmailAgentWidget() {
             </div>
             <button
               onClick={() => setExpanded(false)}
-              className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface-container-highest transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest transition-colors"
             >
-              <span className="material-symbols-outlined text-base text-on-surface-variant">remove</span>
+              <span className="material-symbols-outlined text-lg text-on-surface-variant">remove</span>
             </button>
           </div>
 
@@ -379,16 +394,16 @@ export default function EmailAgentWidget() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors relative ${
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors relative ${
                   activeTab === tab.id
                     ? 'text-primary'
                     : 'text-on-surface-variant hover:text-on-surface'
                 }`}
               >
-                <span className="material-symbols-outlined text-base">{tab.icon}</span>
+                <span className="material-symbols-outlined text-lg">{tab.icon}</span>
                 {tab.label}
                 {tab.badge > 0 && (
-                  <span className="min-w-[16px] h-4 flex items-center justify-center bg-primary/15 text-primary text-[10px] font-bold rounded-full px-1">
+                  <span className="min-w-[18px] h-[18px] flex items-center justify-center bg-primary/15 text-primary text-[11px] font-bold rounded-full px-1">
                     {tab.badge}
                   </span>
                 )}
@@ -401,8 +416,8 @@ export default function EmailAgentWidget() {
 
           {/* Error Banner */}
           {error && (
-            <div className="px-4 py-2 bg-error/10 text-error text-xs flex items-center gap-2">
-              <span className="material-symbols-outlined text-sm">warning</span>
+            <div className="px-4 py-2 bg-error/10 text-error text-sm flex items-center gap-2">
+              <span className="material-symbols-outlined text-base">warning</span>
               {error}
             </div>
           )}
@@ -416,16 +431,16 @@ export default function EmailAgentWidget() {
                 {/* AI Overview Banner */}
                 {overview && (
                   <div className="mb-3 bg-primary/5 border border-primary/10 rounded-xl p-3 flex gap-2.5">
-                    <span className="material-symbols-outlined text-primary text-base mt-0.5 shrink-0">auto_awesome</span>
-                    <p className="text-xs text-on-surface leading-relaxed flex-1">{overview}</p>
+                    <span className="material-symbols-outlined text-primary text-lg mt-0.5 shrink-0">auto_awesome</span>
+                    <p className="text-sm text-on-surface leading-relaxed flex-1">{overview}</p>
                   </div>
                 )}
 
                 {/* Priority Summary Chips */}
                 {notifications.length > 0 && highPriorityCount > 0 && (
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="text-[10px] font-medium text-error bg-error/10 px-2 py-0.5 rounded-full flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[10px]">priority_high</span>
+                    <span className="text-xs font-medium text-error bg-error/10 px-2.5 py-1 rounded-full flex items-center gap-1">
+                      <span className="material-symbols-outlined text-xs">priority_high</span>
                       {highPriorityCount} 封高優先
                     </span>
                   </div>
@@ -434,35 +449,34 @@ export default function EmailAgentWidget() {
                 {/* Email Cards */}
                 {notifications.length > 0 ? (
                   <div className="space-y-2">
-                    {notifications.slice(0, 15).map(n => (
+                    {notifications.slice(0, 30).map(n => (
                       <div
                         key={n.emailId}
                         className="bg-surface-container rounded-xl p-3 hover:bg-surface-container-highest transition-colors group"
                       >
                         <div className="flex items-start gap-2.5">
-                          {/* Priority indicator */}
-                          <div className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${priorityBg[n.priority]}`}>
-                            <span className={`material-symbols-outlined text-sm ${priorityColor[n.priority]}`}>
+                          <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${priorityBg[n.priority]}`}>
+                            <span className={`material-symbols-outlined text-base ${priorityColor[n.priority]}`}>
                               {priorityIcon[n.priority]}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-[13px] text-on-surface font-medium leading-snug line-clamp-2">{n.summary}</p>
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <span className="text-[11px] text-on-surface-variant truncate max-w-[140px]">
+                            <p className="text-sm text-on-surface font-medium leading-snug line-clamp-2">{n.summary}</p>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              <span className="text-xs text-on-surface-variant truncate max-w-[160px]">
                                 {n.from.name || n.from.address}
                               </span>
-                              <span className="text-[11px] text-on-surface-variant/40">·</span>
-                              <span className="text-[11px] text-on-surface-variant/60 shrink-0">
+                              <span className="text-xs text-on-surface-variant/40">·</span>
+                              <span className="text-xs text-on-surface-variant/60 shrink-0">
                                 {formatTime(n.receivedAt)}
                               </span>
                               {n.hasAttachments && (
-                                <span className="material-symbols-outlined text-[11px] text-on-surface-variant/60">attach_file</span>
+                                <span className="material-symbols-outlined text-xs text-on-surface-variant/60">attach_file</span>
                               )}
                               {n.category && (
                                 <>
-                                  <span className="text-[11px] text-on-surface-variant/40">·</span>
-                                  <span className="text-[10px] text-on-surface-variant/60 bg-surface-container-highest px-1.5 py-0.5 rounded">
+                                  <span className="text-xs text-on-surface-variant/40">·</span>
+                                  <span className="text-[11px] text-on-surface-variant/60 bg-surface-container-highest px-1.5 py-0.5 rounded">
                                     {n.category}
                                   </span>
                                 </>
@@ -476,15 +490,15 @@ export default function EmailAgentWidget() {
                           <>
                             <button
                               onClick={() => toggleAnalysis(n.emailId)}
-                              className="mt-2 ml-[34px] text-[11px] text-primary hover:text-primary/80 font-medium flex items-center gap-1"
+                              className="mt-2 ml-[38px] text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1"
                             >
-                              <span className="material-symbols-outlined text-xs" style={{ transform: expandedAnalysis.has(n.emailId) ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                              <span className="material-symbols-outlined text-sm" style={{ transform: expandedAnalysis.has(n.emailId) ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
                                 expand_more
                               </span>
                               {expandedAnalysis.has(n.emailId) ? '收合分析' : '查看分析'}
                             </button>
                             {expandedAnalysis.has(n.emailId) && (
-                              <div className="mt-2 text-xs text-on-surface-variant leading-relaxed border-l-2 border-primary/20 pl-3 overflow-x-auto">
+                              <div className="mt-2 text-sm text-on-surface-variant leading-relaxed border-l-2 border-primary/20 pl-3 overflow-x-auto">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={compactMd}>
                                   {n.analysis}
                                 </ReactMarkdown>
@@ -495,20 +509,20 @@ export default function EmailAgentWidget() {
 
                         {/* Action buttons */}
                         {!n.analysis && (
-                          <div className="flex items-center gap-3 mt-2 ml-[34px]">
+                          <div className="flex items-center gap-3 mt-2 ml-[38px]">
                             <button
                               onClick={() => requestAnalysis(n.emailId)}
                               disabled={n.analyzing}
-                              className="text-[11px] text-primary hover:text-primary/80 font-medium flex items-center gap-1 disabled:opacity-50 transition-colors"
+                              className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 disabled:opacity-50 transition-colors"
                             >
                               {n.analyzing ? (
                                 <>
-                                  <span className="material-symbols-outlined text-xs animate-spin">progress_activity</span>
+                                  <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
                                   分析中...
                                 </>
                               ) : (
                                 <>
-                                  <span className="material-symbols-outlined text-xs">auto_awesome</span>
+                                  <span className="material-symbols-outlined text-sm">auto_awesome</span>
                                   {t('emailAgent.analyze' as any) || 'AI 分析'}
                                 </>
                               )}
@@ -520,18 +534,41 @@ export default function EmailAgentWidget() {
                   </div>
                 ) : !error ? (
                   initialLoading ? (
-                    /* Loading state */
-                    <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant/60">
-                      <span className="material-symbols-outlined text-3xl mb-3 animate-spin">progress_activity</span>
-                      <span className="text-xs font-medium mb-1">正在連線信箱...</span>
-                      <span className="text-[11px] text-on-surface-variant/40">AI 正在掃描你的最新信件</span>
+                    <div className="flex flex-col items-center justify-center py-10">
+                      {/* Animated scanning icon */}
+                      <div className="relative w-16 h-16 mb-4">
+                        <div className="absolute inset-0 rounded-full bg-primary/5 animate-ping" style={{ animationDuration: '2s' }} />
+                        <div className="absolute inset-1 rounded-full bg-primary/10 animate-pulse" />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="material-symbols-outlined text-3xl text-primary animate-pulse">
+                            {['mail', 'search', 'auto_awesome'][loadingStage]}
+                          </span>
+                        </div>
+                      </div>
+                      {/* Rotating stage messages */}
+                      <p className="text-sm font-medium text-on-surface mb-1.5 transition-opacity duration-500">
+                        {['正在連線 Outlook 信箱...', '掃描最新信件中...', 'AI 正在分析信件內容...'][loadingStage]}
+                      </p>
+                      <p className="text-xs text-on-surface-variant/50">
+                        首次載入可能需要幾秒鐘
+                      </p>
+                      {/* Progress dots */}
+                      <div className="flex gap-1.5 mt-3">
+                        {[0, 1, 2].map(i => (
+                          <div
+                            key={i}
+                            className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${
+                              i <= loadingStage ? 'bg-primary scale-100' : 'bg-on-surface-variant/20 scale-75'
+                            }`}
+                          />
+                        ))}
+                      </div>
                     </div>
                   ) : (
-                    /* Truly empty — no new emails */
                     <div className="flex flex-col items-center justify-center py-10 text-on-surface-variant/50">
                       <span className="material-symbols-outlined text-4xl mb-3">mark_email_read</span>
-                      <span className="text-xs mb-1">{t('emailAgent.noNotifications' as any) || '目前沒有新通知'}</span>
-                      <span className="text-[11px] text-on-surface-variant/40">AI 正在持續監控你的信箱</span>
+                      <span className="text-sm mb-1">{t('emailAgent.noNotifications' as any) || '目前沒有新通知'}</span>
+                      <span className="text-xs text-on-surface-variant/40">AI 正在持續監控你的信箱</span>
                     </div>
                   )
                 ) : null}
@@ -542,13 +579,12 @@ export default function EmailAgentWidget() {
             {activeTab === 'chat' && (
               <div className="px-3 pt-3 pb-2">
                 {chatMessages.length === 0 && !streaming ? (
-                  /* Empty chat — welcome + suggestions */
                   <div className="flex flex-col items-center py-6">
                     <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
                       <span className="material-symbols-outlined text-primary text-2xl">smart_toy</span>
                     </div>
-                    <p className="text-sm font-medium text-on-surface mb-1">有什麼我能幫你的？</p>
-                    <p className="text-[11px] text-on-surface-variant/60 text-center mb-4 px-4">
+                    <p className="text-base font-medium text-on-surface mb-1">有什麼我能幫你的？</p>
+                    <p className="text-xs text-on-surface-variant/60 text-center mb-4 px-4">
                       我可以幫你分析信件、整理重點、識別資安風險、建議回覆方向
                     </p>
                     <div className="flex flex-wrap gap-2 justify-center">
@@ -557,25 +593,24 @@ export default function EmailAgentWidget() {
                           key={chip.label}
                           onClick={() => handleChipClick(chip.message)}
                           disabled={streaming || !connected}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-highest text-xs text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-40"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-highest text-sm text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-40"
                         >
-                          <span className="material-symbols-outlined text-sm">{chip.icon}</span>
+                          <span className="material-symbols-outlined text-base">{chip.icon}</span>
                           {chip.label}
                         </button>
                       ))}
                     </div>
                   </div>
                 ) : (
-                  /* Chat messages */
                   <div className="space-y-3">
                     {chatMessages.slice(-20).map((msg, i) => (
                       <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         {msg.role === 'assistant' && (
-                          <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center mr-2 mt-0.5 shrink-0">
-                            <span className="material-symbols-outlined text-primary text-xs">smart_toy</span>
+                          <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center mr-2 mt-0.5 shrink-0">
+                            <span className="material-symbols-outlined text-primary text-sm">smart_toy</span>
                           </div>
                         )}
-                        <div className={`px-3 py-2 rounded-xl text-xs ${
+                        <div className={`px-3.5 py-2.5 rounded-xl text-sm ${
                           msg.role === 'user'
                             ? 'max-w-[75%] bg-primary text-on-primary rounded-br-sm'
                             : 'flex-1 min-w-0 bg-surface-container text-on-surface rounded-bl-sm'
@@ -594,26 +629,26 @@ export default function EmailAgentWidget() {
                     ))}
                     {streaming && streamText && (
                       <div className="flex justify-start">
-                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center mr-2 mt-0.5 shrink-0">
-                          <span className="material-symbols-outlined text-primary text-xs">smart_toy</span>
+                        <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center mr-2 mt-0.5 shrink-0">
+                          <span className="material-symbols-outlined text-primary text-sm">smart_toy</span>
                         </div>
-                        <div className="flex-1 min-w-0 px-3 py-2 rounded-xl rounded-bl-sm bg-surface-container text-on-surface text-xs">
-                          <div className="leading-relaxed">
+                        <div className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl rounded-bl-sm bg-surface-container text-on-surface text-sm">
+                          <div className="leading-relaxed overflow-x-auto">
                             <ReactMarkdown remarkPlugins={[remarkGfm]} components={compactMd}>
                               {streamText}
                             </ReactMarkdown>
-                            <span className="inline-block w-1.5 h-3.5 bg-primary/60 animate-pulse ml-0.5 -mb-0.5 rounded-sm" />
+                            <span className="inline-block w-1.5 h-4 bg-primary/60 animate-pulse ml-0.5 -mb-0.5 rounded-sm" />
                           </div>
                         </div>
                       </div>
                     )}
                     {streaming && !streamText && (
                       <div className="flex justify-start">
-                        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center mr-2 mt-0.5 shrink-0">
-                          <span className="material-symbols-outlined text-primary text-xs">smart_toy</span>
+                        <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center mr-2 mt-0.5 shrink-0">
+                          <span className="material-symbols-outlined text-primary text-sm">smart_toy</span>
                         </div>
-                        <div className="px-3 py-2 rounded-xl rounded-bl-sm bg-surface-container text-on-surface-variant text-xs flex items-center gap-2">
-                          <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                        <div className="px-3.5 py-2.5 rounded-xl rounded-bl-sm bg-surface-container text-on-surface-variant text-sm flex items-center gap-2">
+                          <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
                           思考中...
                         </div>
                       </div>
@@ -627,7 +662,6 @@ export default function EmailAgentWidget() {
 
           {/* Bottom Area: Quick Chips + Input */}
           <div className="border-t border-outline-variant/10 bg-surface-container-high">
-            {/* Quick suggestion chips (only show when on mail tab or chat has messages) */}
             {activeTab === 'mail' && notifications.length > 0 && (
               <div className="px-3 pt-2.5 pb-0 flex gap-1.5 overflow-x-auto scrollbar-none">
                 {quickChips.map(chip => (
@@ -635,16 +669,15 @@ export default function EmailAgentWidget() {
                     key={chip.label}
                     onClick={() => handleChipClick(chip.message)}
                     disabled={streaming || !connected}
-                    className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container hover:bg-surface-container-highest text-[11px] text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-40"
+                    className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-highest text-xs text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-40"
                   >
-                    <span className="material-symbols-outlined text-xs">{chip.icon}</span>
+                    <span className="material-symbols-outlined text-sm">{chip.icon}</span>
                     {chip.label}
                   </button>
                 ))}
               </div>
             )}
 
-            {/* Chat Input */}
             <div className="p-3 pt-2">
               <div className="flex items-center gap-2">
                 <input
@@ -659,14 +692,14 @@ export default function EmailAgentWidget() {
                   onFocus={() => { if (activeTab !== 'chat') setActiveTab('chat'); }}
                   placeholder={t('emailAgent.placeholder' as any) || '問我任何信件相關問題...'}
                   disabled={streaming || !connected}
-                  className="flex-1 bg-surface-container rounded-xl px-3.5 py-2 text-xs text-on-surface placeholder:text-on-surface-variant/40 outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50 transition-shadow"
+                  className="flex-1 bg-surface-container rounded-xl px-3.5 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/40 outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50 transition-shadow"
                 />
                 <button
                   onClick={sendMessage}
                   disabled={streaming || !chatInput.trim() || !connected}
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-primary text-on-primary disabled:opacity-30 hover:bg-primary/90 transition-colors shrink-0"
+                  className="w-9 h-9 flex items-center justify-center rounded-full bg-primary text-on-primary disabled:opacity-30 hover:bg-primary/90 transition-colors shrink-0"
                 >
-                  <span className="material-symbols-outlined text-base">
+                  <span className="material-symbols-outlined text-lg">
                     {streaming ? 'more_horiz' : 'arrow_upward'}
                   </span>
                 </button>
