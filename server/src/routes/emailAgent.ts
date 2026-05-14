@@ -52,7 +52,13 @@ router.get('/events', async (req: Request, res: Response) => {
 
 router.post('/chat', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { message } = req.body as { message?: string };
+  const { message, emailContext } = req.body as {
+    message?: string;
+    emailContext?: Array<{
+      subject: string; from: string; summary: string;
+      priority: string; category: string; receivedAt: string; hasAttachments: boolean;
+    }>;
+  };
 
   if (!message?.trim()) {
     res.status(400).json({ error: 'Message is required' });
@@ -76,6 +82,15 @@ router.post('/chat', async (req: Request, res: Response) => {
     );
     const memoryBlock = buildEmailAgentMemoryContext(memories);
 
+    // Build email context block from client-provided summaries
+    let emailBlock = '';
+    if (emailContext?.length) {
+      emailBlock = '\n\n## 目前信箱狀態（最新信件摘要）\n' +
+        emailContext.map((e, i) =>
+          `${i + 1}. [${e.priority}] ${e.summary}\n   寄件者: ${e.from} | 分類: ${e.category} | 時間: ${e.receivedAt}${e.hasAttachments ? ' | 📎 有附件' : ''}`
+        ).join('\n') + '\n';
+    }
+
     const recentMessages = await dbAll<{ role: string; content: string }>(
       'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 10',
       conversationId
@@ -86,9 +101,16 @@ router.post('/chat', async (req: Request, res: Response) => {
       return `[${r}]: ${c}`;
     }).join('\n');
 
-    const prompt = `你是一位專業的信件助手 AI。你可以幫助用戶查看、分析、整理 Outlook 信件。
-以繁體中文回覆用戶。保持簡潔專業。
-${memoryBlock}
+    const prompt = `你是一位專業且貼心的 AI 信件秘書。你的個性是：主動、有洞察力、簡潔有效率。
+你能幫助用戶：查看和分析 Outlook 信件、整理待辦、識別重要信件、提供回覆建議、標記資安風險。
+
+回覆規則：
+- 用繁體中文，語氣親切專業
+- 善用 markdown 格式（**粗體**標重點、列點整理、適當分段）
+- 回覆要有洞察力，不只是複述資訊，要給出建議和判斷
+- 直接根據下方的信件資料回答用戶問題，不要說你無法存取信箱
+- 如果用戶問的問題不在信件資料範圍內，誠實說明
+${emailBlock}${memoryBlock}
 
 近期對話紀錄：
 ${chatHistory}

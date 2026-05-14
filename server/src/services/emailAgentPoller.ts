@@ -179,19 +179,20 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
 
   console.log(`[EmailAgent] ${emailsToSummarize.length} emails to summarize for user ${userId} (initial=${isInitial})`);
 
-  // Generate Layer 1 summaries
-  const summaries = await generateLayer1Summary(userId, emailsToSummarize);
+  // Generate Layer 1 summaries + overview
+  const { summaries, overview } = await generateLayer1Summary(userId, emailsToSummarize);
 
   pushEvent(userId, {
     type: 'new_emails',
-    data: { emails: summaries, totalUnread, total },
+    data: { emails: summaries, totalUnread, total, overview },
   });
 }
 
 /**
  * Layer 1: Lightweight batch summary using Claude CLI.
+ * Returns individual summaries + a conversational overview.
  */
-async function generateLayer1Summary(userId: string, emails: OutlookMessage[]): Promise<EmailSummary[]> {
+async function generateLayer1Summary(userId: string, emails: OutlookMessage[]): Promise<{ summaries: EmailSummary[], overview: string }> {
   // Load email agent memories for personalization
   const memories = await dbAll<{ content: string }>(
     "SELECT content FROM user_memories WHERE user_id = ? AND memory_type = 'email_agent' ORDER BY created_at DESC LIMIT 10",
@@ -204,7 +205,8 @@ Subject: ${e.subject}
 From: ${e.from.name} <${e.from.address}>
 Preview: ${(e.preview || '').substring(0, 300)}`).join('\n\n');
 
-  const prompt = `你是信件分類助手。為以下新信件各生成一行繁體中文摘要和優先級。
+  const prompt = `你是一位貼心的 AI 信件秘書。為以下新信件各生成一行繁體中文摘要和優先級。
+同時，用 1-2 句話生成一段親切的整體概覽，像是在跟老闆簡報信件狀況。語氣自然、重點明確。
 
 優先級規則：
 - 高：VIP、合約、緊急期限、資安警告、客戶投訴
@@ -216,24 +218,33 @@ ${memoryBlock}
 ${emailList}
 
 回傳 JSON（不要 markdown 包裝，直接 JSON）：
-[{"emailId":"填入編號","summary":"一行摘要","priority":"高|中|低","category":"分類如:會議/客戶/通知/資安"}]`;
+{"overview":"親切的整體概覽","emails":[{"emailId":"填入編號","summary":"一行摘要","priority":"高|中|低","category":"分類如:會議/客戶/通知/資安"}]}`;
 
   const output = await spawnClaudeOneShot(prompt, LAYER1_TIMEOUT);
 
-  // Parse AI output
-  let parsed: Array<{ emailId: string; summary: string; priority: string; category: string }> = [];
+  // Parse AI output — supports both new {overview, emails} and legacy array format
+  let emailResults: Array<{ emailId: string; summary: string; priority: string; category: string }> = [];
+  let overview = '';
   if (output) {
     try {
-      const jsonMatch = output.match(/\[[\s\S]*\]/);
-      if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+      const objMatch = output.match(/\{[\s\S]*"emails"[\s\S]*\}/);
+      if (objMatch) {
+        const parsed = JSON.parse(objMatch[0]);
+        emailResults = parsed.emails || [];
+        overview = parsed.overview || '';
+      } else {
+        // Fallback: legacy array format
+        const arrMatch = output.match(/\[[\s\S]*\]/);
+        if (arrMatch) emailResults = JSON.parse(arrMatch[0]);
+      }
     } catch {
       console.warn('[EmailAgent] Failed to parse Layer 1 output');
     }
   }
 
   // Map parsed results back to emails
-  return emails.map((email, i) => {
-    const aiResult = parsed.find(p => p.emailId === String(i + 1)) || parsed[i];
+  const summaries = emails.map((email, i) => {
+    const aiResult = emailResults.find(p => p.emailId === String(i + 1)) || emailResults[i];
     return {
       emailId: email.id,
       subject: email.subject,
@@ -246,6 +257,8 @@ ${emailList}
       category: aiResult?.category || '一般',
     };
   });
+
+  return { summaries, overview };
 }
 
 /**
