@@ -975,6 +975,24 @@ const zhTW = {
   'admin.settings.info.uploadDesc': '限制每位用戶上傳的分析檔案總量。包含 CSV、Excel、JSON 等供 AI 分析的檔案。',
 
   // Admin Settings - Personal Preferences section
+  // Terms of Service
+  'terms.title': '系統使用規範與管理辦法',
+  'terms.subtitle': '請詳閱以下使用條款，捲動至底部後方可同意。',
+  'terms.scrollHint': '請捲動閱讀完整條款',
+  'terms.agree': '我同意以上條款',
+  'terms.accepting': '處理中...',
+
+  // Admin Terms
+  'admin.sidebar.terms': '使用條款',
+  'admin.terms.title': '使用條款管理',
+  'admin.terms.subtitle': '編輯使用者同意條款',
+  'admin.terms.editor': '編輯器',
+  'admin.terms.preview': '預覽',
+  'admin.terms.placeholderGuide': '動態數值佔位符',
+  'admin.terms.placeholderGuideDesc': '這些佔位符在使用者端會被替換為系統設定中的實際數值。',
+  'admin.terms.bumpVersion': '更新版本號',
+  'admin.terms.resetAcceptance': '重設所有使用者接受狀態',
+
   'admin.settings.preferences.title': '個人偏好',
   'admin.settings.preferences.language': '介面語言',
   'admin.settings.preferences.theme': '外觀主題',

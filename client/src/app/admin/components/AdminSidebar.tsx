@@ -42,6 +42,7 @@ const NAV_GROUPS = [
     icon: 'settings',
     items: [
       { href: '/admin/security', labelKey: 'admin.sidebar.security' as const, icon: 'shield_with_heart' },
+      ...(deployMode === 'pro-panjit' ? [{ href: '/admin/terms', labelKey: 'admin.sidebar.terms' as const, icon: 'gavel' }] : []),
       { href: '/admin/settings', labelKey: 'admin.sidebar.settings' as const, icon: 'settings' },
     ],
   },

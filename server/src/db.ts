@@ -2,6 +2,7 @@ import mysql, { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from './config.js';
+import { DEFAULT_TOS_CONTENT } from './defaults/tos.js';
 
 // ---------------------------------------------------------------------------
 // Connection Pool
@@ -457,6 +458,11 @@ export async function initializeDatabase(): Promise<void> {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // Terms of Service: add acceptance tracking column
+    try {
+      await conn.query('ALTER TABLE users ADD COLUMN terms_accepted_at DATETIME DEFAULT NULL');
+    } catch { /* column already exists */ }
+
     // Migration: add credentials_enc column to outlook_tokens
     try {
       await conn.query('ALTER TABLE outlook_tokens ADD COLUMN credentials_enc TEXT DEFAULT NULL');
@@ -473,6 +479,22 @@ export async function initializeDatabase(): Promise<void> {
         'SELECT `key` FROM system_settings WHERE `key` = ?', [key]
       );
       if (rows.length === 0) {
+        await conn.execute(
+          'INSERT INTO system_settings (`key`, value) VALUES (?, ?)', [key, value]
+        );
+      }
+    }
+
+    // Seed default TOS content if not exists
+    const tosDefaults: Record<string, string> = {
+      tos_content: DEFAULT_TOS_CONTENT,
+      tos_version: '1',
+    };
+    for (const [key, value] of Object.entries(tosDefaults)) {
+      const [tosRows] = await conn.execute<RowDataPacket[]>(
+        'SELECT `key` FROM system_settings WHERE `key` = ?', [key]
+      );
+      if (tosRows.length === 0) {
         await conn.execute(
           'INSERT INTO system_settings (`key`, value) VALUES (?, ?)', [key, value]
         );

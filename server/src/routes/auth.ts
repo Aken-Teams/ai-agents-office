@@ -7,7 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { dbGet, dbRun, dbAll } from '../db.js';
 import { config } from '../config.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { checkUserUsageLimit } from '../services/usageLimit.js';
+import { checkUserUsageLimit, getUserUsageLimitUsd, getStorageQuotaGb, getUploadQuotaMb } from '../services/usageLimit.js';
 import { isEmailEnabled, sendVerificationCode, sendPasswordResetEmail } from '../services/email.js';
 import type { User } from '../types.js';
 
@@ -433,7 +433,7 @@ router.post('/google', async (req: Request, res: Response) => {
    ============================================================ */
 router.get('/me', authMiddleware, async (req: Request, res: Response) => {
   const user = await dbGet<User>(
-    'SELECT id, email, password_hash, display_name, role, status, locale, theme, oauth_provider, company, onboarding_completed, created_at FROM users WHERE id = ?',
+    'SELECT id, email, password_hash, display_name, role, status, locale, theme, oauth_provider, company, onboarding_completed, terms_accepted_at, created_at FROM users WHERE id = ?',
     req.user!.userId
   );
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
@@ -447,7 +447,36 @@ router.get('/me', authMiddleware, async (req: Request, res: Response) => {
     createdAt: user.created_at,
     company: user.company || null,
     onboardingRequired: !user.onboarding_completed && config.deployMode === 'pro-out',
+    termsRequired: !(user as any).terms_accepted_at && config.deployMode === 'pro-panjit',
   });
+});
+
+/* ============================================================
+   GET /api/auth/terms — get TOS content with placeholders resolved
+   ============================================================ */
+router.get('/terms', authMiddleware, async (_req: Request, res: Response) => {
+  const tosRow = await dbGet<{ value: string }>("SELECT value FROM system_settings WHERE `key` = 'tos_content'");
+  if (!tosRow) { res.status(404).json({ error: 'TOS not configured' }); return; }
+
+  const usageLimitUsd = await getUserUsageLimitUsd();
+  const storageQuotaGb = await getStorageQuotaGb();
+  const uploadQuotaMb = await getUploadQuotaMb();
+
+  let content = tosRow.value;
+  content = content.replace(/\{\{usage_limit_usd\}\}/g, String(usageLimitUsd));
+  content = content.replace(/\{\{storage_quota_gb\}\}/g, String(storageQuotaGb));
+  content = content.replace(/\{\{upload_quota_mb\}\}/g, String(uploadQuotaMb));
+
+  const versionRow = await dbGet<{ value: string }>("SELECT value FROM system_settings WHERE `key` = 'tos_version'");
+  res.json({ content, version: versionRow?.value || '1' });
+});
+
+/* ============================================================
+   POST /api/auth/accept-terms — mark TOS as accepted
+   ============================================================ */
+router.post('/accept-terms', authMiddleware, async (req: Request, res: Response) => {
+  await dbRun('UPDATE users SET terms_accepted_at = NOW(), updated_at = NOW() WHERE id = ?', req.user!.userId);
+  res.json({ success: true });
 });
 
 /* ============================================================

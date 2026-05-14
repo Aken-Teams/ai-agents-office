@@ -979,6 +979,48 @@ router.get('/settings/users-usage', async (_req: Request, res: Response) => {
   res.json(result);
 });
 
+// ==================== Terms of Service ====================
+
+// GET /api/admin/terms — raw TOS template for editing
+router.get('/terms', async (_req: Request, res: Response) => {
+  const tosRow = await dbGet<{ value: string }>("SELECT value FROM system_settings WHERE `key` = 'tos_content'");
+  const versionRow = await dbGet<{ value: string }>("SELECT value FROM system_settings WHERE `key` = 'tos_version'");
+  res.json({ content: tosRow?.value || '', version: versionRow?.value || '1' });
+});
+
+// PATCH /api/admin/terms — update TOS content, optionally bump version
+router.patch('/terms', async (req: Request, res: Response) => {
+  const { content, bumpVersion, resetAcceptance } = req.body as {
+    content?: string; bumpVersion?: boolean; resetAcceptance?: boolean;
+  };
+  if (typeof content !== 'string' || !content.trim()) {
+    res.status(400).json({ error: 'Content is required' });
+    return;
+  }
+
+  await dbRun("REPLACE INTO system_settings (`key`, value) VALUES (?, ?)", 'tos_content', content);
+
+  if (bumpVersion) {
+    const versionRow = await dbGet<{ value: string }>("SELECT value FROM system_settings WHERE `key` = 'tos_version'");
+    const newVersion = String(parseInt(versionRow?.value || '1', 10) + 1);
+    await dbRun("REPLACE INTO system_settings (`key`, value) VALUES (?, ?)", 'tos_version', newVersion);
+
+    if (resetAcceptance) {
+      await dbRun('UPDATE users SET terms_accepted_at = NULL');
+    }
+  }
+
+  // Audit log
+  await dbRun(
+    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+    uuidv4(), req.user!.userId, 'update_tos', 'system', 'tos_content',
+    JSON.stringify({ bumpVersion: !!bumpVersion, resetAcceptance: !!resetAcceptance })
+  );
+
+  const newVersionRow = await dbGet<{ value: string }>("SELECT value FROM system_settings WHERE `key` = 'tos_version'");
+  res.json({ success: true, version: newVersionRow?.value || '1' });
+});
+
 // ==================== Conversations ====================
 
 // GET /api/admin/conversations?page=1&limit=20&search=&userId=

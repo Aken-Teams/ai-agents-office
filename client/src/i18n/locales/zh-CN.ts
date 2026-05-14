@@ -971,6 +971,24 @@ const zhCN = {
   'admin.settings.info.uploadDesc': '限制每位用户上传的分析文件总量。包含 CSV、Excel、JSON 等供 AI 分析的文件。',
 
   // Admin Settings - Personal Preferences section
+  // Terms of Service
+  'terms.title': '系统使用规范与管理办法',
+  'terms.subtitle': '请详阅以下使用条款，滚动至底部后方可同意。',
+  'terms.scrollHint': '请滚动阅读完整条款',
+  'terms.agree': '我同意以上条款',
+  'terms.accepting': '处理中...',
+
+  // Admin Terms
+  'admin.sidebar.terms': '使用条款',
+  'admin.terms.title': '使用条款管理',
+  'admin.terms.subtitle': '编辑用户同意条款',
+  'admin.terms.editor': '编辑器',
+  'admin.terms.preview': '预览',
+  'admin.terms.placeholderGuide': '动态数值占位符',
+  'admin.terms.placeholderGuideDesc': '这些占位符在用户端会被替换为系统设置中的实际数值。',
+  'admin.terms.bumpVersion': '更新版本号',
+  'admin.terms.resetAcceptance': '重设所有用户接受状态',
+
   'admin.settings.preferences.title': '个人偏好',
   'admin.settings.preferences.language': '界面语言',
   'admin.settings.preferences.theme': '外观主题',

@@ -952,6 +952,24 @@ const en = {
   'admin.settings.info.storageDesc': 'Limits total AI-generated file storage per user. Includes PPTX, DOCX, XLSX, PDF and all generated files.',
   'admin.settings.info.uploadTitle': 'Upload Storage',
   'admin.settings.info.uploadDesc': 'Limits total uploaded analysis files per user. Includes CSV, Excel, JSON files for AI analysis.',
+  // Terms of Service
+  'terms.title': 'Terms of Service',
+  'terms.subtitle': 'Please read the terms below. Scroll to the bottom to accept.',
+  'terms.scrollHint': 'Scroll to read full terms',
+  'terms.agree': 'I Agree',
+  'terms.accepting': 'Processing...',
+
+  // Admin Terms
+  'admin.sidebar.terms': 'Terms of Service',
+  'admin.terms.title': 'Terms of Service',
+  'admin.terms.subtitle': 'Edit user agreement terms',
+  'admin.terms.editor': 'Editor',
+  'admin.terms.preview': 'Preview',
+  'admin.terms.placeholderGuide': 'Dynamic Placeholders',
+  'admin.terms.placeholderGuideDesc': 'These placeholders are replaced with actual values from system settings on the user-facing page.',
+  'admin.terms.bumpVersion': 'Bump version',
+  'admin.terms.resetAcceptance': 'Reset all users\' acceptance status',
+
   'admin.settings.preferences.title': 'Personal Preferences',
   'admin.settings.preferences.language': 'Interface Language',
   'admin.settings.preferences.theme': 'Appearance Theme',

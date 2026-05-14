@@ -64,7 +64,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     setUser(data);
     setIsLoading(false);
-    if (data.onboardingRequired) {
+    if (data.termsRequired) {
+      router.replace('/terms');
+    } else if (data.onboardingRequired) {
       router.replace('/onboarding');
     }
   }
