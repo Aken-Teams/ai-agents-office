@@ -466,34 +466,59 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
   const [search, setSearch] = useState('');
   const [selectedMsg, setSelectedMsg] = useState<EmailMessage | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [page, setPage] = useState(0);
+  const [fetchingMore, setFetchingMore] = useState(false);
+  const PAGE_SIZE = 10;
+  const BATCH_SIZE = 50;
   const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
 
-  const fetchMessages = useCallback(async (folder: string) => {
-    setLoading(true);
-    setSelectedMsg(null);
+  // Real total from folder metadata
+  const activeFolderData = folders.find(f => f.name === activeFolder);
+  const folderTotal = activeFolderData?.totalCount || messages.length;
+
+  const fetchBatch = useCallback(async (folder: string, offset: number, replace = false) => {
+    if (replace) setLoading(true);
+    else setFetchingMore(true);
     try {
-      const res = await fetch(`${apiBase}/api/outlook/messages?folder=${encodeURIComponent(folder)}&limit=30`, {
+      const res = await fetch(`${apiBase}/api/outlook/messages?folder=${encodeURIComponent(folder)}&limit=${BATCH_SIZE}&offset=${offset}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (data.messages) setMessages(data.messages);
+      if (data.messages) {
+        setMessages(prev => replace ? data.messages : [...prev, ...data.messages]);
+      }
     } catch { /* ignore */ }
-    finally { setLoading(false); }
+    finally { replace ? setLoading(false) : setFetchingMore(false); }
   }, [token, apiBase]);
+
+  const switchFolder = useCallback(async (folder: string) => {
+    setSelectedMsg(null);
+    setPage(0);
+    await fetchBatch(folder, 0, true);
+  }, [fetchBatch]);
 
   useEffect(() => {
     (async () => {
       try {
-        const [fRes, mRes] = await Promise.all([
+        const [fRes] = await Promise.all([
           fetch(`${apiBase}/api/outlook/folders`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-          fetch(`${apiBase}/api/outlook/messages?folder=Inbox&limit=30`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
         ]);
         if (fRes.folders) setFolders(fRes.folders);
-        if (mRes.messages) setMessages(mRes.messages);
       } catch { /* ignore */ }
-      finally { setLoading(false); }
+      // Fetch first batch of Inbox
+      await fetchBatch('Inbox', 0, true);
+      setLoading(false);
     })();
-  }, [token, apiBase]);
+  }, [token, apiBase, fetchBatch]);
+
+  // When page changes, check if we need to fetch more
+  const goToPage = useCallback(async (p: number) => {
+    setPage(p);
+    const needed = (p + 1) * PAGE_SIZE; // how many items we need loaded
+    if (needed > messages.length && messages.length < folderTotal) {
+      await fetchBatch(activeFolder, messages.length);
+    }
+  }, [messages.length, folderTotal, activeFolder, fetchBatch]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') { selectedMsg ? setSelectedMsg(null) : onClose(); } };
@@ -534,7 +559,8 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
     }
   }
 
-  const filtered = search.trim()
+  const isSearching = !!search.trim();
+  const allFiltered = isSearching
     ? messages.filter(m =>
         m.subject?.toLowerCase().includes(search.toLowerCase()) ||
         m.from.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -542,6 +568,10 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
         m.preview?.toLowerCase().includes(search.toLowerCase())
       )
     : messages;
+  // When searching, total = filtered count; otherwise use folder's real total
+  const totalCount = isSearching ? allFiltered.length : folderTotal;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const filtered = allFiltered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const totalUnread = folders.reduce((sum, f) => sum + f.unreadCount, 0);
 
@@ -600,16 +630,20 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
                     {new Date(selectedMsg.received_at).toLocaleString(undefined, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' })}
                   </p>
                   {selectedMsg.to && selectedMsg.to.length > 0 && (
-                    <p className="text-xs text-on-surface-variant mt-1.5">
-                      <span className="font-medium text-on-surface-variant/80">{t('assistant.email.to' as any)}:</span>{' '}
-                      {selectedMsg.to.map(r => r.name || r.address).join(', ')}
-                    </p>
+                    <div className="flex items-start gap-1.5 mt-2">
+                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-tertiary/10 text-tertiary px-1.5 py-0.5 rounded mt-px">To</span>
+                      <p className="text-xs text-on-surface-variant leading-relaxed">
+                        {selectedMsg.to.map(r => r.name || r.address).join(', ')}
+                      </p>
+                    </div>
                   )}
                   {selectedMsg.cc && selectedMsg.cc.length > 0 && (
-                    <p className="text-xs text-on-surface-variant mt-0.5">
-                      <span className="font-medium text-on-surface-variant/80">CC:</span>{' '}
-                      {selectedMsg.cc.map(r => r.name || r.address).join(', ')}
-                    </p>
+                    <div className="flex items-start gap-1.5 mt-1">
+                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-warning/10 text-warning px-1.5 py-0.5 rounded mt-px">CC</span>
+                      <p className="text-xs text-on-surface-variant leading-relaxed">
+                        {selectedMsg.cc.map(r => r.name || r.address).join(', ')}
+                      </p>
+                    </div>
                   )}
                   {selectedMsg.has_attachments && (
                     <div className="flex items-center gap-1 text-xs text-tertiary mt-1.5">
@@ -670,7 +704,7 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
               {selectedMsg.body ? (
                 selectedMsg.body_type === 'html' ? (
                   <iframe
-                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1d1b20;margin:0;padding:0;word-break:break-word;overflow-x:auto;}a{color:#6750A4;}img[src^="cid:"]{display:none!important;width:0!important;height:0!important;}img{max-width:100%!important;height:auto!important;}table{border-collapse:collapse;}*{box-sizing:border-box;}</style></head><body>${selectedMsg.body}</body></html>`}
+                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1d1b20;margin:0;padding:0;word-break:break-word;overflow-x:auto;}a{color:#6750A4;}img[src^="cid:"]{display:none!important;width:0!important;height:0!important;}img{max-width:100%!important;height:auto!important;}table{border-collapse:collapse;}*{box-sizing:border-box;}.reply-collapsed{border-left:3px solid #c4c4c4;margin:16px 0;padding:4px 12px;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:12px;color:#666;}.reply-content{border-left:3px solid #ddd;margin:16px 0;padding:8px 12px;opacity:0.7;font-size:13px;}</style></head><body>${selectedMsg.body}</body></html>`}
                     className="w-full border-0 min-h-[300px]"
                     sandbox="allow-same-origin"
                     title="Email body"
@@ -703,6 +737,41 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
                         tbl.parentElement?.insertBefore(wrap, tbl);
                         wrap.appendChild(tbl);
                       });
+                      // Collapse quoted reply sections
+                      const replySelectors = [
+                        'blockquote',                          // standard
+                        '.gmail_quote',                        // Gmail
+                        '[id^="divRplyFwdMsg"]',               // Outlook new
+                        '#appendonsend',                       // Outlook append
+                        'div.OutlookMessageHeader',            // Outlook header
+                        '[name="_MailAutoSig"] ~ *',           // Outlook auto-sig onwards
+                      ];
+                      const replyEl = doc.querySelector(replySelectors.join(','));
+                      if (replyEl) {
+                        // Collect this element and all following siblings as "reply"
+                        const wrapper = doc.createElement('div');
+                        wrapper.className = 'reply-content';
+                        wrapper.style.display = 'none';
+                        const toggle = doc.createElement('div');
+                        toggle.className = 'reply-collapsed';
+                        toggle.textContent = '⋯ 顯示引用內容';
+                        toggle.addEventListener('click', () => {
+                          const show = wrapper.style.display === 'none';
+                          wrapper.style.display = show ? '' : 'none';
+                          toggle.textContent = show ? '⋯ 隱藏引用內容' : '⋯ 顯示引用內容';
+                          iframe.style.height = doc.body.scrollHeight + 20 + 'px';
+                        });
+                        replyEl.parentElement?.insertBefore(toggle, replyEl);
+                        replyEl.parentElement?.insertBefore(wrapper, replyEl);
+                        // Move reply element and all siblings after it into wrapper
+                        let node = wrapper.nextSibling;
+                        while (node) {
+                          const next = node.nextSibling;
+                          wrapper.appendChild(node);
+                          node = next;
+                        }
+                      }
+
                       const updateHeight = () => {
                         iframe.style.height = doc.body.scrollHeight + 20 + 'px';
                       };
@@ -732,7 +801,7 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
                   <span className="material-symbols-outlined text-on-surface-variant text-base">search</span>
                   <input
                     value={search}
-                    onChange={e => setSearch(e.target.value)}
+                    onChange={e => { setSearch(e.target.value); setPage(0); }}
                     placeholder={t('assistant.email.searchPlaceholder' as any)}
                     className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none"
                   />
@@ -749,7 +818,7 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
                   {folders.map(f => (
                     <button
                       key={f.id}
-                      onClick={() => { setActiveFolder(f.name); setSearch(''); fetchMessages(f.name); }}
+                      onClick={() => { setActiveFolder(f.name); setSearch(''); switchFolder(f.name); }}
                       className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                         activeFolder === f.name
                           ? 'bg-tertiary/15 text-tertiary'
@@ -785,7 +854,7 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
                     <button
                       key={msg.id}
                       onClick={() => openMessage(msg)}
-                      className={`w-full text-left px-4 py-3 hover:bg-surface-container-high/50 transition-colors cursor-pointer ${!msg.is_read ? 'bg-tertiary/[0.03]' : ''}`}
+                      className={`group w-full text-left px-4 py-3 transition-all cursor-pointer border-l-3 hover:bg-surface-container-high/60 hover:border-l-tertiary ${!msg.is_read ? 'bg-tertiary/[0.03] border-l-tertiary/30' : 'border-l-transparent'}`}
                     >
                       <div className="flex items-start gap-3">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
@@ -812,13 +881,42 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
                             <p className="text-xs text-on-surface-variant/60 truncate">{msg.preview}</p>
                           )}
                         </div>
-                        <span className="material-symbols-outlined text-on-surface-variant/30 text-base mt-1 shrink-0">chevron_right</span>
+                        <span className="material-symbols-outlined text-on-surface-variant/30 text-base mt-1 shrink-0 group-hover:text-tertiary transition-colors">chevron_right</span>
                       </div>
                     </button>
                   ))}
                 </div>
               )}
             </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="shrink-0 flex items-center justify-between px-4 py-2.5 border-t border-outline-variant/10 bg-surface-container-high/20">
+                <span className="text-xs text-on-surface-variant/70">
+                  {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} / {totalCount}
+                  {fetchingMore && <span className="ml-1.5 material-symbols-outlined text-[11px] animate-spin align-middle">progress_activity</span>}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    disabled={page === 0 || fetchingMore}
+                    onClick={() => goToPage(page - 1)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <span className="material-symbols-outlined text-on-surface-variant text-base">chevron_left</span>
+                  </button>
+                  <span className="text-xs font-medium text-on-surface-variant min-w-[3rem] text-center">
+                    {page + 1} / {totalPages}
+                  </span>
+                  <button
+                    disabled={page + 1 >= totalPages || fetchingMore}
+                    onClick={() => goToPage(page + 1)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    <span className="material-symbols-outlined text-on-surface-variant text-base">chevron_right</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

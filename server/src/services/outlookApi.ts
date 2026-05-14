@@ -170,16 +170,18 @@ export async function fetchFolders(mailToken: string): Promise<OutlookFolder[]> 
 /**
  * Fetch messages from a folder.
  */
-export async function fetchMessages(mailToken: string, folder: string = 'Inbox', limit: number = 20): Promise<OutlookMessage[]> {
-  const res = await fetch(`${OUTLOOK_BASE}/messages?folder=${encodeURIComponent(folder)}&limit=${limit}`, {
+export async function fetchMessages(mailToken: string, folder: string = 'Inbox', limit: number = 20, offset: number = 0): Promise<{ messages: OutlookMessage[]; total: number }> {
+  const params = new URLSearchParams({ folder, limit: String(limit) });
+  if (offset > 0) params.set('offset', String(offset));
+  const res = await fetch(`${OUTLOOK_BASE}/messages?${params}`, {
     headers: { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${mailToken}` },
   });
   if (!res.ok) {
     console.warn('[Outlook] fetchMessages failed:', res.status, await res.text().catch(() => ''));
-    return [];
+    return { messages: [], total: 0 };
   }
-  const data = await res.json() as { messages?: OutlookMessage[] };
-  return data.messages || [];
+  const data = await res.json() as { messages?: OutlookMessage[]; total?: number };
+  return { messages: data.messages || [], total: data.total ?? (data.messages?.length || 0) };
 }
 
 /**

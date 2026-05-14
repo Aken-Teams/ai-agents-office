@@ -43,7 +43,7 @@ export async function getEmailContextForPrompt(
     const requestedFolder = folderNames.find(f =>
       message.toLowerCase().includes(f.toLowerCase())
     ) || 'Inbox';
-    const messages = await fetchMessages(mailToken, requestedFolder, 20);
+    const { messages } = await fetchMessages(mailToken, requestedFolder, 20);
 
     if (folders.length === 0 && messages.length === 0) {
       return '\n\n## Outlook 信箱\n無法取得信箱資料，請稍後再試。';

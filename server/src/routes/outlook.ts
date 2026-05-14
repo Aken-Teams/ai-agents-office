@@ -47,9 +47,10 @@ router.get('/messages', async (req: Request, res: Response) => {
     return;
   }
   const folder = (req.query.folder as string) || 'Inbox';
-  const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
-  const messages = await fetchMessages(token, folder, limit);
-  res.json({ messages, folder, limit });
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+  const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+  const { messages, total } = await fetchMessages(token, folder, limit, offset);
+  res.json({ messages, folder, limit, offset, total });
 });
 
 // In-memory cache for CID-resolved bodies: messageId → resolved HTML
