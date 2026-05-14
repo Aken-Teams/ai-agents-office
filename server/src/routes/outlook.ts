@@ -5,7 +5,7 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
-import { getMailToken, fetchFolders, fetchMessages, fetchMessageDetail } from '../services/outlookApi.js';
+import { getMailToken, fetchFolders, fetchMessages, fetchMessageDetail, resolveCidImages } from '../services/outlookApi.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -64,6 +64,10 @@ router.get('/messages/:id', async (req: Request, res: Response) => {
   if (!message) {
     res.status(404).json({ error: 'Message not found' });
     return;
+  }
+  // Resolve CID inline images to base64 data URIs
+  if (message.body && message.body_type === 'html' && message.attachments?.length) {
+    message.body = await resolveCidImages(token, req.params.id as string, message.body, message.attachments);
   }
   res.json({ message });
 });

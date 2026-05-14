@@ -34,6 +34,15 @@ interface OutlookFolder {
   unreadCount: number;
 }
 
+interface OutlookAttachment {
+  id: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  is_inline: boolean;
+  cid?: string;
+}
+
 interface OutlookMessage {
   id: string;
   subject: string;
@@ -47,6 +56,7 @@ interface OutlookMessage {
   preview: string;
   body?: string;
   body_type?: string;
+  attachments?: OutlookAttachment[];
 }
 
 /**
@@ -192,6 +202,51 @@ export async function fetchMessageDetail(mailToken: string, messageId: string): 
     return null;
   }
   return detail as OutlookMessage;
+}
+
+/**
+ * Download a single attachment as a Buffer.
+ */
+export async function fetchAttachment(mailToken: string, messageId: string, attachmentId: string): Promise<Buffer | null> {
+  const url = `${OUTLOOK_BASE}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`;
+  const res = await fetch(url, {
+    headers: { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${mailToken}` },
+  });
+  if (!res.ok) return null;
+  return Buffer.from(await res.arrayBuffer());
+}
+
+/**
+ * Resolve CID images in an HTML body by downloading inline attachments
+ * and replacing cid: references with base64 data URIs.
+ */
+export async function resolveCidImages(mailToken: string, messageId: string, body: string, attachments: OutlookAttachment[]): Promise<string> {
+  const inlineAtts = attachments.filter(a => a.is_inline);
+  if (inlineAtts.length === 0) return body;
+
+  // Find all cid: references in body
+  const cidRefs = [...body.matchAll(/cid:([^"']+)/gi)];
+  if (cidRefs.length === 0) return body;
+
+  // Download and replace in parallel
+  const replacements = await Promise.all(cidRefs.map(async (match) => {
+    const cidValue = match[1]; // e.g. "image008.jpg@01DCD71A.FF39ECA0"
+    const filename = cidValue.split('@')[0]; // e.g. "image008.jpg"
+
+    // Match by cid field first, fallback to filename
+    const att = inlineAtts.find(a => a.cid === cidValue) || inlineAtts.find(a => a.filename === filename);
+    if (!att) return null;
+
+    const buf = await fetchAttachment(mailToken, messageId, att.id);
+    if (!buf) return null;
+
+    return { from: 'cid:' + cidValue, to: `data:${att.content_type};base64,${buf.toString('base64')}` };
+  }));
+
+  for (const r of replacements) {
+    if (r) body = body.replace(r.from, r.to);
+  }
+  return body;
 }
 
 /**
