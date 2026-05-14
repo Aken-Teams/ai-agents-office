@@ -14,6 +14,7 @@ import shareRoutes from './routes/share.js';
 import greetingRoutes from './routes/greeting.js';
 import quotaRequestRoutes from './routes/quota-request.js';
 import outlookRoutes from './routes/outlook.js';
+import emailAgentRoutes from './routes/emailAgent.js';
 
 async function main() {
   // Initialize database
@@ -50,6 +51,7 @@ async function main() {
   app.use('/api/greeting', greetingRoutes);
   app.use('/api/quota-request', quotaRequestRoutes);
   app.use('/api/outlook', outlookRoutes);
+  app.use('/api/email-agent', emailAgentRoutes);
 
   // Start server
   app.listen(config.port, () => {

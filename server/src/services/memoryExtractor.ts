@@ -1,9 +1,10 @@
-import { spawn, execSync } from 'child_process';
+import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { config } from '../config.js';
+import { resolveClaudeCliPath } from './resolveClaudeCli.js';
 
 // Thresholds
 const MIN_MSGS_FOR_SUMMARY = 1;   // Summary: extract from any conversation
@@ -11,24 +12,6 @@ const MIN_MSGS_FOR_MEMORIES = 1;  // Extract from any conversation (safety promp
 const MAX_MEMORIES_PER_USER = 50;  // Total memory cap per user
 const MAX_PER_EXTRACTION = 3;      // Max new memories per extraction (fewer but higher quality)
 const EXTRACTION_TIMEOUT_MS = 30_000;
-
-/**
- * Resolve the Claude CLI to a direct node invocation.
- * (Same pattern as greeting.ts / claudeCli.ts)
- */
-function resolveClaudeCliPath(cliPath: string): { bin: string; prefix: string[] } {
-  if (cliPath.endsWith('.js')) {
-    return { bin: process.execPath, prefix: [cliPath] };
-  }
-  try {
-    const npmPrefix = execSync('npm prefix -g', { encoding: 'utf-8' }).trim();
-    const cliScript = path.join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
-    if (fs.existsSync(cliScript)) {
-      return { bin: process.execPath, prefix: [cliScript] };
-    }
-  } catch { /* fall through */ }
-  return { bin: cliPath, prefix: [] };
-}
 
 interface ExtractionResult {
   summary: string;

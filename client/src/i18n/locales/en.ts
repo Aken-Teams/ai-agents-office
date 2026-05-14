@@ -1154,6 +1154,17 @@ const en = {
   'admin.quotaRequests.denyModal.title': 'Deny Quota Request',
   'admin.quotaRequests.denyModal.reason': 'Reason for Denial',
   'admin.quotaRequests.reviewed': 'Reviewed',
+
+  // Email Agent Widget
+  'emailAgent.title': 'Email Agent',
+  'emailAgent.connected': 'Connected',
+  'emailAgent.disconnected': 'Disconnected',
+  'emailAgent.noToken': 'Outlook not connected. Please re-login.',
+  'emailAgent.analyze': 'Analyze',
+  'emailAgent.placeholder': 'Ask about your emails...',
+  'emailAgent.notifications': 'Notifications',
+  'emailAgent.noNotifications': 'No new notifications',
+  'emailAgent.showChat': 'Chat',
 } as const;
 
 export default en;

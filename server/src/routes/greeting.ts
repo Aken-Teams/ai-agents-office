@@ -1,44 +1,14 @@
 import { Router, Request, Response } from 'express';
-import { spawn, execSync } from 'child_process';
+import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { authMiddleware } from '../middleware/auth.js';
 import { dbAll, dbGet } from '../db.js';
 import { config } from '../config.js';
+import { resolveClaudeCliPath } from '../services/resolveClaudeCli.js';
 
 const router = Router();
 router.use(authMiddleware);
-
-/**
- * Resolve the Claude CLI to a direct node invocation.
- * (Simplified version from claudeCli.ts)
- */
-function resolveClaudeCliPath(cliPath: string): { bin: string; prefix: string[] } {
-  if (cliPath.endsWith('.js') || cliPath.endsWith('.cjs')) {
-    return { bin: process.execPath, prefix: [cliPath] };
-  }
-  const cliNames = ['cli.js', 'cli-wrapper.cjs'];
-  try {
-    const npmPrefix = execSync('npm prefix -g', { encoding: 'utf-8' }).trim();
-    for (const name of cliNames) {
-      const cliScript = path.join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code', name);
-      if (fs.existsSync(cliScript)) {
-        return { bin: process.execPath, prefix: [cliScript] };
-      }
-    }
-  } catch { /* fall through */ }
-  const home = process.env.USERPROFILE || process.env.HOME || '';
-  const candidates = cliNames.flatMap(name => [
-    path.join(home, 'AppData', 'Roaming', 'npm', 'node_modules', '@anthropic-ai', 'claude-code', name),
-    path.join(home, '.npm-global', 'lib', 'node_modules', '@anthropic-ai', 'claude-code', name),
-  ]);
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return { bin: process.execPath, prefix: [candidate] };
-    }
-  }
-  return { bin: cliPath, prefix: [] };
-}
 
 // GET /api/greeting — SSE stream a personalized AI greeting
 router.get('/', async (req: Request, res: Response) => {

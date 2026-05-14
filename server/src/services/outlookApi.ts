@@ -43,7 +43,7 @@ interface OutlookAttachment {
   cid?: string;
 }
 
-interface OutlookMessage {
+export interface OutlookMessage {
   id: string;
   subject: string;
   from: { name: string; address: string };

@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from './AuthProvider';
 import { useTranslation } from '../../i18n';
 import type { Locale, Theme } from '../../i18n/types';
+import EmailAgentWidget from './EmailAgentWidget';
 
 const SIDEBAR_KEY = 'sidebar-collapsed';
 const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
@@ -1458,6 +1459,8 @@ export default function Navbar() {
           </div>
         </div>
       )}
+      {/* Email Agent Widget — pro-panjit only */}
+      {isPanjit && <EmailAgentWidget />}
     </>
   );
 }

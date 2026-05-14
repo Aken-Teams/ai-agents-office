@@ -446,6 +446,17 @@ export async function initializeDatabase(): Promise<void> {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // Email agent polling state (pro-panjit only)
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS email_agent_state (
+        user_id         VARCHAR(36) PRIMARY KEY,
+        last_seen_ids   TEXT DEFAULT NULL,
+        last_poll_at    DATETIME DEFAULT NULL,
+        created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     // Migration: add credentials_enc column to outlook_tokens
     try {
       await conn.query('ALTER TABLE outlook_tokens ADD COLUMN credentials_enc TEXT DEFAULT NULL');

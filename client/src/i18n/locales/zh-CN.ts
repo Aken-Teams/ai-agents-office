@@ -1174,6 +1174,17 @@ const zhCN = {
   'admin.quotaRequests.denyModal.title': '拒绝额度申请',
   'admin.quotaRequests.denyModal.reason': '拒绝原因',
   'admin.quotaRequests.reviewed': '已审核',
+
+  // Email Agent Widget
+  'emailAgent.title': '邮件助手',
+  'emailAgent.connected': '已连线',
+  'emailAgent.disconnected': '未连线',
+  'emailAgent.noToken': 'Outlook 未连线，请重新登入',
+  'emailAgent.analyze': '深度分析',
+  'emailAgent.placeholder': '输入邮件相关问题...',
+  'emailAgent.notifications': '通知',
+  'emailAgent.noNotifications': '目前没有新通知',
+  'emailAgent.showChat': '对话',
 } as const;
 
 export default zhCN;

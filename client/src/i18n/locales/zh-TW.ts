@@ -1178,6 +1178,17 @@ const zhTW = {
   'admin.quotaRequests.denyModal.title': '拒絕額度申請',
   'admin.quotaRequests.denyModal.reason': '拒絕原因',
   'admin.quotaRequests.reviewed': '已審核',
+
+  // Email Agent Widget
+  'emailAgent.title': '信件助手',
+  'emailAgent.connected': '已連線',
+  'emailAgent.disconnected': '未連線',
+  'emailAgent.noToken': 'Outlook 未連線，請重新登入',
+  'emailAgent.analyze': '深度分析',
+  'emailAgent.placeholder': '輸入信件相關問題...',
+  'emailAgent.notifications': '通知',
+  'emailAgent.noNotifications': '目前沒有新通知',
+  'emailAgent.showChat': '對話',
 } as const;
 
 export default zhTW;
