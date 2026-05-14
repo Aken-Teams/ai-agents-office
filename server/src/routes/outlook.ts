@@ -57,6 +57,21 @@ router.get('/messages', async (req: Request, res: Response) => {
 const cidCache = new Map<string, { body: string; ts: number }>();
 const CID_CACHE_TTL = 10 * 60_000; // 10 minutes
 
+// DEBUG: serve raw body HTML for visual verification (open in new tab)
+router.get('/messages/:id/raw', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const token = await getMailToken(userId);
+  if (!token) { res.status(401).send('No token'); return; }
+  const message = await fetchMessageDetail(token, req.params.id as string);
+  if (!message?.body) { res.status(404).send('No body'); return; }
+  // Resolve CID images so we can see the full email
+  if (message.attachments?.length && /cid:/i.test(message.body)) {
+    message.body = await resolveCidImages(token, req.params.id as string, message.body, message.attachments);
+  }
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(message.body);
+});
+
 // GET /api/outlook/messages/:id — get a single message with full body
 // ?cid=true (default) resolves inline images; ?cid=false skips for fast initial load
 router.get('/messages/:id', async (req: Request, res: Response) => {

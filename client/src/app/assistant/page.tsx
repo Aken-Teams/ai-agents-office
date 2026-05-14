@@ -704,7 +704,7 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
               {selectedMsg.body ? (
                 selectedMsg.body_type === 'html' ? (
                   <iframe
-                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1d1b20;margin:0;padding:0;word-break:break-word;overflow-x:auto;}a{color:#6750A4;}img[src^="cid:"]{display:none!important;width:0!important;height:0!important;}img{max-width:100%!important;height:auto!important;}table{border-collapse:collapse;}*{box-sizing:border-box;}.reply-collapsed{border-left:3px solid #c4c4c4;margin:16px 0;padding:4px 12px;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:12px;color:#666;}.reply-content{border-left:3px solid #ddd;margin:16px 0;padding:8px 12px;opacity:0.7;font-size:13px;}</style></head><body>${selectedMsg.body}</body></html>`}
+                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>img[src^="cid:"]{display:none!important;width:0!important;height:0!important;}img{max-width:100%!important;height:auto!important;}.reply-collapsed{border-left:3px solid #c4c4c4;margin:16px 0;padding:4px 12px;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:12px;color:#666;}.reply-content{border-left:3px solid #ddd;margin:16px 0;padding:8px 12px;opacity:0.7;font-size:13px;}</style></head><body>${selectedMsg.body}</body></html>`}
                     className="w-full border-0 min-h-[300px]"
                     sandbox="allow-same-origin"
                     title="Email body"
@@ -712,43 +712,24 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
                       const iframe = e.target as HTMLIFrameElement;
                       const doc = iframe.contentDocument;
                       if (!doc?.body) return;
+                      // Hide unresolved CID images + collapse broken images
                       doc.querySelectorAll('img').forEach(img => {
-                        // Hide unresolved CID images (still have cid: src)
                         if (img.src.startsWith('cid:')) {
                           img.style.display = 'none';
                           return;
                         }
-                        // Strip inline width/height on images to let CSS handle sizing
-                        img.removeAttribute('width');
-                        img.removeAttribute('height');
-                        img.style.maxWidth = '100%';
-                        img.style.height = 'auto';
-                        // Collapse broken images that failed to load
                         img.addEventListener('error', () => { img.style.display = 'none'; });
-                      });
-                      // Wrap wide tables in a scrollable container
-                      doc.querySelectorAll('table').forEach(tbl => {
-                        if (tbl.parentElement?.classList.contains('table-scroll-wrap')) return;
-                        const wrap = doc.createElement('div');
-                        wrap.className = 'table-scroll-wrap';
-                        wrap.style.overflowX = 'auto';
-                        wrap.style.maxWidth = '100%';
-                        wrap.style.WebkitOverflowScrolling = 'touch';
-                        tbl.parentElement?.insertBefore(wrap, tbl);
-                        wrap.appendChild(tbl);
                       });
                       // Collapse quoted reply sections
                       const replySelectors = [
-                        'blockquote',                          // standard
-                        '.gmail_quote',                        // Gmail
-                        '[id^="divRplyFwdMsg"]',               // Outlook new
-                        '#appendonsend',                       // Outlook append
-                        'div.OutlookMessageHeader',            // Outlook header
-                        '[name="_MailAutoSig"] ~ *',           // Outlook auto-sig onwards
+                        'blockquote',
+                        '.gmail_quote',
+                        '[id^="divRplyFwdMsg"]',
+                        '#appendonsend',
+                        'div.OutlookMessageHeader',
                       ];
                       const replyEl = doc.querySelector(replySelectors.join(','));
                       if (replyEl) {
-                        // Collect this element and all following siblings as "reply"
                         const wrapper = doc.createElement('div');
                         wrapper.className = 'reply-content';
                         wrapper.style.display = 'none';
@@ -763,7 +744,6 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
                         });
                         replyEl.parentElement?.insertBefore(toggle, replyEl);
                         replyEl.parentElement?.insertBefore(wrapper, replyEl);
-                        // Move reply element and all siblings after it into wrapper
                         let node = wrapper.nextSibling;
                         while (node) {
                           const next = node.nextSibling;
@@ -776,7 +756,6 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
                         iframe.style.height = doc.body.scrollHeight + 20 + 'px';
                       };
                       updateHeight();
-                      // Re-measure after images finish loading
                       doc.querySelectorAll('img').forEach(img => {
                         if (!img.complete) img.addEventListener('load', updateHeight);
                       });
