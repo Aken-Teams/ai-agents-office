@@ -20,6 +20,14 @@ interface EmailFolder {
   unreadCount: number;
 }
 
+interface EmailAttachment {
+  id: string;
+  filename: string;
+  content_type: string;
+  size: number;
+  is_inline: boolean;
+}
+
 interface EmailMessage {
   id: string;
   subject: string;
@@ -32,6 +40,7 @@ interface EmailMessage {
   preview: string;
   body?: string;
   body_type?: string;
+  attachments?: EmailAttachment[];
 }
 
 interface AssistantConversation {
@@ -497,7 +506,8 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
     if (!msg.body) {
       setDetailLoading(true);
       try {
-        const res = await fetch(`${apiBase}/api/outlook/messages/${encodeURIComponent(msg.id)}`, {
+        // Phase 1: fetch without CID resolution (fast — text only)
+        const res = await fetch(`${apiBase}/api/outlook/messages/${encodeURIComponent(msg.id)}?cid=false`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
@@ -505,6 +515,19 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
           const full = { ...msg, ...data.message };
           setSelectedMsg(full);
           setMessages(prev => prev.map(m => m.id === msg.id ? full : m));
+
+          // Phase 2: if email has CID images, resolve them in background
+          if (data.has_cid_images) {
+            fetch(`${apiBase}/api/outlook/messages/${encodeURIComponent(msg.id)}?cid=true`, {
+              headers: { Authorization: `Bearer ${token}` },
+            }).then(r => r.json()).then(d2 => {
+              if (d2.message?.body) {
+                const resolved = { ...full, body: d2.message.body };
+                setSelectedMsg(prev => prev?.id === msg.id ? resolved : prev);
+                setMessages(prev => prev.map(m => m.id === msg.id ? resolved : m));
+              }
+            }).catch(() => {});
+          }
         }
       } catch { /* ignore */ }
       finally { setDetailLoading(false); }
@@ -526,7 +549,7 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
     <div className="fixed inset-0 z-[110] flex items-center justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative bg-surface-container rounded-2xl shadow-2xl border border-outline-variant/10 w-full max-w-3xl mx-4 overflow-hidden flex flex-col"
+        className="relative bg-surface-container rounded-2xl shadow-2xl border border-outline-variant/10 w-full max-w-4xl mx-4 overflow-hidden flex flex-col"
         style={{ maxHeight: '85vh' }}
         onClick={e => e.stopPropagation()}
       >
@@ -598,6 +621,42 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
               </div>
             </div>
 
+            {/* Attachments (non-inline only) */}
+            {selectedMsg.attachments && selectedMsg.attachments.filter(a => !a.is_inline).length > 0 && (
+              <div className="px-5 py-3 border-b border-outline-variant/10">
+                <div className="flex flex-wrap gap-2">
+                  {selectedMsg.attachments.filter(a => !a.is_inline).map(att => (
+                    <a
+                      key={att.id}
+                      href={`${apiBase}/api/outlook/messages/${encodeURIComponent(selectedMsg.id)}/attachments/${encodeURIComponent(att.id)}?filename=${encodeURIComponent(att.filename)}&type=${encodeURIComponent(att.content_type)}`}
+                      download={att.filename}
+                      onClick={e => {
+                        e.preventDefault();
+                        fetch(`${apiBase}/api/outlook/messages/${encodeURIComponent(selectedMsg.id)}/attachments/${encodeURIComponent(att.id)}?filename=${encodeURIComponent(att.filename)}&type=${encodeURIComponent(att.content_type)}`, {
+                          headers: { Authorization: `Bearer ${token}` },
+                        }).then(r => r.blob()).then(blob => {
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url; a.download = att.filename; a.click();
+                          URL.revokeObjectURL(url);
+                        }).catch(() => {});
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg border border-outline-variant/20 bg-surface-container-high/30 hover:bg-surface-container-high/60 transition-colors cursor-pointer max-w-[220px]"
+                    >
+                      <span className="material-symbols-outlined text-tertiary text-base shrink-0">
+                        {att.content_type.startsWith('image/') ? 'image' : att.content_type.includes('pdf') ? 'picture_as_pdf' : att.content_type.includes('sheet') || att.content_type.includes('excel') ? 'table_chart' : 'description'}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-on-surface truncate">{att.filename}</p>
+                        <p className="text-[10px] text-on-surface-variant/60">{att.size < 1024 ? att.size + ' B' : att.size < 1048576 ? (att.size / 1024).toFixed(0) + ' KB' : (att.size / 1048576).toFixed(1) + ' MB'}</p>
+                      </div>
+                      <span className="material-symbols-outlined text-on-surface-variant/50 text-sm shrink-0">download</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Loading indicator */}
             {detailLoading && (
               <div className="flex items-center justify-center gap-2 text-on-surface-variant py-6">
@@ -611,15 +670,47 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
               {selectedMsg.body ? (
                 selectedMsg.body_type === 'html' ? (
                   <iframe
-                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1d1b20;margin:0;padding:0;word-break:break-word;}a{color:#6750A4;}img{max-width:100%;height:auto;}</style></head><body>${selectedMsg.body}</body></html>`}
+                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1d1b20;margin:0;padding:0;word-break:break-word;overflow-x:auto;}a{color:#6750A4;}img[src^="cid:"]{display:none!important;width:0!important;height:0!important;}img{max-width:100%!important;height:auto!important;}table{border-collapse:collapse;}*{box-sizing:border-box;}</style></head><body>${selectedMsg.body}</body></html>`}
                     className="w-full border-0 min-h-[300px]"
                     sandbox="allow-same-origin"
                     title="Email body"
                     onLoad={e => {
                       const iframe = e.target as HTMLIFrameElement;
-                      if (iframe.contentDocument?.body) {
-                        iframe.style.height = iframe.contentDocument.body.scrollHeight + 20 + 'px';
-                      }
+                      const doc = iframe.contentDocument;
+                      if (!doc?.body) return;
+                      doc.querySelectorAll('img').forEach(img => {
+                        // Hide unresolved CID images (still have cid: src)
+                        if (img.src.startsWith('cid:')) {
+                          img.style.display = 'none';
+                          return;
+                        }
+                        // Strip inline width/height on images to let CSS handle sizing
+                        img.removeAttribute('width');
+                        img.removeAttribute('height');
+                        img.style.maxWidth = '100%';
+                        img.style.height = 'auto';
+                        // Collapse broken images that failed to load
+                        img.addEventListener('error', () => { img.style.display = 'none'; });
+                      });
+                      // Wrap wide tables in a scrollable container
+                      doc.querySelectorAll('table').forEach(tbl => {
+                        if (tbl.parentElement?.classList.contains('table-scroll-wrap')) return;
+                        const wrap = doc.createElement('div');
+                        wrap.className = 'table-scroll-wrap';
+                        wrap.style.overflowX = 'auto';
+                        wrap.style.maxWidth = '100%';
+                        wrap.style.WebkitOverflowScrolling = 'touch';
+                        tbl.parentElement?.insertBefore(wrap, tbl);
+                        wrap.appendChild(tbl);
+                      });
+                      const updateHeight = () => {
+                        iframe.style.height = doc.body.scrollHeight + 20 + 'px';
+                      };
+                      updateHeight();
+                      // Re-measure after images finish loading
+                      doc.querySelectorAll('img').forEach(img => {
+                        if (!img.complete) img.addEventListener('load', updateHeight);
+                      });
                     }}
                   />
                 ) : (

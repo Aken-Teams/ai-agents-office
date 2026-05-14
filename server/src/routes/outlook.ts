@@ -5,7 +5,7 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
-import { getMailToken, fetchFolders, fetchMessages, fetchMessageDetail, resolveCidImages } from '../services/outlookApi.js';
+import { getMailToken, fetchFolders, fetchMessages, fetchMessageDetail, resolveCidImages, fetchAttachment } from '../services/outlookApi.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -52,24 +52,64 @@ router.get('/messages', async (req: Request, res: Response) => {
   res.json({ messages, folder, limit });
 });
 
+// In-memory cache for CID-resolved bodies: messageId → resolved HTML
+const cidCache = new Map<string, { body: string; ts: number }>();
+const CID_CACHE_TTL = 10 * 60_000; // 10 minutes
+
 // GET /api/outlook/messages/:id — get a single message with full body
+// ?cid=true (default) resolves inline images; ?cid=false skips for fast initial load
 router.get('/messages/:id', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const msgId = req.params.id as string;
+  const token = await getMailToken(userId);
+  if (!token) {
+    res.status(401).json({ error: 'Outlook 連線已過期，請重新登入' });
+    return;
+  }
+  const message = await fetchMessageDetail(token, msgId);
+  if (!message) {
+    res.status(404).json({ error: 'Message not found' });
+    return;
+  }
+
+  const wantCid = req.query.cid !== 'false';
+  const hasCidImages = !!(message.body && message.body_type === 'html' && message.attachments?.length && /cid:/i.test(message.body));
+
+  if (wantCid && hasCidImages) {
+    // Check cache first
+    const cached = cidCache.get(msgId);
+    if (cached && Date.now() - cached.ts < CID_CACHE_TTL) {
+      message.body = cached.body;
+    } else {
+      message.body = await resolveCidImages(token, msgId, message.body!, message.attachments!);
+      cidCache.set(msgId, { body: message.body, ts: Date.now() });
+    }
+  }
+
+  res.json({ message, has_cid_images: hasCidImages });
+});
+
+// GET /api/outlook/messages/:msgId/attachments/:attId — download an attachment
+router.get('/messages/:msgId/attachments/:attId', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const token = await getMailToken(userId);
   if (!token) {
     res.status(401).json({ error: 'Outlook 連線已過期，請重新登入' });
     return;
   }
-  const message = await fetchMessageDetail(token, req.params.id as string);
-  if (!message) {
-    res.status(404).json({ error: 'Message not found' });
+  const { msgId, attId } = req.params as { msgId: string; attId: string };
+  const filename = (req.query.filename as string) || 'attachment';
+  const contentType = (req.query.type as string) || 'application/octet-stream';
+
+  const buf = await fetchAttachment(token, msgId, attId);
+  if (!buf) {
+    res.status(404).json({ error: 'Attachment not found' });
     return;
   }
-  // Resolve CID inline images to base64 data URIs
-  if (message.body && message.body_type === 'html' && message.attachments?.length) {
-    message.body = await resolveCidImages(token, req.params.id as string, message.body, message.attachments);
-  }
-  res.json({ message });
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+  res.setHeader('Content-Length', buf.length);
+  res.send(buf);
 });
 
 export default router;
