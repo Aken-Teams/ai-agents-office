@@ -23,6 +23,8 @@ router.get('/', async (req: Request, res: Response) => {
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
 
   // Fetch recent conversations (last 5 with summary or latest message)
+  // Exclude auto-created system conversations (email-agent) so first-login users
+  // aren't mistakenly treated as returning users
   const recentConversations = await dbAll<{
     title: string;
     skill_id: string | null;
@@ -33,7 +35,7 @@ router.get('/', async (req: Request, res: Response) => {
     `SELECT c.title, c.skill_id, c.created_at, c.summary,
        (SELECT content FROM messages m WHERE m.conversation_id = c.id AND m.role = 'user' ORDER BY m.created_at DESC LIMIT 1) AS last_message
      FROM conversations c
-     WHERE c.user_id = ?
+     WHERE c.user_id = ? AND (c.category IS NULL OR c.category != 'email-agent')
      ORDER BY c.created_at DESC
      LIMIT 5`,
     userId

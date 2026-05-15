@@ -7,6 +7,9 @@ import remarkGfm from 'remark-gfm';
 import { useTranslation } from '../../i18n';
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:12054';
+const STORAGE_KEY_POS = 'email_widget_pos';
+const STORAGE_KEY_HIDDEN = 'email_widget_hidden';
+const STORAGE_KEY_MUTE = 'email_widget_mute_sound';
 
 interface EmailNotification {
   emailId: string;
@@ -29,6 +32,29 @@ interface ChatMessage {
 
 type TabId = 'mail' | 'chat';
 
+// Play a short notification sound using Web Audio API
+function playNotificationSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    // Two-tone chime
+    const playTone = (freq: number, start: number, dur: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.15, ctx.currentTime + start);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + dur);
+    };
+    playTone(880, 0, 0.15);
+    playTone(1100, 0.12, 0.2);
+    setTimeout(() => ctx.close(), 500);
+  } catch { /* Audio not available */ }
+}
+
 export default function EmailAgentWidget() {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
@@ -47,13 +73,30 @@ export default function EmailAgentWidget() {
   const [loadingStage, setLoadingStage] = useState(0);
   const [expandedAnalysis, setExpandedAnalysis] = useState<Set<string>>(new Set());
   const [bubbleBounce, setBubbleBounce] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const [soundMuted, setSoundMuted] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const reconnectTimer = useRef<NodeJS.Timeout | null>(null);
   const isInitialLoad = useRef(true);
 
-  useEffect(() => { setMounted(true); return () => setMounted(false); }, []);
+  // Drag state
+  const bubbleRef = useRef<HTMLButtonElement>(null);
+  const [bubblePos, setBubblePos] = useState<{ x: number; y: number } | null>(null);
+  const dragState = useRef<{ startX: number; startY: number; startBX: number; startBY: number; moved: boolean } | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+    // Load persisted state
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_POS);
+      if (saved) setBubblePos(JSON.parse(saved));
+      setHidden(localStorage.getItem(STORAGE_KEY_HIDDEN) === 'true');
+      setSoundMuted(localStorage.getItem(STORAGE_KEY_MUTE) === 'true');
+    } catch {}
+    return () => setMounted(false);
+  }, []);
 
   // Cycle through loading stage messages while loading
   useEffect(() => {
@@ -226,6 +269,9 @@ export default function EmailAgentWidget() {
     }
   }, []);
 
+  const soundMutedRef = useRef(soundMuted);
+  useEffect(() => { soundMutedRef.current = soundMuted; }, [soundMuted]);
+
   const handleEvent = useCallback((event: { type: string; data?: any }) => {
     switch (event.type) {
       case 'new_emails': {
@@ -233,10 +279,11 @@ export default function EmailAgentWidget() {
         setNotifications(prev => {
           const existing = new Set(prev.map(n => n.emailId));
           const newOnes = (emails as EmailNotification[]).filter(e => !existing.has(e.emailId));
-          // Bounce bubble when new emails arrive (not initial load)
+          // Bounce bubble + play sound when new emails arrive (not initial load)
           if (!isInitialLoad.current && newOnes.length > 0) {
             setBubbleBounce(true);
             setTimeout(() => setBubbleBounce(false), 2000);
+            if (!soundMutedRef.current) playNotificationSound();
           }
           isInitialLoad.current = false;
           return [...newOnes, ...prev].slice(0, 50);
@@ -272,8 +319,6 @@ export default function EmailAgentWidget() {
       }
       case 'status': {
         if (event.data.connected) setConnected(true);
-        // Only clear loading when we get actual poll data (totalUnread),
-        // not just the initial connection status event
         if (event.data.totalUnread !== undefined) {
           setTotalUnread(event.data.totalUnread);
           setInitialLoading(false);
@@ -311,6 +356,79 @@ export default function EmailAgentWidget() {
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
     };
   }, [connectSSE]);
+
+  // ─── Drag handlers ───
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    if (expanded) return;
+    const el = bubbleRef.current;
+    if (!el) return;
+    el.setPointerCapture(e.pointerId);
+    const rect = el.getBoundingClientRect();
+    dragState.current = {
+      startX: e.clientX, startY: e.clientY,
+      startBX: rect.left + rect.width / 2,
+      startBY: rect.top + rect.height / 2,
+      moved: false,
+    };
+  }, [expanded]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    const ds = dragState.current;
+    if (!ds) return;
+    const dx = e.clientX - ds.startX;
+    const dy = e.clientY - ds.startY;
+    if (!ds.moved && Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+    ds.moved = true;
+    const size = window.innerWidth >= 768 ? 56 : 48;
+    const half = size / 2;
+    const nx = Math.max(half, Math.min(window.innerWidth - half, ds.startBX + dx));
+    const ny = Math.max(half, Math.min(window.innerHeight - half, ds.startBY + dy));
+    setBubblePos({ x: nx, y: ny });
+  }, []);
+
+  const handlePointerUp = useCallback((e: React.PointerEvent) => {
+    const ds = dragState.current;
+    dragState.current = null;
+    if (!ds) return;
+    bubbleRef.current?.releasePointerCapture(e.pointerId);
+    if (ds.moved) {
+      // Snap to nearest edge (left or right)
+      const size = window.innerWidth >= 768 ? 56 : 48;
+      const margin = window.innerWidth >= 768 ? 24 : 16;
+      const currentX = bubblePos?.x ?? ds.startBX;
+      const currentY = bubblePos?.y ?? ds.startBY;
+      const half = size / 2;
+      const snapX = currentX < window.innerWidth / 2
+        ? margin + half
+        : window.innerWidth - margin - half;
+      const snapY = Math.max(half + margin, Math.min(window.innerHeight - half - margin, currentY));
+      const pos = { x: snapX, y: snapY };
+      setBubblePos(pos);
+      localStorage.setItem(STORAGE_KEY_POS, JSON.stringify(pos));
+    } else {
+      // It was a click, not a drag
+      setExpanded(prev => !prev);
+      setBubbleBounce(false);
+    }
+  }, [bubblePos]);
+
+  // Toggle hidden state
+  const toggleHidden = useCallback(() => {
+    setHidden(prev => {
+      const next = !prev;
+      localStorage.setItem(STORAGE_KEY_HIDDEN, String(next));
+      if (next) setExpanded(false);
+      return next;
+    });
+  }, []);
+
+  const toggleSoundMute = useCallback(() => {
+    setSoundMuted(prev => {
+      const next = !prev;
+      localStorage.setItem(STORAGE_KEY_MUTE, String(next));
+      return next;
+    });
+  }, []);
 
   // Send chat message (direct, for chips)
   const sendMessageDirect = useCallback(async (msg: string) => {
@@ -397,28 +515,73 @@ export default function EmailAgentWidget() {
     { icon: 'shield', label: '資安檢查', message: '最近收到的信件有沒有資安風險或可疑內容？' },
   ];
 
+  // Compute bubble position style
+  const defaultBottom = typeof window !== 'undefined' && window.innerWidth >= 768 ? 24 : 16;
+  const defaultRight = typeof window !== 'undefined' && window.innerWidth >= 768 ? 24 : 16;
+  const bubbleSize = typeof window !== 'undefined' && window.innerWidth >= 768 ? 56 : 48;
+  const bubbleStyle: React.CSSProperties = bubblePos
+    ? { left: bubblePos.x - bubbleSize / 2, top: bubblePos.y - bubbleSize / 2, right: 'auto', bottom: 'auto' }
+    : { right: defaultRight, bottom: defaultBottom };
+
+  // Determine which side the bubble is on (for hidden strip and panel positioning)
+  const isOnLeft = bubblePos ? bubblePos.x < (typeof window !== 'undefined' ? window.innerWidth / 2 : 500) : false;
+
+  // Hidden strip position
+  const hiddenStripStyle: React.CSSProperties = bubblePos
+    ? { top: bubblePos.y - 24, [isOnLeft ? 'left' : 'right']: 0 }
+    : { bottom: defaultBottom + bubbleSize / 2 - 24, right: 0 };
+
   const widget = (
     <>
-      {/* Floating Bubble */}
-      <button
-        onClick={() => { setExpanded(!expanded); setBubbleBounce(false); }}
-        className={`fixed bottom-4 right-4 md:bottom-6 md:right-6 z-[90] w-12 h-12 md:w-14 md:h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 ${
-          expanded ? 'bg-surface-container-high text-on-surface scale-90 max-md:hidden' : 'bg-primary text-on-primary hover:shadow-2xl hover:scale-105'
-        } ${bubbleBounce && !expanded ? 'animate-bounce' : ''}`}
-        title={t('emailAgent.title' as any) || '信件助手'}
-      >
-        <span className="material-symbols-outlined text-xl md:text-2xl">
-          {expanded ? 'close' : 'smart_toy'}
-        </span>
-        {!expanded && badgeCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] md:min-w-[20px] md:h-5 flex items-center justify-center bg-error text-on-error text-[10px] md:text-xs font-bold rounded-full px-1 animate-in zoom-in duration-200">
-            {badgeCount > 99 ? '99+' : badgeCount}
+      {/* Hidden mode: thin edge strip with badge */}
+      {hidden && !expanded && (
+        <div
+          className={`fixed z-[90] group cursor-pointer`}
+          style={hiddenStripStyle}
+          onClick={() => { setHidden(false); localStorage.setItem(STORAGE_KEY_HIDDEN, 'false'); }}
+        >
+          <div className={`flex items-center gap-1 bg-primary/90 text-on-primary py-2 px-1.5 shadow-lg transition-all duration-200 group-hover:px-3 ${
+            isOnLeft ? 'rounded-r-xl' : 'rounded-l-xl'
+          }`}>
+            <span className="material-symbols-outlined text-base">smart_toy</span>
+            <span className="text-xs font-medium max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">
+              信件助手
+            </span>
+            {badgeCount > 0 && (
+              <span className="min-w-[16px] h-4 flex items-center justify-center bg-error text-on-error text-[9px] font-bold rounded-full px-0.5">
+                {badgeCount > 99 ? '99+' : badgeCount}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Floating Bubble (visible when not hidden) */}
+      {!hidden && (
+        <button
+          ref={bubbleRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          className={`fixed z-[90] w-12 h-12 md:w-14 md:h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 select-none touch-none ${
+            expanded ? 'bg-surface-container-high text-on-surface scale-90 max-md:hidden' : 'bg-primary text-on-primary hover:shadow-2xl'
+          } ${bubbleBounce && !expanded ? 'animate-bounce' : ''} ${dragState.current?.moved ? 'cursor-grabbing' : 'cursor-grab'}`}
+          style={bubbleStyle}
+          title={t('emailAgent.title' as any) || '信件助手'}
+        >
+          <span className="material-symbols-outlined text-xl md:text-2xl pointer-events-none">
+            {expanded ? 'close' : 'smart_toy'}
           </span>
-        )}
-        {!expanded && connected && (
-          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 md:w-3 md:h-3 bg-success rounded-full border-2 border-surface" />
-        )}
-      </button>
+          {!expanded && badgeCount > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] md:min-w-[20px] md:h-5 flex items-center justify-center bg-error text-on-error text-[10px] md:text-xs font-bold rounded-full px-1 animate-in zoom-in duration-200 pointer-events-none">
+              {badgeCount > 99 ? '99+' : badgeCount}
+            </span>
+          )}
+          {!expanded && connected && (
+            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 md:w-3 md:h-3 bg-success rounded-full border-2 border-surface pointer-events-none" />
+          )}
+        </button>
+      )}
 
       {/* Expanded Panel */}
       {expanded && (
@@ -449,12 +612,35 @@ export default function EmailAgentWidget() {
                 )}
               </div>
             </div>
-            <button
-              onClick={() => setExpanded(false)}
-              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors shrink-0"
-            >
-              <span className="material-symbols-outlined text-lg text-on-surface-variant">close</span>
-            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              {/* Sound toggle */}
+              <button
+                onClick={toggleSoundMute}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors"
+                title={soundMuted ? '開啟音效' : '靜音'}
+              >
+                <span className="material-symbols-outlined text-lg text-on-surface-variant">
+                  {soundMuted ? 'volume_off' : 'volume_up'}
+                </span>
+              </button>
+              {/* Hide button */}
+              <button
+                onClick={toggleHidden}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors"
+                title="隱藏到側邊"
+              >
+                <span className="material-symbols-outlined text-lg text-on-surface-variant">
+                  {isOnLeft ? 'left_panel_close' : 'right_panel_close'}
+                </span>
+              </button>
+              {/* Close button */}
+              <button
+                onClick={() => setExpanded(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors"
+              >
+                <span className="material-symbols-outlined text-lg text-on-surface-variant">close</span>
+              </button>
+            </div>
           </div>
 
           {/* Tab Bar */}

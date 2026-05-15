@@ -144,7 +144,18 @@ function spawnClaudeOneShot(prompt: string, timeoutMs: number): Promise<string |
  * @param isInitial — true on first connect: always send recent unread as a welcome batch
  */
 export async function pollNewEmails(userId: string, isInitial = false): Promise<void> {
-  const token = await getMailToken(userId);
+  let token = await getMailToken(userId);
+
+  // On initial connect, the AD login may still be authenticating Outlook (fire-and-forget).
+  // Retry a few times with a short delay before giving up.
+  if (!token && isInitial) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await new Promise(r => setTimeout(r, 3000));
+      token = await getMailToken(userId);
+      if (token) break;
+    }
+  }
+
   if (!token) {
     pushEvent(userId, { type: 'error', data: { code: 'no_token', message: 'Outlook 連線已過期，請重新登入' } });
     return;
