@@ -469,7 +469,7 @@ export default function EmailAgentWidget() {
                 className={`flex-1 flex items-center justify-center gap-1 md:gap-1.5 py-2 md:py-2.5 text-[13px] md:text-sm font-medium transition-colors relative ${
                   activeTab === tab.id
                     ? 'text-primary'
-                    : 'text-on-surface-variant active:text-on-surface'
+                    : 'text-on-surface-variant active:text-on-surface md:hover:text-on-surface'
                 }`}
               >
                 <span className="material-symbols-outlined text-base md:text-lg">{tab.icon}</span>
@@ -526,7 +526,7 @@ export default function EmailAgentWidget() {
                         key={n.emailId}
                         className="bg-surface-container rounded-xl p-2.5 md:p-3 active:bg-surface-container-highest md:hover:bg-surface-container-highest transition-colors group"
                       >
-                        <div className="flex items-start gap-2">
+                        <div className="flex items-start gap-2 md:gap-2.5">
                           <div className={`shrink-0 w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center ${priorityBg[n.priority]}`}>
                             <span className={`material-symbols-outlined text-sm md:text-base ${priorityColor[n.priority]}`}>
                               {priorityIcon[n.priority]}

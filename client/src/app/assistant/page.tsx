@@ -859,7 +859,7 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
             <div className="flex-1 overflow-y-auto">
               {loading ? (
                 <div className="flex items-center justify-center py-10 md:py-12 gap-2 text-on-surface-variant">
-                  <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                  <span className="material-symbols-outlined text-sm md:text-base animate-spin">progress_activity</span>
                   <span className="text-[13px] md:text-sm">{t('common.loading' as any)}</span>
                 </div>
               ) : filtered.length === 0 ? (
