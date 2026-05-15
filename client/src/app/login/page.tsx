@@ -497,14 +497,16 @@ function AdWizard({
                       blockquote: ({ children, ...props }) => (
                         <blockquote className="border-l-2 border-primary/30 pl-3 my-2.5 text-on-surface-variant bg-primary/5 rounded-r-lg py-1.5 pr-3 text-xs" {...props}>{children}</blockquote>
                       ),
-                      table: ({ children, ...props }) => (
-                        <div className="overflow-x-auto my-2.5 rounded-lg border border-outline-variant/20">
-                          <table className="w-full text-xs border-collapse" {...props}>{children}</table>
-                        </div>
+                      table: ({ children }) => <div className="my-3 space-y-2">{children}</div>,
+                      thead: () => null,
+                      tbody: ({ children }) => <div className="space-y-2">{children}</div>,
+                      tr: ({ children }) => (
+                        <div className="bg-surface-container-high/60 rounded-lg px-3.5 py-2.5 space-y-0.5">{children}</div>
                       ),
-                      thead: ({ children, ...props }) => <thead className="bg-surface-container-high" {...props}>{children}</thead>,
-                      th: ({ children, ...props }) => <th className="text-left px-2.5 py-1.5 font-semibold text-on-surface border-b border-outline-variant/20" {...props}>{children}</th>,
-                      td: ({ children, ...props }) => <td className="px-2.5 py-1.5 text-on-surface-variant border-b border-outline-variant/10" {...props}>{children}</td>,
+                      th: () => null,
+                      td: ({ children }) => (
+                        <div className="text-xs leading-relaxed text-on-surface-variant first:text-[13px] first:font-medium first:text-on-surface [&:nth-child(2)]:text-primary [&:nth-child(2)]:font-semibold last:text-[11px] last:text-on-surface-variant/70 last:mt-0.5">{children}</div>
+                      ),
                       hr: (props) => <hr className="my-3 border-outline-variant/15" {...props} />,
                       a: ({ children, href, ...props }) => (
                         <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" {...props}>{children}</a>
