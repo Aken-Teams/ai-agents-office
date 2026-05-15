@@ -785,6 +785,10 @@ html.locale-zh-CN {
   overflow: auto;
 }
 
+/* Safe area padding for mobile devices with notch/home indicator */
+.safe-area-top { padding-top: env(safe-area-inset-top, 0); }
+.safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0); }
+
 /* Hide scrollbar utility */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

@@ -87,94 +87,96 @@ export default function EmailAgentWidget() {
     };
     return {
       h1: ({ children, ...props }: any) => (
-        <div className="flex items-center gap-2 mt-3 first:mt-0 mb-2 pb-1.5 border-b border-outline-variant/10" {...props}>
-          <span className="material-symbols-outlined text-primary text-base">{getIcon(children)}</span>
-          <span className="font-bold text-on-surface text-[15px]">{children}</span>
+        <div className="flex items-center gap-1.5 md:gap-2 mt-2.5 md:mt-3 first:mt-0 mb-1.5 md:mb-2 pb-1 md:pb-1.5 border-b border-outline-variant/10" {...props}>
+          <span className="material-symbols-outlined text-primary text-sm md:text-base shrink-0">{getIcon(children)}</span>
+          <span className="font-bold text-on-surface text-[13px] md:text-[15px]">{children}</span>
         </div>
       ),
       h2: ({ children, ...props }: any) => (
-        <div className="flex items-center gap-2 mt-3 first:mt-0 mb-2 pb-1.5 border-b border-outline-variant/10" {...props}>
-          <span className="material-symbols-outlined text-primary text-base">{getIcon(children)}</span>
-          <span className="font-bold text-on-surface text-[15px]">{children}</span>
+        <div className="flex items-center gap-1.5 md:gap-2 mt-2.5 md:mt-3 first:mt-0 mb-1.5 md:mb-2 pb-1 md:pb-1.5 border-b border-outline-variant/10" {...props}>
+          <span className="material-symbols-outlined text-primary text-sm md:text-base shrink-0">{getIcon(children)}</span>
+          <span className="font-bold text-on-surface text-[13px] md:text-[15px]">{children}</span>
         </div>
       ),
       h3: ({ children, ...props }: any) => (
-        <div className="flex items-center gap-1.5 mt-2.5 first:mt-0 mb-1.5" {...props}>
-          <span className="material-symbols-outlined text-primary/70 text-sm">{getIcon(children)}</span>
-          <span className="font-semibold text-on-surface text-sm">{children}</span>
+        <div className="flex items-center gap-1 md:gap-1.5 mt-2 md:mt-2.5 first:mt-0 mb-1 md:mb-1.5" {...props}>
+          <span className="material-symbols-outlined text-primary/70 text-xs md:text-sm shrink-0">{getIcon(children)}</span>
+          <span className="font-semibold text-on-surface text-xs md:text-sm">{children}</span>
         </div>
       ),
-      h4: ({ children, ...props }: any) => <p className="font-semibold text-on-surface mt-2 mb-1 text-[13px]" {...props}>{children}</p>,
-      p: ({ children, ...props }: any) => <p className="mb-2 last:mb-0 leading-relaxed text-on-surface-variant" {...props}>{children}</p>,
-      ul: ({ children, ...props }: any) => <ul className="list-none pl-0 mb-2 space-y-1.5" {...props}>{children}</ul>,
-      ol: ({ children, ...props }: any) => <ol className="list-none pl-0 mb-2 space-y-1.5 counter-reset-item" {...props}>{children}</ol>,
+      h4: ({ children, ...props }: any) => <p className="font-semibold text-on-surface mt-1.5 md:mt-2 mb-0.5 md:mb-1 text-xs md:text-[13px]" {...props}>{children}</p>,
+      p: ({ children, ...props }: any) => <p className="mb-1.5 md:mb-2 last:mb-0 leading-relaxed text-on-surface-variant text-xs md:text-sm break-words" {...props}>{children}</p>,
+      ul: ({ children, ...props }: any) => <ul className="list-none pl-0 mb-1.5 md:mb-2 space-y-1 md:space-y-1.5" {...props}>{children}</ul>,
+      ol: ({ children, ...props }: any) => <ol className="list-none pl-0 mb-1.5 md:mb-2 space-y-1 md:space-y-1.5 counter-reset-item" {...props}>{children}</ol>,
       li: ({ children, ...props }: any) => (
-        <li className="flex gap-2 leading-relaxed text-on-surface-variant" {...props}>
-          <span className="material-symbols-outlined text-primary/50 text-sm mt-0.5 shrink-0">arrow_right</span>
-          <span className="flex-1">{children}</span>
+        <li className="flex gap-1.5 md:gap-2 leading-relaxed text-on-surface-variant text-xs md:text-sm" {...props}>
+          <span className="material-symbols-outlined text-primary/50 text-xs md:text-sm mt-0.5 shrink-0">arrow_right</span>
+          <span className="flex-1 min-w-0 break-words">{children}</span>
         </li>
       ),
       strong: ({ children, ...props }: any) => <strong className="font-semibold text-on-surface" {...props}>{children}</strong>,
       blockquote: ({ children, ...props }: any) => (
-        <blockquote className="border-l-2 border-primary/30 pl-2.5 my-2 text-on-surface-variant italic bg-primary/3 rounded-r-lg py-1.5 pr-2" {...props}>{children}</blockquote>
+        <blockquote className="border-l-2 border-primary/30 pl-2 md:pl-2.5 my-1.5 md:my-2 text-on-surface-variant italic bg-primary/3 rounded-r-lg py-1 md:py-1.5 pr-2 text-xs md:text-sm" {...props}>{children}</blockquote>
       ),
       pre: ({ children, ...props }: any) => (
-        <pre className="bg-surface-container rounded-lg p-2.5 my-2 text-xs overflow-x-auto" {...props}>{children}</pre>
+        <pre className="bg-surface-container rounded-lg p-2 md:p-2.5 my-1.5 md:my-2 text-[11px] md:text-xs overflow-x-auto" {...props}>{children}</pre>
       ),
       code: ({ className, children, ...props }: any) => {
         if (className) return <code className={className} {...props}>{children}</code>;
-        return <code className="bg-surface-container px-1.5 py-0.5 rounded text-xs text-primary font-mono" {...props}>{children}</code>;
+        return <code className="bg-surface-container px-1 md:px-1.5 py-0.5 rounded text-[11px] md:text-xs text-primary font-mono break-all" {...props}>{children}</code>;
       },
       a: ({ children, href, ...props }: any) => (
-        <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" {...props}>{children}</a>
+        <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all text-xs md:text-sm" {...props}>{children}</a>
       ),
-      table: ({ children, ...props }: any) => (
-        <div className="overflow-x-auto my-2 rounded-lg border border-outline-variant/20">
-          <table className="w-full text-xs border-collapse" {...props}>{children}</table>
-        </div>
+      table: ({ children }: any) => <div className="my-1.5 md:my-2 space-y-1 md:space-y-1.5">{children}</div>,
+      thead: () => null,
+      tbody: ({ children }: any) => <div className="space-y-1 md:space-y-1.5">{children}</div>,
+      th: () => null,
+      tr: ({ children }: any) => (
+        <div className="bg-surface-container/60 rounded-lg px-2.5 md:px-3 py-1.5 md:py-2 space-y-0.5">{children}</div>
       ),
-      thead: ({ children, ...props }: any) => <thead className="bg-surface-container" {...props}>{children}</thead>,
-      th: ({ children, ...props }: any) => <th className="text-left px-2.5 py-1.5 font-semibold text-on-surface border-b border-outline-variant/20 whitespace-nowrap" {...props}>{children}</th>,
-      td: ({ children, ...props }: any) => <td className="px-2.5 py-1.5 text-on-surface-variant border-b border-outline-variant/10" {...props}>{children}</td>,
-      tr: ({ children, ...props }: any) => <tr className="hover:bg-surface-container/50" {...props}>{children}</tr>,
-      hr: (props: any) => <hr className="my-3 border-outline-variant/15" {...props} />,
+      td: ({ children }: any) => (
+        <div className="text-[11px] md:text-xs leading-relaxed text-on-surface-variant break-words first:text-xs first:md:text-[13px] first:font-medium first:text-on-surface [&:nth-child(2)]:text-primary [&:nth-child(2)]:font-semibold last:text-[10px] last:md:text-[11px] last:text-on-surface-variant/70">{children}</div>
+      ),
+      hr: (props: any) => <hr className="my-2 md:my-3 border-outline-variant/15" {...props} />,
     };
   }, []);
 
   // Compact markdown components for widget (size = text-sm base)
   const compactMd = useMemo<Record<string, React.ComponentType<any>>>(() => ({
-    h1: ({ children, ...props }: any) => <p className="font-bold text-on-surface mt-3 mb-1 text-[15px]" {...props}>{children}</p>,
-    h2: ({ children, ...props }: any) => <p className="font-bold text-on-surface mt-3 mb-1 text-[15px]" {...props}>{children}</p>,
-    h3: ({ children, ...props }: any) => <p className="font-semibold text-on-surface mt-2 mb-0.5 text-sm" {...props}>{children}</p>,
-    h4: ({ children, ...props }: any) => <p className="font-semibold text-on-surface mt-1.5 mb-0.5 text-[13px]" {...props}>{children}</p>,
-    p: ({ children, ...props }: any) => <p className="mb-1.5 last:mb-0 leading-relaxed" {...props}>{children}</p>,
-    ul: ({ children, ...props }: any) => <ul className="list-disc pl-4 mb-1.5 space-y-0.5" {...props}>{children}</ul>,
-    ol: ({ children, ...props }: any) => <ol className="list-decimal pl-4 mb-1.5 space-y-0.5" {...props}>{children}</ol>,
-    li: ({ children, ...props }: any) => <li className="leading-relaxed" {...props}>{children}</li>,
+    h1: ({ children, ...props }: any) => <p className="font-bold text-on-surface mt-2.5 md:mt-3 mb-0.5 md:mb-1 text-[13px] md:text-[15px]" {...props}>{children}</p>,
+    h2: ({ children, ...props }: any) => <p className="font-bold text-on-surface mt-2.5 md:mt-3 mb-0.5 md:mb-1 text-[13px] md:text-[15px]" {...props}>{children}</p>,
+    h3: ({ children, ...props }: any) => <p className="font-semibold text-on-surface mt-2 mb-0.5 text-xs md:text-sm" {...props}>{children}</p>,
+    h4: ({ children, ...props }: any) => <p className="font-semibold text-on-surface mt-1.5 mb-0.5 text-[11px] md:text-[13px]" {...props}>{children}</p>,
+    p: ({ children, ...props }: any) => <p className="mb-1 md:mb-1.5 last:mb-0 leading-relaxed text-xs md:text-sm break-words" {...props}>{children}</p>,
+    ul: ({ children, ...props }: any) => <ul className="list-disc pl-3.5 md:pl-4 mb-1 md:mb-1.5 space-y-0.5" {...props}>{children}</ul>,
+    ol: ({ children, ...props }: any) => <ol className="list-decimal pl-3.5 md:pl-4 mb-1 md:mb-1.5 space-y-0.5" {...props}>{children}</ol>,
+    li: ({ children, ...props }: any) => <li className="leading-relaxed text-xs md:text-sm break-words" {...props}>{children}</li>,
     strong: ({ children, ...props }: any) => <strong className="font-semibold text-on-surface" {...props}>{children}</strong>,
     blockquote: ({ children, ...props }: any) => (
-      <blockquote className="border-l-2 border-primary/30 pl-2.5 my-1.5 text-on-surface-variant italic" {...props}>{children}</blockquote>
+      <blockquote className="border-l-2 border-primary/30 pl-2 md:pl-2.5 my-1 md:my-1.5 text-on-surface-variant italic text-xs md:text-sm" {...props}>{children}</blockquote>
     ),
     pre: ({ children, ...props }: any) => (
-      <pre className="bg-surface-container rounded-lg p-2 my-1.5 text-xs overflow-x-auto" {...props}>{children}</pre>
+      <pre className="bg-surface-container rounded-lg p-2 my-1 md:my-1.5 text-[11px] md:text-xs overflow-x-auto" {...props}>{children}</pre>
     ),
     code: ({ className, children, ...props }: any) => {
       if (className) return <code className={className} {...props}>{children}</code>;
-      return <code className="bg-surface-container px-1 py-0.5 rounded text-xs text-primary" {...props}>{children}</code>;
+      return <code className="bg-surface-container px-1 py-0.5 rounded text-[11px] md:text-xs text-primary break-all" {...props}>{children}</code>;
     },
     a: ({ children, href, ...props }: any) => (
-      <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" {...props}>{children}</a>
+      <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all text-xs md:text-sm" {...props}>{children}</a>
     ),
-    table: ({ children, ...props }: any) => (
-      <div className="overflow-x-auto my-1.5 rounded-lg border border-outline-variant/20">
-        <table className="w-full text-xs border-collapse" {...props}>{children}</table>
-      </div>
+    table: ({ children }: any) => <div className="my-1 md:my-1.5 space-y-1">{children}</div>,
+    thead: () => null,
+    tbody: ({ children }: any) => <div className="space-y-1">{children}</div>,
+    th: () => null,
+    tr: ({ children }: any) => (
+      <div className="bg-surface-container-high/60 rounded-lg px-2.5 py-1.5 space-y-0.5">{children}</div>
     ),
-    thead: ({ children, ...props }: any) => <thead className="bg-surface-container" {...props}>{children}</thead>,
-    th: ({ children, ...props }: any) => <th className="text-left px-2.5 py-1.5 font-semibold text-on-surface border-b border-outline-variant/20 whitespace-nowrap" {...props}>{children}</th>,
-    td: ({ children, ...props }: any) => <td className="px-2.5 py-1.5 text-on-surface-variant border-b border-outline-variant/10" {...props}>{children}</td>,
-    tr: ({ children, ...props }: any) => <tr className="hover:bg-surface-container/50" {...props}>{children}</tr>,
-    hr: (props: any) => <hr className="my-2 border-outline-variant/20" {...props} />,
+    td: ({ children }: any) => (
+      <div className="text-[11px] md:text-xs leading-relaxed text-on-surface-variant break-words first:font-medium first:text-on-surface [&:nth-child(2)]:text-primary [&:nth-child(2)]:font-semibold">{children}</div>
+    ),
+    hr: (props: any) => <hr className="my-1.5 md:my-2 border-outline-variant/20" {...props} />,
   }), []);
 
   // SSE connection
@@ -400,47 +402,47 @@ export default function EmailAgentWidget() {
       {/* Floating Bubble */}
       <button
         onClick={() => { setExpanded(!expanded); setBubbleBounce(false); }}
-        className={`fixed bottom-6 right-6 z-[90] w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 ${
-          expanded ? 'bg-surface-container-high text-on-surface scale-90' : 'bg-primary text-on-primary hover:shadow-2xl hover:scale-105'
+        className={`fixed bottom-4 right-4 md:bottom-6 md:right-6 z-[90] w-12 h-12 md:w-14 md:h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 ${
+          expanded ? 'bg-surface-container-high text-on-surface scale-90 max-md:hidden' : 'bg-primary text-on-primary hover:shadow-2xl hover:scale-105'
         } ${bubbleBounce && !expanded ? 'animate-bounce' : ''}`}
         title={t('emailAgent.title' as any) || '信件助手'}
       >
-        <span className="material-symbols-outlined text-2xl">
+        <span className="material-symbols-outlined text-xl md:text-2xl">
           {expanded ? 'close' : 'smart_toy'}
         </span>
         {!expanded && badgeCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[20px] h-5 flex items-center justify-center bg-error text-on-error text-xs font-bold rounded-full px-1 animate-in zoom-in duration-200">
+          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] md:min-w-[20px] md:h-5 flex items-center justify-center bg-error text-on-error text-[10px] md:text-xs font-bold rounded-full px-1 animate-in zoom-in duration-200">
             {badgeCount > 99 ? '99+' : badgeCount}
           </span>
         )}
         {!expanded && connected && (
-          <span className="absolute bottom-0 right-0 w-3 h-3 bg-success rounded-full border-2 border-surface" />
+          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 md:w-3 md:h-3 bg-success rounded-full border-2 border-surface" />
         )}
       </button>
 
       {/* Expanded Panel */}
       {expanded && (
-        <div className="fixed bottom-24 right-6 z-[95] w-[520px] max-h-[700px] bg-surface-container-high rounded-2xl shadow-2xl border border-outline-variant/10 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-200">
+        <div className="fixed inset-0 md:inset-auto md:bottom-24 md:right-6 z-[95] md:w-[520px] md:max-h-[700px] bg-surface-container-high md:rounded-2xl shadow-2xl md:border md:border-outline-variant/10 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-200">
           {/* Header */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-outline-variant/10 bg-surface-container-high">
-            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="material-symbols-outlined text-primary text-xl">smart_toy</span>
+          <div className="flex items-center gap-2.5 md:gap-3 px-3 md:px-4 py-2.5 md:py-3 border-b border-outline-variant/10 bg-surface-container-high safe-area-top">
+            <div className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-primary text-lg md:text-xl">smart_toy</span>
             </div>
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-on-surface">
+            <div className="flex-1 min-w-0">
+              <h3 className="text-[13px] md:text-sm font-semibold text-on-surface">
                 {t('emailAgent.title' as any) || '信件助手'}
               </h3>
-              <div className="flex items-center gap-2">
-                <span className={`w-1.5 h-1.5 rounded-full ${connected ? 'bg-success' : 'bg-error'}`} />
-                <span className="text-xs text-on-surface-variant">
+              <div className="flex items-center gap-1.5 md:gap-2">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${connected ? 'bg-success' : 'bg-error'}`} />
+                <span className="text-[11px] md:text-xs text-on-surface-variant">
                   {connected
                     ? (t('emailAgent.connected' as any) || '已連線')
                     : (t('emailAgent.disconnected' as any) || '未連線')}
                 </span>
                 {totalUnread > 0 && (
                   <>
-                    <span className="text-xs text-on-surface-variant/40">·</span>
-                    <span className="text-xs text-on-surface-variant">
+                    <span className="text-[11px] md:text-xs text-on-surface-variant/40">·</span>
+                    <span className="text-[11px] md:text-xs text-on-surface-variant">
                       {totalUnread} 封未讀
                     </span>
                   </>
@@ -449,9 +451,9 @@ export default function EmailAgentWidget() {
             </div>
             <button
               onClick={() => setExpanded(false)}
-              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest transition-colors"
+              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors shrink-0"
             >
-              <span className="material-symbols-outlined text-lg text-on-surface-variant">remove</span>
+              <span className="material-symbols-outlined text-lg text-on-surface-variant">close</span>
             </button>
           </div>
 
@@ -464,16 +466,16 @@ export default function EmailAgentWidget() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors relative ${
+                className={`flex-1 flex items-center justify-center gap-1 md:gap-1.5 py-2 md:py-2.5 text-[13px] md:text-sm font-medium transition-colors relative ${
                   activeTab === tab.id
                     ? 'text-primary'
-                    : 'text-on-surface-variant hover:text-on-surface'
+                    : 'text-on-surface-variant active:text-on-surface'
                 }`}
               >
-                <span className="material-symbols-outlined text-lg">{tab.icon}</span>
+                <span className="material-symbols-outlined text-base md:text-lg">{tab.icon}</span>
                 {tab.label}
                 {tab.badge > 0 && (
-                  <span className="min-w-[18px] h-[18px] flex items-center justify-center bg-primary/15 text-primary text-[11px] font-bold rounded-full px-1">
+                  <span className="min-w-[16px] h-4 md:min-w-[18px] md:h-[18px] flex items-center justify-center bg-primary/15 text-primary text-[10px] md:text-[11px] font-bold rounded-full px-0.5 md:px-1">
                     {tab.badge}
                   </span>
                 )}
@@ -497,19 +499,19 @@ export default function EmailAgentWidget() {
 
             {/* ─── Mail Tab ─── */}
             {activeTab === 'mail' && (
-              <div className="px-3 pt-3 pb-2">
+              <div className="px-2.5 md:px-3 pt-2.5 md:pt-3 pb-2">
                 {/* AI Overview Banner */}
                 {overview && (
-                  <div className="mb-3 bg-primary/5 border border-primary/10 rounded-xl p-3 flex gap-2.5">
-                    <span className="material-symbols-outlined text-primary text-lg mt-0.5 shrink-0">auto_awesome</span>
-                    <p className="text-sm text-on-surface leading-relaxed flex-1">{overview}</p>
+                  <div className="mb-2.5 md:mb-3 bg-primary/5 border border-primary/10 rounded-xl p-2.5 md:p-3 flex gap-2">
+                    <span className="material-symbols-outlined text-primary text-base md:text-lg mt-0.5 shrink-0">auto_awesome</span>
+                    <p className="text-xs md:text-sm text-on-surface leading-relaxed flex-1">{overview}</p>
                   </div>
                 )}
 
                 {/* Priority Summary Chips */}
                 {notifications.length > 0 && highPriorityCount > 0 && (
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="text-xs font-medium text-error bg-error/10 px-2.5 py-1 rounded-full flex items-center gap-1">
+                  <div className="flex items-center gap-2 mb-2.5 md:mb-3">
+                    <span className="text-[11px] md:text-xs font-medium text-error bg-error/10 px-2 md:px-2.5 py-0.5 md:py-1 rounded-full flex items-center gap-1">
                       <span className="material-symbols-outlined text-xs">priority_high</span>
                       {highPriorityCount} 封高優先
                     </span>
@@ -518,35 +520,35 @@ export default function EmailAgentWidget() {
 
                 {/* Email Cards */}
                 {notifications.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5 md:space-y-2">
                     {notifications.slice(0, 30).map(n => (
                       <div
                         key={n.emailId}
-                        className="bg-surface-container rounded-xl p-3 hover:bg-surface-container-highest transition-colors group"
+                        className="bg-surface-container rounded-xl p-2.5 md:p-3 active:bg-surface-container-highest md:hover:bg-surface-container-highest transition-colors group"
                       >
-                        <div className="flex items-start gap-2.5">
-                          <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${priorityBg[n.priority]}`}>
-                            <span className={`material-symbols-outlined text-base ${priorityColor[n.priority]}`}>
+                        <div className="flex items-start gap-2">
+                          <div className={`shrink-0 w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center ${priorityBg[n.priority]}`}>
+                            <span className={`material-symbols-outlined text-sm md:text-base ${priorityColor[n.priority]}`}>
                               {priorityIcon[n.priority]}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-on-surface font-medium leading-snug line-clamp-2">{n.summary}</p>
-                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                              <span className="text-xs text-on-surface-variant truncate max-w-[160px]">
+                            <p className="text-[13px] md:text-sm text-on-surface font-medium leading-snug line-clamp-2">{n.summary}</p>
+                            <div className="flex items-center gap-1 md:gap-1.5 mt-0.5 md:mt-1 flex-wrap">
+                              <span className="text-[11px] md:text-xs text-on-surface-variant truncate max-w-[120px] md:max-w-[160px]">
                                 {n.from.name || n.from.address}
                               </span>
-                              <span className="text-xs text-on-surface-variant/40">·</span>
-                              <span className="text-xs text-on-surface-variant/60 shrink-0">
+                              <span className="text-[11px] md:text-xs text-on-surface-variant/40">·</span>
+                              <span className="text-[11px] md:text-xs text-on-surface-variant/60 shrink-0">
                                 {formatTime(n.receivedAt)}
                               </span>
                               {n.hasAttachments && (
-                                <span className="material-symbols-outlined text-xs text-on-surface-variant/60">attach_file</span>
+                                <span className="material-symbols-outlined text-[11px] md:text-xs text-on-surface-variant/60">attach_file</span>
                               )}
                               {n.category && (
                                 <>
-                                  <span className="text-xs text-on-surface-variant/40">·</span>
-                                  <span className="text-[11px] text-on-surface-variant/60 bg-surface-container-highest px-1.5 py-0.5 rounded">
+                                  <span className="text-[11px] md:text-xs text-on-surface-variant/40">·</span>
+                                  <span className="text-[10px] md:text-[11px] text-on-surface-variant/60 bg-surface-container-highest px-1.5 py-0.5 rounded">
                                     {n.category}
                                   </span>
                                 </>
@@ -560,7 +562,7 @@ export default function EmailAgentWidget() {
                           <>
                             <button
                               onClick={() => toggleAnalysis(n.emailId)}
-                              className="mt-2 ml-[38px] text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1"
+                              className="mt-1.5 md:mt-2 ml-8 md:ml-[38px] text-[11px] md:text-xs text-primary active:text-primary/80 md:hover:text-primary/80 font-medium flex items-center gap-0.5 md:gap-1"
                             >
                               <span className="material-symbols-outlined text-sm" style={{ transform: expandedAnalysis.has(n.emailId) ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
                                 expand_more
@@ -568,14 +570,14 @@ export default function EmailAgentWidget() {
                               {expandedAnalysis.has(n.emailId) ? '收合分析' : '查看分析'}
                             </button>
                             {expandedAnalysis.has(n.emailId) && (
-                              <div className="mt-2.5 bg-surface-container-highest/50 rounded-xl border border-outline-variant/10 overflow-hidden">
+                              <div className="mt-2 md:mt-2.5 bg-surface-container-highest/50 rounded-xl border border-outline-variant/10 overflow-hidden">
                                 {/* Analysis header */}
-                                <div className="flex items-center gap-2 px-3.5 py-2 bg-primary/5 border-b border-outline-variant/10">
-                                  <span className="material-symbols-outlined text-primary text-base">auto_awesome</span>
-                                  <span className="text-xs font-semibold text-on-surface">AI 深度分析</span>
+                                <div className="flex items-center gap-1.5 md:gap-2 px-3 md:px-3.5 py-1.5 md:py-2 bg-primary/5 border-b border-outline-variant/10">
+                                  <span className="material-symbols-outlined text-primary text-sm md:text-base">auto_awesome</span>
+                                  <span className="text-[11px] md:text-xs font-semibold text-on-surface">AI 深度分析</span>
                                 </div>
                                 {/* Analysis body */}
-                                <div className="px-3.5 py-3 text-sm text-on-surface-variant leading-relaxed overflow-x-auto">
+                                <div className="px-3 md:px-3.5 py-2.5 md:py-3 text-[13px] md:text-sm text-on-surface-variant leading-relaxed overflow-x-hidden overflow-y-auto">
                                   <ReactMarkdown remarkPlugins={[remarkGfm]} components={analysisMd}>
                                     {n.analysis}
                                   </ReactMarkdown>
@@ -587,11 +589,11 @@ export default function EmailAgentWidget() {
 
                         {/* Action buttons */}
                         {!n.analysis && (
-                          <div className="flex items-center gap-3 mt-2 ml-[38px]">
+                          <div className="flex items-center gap-3 mt-1.5 md:mt-2 ml-8 md:ml-[38px]">
                             <button
                               onClick={() => requestAnalysis(n.emailId)}
                               disabled={n.analyzing}
-                              className="text-xs text-primary hover:text-primary/80 font-medium flex items-center gap-1 disabled:opacity-50 transition-colors"
+                              className="text-[11px] md:text-xs text-primary active:text-primary/80 md:hover:text-primary/80 font-medium flex items-center gap-1 disabled:opacity-50 transition-colors"
                             >
                               {n.analyzing ? (
                                 <>
@@ -612,26 +614,24 @@ export default function EmailAgentWidget() {
                   </div>
                 ) : !error ? (
                   initialLoading ? (
-                    <div className="flex flex-col items-center justify-center py-10">
+                    <div className="flex flex-col items-center justify-center py-8 md:py-10">
                       {/* Animated scanning icon */}
-                      <div className="relative w-16 h-16 mb-4">
+                      <div className="relative w-14 h-14 md:w-16 md:h-16 mb-3 md:mb-4">
                         <div className="absolute inset-0 rounded-full bg-primary/5 animate-ping" style={{ animationDuration: '2s' }} />
                         <div className="absolute inset-1 rounded-full bg-primary/10 animate-pulse" />
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="material-symbols-outlined text-3xl text-primary animate-pulse">
+                          <span className="material-symbols-outlined text-2xl md:text-3xl text-primary animate-pulse">
                             {['mail', 'search', 'auto_awesome'][loadingStage]}
                           </span>
                         </div>
                       </div>
-                      {/* Rotating stage messages */}
-                      <p className="text-sm font-medium text-on-surface mb-1.5 transition-opacity duration-500">
+                      <p className="text-[13px] md:text-sm font-medium text-on-surface mb-1 md:mb-1.5 transition-opacity duration-500">
                         {['正在連線 Outlook 信箱...', '掃描最新信件中...', 'AI 正在分析信件內容...'][loadingStage]}
                       </p>
-                      <p className="text-xs text-on-surface-variant/50">
+                      <p className="text-[11px] md:text-xs text-on-surface-variant/50">
                         首次載入可能需要幾秒鐘
                       </p>
-                      {/* Progress dots */}
-                      <div className="flex gap-1.5 mt-3">
+                      <div className="flex gap-1.5 mt-2.5 md:mt-3">
                         {[0, 1, 2].map(i => (
                           <div
                             key={i}
@@ -643,10 +643,10 @@ export default function EmailAgentWidget() {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center py-10 text-on-surface-variant/50">
-                      <span className="material-symbols-outlined text-4xl mb-3">mark_email_read</span>
-                      <span className="text-sm mb-1">{t('emailAgent.noNotifications' as any) || '目前沒有新通知'}</span>
-                      <span className="text-xs text-on-surface-variant/40">AI 正在持續監控你的信箱</span>
+                    <div className="flex flex-col items-center justify-center py-8 md:py-10 text-on-surface-variant/50">
+                      <span className="material-symbols-outlined text-3xl md:text-4xl mb-2.5 md:mb-3">mark_email_read</span>
+                      <span className="text-[13px] md:text-sm mb-1">{t('emailAgent.noNotifications' as any) || '目前沒有新通知'}</span>
+                      <span className="text-[11px] md:text-xs text-on-surface-variant/40">AI 正在持續監控你的信箱</span>
                     </div>
                   )
                 ) : null}
@@ -655,63 +655,63 @@ export default function EmailAgentWidget() {
 
             {/* ─── Chat Tab ─── */}
             {activeTab === 'chat' && (
-              <div className="px-3 pt-3 pb-2">
+              <div className="px-2.5 md:px-3 pt-2.5 md:pt-3 pb-2">
                 {chatMessages.length === 0 && !streaming ? (
-                  <div className="flex flex-col items-center py-6">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
-                      <span className="material-symbols-outlined text-primary text-2xl">smart_toy</span>
+                  <div className="flex flex-col items-center py-5 md:py-6">
+                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2.5 md:mb-3">
+                      <span className="material-symbols-outlined text-primary text-xl md:text-2xl">smart_toy</span>
                     </div>
-                    <p className="text-base font-medium text-on-surface mb-1">有什麼我能幫你的？</p>
-                    <p className="text-xs text-on-surface-variant/60 text-center mb-4 px-4">
+                    <p className="text-sm md:text-base font-medium text-on-surface mb-0.5 md:mb-1">有什麼我能幫你的？</p>
+                    <p className="text-[11px] md:text-xs text-on-surface-variant/60 text-center mb-3 md:mb-4 px-4">
                       我可以幫你分析信件、整理重點、識別資安風險、建議回覆方向
                     </p>
-                    <div className="flex flex-wrap gap-2 justify-center">
+                    <div className="flex flex-wrap gap-1.5 md:gap-2 justify-center">
                       {quickChips.map(chip => (
                         <button
                           key={chip.label}
                           onClick={() => handleChipClick(chip.message)}
                           disabled={streaming || !connected}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-highest text-sm text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-40"
+                          className="flex items-center gap-1 md:gap-1.5 px-2.5 md:px-3 py-1.5 rounded-full bg-surface-container active:bg-surface-container-highest md:hover:bg-surface-container-highest text-[13px] md:text-sm text-on-surface-variant active:text-on-surface md:hover:text-on-surface transition-colors disabled:opacity-40"
                         >
-                          <span className="material-symbols-outlined text-base">{chip.icon}</span>
+                          <span className="material-symbols-outlined text-sm md:text-base">{chip.icon}</span>
                           {chip.label}
                         </button>
                       ))}
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2.5 md:space-y-3">
                     {chatMessages.slice(-20).map((msg, i) => (
                       <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         {msg.role === 'assistant' && (
-                          <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center mr-2 mt-0.5 shrink-0">
-                            <span className="material-symbols-outlined text-primary text-sm">smart_toy</span>
+                          <div className="w-6 h-6 md:w-7 md:h-7 rounded-full bg-primary/10 flex items-center justify-center mr-1.5 md:mr-2 mt-0.5 shrink-0">
+                            <span className="material-symbols-outlined text-primary text-xs md:text-sm">smart_toy</span>
                           </div>
                         )}
-                        <div className={`px-3.5 py-2.5 rounded-xl text-sm ${
+                        <div className={`px-3 md:px-3.5 py-2 md:py-2.5 rounded-xl text-[13px] md:text-sm ${
                           msg.role === 'user'
-                            ? 'max-w-[75%] bg-primary text-on-primary rounded-br-sm'
+                            ? 'max-w-[80%] md:max-w-[75%] bg-primary text-on-primary rounded-br-sm'
                             : 'flex-1 min-w-0 bg-surface-container text-on-surface rounded-bl-sm'
                         }`}>
                           {msg.role === 'assistant' ? (
-                            <div className="leading-relaxed overflow-x-auto">
+                            <div className="leading-relaxed overflow-x-hidden overflow-y-auto break-words">
                               <ReactMarkdown remarkPlugins={[remarkGfm]} components={compactMd}>
                                 {msg.content}
                               </ReactMarkdown>
                             </div>
                           ) : (
-                            <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                            <p className="whitespace-pre-wrap leading-relaxed break-words">{msg.content}</p>
                           )}
                         </div>
                       </div>
                     ))}
                     {streaming && streamText && (
                       <div className="flex justify-start">
-                        <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center mr-2 mt-0.5 shrink-0">
-                          <span className="material-symbols-outlined text-primary text-sm">smart_toy</span>
+                        <div className="w-6 h-6 md:w-7 md:h-7 rounded-full bg-primary/10 flex items-center justify-center mr-1.5 md:mr-2 mt-0.5 shrink-0">
+                          <span className="material-symbols-outlined text-primary text-xs md:text-sm">smart_toy</span>
                         </div>
-                        <div className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl rounded-bl-sm bg-surface-container text-on-surface text-sm">
-                          <div className="leading-relaxed overflow-x-auto">
+                        <div className="flex-1 min-w-0 px-3 md:px-3.5 py-2 md:py-2.5 rounded-xl rounded-bl-sm bg-surface-container text-on-surface text-[13px] md:text-sm">
+                          <div className="leading-relaxed overflow-x-hidden overflow-y-auto break-words">
                             <ReactMarkdown remarkPlugins={[remarkGfm]} components={compactMd}>
                               {streamText}
                             </ReactMarkdown>
@@ -722,11 +722,11 @@ export default function EmailAgentWidget() {
                     )}
                     {streaming && !streamText && (
                       <div className="flex justify-start">
-                        <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center mr-2 mt-0.5 shrink-0">
-                          <span className="material-symbols-outlined text-primary text-sm">smart_toy</span>
+                        <div className="w-6 h-6 md:w-7 md:h-7 rounded-full bg-primary/10 flex items-center justify-center mr-1.5 md:mr-2 mt-0.5 shrink-0">
+                          <span className="material-symbols-outlined text-primary text-xs md:text-sm">smart_toy</span>
                         </div>
-                        <div className="px-3.5 py-2.5 rounded-xl rounded-bl-sm bg-surface-container text-on-surface-variant text-sm flex items-center gap-2">
-                          <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+                        <div className="px-3 md:px-3.5 py-2 md:py-2.5 rounded-xl rounded-bl-sm bg-surface-container text-on-surface-variant text-[13px] md:text-sm flex items-center gap-2">
+                          <span className="material-symbols-outlined text-sm md:text-base animate-spin">progress_activity</span>
                           思考中...
                         </div>
                       </div>
@@ -739,25 +739,25 @@ export default function EmailAgentWidget() {
           </div>
 
           {/* Bottom Area: Quick Chips + Input */}
-          <div className="border-t border-outline-variant/10 bg-surface-container-high">
+          <div className="border-t border-outline-variant/10 bg-surface-container-high safe-area-bottom">
             {activeTab === 'mail' && notifications.length > 0 && (
-              <div className="px-3 pt-2.5 pb-0 flex gap-1.5 overflow-x-auto scrollbar-none">
+              <div className="px-2.5 md:px-3 pt-2 md:pt-2.5 pb-0 flex gap-1 md:gap-1.5 overflow-x-auto scrollbar-none">
                 {quickChips.map(chip => (
                   <button
                     key={chip.label}
                     onClick={() => handleChipClick(chip.message)}
                     disabled={streaming || !connected}
-                    className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full bg-surface-container hover:bg-surface-container-highest text-xs text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-40"
+                    className="shrink-0 flex items-center gap-0.5 md:gap-1 px-2.5 md:px-3 py-1 md:py-1.5 rounded-full bg-surface-container active:bg-surface-container-highest md:hover:bg-surface-container-highest text-[11px] md:text-xs text-on-surface-variant active:text-on-surface md:hover:text-on-surface transition-colors disabled:opacity-40"
                   >
-                    <span className="material-symbols-outlined text-sm">{chip.icon}</span>
+                    <span className="material-symbols-outlined text-xs md:text-sm">{chip.icon}</span>
                     {chip.label}
                   </button>
                 ))}
               </div>
             )}
 
-            <div className="p-3 pt-2">
-              <div className="flex items-center gap-2">
+            <div className="p-2.5 md:p-3 pt-1.5 md:pt-2">
+              <div className="flex items-center gap-1.5 md:gap-2">
                 <input
                   value={chatInput}
                   onChange={e => setChatInput(e.target.value)}
@@ -770,14 +770,14 @@ export default function EmailAgentWidget() {
                   onFocus={() => { if (activeTab !== 'chat') setActiveTab('chat'); }}
                   placeholder={t('emailAgent.placeholder' as any) || '問我任何信件相關問題...'}
                   disabled={streaming || !connected}
-                  className="flex-1 bg-surface-container rounded-xl px-3.5 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/40 outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50 transition-shadow"
+                  className="flex-1 bg-surface-container rounded-xl px-3 md:px-3.5 py-2 md:py-2.5 text-[13px] md:text-sm text-on-surface placeholder:text-on-surface-variant/40 outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50 transition-shadow"
                 />
                 <button
                   onClick={sendMessage}
                   disabled={streaming || !chatInput.trim() || !connected}
-                  className="w-9 h-9 flex items-center justify-center rounded-full bg-primary text-on-primary disabled:opacity-30 hover:bg-primary/90 transition-colors shrink-0"
+                  className="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-full bg-primary text-on-primary disabled:opacity-30 active:bg-primary/90 md:hover:bg-primary/90 transition-colors shrink-0"
                 >
-                  <span className="material-symbols-outlined text-lg">
+                  <span className="material-symbols-outlined text-base md:text-lg">
                     {streaming ? 'more_horiz' : 'arrow_upward'}
                   </span>
                 </button>
