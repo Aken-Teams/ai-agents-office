@@ -466,6 +466,7 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
   const [search, setSearch] = useState('');
   const [selectedMsg, setSelectedMsg] = useState<EmailMessage | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [cidLoading, setCidLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [fetchingMore, setFetchingMore] = useState(false);
   const PAGE_SIZE = 10;
@@ -528,6 +529,7 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
 
   async function openMessage(msg: EmailMessage) {
     setSelectedMsg(msg);
+    setCidLoading(false);
     if (!msg.body) {
       setDetailLoading(true);
       try {
@@ -543,6 +545,7 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
 
           // Phase 2: if email has CID images, resolve them in background
           if (data.has_cid_images) {
+            setCidLoading(true);
             fetch(`${apiBase}/api/outlook/messages/${encodeURIComponent(msg.id)}?cid=true`, {
               headers: { Authorization: `Bearer ${token}` },
             }).then(r => r.json()).then(d2 => {
@@ -551,7 +554,7 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
                 setSelectedMsg(prev => prev?.id === msg.id ? resolved : prev);
                 setMessages(prev => prev.map(m => m.id === msg.id ? resolved : m));
               }
-            }).catch(() => {});
+            }).catch(() => {}).finally(() => setCidLoading(false));
           }
         }
       } catch { /* ignore */ }
@@ -698,12 +701,20 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
               </div>
             )}
 
+            {/* CID image loading indicator */}
+            {cidLoading && (
+              <div className="flex items-center gap-2 px-3 md:px-5 py-2 bg-tertiary/5 border-b border-tertiary/10 text-tertiary">
+                <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                <span className="text-[11px] md:text-xs font-medium">正在載入嵌入圖片...</span>
+              </div>
+            )}
+
             {/* Body content */}
             <div className="px-3 md:px-5 py-3 md:py-5">
               {selectedMsg.body ? (
                 selectedMsg.body_type === 'html' ? (
                   <iframe
-                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding:0;word-break:break-word;overflow-wrap:break-word;-webkit-text-size-adjust:100%;}img[src^="cid:"]{display:none!important;width:0!important;height:0!important;}img{max-width:100%!important;height:auto!important;}table{max-width:100%!important;width:auto!important;}td,th{word-break:break-word!important;overflow-wrap:break-word!important;}*{max-width:100%!important;box-sizing:border-box!important;}a{word-break:break-all;}@media(max-width:600px){body{font-size:13px!important;line-height:1.5!important;}td,th,p,div,span,li,a{font-size:inherit!important;}h1{font-size:18px!important;}h2{font-size:16px!important;}h3{font-size:14px!important;}table{font-size:13px!important;}[style*="font-size"]{font-size:inherit!important;}ul,ol{padding-left:16px!important;margin-left:0!important;}li{margin-left:0!important;}ul ul,ol ol,ul ol,ol ul{padding-left:12px!important;}p,div{margin-left:0!important;padding-left:0!important;}blockquote{margin-left:0!important;padding-left:8px!important;}[style*="margin-left"]{margin-left:0!important;}[style*="padding-left"]{padding-left:0!important;}}.reply-collapsed{border-left:3px solid #c4c4c4;margin:16px 0;padding:4px 12px;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:12px;color:#666;}.reply-content{border-left:3px solid #ddd;margin:16px 0;padding:8px 12px;opacity:0.7;font-size:13px;}</style></head><body>${selectedMsg.body}</body></html>`}
+                    srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding:0;overflow-x:hidden;word-break:break-word;overflow-wrap:break-word;-webkit-text-size-adjust:100%;}img[src^="cid:"]{display:none!important;width:0!important;height:0!important;}img{max-width:100%!important;height:auto!important;}.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;margin:8px 0;}.reply-collapsed{border-left:3px solid #c4c4c4;margin:16px 0;padding:4px 12px;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:12px;color:#666;}.reply-content{border-left:3px solid #ddd;margin:16px 0;padding:8px 12px;opacity:0.7;font-size:13px;}</style></head><body>${selectedMsg.body}</body></html>`}
                     className="w-full border-0 min-h-[200px] md:min-h-[300px]"
                     sandbox="allow-same-origin"
                     title="Email body"
@@ -718,6 +729,35 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
                           return;
                         }
                         img.addEventListener('error', () => { img.style.display = 'none'; });
+                      });
+                      // Handle tables: layout tables reflow to fit; data tables get horizontal scroll
+                      doc.querySelectorAll('table').forEach(table => {
+                        if (table.closest('.table-scroll')) return;
+                        const isDataTable = table.querySelector('th, thead');
+                        if (isDataTable) {
+                          // Data table — wrap in scroll container, keep natural width
+                          table.removeAttribute('width');
+                          table.style.width = 'auto';
+                          table.style.maxWidth = 'none';
+                          table.style.tableLayout = 'auto';
+                          table.querySelectorAll('td, th').forEach(cell => {
+                            (cell as HTMLElement).style.whiteSpace = 'nowrap';
+                          });
+                          const wrapper = doc.createElement('div');
+                          wrapper.className = 'table-scroll';
+                          table.parentElement?.insertBefore(wrapper, table);
+                          wrapper.appendChild(table);
+                        } else {
+                          // Layout table — strip fixed width so content reflows within viewport
+                          table.removeAttribute('width');
+                          table.style.width = '100%';
+                          table.style.maxWidth = '100%';
+                          table.style.tableLayout = 'auto';
+                          table.querySelectorAll('td').forEach(cell => {
+                            (cell as HTMLElement).removeAttribute('width');
+                            (cell as HTMLElement).style.width = '';
+                          });
+                        }
                       });
                       // Collapse quoted reply sections
                       const replySelectors = [
