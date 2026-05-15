@@ -582,29 +582,29 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
     <div className="fixed inset-0 z-[110] flex items-end md:items-center md:justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative bg-surface-container w-full h-full md:h-auto md:rounded-2xl md:shadow-2xl md:border md:border-outline-variant/10 md:max-w-4xl md:mx-4 overflow-hidden flex flex-col md:max-h-[85vh]"
+        className="relative bg-surface-container w-full h-full md:h-auto md:rounded-2xl md:shadow-2xl md:border md:border-outline-variant/10 md:max-w-4xl md:mx-4 overflow-hidden flex flex-col md:max-h-[85vh] safe-area-top safe-area-bottom"
         onClick={e => e.stopPropagation()}
       >
         {/* Modal header */}
-        <div className="flex items-center gap-2 md:gap-3 px-3 md:px-5 py-2.5 md:py-4 border-b border-outline-variant/10 shrink-0 safe-area-top">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-outline-variant/10 shrink-0">
           {selectedMsg ? (
             <>
               <button onClick={() => setSelectedMsg(null)} className="w-8 h-8 flex items-center justify-center rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors cursor-pointer shrink-0">
                 <span className="material-symbols-outlined text-on-surface-variant text-lg">arrow_back</span>
               </button>
               <div className="flex-1 min-w-0">
-                <h3 className="font-headline font-bold text-[13px] md:text-base text-on-surface truncate">{selectedMsg.subject || t('assistant.email.noSubject' as any)}</h3>
+                <h3 className="font-headline font-bold text-base text-on-surface truncate">{selectedMsg.subject || t('assistant.email.noSubject' as any)}</h3>
               </div>
             </>
           ) : (
             <>
-              <div className="w-8 h-8 md:w-9 md:h-9 rounded-lg bg-tertiary/15 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-tertiary text-lg md:text-xl">mail</span>
+              <div className="w-9 h-9 rounded-lg bg-tertiary/15 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-tertiary text-xl">mail</span>
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-headline font-bold text-[13px] md:text-base text-on-surface">{t('assistant.email.title' as any)}</h3>
+                <h3 className="font-headline font-bold text-base text-on-surface">{t('assistant.email.title' as any)}</h3>
                 {totalUnread > 0 && (
-                  <p className="text-[11px] md:text-xs text-on-surface-variant">{t('assistant.email.unreadCount' as any, { count: totalUnread })}</p>
+                  <p className="text-xs text-on-surface-variant">{t('assistant.email.unreadCount' as any, { count: totalUnread })}</p>
                 )}
               </div>
             </>
@@ -618,38 +618,38 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
           /* ── Message Detail View ── */
           <div className="flex-1 overflow-y-auto">
             {/* Sender card */}
-            <div className="px-3 md:px-5 py-3 md:py-4 bg-surface-container-high/30 border-b border-outline-variant/10">
-              <div className="flex items-start gap-2.5 md:gap-3">
-                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-tertiary/15 flex items-center justify-center shrink-0 mt-0.5">
-                  <span className="material-symbols-outlined text-tertiary text-lg md:text-2xl">person</span>
+            <div className="px-5 py-4 bg-surface-container-high/30 border-b border-outline-variant/10">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-tertiary/15 flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="material-symbols-outlined text-tertiary text-2xl">person</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-1.5 md:gap-2 flex-wrap">
-                    <span className="text-[13px] md:text-sm font-bold text-on-surface">{selectedMsg.from.name || selectedMsg.from.address}</span>
-                    <span className="text-[11px] md:text-xs text-on-surface-variant/70 truncate max-w-[180px] md:max-w-none">{'<'}{selectedMsg.from.address}{'>'}</span>
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-on-surface">{selectedMsg.from.name || selectedMsg.from.address}</span>
+                    <span className="text-xs text-on-surface-variant/70 truncate max-w-[180px] md:max-w-none">{'<'}{selectedMsg.from.address}{'>'}</span>
                   </div>
-                  <p className="text-[11px] md:text-xs text-on-surface-variant/70 mt-0.5">
+                  <p className="text-xs text-on-surface-variant/70 mt-0.5">
                     {new Date(selectedMsg.received_at).toLocaleString(undefined, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' })}
                   </p>
                   {selectedMsg.to && selectedMsg.to.length > 0 && (
-                    <div className="flex items-start gap-1.5 mt-1.5 md:mt-2">
-                      <span className="shrink-0 text-[9px] md:text-[10px] font-bold uppercase tracking-wide bg-tertiary/10 text-tertiary px-1 md:px-1.5 py-0.5 rounded mt-px">To</span>
-                      <p className="text-[11px] md:text-xs text-on-surface-variant leading-relaxed line-clamp-2 md:line-clamp-none">
+                    <div className="flex items-start gap-1.5 mt-2">
+                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-tertiary/10 text-tertiary px-1.5 py-0.5 rounded mt-px">To</span>
+                      <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2 md:line-clamp-none">
                         {selectedMsg.to.map(r => r.name || r.address).join(', ')}
                       </p>
                     </div>
                   )}
                   {selectedMsg.cc && selectedMsg.cc.length > 0 && (
                     <div className="flex items-start gap-1.5 mt-1">
-                      <span className="shrink-0 text-[9px] md:text-[10px] font-bold uppercase tracking-wide bg-warning/10 text-warning px-1 md:px-1.5 py-0.5 rounded mt-px">CC</span>
-                      <p className="text-[11px] md:text-xs text-on-surface-variant leading-relaxed line-clamp-2 md:line-clamp-none">
+                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-warning/10 text-warning px-1.5 py-0.5 rounded mt-px">CC</span>
+                      <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2 md:line-clamp-none">
                         {selectedMsg.cc.map(r => r.name || r.address).join(', ')}
                       </p>
                     </div>
                   )}
                   {selectedMsg.has_attachments && (
-                    <div className="flex items-center gap-1 text-[11px] md:text-xs text-tertiary mt-1 md:mt-1.5">
-                      <span className="material-symbols-outlined text-xs md:text-sm">attach_file</span>
+                    <div className="flex items-center gap-1 text-xs text-tertiary mt-1.5">
+                      <span className="material-symbols-outlined text-sm">attach_file</span>
                       {t('assistant.email.hasAttachments' as any)}
                     </div>
                   )}
@@ -659,8 +659,8 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
 
             {/* Attachments (non-inline only) */}
             {selectedMsg.attachments && selectedMsg.attachments.filter(a => !a.is_inline).length > 0 && (
-              <div className="px-3 md:px-5 py-2.5 md:py-3 border-b border-outline-variant/10">
-                <div className="flex flex-wrap gap-1.5 md:gap-2">
+              <div className="px-5 py-3 border-b border-outline-variant/10">
+                <div className="flex flex-wrap gap-2">
                   {selectedMsg.attachments.filter(a => !a.is_inline).map(att => (
                     <a
                       key={att.id}
@@ -677,16 +677,16 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
                           URL.revokeObjectURL(url);
                         }).catch(() => {});
                       }}
-                      className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-3 py-1.5 md:py-2 rounded-lg border border-outline-variant/20 bg-surface-container-high/30 active:bg-surface-container-high/60 md:hover:bg-surface-container-high/60 transition-colors cursor-pointer max-w-[180px] md:max-w-[220px]"
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg border border-outline-variant/20 bg-surface-container-high/30 active:bg-surface-container-high/60 md:hover:bg-surface-container-high/60 transition-colors cursor-pointer max-w-[180px] md:max-w-[220px]"
                     >
-                      <span className="material-symbols-outlined text-tertiary text-sm md:text-base shrink-0">
+                      <span className="material-symbols-outlined text-tertiary text-base shrink-0">
                         {att.content_type.startsWith('image/') ? 'image' : att.content_type.includes('pdf') ? 'picture_as_pdf' : att.content_type.includes('sheet') || att.content_type.includes('excel') ? 'table_chart' : 'description'}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[11px] md:text-xs font-medium text-on-surface truncate">{att.filename}</p>
-                        <p className="text-[9px] md:text-[10px] text-on-surface-variant/60">{att.size < 1024 ? att.size + ' B' : att.size < 1048576 ? (att.size / 1024).toFixed(0) + ' KB' : (att.size / 1048576).toFixed(1) + ' MB'}</p>
+                        <p className="text-xs font-medium text-on-surface truncate">{att.filename}</p>
+                        <p className="text-[10px] text-on-surface-variant/60">{att.size < 1024 ? att.size + ' B' : att.size < 1048576 ? (att.size / 1024).toFixed(0) + ' KB' : (att.size / 1048576).toFixed(1) + ' MB'}</p>
                       </div>
-                      <span className="material-symbols-outlined text-on-surface-variant/50 text-xs md:text-sm shrink-0">download</span>
+                      <span className="material-symbols-outlined text-on-surface-variant/50 text-sm shrink-0">download</span>
                     </a>
                   ))}
                 </div>
@@ -695,22 +695,22 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
 
             {/* Loading indicator */}
             {detailLoading && (
-              <div className="flex items-center justify-center gap-2 text-on-surface-variant py-4 md:py-6">
+              <div className="flex items-center justify-center gap-2 text-on-surface-variant py-6">
                 <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-                <span className="text-[13px] md:text-sm">{t('common.loading' as any)}</span>
+                <span className="text-sm">{t('common.loading' as any)}</span>
               </div>
             )}
 
             {/* CID image loading indicator */}
             {cidLoading && (
-              <div className="flex items-center gap-2 px-3 md:px-5 py-2 bg-tertiary/5 border-b border-tertiary/10 text-tertiary">
+              <div className="flex items-center gap-2 px-5 py-2 bg-tertiary/5 border-b border-tertiary/10 text-tertiary">
                 <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-                <span className="text-[11px] md:text-xs font-medium">正在載入嵌入圖片...</span>
+                <span className="text-xs font-medium">正在載入嵌入圖片...</span>
               </div>
             )}
 
             {/* Body content */}
-            <div className="px-3 md:px-5 py-3 md:py-5">
+            <div className="px-5 py-5">
               {selectedMsg.body ? (
                 selectedMsg.body_type === 'html' ? (
                   <iframe
@@ -801,10 +801,10 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
                     }}
                   />
                 ) : (
-                  <pre className="text-xs md:text-sm text-on-surface whitespace-pre-wrap font-sans leading-relaxed break-words">{selectedMsg.body}</pre>
+                  <pre className="text-sm text-on-surface whitespace-pre-wrap font-sans leading-relaxed break-words">{selectedMsg.body}</pre>
                 )
               ) : !detailLoading ? (
-                <p className="text-xs md:text-sm text-on-surface leading-relaxed whitespace-pre-wrap break-words">{selectedMsg.preview}</p>
+                <p className="text-sm text-on-surface leading-relaxed whitespace-pre-wrap break-words">{selectedMsg.preview}</p>
               ) : null}
             </div>
           </div>
@@ -814,30 +814,30 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
             {/* Search + folder tabs */}
             <div className="shrink-0 border-b border-outline-variant/10">
               {/* Search bar */}
-              <div className="px-3 md:px-4 pt-2.5 md:pt-3 pb-1.5 md:pb-2">
-                <div className="flex items-center gap-2 bg-surface-container-high rounded-lg border border-outline-variant/20 px-2.5 md:px-3 py-1.5 md:py-2">
-                  <span className="material-symbols-outlined text-on-surface-variant text-sm md:text-base">search</span>
+              <div className="px-4 pt-3 pb-2">
+                <div className="flex items-center gap-2 bg-surface-container-high rounded-lg border border-outline-variant/20 px-3 py-2">
+                  <span className="material-symbols-outlined text-on-surface-variant text-base">search</span>
                   <input
                     value={search}
                     onChange={e => { setSearch(e.target.value); setPage(0); }}
                     placeholder={t('assistant.email.searchPlaceholder' as any)}
-                    className="flex-1 bg-transparent text-[13px] md:text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none"
+                    className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none"
                   />
                   {search && (
                     <button onClick={() => setSearch('')} className="cursor-pointer">
-                      <span className="material-symbols-outlined text-on-surface-variant text-sm md:text-base">close</span>
+                      <span className="material-symbols-outlined text-on-surface-variant text-base">close</span>
                     </button>
                   )}
                 </div>
               </div>
               {/* Folder tabs */}
               {folders.length > 0 && (
-                <div className="flex gap-1 px-3 md:px-4 pb-1.5 md:pb-2 overflow-x-auto scrollbar-none">
+                <div className="flex gap-1 px-4 pb-2 overflow-x-auto scrollbar-none">
                   {folders.map(f => (
                     <button
                       key={f.id}
                       onClick={() => { setActiveFolder(f.name); setSearch(''); switchFolder(f.name); }}
-                      className={`shrink-0 flex items-center gap-1 md:gap-1.5 px-2.5 md:px-3 py-1 md:py-1.5 rounded-lg text-[11px] md:text-xs font-medium transition-colors cursor-pointer ${
+                      className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                         activeFolder === f.name
                           ? 'bg-tertiary/15 text-tertiary'
                           : 'bg-surface-container-highest/50 text-on-surface-variant active:bg-surface-container-highest md:hover:bg-surface-container-highest'
@@ -845,7 +845,7 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
                     >
                       <span>{f.displayName}</span>
                       {f.unreadCount > 0 && (
-                        <span className="bg-tertiary text-on-primary text-[9px] md:text-[10px] font-bold px-1 md:px-1.5 py-0.5 rounded-full min-w-[16px] md:min-w-[18px] text-center">
+                        <span className="bg-tertiary text-on-primary text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
                           {f.unreadCount}
                         </span>
                       )}
@@ -858,12 +858,12 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
             {/* Message list */}
             <div className="flex-1 overflow-y-auto">
               {loading ? (
-                <div className="flex items-center justify-center py-10 md:py-12 gap-2 text-on-surface-variant">
-                  <span className="material-symbols-outlined text-sm md:text-base animate-spin">progress_activity</span>
-                  <span className="text-[13px] md:text-sm">{t('common.loading' as any)}</span>
+                <div className="flex items-center justify-center py-12 gap-2 text-on-surface-variant">
+                  <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+                  <span className="text-sm">{t('common.loading' as any)}</span>
                 </div>
               ) : filtered.length === 0 ? (
-                <div className="py-10 md:py-12 text-center text-[13px] md:text-sm text-on-surface-variant/60">
+                <div className="py-12 text-center text-sm text-on-surface-variant/60">
                   {search ? t('assistant.email.noSearchResults' as any) : t('assistant.email.noMessages' as any)}
                 </div>
               ) : (
@@ -872,34 +872,34 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
                     <button
                       key={msg.id}
                       onClick={() => openMessage(msg)}
-                      className={`group w-full text-left px-3 md:px-4 py-2.5 md:py-3 transition-all cursor-pointer border-l-3 active:bg-surface-container-high/60 md:hover:bg-surface-container-high/60 md:hover:border-l-tertiary ${!msg.is_read ? 'bg-tertiary/[0.03] border-l-tertiary/30' : 'border-l-transparent'}`}
+                      className={`group w-full text-left px-4 py-3 transition-all cursor-pointer border-l-3 active:bg-surface-container-high/60 md:hover:bg-surface-container-high/60 md:hover:border-l-tertiary ${!msg.is_read ? 'bg-tertiary/[0.03] border-l-tertiary/30' : 'border-l-transparent'}`}
                     >
-                      <div className="flex items-start gap-2.5 md:gap-3">
-                        <div className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                      <div className="flex items-start gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
                           !msg.is_read ? 'bg-tertiary/15' : 'bg-surface-container-highest'
                         }`}>
-                          <span className={`material-symbols-outlined text-xs md:text-sm ${!msg.is_read ? 'text-tertiary' : 'text-on-surface-variant/60'}`}>
+                          <span className={`material-symbols-outlined text-sm ${!msg.is_read ? 'text-tertiary' : 'text-on-surface-variant/60'}`}>
                             {msg.has_attachments ? 'attach_file' : 'person'}
                           </span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 md:gap-2 mb-0.5">
-                            <span className={`text-[13px] md:text-sm truncate ${!msg.is_read ? 'font-bold text-on-surface' : 'font-medium text-on-surface/80'}`}>
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className={`text-sm truncate ${!msg.is_read ? 'font-bold text-on-surface' : 'font-medium text-on-surface/80'}`}>
                               {msg.from.name || msg.from.address}
                             </span>
-                            {!msg.is_read && <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-tertiary shrink-0" />}
-                            <span className="ml-auto text-[10px] md:text-[11px] text-on-surface-variant/60 shrink-0">
+                            {!msg.is_read && <span className="w-2 h-2 rounded-full bg-tertiary shrink-0" />}
+                            <span className="ml-auto text-[11px] text-on-surface-variant/60 shrink-0">
                               {new Date(msg.received_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
-                          <p className={`text-[13px] md:text-sm truncate mb-0.5 ${!msg.is_read ? 'text-on-surface' : 'text-on-surface-variant'}`}>
+                          <p className={`text-sm truncate mb-0.5 ${!msg.is_read ? 'text-on-surface' : 'text-on-surface-variant'}`}>
                             {msg.subject || t('assistant.email.noSubject' as any)}
                           </p>
                           {msg.preview && (
-                            <p className="text-[11px] md:text-xs text-on-surface-variant/60 truncate">{msg.preview}</p>
+                            <p className="text-xs text-on-surface-variant/60 truncate">{msg.preview}</p>
                           )}
                         </div>
-                        <span className="material-symbols-outlined text-on-surface-variant/30 text-sm md:text-base mt-1 shrink-0 group-hover:text-tertiary transition-colors">chevron_right</span>
+                        <span className="material-symbols-outlined text-on-surface-variant/30 text-base mt-1 shrink-0 group-hover:text-tertiary transition-colors">chevron_right</span>
                       </div>
                     </button>
                   ))}
@@ -909,28 +909,28 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="shrink-0 flex items-center justify-between px-3 md:px-4 py-2 md:py-2.5 border-t border-outline-variant/10 bg-surface-container-high/20 safe-area-bottom">
-                <span className="text-[11px] md:text-xs text-on-surface-variant/70">
+              <div className="shrink-0 flex items-center justify-between px-4 py-2.5 border-t border-outline-variant/10 bg-surface-container-high/20">
+                <span className="text-xs text-on-surface-variant/70">
                   {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} / {totalCount}
                   {fetchingMore && <span className="ml-1.5 material-symbols-outlined text-[11px] animate-spin align-middle">progress_activity</span>}
                 </span>
-                <div className="flex items-center gap-0.5 md:gap-1">
+                <div className="flex items-center gap-1">
                   <button
                     disabled={page === 0 || fetchingMore}
                     onClick={() => goToPage(page - 1)}
-                    className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="w-8 h-8 flex items-center justify-center rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                   >
-                    <span className="material-symbols-outlined text-on-surface-variant text-sm md:text-base">chevron_left</span>
+                    <span className="material-symbols-outlined text-on-surface-variant text-base">chevron_left</span>
                   </button>
-                  <span className="text-[11px] md:text-xs font-medium text-on-surface-variant min-w-[2.5rem] md:min-w-[3rem] text-center">
+                  <span className="text-xs font-medium text-on-surface-variant min-w-[3rem] text-center">
                     {page + 1} / {totalPages}
                   </span>
                   <button
                     disabled={page + 1 >= totalPages || fetchingMore}
                     onClick={() => goToPage(page + 1)}
-                    className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                    className="w-8 h-8 flex items-center justify-center rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                   >
-                    <span className="material-symbols-outlined text-on-surface-variant text-sm md:text-base">chevron_right</span>
+                    <span className="material-symbols-outlined text-on-surface-variant text-base">chevron_right</span>
                   </button>
                 </div>
               </div>
