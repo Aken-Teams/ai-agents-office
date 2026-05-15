@@ -34,6 +34,7 @@ const NAV_GROUPS = [
       { href: '/admin/skills', labelKey: 'admin.sidebar.skills' as const, icon: 'hub' },
       { href: '/admin/tokens', labelKey: 'admin.sidebar.tokens' as const, icon: 'payments' },
       { href: '/admin/analytics', labelKey: 'admin.sidebar.analytics' as const, icon: 'bar_chart' },
+      ...(deployMode === 'pro-panjit' ? [{ href: '/admin/terms', labelKey: 'admin.sidebar.terms' as const, icon: 'gavel' }] : []),
     ],
   },
   {
@@ -42,7 +43,6 @@ const NAV_GROUPS = [
     icon: 'settings',
     items: [
       { href: '/admin/security', labelKey: 'admin.sidebar.security' as const, icon: 'shield_with_heart' },
-      ...(deployMode === 'pro-panjit' ? [{ href: '/admin/terms', labelKey: 'admin.sidebar.terms' as const, icon: 'gavel' }] : []),
       { href: '/admin/settings', labelKey: 'admin.sidebar.settings' as const, icon: 'settings' },
     ],
   },

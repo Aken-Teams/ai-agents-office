@@ -585,6 +585,7 @@ const zhCN = {
   'userMenu.role': '角色',
   'userMenu.role.user': '普通用户',
   'userMenu.role.admin': '管理员',
+  'userMenu.role.readonly': '检阅者',
   'userMenu.changeName': '修改名称',
   'userMenu.changeName.placeholder': '输入显示名称',
   'userMenu.changeName.tooLong': '名称最多 50 个字符',

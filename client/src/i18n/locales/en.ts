@@ -576,6 +576,7 @@ const en = {
   'userMenu.role': 'Role',
   'userMenu.role.user': 'User',
   'userMenu.role.admin': 'Admin',
+  'userMenu.role.readonly': 'Reviewer',
   'userMenu.changeName': 'Change Name',
   'userMenu.changeName.placeholder': 'Enter display name',
   'userMenu.changeName.tooLong': 'Name must be at most 50 characters',
