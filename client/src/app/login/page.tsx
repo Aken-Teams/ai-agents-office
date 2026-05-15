@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
 import { I18nProvider, useTranslation } from '../../i18n';
@@ -82,7 +84,7 @@ interface AdUserInfo {
   department: string | null;
 }
 
-type WizardStep = 'confirm' | 'inherit-choice' | 'inherit-email' | 'inherit-code' | 'done';
+type WizardStep = 'confirm' | 'inherit-choice' | 'inherit-email' | 'inherit-code' | 'done' | 'terms';
 
 function AdWizard({
   adSessionToken,
@@ -98,6 +100,14 @@ function AdWizard({
   const [error, setError] = useState('');
   const [completedData, setCompletedData] = useState<{ token: string; user: { id: string; email: string; displayName: string | null; role: string } } | null>(null);
   const [isNewAccount, setIsNewAccount] = useState(false);
+
+  // Terms state
+  const [tosContent, setTosContent] = useState('');
+  const [tosLoading, setTosLoading] = useState(false);
+  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
+  const [acceptingTerms, setAcceptingTerms] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // inherit flow
   const [claimEmail, setClaimEmail] = useState(adUser.mail || '');
@@ -181,6 +191,41 @@ function AdWizard({
       setError('網路錯誤，請稍後再試');
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Fetch TOS content when registration completes
+  useEffect(() => {
+    if (!completedData) return;
+    setTosLoading(true);
+    fetch('/api/auth/terms', { headers: { Authorization: `Bearer ${completedData.token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.content) setTosContent(data.content); setTosLoading(false); })
+      .catch(() => setTosLoading(false));
+  }, [completedData]);
+
+  // IntersectionObserver for terms scroll detection
+  useEffect(() => {
+    if (step !== 'terms' || !sentinelRef.current || tosLoading || !tosContent) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setHasScrolledToBottom(true); },
+      { root: scrollContainerRef.current, threshold: 0.1 }
+    );
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [step, tosLoading, tosContent]);
+
+  async function handleAcceptTerms() {
+    if (!completedData) return;
+    setAcceptingTerms(true);
+    try {
+      await fetch('/api/auth/accept-terms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${completedData.token}` },
+      });
+      onComplete(completedData.token, completedData.user);
+    } finally {
+      setAcceptingTerms(false);
     }
   }
 
@@ -411,11 +456,87 @@ function AdWizard({
           </div>
 
           <button
-            onClick={() => onComplete(completedData.token, completedData.user)}
+            onClick={() => setStep('terms')}
             className="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all"
           >
-            開始使用
+            下一步
           </button>
+        </>
+      )}
+
+      {/* Step: Terms of Service */}
+      {step === 'terms' && completedData && (
+        <>
+          <div>
+            <h3 className="font-headline text-2xl font-bold mb-1">系統使用規範</h3>
+            <p className="text-on-surface-variant text-sm">請閱讀並同意以下使用條款，捲動至底部後方可同意</p>
+          </div>
+
+          {tosLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span>
+            </div>
+          ) : (
+            <>
+              <div
+                ref={scrollContainerRef}
+                className="max-h-[40vh] overflow-y-auto bg-surface-container rounded-xl p-4 md:p-5 scroll-smooth"
+              >
+                <div className="text-sm text-on-surface leading-relaxed">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      h1: ({ children, ...props }) => <h1 className="text-base font-bold text-on-surface mt-0 mb-2.5 pb-1.5 border-b border-outline-variant/15" {...props}>{children}</h1>,
+                      h2: ({ children, ...props }) => <h2 className="text-sm font-bold text-on-surface mt-4 mb-1.5" {...props}>{children}</h2>,
+                      h3: ({ children, ...props }) => <h3 className="text-sm font-semibold text-on-surface mt-2.5 mb-1" {...props}>{children}</h3>,
+                      p: ({ children, ...props }) => <p className="mb-2 last:mb-0 leading-relaxed text-on-surface-variant text-xs" {...props}>{children}</p>,
+                      ul: ({ children, ...props }) => <ul className="list-disc pl-4 mb-2.5 space-y-0.5" {...props}>{children}</ul>,
+                      ol: ({ children, ...props }) => <ol className="list-decimal pl-4 mb-2.5 space-y-0.5" {...props}>{children}</ol>,
+                      li: ({ children, ...props }) => <li className="leading-relaxed text-on-surface-variant text-xs" {...props}>{children}</li>,
+                      strong: ({ children, ...props }) => <strong className="font-semibold text-on-surface" {...props}>{children}</strong>,
+                      blockquote: ({ children, ...props }) => (
+                        <blockquote className="border-l-2 border-primary/30 pl-3 my-2.5 text-on-surface-variant bg-primary/5 rounded-r-lg py-1.5 pr-3 text-xs" {...props}>{children}</blockquote>
+                      ),
+                      table: ({ children, ...props }) => (
+                        <div className="overflow-x-auto my-2.5 rounded-lg border border-outline-variant/20">
+                          <table className="w-full text-xs border-collapse" {...props}>{children}</table>
+                        </div>
+                      ),
+                      thead: ({ children, ...props }) => <thead className="bg-surface-container-high" {...props}>{children}</thead>,
+                      th: ({ children, ...props }) => <th className="text-left px-2.5 py-1.5 font-semibold text-on-surface border-b border-outline-variant/20" {...props}>{children}</th>,
+                      td: ({ children, ...props }) => <td className="px-2.5 py-1.5 text-on-surface-variant border-b border-outline-variant/10" {...props}>{children}</td>,
+                      hr: (props) => <hr className="my-3 border-outline-variant/15" {...props} />,
+                      a: ({ children, href, ...props }) => (
+                        <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" {...props}>{children}</a>
+                      ),
+                    }}
+                  >
+                    {tosContent}
+                  </ReactMarkdown>
+                </div>
+                <div ref={sentinelRef} className="h-1" />
+              </div>
+
+              {/* Scroll hint */}
+              {!hasScrolledToBottom && (
+                <div className="flex items-center justify-center gap-2 text-xs text-on-surface-variant/60 animate-bounce">
+                  <span className="material-symbols-outlined text-sm">keyboard_double_arrow_down</span>
+                  請捲動閱讀完整條款
+                </div>
+              )}
+
+              {/* Accept button */}
+              <div className={`transition-all duration-300 ${hasScrolledToBottom ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+                <button
+                  onClick={handleAcceptTerms}
+                  disabled={acceptingTerms || !hasScrolledToBottom}
+                  className="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {acceptingTerms ? '處理中...' : '同意並開始使用'}
+                </button>
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
