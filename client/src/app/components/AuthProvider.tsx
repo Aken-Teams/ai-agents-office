@@ -15,10 +15,18 @@ interface User {
   hasPassword?: boolean;
 }
 
+interface Permissions {
+  adminSidebar: string[];
+  frontendNav: string[];
+  features: string[];
+}
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
+  permissions: Permissions | null;
+  hasPermission: (category: keyof Permissions, key: string) => boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (token: string, tokenType?: 'credential' | 'access_token') => Promise<{ needsVerification?: boolean; email?: string } | void>;
   register: (email: string, password: string, displayName: string, inviteCode?: string) => Promise<{ pending: boolean; needsVerification: boolean; email?: string; message?: string }>;
@@ -41,7 +49,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [permissions, setPermissions] = useState<Permissions | null>(null);
   const router = useRouter();
+
+  const hasPermission = useCallback((category: keyof Permissions, key: string): boolean => {
+    if (!permissions) return false;
+    const list = permissions[category];
+    return list.includes('*') || list.includes(key);
+  }, [permissions]);
 
   // Check stored token on mount
   useEffect(() => {
@@ -71,6 +86,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else if (data.termsRequired) {
       setShowTermsModal(true);
     }
+    // Fetch permissions
+    fetch('/api/auth/permissions', { headers: { Authorization: `Bearer ${t}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(p => { if (p) setPermissions(p); })
+      .catch(() => {});
   }
 
   const login = useCallback(async (email: string, password: string) => {
@@ -183,7 +203,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, loginWithGoogle, register, verifyEmail, resendCode, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, permissions, hasPermission, login, loginWithGoogle, register, verifyEmail, resendCode, logout, updateUser }}>
       {children}
       {showTermsModal && token && (
         <TermsModal token={token} onAccepted={() => setShowTermsModal(false)} />

@@ -8,6 +8,7 @@ import { dbGet, dbRun, dbAll } from '../db.js';
 import { config } from '../config.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { checkUserUsageLimit, getUserUsageLimitUsd, getStorageQuotaGb, getUploadQuotaMb } from '../services/usageLimit.js';
+import { getRolePermissions } from '../services/rolePermissions.js';
 import { isEmailEnabled, sendVerificationCode, sendPasswordResetEmail } from '../services/email.js';
 import type { User } from '../types.js';
 
@@ -448,6 +449,39 @@ router.get('/me', authMiddleware, async (req: Request, res: Response) => {
     company: user.company || null,
     onboardingRequired: !user.onboarding_completed && config.deployMode === 'pro-out',
     termsRequired: !(user as any).terms_accepted_at && config.deployMode === 'pro-panjit',
+  });
+});
+
+/* ============================================================
+   GET /api/auth/permissions — get effective permissions for current user
+   ============================================================ */
+router.get('/permissions', authMiddleware, async (req: Request, res: Response) => {
+  const user = await dbGet<{ role: string }>('SELECT role FROM users WHERE id = ?', req.user!.userId);
+  const role = user?.role || 'user';
+
+  // Admin gets full access
+  if (role === 'admin') {
+    res.json({ adminSidebar: ['*'], frontendNav: ['*'], features: ['*'] });
+    return;
+  }
+
+  const perms = await getRolePermissions();
+
+  if (role === 'readonly') {
+    res.json({
+      adminSidebar: perms.adminSidebar.readonly || [],
+      adminSidebarOperate: perms.adminSidebar.readonlyOperate || [],
+      frontendNav: perms.frontendNav.readonly || [],
+      features: perms.features.readonly || [],
+    });
+    return;
+  }
+
+  // Regular user
+  res.json({
+    adminSidebar: [],
+    frontendNav: perms.frontendNav.user || [],
+    features: perms.features.user || [],
   });
 });
 

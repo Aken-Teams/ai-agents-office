@@ -8,6 +8,7 @@ import { loadSkills } from '../skills/loader.js';
 import { config } from '../config.js';
 import { applyWatermark } from '../services/watermark.js';
 import { getUserUsageLimitUsd, setUserUsageLimitUsd, getUserDisplayCost, getEffectiveUserLimit, getStorageQuotaGb, setStorageQuotaGb, getUploadQuotaMb, setUploadQuotaMb } from '../services/usageLimit.js';
+import { getRolePermissions, setRolePermissions, type RolePermissions } from '../services/rolePermissions.js';
 
 const router = Router();
 router.use(adminMiddleware);
@@ -1843,6 +1844,25 @@ router.get('/org/domains', (_req: Request, res: Response) => {
     return res.status(403).json({ error: 'Not available in this deployment mode' });
   }
   res.json({ domains: AD_DOMAINS });
+});
+
+// ==================== Permissions ====================
+
+// GET /api/admin/permissions — get role permissions config
+router.get('/permissions', async (_req: Request, res: Response) => {
+  const perms = await getRolePermissions();
+  res.json(perms);
+});
+
+// PUT /api/admin/permissions — update role permissions config (admin only, readonly blocked by middleware)
+router.put('/permissions', async (req: Request, res: Response) => {
+  const body = req.body as RolePermissions;
+  if (!body || !body.adminSidebar || !body.frontendNav || !body.features) {
+    res.status(400).json({ error: 'Invalid permissions format' });
+    return;
+  }
+  await setRolePermissions(body);
+  res.json({ success: true });
 });
 
 export default router;

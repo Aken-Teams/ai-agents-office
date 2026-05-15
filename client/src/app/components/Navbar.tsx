@@ -15,13 +15,13 @@ const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
 const isPanjit = deployMode === 'pro-panjit';
 
 const NAV_LINKS = [
-  { href: '/dashboard', labelKey: 'nav.dashboard' as const, icon: 'dashboard' },
-  { href: '/assistant', labelKey: 'nav.assistant' as const, icon: 'smart_toy' },
-  { href: '/conversations', labelKey: 'nav.conversations' as const, icon: 'chat' },
-  { href: '/files', labelKey: 'nav.files' as const, icon: 'folder_open' },
-  { href: '/usage', labelKey: 'nav.usage' as const, icon: 'bar_chart' },
-  { href: '/memories', labelKey: 'nav.memories' as const, icon: 'psychology' },
-  { href: '/guide', labelKey: 'nav.guide' as const, icon: 'menu_book' },
+  { href: '/dashboard', permKey: 'dashboard', labelKey: 'nav.dashboard' as const, icon: 'dashboard' },
+  { href: '/assistant', permKey: 'assistant', labelKey: 'nav.assistant' as const, icon: 'smart_toy' },
+  { href: '/conversations', permKey: 'conversations', labelKey: 'nav.conversations' as const, icon: 'chat' },
+  { href: '/files', permKey: 'files', labelKey: 'nav.files' as const, icon: 'folder_open' },
+  { href: '/usage', permKey: 'usage', labelKey: 'nav.usage' as const, icon: 'bar_chart' },
+  { href: '/memories', permKey: 'memories', labelKey: 'nav.memories' as const, icon: 'psychology' },
+  { href: '/guide', permKey: 'guide', labelKey: 'nav.guide' as const, icon: 'menu_book' },
 ];
 
 const DOC_TYPES = [
@@ -120,7 +120,7 @@ const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
 ];
 
 export default function Navbar() {
-  const { user, token, logout, updateUser } = useAuth();
+  const { user, token, logout, updateUser, hasPermission } = useAuth();
   const { locale, theme, setLocale, setTheme, t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
@@ -554,7 +554,7 @@ export default function Navbar() {
             <div className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${mobileUserExpanded ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'}`}>
               <div className="overflow-hidden">
                 <nav className="py-1 border-t border-outline-variant/10">
-                  {NAV_LINKS.map(link => {
+                  {NAV_LINKS.filter(l => hasPermission('frontendNav', l.permKey)).map(link => {
                     const isActive = pathname === link.href;
                     return (
                       <Link
@@ -625,7 +625,7 @@ export default function Navbar() {
 
         {/* Navigation */}
         <nav className={`flex-1 space-y-1 ${collapsed ? 'px-2' : 'px-4'}`}>
-          {NAV_LINKS.map(link => {
+          {NAV_LINKS.filter(l => hasPermission('frontendNav', l.permKey)).map(link => {
             const isActive = pathname === link.href;
             return (
               <Link
@@ -1479,7 +1479,7 @@ export default function Navbar() {
         </div>
       )}
       {/* Email Agent Widget — pro-panjit only */}
-      {isPanjit && <EmailAgentWidget />}
+      {isPanjit && hasPermission('features', 'email-agent') && <EmailAgentWidget />}
 
       {/* Terms Modal */}
       {showTermsModal && (
