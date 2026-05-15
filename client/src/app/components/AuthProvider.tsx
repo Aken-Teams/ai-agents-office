@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import TermsModal from './TermsModal';
 
 interface User {
   id: string;
@@ -39,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const router = useRouter();
 
   // Check stored token on mount
@@ -64,8 +66,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     setUser(data);
     setIsLoading(false);
-    if (data.termsRequired || data.onboardingRequired) {
+    if (data.onboardingRequired) {
       router.replace('/onboarding');
+    } else if (data.termsRequired) {
+      setShowTermsModal(true);
     }
   }
 
@@ -181,6 +185,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{ user, token, isLoading, login, loginWithGoogle, register, verifyEmail, resendCode, logout, updateUser }}>
       {children}
+      {showTermsModal && token && (
+        <TermsModal token={token} onAccepted={() => setShowTermsModal(false)} />
+      )}
     </AuthContext.Provider>
   );
 }
