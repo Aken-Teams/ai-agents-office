@@ -91,7 +91,18 @@ export default function EmailAgentWidget() {
     // Load persisted state
     try {
       const saved = localStorage.getItem(STORAGE_KEY_POS);
-      if (saved) setBubblePos(JSON.parse(saved));
+      if (saved) {
+        const pos = JSON.parse(saved) as { x: number; y: number };
+        // Validate position is within current viewport
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        if (pos.x > 20 && pos.x < vw - 20 && pos.y > 20 && pos.y < vh - 20) {
+          setBubblePos(pos);
+        } else {
+          // Stored position is off-screen, discard it
+          localStorage.removeItem(STORAGE_KEY_POS);
+        }
+      }
       setHidden(localStorage.getItem(STORAGE_KEY_HIDDEN) === 'true');
       setSoundMuted(localStorage.getItem(STORAGE_KEY_MUTE) === 'true');
     } catch {}
@@ -515,21 +526,20 @@ export default function EmailAgentWidget() {
     { icon: 'shield', label: '資安檢查', message: '最近收到的信件有沒有資安風險或可疑內容？' },
   ];
 
-  // Compute bubble position style
-  const defaultBottom = typeof window !== 'undefined' && window.innerWidth >= 768 ? 24 : 16;
-  const defaultRight = typeof window !== 'undefined' && window.innerWidth >= 768 ? 24 : 16;
-  const bubbleSize = typeof window !== 'undefined' && window.innerWidth >= 768 ? 56 : 48;
+  // Compute bubble position style (mounted guard already ensures window is available)
+  const isMd = window.innerWidth >= 768;
+  const bubbleSize = isMd ? 56 : 48;
   const bubbleStyle: React.CSSProperties = bubblePos
     ? { left: bubblePos.x - bubbleSize / 2, top: bubblePos.y - bubbleSize / 2, right: 'auto', bottom: 'auto' }
-    : { right: defaultRight, bottom: defaultBottom };
+    : {}; // use CSS classes for default position
 
-  // Determine which side the bubble is on (for hidden strip and panel positioning)
-  const isOnLeft = bubblePos ? bubblePos.x < (typeof window !== 'undefined' ? window.innerWidth / 2 : 500) : false;
+  // Determine which side the bubble is on
+  const isOnLeft = bubblePos ? bubblePos.x < window.innerWidth / 2 : false;
 
   // Hidden strip position
   const hiddenStripStyle: React.CSSProperties = bubblePos
     ? { top: bubblePos.y - 24, [isOnLeft ? 'left' : 'right']: 0 }
-    : { bottom: defaultBottom + bubbleSize / 2 - 24, right: 0 };
+    : { bottom: isMd ? 48 : 40, right: 0 };
 
   const widget = (
     <>
@@ -564,9 +574,11 @@ export default function EmailAgentWidget() {
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           className={`fixed z-[90] w-12 h-12 md:w-14 md:h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 select-none touch-none ${
+            bubblePos ? '' : 'bottom-4 right-4 md:bottom-6 md:right-6'
+          } ${
             expanded ? 'bg-surface-container-high text-on-surface scale-90 max-md:hidden' : 'bg-primary text-on-primary hover:shadow-2xl'
-          } ${bubbleBounce && !expanded ? 'animate-bounce' : ''} ${dragState.current?.moved ? 'cursor-grabbing' : 'cursor-grab'}`}
-          style={bubbleStyle}
+          } ${bubbleBounce && !expanded ? 'animate-bounce' : ''}`}
+          style={bubblePos ? bubbleStyle : undefined}
           title={t('emailAgent.title' as any) || '信件助手'}
         >
           <span className="material-symbols-outlined text-xl md:text-2xl pointer-events-none">

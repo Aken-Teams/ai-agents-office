@@ -11,7 +11,7 @@ import { getMailToken, fetchMessages, fetchMessageDetail, type OutlookMessage } 
 import { pushEvent, getLastSeenIds, updateLastSeenIds } from './emailAgentRegistry.js';
 import { buildEmailAgentMemoryContext } from './emailAgentMemory.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
-import { dbAll } from '../db.js';
+import { dbAll, dbGet } from '../db.js';
 
 const LAYER1_TIMEOUT = 25_000; // 25s for batch summary
 const LAYER2_TIMEOUT = 60_000; // 60s for deep analysis
@@ -147,12 +147,18 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
   let token = await getMailToken(userId);
 
   // On initial connect, the AD login may still be authenticating Outlook (fire-and-forget).
-  // Retry a few times with a short delay before giving up.
+  // Only retry if the user has stored credentials (AD user) but token isn't ready yet.
   if (!token && isInitial) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      await new Promise(r => setTimeout(r, 3000));
-      token = await getMailToken(userId);
-      if (token) break;
+    const hasCredentials = await dbGet<{ credentials_enc: string | null }>(
+      'SELECT credentials_enc FROM outlook_tokens WHERE user_id = ?', userId
+    );
+    if (hasCredentials?.credentials_enc) {
+      // AD user — token is being created, wait briefly
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await new Promise(r => setTimeout(r, 2000));
+        token = await getMailToken(userId);
+        if (token) break;
+      }
     }
   }
 
