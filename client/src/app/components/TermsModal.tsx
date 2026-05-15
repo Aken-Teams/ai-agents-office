@@ -138,7 +138,7 @@ export default function TermsModal({ token, onAccepted }: TermsModalProps) {
                     ),
                     table: ({ children, ...props }) => (
                       <div className="overflow-x-auto my-3 md:my-4 rounded-xl border border-outline-variant/15 bg-surface-container/50 -mx-1">
-                        <table className="w-full text-[12px] md:text-[13px] min-w-[420px]" {...props}>{children}</table>
+                        <table className="w-full text-[12px] md:text-[13px] min-w-[520px]" {...props}>{children}</table>
                       </div>
                     ),
                     thead: ({ children, ...props }) => (
@@ -148,7 +148,7 @@ export default function TermsModal({ token, onAccepted }: TermsModalProps) {
                       <th className="text-left px-3 md:px-4 py-2 md:py-2.5 font-semibold text-on-surface text-[11px] md:text-xs uppercase tracking-wider border-b border-outline-variant/15 whitespace-nowrap" {...props}>{children}</th>
                     ),
                     td: ({ children, ...props }) => (
-                      <td className="px-3 md:px-4 py-2 md:py-2.5 text-on-surface-variant border-b border-outline-variant/8" {...props}>{children}</td>
+                      <td className="px-3 md:px-4 py-2 md:py-2.5 text-on-surface-variant border-b border-outline-variant/8 align-top" {...props}>{children}</td>
                     ),
                     tr: ({ children, ...props }) => (
                       <tr className="transition-colors hover:bg-surface-container-high/30" {...props}>{children}</tr>
