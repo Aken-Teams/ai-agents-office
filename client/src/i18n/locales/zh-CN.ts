@@ -972,6 +972,7 @@ const zhCN = {
 
   // Admin Settings - Personal Preferences section
   // Terms of Service
+  'userMenu.terms': '系统使用规范',
   'terms.title': '系统使用规范与管理办法',
   'terms.subtitle': '请详阅以下使用条款，滚动至底部后方可同意。',
   'terms.scrollHint': '请滚动阅读完整条款',

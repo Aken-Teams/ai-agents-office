@@ -976,6 +976,7 @@ const zhTW = {
 
   // Admin Settings - Personal Preferences section
   // Terms of Service
+  'userMenu.terms': '系統使用規範',
   'terms.title': '系統使用規範與管理辦法',
   'terms.subtitle': '請詳閱以下使用條款，捲動至底部後方可同意。',
   'terms.scrollHint': '請捲動閱讀完整條款',

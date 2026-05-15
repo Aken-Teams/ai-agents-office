@@ -953,6 +953,7 @@ const en = {
   'admin.settings.info.uploadTitle': 'Upload Storage',
   'admin.settings.info.uploadDesc': 'Limits total uploaded analysis files per user. Includes CSV, Excel, JSON files for AI analysis.',
   // Terms of Service
+  'userMenu.terms': 'Terms of Service',
   'terms.title': 'Terms of Service',
   'terms.subtitle': 'Please read the terms below. Scroll to the bottom to accept.',
   'terms.scrollHint': 'Scroll to read full terms',

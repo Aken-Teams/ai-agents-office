@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useAuth } from './AuthProvider';
 import { useTranslation } from '../../i18n';
 import type { Locale, Theme } from '../../i18n/types';
@@ -150,6 +152,9 @@ export default function Navbar() {
   const [saved, setSaved] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileUserExpanded, setMobileUserExpanded] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [termsContent, setTermsContent] = useState('');
+  const [termsLoading, setTermsLoading] = useState(false);
 
   // AI Memory state
   const [memories, setMemories] = useState<Array<{ id: string; content: string; category: string; created_at: string }>>([]);
@@ -238,6 +243,18 @@ export default function Navbar() {
     await setTheme(newTheme);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  }
+
+  function openTermsModal() {
+    setShowTermsModal(true);
+    if (!termsContent && !termsLoading) {
+      setTermsLoading(true);
+      const token = localStorage.getItem('token');
+      fetch('/api/auth/terms', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data?.content) setTermsContent(data.content); setTermsLoading(false); })
+        .catch(() => setTermsLoading(false));
+    }
   }
 
   const isOAuthOnly = user.oauthProvider && user.hasPassword === false;
@@ -579,9 +596,20 @@ export default function Navbar() {
               </div>
             </div>
 
-            {/* Developer Footer */}
-            <div className="py-3 border-t border-outline-variant/10">
-              <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className="text-[11px] text-outline hover:text-on-surface-variant transition-colors no-underline block text-center">
+            {/* Footer */}
+            <div className="py-3 border-t border-outline-variant/10 flex items-center justify-center gap-3">
+              {isPanjit && (
+                <>
+                  <button
+                    onClick={() => { setMobileMenuOpen(false); openTermsModal(); }}
+                    className="text-[11px] text-outline active:text-on-surface-variant transition-colors bg-transparent cursor-pointer"
+                  >
+                    {t('userMenu.terms' as any) || '系統使用規範'}
+                  </button>
+                  <span className="text-outline text-[11px]">·</span>
+                </>
+              )}
+              <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className="text-[11px] text-outline hover:text-on-surface-variant transition-colors no-underline">
                 {t('nav.poweredBy')} &copy; 2026
               </a>
             </div>
@@ -921,7 +949,24 @@ export default function Navbar() {
           </div>
 
           {/* Footer */}
-          <div className="mt-3 pt-3 border-t border-outline-variant/10 px-3">
+          <div className="mt-3 pt-3 border-t border-outline-variant/10 px-3 flex flex-col items-center gap-1">
+            {isPanjit && !collapsed && (
+              <button
+                onClick={openTermsModal}
+                className="text-[11px] text-outline hover:text-on-surface-variant transition-colors bg-transparent cursor-pointer"
+              >
+                {t('userMenu.terms' as any) || '系統使用規範'}
+              </button>
+            )}
+            {isPanjit && collapsed && (
+              <button
+                onClick={openTermsModal}
+                className="text-outline hover:text-on-surface-variant transition-colors bg-transparent cursor-pointer"
+                title={t('userMenu.terms' as any) || '系統使用規範'}
+              >
+                <span className="material-symbols-outlined text-sm">gavel</span>
+              </button>
+            )}
             <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className={`text-outline hover:text-on-surface-variant transition-colors no-underline block text-center ${collapsed ? 'text-sm' : 'text-[11px]'}`}>
               {collapsed ? '©' : <>{t('nav.poweredBy')} &copy; 2026</>}
             </a>
@@ -1461,6 +1506,83 @@ export default function Navbar() {
       )}
       {/* Email Agent Widget — pro-panjit only */}
       {isPanjit && <EmailAgentWidget />}
+
+      {/* Terms Modal */}
+      {showTermsModal && (
+        <div className="fixed inset-0 z-[200] flex items-end md:items-center md:justify-center md:p-4" onClick={() => setShowTermsModal(false)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div
+            className="relative bg-surface-container shadow-2xl border border-outline-variant/20 w-full flex flex-col rounded-t-2xl max-h-[85vh] md:rounded-2xl md:max-w-2xl md:max-h-[80vh]"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Drag handle (mobile) */}
+            <div className="flex justify-center pt-2 pb-0 md:hidden">
+              <div className="w-8 h-1 rounded-full bg-outline-variant/30" />
+            </div>
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 md:px-5 md:py-4 border-b border-outline-variant/10 shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-base md:text-lg">gavel</span>
+                <h2 className="text-[13px] md:text-sm font-headline font-bold text-on-surface">{t('userMenu.terms' as any) || '系統使用規範'}</h2>
+              </div>
+              <button
+                onClick={() => setShowTermsModal(false)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container-high transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 md:px-5 md:py-5 min-h-0 overscroll-contain">
+              {termsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <span className="material-symbols-outlined animate-spin text-primary text-2xl">progress_activity</span>
+                </div>
+              ) : !termsContent ? (
+                <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant">
+                  <span className="material-symbols-outlined text-2xl mb-2 opacity-40">description</span>
+                  <p className="text-xs">{t('common.noData' as any) || '尚無資料'}</p>
+                </div>
+              ) : (
+                <article className="text-on-surface leading-relaxed">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      h1: ({ children, ...props }) => <h1 className="text-sm md:text-base font-bold text-on-surface mt-0 mb-2.5 pb-2 border-b border-outline-variant/15" {...props}>{children}</h1>,
+                      h2: ({ children, ...props }) => <h2 className="text-[13px] md:text-sm font-bold text-on-surface mt-4 mb-1.5" {...props}>{children}</h2>,
+                      h3: ({ children, ...props }) => <h3 className="text-xs md:text-[13px] font-semibold text-on-surface mt-3 mb-1" {...props}>{children}</h3>,
+                      p: ({ children, ...props }) => <p className="mb-2 last:mb-0 leading-relaxed text-on-surface-variant text-xs" {...props}>{children}</p>,
+                      ul: ({ children, ...props }) => <ul className="list-disc pl-4 mb-2 space-y-0.5" {...props}>{children}</ul>,
+                      ol: ({ children, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5" {...props}>{children}</ol>,
+                      li: ({ children, ...props }) => <li className="leading-relaxed text-on-surface-variant text-xs" {...props}>{children}</li>,
+                      strong: ({ children, ...props }) => <strong className="font-semibold text-on-surface" {...props}>{children}</strong>,
+                      blockquote: ({ children, ...props }) => (
+                        <blockquote className="border-l-2 border-primary/30 pl-3 my-2 text-on-surface-variant bg-primary/5 rounded-r-lg py-1.5 pr-3 text-xs" {...props}>{children}</blockquote>
+                      ),
+                      table: ({ children }) => <div className="my-2.5 space-y-1.5">{children}</div>,
+                      thead: () => null,
+                      tbody: ({ children }) => <div className="space-y-1.5">{children}</div>,
+                      tr: ({ children }) => (
+                        <div className="bg-surface-container-high/60 rounded-lg px-3 py-2 space-y-0.5">{children}</div>
+                      ),
+                      th: () => null,
+                      td: ({ children }) => (
+                        <div className="text-xs leading-relaxed text-on-surface-variant first:text-[13px] first:font-medium first:text-on-surface [&:nth-child(2)]:text-primary [&:nth-child(2)]:font-semibold last:text-[11px] last:text-on-surface-variant/70">{children}</div>
+                      ),
+                      hr: (props) => <hr className="my-3 border-outline-variant/15" {...props} />,
+                      a: ({ children, href, ...props }) => (
+                        <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" {...props}>{children}</a>
+                      ),
+                    }}
+                  >
+                    {termsContent}
+                  </ReactMarkdown>
+                </article>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
