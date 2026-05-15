@@ -8,7 +8,7 @@ import { dbGet, dbRun } from '../db.js';
 import { pollNewEmails } from './emailAgentPoller.js';
 
 const KEEPALIVE_INTERVAL = 10_000;   // 10s
-const POLL_INTERVAL = 3 * 60_000;    // 3 min
+const POLL_INTERVAL = 60_000;         // 1 min
 
 export interface EmailAgentEvent {
   type: 'new_emails' | 'ai_analysis' | 'ai_response_delta' | 'ai_response_done'
@@ -17,13 +17,34 @@ export interface EmailAgentEvent {
 }
 
 interface UserConnection {
+  id: number;          // unique connection ID to prevent stale close handlers
   res: Response;
-  pollTimer: NodeJS.Timeout;
-  keepaliveTimer: NodeJS.Timeout;
+  pollTimer: ReturnType<typeof setTimeout>;
+  keepaliveTimer: ReturnType<typeof setInterval>;
   lastSeenIds: Set<string>;
 }
 
+let nextConnId = 1;
+
 const connections = new Map<string, UserConnection>();
+
+/** Schedule the next regular poll using setTimeout (self-rescheduling). */
+function scheduleNextPoll(userId: string): void {
+  const conn = connections.get(userId);
+  if (!conn) return;
+
+  conn.pollTimer = setTimeout(async () => {
+    if (!connections.has(userId)) return;
+    console.log(`[EmailAgent] Regular poll tick for user ${userId}`);
+    try {
+      await pollNewEmails(userId, false);
+    } catch (err) {
+      console.error(`[EmailAgent] Poll error for ${userId}:`, err);
+    }
+    // Schedule next poll (self-rescheduling chain)
+    scheduleNextPoll(userId);
+  }, POLL_INTERVAL);
+}
 
 /**
  * Register a new SSE connection for a user.
@@ -43,28 +64,32 @@ export async function registerConnection(userId: string, res: Response): Promise
     state?.last_seen_ids ? JSON.parse(state.last_seen_ids) : []
   );
 
-  // Keepalive timer
+  // Keepalive timer — detect dead connections
   const keepaliveTimer = setInterval(() => {
-    try { res.write(': keepalive\n\n'); } catch { /* closed */ }
+    try {
+      res.write(': keepalive\n\n');
+    } catch {
+      console.warn(`[EmailAgent] Keepalive write failed for ${userId}, cleaning up`);
+      unregisterConnection(userId);
+    }
   }, KEEPALIVE_INTERVAL);
 
-  // Poll timer — initial poll sends welcome batch, then regular polls every 3 min
-  const doRegularPoll = () => {
-    pollNewEmails(userId, false).catch(err =>
-      console.error(`[EmailAgent] Poll error for ${userId}:`, err)
-    );
-  };
-  // Initial poll: always send recent unread emails
-  pollNewEmails(userId, true).catch(err =>
-    console.error(`[EmailAgent] Initial poll error for ${userId}:`, err)
-  );
-  const pollTimer = setInterval(doRegularPoll, POLL_INTERVAL);
-
-  connections.set(userId, { res, pollTimer, keepaliveTimer, lastSeenIds });
+  // Store connection FIRST so pollNewEmails can find it via getLastSeenIds
+  const connId = nextConnId++;
+  const conn: UserConnection = { id: connId, res, pollTimer: null as any, keepaliveTimer, lastSeenIds };
+  connections.set(userId, conn);
 
   // Send connected status
   pushEvent(userId, { type: 'status', data: { connected: true } });
   console.log(`[EmailAgent] User ${userId} connected (${connections.size} total)`);
+
+  // Initial poll: always send recent unread emails
+  pollNewEmails(userId, true).catch(err =>
+    console.error(`[EmailAgent] Initial poll error for ${userId}:`, err)
+  );
+
+  // Start the recurring poll chain (self-rescheduling setTimeout)
+  scheduleNextPoll(userId);
 }
 
 /**
@@ -75,7 +100,7 @@ export function unregisterConnection(userId: string): void {
   if (!conn) return;
 
   clearInterval(conn.keepaliveTimer);
-  clearInterval(conn.pollTimer);
+  clearTimeout(conn.pollTimer);
 
   // Persist last-seen IDs (fire-and-forget)
   const idsArray = [...conn.lastSeenIds].slice(0, 50); // cap stored IDs
@@ -92,15 +117,20 @@ export function unregisterConnection(userId: string): void {
 
 /**
  * Push an SSE event to a connected user.
+ * Returns false if the write failed (connection likely dead).
  */
-export function pushEvent(userId: string, event: EmailAgentEvent): void {
+export function pushEvent(userId: string, event: EmailAgentEvent): boolean {
   const conn = connections.get(userId);
-  if (!conn) return;
+  if (!conn) return false;
   try {
     conn.res.write(`data: ${JSON.stringify(event)}\n\n`);
+    return true;
   } catch {
-    // Connection broken — clean up
-    unregisterConnection(userId);
+    // Connection broken — log but don't unregister here.
+    // The keepalive timer or req.on('close') will handle cleanup.
+    // This prevents killing poll timers mid-flight.
+    console.warn(`[EmailAgent] pushEvent write failed for ${userId} (event=${event.type})`);
+    return false;
   }
 }
 
@@ -121,4 +151,23 @@ export function updateLastSeenIds(userId: string, ids: Set<string>): void {
 
 export function isConnected(userId: string): boolean {
   return connections.has(userId);
+}
+
+/**
+ * Get the current connection ID for a user.
+ * Used by the route close handler to avoid killing a newer connection.
+ */
+export function getConnectionId(userId: string): number | null {
+  return connections.get(userId)?.id ?? null;
+}
+
+/**
+ * Safely unregister only if the connection ID matches (prevents stale close handlers
+ * from killing a newer connection that replaced the old one).
+ */
+export function unregisterIfMatch(userId: string, connId: number): void {
+  const conn = connections.get(userId);
+  if (conn && conn.id === connId) {
+    unregisterConnection(userId);
+  }
 }

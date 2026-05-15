@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
 import { dbGet, dbAll, dbRun } from '../db.js';
-import { registerConnection, unregisterConnection, pushEvent, isConnected } from '../services/emailAgentRegistry.js';
+import { registerConnection, unregisterConnection, pushEvent, isConnected, getConnectionId, unregisterIfMatch } from '../services/emailAgentRegistry.js';
 import { generateLayer2Analysis } from '../services/emailAgentPoller.js';
 import { extractEmailAgentMemory, buildEmailAgentMemoryContext } from '../services/emailAgentMemory.js';
 import { resolveClaudeCliPath } from '../services/resolveClaudeCli.js';
@@ -42,9 +42,15 @@ router.get('/events', async (req: Request, res: Response) => {
   // Register this connection (starts polling + keepalive)
   await registerConnection(userId, res);
 
-  // Clean up on disconnect
+  // Capture the connection ID so the close handler only kills THIS connection,
+  // not a newer one that replaced it during reconnection.
+  const connId = getConnectionId(userId);
+
+  // Clean up on disconnect — only if this connection is still active
   req.on('close', () => {
-    unregisterConnection(userId);
+    if (connId !== null) {
+      unregisterIfMatch(userId, connId);
+    }
   });
 });
 

@@ -75,6 +75,8 @@ export default function EmailAgentWidget() {
   const [bubbleBounce, setBubbleBounce] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [soundMuted, setSoundMuted] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimer = useRef<NodeJS.Timeout | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -283,6 +285,42 @@ export default function EmailAgentWidget() {
   const soundMutedRef = useRef(soundMuted);
   useEffect(() => { soundMutedRef.current = soundMuted; }, [soundMuted]);
 
+  // Generate a friendly AI toast message for new emails
+  const generateToastMessage = useCallback((newEmails: EmailNotification[]) => {
+    const count = newEmails.length;
+    const highPri = newEmails.filter(e => e.priority === '高');
+    const firstFrom = newEmails[0]?.from?.name || newEmails[0]?.from?.address || '';
+
+    if (highPri.length > 0) {
+      const msgs = [
+        `⚡ 有 ${highPri.length} 封重要信件剛到！要不要先看一下？`,
+        `🔔 注意！有封來自 ${highPri[0].from.name || highPri[0].from.address} 的重要信，建議優先處理～`,
+        `📮 ${highPri.length} 封高優先信件進來了，幫你標記好了！`,
+      ];
+      return msgs[Math.floor(Math.random() * msgs.length)];
+    }
+    if (count === 1) {
+      const msgs = [
+        `📬 有你的信喔～ 來自 ${firstFrom}，要看一下嗎？`,
+        `✉️ ${firstFrom} 寄了封信給你，我先幫你看過了～`,
+        `💌 嘿！剛收到一封新信，寄件者是 ${firstFrom}`,
+      ];
+      return msgs[Math.floor(Math.random() * msgs.length)];
+    }
+    const msgs = [
+      `📬 有 ${count} 封新信進來囉！我已經幫你整理好摘要了～`,
+      `✉️ 收到 ${count} 封新郵件，要不要看一下重點？`,
+      `💌 嘿！${count} 封新信到了，幫你標好優先級了！`,
+    ];
+    return msgs[Math.floor(Math.random() * msgs.length)];
+  }, []);
+
+  const showToast = useCallback((message: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToastMessage(message);
+    toastTimer.current = setTimeout(() => setToastMessage(null), 8000);
+  }, []);
+
   const handleEvent = useCallback((event: { type: string; data?: any }) => {
     switch (event.type) {
       case 'new_emails': {
@@ -290,11 +328,12 @@ export default function EmailAgentWidget() {
         setNotifications(prev => {
           const existing = new Set(prev.map(n => n.emailId));
           const newOnes = (emails as EmailNotification[]).filter(e => !existing.has(e.emailId));
-          // Bounce bubble + play sound when new emails arrive (not initial load)
+          // Bounce bubble + play sound + show toast when new emails arrive (not initial load)
           if (!isInitialLoad.current && newOnes.length > 0) {
             setBubbleBounce(true);
             setTimeout(() => setBubbleBounce(false), 2000);
             if (!soundMutedRef.current) playNotificationSound();
+            showToast(generateToastMessage(newOnes));
           }
           isInitialLoad.current = false;
           return [...newOnes, ...prev].slice(0, 50);
@@ -568,31 +607,70 @@ export default function EmailAgentWidget() {
 
       {/* Floating Bubble (visible when not hidden) */}
       {!hidden && (
-        <button
-          ref={bubbleRef}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          className={`fixed z-[90] w-12 h-12 md:w-14 md:h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 select-none touch-none ${
-            bubblePos ? '' : 'bottom-4 right-4 md:bottom-6 md:right-6'
-          } ${
-            expanded ? 'bg-surface-container-high text-on-surface scale-90 max-md:hidden' : 'bg-primary text-on-primary hover:shadow-2xl'
-          } ${bubbleBounce && !expanded ? 'animate-bounce' : ''}`}
-          style={bubblePos ? bubbleStyle : undefined}
-          title={t('emailAgent.title' as any) || '信件助手'}
-        >
-          <span className="material-symbols-outlined text-xl md:text-2xl pointer-events-none">
-            {expanded ? 'close' : 'smart_toy'}
-          </span>
-          {!expanded && badgeCount > 0 && (
-            <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] md:min-w-[20px] md:h-5 flex items-center justify-center bg-error text-on-error text-[10px] md:text-xs font-bold rounded-full px-1 animate-in zoom-in duration-200 pointer-events-none">
-              {badgeCount > 99 ? '99+' : badgeCount}
+        <>
+          <button
+            ref={bubbleRef}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            className={`fixed z-[90] w-12 h-12 md:w-14 md:h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 select-none touch-none ${
+              bubblePos ? '' : 'bottom-4 right-4 md:bottom-6 md:right-6'
+            } ${
+              expanded ? 'bg-surface-container-high text-on-surface scale-90 max-md:hidden' : 'bg-primary text-on-primary hover:shadow-2xl'
+            } ${bubbleBounce && !expanded ? 'animate-bounce' : ''}`}
+            style={bubblePos ? bubbleStyle : undefined}
+            title={t('emailAgent.title' as any) || '信件助手'}
+          >
+            <span className="material-symbols-outlined text-xl md:text-2xl pointer-events-none">
+              {expanded ? 'close' : 'smart_toy'}
             </span>
+            {!expanded && badgeCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] md:min-w-[20px] md:h-5 flex items-center justify-center bg-error text-on-error text-[10px] md:text-xs font-bold rounded-full px-1 animate-in zoom-in duration-200 pointer-events-none">
+                {badgeCount > 99 ? '99+' : badgeCount}
+              </span>
+            )}
+            {!expanded && connected && (
+              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 md:w-3 md:h-3 bg-success rounded-full border-2 border-surface pointer-events-none" />
+            )}
+          </button>
+
+          {/* AI Toast Notification Bubble */}
+          {toastMessage && !expanded && (
+            <div
+              className="fixed z-[91] animate-in slide-in-from-bottom-2 fade-in duration-300"
+              style={bubblePos ? {
+                ...(isOnLeft
+                  ? { left: bubblePos.x + bubbleSize / 2 + 12 }
+                  : { right: window.innerWidth - bubblePos.x + bubbleSize / 2 + 12 }),
+                top: bubblePos.y - bubbleSize / 2,
+              } : {
+                right: bubbleSize + (isMd ? 24 + 12 : 16 + 12),
+                bottom: isMd ? 24 : 16,
+              }}
+            >
+              <div
+                className="w-[260px] md:w-[300px] bg-surface-container-high border border-outline-variant/20 rounded-2xl shadow-xl px-3.5 py-2.5 cursor-pointer hover:bg-surface-container-highest transition-colors"
+                onClick={() => { setToastMessage(null); setExpanded(true); }}
+              >
+                <div className="flex items-start gap-2">
+                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <span className="material-symbols-outlined text-primary text-sm">smart_toy</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs md:text-sm text-on-surface leading-relaxed">{toastMessage}</p>
+                    <p className="text-[10px] md:text-xs text-on-surface-variant/60 mt-1">點擊查看詳情</p>
+                  </div>
+                  <button
+                    className="shrink-0 text-on-surface-variant/40 hover:text-on-surface-variant mt-0.5"
+                    onClick={(e) => { e.stopPropagation(); setToastMessage(null); }}
+                  >
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
-          {!expanded && connected && (
-            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 md:w-3 md:h-3 bg-success rounded-full border-2 border-surface pointer-events-none" />
-          )}
-        </button>
+        </>
       )}
 
       {/* Expanded Panel */}

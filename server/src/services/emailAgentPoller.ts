@@ -168,10 +168,16 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
   }
 
   const { messages, total } = await fetchMessages(token, 'Inbox', 30, 0);
-  if (!messages.length) return;
+  if (!messages.length) {
+    console.log(`[EmailAgent] No messages returned for user ${userId} (initial=${isInitial})`);
+    return;
+  }
 
   const lastSeenIds = getLastSeenIds(userId);
-  if (!lastSeenIds) return;
+  if (!lastSeenIds) {
+    console.warn(`[EmailAgent] No connection found for user ${userId} during poll, skipping`);
+    return;
+  }
 
   // Count total unread
   const totalUnread = messages.filter(m => !m.is_read).length;
