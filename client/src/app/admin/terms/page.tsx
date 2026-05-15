@@ -163,7 +163,8 @@ export default function AdminTermsPage() {
 }
 
 function AdminTermsContent() {
-  const { token, isReadonly } = useAdminAuth();
+  const { token, isReadonly, canOperate } = useAdminAuth();
+  const editable = !isReadonly || canOperate('terms');
   const { t } = useTranslation();
   const [content, setContent] = useState('');
   const [version, setVersion] = useState('1');
@@ -189,7 +190,7 @@ function AdminTermsContent() {
   }, [token]);
 
   async function handleSave() {
-    if (!token || saving || isReadonly) return;
+    if (!token || saving || !editable) return;
     setSaving(true);
     setSaved(false);
     try {
@@ -300,7 +301,7 @@ function AdminTermsContent() {
                 key={p.key}
                 type="button"
                 onClick={() => {
-                  if (isReadonly) return;
+                  if (!editable) return;
                   const ta = textareaRef.current;
                   if (!ta) return;
                   const scrollTop = ta.scrollTop;
@@ -331,7 +332,7 @@ function AdminTermsContent() {
           {!showPreview ? (
             <div className="w-full h-full flex flex-col bg-surface-container-high rounded-xl border border-outline-variant/15 focus-within:border-primary/40 transition-colors overflow-hidden">
               {/* Toolbar */}
-              {!isReadonly && (
+              {editable && (
                 <MarkdownToolbar textareaRef={textareaRef} content={content} setContent={setContent} />
               )}
               <div className="relative flex-1 min-h-[300px] overflow-hidden">
@@ -355,7 +356,7 @@ function AdminTermsContent() {
                       backdropRef.current.scrollTop = textareaRef.current.scrollTop;
                     }
                   }}
-                  disabled={isReadonly}
+                  disabled={!editable}
                   className="absolute inset-0 w-full h-full bg-transparent p-4 md:p-6 text-sm font-mono resize-none focus:outline-none selection:bg-primary/30"
                   style={{ color: 'transparent', caretColor: 'var(--color-on-surface, #1b1b1f)', WebkitTextFillColor: 'transparent' }}
                   placeholder={'# 使用條款標題\n\n## 第一章 總則\n\n使用條款內容...\n\n- 項目一\n- 項目二\n\n> 引用文字\n\n| 欄位 | 說明 |\n| --- | --- |\n| 項目 | 內容 |'}
@@ -401,7 +402,7 @@ function AdminTermsContent() {
         </div>
 
         {/* Save options */}
-        {!isReadonly && (
+        {editable && (
           <div className="bg-surface-container rounded-xl p-4 md:p-5 space-y-4">
             <div className="flex flex-col sm:flex-row gap-4">
               {/* Bump version toggle */}

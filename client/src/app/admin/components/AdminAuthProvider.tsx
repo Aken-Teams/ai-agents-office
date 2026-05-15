@@ -14,6 +14,7 @@ interface AdminUser {
 
 interface Permissions {
   adminSidebar: string[];
+  adminSidebarOperate: string[];
   frontendNav: string[];
   features: string[];
 }
@@ -25,6 +26,7 @@ interface AdminAuthContextType {
   isReadonly: boolean;
   permissions: Permissions | null;
   hasPermission: (category: keyof Permissions, key: string) => boolean;
+  canOperate: (pageKey: string) => boolean;
   logout: () => void;
 }
 
@@ -47,6 +49,13 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     if (!permissions) return false;
     const list = permissions[category];
     return list.includes('*') || list.includes(key);
+  }, [permissions]);
+
+  const canOperate = useCallback((pageKey: string): boolean => {
+    if (!permissions) return false;
+    // Admin can always operate
+    if (permissions.adminSidebarOperate?.includes('*')) return true;
+    return permissions.adminSidebarOperate?.includes(pageKey) ?? false;
   }, [permissions]);
 
   useEffect(() => {
@@ -93,7 +102,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const isReadonly = user?.role === 'readonly';
 
   return (
-    <AdminAuthContext.Provider value={{ user, token, isLoading, isReadonly, permissions, hasPermission, logout }}>
+    <AdminAuthContext.Provider value={{ user, token, isLoading, isReadonly, permissions, hasPermission, canOperate, logout }}>
       {children}
     </AdminAuthContext.Provider>
   );

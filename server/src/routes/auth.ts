@@ -461,7 +461,7 @@ router.get('/permissions', authMiddleware, async (req: Request, res: Response) =
 
   // Admin gets full access
   if (role === 'admin') {
-    res.json({ adminSidebar: ['*'], frontendNav: ['*'], features: ['*'] });
+    res.json({ adminSidebar: ['*'], adminSidebarOperate: ['*'], frontendNav: ['*'], features: ['*'] });
     return;
   }
 
@@ -480,6 +480,7 @@ router.get('/permissions', authMiddleware, async (req: Request, res: Response) =
   // Regular user
   res.json({
     adminSidebar: [],
+    adminSidebarOperate: [],
     frontendNav: perms.frontendNav.user || [],
     features: perms.features.user || [],
   });
