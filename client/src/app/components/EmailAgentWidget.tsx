@@ -32,11 +32,30 @@ interface ChatMessage {
 
 type TabId = 'mail' | 'chat';
 
-// Play a short notification sound using Web Audio API
+// Shared AudioContext — unlocked on first user interaction, reused for all notifications
+let _audioCtx: AudioContext | null = null;
+
+/** Call on any user click to unlock audio for future notifications */
+function unlockAudio() {
+  if (_audioCtx) {
+    if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
+    return;
+  }
+  try {
+    _audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    // Play silent buffer to fully unlock on iOS/Safari
+    const buf = _audioCtx.createBuffer(1, 1, 22050);
+    const src = _audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(_audioCtx.destination);
+    src.start(0);
+  } catch { /* Audio not available */ }
+}
+
 function playNotificationSound() {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    // Two-tone chime
+    const ctx = _audioCtx;
+    if (!ctx || ctx.state === 'suspended') return; // Not unlocked yet
     const playTone = (freq: number, start: number, dur: number) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -44,14 +63,14 @@ function playNotificationSound() {
       gain.connect(ctx.destination);
       osc.type = 'sine';
       osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.15, ctx.currentTime + start);
+      gain.gain.setValueAtTime(0.4, ctx.currentTime + start);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
       osc.start(ctx.currentTime + start);
       osc.stop(ctx.currentTime + start + dur);
     };
-    playTone(880, 0, 0.15);
-    playTone(1100, 0.12, 0.2);
-    setTimeout(() => ctx.close(), 500);
+    playTone(784, 0, 0.12);
+    playTone(988, 0.1, 0.12);
+    playTone(1175, 0.2, 0.18);
   } catch { /* Audio not available */ }
 }
 
@@ -109,7 +128,10 @@ export default function EmailAgentWidget() {
       setHidden(localStorage.getItem(STORAGE_KEY_HIDDEN) === 'true');
       setSoundMuted(localStorage.getItem(STORAGE_KEY_MUTE) === 'true');
     } catch {}
-    return () => setMounted(false);
+    // Unlock audio on any page interaction
+    const onInteract = () => { unlockAudio(); document.removeEventListener('click', onInteract); };
+    document.addEventListener('click', onInteract);
+    return () => { setMounted(false); document.removeEventListener('click', onInteract); };
   }, []);
 
   // Cycle through loading stage messages while loading
@@ -285,36 +307,8 @@ export default function EmailAgentWidget() {
 
   const soundMutedRef = useRef(soundMuted);
   useEffect(() => { soundMutedRef.current = soundMuted; }, [soundMuted]);
-
-  // Generate a friendly AI toast message for new emails
-  const generateToastMessage = useCallback((newEmails: EmailNotification[]) => {
-    const count = newEmails.length;
-    const highPri = newEmails.filter(e => e.priority === '高');
-    const firstFrom = newEmails[0]?.from?.name || newEmails[0]?.from?.address || '';
-
-    if (highPri.length > 0) {
-      const msgs = [
-        `⚡ 有 ${highPri.length} 封重要信件剛到！要不要先看一下？`,
-        `🔔 注意！有封來自 ${highPri[0].from.name || highPri[0].from.address} 的重要信，建議優先處理～`,
-        `📮 ${highPri.length} 封高優先信件進來了，幫你標記好了！`,
-      ];
-      return msgs[Math.floor(Math.random() * msgs.length)];
-    }
-    if (count === 1) {
-      const msgs = [
-        `📬 有你的信喔～ 來自 ${firstFrom}，要看一下嗎？`,
-        `✉️ ${firstFrom} 寄了封信給你，我先幫你看過了～`,
-        `💌 嘿！剛收到一封新信，寄件者是 ${firstFrom}`,
-      ];
-      return msgs[Math.floor(Math.random() * msgs.length)];
-    }
-    const msgs = [
-      `📬 有 ${count} 封新信進來囉！我已經幫你整理好摘要了～`,
-      `✉️ 收到 ${count} 封新郵件，要不要看一下重點？`,
-      `💌 嘿！${count} 封新信到了，幫你標好優先級了！`,
-    ];
-    return msgs[Math.floor(Math.random() * msgs.length)];
-  }, []);
+  const expandedRef = useRef(expanded);
+  useEffect(() => { expandedRef.current = expanded; }, [expanded]);
 
   const showToast = useCallback((message: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -340,12 +334,16 @@ export default function EmailAgentWidget() {
             }
           }
 
-          // Bounce bubble + play sound + show toast when new emails arrive (not initial load)
-          if (!isInitialLoad.current && brandNew.length > 0) {
+          // Play sound + toast for new emails (Phase 1 initial or subsequent polls)
+          if (brandNew.length > 0) {
             setBubbleBounce(true);
             setTimeout(() => setBubbleBounce(false), 2000);
             if (!soundMutedRef.current) playNotificationSound();
-            showToast(generateToastMessage(brandNew));
+            // Simple toast — details are inside the widget
+            const msg = brandNew.length === 1
+              ? `📬 收到 1 封新信`
+              : `📬 收到 ${brandNew.length} 封新信`;
+            if (!expandedRef.current) showToast(msg);
           }
           isInitialLoad.current = false;
 
@@ -603,7 +601,7 @@ export default function EmailAgentWidget() {
         <div
           className={`fixed z-[90] group cursor-pointer`}
           style={hiddenStripStyle}
-          onClick={() => { setHidden(false); localStorage.setItem(STORAGE_KEY_HIDDEN, 'false'); }}
+          onClick={() => { unlockAudio(); setHidden(false); localStorage.setItem(STORAGE_KEY_HIDDEN, 'false'); }}
         >
           <div className={`flex items-center gap-1 bg-primary/90 text-on-primary py-2 px-1.5 shadow-lg transition-all duration-200 group-hover:px-3 ${
             isOnLeft ? 'rounded-r-xl' : 'rounded-l-xl'
@@ -630,6 +628,7 @@ export default function EmailAgentWidget() {
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onClick={() => {
+              unlockAudio();
               if (wasDrag.current) { wasDrag.current = false; return; }
               setExpanded(prev => !prev);
               setBubbleBounce(false);
@@ -671,7 +670,7 @@ export default function EmailAgentWidget() {
             >
               <div
                 className="w-[260px] md:w-[300px] bg-surface-container-high border border-outline-variant/20 rounded-2xl shadow-xl px-3.5 py-2.5 cursor-pointer hover:bg-surface-container-highest transition-colors"
-                onClick={() => { setToastMessage(null); setExpanded(true); }}
+                onClick={() => { unlockAudio(); setToastMessage(null); setExpanded(true); }}
               >
                 <div className="flex items-start gap-2">
                   <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
