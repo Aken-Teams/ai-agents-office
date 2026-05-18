@@ -31,6 +31,15 @@ export interface EmailSummary {
 /**
  * Spawn Claude CLI for a one-shot prompt, collect text output.
  */
+/**
+ * Detect whether stderr indicates an account quota / rate limit error.
+ */
+function isQuotaLimitError(text: string): boolean {
+  if (/you[''\u2019]ve hit your limit/i.test(text)) return true;
+  if (/rate.?limit|too many requests|429/i.test(text) && text.length < 500) return true;
+  return false;
+}
+
 function spawnClaudeOneShot(prompt: string, timeoutMs: number): Promise<string | null> {
   return new Promise((resolve) => {
     const resolvedCmd = resolveClaudeCliPath(config.claudeCliPath);
@@ -47,95 +56,113 @@ function spawnClaudeOneShot(prompt: string, timeoutMs: number): Promise<string |
     const tmpDir = path.join(config.workspaceRoot, '_email_agent', spawnId);
     fs.mkdirSync(tmpDir, { recursive: true });
 
-    const cleanEnv = { ...process.env };
-    for (const key of Object.keys(cleanEnv)) {
-      if (key.toUpperCase().startsWith('CLAUDE')) delete cleanEnv[key];
-    }
+    function doSpawn(useApiKey: boolean) {
+      const cleanEnv = { ...process.env };
+      for (const key of Object.keys(cleanEnv)) {
+        if (key.toUpperCase().startsWith('CLAUDE') || key === 'ANTHROPIC_API_KEY') {
+          delete cleanEnv[key];
+        }
+      }
+      if (useApiKey && config.anthropicApiKey) {
+        cleanEnv['ANTHROPIC_API_KEY'] = config.anthropicApiKey;
+      }
 
-    let proc;
-    try {
-      proc = spawn(resolvedCmd.bin, [...resolvedCmd.prefix, ...args], {
-        cwd: tmpDir,
-        shell: false,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: cleanEnv,
-      });
-    } catch (err) {
-      console.error('[EmailAgent] Failed to spawn Claude CLI:', err);
-      cleanup();
-      resolve(null);
-      return;
-    }
+      const modeLabel = useApiKey ? '(API Key)' : '(account)';
 
-    proc.stdin!.write(prompt);
-    proc.stdin!.end();
+      let proc: ReturnType<typeof spawn>;
+      try {
+        proc = spawn(resolvedCmd.bin, [...resolvedCmd.prefix, ...args], {
+          cwd: tmpDir,
+          shell: false,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: cleanEnv,
+        });
+      } catch (err) {
+        console.error(`[EmailAgent] Failed to spawn Claude CLI ${modeLabel}:`, err);
+        cleanup();
+        resolve(null);
+        return;
+      }
 
-    let output = '';
-    let stderrOutput = '';
-    let stdoutBuffer = '';
-    let rawLines = 0;
+      proc.stdin!.write(prompt);
+      proc.stdin!.end();
 
-    proc.stdout!.on('data', (data: Buffer) => {
-      stdoutBuffer += data.toString();
-      const lines = stdoutBuffer.split('\n');
-      stdoutBuffer = lines.pop() || '';
+      let output = '';
+      let stderrOutput = '';
+      let stdoutBuffer = '';
+      let rawLines = 0;
 
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        rawLines++;
-        try {
-          const parsed = JSON.parse(line);
-          // Handle all known event types from Claude CLI stream-json
-          if (parsed.type === 'content_block_delta') {
-            const delta = parsed.delta;
-            if (delta?.type === 'text_delta' && delta.text) {
-              output += delta.text;
-            }
-          } else if (parsed.type === 'assistant') {
-            const content = parsed.message?.content;
-            if (Array.isArray(content)) {
-              for (const block of content) {
-                if (block.type === 'text' && block.text) output += block.text;
+      proc.stdout!.on('data', (data: Buffer) => {
+        stdoutBuffer += data.toString();
+        const lines = stdoutBuffer.split('\n');
+        stdoutBuffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          rawLines++;
+          try {
+            const parsed = JSON.parse(line);
+            if (parsed.type === 'content_block_delta') {
+              const delta = parsed.delta;
+              if (delta?.type === 'text_delta' && delta.text) {
+                output += delta.text;
+              }
+            } else if (parsed.type === 'assistant') {
+              const content = parsed.message?.content;
+              if (Array.isArray(content)) {
+                for (const block of content) {
+                  if (block.type === 'text' && block.text) output += block.text;
+                }
+              }
+            } else if (parsed.type === 'result') {
+              const text = parsed.result;
+              if (typeof text === 'string' && text && !output) {
+                output = text;
               }
             }
-          } else if (parsed.type === 'result') {
-            // Newer Claude CLI versions emit a final 'result' event
-            const text = parsed.result;
-            if (typeof text === 'string' && text && !output) {
-              output = text;
-            }
-          }
-        } catch { /* skip malformed */ }
-      }
-    });
+          } catch { /* skip malformed */ }
+        }
+      });
 
-    proc.stderr!.on('data', (data: Buffer) => {
-      const msg = data.toString().trim();
-      if (msg) {
-        stderrOutput += msg + '\n';
-        console.warn(`[EmailAgent CLI stderr] ${msg.substring(0, 300)}`);
-      }
-    });
+      proc.stderr!.on('data', (data: Buffer) => {
+        const msg = data.toString().trim();
+        if (msg) {
+          stderrOutput += msg + '\n';
+          console.warn(`[EmailAgent CLI stderr] ${msg.substring(0, 300)}`);
+        }
+      });
+
+      const timeout = setTimeout(() => {
+        try { proc.kill(); } catch {}
+        console.warn(`[EmailAgent] Claude ${modeLabel} timed out after ${timeoutMs}ms (rawLines=${rawLines}, outputLen=${output.length})`);
+        cleanup();
+        resolve(output || null);
+      }, timeoutMs);
+
+      proc.on('exit', (code) => {
+        clearTimeout(timeout);
+
+        // API key fallback: quota hit + no output + API key available → retry
+        if (!useApiKey && code !== 0 && !output
+            && isQuotaLimitError(stderrOutput) && config.anthropicApiKey) {
+          console.log(`[EmailAgent] Account quota exhausted, retrying with API key...`);
+          doSpawn(true);
+          return;
+        }
+
+        if (!output && (code !== 0 || stderrOutput)) {
+          console.error(`[EmailAgent] Claude ${modeLabel} exited code=${code}, rawLines=${rawLines}, stderr=${stderrOutput.substring(0, 500)}`);
+        }
+        cleanup();
+        resolve(output || null);
+      });
+    }
 
     function cleanup() {
       try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
     }
 
-    const timeout = setTimeout(() => {
-      try { proc.kill(); } catch {}
-      console.warn(`[EmailAgent] Claude timed out after ${timeoutMs}ms (rawLines=${rawLines}, outputLen=${output.length})`);
-      cleanup();
-      resolve(output || null);
-    }, timeoutMs);
-
-    proc.on('exit', (code) => {
-      clearTimeout(timeout);
-      if (!output && (code !== 0 || stderrOutput)) {
-        console.error(`[EmailAgent] Claude exited code=${code}, rawLines=${rawLines}, stderr=${stderrOutput.substring(0, 500)}`);
-      }
-      cleanup();
-      resolve(output || null);
-    });
+    doSpawn(false);
   });
 }
 
@@ -202,7 +229,27 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
 
   console.log(`[EmailAgent] ${emailsToSummarize.length} emails to summarize for user ${userId} (initial=${isInitial})`);
 
-  // Generate Layer 1 summaries + overview
+  // Initial load: send basic info first so client exits loading spinner fast,
+  // then update with AI summaries. Subsequent polls: wait for AI before notifying.
+  if (isInitial) {
+    const basicSummaries: EmailSummary[] = emailsToSummarize.map(email => ({
+      emailId: email.id,
+      subject: email.subject,
+      from: email.from,
+      receivedAt: email.received_at,
+      isRead: email.is_read,
+      hasAttachments: email.has_attachments,
+      summary: email.subject,
+      priority: '中' as const,
+      category: '一般',
+    }));
+    pushEvent(userId, {
+      type: 'new_emails',
+      data: { emails: basicSummaries, totalUnread, total, overview: '' },
+    });
+  }
+
+  // Generate AI summaries (Layer 1)
   const { summaries, overview } = await generateLayer1Summary(userId, emailsToSummarize);
 
   pushEvent(userId, {

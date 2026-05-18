@@ -87,6 +87,7 @@ export default function EmailAgentWidget() {
   const bubbleRef = useRef<HTMLButtonElement>(null);
   const [bubblePos, setBubblePos] = useState<{ x: number; y: number } | null>(null);
   const dragState = useRef<{ startX: number; startY: number; startBX: number; startBY: number; moved: boolean } | null>(null);
+  const wasDrag = useRef(false);
 
   useEffect(() => {
     setMounted(true);
@@ -326,17 +327,31 @@ export default function EmailAgentWidget() {
       case 'new_emails': {
         const { emails, totalUnread: unread, overview: ov } = event.data;
         setNotifications(prev => {
-          const existing = new Set(prev.map(n => n.emailId));
-          const newOnes = (emails as EmailNotification[]).filter(e => !existing.has(e.emailId));
+          const existingMap = new Map(prev.map(n => [n.emailId, n]));
+          const incoming = emails as EmailNotification[];
+          const brandNew: EmailNotification[] = [];
+
+          for (const e of incoming) {
+            if (existingMap.has(e.emailId)) {
+              // Update existing entry (AI summary replacing placeholder)
+              existingMap.set(e.emailId, { ...existingMap.get(e.emailId)!, ...e });
+            } else {
+              brandNew.push(e);
+            }
+          }
+
           // Bounce bubble + play sound + show toast when new emails arrive (not initial load)
-          if (!isInitialLoad.current && newOnes.length > 0) {
+          if (!isInitialLoad.current && brandNew.length > 0) {
             setBubbleBounce(true);
             setTimeout(() => setBubbleBounce(false), 2000);
             if (!soundMutedRef.current) playNotificationSound();
-            showToast(generateToastMessage(newOnes));
+            showToast(generateToastMessage(brandNew));
           }
           isInitialLoad.current = false;
-          return [...newOnes, ...prev].slice(0, 50);
+
+          // Merge: new emails on top, then updated existing ones
+          const updated = [...existingMap.values()];
+          return [...brandNew, ...updated].slice(0, 50);
         });
         if (unread !== undefined) setTotalUnread(unread);
         if (ov) setOverview(ov);
@@ -409,7 +424,10 @@ export default function EmailAgentWidget() {
 
   // ─── Drag handlers ───
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    if (expanded) return;
+    if (expanded) {
+      // Expanded: treat as simple click, no drag
+      return;
+    }
     const el = bubbleRef.current;
     if (!el) return;
     el.setPointerCapture(e.pointerId);
@@ -455,11 +473,9 @@ export default function EmailAgentWidget() {
       const pos = { x: snapX, y: snapY };
       setBubblePos(pos);
       localStorage.setItem(STORAGE_KEY_POS, JSON.stringify(pos));
-    } else {
-      // It was a click, not a drag
-      setExpanded(prev => !prev);
-      setBubbleBounce(false);
+      wasDrag.current = true;
     }
+    // Click is handled by onClick, not here
   }, [bubblePos]);
 
   // Toggle hidden state
@@ -613,7 +629,12 @@ export default function EmailAgentWidget() {
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            className={`fixed z-[90] w-12 h-12 md:w-14 md:h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 select-none touch-none ${
+            onClick={() => {
+              if (wasDrag.current) { wasDrag.current = false; return; }
+              setExpanded(prev => !prev);
+              setBubbleBounce(false);
+            }}
+            className={`fixed ${expanded ? 'z-[96]' : 'z-[90]'} w-12 h-12 md:w-14 md:h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 select-none touch-none ${
               bubblePos ? '' : 'bottom-4 right-4 md:bottom-6 md:right-6'
             } ${
               expanded ? 'bg-surface-container-high text-on-surface scale-90 max-md:hidden' : 'bg-primary text-on-primary hover:shadow-2xl'
