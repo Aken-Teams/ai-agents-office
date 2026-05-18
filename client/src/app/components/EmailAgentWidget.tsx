@@ -32,46 +32,67 @@ interface ChatMessage {
 
 type TabId = 'mail' | 'chat';
 
-// Shared AudioContext — unlocked on first user interaction, reused for all notifications
-let _audioCtx: AudioContext | null = null;
+// --- Notification sound ---
+// Key: reuse the SAME Audio element that was first played during a user gesture.
+// Chrome ties autoplay permission to the element instance, so creating new Audio()
+// each time loses the gesture association and gets blocked in background/hidden mode.
+let _audioEl: HTMLAudioElement | null = null;
+let _audioUrl: string | null = null;
 
-/** Call on any user click to unlock audio for future notifications */
+function getAudioUrl(): string {
+  if (_audioUrl) return _audioUrl;
+  const sr = 22050, dur = 0.4, n = Math.floor(sr * dur);
+  const buf = new ArrayBuffer(44 + n * 2);
+  const v = new DataView(buf);
+  const ws = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  ws(0,'RIFF'); v.setUint32(4,36+n*2,true); ws(8,'WAVE'); ws(12,'fmt ');
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,sr,true); v.setUint32(28,sr*2,true); v.setUint16(32,2,true);
+  v.setUint16(34,16,true); ws(36,'data'); v.setUint32(40,n*2,true);
+  const tones = [{f:784,s:0,d:0.12},{f:988,s:0.1,d:0.12},{f:1175,s:0.2,d:0.18}];
+  for (let i = 0; i < n; i++) {
+    const t = i / sr; let sample = 0;
+    for (const tone of tones) {
+      if (t >= tone.s && t < tone.s + tone.d) {
+        sample += Math.sin(2 * Math.PI * tone.f * t) * 0.4 * Math.exp(-(t - tone.s) * 10);
+      }
+    }
+    v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, sample)) * 32767, true);
+  }
+  _audioUrl = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  return _audioUrl;
+}
+
+/** Call on any user click — creates & plays the Audio element within a gesture */
 function unlockAudio() {
-  if (_audioCtx) {
-    if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
+  if (_audioEl) return; // already unlocked
+  try {
+    _audioEl = new Audio(getAudioUrl());
+    _audioEl.volume = 0.01;
+    _audioEl.play().then(() => {
+      _audioEl!.pause();
+      _audioEl!.currentTime = 0;
+      _audioEl!.volume = 1;
+    }).catch(() => {});
+  } catch {}
+}
+
+/** Replay the same gesture-associated Audio element */
+function playNotificationSound() {
+  if (!_audioEl) {
+    // Last resort: try to create & play even without gesture (works if MEI is high)
+    try {
+      _audioEl = new Audio(getAudioUrl());
+      _audioEl.volume = 1;
+      _audioEl.play().catch(() => { _audioEl = null; });
+    } catch {}
     return;
   }
   try {
-    _audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    // Play silent buffer to fully unlock on iOS/Safari
-    const buf = _audioCtx.createBuffer(1, 1, 22050);
-    const src = _audioCtx.createBufferSource();
-    src.buffer = buf;
-    src.connect(_audioCtx.destination);
-    src.start(0);
-  } catch { /* Audio not available */ }
-}
-
-function playNotificationSound() {
-  try {
-    const ctx = _audioCtx;
-    if (!ctx || ctx.state === 'suspended') return; // Not unlocked yet
-    const playTone = (freq: number, start: number, dur: number) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.4, ctx.currentTime + start);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-      osc.start(ctx.currentTime + start);
-      osc.stop(ctx.currentTime + start + dur);
-    };
-    playTone(784, 0, 0.12);
-    playTone(988, 0.1, 0.12);
-    playTone(1175, 0.2, 0.18);
-  } catch { /* Audio not available */ }
+    _audioEl.currentTime = 0;
+    _audioEl.volume = 1;
+    _audioEl.play().catch(() => {});
+  } catch {}
 }
 
 export default function EmailAgentWidget() {
@@ -128,8 +149,11 @@ export default function EmailAgentWidget() {
       setHidden(localStorage.getItem(STORAGE_KEY_HIDDEN) === 'true');
       setSoundMuted(localStorage.getItem(STORAGE_KEY_MUTE) === 'true');
     } catch {}
-    // Unlock audio on any page interaction
-    const onInteract = () => { unlockAudio(); document.removeEventListener('click', onInteract); };
+    // Unlock audio on any page interaction — keep retrying until successful
+    const onInteract = () => {
+      unlockAudio();
+      if (_audioEl) document.removeEventListener('click', onInteract);
+    };
     document.addEventListener('click', onInteract);
     return () => { setMounted(false); document.removeEventListener('click', onInteract); };
   }, []);
