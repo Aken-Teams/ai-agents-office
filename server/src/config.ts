@@ -37,6 +37,8 @@ export const config = {
 
   // Claude CLI
   claudeCliPath: process.env.CLAUDE_CLI_PATH || 'claude',
+  // Anthropic API Key — fallback when account quota is exhausted
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '',
 
   // Google OAuth
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',

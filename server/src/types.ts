@@ -68,7 +68,7 @@ export interface TokenUsage {
 export interface SSEEvent {
   type:
     | 'text' | 'thinking' | 'tool_activity' | 'file_generated' | 'usage'
-    | 'done' | 'error' | 'session_id'
+    | 'done' | 'error' | 'info' | 'session_id'
     // Multi-agent orchestration events
     | 'task_dispatched' | 'task_completed' | 'task_failed'
     | 'pipeline_started' | 'pipeline_completed'

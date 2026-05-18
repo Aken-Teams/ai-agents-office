@@ -50,6 +50,16 @@ function humanizeClaudeError(text: string): string | null {
   return null;
 }
 
+/**
+ * Detect whether stderr indicates an account quota / rate limit error
+ * that can be retried with an API key.
+ */
+function isQuotaLimitError(text: string): boolean {
+  if (/you[''\u2019]ve hit your limit/i.test(text)) return true;
+  if (/rate.?limit|too many requests|429/i.test(text) && text.length < 500) return true;
+  return false;
+}
+
 export interface ClaudeCliOptions {
   userId: string;
   conversationId: string;
@@ -60,6 +70,7 @@ export interface ClaudeCliOptions {
   customAllowedTools?: string[];        // Override default allowed tools
   customDisallowedTools?: string[];     // Override default disallowed tools
   sandboxSubdir?: string;              // Subdirectory within sandbox (e.g. _agents/research)
+  useApiKey?: boolean;                 // Internal: force API key auth (set by retry logic)
 }
 
 interface ClaudeResult {
@@ -121,6 +132,9 @@ const ROUTER_DISALLOWED_TOOLS = [
  * System prompt is written to CLAUDE.md in the sandbox directory,
  * which Claude CLI reads automatically. This avoids Windows command line
  * length limits and special character escaping issues.
+ *
+ * When the account quota is exhausted and ANTHROPIC_API_KEY is configured,
+ * the function transparently retries with API key authentication.
  */
 export function spawnClaude(
   message: string,
@@ -143,6 +157,7 @@ export function spawnClaude(
   const claudeMdPath = path.join(sandboxPath, 'CLAUDE.md');
   fs.writeFileSync(claudeMdPath, systemPrompt, 'utf-8');
 
+  // Build CLI arguments (shared across retries)
   const args: string[] = [
     '-p',                              // Print mode (non-interactive)
     '--output-format', 'stream-json',  // Structured streaming output
@@ -180,137 +195,170 @@ export function spawnClaude(
     args.push('--max-turns', '1');
   }
 
-  // Clean environment to prevent nested Claude session detection
-  // Remove ALL Claude-related env vars (inherited from VSCode extension, etc.)
-  const cleanEnv = { ...process.env };
-  for (const key of Object.keys(cleanEnv)) {
-    if (key.toUpperCase().startsWith('CLAUDE')) {
-      delete cleanEnv[key];
-    }
-  }
-
   // Resolve the actual Claude CLI script path to avoid shell:true issues on Windows
   // npm global installs create .cmd wrappers that can break under concurrently/tsx
   const resolvedCmd = resolveClaudeCliPath(config.claudeCliPath);
 
   const logRole = options.role || 'worker';
   const logSkill = options.skillId || 'unknown';
-  console.log(`[Claude CLI] Spawning ${logRole}/${logSkill} for conversation ${options.conversationId} (cwd: ${sandboxPath})`);
-  console.log(`[Claude CLI]   allowedTools: ${allowedTools.join(',')}`);
-  console.log(`[Claude CLI]   args: ${args.join(' ')}`);
 
-  let proc: ChildProcess;
-  try {
-    proc = spawn(resolvedCmd.bin, [...resolvedCmd.prefix, ...args], {
-      cwd: sandboxPath,
-      shell: false,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: cleanEnv,
-    });
-  } catch (error) {
-    console.error('[Claude CLI] Spawn failed:', error);
-    emitter.emit('event', {
-      type: 'error',
-      data: `Failed to spawn Claude CLI: ${error}`,
-    } satisfies SSEEvent);
-    emitter.emit('event', {
-      type: 'done',
-      data: { exitCode: 1 },
-    } satisfies SSEEvent);
-    return { emitter, abort: () => {}, sessionId: options.sessionId };
-  }
+  // Mutable reference so abort() always targets the active process
+  let currentProc: ChildProcess | null = null;
 
-  // Write user message to stdin
-  proc.stdin!.write(message);
-  proc.stdin!.end();
-
-  // Accumulated token counts
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let model = '';
-  let stdoutBuffer = '';
-
-  // Parse stream-json output line by line
-  proc.stdout!.on('data', (data: Buffer) => {
-    const chunk = data.toString();
-    stdoutBuffer += chunk;
-    const lines = stdoutBuffer.split('\n');
-    stdoutBuffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const parsed = JSON.parse(line);
-        processStreamEvent(parsed, emitter, {
-          getInputTokens: () => inputTokens,
-          getOutputTokens: () => outputTokens,
-          addInputTokens: (n: number) => { inputTokens += n; },
-          addOutputTokens: (n: number) => { outputTokens += n; },
-          setModel: (m: string) => { model = m; },
-        });
-      } catch {
-        // Skip malformed JSON lines
+  /**
+   * Inner spawn function — called once normally, and optionally a second time
+   * with API key authentication if the first attempt hits account quota limits.
+   */
+  function doSpawn(useApiKey: boolean) {
+    // Clean environment to prevent nested Claude session detection
+    // Remove Claude-related AND Anthropic API key vars (control auth explicitly)
+    const cleanEnv = { ...process.env };
+    for (const key of Object.keys(cleanEnv)) {
+      if (key.toUpperCase().startsWith('CLAUDE') || key === 'ANTHROPIC_API_KEY') {
+        delete cleanEnv[key];
       }
     }
-  });
 
-  // Capture stderr for debugging
-  let stderrBuffer = '';
-  proc.stderr!.on('data', (data: Buffer) => {
-    const chunk = data.toString();
-    stderrBuffer += chunk;
-    console.error(`[Claude CLI stderr] ${chunk.trim()}`);
-  });
-
-  // Process exit
-  proc.on('exit', (code) => {
-    console.log(`[Claude CLI] ${logRole}/${logSkill} exited with code ${code}`);
-    if (stderrBuffer) {
-      console.error(`[Claude CLI] ${logRole}/${logSkill} stderr:\n${stderrBuffer.substring(0, 1000)}`);
+    // API key fallback mode: inject ANTHROPIC_API_KEY for CLI to use
+    if (useApiKey && config.anthropicApiKey) {
+      cleanEnv['ANTHROPIC_API_KEY'] = config.anthropicApiKey;
     }
 
-    if (code !== 0 && !inputTokens) {
-      console.error(`[Claude CLI] ${logRole}/${logSkill} FAILED: code=${code}, inputTokens=0, stderr=${stderrBuffer.substring(0, 500)}`);
-      const fallback = 'AI 處理程序發生非預期錯誤，請稍後再試。';
+    const modeLabel = useApiKey ? '(API Key fallback)' : '(account)';
+    console.log(`[Claude CLI] Spawning ${logRole}/${logSkill} ${modeLabel} for conversation ${options.conversationId} (cwd: ${sandboxPath})`);
+    console.log(`[Claude CLI]   allowedTools: ${allowedTools.join(',')}`);
+    console.log(`[Claude CLI]   args: ${args.join(' ')}`);
+
+    let proc: ChildProcess;
+    try {
+      proc = spawn(resolvedCmd.bin, [...resolvedCmd.prefix, ...args], {
+        cwd: sandboxPath,
+        shell: false,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: cleanEnv,
+      });
+    } catch (error) {
+      console.error('[Claude CLI] Spawn failed:', error);
       emitter.emit('event', {
         type: 'error',
-        data: humanizeClaudeError(stderrBuffer) || fallback,
+        data: `Failed to spawn Claude CLI: ${error}`,
       } satisfies SSEEvent);
+      emitter.emit('event', {
+        type: 'done',
+        data: { exitCode: 1 },
+      } satisfies SSEEvent);
+      return;
     }
 
-    // Emit final usage
-    emitter.emit('event', {
-      type: 'usage',
-      data: { inputTokens, outputTokens, model },
-    } satisfies SSEEvent);
+    currentProc = proc;
 
-    // Emit done
-    emitter.emit('event', {
-      type: 'done',
-      data: { exitCode: code, stderr: stderrBuffer || undefined },
-    } satisfies SSEEvent);
-  });
+    // Write user message to stdin
+    proc.stdin!.write(message);
+    proc.stdin!.end();
 
-  proc.on('error', (error) => {
-    console.error('[Claude CLI] Process error:', error);
-    emitter.emit('event', {
-      type: 'error',
-      data: humanizeClaudeError(error.message) || `AI 處理程序發生錯誤，請稍後再試。`,
-    } satisfies SSEEvent);
-    emitter.emit('event', {
-      type: 'done',
-      data: { exitCode: 1 },
-    } satisfies SSEEvent);
-  });
+    // Accumulated token counts (per-attempt)
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let model = '';
+    let stdoutBuffer = '';
+
+    // Parse stream-json output line by line
+    proc.stdout!.on('data', (data: Buffer) => {
+      const chunk = data.toString();
+      stdoutBuffer += chunk;
+      const lines = stdoutBuffer.split('\n');
+      stdoutBuffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const parsed = JSON.parse(line);
+          processStreamEvent(parsed, emitter, {
+            getInputTokens: () => inputTokens,
+            getOutputTokens: () => outputTokens,
+            addInputTokens: (n: number) => { inputTokens += n; },
+            addOutputTokens: (n: number) => { outputTokens += n; },
+            setModel: (m: string) => { model = m; },
+          });
+        } catch {
+          // Skip malformed JSON lines
+        }
+      }
+    });
+
+    // Capture stderr for debugging
+    let stderrBuffer = '';
+    proc.stderr!.on('data', (data: Buffer) => {
+      const chunk = data.toString();
+      stderrBuffer += chunk;
+      console.error(`[Claude CLI stderr] ${chunk.trim()}`);
+    });
+
+    // Process exit
+    proc.on('exit', (code) => {
+      console.log(`[Claude CLI] ${logRole}/${logSkill} ${modeLabel} exited with code ${code}`);
+      if (stderrBuffer) {
+        console.error(`[Claude CLI] ${logRole}/${logSkill} stderr:\n${stderrBuffer.substring(0, 1000)}`);
+      }
+
+      // --- API Key Fallback ---
+      // If account quota hit (no output produced) and API key is available, retry transparently.
+      // Suppress error/usage/done for this failed attempt; the retry will emit them.
+      if (!useApiKey && code !== 0 && !inputTokens
+          && isQuotaLimitError(stderrBuffer) && config.anthropicApiKey) {
+        console.log(`[Claude CLI] Account quota exhausted for ${logRole}/${logSkill}, retrying with API key...`);
+        doSpawn(true);
+        return;
+      }
+
+      if (code !== 0 && !inputTokens) {
+        console.error(`[Claude CLI] ${logRole}/${logSkill} FAILED: code=${code}, inputTokens=0, stderr=${stderrBuffer.substring(0, 500)}`);
+        const fallback = 'AI 處理程序發生非預期錯誤，請稍後再試。';
+        emitter.emit('event', {
+          type: 'error',
+          data: humanizeClaudeError(stderrBuffer) || fallback,
+        } satisfies SSEEvent);
+      }
+
+      // Emit final usage
+      emitter.emit('event', {
+        type: 'usage',
+        data: { inputTokens, outputTokens, model },
+      } satisfies SSEEvent);
+
+      // Emit done
+      emitter.emit('event', {
+        type: 'done',
+        data: { exitCode: code, stderr: stderrBuffer || undefined },
+      } satisfies SSEEvent);
+    });
+
+    proc.on('error', (error) => {
+      console.error('[Claude CLI] Process error:', error);
+      emitter.emit('event', {
+        type: 'error',
+        data: humanizeClaudeError(error.message) || `AI 處理程序發生錯誤，請稍後再試。`,
+      } satisfies SSEEvent);
+      emitter.emit('event', {
+        type: 'done',
+        data: { exitCode: 1 },
+      } satisfies SSEEvent);
+    });
+  }
+
+  // Start first attempt with account auth (or forced API key if explicitly set)
+  doSpawn(options.useApiKey || false);
 
   return {
     emitter,
     abort: () => {
       try {
-        if (process.platform === 'win32') {
-          spawn('taskkill', ['/pid', String(proc.pid), '/f', '/t'], { shell: true });
-        } else {
-          proc.kill('SIGTERM');
+        if (currentProc) {
+          if (process.platform === 'win32') {
+            spawn('taskkill', ['/pid', String(currentProc.pid), '/f', '/t'], { shell: true });
+          } else {
+            currentProc.kill('SIGTERM');
+          }
         }
       } catch { /* ignore */ }
     },
