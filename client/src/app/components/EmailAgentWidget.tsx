@@ -343,7 +343,7 @@ export default function EmailAgentWidget() {
             const msg = brandNew.length === 1
               ? `📬 收到 1 封新信`
               : `📬 收到 ${brandNew.length} 封新信`;
-            if (!expandedRef.current) showToast(msg);
+            showToast(msg);
           }
           isInitialLoad.current = false;
 
@@ -358,9 +358,16 @@ export default function EmailAgentWidget() {
       }
       case 'ai_analysis': {
         const { emailId, analysis } = event.data;
-        setNotifications(prev => prev.map(n =>
-          n.emailId === emailId ? { ...n, analysis, analyzing: false } : n
-        ));
+        setNotifications(prev => {
+          const target = prev.find(n => n.emailId === emailId);
+          if (target) {
+            if (!soundMutedRef.current) playNotificationSound();
+            showToast(`🔍 「${target.subject}」分析完成`);
+          }
+          return prev.map(n =>
+            n.emailId === emailId ? { ...n, analysis, analyzing: false } : n
+          );
+        });
         setExpandedAnalysis(prev => new Set([...prev, emailId]));
         break;
       }
@@ -373,6 +380,8 @@ export default function EmailAgentWidget() {
         setChatMessages(prev => [...prev, { role: 'assistant', content: text }]);
         setStreamText('');
         setStreaming(false);
+        if (!soundMutedRef.current) playNotificationSound();
+        showToast('💬 信件助手已回覆');
         break;
       }
       case 'error': {
@@ -596,7 +605,7 @@ export default function EmailAgentWidget() {
 
   const widget = (
     <>
-      {/* Hidden mode: thin edge strip with badge */}
+      {/* Hidden mode: thin edge strip with badge — auto-expands when toast */}
       {hidden && !expanded && (
         <div
           className={`fixed z-[90] group cursor-pointer`}
@@ -604,11 +613,13 @@ export default function EmailAgentWidget() {
           onClick={() => { unlockAudio(); setHidden(false); localStorage.setItem(STORAGE_KEY_HIDDEN, 'false'); }}
         >
           <div className={`flex items-center gap-1 bg-primary/90 text-on-primary py-2 px-1.5 shadow-lg transition-all duration-200 group-hover:px-3 ${
-            isOnLeft ? 'rounded-r-xl' : 'rounded-l-xl'
-          }`}>
+            toastMessage ? 'px-3' : ''
+          } ${isOnLeft ? 'rounded-r-xl' : 'rounded-l-xl'}`}>
             <span className="material-symbols-outlined text-base">smart_toy</span>
-            <span className="text-xs font-medium max-w-0 overflow-hidden group-hover:max-w-[80px] transition-all duration-200 whitespace-nowrap">
-              信件助手
+            <span className={`text-xs font-medium overflow-hidden transition-all duration-300 whitespace-nowrap ${
+              toastMessage ? 'max-w-[200px]' : 'max-w-0 group-hover:max-w-[80px]'
+            }`}>
+              {toastMessage || '信件助手'}
             </span>
             {badgeCount > 0 && (
               <span className="min-w-[16px] h-4 flex items-center justify-center bg-error text-on-error text-[9px] font-bold rounded-full px-0.5">
@@ -654,43 +665,44 @@ export default function EmailAgentWidget() {
             )}
           </button>
 
-          {/* AI Toast Notification Bubble */}
-          {toastMessage && !expanded && (
-            <div
-              className="fixed z-[91] animate-in slide-in-from-bottom-2 fade-in duration-300"
-              style={bubblePos ? {
-                ...(isOnLeft
-                  ? { left: bubblePos.x + bubbleSize / 2 + 12 }
-                  : { right: window.innerWidth - bubblePos.x + bubbleSize / 2 + 12 }),
-                top: bubblePos.y - bubbleSize / 2,
-              } : {
-                right: bubbleSize + (isMd ? 24 + 12 : 16 + 12),
-                bottom: isMd ? 24 : 16,
-              }}
-            >
-              <div
-                className="w-[260px] md:w-[300px] bg-surface-container-high border border-outline-variant/20 rounded-2xl shadow-xl px-3.5 py-2.5 cursor-pointer hover:bg-surface-container-highest transition-colors"
-                onClick={() => { unlockAudio(); setToastMessage(null); setExpanded(true); }}
-              >
-                <div className="flex items-start gap-2">
-                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                    <span className="material-symbols-outlined text-primary text-sm">smart_toy</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs md:text-sm text-on-surface leading-relaxed">{toastMessage}</p>
-                    <p className="text-[10px] md:text-xs text-on-surface-variant/60 mt-1">點擊查看詳情</p>
-                  </div>
-                  <button
-                    className="shrink-0 text-on-surface-variant/40 hover:text-on-surface-variant mt-0.5"
-                    onClick={(e) => { e.stopPropagation(); setToastMessage(null); }}
-                  >
-                    <span className="material-symbols-outlined text-sm">close</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </>
+      )}
+
+      {/* AI Toast Notification Bubble — only when bubble is visible (not hidden) */}
+      {toastMessage && !expanded && !hidden && (
+        <div
+          className="fixed z-[91] animate-in slide-in-from-bottom-2 fade-in duration-300"
+          style={bubblePos ? {
+            ...(isOnLeft
+              ? { left: bubblePos.x + bubbleSize / 2 + 12 }
+              : { right: window.innerWidth - bubblePos.x + bubbleSize / 2 + 12 }),
+            top: bubblePos.y - bubbleSize / 2,
+          } : {
+            right: bubbleSize + (isMd ? 24 + 12 : 16 + 12),
+            bottom: isMd ? 24 : 16,
+          }}
+        >
+          <div
+            className="w-[260px] md:w-[300px] bg-surface-container-high border border-outline-variant/20 rounded-2xl shadow-xl px-3.5 py-2.5 cursor-pointer hover:bg-surface-container-highest transition-colors"
+            onClick={() => { unlockAudio(); setToastMessage(null); setExpanded(true); }}
+          >
+            <div className="flex items-start gap-2">
+              <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                <span className="material-symbols-outlined text-primary text-sm">smart_toy</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs md:text-sm text-on-surface leading-relaxed">{toastMessage}</p>
+                <p className="text-[10px] md:text-xs text-on-surface-variant/60 mt-1">點擊查看詳情</p>
+              </div>
+              <button
+                className="shrink-0 text-on-surface-variant/40 hover:text-on-surface-variant mt-0.5"
+                onClick={(e) => { e.stopPropagation(); setToastMessage(null); }}
+              >
+                <span className="material-symbols-outlined text-sm">close</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Expanded Panel */}
