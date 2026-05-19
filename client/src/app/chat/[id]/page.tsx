@@ -402,9 +402,10 @@ function FileThumbnail({ file, token, onClick }: { file: GeneratedFile; token: s
 
   useEffect(() => {
     let url: string | null = null;
+    // Use direct Express URL (bypass Next.js proxy which can corrupt binary responses)
     const endpoint = file.file_type === 'html'
-      ? `/api/files/${file.id}/download`
-      : `/api/files/${file.id}/preview`;
+      ? `${SSE_BASE}/api/files/${file.id}/download`
+      : `${SSE_BASE}/api/files/${file.id}/preview`;
     fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => {
         if (!r.ok) throw new Error(`preview ${r.status}`);
@@ -1195,7 +1196,7 @@ function ChatContent() {
 
   async function handleDownload(fileId: string, filename: string) {
     try {
-      const res = await fetch(`/api/files/${fileId}/download`, {
+      const res = await fetch(`${SSE_BASE}/api/files/${fileId}/download`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Download failed');
@@ -1215,7 +1216,7 @@ function ChatContent() {
 
   async function openPreview(file: GeneratedFile) {
     try {
-      const res = await fetch(`/api/files/${file.id}/download`, {
+      const res = await fetch(`${SSE_BASE}/api/files/${file.id}/download`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Preview fetch failed');
@@ -1246,7 +1247,7 @@ function ChatContent() {
     const realFileId = dropdownKey.replace(/^(preview|sidebar|mobile)-/, '');
     if (!versionCache[realFileId]) {
       try {
-        const res = await fetch(`/api/files/${realFileId}/versions`, {
+        const res = await fetch(`${SSE_BASE}/api/files/${realFileId}/versions`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
