@@ -38,7 +38,7 @@ export default function GreetingPopup({ userName, userId, onClose }: GreetingPop
     (async () => {
       try {
         // Connect directly to Express for SSE (Next.js proxy buffers responses)
-        const sseBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:12054';
+        const sseBase = process.env.NEXT_PUBLIC_API_URL ?? '';
         const res = await fetch(`${sseBase}/api/greeting`, {
           headers: { Authorization: `Bearer ${token}` },
           signal: controller.signal,

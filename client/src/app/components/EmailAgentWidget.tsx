@@ -6,7 +6,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTranslation } from '../../i18n';
 
-const SSE_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:12054';
+const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 const STORAGE_KEY_POS = 'email_widget_pos';
 const STORAGE_KEY_HIDDEN = 'email_widget_hidden';
 const STORAGE_KEY_MUTE = 'email_widget_mute_sound';

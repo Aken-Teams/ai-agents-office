@@ -51,9 +51,8 @@ function convertMermaidMindmapToMarkdown(mermaidCode: string): string {
   return result.join('\n');
 }
 
-// Direct connection to Express for SSE streaming.
-// Next.js rewrites proxy buffers the entire response, preventing real-time updates.
-const SSE_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:12054';
+// SSE streaming via Next.js API route proxy (relative path for production).
+const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 interface Message {
   id: string;
