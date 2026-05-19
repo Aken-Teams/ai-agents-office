@@ -14,17 +14,31 @@ export function resolveClaudeCliPath(cliPath: string): { bin: string; prefix: st
   }
 
   const cliNames = ['cli.js', 'cli-wrapper.cjs'];
+
+  // Try to resolve the actual CLI entry point via `which` or `where`
+  try {
+    const cmd = process.platform === 'win32' ? 'where claude' : 'which claude';
+    const claudePath = execSync(cmd, { encoding: 'utf-8' }).trim().split('\n')[0];
+    const realPath = fs.realpathSync(claudePath);
+    if (realPath.endsWith('.js') && fs.existsSync(realPath)) {
+      return { bin: process.execPath, prefix: [realPath] };
+    }
+  } catch { /* fall through */ }
+
+  // Try to find the actual CLI script from the npm global prefix
   try {
     const npmPrefix = execSync('npm prefix -g', { encoding: 'utf-8' }).trim();
-    for (const name of cliNames) {
-      const cliScript = path.join(npmPrefix, 'node_modules', '@anthropic-ai', 'claude-code', name);
-      if (fs.existsSync(cliScript)) {
-        return { bin: process.execPath, prefix: [cliScript] };
+    for (const sub of ['node_modules', 'lib/node_modules']) {
+      for (const name of cliNames) {
+        const cliScript = path.join(npmPrefix, sub, '@anthropic-ai', 'claude-code', name);
+        if (fs.existsSync(cliScript)) {
+          return { bin: process.execPath, prefix: [cliScript] };
+        }
       }
     }
   } catch { /* fall through */ }
 
-  // Fallback: try common Windows npm global paths
+  // Fallback: try common paths
   const home = process.env.USERPROFILE || process.env.HOME || '';
   const candidates = cliNames.flatMap(name => [
     path.join(home, 'AppData', 'Roaming', 'npm', 'node_modules', '@anthropic-ai', 'claude-code', name),
