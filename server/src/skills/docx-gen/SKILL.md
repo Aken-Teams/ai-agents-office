@@ -74,9 +74,16 @@ fs.writeFileSync('output.docx', buffer);
 
 **All content in the generated document** — title, headings, body text, bullets, header, footer, branding, terminology, everything — must come from either:
 1. The **task description** provided to you, or
-2. The **user's message** in the conversation
+2. The **user's message** in the conversation, or
+3. Content already read from the user's uploaded files
 
-If specific content (company names, frameworks, slogans, methodologies, proprietary terms, etc.) is NOT present in those sources, do NOT include it **anywhere** in the output.
+If specific content (company names, **department / business-unit / division / group names**, frameworks, slogans, methodologies, proprietary terms, person names, etc.) is NOT present in those sources, do NOT include it **anywhere** in the output.
+
+**Training-knowledge override**: even if your training data tells you the user's likely organization has known departments / divisions / standard footer text / executive titles, do **NOT** use that knowledge to populate output content. Treat every user as an unknown party. Only what you can quote verbatim from task description / user message / file content counts.
+
+**Default header/footer policy**: leave the document header and footer empty unless the string is actually present in one of the allowed sources (task description, user message, memory context shown in task description, or read file content). Copy it verbatim — never invent a parent company line or department footer from your training knowledge.
+
+**Uploaded file metadata hint**: filenames may contain organization-name fragments. Reference the file's contents once read, but do not elevate a department / BU name from the filename alone into a header or footer.
 
 ## Output Rules
 - Always name the output file descriptively

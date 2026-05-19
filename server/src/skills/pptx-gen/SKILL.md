@@ -150,9 +150,16 @@ Use these patterns for content slides. The **cover slide is always custom** — 
 
 **All content in the generated document** — title, subtitle, body text, bullets, footer, branding, terminology, everything — must come from either:
 1. The **task description** provided to you, or
-2. The **user's message** in the conversation
+2. The **user's message** in the conversation, or
+3. Content already read from the user's uploaded files
 
-If specific content (company names, frameworks, slogans, methodologies, proprietary terms, etc.) is NOT present in those sources, do NOT include it **anywhere** in the output — not in headers, not in footers, not in body text, not in slide titles, nowhere.
+If specific content (company names, **department / business-unit / division / group names**, frameworks, slogans, methodologies, proprietary terms, person names, slogans, etc.) is NOT present in those sources, do NOT include it **anywhere** in the output — not in headers, not in footers, not in body text, not in slide titles, nowhere.
+
+**Training-knowledge override (read carefully)**: even if your training data tells you the user's likely organization has known departments / divisions / standard footer text / executive titles, do **NOT** use that knowledge to populate output content. Treat every user as an unknown party. The only authoritative source is what you can quote verbatim from the task description, user message, or file contents.
+
+**Default header/footer policy**: leave them empty, or use only the document title. Add an organizational footer / watermark / company name when **any** of the allowed sources (task description, user message, user's memory context shown in task description, or read file content) actually contains the string — copy it verbatim. If you can't point to where in the input the string came from, do not put it in the header/footer. Never substitute with something you "know" from training.
+
+**Uploaded file metadata hint**: filenames may contain organization-name fragments. You may reference the file's contents once read, but do **not** elevate a department / BU name from the filename alone into a header or footer.
 
 ## Output Rules
 - Always name the output file descriptively (e.g., "marketing-plan-2026.pptx")
