@@ -477,8 +477,16 @@ async function handleDirect(
 }
 
 // GET /api/generate/:conversationId/status — check if a generation is in progress
-router.get('/:conversationId/status', (req: Request, res: Response) => {
+router.get('/:conversationId/status', async (req: Request, res: Response) => {
   const conversationId = req.params.conversationId as string;
+  const userId = req.user!.userId;
+
+  const conversation = await dbGet<{ id: string }>(
+    'SELECT id FROM conversations WHERE id = ? AND user_id = ?',
+    conversationId, userId
+  );
+  if (!conversation) { res.status(404).json({ error: 'Not found' }); return; }
+
   res.json({ processing: activeGenerations.has(conversationId) });
 });
 
@@ -506,8 +514,16 @@ router.get('/:conversationId/tasks', async (req: Request, res: Response) => {
 });
 
 // POST /api/generate/:conversationId/abort
-router.post('/:conversationId/abort', (req: Request, res: Response) => {
+router.post('/:conversationId/abort', async (req: Request, res: Response) => {
   const conversationId = req.params.conversationId as string;
+  const userId = req.user!.userId;
+
+  const conversation = await dbGet<{ id: string }>(
+    'SELECT id FROM conversations WHERE id = ? AND user_id = ?',
+    conversationId, userId
+  );
+  if (!conversation) { res.status(404).json({ error: 'Not found' }); return; }
+
   const abortFn = activeGenerations.get(conversationId);
   if (abortFn) {
     abortFn(); activeGenerations.delete(conversationId);
