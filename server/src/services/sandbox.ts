@@ -5,6 +5,34 @@ import { config } from '../config.js';
 const SAFE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 /**
+ * Ensure workspace root has boundary markers so Claude CLI does NOT walk up
+ * to the parent project directory and load its CLAUDE.md / auto-memory.
+ * A bare `.git` dir acts as the project-root boundary for Claude CLI.
+ */
+let _boundaryInitialized = false;
+function ensureWorkspaceBoundary(): void {
+  if (_boundaryInitialized) return;
+  _boundaryInitialized = true;
+
+  const root = config.workspaceRoot;
+  fs.mkdirSync(root, { recursive: true });
+
+  // .git directory = project root boundary (stops CLAUDE.md auto-discovery)
+  const gitDir = path.join(root, '.git');
+  if (!fs.existsSync(gitDir)) {
+    fs.mkdirSync(gitDir, { recursive: true });
+    console.log('[Sandbox] Created .git boundary in workspace root');
+  }
+
+  // Empty CLAUDE.md overrides any parent CLAUDE.md (belt + suspenders)
+  const claudeMd = path.join(root, 'CLAUDE.md');
+  if (!fs.existsSync(claudeMd)) {
+    fs.writeFileSync(claudeMd, '# Workspace\nThis is an isolated workspace directory.\n');
+    console.log('[Sandbox] Created CLAUDE.md boundary in workspace root');
+  }
+}
+
+/**
  * Validate that an ID only contains safe characters (prevent path traversal)
  */
 export function validateId(id: string): boolean {
@@ -19,6 +47,9 @@ export function getSandboxPath(userId: string, conversationId: string): string {
   if (!validateId(userId) || !validateId(conversationId)) {
     throw new Error('Invalid userId or conversationId: contains unsafe characters');
   }
+
+  // Ensure workspace root has boundary markers (only runs once)
+  ensureWorkspaceBoundary();
 
   const sandboxDir = path.join(config.workspaceRoot, userId, conversationId);
 

@@ -250,6 +250,9 @@ export function spawnClaude(
     '--verbose',
   ];
 
+  // Note: Claude CLI auto-memory is per-project (based on cwd path hash).
+  // Each user/conversation/skill gets a unique sandbox path, so auto-memory is already isolated.
+
   // Session management for multi-turn conversations
   // --session-id creates a NEW session; --resume continues an EXISTING one
   if (options.sessionId) {
