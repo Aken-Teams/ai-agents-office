@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
 import type { AuthPayload } from '../types.js';
 import { getRolePermissions } from '../services/rolePermissions.js';
+import { dbGet } from '../db.js';
 
 // Map admin API route prefixes to permission page keys
 const ROUTE_TO_PAGE_KEY: Record<string, string> = {
@@ -45,28 +46,42 @@ export function adminMiddleware(req: Request, res: Response, next: NextFunction)
 
   try {
     const payload = jwt.verify(token, config.jwtSecret) as AuthPayload;
-    if (payload.role !== 'admin' && payload.role !== 'readonly') {
-      res.status(403).json({ error: 'Admin access required' });
-      return;
-    }
-    if (payload.role === 'readonly' && req.method !== 'GET') {
-      // Check if this route is in readonlyOperate
-      const pageKey = getPageKeyFromPath(req.path);
-      getRolePermissions().then(perms => {
-        const operable = perms.adminSidebar.readonlyOperate ?? [];
-        if (operable.includes(pageKey ?? '')) {
-          req.user = payload;
-          next();
-        } else {
-          res.status(403).json({ error: 'Read-only access: modifications not permitted' });
+
+    // Always fetch the latest role from DB (JWT role may be stale after admin changes)
+    dbGet<{ role: string | null }>('SELECT role FROM users WHERE id = ?', payload.userId)
+      .then(user => {
+        if (!user) { res.status(401).json({ error: 'User not found' }); return; }
+        const currentRole = user.role || 'user';
+
+        if (currentRole !== 'admin' && currentRole !== 'readonly') {
+          res.status(403).json({ error: 'Admin access required' });
+          return;
         }
-      }).catch(() => {
-        res.status(403).json({ error: 'Read-only access: modifications not permitted' });
+
+        // Update payload with current role from DB
+        payload.role = currentRole;
+
+        if (currentRole === 'readonly' && req.method !== 'GET') {
+          const pageKey = getPageKeyFromPath(req.path);
+          getRolePermissions().then(perms => {
+            const operable = perms.adminSidebar.readonlyOperate ?? [];
+            if (operable.includes(pageKey ?? '')) {
+              req.user = payload;
+              next();
+            } else {
+              res.status(403).json({ error: 'Read-only access: modifications not permitted' });
+            }
+          }).catch(() => {
+            res.status(403).json({ error: 'Read-only access: modifications not permitted' });
+          });
+          return;
+        }
+        req.user = payload;
+        next();
+      })
+      .catch(() => {
+        res.status(500).json({ error: 'Internal server error' });
       });
-      return;
-    }
-    req.user = payload;
-    next();
   } catch {
     res.status(401).json({ error: 'Invalid or expired token' });
   }
