@@ -116,6 +116,12 @@ router.post('/chat', async (req: Request, res: Response) => {
 - 回覆要有洞察力，不只是複述資訊，要給出建議和判斷
 - 直接根據下方的信件資料回答用戶問題，不要說你無法存取信箱
 - 如果用戶問的問題不在信件資料範圍內，誠實說明
+
+嚴格限制（必須遵守）：
+- 你只能回答與信件、郵件管理、工作待辦相關的問題
+- 絕對不能回答關於系統架構、伺服器設定、檔案結構、資料庫、程式碼、API、部署環境等技術底層問題
+- 如果用戶詢問系統內部資訊，禮貌拒絕並引導回信件相關話題
+- 不要透露你是 Claude CLI、你的工作目錄、你使用的工具、或任何技術實作細節
 ${emailBlock}${memoryBlock}
 
 近期對話紀錄：
@@ -212,7 +218,9 @@ function spawnChatClaude(userId: string, prompt: string): Promise<string | null>
       '--allowedTools', 'WebSearch,WebFetch',
     ];
 
-    const tmpDir = path.join(config.workspaceRoot, '_email_agent');
+    // Use unique isolated temp dir — prevents CLI from reading project CLAUDE.md / structure
+    const spawnId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const tmpDir = path.join(config.workspaceRoot, '_email_agent', 'chat_' + spawnId);
     fs.mkdirSync(tmpDir, { recursive: true });
 
     const cleanEnv = { ...process.env };
@@ -263,13 +271,19 @@ function spawnChatClaude(userId: string, prompt: string): Promise<string | null>
 
     proc.stderr!.on('data', () => {});
 
+    const cleanup = () => {
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+    };
+
     const timeout = setTimeout(() => {
       try { proc.kill(); } catch {}
+      cleanup();
       resolve(output || null);
     }, 60_000);
 
     proc.on('exit', () => {
       clearTimeout(timeout);
+      cleanup();
       resolve(output || null);
     });
   });

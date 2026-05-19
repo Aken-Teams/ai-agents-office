@@ -230,6 +230,37 @@ function detectEscalationPatterns(input: string): { score: number; flag: string 
 }
 
 // ---------------------------------------------------------------------------
+// Detector: System architecture / infrastructure probing
+// ---------------------------------------------------------------------------
+
+function detectArchitectureProbing(input: string): { score: number; flag: string } | null {
+  const normalized = input
+    .replace(/[\u200B-\u200D\uFEFF\u00AD]/g, '')
+    .toLowerCase();
+
+  const highRisk: RegExp[] = [
+    // Direct infrastructure probing (EN)
+    /(?:show|list|tell|reveal|describe|explain)\s+(?:me\s+)?(?:your|the|system)\s+(?:directory|folder|file)\s+(?:structure|tree|layout|paths?)/i,
+    /(?:what|where)\s+(?:is|are)\s+(?:your|the)\s+(?:working|current|root|home|base|server|project)\s+(?:directory|folder|path)/i,
+    /(?:list|show|scan|enumerate)\s+(?:all\s+)?(?:agents?|skills?|workers?|tools?|processes?|services?)\s+(?:available|running|active|installed)/i,
+    /(?:what|which|how\s+many)\s+(?:agents?|skills?|tools?|models?)\s+(?:do\s+you|are|can\s+you)\s+(?:have|use|access|run)/i,
+    // Direct infrastructure probing (ZH)
+    /(?:你的|系統的|內部的)?(?:底層|內部|系統|伺服器|目錄|檔案|資料夾)(?:結構|架構|路徑|配置|設定|佈局)/,
+    /(?:列出|顯示|告訴我|說明)(?:你的|所有的?)?(?:代理|技能|工具|模組|服務|進程|工作者)/,
+    /(?:你|系統)(?:有|用了?|跑了?|啟動了?)(?:幾個|多少|哪些)(?:代理|技能|agent|skill|worker|tool)/,
+    /(?:你的|系統的)(?:工作|執行|運行|部署)(?:目錄|路徑|環境|資料夾)/,
+  ];
+
+  for (const p of highRisk) {
+    if (p.test(normalized) || p.test(input)) {
+      return { score: 25, flag: 'architecture_probing' };
+    }
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // All detectors
 // ---------------------------------------------------------------------------
 
@@ -241,6 +272,7 @@ const ALL_DETECTORS: Detector[] = [
   detectPathTraversal,
   detectFormulaInjection,
   detectEscalationPatterns,
+  detectArchitectureProbing,
 ];
 
 // ---------------------------------------------------------------------------
