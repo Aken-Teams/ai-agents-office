@@ -90,7 +90,8 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 export default function AdminUsers() {
-  const { token, isReadonly } = useAdminAuth();
+  const { token, isReadonly, canOperate } = useAdminAuth();
+  const canEdit = !isReadonly || canOperate('users');
   const { t } = useTranslation();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -316,7 +317,7 @@ export default function AdminUsers() {
         <div className="px-4 py-3 border-b border-outline-variant/10">
           <div className="flex items-center gap-2">
             <span className="text-xs uppercase tracking-wider text-on-surface-variant font-bold">{t('admin.users.detail.roleLabel')}</span>
-            {!isReadonly && (
+            {canEdit && (
               <div className="flex rounded overflow-hidden border border-outline-variant/15 ml-auto">
                 {(['user', 'readonly', 'admin'] as const).map(r => (
                   <button
@@ -387,7 +388,7 @@ export default function AdminUsers() {
               onChange={e => { if (/^\d*\.?\d{0,2}$/.test(e.target.value) || e.target.value === '') setQuotaInput(e.target.value); }}
               className="flex-1 bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-1.5 px-2.5 text-xs font-mono rounded placeholder:text-outline min-w-0 [appearance:textfield]"
             />
-            {!isReadonly && (
+            {canEdit && (
               <button
                 onClick={() => updateQuota(detail.id)}
                 disabled={quotaLoading}
@@ -402,7 +403,7 @@ export default function AdminUsers() {
             {detail.quota_override != null ? (
               <>
                 <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 rounded-full">{t('admin.quotaGroups.source.personal' as any)}: ${detail.quota_override}</span>
-                {!isReadonly && (
+                {canEdit && (
                   <button
                     onClick={() => { setQuotaInput(''); updateQuota(detail.id); }}
                     className="text-[10px] text-error hover:text-error/80 transition-colors cursor-pointer"
@@ -475,7 +476,7 @@ export default function AdminUsers() {
         </div>
 
         {/* Actions */}
-        {!isReadonly && <div className="px-4 py-3 space-y-2">
+        {canEdit && <div className="px-4 py-3 space-y-2">
           {(detail.status === 'pending' || detail.status === 'pending_verification') ? (
             <div className="flex gap-2">
               <button

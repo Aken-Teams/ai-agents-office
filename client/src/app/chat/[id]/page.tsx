@@ -397,46 +397,25 @@ const IFRAME_PREVIEWABLE = new Set(['pdf', 'html', 'htm']);
 const CARD_PREVIEWABLE = new Set(['pptx', 'ppt', 'docx', 'doc', 'xlsx', 'xls']);
 const PREVIEWABLE_TYPES = new Set([...IFRAME_PREVIEWABLE, ...CARD_PREVIEWABLE]);
 
-/** Background gradient per file type for styled cover cards */
-function getFileBg(type: string): string {
-  const bgs: Record<string, string> = {
-    pptx: 'from-orange-900/40 to-orange-950/60', ppt: 'from-orange-900/40 to-orange-950/60',
-    docx: 'from-blue-900/40 to-blue-950/60', doc: 'from-blue-900/40 to-blue-950/60',
-    xlsx: 'from-green-900/40 to-green-950/60', xls: 'from-green-900/40 to-green-950/60',
-    pdf: 'from-red-900/40 to-red-950/60',
-  };
-  return bgs[type] || 'from-surface-container to-surface-container-lowest';
-}
-
-function getFileLabel(type: string): string {
-  const labels: Record<string, string> = {
-    pptx: 'PowerPoint', ppt: 'PowerPoint',
-    docx: 'Word', doc: 'Word',
-    xlsx: 'Excel', xls: 'Excel',
-    pdf: 'PDF',
-  };
-  return labels[type] || type.toUpperCase();
-}
-
-/** Styled file-type cover card for Office files (PPTX, DOCX, XLSX) */
+/** Simple cover card for Office files — light bg + icon */
 function FileTypeCover({ file, onClick }: { file: GeneratedFile; onClick: () => void }) {
   const { t } = useTranslation();
   return (
     <button
       onClick={onClick}
-      className="relative w-full rounded-t-xl overflow-hidden cursor-pointer group block"
+      className="relative w-full rounded-t-xl overflow-hidden cursor-pointer group block bg-surface-container-lowest"
       title={t('chat.preview.fullscreen' as any)}
     >
-      <div className={`h-[120px] md:h-[140px] bg-gradient-to-br ${getFileBg(file.file_type)} flex flex-col items-center justify-center gap-2`}>
-        <span className={`material-symbols-outlined text-4xl md:text-5xl ${getFileColor(file.file_type)} opacity-80`}>
+      <div className="h-[100px] md:h-[120px] flex flex-col items-center justify-center gap-1.5">
+        <span className={`material-symbols-outlined text-3xl md:text-4xl ${getFileColor(file.file_type)}`}>
           {getFileIcon(file.file_type)}
         </span>
-        <span className="text-xs font-medium text-on-surface-variant/70 tracking-wider uppercase">
-          {getFileLabel(file.file_type)}
+        <span className="text-[11px] text-on-surface-variant/50 font-medium uppercase tracking-wider">
+          {file.file_type}
         </span>
       </div>
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-        <span className="material-symbols-outlined text-on-surface-variant text-2xl opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg">
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center">
+        <span className="material-symbols-outlined text-on-surface-variant text-xl opacity-0 group-hover:opacity-70 transition-opacity">
           open_in_full
         </span>
       </div>

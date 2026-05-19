@@ -18,7 +18,8 @@ export default function AdminInviteCodes() {
 }
 
 function InviteCodesContent() {
-  const { token, isReadonly } = useAdminAuth();
+  const { token, isReadonly, canOperate } = useAdminAuth();
+  const canEdit = !isReadonly || canOperate('invite-codes');
   const { t } = useTranslation();
   const [codes, setCodes] = useState<InviteCode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,7 +113,7 @@ function InviteCodesContent() {
           <span className="material-symbols-outlined text-primary" style={{ fontSize: 22 }}>card_membership</span>
           <h1 className="font-headline text-lg md:text-xl font-bold tracking-tight truncate">{t('admin.inviteCodes.title' as any)}</h1>
         </div>
-        {!isReadonly && (
+        {canEdit && (
           <button
             onClick={openCreate}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary text-on-primary rounded-lg hover:brightness-110 transition-all cursor-pointer shrink-0"
@@ -156,7 +157,7 @@ function InviteCodesContent() {
                 </div>
 
                 {/* Actions — compact row */}
-                {!isReadonly && (
+                {canEdit && (
                   <div className="flex items-center shrink-0">
                     <button
                       onClick={() => handleToggle(c)}

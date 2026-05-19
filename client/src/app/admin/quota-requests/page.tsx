@@ -24,7 +24,8 @@ export default function AdminQuotaRequests() {
 }
 
 function QuotaRequestsContent() {
-  const { token, isReadonly } = useAdminAuth();
+  const { token, isReadonly, canOperate } = useAdminAuth();
+  const canEdit = !isReadonly || canOperate('quota-requests');
   const { t } = useTranslation();
   const [requests, setRequests] = useState<QuotaRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -177,7 +178,7 @@ function QuotaRequestsContent() {
                     </div>
                   )}
                 </div>
-                {req.status === 'pending' && !isReadonly && (
+                {req.status === 'pending' && canEdit && (
                   <div className="flex items-center gap-2 shrink-0">
                     <button
                       onClick={() => { setApproveTarget(req); setApproveLimit(String(Math.ceil(req.current_limit * 1.5))); }}
