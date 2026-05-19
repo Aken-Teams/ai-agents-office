@@ -87,9 +87,14 @@ router.get('/:id/download', async (req: Request, res: Response) => {
 // GET /api/files/:id/preview
 router.get('/:id/preview', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const filePath = await getFileDownloadPath(userId, req.params.id as string);
+  const fileId = req.params.id as string;
+  const filePath = await getFileDownloadPath(userId, fileId);
 
-  if (!filePath) { res.status(404).json({ error: 'File not found' }); return; }
+  if (!filePath) {
+    console.warn(`[Preview] File not found: id=${fileId}, userId=${userId}`);
+    res.status(404).json({ error: 'File not found' });
+    return;
+  }
 
   const ext = path.extname(filePath).slice(1).toLowerCase();
   const mime = MIME_MAP[ext];
@@ -125,7 +130,7 @@ router.get('/:id/preview', async (req: Request, res: Response) => {
         res.send(result.content);
       }
     } catch (err) {
-      console.error('[Preview] Conversion error:', err);
+      console.error(`[Preview] Conversion error for ${path.basename(filePath)} (${ext}):`, err);
       res.status(500).json({ error: 'Preview conversion failed' });
     }
     return;

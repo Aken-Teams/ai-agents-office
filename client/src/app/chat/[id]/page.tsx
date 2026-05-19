@@ -398,6 +398,7 @@ function FileThumbnail({ file, token, onClick }: { file: GeneratedFile; token: s
   const { t } = useTranslation();
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [isPdf, setIsPdf] = useState(false);
 
   useEffect(() => {
     let url: string | null = null;
@@ -406,20 +407,43 @@ function FileThumbnail({ file, token, onClick }: { file: GeneratedFile; token: s
       : `/api/files/${file.id}/preview`;
     fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => {
-        if (!r.ok) throw new Error('preview failed');
+        if (!r.ok) throw new Error(`preview ${r.status}`);
         const ct = r.headers.get('Content-Type') || '';
         return r.blob().then(blob => ({ blob, ct }));
       })
       .then(({ blob, ct }) => {
-        const type = ct.includes('pdf') ? 'application/pdf' : ct.includes('html') ? 'text/html' : ct;
+        const pdf = ct.includes('pdf');
+        const type = pdf ? 'application/pdf' : ct.includes('html') ? 'text/html' : ct;
         url = URL.createObjectURL(new Blob([blob], { type }));
+        setIsPdf(pdf);
         setBlobUrl(url);
       })
-      .catch(() => setFailed(true));
+      .catch((err) => {
+        console.warn(`[FileThumbnail] Preview failed for ${file.filename}:`, err);
+        setFailed(true);
+      });
     return () => { if (url) URL.revokeObjectURL(url); };
-  }, [file.id, file.file_type, token]);
+  }, [file.id, file.file_type, file.filename, token]);
 
-  if (failed) return null;
+  // Failed: show a styled fallback card instead of disappearing
+  if (failed) return (
+    <button
+      onClick={onClick}
+      className="relative w-full rounded-t-xl overflow-hidden bg-surface-container-lowest cursor-pointer group block"
+      title={t('chat.preview.fullscreen' as any)}
+    >
+      <div className="h-[120px] md:h-[140px] flex flex-col items-center justify-center text-on-surface-variant/60 gap-2">
+        <span className="material-symbols-outlined text-3xl">{getFileIcon(file.file_type)}</span>
+        <span className="text-xs">{t('chat.preview.clickToOpen' as any) || '點擊預覽'}</span>
+      </div>
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+        <span className="material-symbols-outlined text-on-surface-variant text-2xl opacity-0 group-hover:opacity-100 transition-opacity">
+          open_in_full
+        </span>
+      </div>
+    </button>
+  );
+
   if (!blobUrl) return (
     <div className="h-[160px] md:h-[200px] flex items-center justify-center text-on-surface-variant text-sm rounded-t-xl bg-surface-container-lowest">
       <span className="material-symbols-outlined animate-spin mr-2 text-base">progress_activity</span>
@@ -435,13 +459,13 @@ function FileThumbnail({ file, token, onClick }: { file: GeneratedFile; token: s
     >
       <div className="h-[160px] md:h-[200px] overflow-hidden">
         <iframe
-          src={blobUrl.endsWith('.pdf') || blobUrl.includes('application/pdf') ? `${blobUrl}#toolbar=0&navpanes=0&scrollbar=0&page=1` : blobUrl}
+          src={isPdf ? `${blobUrl}#toolbar=0&navpanes=0&scrollbar=0&page=1` : blobUrl}
           className="w-full h-[400px] border-0 scale-[0.5] origin-top-left"
           style={{ width: '200%', pointerEvents: 'none' }}
           scrolling="no"
           tabIndex={-1}
           title={file.filename}
-          sandbox={file.file_type === 'html' ? 'allow-scripts allow-same-origin' : 'allow-same-origin'}
+          sandbox="allow-scripts allow-same-origin"
         />
       </div>
       {/* Gradient fade at bottom */}
