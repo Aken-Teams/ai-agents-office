@@ -391,9 +391,60 @@ function getFileColor(type: string): string {
   return colors[type] || 'text-primary';
 }
 
-/** Static first-page thumbnail — clickable to open full preview */
-const PREVIEWABLE_TYPES = new Set(['pdf', 'pptx', 'ppt', 'docx', 'doc', 'xlsx', 'xls']);
+/** Types that can render a live iframe preview (PDF natively, HTML directly) */
+const IFRAME_PREVIEWABLE = new Set(['pdf', 'html', 'htm']);
+/** Types that show a styled file-type cover card */
+const CARD_PREVIEWABLE = new Set(['pptx', 'ppt', 'docx', 'doc', 'xlsx', 'xls']);
+const PREVIEWABLE_TYPES = new Set([...IFRAME_PREVIEWABLE, ...CARD_PREVIEWABLE]);
 
+/** Background gradient per file type for styled cover cards */
+function getFileBg(type: string): string {
+  const bgs: Record<string, string> = {
+    pptx: 'from-orange-900/40 to-orange-950/60', ppt: 'from-orange-900/40 to-orange-950/60',
+    docx: 'from-blue-900/40 to-blue-950/60', doc: 'from-blue-900/40 to-blue-950/60',
+    xlsx: 'from-green-900/40 to-green-950/60', xls: 'from-green-900/40 to-green-950/60',
+    pdf: 'from-red-900/40 to-red-950/60',
+  };
+  return bgs[type] || 'from-surface-container to-surface-container-lowest';
+}
+
+function getFileLabel(type: string): string {
+  const labels: Record<string, string> = {
+    pptx: 'PowerPoint', ppt: 'PowerPoint',
+    docx: 'Word', doc: 'Word',
+    xlsx: 'Excel', xls: 'Excel',
+    pdf: 'PDF',
+  };
+  return labels[type] || type.toUpperCase();
+}
+
+/** Styled file-type cover card for Office files (PPTX, DOCX, XLSX) */
+function FileTypeCover({ file, onClick }: { file: GeneratedFile; onClick: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <button
+      onClick={onClick}
+      className="relative w-full rounded-t-xl overflow-hidden cursor-pointer group block"
+      title={t('chat.preview.fullscreen' as any)}
+    >
+      <div className={`h-[120px] md:h-[140px] bg-gradient-to-br ${getFileBg(file.file_type)} flex flex-col items-center justify-center gap-2`}>
+        <span className={`material-symbols-outlined text-4xl md:text-5xl ${getFileColor(file.file_type)} opacity-80`}>
+          {getFileIcon(file.file_type)}
+        </span>
+        <span className="text-xs font-medium text-on-surface-variant/70 tracking-wider uppercase">
+          {getFileLabel(file.file_type)}
+        </span>
+      </div>
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+        <span className="material-symbols-outlined text-on-surface-variant text-2xl opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg">
+          open_in_full
+        </span>
+      </div>
+    </button>
+  );
+}
+
+/** Live iframe thumbnail for PDF and HTML files */
 function FileThumbnail({ file, token, onClick }: { file: GeneratedFile; token: string; onClick: () => void }) {
   const { t } = useTranslation();
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
@@ -402,7 +453,6 @@ function FileThumbnail({ file, token, onClick }: { file: GeneratedFile; token: s
 
   useEffect(() => {
     let url: string | null = null;
-    // Use direct Express URL (bypass Next.js proxy which can corrupt binary responses)
     const endpoint = file.file_type === 'html'
       ? `${SSE_BASE}/api/files/${file.id}/download`
       : `${SSE_BASE}/api/files/${file.id}/preview`;
@@ -426,24 +476,8 @@ function FileThumbnail({ file, token, onClick }: { file: GeneratedFile; token: s
     return () => { if (url) URL.revokeObjectURL(url); };
   }, [file.id, file.file_type, file.filename, token]);
 
-  // Failed: show a styled fallback card instead of disappearing
-  if (failed) return (
-    <button
-      onClick={onClick}
-      className="relative w-full rounded-t-xl overflow-hidden bg-surface-container-lowest cursor-pointer group block"
-      title={t('chat.preview.fullscreen' as any)}
-    >
-      <div className="h-[120px] md:h-[140px] flex flex-col items-center justify-center text-on-surface-variant/60 gap-2">
-        <span className="material-symbols-outlined text-3xl">{getFileIcon(file.file_type)}</span>
-        <span className="text-xs">{t('chat.preview.clickToOpen' as any) || '點擊預覽'}</span>
-      </div>
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-        <span className="material-symbols-outlined text-on-surface-variant text-2xl opacity-0 group-hover:opacity-100 transition-opacity">
-          open_in_full
-        </span>
-      </div>
-    </button>
-  );
+  // Failed: show file type cover card as fallback
+  if (failed) return <FileTypeCover file={file} onClick={onClick} />;
 
   if (!blobUrl) return (
     <div className="h-[160px] md:h-[200px] flex items-center justify-center text-on-surface-variant text-sm rounded-t-xl bg-surface-container-lowest">
@@ -469,9 +503,7 @@ function FileThumbnail({ file, token, onClick }: { file: GeneratedFile; token: s
           sandbox="allow-scripts allow-same-origin"
         />
       </div>
-      {/* Gradient fade at bottom */}
       <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-surface-container-low to-transparent" />
-      {/* Hover overlay */}
       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
         <span className="material-symbols-outlined text-white text-2xl opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg">
           open_in_full
@@ -1677,10 +1709,12 @@ function ChatContent() {
               <div className="max-w-full md:max-w-[85%] space-y-3 ml-0 md:ml-13">
                 {latestFiles.map(file => (
                   <div key={file.id} className="bg-surface-container-low rounded-xl border border-outline-variant/10 overflow-visible">
-                    {/* File thumbnail — static first-page preview */}
-                    {(file.file_type === 'html' || PREVIEWABLE_TYPES.has(file.file_type)) && (
+                    {/* File cover: iframe preview for PDF/HTML, styled card for Office */}
+                    {IFRAME_PREVIEWABLE.has(file.file_type) || file.file_type === 'html' ? (
                       <FileThumbnail file={file} token={token!} onClick={() => openPreview(file)} />
-                    )}
+                    ) : CARD_PREVIEWABLE.has(file.file_type) ? (
+                      <FileTypeCover file={file} onClick={() => openPreview(file)} />
+                    ) : null}
                     {/* Other file types — card only */}
                     <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-3">
                       <div className={`w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0 ${
