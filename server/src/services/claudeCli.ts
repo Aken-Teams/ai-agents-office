@@ -60,6 +60,50 @@ function isQuotaLimitError(text: string): boolean {
   return false;
 }
 
+// ---------------------------------------------------------------------------
+// Output sanitizer — redact system paths from AI responses before sending
+// to the user. This is the last line of defense: even if the AI ignores
+// prompt rules, leaked paths are scrubbed from the output.
+// ---------------------------------------------------------------------------
+
+/** Patterns that match system / infrastructure paths the user should never see. */
+const REDACT_PATTERNS: RegExp[] = [
+  // Unix home directories: /home/username/...
+  /\/home\/[a-zA-Z0-9_.-]+\/[^\s'"`)\]},]*/g,
+  // Root home: /root/...
+  /\/root\/[^\s'"`)\]},]*/g,
+  // Windows user profiles: C:\Users\username\...
+  /[A-Z]:\\Users\\[a-zA-Z0-9_.-]+\\[^\s'"`)\]},]*/gi,
+  // Git-bash style drives: /d/github/... /c/Users/...
+  /\/[a-z]\/(?:github|Users|home|projects?|repos?|src|code)\/[^\s'"`)\]},]*/gi,
+  // .claude directories anywhere in a path
+  /[^\s'"`]*\.claude\/[^\s'"`)\]},]*/g,
+  // node_modules with absolute prefix
+  /(?:\/|[A-Z]:\\)[^\s'"`]*node_modules\/[^\s'"`)\]},]*/gi,
+  // Workspace agent internals: _agents/skillId/...
+  /[^\s'"`]*\/_agents\/[^\s'"`)\]},]*/g,
+  // /usr, /etc, /proc, /sys paths
+  /\/(?:usr|etc|proc|sys)\/[^\s'"`)\]},]*/g,
+  // /tmp with deep paths (but not bare /tmp)
+  /\/tmp\/[^\s'"`)\]},]{10,}/g,
+];
+
+const REDACT_REPLACEMENT = '[路徑已隱藏]';
+
+/**
+ * Scrub system paths from text before it reaches the user.
+ * Intentionally aggressive: better to over-redact than to leak server internals.
+ */
+function sanitizeOutput(text: string): string {
+  let result = text;
+  for (const pattern of REDACT_PATTERNS) {
+    // Reset lastIndex for global regexes
+    pattern.lastIndex = 0;
+    result = result.replace(pattern, REDACT_REPLACEMENT);
+  }
+  return result;
+}
+
 export interface ClaudeCliOptions {
   userId: string;
   conversationId: string;
@@ -447,9 +491,10 @@ function processStreamEvent(
     if (delta?.type === 'text_delta' && delta.text) {
       const rawDelta = delta.text as string;
       const translated = humanizeClaudeError(rawDelta);
+      const safeText = sanitizeOutput(translated || rawDelta);
       emitter.emit('event', {
         type: translated ? 'error' : 'text',
-        data: translated || rawDelta,
+        data: safeText,
       } satisfies SSEEvent);
     }
     if (delta?.type === 'thinking_delta' && delta.thinking) {
@@ -475,9 +520,10 @@ function processStreamEvent(
         if (block.type === 'text' && block.text) {
           const rawText = block.text as string;
           const translated = humanizeClaudeError(rawText);
+          const safeText = sanitizeOutput(translated || rawText);
           emitter.emit('event', {
             type: translated ? 'error' : 'text',
-            data: translated || rawText,
+            data: safeText,
           } satisfies SSEEvent);
         }
         if (block.type === 'tool_use') {
