@@ -174,16 +174,20 @@ function AdminTermsContent() {
   const [showPreview, setShowPreview] = useState(false);
   const [bumpVersion, setBumpVersion] = useState(false);
   const [resetAcceptance, setResetAcceptance] = useState(false);
+  const [settings, setSettings] = useState<{ usageLimitUsd: number; storageQuotaGb: number; uploadQuotaMb: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!token) return;
-    fetch('/api/admin/terms', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(data => {
-        setContent(data.content || '');
-        setVersion(data.version || '1');
+    Promise.all([
+      fetch('/api/admin/terms', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch('/api/admin/settings', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+    ])
+      .then(([termsData, settingsData]) => {
+        setContent(termsData.content || '');
+        setVersion(termsData.version || '1');
+        setSettings(settingsData);
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -368,6 +372,12 @@ function AdminTermsContent() {
               <div className="prose-terms text-sm text-on-surface leading-relaxed">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
+                  children={settings
+                    ? content
+                        .replace(/\{\{usage_limit_usd\}\}/g, String(settings.usageLimitUsd))
+                        .replace(/\{\{storage_quota_gb\}\}/g, String(settings.storageQuotaGb))
+                        .replace(/\{\{upload_quota_mb\}\}/g, String(settings.uploadQuotaMb))
+                    : content}
                   components={{
                     h1: ({ children, ...props }) => <h1 className="text-lg font-bold text-on-surface mt-0 mb-3 pb-2 border-b border-outline-variant/15" {...props}>{children}</h1>,
                     h2: ({ children, ...props }) => <h2 className="text-base font-bold text-on-surface mt-5 mb-2" {...props}>{children}</h2>,
@@ -393,9 +403,7 @@ function AdminTermsContent() {
                       <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" {...props}>{children}</a>
                     ),
                   }}
-                >
-                  {content}
-                </ReactMarkdown>
+                />
               </div>
             </div>
           )}
