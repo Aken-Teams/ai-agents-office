@@ -138,6 +138,13 @@ const DISALLOWED_TOOLS = [
   'Bash(cat ..:*)',
   'Bash(head ..:*)',
   'Bash(tail ..:*)',
+  // Block .claude directory access
+  'Bash(ls .claude:*)',
+  'Bash(cat .claude:*)',
+  'Bash(ls */.claude:*)',
+  'Bash(cat */.claude:*)',
+  'Bash(head .claude:*)',
+  'Bash(tail .claude:*)',
 ];
 
 // Router agents: NO tools — they only analyze requests and output [TASK] blocks.

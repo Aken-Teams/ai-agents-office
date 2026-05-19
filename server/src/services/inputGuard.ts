@@ -241,14 +241,25 @@ function detectArchitectureProbing(input: string): { score: number; flag: string
   const highRisk: RegExp[] = [
     // Direct infrastructure probing (EN)
     /(?:show|list|tell|reveal|describe|explain)\s+(?:me\s+)?(?:your|the|system)\s+(?:directory|folder|file)\s+(?:structure|tree|layout|paths?)/i,
+    /(?:show|list|tell|reveal|describe|explain)\s+(?:me\s+)?(?:the\s+)?(?:system|server|internal|project)\s+(?:directory|folder|file)\s+(?:structure|tree|layout|paths?)/i,
     /(?:what|where)\s+(?:is|are)\s+(?:your|the)\s+(?:working|current|root|home|base|server|project)\s+(?:directory|folder|path)/i,
     /(?:list|show|scan|enumerate)\s+(?:all\s+)?(?:agents?|skills?|workers?|tools?|processes?|services?)\s+(?:available|running|active|installed)/i,
     /(?:what|which|how\s+many)\s+(?:agents?|skills?|tools?|models?)\s+(?:do\s+you|are|can\s+you)\s+(?:have|use|access|run)/i,
+    // Memory / config probing (EN)
+    /(?:show|list|read|tell|reveal|what(?:'s| is| are))\s+(?:me\s+)?(?:your|the|my)\s+(?:memory|config|configuration|settings?)\s+(?:files?|data|contents?|entries?|directory)/i,
+    /(?:what|where)\s+(?:is|are)\s+(?:in\s+)?(?:your|the|my)\s+(?:memory|config|claude\.?md|\.claude)/i,
+    /what\s+(?:is|are)\s+in\s+my\s+(?:memory|config|settings?|files?)/i,
+    /(?:read|show|cat|list|open)\s+(?:the\s+)?(?:\.claude|claude\.md|memory\.md|CLAUDE\.md)/i,
     // Direct infrastructure probing (ZH)
     /(?:你的|系統的|內部的)?(?:底層|內部|系統|伺服器|目錄|檔案|資料夾)(?:結構|架構|路徑|配置|設定|佈局)/,
     /(?:列出|顯示|告訴我|說明)(?:你的|所有的?)?(?:代理|技能|工具|模組|服務|進程|工作者)/,
     /(?:你|系統)(?:有|用了?|跑了?|啟動了?)(?:幾個|多少|哪些)(?:代理|技能|agent|skill|worker|tool)/,
     /(?:你的|系統的)(?:工作|執行|運行|部署)(?:目錄|路徑|環境|資料夾)/,
+    // Memory / config probing (ZH)
+    /(?:我的|你的)?(?:記憶|記憶檔|記憶體|memory|config|設定檔|配置檔)(?:有什麼|有哪些|裡面|內容|是什麼|在哪)/,
+    /(?:列出|顯示|讀取|打開|看一下)(?:我的|你的)?(?:記憶|記憶檔|memory|config|設定|配置)/,
+    /(?:你|系統)(?:記得|記住|存了)(?:什麼|哪些|多少)/,
+    /(?:claude\.?md|\.claude|CLAUDE\.MD)/i,
   ];
 
   for (const p of highRisk) {
