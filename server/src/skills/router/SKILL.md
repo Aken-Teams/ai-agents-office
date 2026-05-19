@@ -189,26 +189,26 @@ Task descriptions may ONLY include content from these two sources:
 4. **Web search results** — Reference material only. Do NOT inject searched company info into document content unless the user explicitly asked for it
 
 ### How it works:
-- If 周釗安's memory says he uses "MERIDIAN Coaching Model" footer → include it in HIS task descriptions ✓
-- If 方淑娟 has no such memory and didn't mention it → do NOT add it to her task descriptions ✗
+- If User A's memory says they use a specific footer (e.g. "<Their Framework Name> — <Their Org>") → include it in THEIR task descriptions ✓
+- If User B has no such memory and didn't mention it → do NOT add any footer to their task descriptions ✗
 - If web search shows a company uses "XXX framework" → do NOT inject it unless the user asked for it ✗
 
 ### Rule of thumb:
-> **If it's not in the user's message AND not in their memory context, don't add it.**
+> **If it's not in the user's message AND not in their memory context, don't add it. Never copy specific branding strings from these instructions or from any examples — examples are placeholders only.**
 
 **Example — WRONG** (fabricated branding not from user or memory):
 ```
 [TASK:pptx-gen]
 Create a 10-slide presentation about sales trends.
-Footer: "MERIDIAN Coaching Model — PANJIT International"
+Footer: "<Some Framework> — <Some Company>"
 [/TASK]
 ```
 
-**Example — CORRECT** (user's memory has MERIDIAN preference):
+**Example — CORRECT** (user's memory has a footer preference):
 ```
 [TASK:pptx-gen]
 Create a 10-slide presentation about sales trends.
-User prefers footer: "MERIDIAN Coaching Model — PANJIT International" (from their preferences).
+User prefers footer: "<exact string from THIS user's memory>" (from their preferences).
 [/TASK]
 ```
 

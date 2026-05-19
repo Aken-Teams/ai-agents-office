@@ -503,7 +503,7 @@ Card-style with icons and side image:
 { "type": "chart", "title": "Skill Assessment", "chart": {
   "type": "radar",
   "indicators": [{"name": "Frontend", "max": 100}, {"name": "Backend", "max": 100}, {"name": "DevOps", "max": 100}, {"name": "Design", "max": 100}],
-  "radarData": [{"name": "Alice", "values": [90, 70, 60, 80]}, {"name": "Bob", "values": [60, 90, 85, 40]}]
+  "radarData": [{"name": "<Subject A>", "values": [90, 70, 60, 80]}, {"name": "<Subject B>", "values": [60, 90, 85, 40]}]
 }}
 ```
 
@@ -622,12 +622,12 @@ Map types: `"world"`, `"china"`. Region names must match GeoJSON feature names (
 
 **`"profile"`** — Personal/team profile with avatar, bio, and social links.
 ```json
-{ "type": "profile", "name": "Jane Smith", "role": "Lead Designer",
-  "avatar": "https://images.unsplash.com/photo-xxx?w=400&h=400&fit=crop&crop=face",
-  "bio": "10+ years of design experience. Passionate about creating intuitive user experiences.",
+{ "type": "profile", "name": "<Their Name>", "role": "<Their Role>",
+  "avatar": "<photo URL>",
+  "bio": "<their bio — pull from user's input or memory, do NOT fabricate>",
   "socialLinks": [
-    { "icon": "language", "label": "janesmith.com" },
-    { "icon": "mail", "label": "jane@example.com" }
+    { "icon": "language", "label": "<their website>" },
+    { "icon": "mail", "label": "<their email>" }
 ]}
 ```
 
@@ -635,14 +635,16 @@ Map types: `"world"`, `"china"`. Region names must match GeoJSON feature names (
 
 **`"team"`** — Team member cards with circular photos. **Always use `"layout": "top-bottom"`** so cards get full width.
 ```json
-{ "type": "team", "title": "Our Team", "layout": "top-bottom",
-  "description": "Our experienced leadership team drives innovation.",
-  "highlights": ["Combined 30+ years of experience", "Background from top-tier companies"],
+{ "type": "team", "title": "<Team / Section Title>", "layout": "top-bottom",
+  "description": "<short team description — only if user provided one>",
+  "highlights": ["<highlight 1 from user input>", "<highlight 2 from user input>"],
   "members": [
-    { "photo": "https://images.unsplash.com/photo-xxx?w=300&h=300&fit=crop&crop=face", "name": "Alice", "role": "CEO", "description": "Visionary leader" },
-    { "photo": "https://images.unsplash.com/photo-yyy?w=300&h=300&fit=crop&crop=face", "name": "Bob", "role": "CTO", "description": "Tech architect" }
+    { "photo": "<photo URL>", "name": "<Member 1 name>", "role": "<Role>", "description": "<short description>" },
+    { "photo": "<photo URL>", "name": "<Member 2 name>", "role": "<Role>", "description": "<short description>" }
 ]}
 ```
+
+> **NEVER fabricate team member names, bios, or company history. If the user didn't provide them, leave the fields empty or omit the slide.**
 
 ### Gallery
 
