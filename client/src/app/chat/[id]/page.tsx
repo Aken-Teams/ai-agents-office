@@ -1227,14 +1227,14 @@ function ChatContent() {
 
   async function openPreview(file: GeneratedFile) {
     try {
-      const res = await fetch(`${SSE_BASE}/api/files/${file.id}/download`, {
+      // Use /preview for all types — it converts Office files to PDF/HTML
+      const res = await fetch(`${SSE_BASE}/api/files/${file.id}/preview`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Preview fetch failed');
+      const contentType = res.headers.get('Content-Type') || 'application/octet-stream';
       const blob = await res.blob();
-      const url = URL.createObjectURL(
-        file.file_type === 'html' ? new Blob([await blob.text()], { type: 'text/html' }) : blob
-      );
+      const url = URL.createObjectURL(new Blob([blob], { type: contentType }));
       setPreviewBlobUrl(url);
       setPreviewFile(file);
     } catch (err) {
