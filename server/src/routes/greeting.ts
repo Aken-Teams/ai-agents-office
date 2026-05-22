@@ -1,16 +1,14 @@
 import { Router, Request, Response } from 'express';
-import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { authMiddleware } from '../middleware/auth.js';
 import { dbAll, dbGet } from '../db.js';
 import { config } from '../config.js';
-import { resolveClaudeCliPath } from '../services/resolveClaudeCli.js';
 
 const router = Router();
 router.use(authMiddleware);
 
-// GET /api/greeting — SSE stream a personalized AI greeting
+// GET /api/greeting — SSE stream a personalized AI greeting via DeepSeek
 router.get('/', async (req: Request, res: Response) => {
 
   console.log('[Greeting] Request received');
@@ -55,14 +53,17 @@ router.get('/', async (req: Request, res: Response) => {
      ORDER BY created_at DESC LIMIT 3`
   );
 
+  // Set up SSE
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
   // No conversations — return a static welcome (no AI call needed)
   if (recentConversations.length === 0) {
     console.log('[Greeting] New/idle user, sending static welcome');
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    });
     const welcomeData: Record<string, any> = {
       type: 'welcome',
       userName: user.display_name || user.email.split('@')[0],
@@ -83,7 +84,6 @@ router.get('/', async (req: Request, res: Response) => {
   console.log(`[Greeting] Found ${recentConversations.length} recent conversations for user ${userName}`);
 
   const conversationSummary = recentConversations.map((c, i) => {
-    // Prefer summary (safe, pre-filtered) over raw message
     const desc = c.summary
       || (c.last_message
         ? (c.last_message.length > 50 ? c.last_message.substring(0, 50) + '...' : c.last_message)
@@ -127,114 +127,96 @@ Write a warm, concise greeting (2-4 sentences max). Be human, natural, and carin
 - Do NOT use markdown formatting (no **, #, -, etc.), just plain text with line breaks
 - Do NOT repeat their conversation titles verbatim, paraphrase naturally${announcementSection}`;
 
-  // Set up SSE
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no',
-  });
-
   const keepalive = setInterval(() => {
     try { res.write(': keepalive\n\n'); } catch { /* closed */ }
   }, 10000);
 
-  // Clean environment
-  const cleanEnv = { ...process.env };
-  for (const key of Object.keys(cleanEnv)) {
-    if (key.toUpperCase().startsWith('CLAUDE')) delete cleanEnv[key];
-  }
-
-  const resolvedCmd = resolveClaudeCliPath(config.claudeCliPath);
-  const args = [
-    '-p',
-    '--verbose',
-    '--output-format', 'stream-json',
-    '--max-turns', '1',
-    '--disallowedTools', 'Bash,Write,Read,Edit,WebSearch,WebFetch,Glob,Grep,Task,TodoWrite,NotebookEdit',
-  ];
-
-  // Use a temp directory for the greeting (no sandbox needed)
-  const tmpDir = path.join(config.workspaceRoot, '_greeting');
-  fs.mkdirSync(tmpDir, { recursive: true });
-
-  let proc;
-  try {
-    proc = spawn(resolvedCmd.bin, [...resolvedCmd.prefix, ...args], {
-      cwd: tmpDir,
-      shell: false,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: cleanEnv,
-    });
-  } catch (error) {
+  // Check for API key
+  if (!config.deepseekApiKey) {
+    console.error('[Greeting] DEEPSEEK_API_KEY not configured');
     clearInterval(keepalive);
-    res.write(`data: ${JSON.stringify({ type: 'error', data: 'Failed to start AI' })}\n\n`);
+    res.write(`data: ${JSON.stringify({ type: 'error', data: 'AI greeting service not configured' })}\n\n`);
     res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
     res.end();
     return;
   }
 
-  proc.stdin!.write(prompt);
-  proc.stdin!.end();
-
-  let stdoutBuffer = '';
-
-  proc.stdout!.on('data', (data: Buffer) => {
-    stdoutBuffer += data.toString();
-    const lines = stdoutBuffer.split('\n');
-    stdoutBuffer = lines.pop() || '';
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const parsed = JSON.parse(line);
-        // Streaming text deltas (real-time typing effect)
-        if (parsed.type === 'content_block_delta') {
-          const delta = parsed.delta;
-          if (delta?.type === 'text_delta' && delta.text) {
-            res.write(`data: ${JSON.stringify({ type: 'text_delta', data: delta.text })}\n\n`);
-          }
-        }
-        // Full assistant message (fallback if no deltas received)
-        else if (parsed.type === 'assistant') {
-          const content = parsed.message?.content;
-          if (Array.isArray(content)) {
-            for (const block of content) {
-              if (block.type === 'text' && block.text) {
-                res.write(`data: ${JSON.stringify({ type: 'text', data: block.text })}\n\n`);
-              }
-            }
-          }
-        }
-      } catch { /* skip malformed */ }
-    }
-  });
-
-  proc.stderr!.on('data', (data: Buffer) => {
-    console.error(`[Greeting CLI stderr] ${data.toString().trim()}`);
-  });
-
-  proc.on('error', (err) => {
-    console.error(`[Greeting] CLI spawn error: ${err.message}`);
-    clearInterval(keepalive);
-    try {
-      res.write(`data: ${JSON.stringify({ type: 'error', data: 'AI engine unavailable' })}\n\n`);
-      res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
-      res.end();
-    } catch { /* already closed */ }
-  });
+  let aborted = false;
+  let abortController: AbortController | null = new AbortController();
 
   req.on('close', () => {
-    try { proc.kill(); } catch { /* already dead */ }
+    aborted = true;
+    abortController?.abort();
   });
 
-  proc.on('exit', () => {
-    clearInterval(keepalive);
-    try {
+  try {
+    const response = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.deepseekApiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [{ role: 'user', content: prompt }],
+        stream: true,
+        max_tokens: 300,
+        temperature: 0.7,
+      }),
+      signal: abortController.signal,
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      console.error(`[Greeting] DeepSeek API error ${response.status}: ${errText}`);
+      clearInterval(keepalive);
+      res.write(`data: ${JSON.stringify({ type: 'error', data: 'AI 問候服務暫時無法使用' })}\n\n`);
       res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
       res.end();
-    } catch { /* already closed */ }
-  });
+      return;
+    }
+
+    const reader = response.body as any;
+    if (!reader) throw new Error('No response body');
+
+    // Node fetch returns a ReadableStream; read it as chunks
+    let buffer = '';
+    for await (const chunk of reader) {
+      if (aborted) break;
+      buffer += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString();
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const data = trimmed.slice(6);
+        if (data === '[DONE]') continue;
+
+        try {
+          const parsed = JSON.parse(data);
+          const delta = parsed.choices?.[0]?.delta?.content;
+          if (delta) {
+            res.write(`data: ${JSON.stringify({ type: 'text_delta', data: delta })}\n\n`);
+          }
+        } catch { /* skip malformed */ }
+      }
+    }
+  } catch (err: any) {
+    if (!aborted) {
+      console.error(`[Greeting] DeepSeek call failed: ${err.message}`);
+      res.write(`data: ${JSON.stringify({ type: 'error', data: 'AI 問候服務暫時無法使用' })}\n\n`);
+    }
+  } finally {
+    abortController = null;
+    clearInterval(keepalive);
+    if (!aborted) {
+      try {
+        res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+        res.end();
+      } catch { /* already closed */ }
+    }
+  }
 });
 
 export default router;
