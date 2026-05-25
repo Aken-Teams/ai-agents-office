@@ -369,6 +369,12 @@ router.post('/google', async (req: Request, res: Response) => {
       email = userinfo.email.toLowerCase().trim(); name = userinfo.name || ''; googleId = userinfo.sub || '';
     }
 
+    // pro-panjit mode: only whitelisted emails can use Google login
+    if (config.deployMode === 'pro-panjit' && !config.emailLoginWhitelist.includes(email)) {
+      res.status(403).json({ error: '此 Google 帳號未獲授權登入，請聯繫管理者', code: 'GOOGLE_NOT_WHITELISTED' });
+      return;
+    }
+
     let user = await dbGet<User>('SELECT * FROM users WHERE email = ?', email);
 
     if (user) {

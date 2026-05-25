@@ -896,7 +896,7 @@ function EmailLoginForm({ onBack }: { onBack?: () => void }) {
           </button>
         )}
       </form>
-      {!onBack && googleClientId && (
+      {googleClientId && (
         <div className="mt-5 flex flex-col items-center gap-4">
           <div className="w-full h-px bg-outline-variant/20 relative">
             <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-container-high px-4 text-xs uppercase tracking-widest text-outline">
@@ -1009,7 +1009,7 @@ function LoginPageInner() {
 }
 
 export default function LoginPage() {
-  if (!isPanjit && googleClientId) {
+  if (googleClientId) {
     return (
       <GoogleOAuthProvider clientId={googleClientId}>
         <LoginPageInner />
