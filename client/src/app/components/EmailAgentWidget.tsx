@@ -120,10 +120,12 @@ export default function EmailAgentWidget() {
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const reconnectTimer = useRef<NodeJS.Timeout | null>(null);
   const isInitialLoad = useRef(true);
   const [serverActiveTasks, setServerActiveTasks] = useState<string[]>([]);
   const [detailEmail, setDetailEmail] = useState<string | null>(null);
+  const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
 
   // Drag state
   const bubbleRef = useRef<HTMLButtonElement>(null);
@@ -408,8 +410,9 @@ export default function EmailAgentWidget() {
             n.emailId === emailId ? { ...n, analysis, analyzing: false } : n
           );
         });
-        // Auto-open the detail modal to show analysis result
-        setDetailEmail(emailId);
+        // Auto-select in widget; if widget is collapsed, open full modal instead
+        setSelectedEmailId(emailId);
+        if (!expandedRef.current) setDetailEmail(emailId);
         break;
       }
       case 'ai_response_delta': {
@@ -586,6 +589,7 @@ export default function EmailAgentWidget() {
     const msg = chatInput.trim();
     if (!msg) return;
     setChatInput('');
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
     await sendMessageDirect(msg);
   }, [chatInput, sendMessageDirect]);
 
@@ -894,11 +898,13 @@ export default function EmailAgentWidget() {
                     {notifications.slice(0, 30).map(n => (
                       <div
                         key={n.emailId}
-                        onClick={() => setDetailEmail(n.emailId)}
-                        className={`rounded-xl transition-colors overflow-hidden cursor-pointer hover:bg-surface-container-high/60 active:bg-surface-container-high/60 ${
-                          n.analysis
-                            ? 'bg-surface-container border-l-[3px] border-l-primary/40'
-                            : 'bg-surface-container border-l-[3px] border-l-transparent'
+                        onClick={() => setSelectedEmailId(prev => prev === n.emailId ? null : n.emailId)}
+                        className={`rounded-xl transition-all overflow-hidden cursor-pointer ${
+                          selectedEmailId === n.emailId
+                            ? 'bg-surface-container-high ring-1 ring-primary/20 border-l-[3px] border-l-primary'
+                            : n.analysis
+                              ? 'bg-surface-container border-l-[3px] border-l-primary/40 hover:bg-surface-container-high/60'
+                              : 'bg-surface-container border-l-[3px] border-l-transparent hover:bg-surface-container-high/60'
                         }`}
                       >
                         {/* Card header */}
@@ -936,23 +942,58 @@ export default function EmailAgentWidget() {
                               )}
                             </div>
                           </div>
-                          {/* Inline action: status indicator */}
+                          {/* Chevron / spinner */}
                           <div className="shrink-0 mt-0.5">
                             {n.analyzing ? (
                               <span className="material-symbols-outlined text-lg text-primary animate-spin">progress_activity</span>
-                            ) : n.analysis ? (
-                              <span className="material-symbols-outlined text-lg text-on-surface-variant/40">open_in_new</span>
                             ) : (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); requestAnalysis(n.emailId); }}
-                                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-primary/10 active:bg-primary/10 transition-colors"
-                                title="AI 深度分析"
-                              >
-                                <span className="material-symbols-outlined text-lg text-on-surface-variant/50 hover:text-primary">auto_awesome</span>
-                              </button>
+                              <span className={`material-symbols-outlined text-lg transition-transform duration-200 ${
+                                selectedEmailId === n.emailId ? 'text-primary rotate-180' : 'text-on-surface-variant/40'
+                              }`}>expand_more</span>
                             )}
                           </div>
                         </div>
+
+                        {/* Inline preview panel */}
+                        {selectedEmailId === n.emailId && (
+                          <div className="mx-3 mb-3 pt-2 border-t border-outline-variant/10">
+                            {n.analyzing ? (
+                              <div className="flex items-center gap-2 py-3 justify-center">
+                                <span className="material-symbols-outlined text-primary animate-spin text-base">progress_activity</span>
+                                <span className="text-sm text-on-surface-variant">AI 正在分析中...</span>
+                              </div>
+                            ) : n.analysis ? (
+                              <>
+                                <div className="relative max-h-[130px] overflow-hidden rounded-lg bg-surface-container-highest/30 p-2.5">
+                                  <div className="text-on-surface-variant leading-relaxed">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={analysisMd}>
+                                      {n.analysis}
+                                    </ReactMarkdown>
+                                  </div>
+                                  <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-surface-container-high to-transparent pointer-events-none rounded-b-lg" />
+                                </div>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setDetailEmail(n.emailId); }}
+                                  className="flex items-center gap-1.5 mt-2 w-full justify-center py-2 rounded-lg bg-primary/10 text-sm font-medium text-primary hover:bg-primary/15 active:bg-primary/15 transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-base">open_in_new</span>
+                                  查看完整信件
+                                </button>
+                              </>
+                            ) : (
+                              <div className="flex flex-col items-center py-3 gap-2.5">
+                                <p className="text-xs text-on-surface-variant/60">尚未進行 AI 分析</p>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); requestAnalysis(n.emailId); }}
+                                  className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary text-sm font-medium hover:bg-primary/90 active:bg-primary/90 transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-base">auto_awesome</span>
+                                  AI 深度分析
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1101,10 +1142,16 @@ export default function EmailAgentWidget() {
             )}
 
             <div className="p-3 pt-2">
-              <div className="flex items-center gap-2">
-                <input
+              <div className="flex items-end gap-2">
+                <textarea
+                  ref={textareaRef}
                   value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
+                  onChange={e => {
+                    setChatInput(e.target.value);
+                    const el = e.target;
+                    el.style.height = 'auto';
+                    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+                  }}
                   onKeyDown={e => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -1114,12 +1161,14 @@ export default function EmailAgentWidget() {
                   onFocus={() => { if (activeTab !== 'chat') setActiveTab('chat'); }}
                   placeholder={t('emailAgent.placeholder' as any) || '問我任何信件相關問題...'}
                   disabled={streaming || !connected}
-                  className="flex-1 bg-surface-container rounded-xl px-3.5 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/40 outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50 transition-shadow"
+                  rows={1}
+                  className="flex-1 bg-surface-container rounded-xl px-3.5 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/40 outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50 transition-shadow resize-none leading-relaxed"
+                  style={{ maxHeight: 120 }}
                 />
                 <button
                   onClick={sendMessage}
                   disabled={streaming || !chatInput.trim() || !connected}
-                  className="w-9 h-9 flex items-center justify-center rounded-full bg-primary text-on-primary disabled:opacity-30 active:bg-primary/90 md:hover:bg-primary/90 transition-colors shrink-0"
+                  className="w-9 h-9 flex items-center justify-center rounded-full bg-primary text-on-primary disabled:opacity-30 active:bg-primary/90 md:hover:bg-primary/90 transition-colors shrink-0 mb-0.5"
                 >
                   <span className="material-symbols-outlined text-lg">
                     {streaming ? 'more_horiz' : 'arrow_upward'}
