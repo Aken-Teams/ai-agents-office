@@ -11,7 +11,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { registerConnection, unregisterConnection, pushEvent, isConnected, getConnectionId, unregisterIfMatch, markTaskActive, markTaskDone } from '../services/emailAgentRegistry.js';
-import { generateLayer2Analysis } from '../services/emailAgentPoller.js';
+import { generateLayer2Analysis, pollNewEmails } from '../services/emailAgentPoller.js';
 import { extractEmailAgentMemory, buildEmailAgentMemoryContext } from '../services/emailAgentMemory.js';
 import { resolveClaudeCliPath } from '../services/resolveClaudeCli.js';
 
@@ -190,6 +190,15 @@ router.get('/history', async (req: Request, res: Response) => {
   );
 
   res.json({ messages: messages.reverse() });
+});
+
+// Clear summary cache and re-poll (fix stale/mismatched summaries)
+router.post('/refresh', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  await dbRun('DELETE FROM email_summary_cache WHERE user_id = ?', userId);
+  // Trigger a fresh initial poll
+  pollNewEmails(userId, true).catch(() => {});
+  res.json({ ok: true });
 });
 
 // ─── Helpers ───

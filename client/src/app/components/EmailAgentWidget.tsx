@@ -385,9 +385,11 @@ export default function EmailAgentWidget() {
               .map(t => t.slice(8))
           );
 
-          // Merge: new emails on top, then updated existing ones
+          // Merge and sort by receivedAt descending (newest first)
           const updated = [...existingMap.values()];
-          const merged = [...brandNew, ...updated].slice(0, 100);
+          const merged = [...brandNew, ...updated]
+            .sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime())
+            .slice(0, 100);
           if (analyzingIds.size === 0) return merged;
           return merged.map(n =>
             analyzingIds.has(n.emailId) ? { ...n, analyzing: true } : n
@@ -644,7 +646,9 @@ export default function EmailAgentWidget() {
         const existingIds = new Set(prev.map(n => n.emailId));
         const newOnes = older.filter(o => !existingIds.has(o.emailId));
         if (newOnes.length === 0) setHasMore(false);
-        return [...prev, ...newOnes];
+        return [...prev, ...newOnes].sort((a, b) =>
+          new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
+        );
       });
       if (offset + data.messages.length >= data.total) setHasMore(false);
     } catch {
@@ -838,6 +842,25 @@ export default function EmailAgentWidget() {
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
+              {/* Refresh */}
+              <button
+                onClick={async () => {
+                  const token = localStorage.getItem('token');
+                  if (!token) return;
+                  setInitialLoading(true);
+                  setNotifications([]);
+                  try {
+                    await fetch(`${SSE_BASE}/api/email-agent/refresh`, {
+                      method: 'POST',
+                      headers: { Authorization: `Bearer ${token}` },
+                    });
+                  } catch {}
+                }}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors"
+                title="重新整理信件"
+              >
+                <span className="material-symbols-outlined text-lg text-on-surface-variant">refresh</span>
+              </button>
               {/* Sound toggle */}
               <button
                 onClick={toggleSoundMute}

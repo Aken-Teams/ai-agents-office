@@ -194,11 +194,15 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
     return;
   }
 
-  const { messages, total } = await fetchMessages(token, 'Inbox', 50, 0);
-  if (!messages.length) {
+  const { messages: rawMessages, total } = await fetchMessages(token, 'Inbox', 50, 0);
+  if (!rawMessages.length) {
     console.log(`[EmailAgent] No messages returned for user ${userId} (initial=${isInitial})`);
     return;
   }
+  // Sort newest first — don't rely on API ordering
+  const messages = [...rawMessages].sort((a, b) =>
+    new Date(b.received_at).getTime() - new Date(a.received_at).getTime()
+  );
 
   const lastSeenIds = getLastSeenIds(userId);
   if (!lastSeenIds) {
@@ -209,10 +213,10 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
   // Count total unread
   const totalUnread = messages.filter(m => !m.is_read).length;
 
-  // On initial connect: send recent unread as welcome batch (even if already "seen")
+  // On initial connect: send ALL recent emails (read + unread) so user sees latest inbox
   // On subsequent polls: only send genuinely new emails
   const emailsToSummarize = isInitial
-    ? messages.filter(m => !m.is_read).slice(0, 50)
+    ? messages.slice(0, 50)
     : messages.filter(m => !lastSeenIds.has(m.id));
 
   // Update last-seen IDs (keep the latest 50)
@@ -333,13 +337,29 @@ async function generateLayer1Summary(userId: string, emails: OutlookMessage[]): 
   );
   const memoryBlock = buildEmailAgentMemoryContext(memories);
 
-  const emailList = emails.map((e, i) => `[${i + 1}]
+  // Process in batches of 5 using keyed tags (A-E) for reliable mapping
+  const BATCH_SIZE = 5;
+  const TAGS = 'ABCDEFGHIJ';
+  const allSummaries: EmailSummary[] = [];
+  let lastOverview = '';
+
+  for (let batchStart = 0; batchStart < emails.length; batchStart += BATCH_SIZE) {
+    const batch = emails.slice(batchStart, batchStart + BATCH_SIZE);
+    const isLastBatch = batchStart + BATCH_SIZE >= emails.length;
+
+    // Each email gets a unique letter tag
+    const emailList = batch.map((e, i) => `--- 信件 ${TAGS[i]} ---
 Subject: ${e.subject}
 From: ${e.from.name} <${e.from.address}>
 Preview: ${(e.preview || '').substring(0, 300)}`).join('\n\n');
 
-  const prompt = `你是一位貼心的 AI 信件秘書。為以下新信件各生成一行繁體中文摘要和優先級。
-同時，用 1-2 句話生成一段親切的整體概覽，像是在跟老闆簡報信件狀況。語氣自然、重點明確。
+    const overviewInstruction = isLastBatch
+      ? '\n同時，用 1-2 句話生成一段親切的整體概覽，像是在跟老闆簡報信件狀況。語氣自然、重點明確。'
+      : '';
+
+    const tagKeys = batch.map((_, i) => `"${TAGS[i]}":{"summary":"...","priority":"高|中|低","category":"..."}`).join(',');
+
+    const prompt = `你是一位貼心的 AI 信件秘書。為以下 ${batch.length} 封信件各生成一行繁體中文摘要和優先級。${overviewInstruction}
 
 優先級規則：
 - 高：VIP、合約、緊急期限、資安警告、客戶投訴
@@ -350,48 +370,49 @@ ${memoryBlock}
 信件列表：
 ${emailList}
 
-回傳 JSON（不要 markdown 包裝，直接 JSON）：
-{"overview":"親切的整體概覽","emails":[{"emailId":"填入編號","summary":"一行摘要","priority":"高|中|低","category":"分類如:會議/客戶/通知/資安"}]}`;
+回傳 JSON（不要 markdown 包裝，直接 JSON），用信件代碼作為 key：
+{"overview":"${isLastBatch ? '整體概覽' : ''}",${tagKeys}}
 
-  const output = await spawnClaudeOneShot(prompt, LAYER1_TIMEOUT);
+重要：每個 key（${batch.map((_, i) => TAGS[i]).join(', ')}）必須對應到上面相同代碼的信件。`;
 
-  // Parse AI output — supports both new {overview, emails} and legacy array format
-  let emailResults: Array<{ emailId: string; summary: string; priority: string; category: string }> = [];
-  let overview = '';
-  if (output) {
-    try {
-      const objMatch = output.match(/\{[\s\S]*"emails"[\s\S]*\}/);
-      if (objMatch) {
-        const parsed = JSON.parse(objMatch[0]);
-        emailResults = parsed.emails || [];
-        overview = parsed.overview || '';
-      } else {
-        // Fallback: legacy array format
-        const arrMatch = output.match(/\[[\s\S]*\]/);
-        if (arrMatch) emailResults = JSON.parse(arrMatch[0]);
+    const output = await spawnClaudeOneShot(prompt, LAYER1_TIMEOUT);
+
+    const tagMap = new Map<string, { summary: string; priority: string; category: string }>();
+    if (output) {
+      try {
+        const objMatch = output.match(/\{[\s\S]*\}/);
+        if (objMatch) {
+          const parsed = JSON.parse(objMatch[0]);
+          if (parsed.overview) lastOverview = parsed.overview;
+          for (let i = 0; i < batch.length; i++) {
+            const tag = TAGS[i];
+            if (parsed[tag]) tagMap.set(tag, parsed[tag]);
+          }
+        }
+      } catch {
+        console.warn(`[EmailAgent] Failed to parse Layer 1 output for batch starting at ${batchStart}`);
       }
-    } catch {
-      console.warn('[EmailAgent] Failed to parse Layer 1 output');
+    }
+
+    // Map by tag — each email gets its tagged result
+    for (let i = 0; i < batch.length; i++) {
+      const email = batch[i];
+      const aiResult = tagMap.get(TAGS[i]);
+      allSummaries.push({
+        emailId: email.id,
+        subject: email.subject,
+        from: email.from,
+        receivedAt: email.received_at,
+        isRead: email.is_read,
+        hasAttachments: email.has_attachments,
+        summary: aiResult?.summary || email.subject,
+        priority: (aiResult?.priority && ['高', '中', '低'].includes(aiResult.priority) ? aiResult.priority : '中') as '高' | '中' | '低',
+        category: aiResult?.category || '一般',
+      });
     }
   }
 
-  // Map parsed results back to emails
-  const summaries = emails.map((email, i) => {
-    const aiResult = emailResults.find(p => p.emailId === String(i + 1)) || emailResults[i];
-    return {
-      emailId: email.id,
-      subject: email.subject,
-      from: email.from,
-      receivedAt: email.received_at,
-      isRead: email.is_read,
-      hasAttachments: email.has_attachments,
-      summary: aiResult?.summary || email.subject,
-      priority: (['高', '中', '低'].includes(aiResult?.priority) ? aiResult.priority : '中') as '高' | '中' | '低',
-      category: aiResult?.category || '一般',
-    };
-  });
-
-  return { summaries, overview };
+  return { summaries: allSummaries, overview: lastOverview };
 }
 
 /**
