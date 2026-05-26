@@ -712,11 +712,11 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
             {/* Body content */}
             <div className="px-5 py-5">
               {selectedMsg.body ? (
-                selectedMsg.body_type === 'html' ? (
+                (selectedMsg.body_type === 'html' || /<(?:div|table|html|head|body|span|p|br|a|img|style|td|tr|th)\b/i.test(selectedMsg.body)) ? (
                   <iframe
                     srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;padding:0;overflow-x:hidden;word-break:break-word;overflow-wrap:break-word;-webkit-text-size-adjust:100%;}img[src^="cid:"]{display:none!important;width:0!important;height:0!important;}img{max-width:100%!important;height:auto!important;}.table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;margin:8px 0;}.reply-collapsed{border-left:3px solid #c4c4c4;margin:16px 0;padding:4px 12px;border-radius:4px;background:#f5f5f5;cursor:pointer;font-size:12px;color:#666;}.reply-content{border-left:3px solid #ddd;margin:16px 0;padding:8px 12px;opacity:0.7;font-size:13px;}</style></head><body>${selectedMsg.body}</body></html>`}
                     className="w-full border-0 min-h-[200px] md:min-h-[300px]"
-                    sandbox="allow-same-origin"
+                    sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
                     title="Email body"
                     onLoad={e => {
                       const iframe = e.target as HTMLIFrameElement;
