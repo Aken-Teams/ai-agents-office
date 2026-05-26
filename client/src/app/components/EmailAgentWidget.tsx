@@ -358,12 +358,12 @@ export default function EmailAgentWidget() {
             }
           }
 
-          // Play sound + toast for new emails (Phase 1 initial or subsequent polls)
-          if (brandNew.length > 0) {
+          // Play sound + toast only for genuinely new emails on subsequent polls
+          // (suppress on initial load / reconnect to avoid noise on page navigation)
+          if (brandNew.length > 0 && !isInitialLoad.current) {
             setBubbleBounce(true);
             setTimeout(() => setBubbleBounce(false), 2000);
             if (!soundMutedRef.current) playNotificationSound();
-            // Simple toast — details are inside the widget
             const msg = brandNew.length === 1
               ? `📬 收到 1 封新信`
               : `📬 收到 ${brandNew.length} 封新信`;
@@ -601,6 +601,7 @@ export default function EmailAgentWidget() {
 
   const badgeCount = notifications.filter(n => !n.isRead).length || totalUnread;
   const highPriorityCount = notifications.filter(n => n.priority === '高').length;
+  const isAiWorking = streaming || notifications.some(n => n.analyzing);
 
   const priorityIcon = { '高': 'priority_high', '中': 'radio_button_checked', '低': 'radio_button_unchecked' };
   const priorityColor = { '高': 'text-error', '中': 'text-warning', '低': 'text-on-surface-variant/60' };
@@ -639,11 +640,20 @@ export default function EmailAgentWidget() {
           <div className={`flex items-center gap-1 bg-primary/90 text-on-primary py-2 px-1.5 shadow-lg transition-all duration-200 group-hover:px-3 ${
             toastMessage ? 'px-3' : ''
           } ${isOnLeft ? 'rounded-r-xl' : 'rounded-l-xl'}`}>
-            <span className="material-symbols-outlined text-base">smart_toy</span>
+            {isAiWorking ? (
+              <span className="flex items-center gap-[1.5px] w-4 justify-center">
+                {[0, 1, 2].map(i => (
+                  <span key={i} className="w-1 h-1 bg-on-primary rounded-full animate-bounce"
+                    style={{ animationDelay: `${i * 150}ms`, animationDuration: '0.8s' }} />
+                ))}
+              </span>
+            ) : (
+              <span className="material-symbols-outlined text-base">smart_toy</span>
+            )}
             <span className={`text-xs font-medium overflow-hidden transition-all duration-300 whitespace-nowrap ${
               toastMessage ? 'max-w-[200px]' : 'max-w-0 group-hover:max-w-[80px]'
             }`}>
-              {toastMessage || '信件助手'}
+              {toastMessage || (isAiWorking ? '分析中...' : '信件助手')}
             </span>
             {badgeCount > 0 && (
               <span className="min-w-[16px] h-4 flex items-center justify-center bg-error text-on-error text-[9px] font-bold rounded-full px-0.5">
@@ -676,9 +686,21 @@ export default function EmailAgentWidget() {
             style={bubblePos ? bubbleStyle : undefined}
             title={t('emailAgent.title' as any) || '信件助手'}
           >
-            <span className="material-symbols-outlined text-xl md:text-2xl pointer-events-none">
-              {expanded ? 'close' : 'smart_toy'}
-            </span>
+            {!expanded && isAiWorking ? (
+              <span className="pointer-events-none flex items-center gap-[2px]">
+                {[0, 1, 2].map(i => (
+                  <span
+                    key={i}
+                    className="w-[5px] h-[5px] md:w-1.5 md:h-1.5 bg-on-primary rounded-full animate-bounce"
+                    style={{ animationDelay: `${i * 150}ms`, animationDuration: '0.8s' }}
+                  />
+                ))}
+              </span>
+            ) : (
+              <span className="material-symbols-outlined text-xl md:text-2xl pointer-events-none">
+                {expanded ? 'close' : 'smart_toy'}
+              </span>
+            )}
             {!expanded && badgeCount > 0 && (
               <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] md:min-w-[20px] md:h-5 flex items-center justify-center bg-error text-on-error text-[10px] md:text-xs font-bold rounded-full px-1 animate-in zoom-in duration-200 pointer-events-none">
                 {badgeCount > 99 ? '99+' : badgeCount}

@@ -11,7 +11,7 @@ import { getMailToken, fetchMessages, fetchMessageDetail, type OutlookMessage } 
 import { pushEvent, getLastSeenIds, updateLastSeenIds } from './emailAgentRegistry.js';
 import { buildEmailAgentMemoryContext } from './emailAgentMemory.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
-import { dbAll, dbGet } from '../db.js';
+import { dbAll, dbGet, dbRun } from '../db.js';
 
 const LAYER1_TIMEOUT = 25_000; // 25s for batch summary
 const LAYER2_TIMEOUT = 60_000; // 60s for deep analysis
@@ -229,10 +229,53 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
 
   console.log(`[EmailAgent] ${emailsToSummarize.length} emails to summarize for user ${userId} (initial=${isInitial})`);
 
-  // Initial load: send basic info first so client exits loading spinner fast,
-  // then update with AI summaries. Subsequent polls: wait for AI before notifying.
+  // ── Check cache for already-summarized emails ──
+  const emailIds = emailsToSummarize.map(e => e.id);
+  const cached = await dbAll<{ email_id: string; summary: string; priority: string; category: string; analysis: string | null }>(
+    `SELECT email_id, summary, priority, category, analysis FROM email_summary_cache WHERE user_id = ? AND email_id IN (${emailIds.map(() => '?').join(',')})`,
+    userId, ...emailIds
+  );
+  const cacheMap = new Map(cached.map(c => [c.email_id, c]));
+
+  const uncachedEmails = emailsToSummarize.filter(e => !cacheMap.has(e.id));
+
+  // Build summaries from cache (include analysis if available)
+  const cachedSummaries: (EmailSummary & { analysis?: string })[] = emailsToSummarize
+    .filter(e => cacheMap.has(e.id))
+    .map(email => {
+      const c = cacheMap.get(email.id)!;
+      return {
+        emailId: email.id,
+        subject: email.subject,
+        from: email.from,
+        receivedAt: email.received_at,
+        isRead: email.is_read,
+        hasAttachments: email.has_attachments,
+        summary: c.summary,
+        priority: (['高', '中', '低'].includes(c.priority) ? c.priority : '中') as '高' | '中' | '低',
+        category: c.category,
+        ...(c.analysis ? { analysis: c.analysis } : {}),
+      };
+    });
+
+  // All emails cached — send cached data immediately, no AI call needed
+  if (uncachedEmails.length === 0) {
+    const state = await dbGet<{ last_overview: string | null }>(
+      'SELECT last_overview FROM email_agent_state WHERE user_id = ?', userId
+    );
+    console.log(`[EmailAgent] All ${emailsToSummarize.length} emails served from cache for user ${userId}`);
+    pushEvent(userId, {
+      type: 'new_emails',
+      data: { emails: cachedSummaries, totalUnread, total, overview: state?.last_overview || '' },
+    });
+    return;
+  }
+
+  console.log(`[EmailAgent] ${uncachedEmails.length}/${emailsToSummarize.length} emails need AI summary for user ${userId}`);
+
+  // Send cached + basic placeholders for uncached immediately (fast spinner exit)
   if (isInitial) {
-    const basicSummaries: EmailSummary[] = emailsToSummarize.map(email => ({
+    const basicForUncached: EmailSummary[] = uncachedEmails.map(email => ({
       emailId: email.id,
       subject: email.subject,
       from: email.from,
@@ -245,16 +288,36 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
     }));
     pushEvent(userId, {
       type: 'new_emails',
-      data: { emails: basicSummaries, totalUnread, total, overview: '' },
+      data: { emails: [...cachedSummaries, ...basicForUncached], totalUnread, total, overview: '' },
     });
   }
 
-  // Generate AI summaries (Layer 1)
-  const { summaries, overview } = await generateLayer1Summary(userId, emailsToSummarize);
+  // Generate AI summaries only for uncached emails
+  const { summaries: freshSummaries, overview } = await generateLayer1Summary(userId, uncachedEmails);
 
+  // Save fresh summaries to cache (fire-and-forget)
+  for (const s of freshSummaries) {
+    dbRun(
+      `INSERT INTO email_summary_cache (user_id, email_id, summary, priority, category) VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE summary = VALUES(summary), priority = VALUES(priority), category = VALUES(category)`,
+      userId, s.emailId, s.summary, s.priority, s.category
+    ).catch(() => {});
+  }
+
+  // Save overview (fire-and-forget)
+  if (overview) {
+    dbRun(
+      `INSERT INTO email_agent_state (user_id, last_overview) VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE last_overview = VALUES(last_overview)`,
+      userId, overview
+    ).catch(() => {});
+  }
+
+  // Merge cached + fresh and push
+  const allSummaries = [...cachedSummaries, ...freshSummaries];
   pushEvent(userId, {
     type: 'new_emails',
-    data: { emails: summaries, totalUnread, total, overview },
+    data: { emails: allSummaries, totalUnread, total, overview },
   });
 }
 
@@ -337,6 +400,20 @@ ${emailList}
  */
 export async function generateLayer2Analysis(userId: string, messageId: string): Promise<void> {
   try {
+    // ── Check cache first ──
+    const cached = await dbGet<{ analysis: string | null }>(
+      'SELECT analysis FROM email_summary_cache WHERE user_id = ? AND email_id = ?',
+      userId, messageId
+    );
+    if (cached?.analysis) {
+      console.log(`[EmailAgent] Layer 2 cache hit for message ${messageId}`);
+      pushEvent(userId, {
+        type: 'ai_analysis',
+        data: { emailId: messageId, analysis: cached.analysis },
+      });
+      return;
+    }
+
     const token = await getMailToken(userId);
     if (!token) {
       pushEvent(userId, { type: 'ai_analysis', data: { emailId: messageId, analysis: '❌ Outlook 連線已過期，請重新登入' } });
@@ -387,12 +464,20 @@ ${bodyText}
     const output = await spawnClaudeOneShot(prompt, LAYER2_TIMEOUT);
     console.log(`[EmailAgent] Layer 2 result: ${output ? output.substring(0, 100) + '...' : 'NULL'}`);
 
+    const analysis = output || '⚠️ AI 分析暫時無法回應，請稍後再試';
+
+    // Save analysis to cache (fire-and-forget)
+    if (output) {
+      dbRun(
+        `INSERT INTO email_summary_cache (user_id, email_id, summary, analysis) VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE analysis = VALUES(analysis)`,
+        userId, messageId, '', output
+      ).catch(() => {});
+    }
+
     pushEvent(userId, {
       type: 'ai_analysis',
-      data: {
-        emailId: messageId,
-        analysis: output || '⚠️ AI 分析暫時無法回應，請稍後再試',
-      },
+      data: { emailId: messageId, analysis },
     });
   } catch (err) {
     console.error(`[EmailAgent] Layer 2 error for ${messageId}:`, err);

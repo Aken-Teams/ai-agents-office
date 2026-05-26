@@ -453,7 +453,24 @@ export async function initializeDatabase(): Promise<void> {
         user_id         VARCHAR(36) PRIMARY KEY,
         last_seen_ids   TEXT DEFAULT NULL,
         last_poll_at    DATETIME DEFAULT NULL,
+        last_overview   TEXT DEFAULT NULL,
         created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Email summary + analysis cache (avoid re-generating AI for same emails)
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS email_summary_cache (
+        user_id     VARCHAR(36) NOT NULL,
+        email_id    VARCHAR(255) NOT NULL,
+        summary     TEXT NOT NULL,
+        priority    VARCHAR(5) NOT NULL DEFAULT '中',
+        category    VARCHAR(50) NOT NULL DEFAULT '一般',
+        analysis    LONGTEXT DEFAULT NULL,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, email_id),
+        INDEX idx_summary_cache_user (user_id),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
@@ -461,6 +478,11 @@ export async function initializeDatabase(): Promise<void> {
     // Terms of Service: add acceptance tracking column
     try {
       await conn.query('ALTER TABLE users ADD COLUMN terms_accepted_at DATETIME DEFAULT NULL');
+    } catch { /* column already exists */ }
+
+    // Migration: add last_overview column to email_agent_state
+    try {
+      await conn.query('ALTER TABLE email_agent_state ADD COLUMN last_overview TEXT DEFAULT NULL');
     } catch { /* column already exists */ }
 
     // Migration: add credentials_enc column to outlook_tokens
