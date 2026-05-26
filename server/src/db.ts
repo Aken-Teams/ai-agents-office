@@ -460,15 +460,18 @@ export async function initializeDatabase(): Promise<void> {
     `);
 
     // Email summary + analysis cache (avoid re-generating AI for same emails)
+    // IMPORTANT: email_id uses utf8mb4_bin (case-sensitive) because Outlook message IDs
+    // are base64-encoded and differ only in case (e.g. "6PoAAA=" vs "6POAAA=" are DIFFERENT emails)
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS email_summary_cache (
-        user_id     VARCHAR(36) NOT NULL,
-        email_id    VARCHAR(255) NOT NULL,
-        summary     TEXT NOT NULL,
-        priority    VARCHAR(5) NOT NULL DEFAULT '中',
-        category    VARCHAR(50) NOT NULL DEFAULT '一般',
-        analysis    LONGTEXT DEFAULT NULL,
-        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        user_id       VARCHAR(36) NOT NULL,
+        email_id      VARCHAR(500) COLLATE utf8mb4_bin NOT NULL,
+        summary       TEXT NOT NULL,
+        priority      VARCHAR(5) NOT NULL DEFAULT '中',
+        category      VARCHAR(50) NOT NULL DEFAULT '一般',
+        analysis      LONGTEXT DEFAULT NULL,
+        email_subject VARCHAR(500) DEFAULT NULL,
+        created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (user_id, email_id),
         INDEX idx_summary_cache_user (user_id),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -489,6 +492,23 @@ export async function initializeDatabase(): Promise<void> {
     try {
       await conn.query('ALTER TABLE outlook_tokens ADD COLUMN credentials_enc TEXT DEFAULT NULL');
     } catch { /* column already exists */ }
+
+    // Migration: widen email_id + switch to case-sensitive collation (utf8mb4_bin)
+    // Outlook message IDs are base64-encoded and differ only by case — unicode_ci treats them as equal!
+    try {
+      await conn.query('ALTER TABLE email_summary_cache MODIFY COLUMN email_id VARCHAR(500) COLLATE utf8mb4_bin NOT NULL');
+    } catch { /* already modified or table doesn't exist */ }
+
+    // Migration: add email_subject for cache integrity verification
+    try {
+      await conn.query('ALTER TABLE email_summary_cache ADD COLUMN email_subject VARCHAR(500) DEFAULT NULL');
+    } catch { /* column already exists */ }
+
+    // Migration: clear stale analyses that may have been stored against wrong email IDs
+    // due to case-insensitive collation (one-time cleanup after switching to utf8mb4_bin)
+    try {
+      await conn.query("UPDATE email_summary_cache SET analysis = NULL WHERE analysis IS NOT NULL AND email_subject IS NULL");
+    } catch { /* ignore */ }
 
     // Default system settings
     const defaults: Record<string, string> = {

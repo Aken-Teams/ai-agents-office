@@ -235,23 +235,52 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
 
   // ── Check cache for already-summarized emails ──
   const emailIds = emailsToSummarize.map(e => e.id);
-  const cached = await dbAll<{ email_id: string; summary: string; priority: string; category: string; analysis: string | null }>(
-    `SELECT email_id, summary, priority, category, analysis FROM email_summary_cache WHERE user_id = ? AND email_id IN (${emailIds.map(() => '?').join(',')})`,
+  const cached = await dbAll<{ email_id: string; summary: string; priority: string; category: string; analysis: string | null; email_subject: string | null }>(
+    `SELECT email_id, summary, priority, category, analysis, email_subject FROM email_summary_cache WHERE user_id = ? AND email_id IN (${emailIds.map(() => '?').join(',')})`,
     userId, ...emailIds
   );
+
+  // Build a subject lookup from incoming emails for cache integrity checks
+  const subjectById = new Map(emailsToSummarize.map(e => [e.id, e.subject]));
+
   // Only treat entries with non-empty summary as cached (refresh clears summaries but preserves analyses)
   const cacheMap = new Map(cached.filter(c => c.summary).map(c => [c.email_id, c]));
   // Keep a map of analyses for emails that were cleared by refresh (so we can re-attach them)
-  const analysisOnlyMap = new Map(cached.filter(c => !c.summary && c.analysis).map(c => [c.email_id, c.analysis]));
+  // Verify subject matches to prevent stale/mismatched analyses
+  const analysisOnlyMap = new Map(
+    cached
+      .filter(c => !c.summary && c.analysis)
+      .filter(c => {
+        // If we have a stored subject, verify it matches the actual email
+        if (c.email_subject && subjectById.has(c.email_id)) {
+          const actualSubject = subjectById.get(c.email_id)!;
+          if (c.email_subject !== actualSubject) {
+            console.warn(`[EmailAgent] Cache integrity mismatch for ${c.email_id}: cached="${c.email_subject}" vs actual="${actualSubject}" — discarding stale analysis`);
+            // Clear the stale analysis from DB
+            dbRun('UPDATE email_summary_cache SET analysis = NULL, email_subject = NULL WHERE user_id = ? AND email_id = ?', userId, c.email_id).catch(() => {});
+            return false;
+          }
+        }
+        return true;
+      })
+      .map(c => [c.email_id, c.analysis])
+  );
   console.log(`[EmailAgent] Cache: ${cacheMap.size} hits, ${analysisOnlyMap.size} analyses-only, ${emailIds.length - cacheMap.size - analysisOnlyMap.size} misses for user ${userId}`);
 
   const uncachedEmails = emailsToSummarize.filter(e => !cacheMap.has(e.id));
 
-  // Build summaries from cache (include analysis if available)
+  // Build summaries from cache (include analysis if available, with subject verification)
   const cachedSummaries: (EmailSummary & { analysis?: string })[] = emailsToSummarize
     .filter(e => cacheMap.has(e.id))
     .map(email => {
       const c = cacheMap.get(email.id)!;
+      // Verify cached analysis subject matches the actual email subject
+      let analysis = c.analysis;
+      if (analysis && c.email_subject && c.email_subject !== email.subject) {
+        console.warn(`[EmailAgent] Cache integrity mismatch for ${email.id}: cached="${c.email_subject}" vs actual="${email.subject}" — discarding stale analysis`);
+        dbRun('UPDATE email_summary_cache SET analysis = NULL, email_subject = NULL WHERE user_id = ? AND email_id = ?', userId, email.id).catch(() => {});
+        analysis = null;
+      }
       return {
         emailId: email.id,
         subject: email.subject,
@@ -262,7 +291,7 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
         summary: c.summary,
         priority: (['高', '中', '低'].includes(c.priority) ? c.priority : '中') as '高' | '中' | '低',
         category: c.category,
-        ...(c.analysis ? { analysis: c.analysis } : {}),
+        ...(analysis ? { analysis } : {}),
       };
     });
 
@@ -282,18 +311,23 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
   console.log(`[EmailAgent] ${uncachedEmails.length}/${emailsToSummarize.length} emails need AI summary for user ${userId}`);
 
   // Send cached + basic placeholders for uncached immediately (fast spinner exit)
+  // Attach preserved analyses (from refresh) even in the first push so they're not lost
   if (isInitial) {
-    const basicForUncached: EmailSummary[] = uncachedEmails.map(email => ({
-      emailId: email.id,
-      subject: email.subject,
-      from: email.from,
-      receivedAt: email.received_at,
-      isRead: email.is_read,
-      hasAttachments: email.has_attachments,
-      summary: email.subject,
-      priority: '中' as const,
-      category: '一般',
-    }));
+    const basicForUncached: (EmailSummary & { analysis?: string })[] = uncachedEmails.map(email => {
+      const preservedAnalysis = analysisOnlyMap.get(email.id);
+      return {
+        emailId: email.id,
+        subject: email.subject,
+        from: email.from,
+        receivedAt: email.received_at,
+        isRead: email.is_read,
+        hasAttachments: email.has_attachments,
+        summary: email.subject,
+        priority: '中' as const,
+        category: '一般',
+        ...(preservedAnalysis ? { analysis: preservedAnalysis } : {}),
+      };
+    });
     // Load cached overview so we don't blank it while AI runs for new emails
     const cachedState = await dbGet<{ last_overview: string | null }>(
       'SELECT last_overview FROM email_agent_state WHERE user_id = ?', userId
@@ -307,12 +341,12 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
   // Generate AI summaries only for uncached emails
   const { summaries: freshSummaries, overview } = await generateLayer1Summary(userId, uncachedEmails);
 
-  // Save fresh summaries to cache (fire-and-forget)
+  // Save fresh summaries to cache (fire-and-forget), include subject for integrity verification
   for (const s of freshSummaries) {
     dbRun(
-      `INSERT INTO email_summary_cache (user_id, email_id, summary, priority, category) VALUES (?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE summary = VALUES(summary), priority = VALUES(priority), category = VALUES(category)`,
-      userId, s.emailId, s.summary, s.priority, s.category
+      `INSERT INTO email_summary_cache (user_id, email_id, summary, priority, category, email_subject) VALUES (?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE summary = VALUES(summary), priority = VALUES(priority), category = VALUES(category), email_subject = VALUES(email_subject)`,
+      userId, s.emailId, s.summary, s.priority, s.category, s.subject
     ).catch(() => {});
   }
 
@@ -436,31 +470,45 @@ ${emailList}
 export async function generateLayer2Analysis(userId: string, messageId: string): Promise<void> {
   try {
     // ── Check cache first ──
-    const cached = await dbGet<{ analysis: string | null }>(
-      'SELECT analysis FROM email_summary_cache WHERE user_id = ? AND email_id = ?',
+    const cached = await dbGet<{ analysis: string | null; email_subject: string | null }>(
+      'SELECT analysis, email_subject FROM email_summary_cache WHERE user_id = ? AND email_id = ?',
       userId, messageId
     );
-    if (cached?.analysis) {
-      console.log(`[EmailAgent] Layer 2 cache hit for message ${messageId}`);
-      pushEvent(userId, {
-        type: 'ai_analysis',
-        data: { emailId: messageId, analysis: cached.analysis },
-      });
-      return;
-    }
-
     const token = await getMailToken(userId);
     if (!token) {
       pushEvent(userId, { type: 'ai_analysis', data: { emailId: messageId, analysis: '❌ Outlook 連線已過期，請重新登入' } });
       return;
     }
 
+    // Always fetch the actual message to verify cache integrity
     console.log(`[EmailAgent] Layer 2 analysis for message ${messageId}`);
     markTaskActive(userId, `analyze:${messageId}`);
     const message = await fetchMessageDetail(token, messageId);
     if (!message) {
+      markTaskDone(userId, `analyze:${messageId}`);
       pushEvent(userId, { type: 'ai_analysis', data: { emailId: messageId, analysis: '❌ 找不到信件，可能已被刪除' } });
       return;
+    }
+
+    // Check cache — verify subject matches to prevent stale/mismatched analyses
+    if (cached?.analysis) {
+      if (!cached.email_subject || cached.email_subject === message.subject) {
+        console.log(`[EmailAgent] Layer 2 cache hit for message ${messageId} (subject verified)`);
+        // Update subject if missing (for legacy cache entries)
+        if (!cached.email_subject) {
+          dbRun('UPDATE email_summary_cache SET email_subject = ? WHERE user_id = ? AND email_id = ?',
+            message.subject || '', userId, messageId).catch(() => {});
+        }
+        pushEvent(userId, {
+          type: 'ai_analysis',
+          data: { emailId: messageId, analysis: cached.analysis },
+        });
+        markTaskDone(userId, `analyze:${messageId}`);
+        return;
+      }
+      console.warn(`[EmailAgent] Layer 2 cache MISMATCH for ${messageId}: cached="${cached.email_subject}" vs actual="${message.subject}" — regenerating`);
+      dbRun('UPDATE email_summary_cache SET analysis = NULL, email_subject = NULL WHERE user_id = ? AND email_id = ?',
+        userId, messageId).catch(() => {});
     }
 
     // Load email agent memories
@@ -511,13 +559,13 @@ ${bodyText}
 
     const analysis = output || '⚠️ AI 分析暫時無法回應，請稍後再試';
 
-    // Save analysis to cache (fire-and-forget)
+    // Save analysis to cache with subject for integrity verification
     if (output) {
       dbRun(
-        `INSERT INTO email_summary_cache (user_id, email_id, summary, analysis) VALUES (?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE analysis = VALUES(analysis)`,
-        userId, messageId, '', output
-      ).catch(() => {});
+        `INSERT INTO email_summary_cache (user_id, email_id, summary, analysis, email_subject) VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE analysis = VALUES(analysis), email_subject = VALUES(email_subject)`,
+        userId, messageId, '', output, message.subject || ''
+      ).catch(err => console.error(`[EmailAgent] Failed to save Layer 2 analysis for ${messageId}:`, err));
     }
 
     markTaskDone(userId, `analyze:${messageId}`);

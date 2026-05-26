@@ -605,7 +605,7 @@ export default function EmailAgentWidget() {
       n.emailId === emailId ? { ...n, analyzing: true } : n
     ));
     try {
-      await fetch(`${SSE_BASE}/api/email-agent/analyze/${emailId}`, {
+      await fetch(`${SSE_BASE}/api/email-agent/analyze/${encodeURIComponent(emailId)}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -642,9 +642,35 @@ export default function EmailAgentWidget() {
         priority: '中' as const,
         category: '',
       }));
+      // Fetch cached summaries/analyses for loaded-more emails
+      const newIds = older.map(o => o.emailId);
+      let cacheData: Record<string, { summary?: string; priority?: string; category?: string; analysis?: string }> = {};
+      try {
+        const cacheRes = await fetch(`${SSE_BASE}/api/email-agent/cache-lookup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ emailIds: newIds }),
+        });
+        if (cacheRes.ok) {
+          const cd = await cacheRes.json();
+          cacheData = cd.cache || {};
+        }
+      } catch { /* cache lookup is optional */ }
+      // Merge cached data into loaded emails
+      const enriched = older.map(o => {
+        const c = cacheData[o.emailId];
+        if (!c) return o;
+        return {
+          ...o,
+          ...(c.summary ? { summary: c.summary } : {}),
+          ...(c.priority && ['高', '中', '低'].includes(c.priority) ? { priority: c.priority as '高' | '中' | '低' } : {}),
+          ...(c.category ? { category: c.category } : {}),
+          ...(c.analysis ? { analysis: c.analysis } : {}),
+        };
+      });
       setNotifications(prev => {
         const existingIds = new Set(prev.map(n => n.emailId));
-        const newOnes = older.filter(o => !existingIds.has(o.emailId));
+        const newOnes = enriched.filter(o => !existingIds.has(o.emailId));
         if (newOnes.length === 0) setHasMore(false);
         return [...prev, ...newOnes].sort((a, b) =>
           new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()
@@ -975,7 +1001,7 @@ export default function EmailAgentWidget() {
                     {notifications.map(n => (
                       <div
                         key={n.emailId}
-                        className={`rounded-xl bg-surface-container overflow-hidden ${
+                        className={`rounded-xl bg-surface-container ${
                           n.analysis ? 'border-l-[3px] border-l-primary/40' : 'border-l-[3px] border-l-transparent'
                         }`}
                       >
@@ -1016,7 +1042,7 @@ export default function EmailAgentWidget() {
                                 >
                                   <span className="material-symbols-outlined text-on-surface-variant/50" style={{ fontSize: 15 }}>open_in_new</span>
                                 </button>
-                                <span className="pointer-events-none absolute right-0 top-full mt-1 px-2 py-0.5 rounded-md bg-inverse-surface text-inverse-on-surface text-[10px] font-medium whitespace-nowrap opacity-0 scale-95 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:scale-100 shadow-lg z-10">
+                                <span className="pointer-events-none absolute right-0 bottom-full mb-1 px-2 py-0.5 rounded-md bg-inverse-surface text-inverse-on-surface text-[10px] font-medium whitespace-nowrap opacity-0 scale-95 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:scale-100 shadow-lg z-50">
                                   查看信件
                                 </span>
                               </div>
@@ -1032,7 +1058,7 @@ export default function EmailAgentWidget() {
                                   >
                                     <span className="material-symbols-outlined text-primary" style={{ fontSize: 15 }}>auto_awesome</span>
                                   </button>
-                                  <span className="pointer-events-none absolute right-0 top-full mt-1 px-2 py-0.5 rounded-md bg-inverse-surface text-inverse-on-surface text-[10px] font-medium whitespace-nowrap opacity-0 scale-95 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:scale-100 shadow-lg z-10">
+                                  <span className="pointer-events-none absolute right-0 bottom-full mb-1 px-2 py-0.5 rounded-md bg-inverse-surface text-inverse-on-surface text-[10px] font-medium whitespace-nowrap opacity-0 scale-95 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:scale-100 shadow-lg z-50">
                                     查看 AI 分析
                                   </span>
                                 </div>
@@ -1044,7 +1070,7 @@ export default function EmailAgentWidget() {
                                   >
                                     <span className="material-symbols-outlined text-on-surface-variant/35" style={{ fontSize: 15 }}>auto_awesome</span>
                                   </button>
-                                  <span className="pointer-events-none absolute right-0 top-full mt-1 px-2 py-0.5 rounded-md bg-inverse-surface text-inverse-on-surface text-[10px] font-medium whitespace-nowrap opacity-0 scale-95 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:scale-100 shadow-lg z-10">
+                                  <span className="pointer-events-none absolute right-0 bottom-full mb-1 px-2 py-0.5 rounded-md bg-inverse-surface text-inverse-on-surface text-[10px] font-medium whitespace-nowrap opacity-0 scale-95 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:scale-100 shadow-lg z-50">
                                     AI 深度分析
                                   </span>
                                 </div>

@@ -205,6 +205,33 @@ router.post('/refresh', async (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
+// ─── POST /api/email-agent/cache-lookup — Fetch cached summaries/analyses for specific email IDs ───
+
+router.post('/cache-lookup', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const { emailIds } = req.body as { emailIds?: string[] };
+  if (!Array.isArray(emailIds) || emailIds.length === 0) {
+    res.json({ cache: {} });
+    return;
+  }
+  // Limit to 100 IDs per request
+  const ids = emailIds.slice(0, 100);
+  const rows = await dbAll<{ email_id: string; summary: string; priority: string; category: string; analysis: string | null }>(
+    `SELECT email_id, summary, priority, category, analysis FROM email_summary_cache WHERE user_id = ? AND email_id IN (${ids.map(() => '?').join(',')})`,
+    userId, ...ids
+  );
+  const cache: Record<string, { summary?: string; priority?: string; category?: string; analysis?: string }> = {};
+  for (const r of rows) {
+    cache[r.email_id] = {
+      ...(r.summary ? { summary: r.summary } : {}),
+      ...(r.priority ? { priority: r.priority } : {}),
+      ...(r.category ? { category: r.category } : {}),
+      ...(r.analysis ? { analysis: r.analysis } : {}),
+    };
+  }
+  res.json({ cache });
+});
+
 // ─── Helpers ───
 
 async function getOrCreateConversation(userId: string): Promise<string> {
