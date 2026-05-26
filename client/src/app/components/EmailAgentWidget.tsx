@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTranslation } from '../../i18n';
+import EmailDetailModal from './EmailDetailModal';
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 const STORAGE_KEY_POS = 'email_widget_pos';
@@ -123,6 +124,7 @@ export default function EmailAgentWidget() {
   const reconnectTimer = useRef<NodeJS.Timeout | null>(null);
   const isInitialLoad = useRef(true);
   const [serverActiveTasks, setServerActiveTasks] = useState<string[]>([]);
+  const [detailEmail, setDetailEmail] = useState<string | null>(null);
 
   // Drag state
   const bubbleRef = useRef<HTMLButtonElement>(null);
@@ -407,7 +409,8 @@ export default function EmailAgentWidget() {
             n.emailId === emailId ? { ...n, analysis, analyzing: false } : n
           );
         });
-        setExpandedAnalysis(prev => new Set([...prev, emailId]));
+        // Auto-open the detail modal to show analysis result
+        setDetailEmail(emailId);
         break;
       }
       case 'ai_response_delta': {
@@ -900,7 +903,8 @@ export default function EmailAgentWidget() {
                     {notifications.slice(0, 30).map(n => (
                       <div
                         key={n.emailId}
-                        className={`rounded-xl transition-colors overflow-hidden ${
+                        onClick={() => setDetailEmail(n.emailId)}
+                        className={`rounded-xl transition-colors overflow-hidden cursor-pointer hover:bg-surface-container-high/60 active:bg-surface-container-high/60 ${
                           n.analysis
                             ? 'bg-surface-container border-l-[3px] border-l-primary/40'
                             : 'bg-surface-container border-l-[3px] border-l-transparent'
@@ -947,7 +951,7 @@ export default function EmailAgentWidget() {
                               <span className="material-symbols-outlined text-lg text-primary animate-spin">progress_activity</span>
                             ) : n.analysis ? (
                               <button
-                                onClick={() => toggleAnalysis(n.emailId)}
+                                onClick={(e) => { e.stopPropagation(); toggleAnalysis(n.emailId); }}
                                 className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-primary/10 active:bg-primary/10 transition-colors"
                                 title={expandedAnalysis.has(n.emailId) ? '收合分析' : '展開分析'}
                               >
@@ -957,7 +961,7 @@ export default function EmailAgentWidget() {
                               </button>
                             ) : (
                               <button
-                                onClick={() => requestAnalysis(n.emailId)}
+                                onClick={(e) => { e.stopPropagation(); requestAnalysis(n.emailId); }}
                                 className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-primary/10 active:bg-primary/10 transition-colors"
                                 title="AI 深度分析"
                               >
@@ -1158,6 +1162,27 @@ export default function EmailAgentWidget() {
           </div>
         </div>
       )}
+
+      {/* Email Detail Modal */}
+      {detailEmail && (() => {
+        const currentEmail = notifications.find(n => n.emailId === detailEmail);
+        if (!currentEmail) return null;
+        return (
+          <EmailDetailModal
+            email={currentEmail}
+            analysisMd={analysisMd}
+            onClose={() => setDetailEmail(null)}
+            onRequestAnalysis={(emailId) => { requestAnalysis(emailId); }}
+            onChatAboutEmail={(subject, from) => {
+              setDetailEmail(null);
+              setExpanded(true);
+              setActiveTab('chat');
+              const msg = `關於「${subject}」（來自 ${from}）這封信，`;
+              setChatInput(msg);
+            }}
+          />
+        );
+      })()}
     </>
   );
 
