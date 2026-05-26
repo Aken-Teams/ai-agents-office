@@ -239,7 +239,11 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
     `SELECT email_id, summary, priority, category, analysis FROM email_summary_cache WHERE user_id = ? AND email_id IN (${emailIds.map(() => '?').join(',')})`,
     userId, ...emailIds
   );
-  const cacheMap = new Map(cached.map(c => [c.email_id, c]));
+  // Only treat entries with non-empty summary as cached (refresh clears summaries but preserves analyses)
+  const cacheMap = new Map(cached.filter(c => c.summary).map(c => [c.email_id, c]));
+  // Keep a map of analyses for emails that were cleared by refresh (so we can re-attach them)
+  const analysisOnlyMap = new Map(cached.filter(c => !c.summary && c.analysis).map(c => [c.email_id, c.analysis]));
+  console.log(`[EmailAgent] Cache: ${cacheMap.size} hits, ${analysisOnlyMap.size} analyses-only, ${emailIds.length - cacheMap.size - analysisOnlyMap.size} misses for user ${userId}`);
 
   const uncachedEmails = emailsToSummarize.filter(e => !cacheMap.has(e.id));
 
@@ -290,9 +294,13 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
       priority: '中' as const,
       category: '一般',
     }));
+    // Load cached overview so we don't blank it while AI runs for new emails
+    const cachedState = await dbGet<{ last_overview: string | null }>(
+      'SELECT last_overview FROM email_agent_state WHERE user_id = ?', userId
+    );
     pushEvent(userId, {
       type: 'new_emails',
-      data: { emails: [...cachedSummaries, ...basicForUncached], totalUnread, total, overview: '' },
+      data: { emails: [...cachedSummaries, ...basicForUncached], totalUnread, total, overview: cachedState?.last_overview || '' },
     });
   }
 
@@ -317,8 +325,14 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
     ).catch(() => {});
   }
 
+  // Re-attach preserved analyses (from refresh) to fresh summaries
+  const allFresh = freshSummaries.map(s => {
+    const preservedAnalysis = analysisOnlyMap.get(s.emailId);
+    return preservedAnalysis ? { ...s, analysis: preservedAnalysis } : s;
+  });
+
   // Merge cached + fresh and push
-  const allSummaries = [...cachedSummaries, ...freshSummaries];
+  const allSummaries = [...cachedSummaries, ...allFresh];
   pushEvent(userId, {
     type: 'new_emails',
     data: { emails: allSummaries, totalUnread, total, overview },

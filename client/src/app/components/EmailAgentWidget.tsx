@@ -843,51 +843,68 @@ export default function EmailAgentWidget() {
             </div>
             <div className="flex items-center gap-1 shrink-0">
               {/* Refresh */}
-              <button
-                onClick={async () => {
-                  const token = localStorage.getItem('token');
-                  if (!token) return;
-                  setInitialLoading(true);
-                  setNotifications([]);
-                  try {
-                    await fetch(`${SSE_BASE}/api/email-agent/refresh`, {
-                      method: 'POST',
-                      headers: { Authorization: `Bearer ${token}` },
-                    });
-                  } catch {}
-                }}
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors"
-                title="重新整理信件"
-              >
-                <span className="material-symbols-outlined text-lg text-on-surface-variant">refresh</span>
-              </button>
+              <div className="relative group/tip">
+                <button
+                  onClick={async () => {
+                    const token = localStorage.getItem('token');
+                    if (!token) return;
+                    setInitialLoading(true);
+                    setNotifications([]);
+                    try {
+                      await fetch(`${SSE_BASE}/api/email-agent/refresh`, {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${token}` },
+                      });
+                    } catch {}
+                  }}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg text-on-surface-variant">refresh</span>
+                </button>
+                <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2.5 py-1 rounded-lg bg-inverse-surface text-inverse-on-surface text-[11px] font-medium whitespace-nowrap opacity-0 scale-95 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:scale-100 shadow-lg z-10">
+                  重新整理
+                </span>
+              </div>
               {/* Sound toggle */}
-              <button
-                onClick={toggleSoundMute}
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors"
-                title={soundMuted ? '開啟音效' : '靜音'}
-              >
-                <span className="material-symbols-outlined text-lg text-on-surface-variant">
-                  {soundMuted ? 'volume_off' : 'volume_up'}
+              <div className="relative group/tip">
+                <button
+                  onClick={toggleSoundMute}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg text-on-surface-variant">
+                    {soundMuted ? 'volume_off' : 'volume_up'}
+                  </span>
+                </button>
+                <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2.5 py-1 rounded-lg bg-inverse-surface text-inverse-on-surface text-[11px] font-medium whitespace-nowrap opacity-0 scale-95 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:scale-100 shadow-lg z-10">
+                  {soundMuted ? '開啟音效' : '靜音'}
                 </span>
-              </button>
+              </div>
               {/* Hide button */}
-              <button
-                onClick={toggleHidden}
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors"
-                title="隱藏到側邊"
-              >
-                <span className="material-symbols-outlined text-lg text-on-surface-variant">
-                  {isOnLeft ? 'left_panel_close' : 'right_panel_close'}
+              <div className="relative group/tip">
+                <button
+                  onClick={toggleHidden}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg text-on-surface-variant">
+                    {isOnLeft ? 'left_panel_close' : 'right_panel_close'}
+                  </span>
+                </button>
+                <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2.5 py-1 rounded-lg bg-inverse-surface text-inverse-on-surface text-[11px] font-medium whitespace-nowrap opacity-0 scale-95 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:scale-100 shadow-lg z-10">
+                  隱藏到側邊
                 </span>
-              </button>
+              </div>
               {/* Close button */}
-              <button
-                onClick={() => setExpanded(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors"
-              >
-                <span className="material-symbols-outlined text-lg text-on-surface-variant">close</span>
-              </button>
+              <div className="relative group/tip">
+                <button
+                  onClick={() => setExpanded(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors"
+                >
+                  <span className="material-symbols-outlined text-lg text-on-surface-variant">close</span>
+                </button>
+                <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2.5 py-1 rounded-lg bg-inverse-surface text-inverse-on-surface text-[11px] font-medium whitespace-nowrap opacity-0 scale-95 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:scale-100 shadow-lg z-10">
+                  關閉
+                </span>
+              </div>
             </div>
           </div>
 
@@ -970,7 +987,10 @@ export default function EmailAgentWidget() {
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-[13px] text-on-surface font-medium leading-snug line-clamp-2">{n.summary}</p>
+                            <p className="text-[13px] text-on-surface font-medium leading-snug line-clamp-1">{n.subject}</p>
+                            {n.summary && n.summary !== n.subject && (
+                              <p className="text-[12px] text-on-surface-variant leading-snug line-clamp-1 mt-0.5">{n.summary}</p>
+                            )}
                             <div className="flex items-center gap-1.5 mt-1">
                               <span className="text-[11px] text-on-surface-variant truncate max-w-[100px] md:max-w-[140px]">
                                 {n.from.name || n.from.address}
@@ -989,33 +1009,45 @@ export default function EmailAgentWidget() {
                               )}
                               {/* Action icons — inline with metadata */}
                               <span className="flex-1" />
-                              <button
-                                onClick={() => setDetailEmail(n.emailId)}
-                                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors"
-                                title="查看信件"
-                              >
-                                <span className="material-symbols-outlined text-on-surface-variant/50" style={{ fontSize: 15 }}>open_in_new</span>
-                              </button>
+                              <div className="relative group/tip">
+                                <button
+                                  onClick={() => setDetailEmail(n.emailId)}
+                                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors"
+                                >
+                                  <span className="material-symbols-outlined text-on-surface-variant/50" style={{ fontSize: 15 }}>open_in_new</span>
+                                </button>
+                                <span className="pointer-events-none absolute right-0 top-full mt-1 px-2 py-0.5 rounded-md bg-inverse-surface text-inverse-on-surface text-[10px] font-medium whitespace-nowrap opacity-0 scale-95 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:scale-100 shadow-lg z-10">
+                                  查看信件
+                                </span>
+                              </div>
                               {n.analyzing ? (
                                 <span className="w-7 h-7 flex items-center justify-center">
                                   <span className="material-symbols-outlined text-primary animate-spin" style={{ fontSize: 15 }}>progress_activity</span>
                                 </span>
                               ) : n.analysis ? (
-                                <button
-                                  onClick={() => setDetailEmail(n.emailId)}
-                                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-primary/10 active:bg-primary/10 transition-colors"
-                                  title="查看 AI 分析"
-                                >
-                                  <span className="material-symbols-outlined text-primary" style={{ fontSize: 15 }}>auto_awesome</span>
-                                </button>
+                                <div className="relative group/tip">
+                                  <button
+                                    onClick={() => setDetailEmail(n.emailId)}
+                                    className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-primary/10 active:bg-primary/10 transition-colors"
+                                  >
+                                    <span className="material-symbols-outlined text-primary" style={{ fontSize: 15 }}>auto_awesome</span>
+                                  </button>
+                                  <span className="pointer-events-none absolute right-0 top-full mt-1 px-2 py-0.5 rounded-md bg-inverse-surface text-inverse-on-surface text-[10px] font-medium whitespace-nowrap opacity-0 scale-95 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:scale-100 shadow-lg z-10">
+                                    查看 AI 分析
+                                  </span>
+                                </div>
                               ) : (
-                                <button
-                                  onClick={() => requestAnalysis(n.emailId)}
-                                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-primary/10 active:bg-primary/10 transition-colors"
-                                  title="AI 深度分析"
-                                >
-                                  <span className="material-symbols-outlined text-on-surface-variant/35" style={{ fontSize: 15 }}>auto_awesome</span>
-                                </button>
+                                <div className="relative group/tip">
+                                  <button
+                                    onClick={() => requestAnalysis(n.emailId)}
+                                    className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-primary/10 active:bg-primary/10 transition-colors"
+                                  >
+                                    <span className="material-symbols-outlined text-on-surface-variant/35" style={{ fontSize: 15 }}>auto_awesome</span>
+                                  </button>
+                                  <span className="pointer-events-none absolute right-0 top-full mt-1 px-2 py-0.5 rounded-md bg-inverse-surface text-inverse-on-surface text-[10px] font-medium whitespace-nowrap opacity-0 scale-95 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:scale-100 shadow-lg z-10">
+                                    AI 深度分析
+                                  </span>
+                                </div>
                               )}
                             </div>
                           </div>

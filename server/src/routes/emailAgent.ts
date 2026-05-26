@@ -192,10 +192,14 @@ router.get('/history', async (req: Request, res: Response) => {
   res.json({ messages: messages.reverse() });
 });
 
-// Clear summary cache and re-poll (fix stale/mismatched summaries)
+// Clear Layer 1 summary cache and re-poll (preserve Layer 2 analyses)
 router.post('/refresh', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  await dbRun('DELETE FROM email_summary_cache WHERE user_id = ?', userId);
+  // Only clear Layer 1 summaries — preserve Layer 2 analyses
+  await dbRun(
+    `UPDATE email_summary_cache SET summary = '', priority = '中', category = '一般' WHERE user_id = ?`,
+    userId
+  );
   // Trigger a fresh initial poll
   pollNewEmails(userId, true).catch(() => {});
   res.json({ ok: true });
