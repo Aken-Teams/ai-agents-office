@@ -55,34 +55,33 @@ interface EmailDetailModalProps {
   onChatAboutEmail: (subject: string, from: string) => void;
 }
 
-// Detect security risks from AI analysis text
-function detectSecurityFlags(analysis: string | undefined, priority: string): SecurityFlags {
+// Detect security risks using the structured [RISK:...] tag from AI output.
+// The AI prompt explicitly asks for [RISK:NONE] or [RISK:HIGH] on the last line.
+// Falls back to keyword heuristic only if the tag is missing (legacy analyses).
+function detectSecurityFlags(analysis: string | undefined): SecurityFlags {
   if (!analysis) return { hasRisk: false, riskLevel: 'none', flags: [] };
 
-  const negationPatterns = /無(?:明顯|特別)?(?:資安)?風險|低風險|安全無虞|沒有.*?風險/;
-  const hasNegation = negationPatterns.test(analysis);
-
-  const riskKeywords: Array<[RegExp, string]> = [
-    [/釣魚/g, '釣魚風險'],
-    [/phishing/gi, '釣魚風險'],
-    [/惡意/g, '惡意內容'],
-    [/malware|malicious/gi, '惡意內容'],
-    [/詐騙|scam/gi, '詐騙風險'],
-    [/偽造|spoofing/gi, '偽造寄件者'],
-    [/可疑(?:連結|附件|網址|URL)/g, '可疑連結'],
-  ];
-
-  const flags = new Set<string>();
-  for (const [pattern, label] of riskKeywords) {
-    if (pattern.test(analysis)) flags.add(label);
+  // 1. Check for structured risk tag (preferred — most reliable)
+  const tagMatch = analysis.match(/\[RISK:(NONE|HIGH)]/);
+  if (tagMatch) {
+    if (tagMatch[1] === 'NONE') return { hasRisk: false, riskLevel: 'none', flags: [] };
+    // RISK:HIGH — extract specific risk types from the 資安標記 section
+    const flags = new Set<string>();
+    const section = analysis.match(/資安標記[\s\S]*?(?=\n##|\n\d+\.\s|\[RISK:|$)/i)?.[0] || analysis;
+    if (/釣魚|phishing/i.test(section)) flags.add('釣魚風險');
+    if (/惡意|malware|malicious/i.test(section)) flags.add('惡意內容');
+    if (/詐騙|scam/i.test(section)) flags.add('詐騙風險');
+    if (/偽造|spoofing|冒充/i.test(section)) flags.add('偽造寄件者');
+    if (/可疑(?:連結|附件|網址)/i.test(section)) flags.add('可疑連結');
+    if (flags.size === 0) flags.add('資安風險');
+    return { hasRisk: true, riskLevel: 'high', flags: [...flags] };
   }
 
-  if (flags.size === 0 || hasNegation) {
-    return { hasRisk: false, riskLevel: 'none', flags: [] };
-  }
-
-  const riskLevel = priority === '高' ? 'high' : 'medium';
-  return { hasRisk: true, riskLevel, flags: [...flags] };
+  // 2. Fallback: no tag found (legacy analyses before prompt update)
+  //    Only flag if analysis does NOT contain common "safe" phrases
+  const safePattern = /無資安風險|無明顯.*風險|低風險|安全無虞|正常信件/;
+  if (safePattern.test(analysis)) return { hasRisk: false, riskLevel: 'none', flags: [] };
+  return { hasRisk: false, riskLevel: 'none', flags: [] };
 }
 
 function formatFileSize(bytes: number): string {
@@ -137,7 +136,7 @@ export default function EmailDetailModal({
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const security = detectSecurityFlags(email.analysis, email.priority);
+  const security = detectSecurityFlags(email.analysis);
 
   const handleDownload = useCallback((msgId: string, attId: string, filename: string, contentType: string) => {
     const token = localStorage.getItem('token');
@@ -406,7 +405,7 @@ export default function EmailDetailModal({
               ) : email.analysis ? (
                 <div className="text-sm text-on-surface-variant leading-relaxed">
                   <ReactMarkdown remarkPlugins={[remarkGfm]} components={analysisMd}>
-                    {email.analysis}
+                    {email.analysis.replace(/\n?\[RISK:(?:NONE|HIGH)]\s*$/, '')}
                   </ReactMarkdown>
                 </div>
               ) : (

@@ -125,7 +125,6 @@ export default function EmailAgentWidget() {
   const isInitialLoad = useRef(true);
   const [serverActiveTasks, setServerActiveTasks] = useState<string[]>([]);
   const [detailEmail, setDetailEmail] = useState<string | null>(null);
-  const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
 
   // Drag state
   const bubbleRef = useRef<HTMLButtonElement>(null);
@@ -410,9 +409,6 @@ export default function EmailAgentWidget() {
             n.emailId === emailId ? { ...n, analysis, analyzing: false } : n
           );
         });
-        // Auto-select in widget; if widget is collapsed, open full modal instead
-        setSelectedEmailId(emailId);
-        if (!expandedRef.current) setDetailEmail(emailId);
         break;
       }
       case 'ai_response_delta': {
@@ -898,102 +894,68 @@ export default function EmailAgentWidget() {
                     {notifications.slice(0, 30).map(n => (
                       <div
                         key={n.emailId}
-                        onClick={() => setSelectedEmailId(prev => prev === n.emailId ? null : n.emailId)}
-                        className={`rounded-xl transition-all overflow-hidden cursor-pointer ${
-                          selectedEmailId === n.emailId
-                            ? 'bg-surface-container-high ring-1 ring-primary/20 border-l-[3px] border-l-primary'
-                            : n.analysis
-                              ? 'bg-surface-container border-l-[3px] border-l-primary/40 hover:bg-surface-container-high/60'
-                              : 'bg-surface-container border-l-[3px] border-l-transparent hover:bg-surface-container-high/60'
+                        className={`rounded-xl bg-surface-container overflow-hidden ${
+                          n.analysis ? 'border-l-[3px] border-l-primary/40' : 'border-l-[3px] border-l-transparent'
                         }`}
                       >
-                        {/* Card header */}
-                        <div className="flex items-start gap-2.5 p-3 pb-2">
-                          {/* Priority icon with analyzed badge */}
-                          <div className="relative shrink-0">
-                            <div className={`w-7 h-7 rounded-full flex items-center justify-center ${priorityBg[n.priority]}`}>
-                              <span className={`material-symbols-outlined text-base ${priorityColor[n.priority]}`}>
-                                {priorityIcon[n.priority]}
-                              </span>
-                            </div>
-                            {n.analysis && (
-                              <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-primary rounded-full flex items-center justify-center ring-2 ring-surface-container">
-                                <span className="material-symbols-outlined text-on-primary" style={{ fontSize: '9px' }}>check</span>
-                              </span>
-                            )}
+                        <div className="flex items-start gap-2.5 px-3 py-2.5">
+                          {/* Priority icon */}
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${priorityBg[n.priority]}`}>
+                            <span className={`material-symbols-outlined text-sm ${priorityColor[n.priority]}`}>
+                              {priorityIcon[n.priority]}
+                            </span>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-on-surface font-medium leading-snug line-clamp-2">{n.summary}</p>
-                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                              <span className="text-xs text-on-surface-variant truncate max-w-[120px] md:max-w-[160px]">
+                            <p className="text-[13px] text-on-surface font-medium leading-snug line-clamp-2">{n.summary}</p>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className="text-[11px] text-on-surface-variant truncate max-w-[100px] md:max-w-[140px]">
                                 {n.from.name || n.from.address}
                               </span>
-                              <span className="text-xs text-on-surface-variant/40">·</span>
-                              <span className="text-xs text-on-surface-variant/60 shrink-0">
+                              <span className="text-[11px] text-on-surface-variant/40">·</span>
+                              <span className="text-[11px] text-on-surface-variant/60 shrink-0">
                                 {formatTime(n.receivedAt)}
                               </span>
                               {n.hasAttachments && (
-                                <span className="material-symbols-outlined text-xs text-on-surface-variant/60">attach_file</span>
+                                <span className="material-symbols-outlined text-[11px] text-on-surface-variant/60">attach_file</span>
                               )}
                               {n.category && (
                                 <span className="text-[10px] text-on-surface-variant/60 bg-surface-container-highest px-1.5 py-0.5 rounded-full">
                                   {n.category}
                                 </span>
                               )}
+                              {/* Action icons — inline with metadata */}
+                              <span className="flex-1" />
+                              <button
+                                onClick={() => setDetailEmail(n.emailId)}
+                                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-surface-container-highest active:bg-surface-container-highest transition-colors"
+                                title="查看信件"
+                              >
+                                <span className="material-symbols-outlined text-on-surface-variant/50" style={{ fontSize: 15 }}>open_in_new</span>
+                              </button>
+                              {n.analyzing ? (
+                                <span className="w-7 h-7 flex items-center justify-center">
+                                  <span className="material-symbols-outlined text-primary animate-spin" style={{ fontSize: 15 }}>progress_activity</span>
+                                </span>
+                              ) : n.analysis ? (
+                                <button
+                                  onClick={() => setDetailEmail(n.emailId)}
+                                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-primary/10 active:bg-primary/10 transition-colors"
+                                  title="查看 AI 分析"
+                                >
+                                  <span className="material-symbols-outlined text-primary" style={{ fontSize: 15 }}>auto_awesome</span>
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => requestAnalysis(n.emailId)}
+                                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-primary/10 active:bg-primary/10 transition-colors"
+                                  title="AI 深度分析"
+                                >
+                                  <span className="material-symbols-outlined text-on-surface-variant/35" style={{ fontSize: 15 }}>auto_awesome</span>
+                                </button>
+                              )}
                             </div>
                           </div>
-                          {/* Chevron / spinner */}
-                          <div className="shrink-0 mt-0.5">
-                            {n.analyzing ? (
-                              <span className="material-symbols-outlined text-lg text-primary animate-spin">progress_activity</span>
-                            ) : (
-                              <span className={`material-symbols-outlined text-lg transition-transform duration-200 ${
-                                selectedEmailId === n.emailId ? 'text-primary rotate-180' : 'text-on-surface-variant/40'
-                              }`}>expand_more</span>
-                            )}
-                          </div>
                         </div>
-
-                        {/* Inline preview panel */}
-                        {selectedEmailId === n.emailId && (
-                          <div className="mx-3 mb-3 pt-2 border-t border-outline-variant/10">
-                            {n.analyzing ? (
-                              <div className="flex items-center gap-2 py-3 justify-center">
-                                <span className="material-symbols-outlined text-primary animate-spin text-base">progress_activity</span>
-                                <span className="text-sm text-on-surface-variant">AI 正在分析中...</span>
-                              </div>
-                            ) : n.analysis ? (
-                              <>
-                                <div className="relative max-h-[130px] overflow-hidden rounded-lg bg-surface-container-highest/30 p-2.5">
-                                  <div className="text-on-surface-variant leading-relaxed">
-                                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={analysisMd}>
-                                      {n.analysis}
-                                    </ReactMarkdown>
-                                  </div>
-                                  <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-surface-container-high to-transparent pointer-events-none rounded-b-lg" />
-                                </div>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setDetailEmail(n.emailId); }}
-                                  className="flex items-center gap-1.5 mt-2 w-full justify-center py-2 rounded-lg bg-primary/10 text-sm font-medium text-primary hover:bg-primary/15 active:bg-primary/15 transition-colors"
-                                >
-                                  <span className="material-symbols-outlined text-base">open_in_new</span>
-                                  查看完整信件
-                                </button>
-                              </>
-                            ) : (
-                              <div className="flex flex-col items-center py-3 gap-2.5">
-                                <p className="text-xs text-on-surface-variant/60">尚未進行 AI 分析</p>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); requestAnalysis(n.emailId); }}
-                                  className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary text-sm font-medium hover:bg-primary/90 active:bg-primary/90 transition-colors"
-                                >
-                                  <span className="material-symbols-outlined text-base">auto_awesome</span>
-                                  AI 深度分析
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -1162,8 +1124,7 @@ export default function EmailAgentWidget() {
                   placeholder={t('emailAgent.placeholder' as any) || '問我任何信件相關問題...'}
                   disabled={streaming || !connected}
                   rows={1}
-                  className="flex-1 bg-surface-container rounded-xl px-3.5 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/40 outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50 transition-shadow resize-none leading-relaxed"
-                  style={{ maxHeight: 120 }}
+                  className="flex-1 bg-surface-container rounded-xl px-3.5 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/40 outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50 transition-shadow resize-none leading-relaxed overflow-hidden"
                 />
                 <button
                   onClick={sendMessage}

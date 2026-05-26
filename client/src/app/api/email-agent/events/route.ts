@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
     headers: {
       Authorization: req.headers.get('Authorization') || '',
     },
+    cache: 'no-store',
   });
 
   if (!backendRes.ok || !backendRes.body) {
