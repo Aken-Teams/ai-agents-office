@@ -112,7 +112,6 @@ export default function EmailAgentWidget() {
   const [error, setError] = useState<string | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [loadingStage, setLoadingStage] = useState(0);
-  const [expandedAnalysis, setExpandedAnalysis] = useState<Set<string>>(new Set());
   const [bubbleBounce, setBubbleBounce] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [soundMuted, setSoundMuted] = useState(false);
@@ -613,14 +612,6 @@ export default function EmailAgentWidget() {
     }
   };
 
-  const toggleAnalysis = (emailId: string) => {
-    setExpandedAnalysis(prev => {
-      const next = new Set(prev);
-      if (next.has(emailId)) next.delete(emailId);
-      else next.add(emailId);
-      return next;
-    });
-  };
 
   if (!mounted) return null;
 
@@ -945,20 +936,12 @@ export default function EmailAgentWidget() {
                               )}
                             </div>
                           </div>
-                          {/* Inline action: analyze button or status */}
+                          {/* Inline action: status indicator */}
                           <div className="shrink-0 mt-0.5">
                             {n.analyzing ? (
                               <span className="material-symbols-outlined text-lg text-primary animate-spin">progress_activity</span>
                             ) : n.analysis ? (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); toggleAnalysis(n.emailId); }}
-                                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-primary/10 active:bg-primary/10 transition-colors"
-                                title={expandedAnalysis.has(n.emailId) ? '收合分析' : '展開分析'}
-                              >
-                                <span className="material-symbols-outlined text-lg text-primary" style={{ transform: expandedAnalysis.has(n.emailId) ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
-                                  expand_more
-                                </span>
-                              </button>
+                              <span className="material-symbols-outlined text-lg text-on-surface-variant/40">open_in_new</span>
                             ) : (
                               <button
                                 onClick={(e) => { e.stopPropagation(); requestAnalysis(n.emailId); }}
@@ -970,21 +953,6 @@ export default function EmailAgentWidget() {
                             )}
                           </div>
                         </div>
-
-                        {/* Expanded analysis panel */}
-                        {n.analysis && expandedAnalysis.has(n.emailId) && (
-                          <div className="mx-3 mb-3 rounded-lg bg-surface-container-highest/40 border border-outline-variant/8 overflow-hidden">
-                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/5 border-b border-outline-variant/8">
-                              <span className="material-symbols-outlined text-primary text-sm">auto_awesome</span>
-                              <span className="text-[11px] font-semibold text-on-surface">AI 深度分析</span>
-                            </div>
-                            <div className="px-3 py-2.5 text-sm text-on-surface-variant leading-relaxed overflow-x-hidden overflow-y-auto max-h-[400px]">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]} components={analysisMd}>
-                                {n.analysis}
-                              </ReactMarkdown>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     ))}
                   </div>
