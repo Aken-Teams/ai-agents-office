@@ -125,6 +125,8 @@ export default function EmailAgentWidget() {
   const isInitialLoad = useRef(true);
   const [serverActiveTasks, setServerActiveTasks] = useState<string[]>([]);
   const [detailEmail, setDetailEmail] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
 
   // Drag state
   const bubbleRef = useRef<HTMLButtonElement>(null);
@@ -385,7 +387,7 @@ export default function EmailAgentWidget() {
 
           // Merge: new emails on top, then updated existing ones
           const updated = [...existingMap.values()];
-          const merged = [...brandNew, ...updated].slice(0, 50);
+          const merged = [...brandNew, ...updated].slice(0, 100);
           if (analyzingIds.size === 0) return merged;
           return merged.map(n =>
             analyzingIds.has(n.emailId) ? { ...n, analyzing: true } : n
@@ -612,6 +614,45 @@ export default function EmailAgentWidget() {
     }
   };
 
+  const loadMoreEmails = async () => {
+    const token = localStorage.getItem('token');
+    if (!token || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const offset = notifications.length;
+      const res = await fetch(`${SSE_BASE}/api/outlook/messages?folder=Inbox&limit=50&offset=${offset}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+      if (!data.messages?.length) {
+        setHasMore(false);
+        return;
+      }
+      const older: EmailNotification[] = data.messages.map((m: any) => ({
+        emailId: m.id,
+        subject: m.subject,
+        from: m.from,
+        receivedAt: m.received_at,
+        isRead: m.is_read,
+        hasAttachments: m.has_attachments,
+        summary: m.subject,
+        priority: '中' as const,
+        category: '',
+      }));
+      setNotifications(prev => {
+        const existingIds = new Set(prev.map(n => n.emailId));
+        const newOnes = older.filter(o => !existingIds.has(o.emailId));
+        if (newOnes.length === 0) setHasMore(false);
+        return [...prev, ...newOnes];
+      });
+      if (offset + data.messages.length >= data.total) setHasMore(false);
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   if (!mounted) return null;
 
@@ -891,7 +932,7 @@ export default function EmailAgentWidget() {
                 {/* Email Cards */}
                 {notifications.length > 0 ? (
                   <div className="space-y-1.5">
-                    {notifications.slice(0, 30).map(n => (
+                    {notifications.map(n => (
                       <div
                         key={n.emailId}
                         className={`rounded-xl bg-surface-container overflow-hidden ${
@@ -958,6 +999,25 @@ export default function EmailAgentWidget() {
                         </div>
                       </div>
                     ))}
+                    {hasMore && (
+                      <button
+                        onClick={loadMoreEmails}
+                        disabled={loadingMore}
+                        className="w-full py-2 text-xs text-primary hover:bg-primary/5 rounded-lg transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      >
+                        {loadingMore ? (
+                          <>
+                            <span className="material-symbols-outlined animate-spin" style={{ fontSize: 14 }}>progress_activity</span>
+                            載入中...
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>expand_more</span>
+                            載入更多信件
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
                 ) : !error ? (
                   initialLoading ? (
