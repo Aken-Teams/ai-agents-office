@@ -8,7 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import { config } from '../config.js';
 import { getMailToken, fetchMessages, fetchMessageDetail, type OutlookMessage } from './outlookApi.js';
-import { pushEvent, getLastSeenIds, updateLastSeenIds } from './emailAgentRegistry.js';
+import { pushEvent, getLastSeenIds, updateLastSeenIds, markTaskActive, markTaskDone } from './emailAgentRegistry.js';
 import { buildEmailAgentMemoryContext } from './emailAgentMemory.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
 import { dbAll, dbGet, dbRun } from '../db.js';
@@ -421,6 +421,7 @@ export async function generateLayer2Analysis(userId: string, messageId: string):
     }
 
     console.log(`[EmailAgent] Layer 2 analysis for message ${messageId}`);
+    markTaskActive(userId, `analyze:${messageId}`);
     const message = await fetchMessageDetail(token, messageId);
     if (!message) {
       pushEvent(userId, { type: 'ai_analysis', data: { emailId: messageId, analysis: '❌ 找不到信件，可能已被刪除' } });
@@ -475,11 +476,13 @@ ${bodyText}
       ).catch(() => {});
     }
 
+    markTaskDone(userId, `analyze:${messageId}`);
     pushEvent(userId, {
       type: 'ai_analysis',
       data: { emailId: messageId, analysis },
     });
   } catch (err) {
+    markTaskDone(userId, `analyze:${messageId}`);
     console.error(`[EmailAgent] Layer 2 error for ${messageId}:`, err);
     pushEvent(userId, {
       type: 'ai_analysis',

@@ -122,6 +122,7 @@ export default function EmailAgentWidget() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const reconnectTimer = useRef<NodeJS.Timeout | null>(null);
   const isInitialLoad = useRef(true);
+  const [serverActiveTasks, setServerActiveTasks] = useState<string[]>([]);
 
   // Drag state
   const bubbleRef = useRef<HTMLButtonElement>(null);
@@ -333,6 +334,8 @@ export default function EmailAgentWidget() {
   useEffect(() => { soundMutedRef.current = soundMuted; }, [soundMuted]);
   const expandedRef = useRef(expanded);
   useEffect(() => { expandedRef.current = expanded; }, [expanded]);
+  const serverActiveTasksRef = useRef(serverActiveTasks);
+  useEffect(() => { serverActiveTasksRef.current = serverActiveTasks; }, [serverActiveTasks]);
 
   const showToast = useCallback((message: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -371,9 +374,20 @@ export default function EmailAgentWidget() {
           }
           isInitialLoad.current = false;
 
+          // Mark any emails that are currently being analyzed by the server
+          const analyzingIds = new Set(
+            serverActiveTasksRef.current
+              .filter(t => t.startsWith('analyze:'))
+              .map(t => t.slice(8))
+          );
+
           // Merge: new emails on top, then updated existing ones
           const updated = [...existingMap.values()];
-          return [...brandNew, ...updated].slice(0, 50);
+          const merged = [...brandNew, ...updated].slice(0, 50);
+          if (analyzingIds.size === 0) return merged;
+          return merged.map(n =>
+            analyzingIds.has(n.emailId) ? { ...n, analyzing: true } : n
+          );
         });
         if (unread !== undefined) setTotalUnread(unread);
         if (ov) setOverview(ov);
@@ -382,6 +396,7 @@ export default function EmailAgentWidget() {
       }
       case 'ai_analysis': {
         const { emailId, analysis } = event.data;
+        setServerActiveTasks(prev => prev.filter(t => t !== `analyze:${emailId}`));
         setNotifications(prev => {
           const target = prev.find(n => n.emailId === emailId);
           if (target) {
@@ -401,6 +416,7 @@ export default function EmailAgentWidget() {
       }
       case 'ai_response_done': {
         const text = event.data.text;
+        setServerActiveTasks(prev => prev.filter(t => t !== 'chat'));
         setChatMessages(prev => [...prev, { role: 'assistant', content: text }]);
         setStreamText('');
         setStreaming(false);
@@ -419,6 +435,12 @@ export default function EmailAgentWidget() {
           setTotalUnread(event.data.totalUnread);
           setInitialLoading(false);
           isInitialLoad.current = false;
+        }
+        // Restore AI working state from server-tracked active tasks
+        if (Array.isArray(event.data.activeTasks)) {
+          const tasks: string[] = event.data.activeTasks;
+          setServerActiveTasks(tasks);
+          if (tasks.includes('chat')) setStreaming(true);
         }
         break;
       }
@@ -601,7 +623,7 @@ export default function EmailAgentWidget() {
 
   const badgeCount = notifications.filter(n => !n.isRead).length || totalUnread;
   const highPriorityCount = notifications.filter(n => n.priority === '高').length;
-  const isAiWorking = streaming || notifications.some(n => n.analyzing);
+  const isAiWorking = streaming || notifications.some(n => n.analyzing) || serverActiveTasks.length > 0;
 
   const priorityIcon = { '高': 'priority_high', '中': 'radio_button_checked', '低': 'radio_button_unchecked' };
   const priorityColor = { '高': 'text-error', '中': 'text-warning', '低': 'text-on-surface-variant/60' };
@@ -874,17 +896,30 @@ export default function EmailAgentWidget() {
 
                 {/* Email Cards */}
                 {notifications.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {notifications.slice(0, 30).map(n => (
                       <div
                         key={n.emailId}
-                        className="bg-surface-container rounded-xl p-3 active:bg-surface-container-highest md:hover:bg-surface-container-highest transition-colors group"
+                        className={`rounded-xl transition-colors overflow-hidden ${
+                          n.analysis
+                            ? 'bg-surface-container border-l-[3px] border-l-primary/40'
+                            : 'bg-surface-container border-l-[3px] border-l-transparent'
+                        }`}
                       >
-                        <div className="flex items-start gap-2.5">
-                          <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${priorityBg[n.priority]}`}>
-                            <span className={`material-symbols-outlined text-base ${priorityColor[n.priority]}`}>
-                              {priorityIcon[n.priority]}
-                            </span>
+                        {/* Card header */}
+                        <div className="flex items-start gap-2.5 p-3 pb-2">
+                          {/* Priority icon with analyzed badge */}
+                          <div className="relative shrink-0">
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center ${priorityBg[n.priority]}`}>
+                              <span className={`material-symbols-outlined text-base ${priorityColor[n.priority]}`}>
+                                {priorityIcon[n.priority]}
+                              </span>
+                            </div>
+                            {n.analysis && (
+                              <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-primary rounded-full flex items-center justify-center ring-2 ring-surface-container">
+                                <span className="material-symbols-outlined text-on-primary" style={{ fontSize: '9px' }}>check</span>
+                              </span>
+                            )}
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-on-surface font-medium leading-snug line-clamp-2">{n.summary}</p>
@@ -900,67 +935,50 @@ export default function EmailAgentWidget() {
                                 <span className="material-symbols-outlined text-xs text-on-surface-variant/60">attach_file</span>
                               )}
                               {n.category && (
-                                <>
-                                  <span className="text-xs text-on-surface-variant/40">·</span>
-                                  <span className="text-[11px] text-on-surface-variant/60 bg-surface-container-highest px-1.5 py-0.5 rounded">
-                                    {n.category}
-                                  </span>
-                                </>
+                                <span className="text-[10px] text-on-surface-variant/60 bg-surface-container-highest px-1.5 py-0.5 rounded-full">
+                                  {n.category}
+                                </span>
                               )}
                             </div>
                           </div>
+                          {/* Inline action: analyze button or status */}
+                          <div className="shrink-0 mt-0.5">
+                            {n.analyzing ? (
+                              <span className="material-symbols-outlined text-lg text-primary animate-spin">progress_activity</span>
+                            ) : n.analysis ? (
+                              <button
+                                onClick={() => toggleAnalysis(n.emailId)}
+                                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-primary/10 active:bg-primary/10 transition-colors"
+                                title={expandedAnalysis.has(n.emailId) ? '收合分析' : '展開分析'}
+                              >
+                                <span className="material-symbols-outlined text-lg text-primary" style={{ transform: expandedAnalysis.has(n.emailId) ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                                  expand_more
+                                </span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => requestAnalysis(n.emailId)}
+                                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-primary/10 active:bg-primary/10 transition-colors"
+                                title="AI 深度分析"
+                              >
+                                <span className="material-symbols-outlined text-lg text-on-surface-variant/50 hover:text-primary">auto_awesome</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
 
-                        {/* Analysis result (collapsible, with markdown) */}
-                        {n.analysis && (
-                          <>
-                            <button
-                              onClick={() => toggleAnalysis(n.emailId)}
-                              className="mt-2 ml-[38px] text-xs text-primary active:text-primary/80 md:hover:text-primary/80 font-medium flex items-center gap-1"
-                            >
-                              <span className="material-symbols-outlined text-sm" style={{ transform: expandedAnalysis.has(n.emailId) ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
-                                expand_more
-                              </span>
-                              {expandedAnalysis.has(n.emailId) ? '收合分析' : '查看分析'}
-                            </button>
-                            {expandedAnalysis.has(n.emailId) && (
-                              <div className="mt-2.5 bg-surface-container-highest/50 rounded-xl border border-outline-variant/10 overflow-hidden">
-                                {/* Analysis header */}
-                                <div className="flex items-center gap-2 px-3.5 py-2 bg-primary/5 border-b border-outline-variant/10">
-                                  <span className="material-symbols-outlined text-primary text-base">auto_awesome</span>
-                                  <span className="text-xs font-semibold text-on-surface">AI 深度分析</span>
-                                </div>
-                                {/* Analysis body */}
-                                <div className="px-3.5 py-3 text-sm text-on-surface-variant leading-relaxed overflow-x-hidden overflow-y-auto">
-                                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={analysisMd}>
-                                    {n.analysis}
-                                  </ReactMarkdown>
-                                </div>
-                              </div>
-                            )}
-                          </>
-                        )}
-
-                        {/* Action buttons */}
-                        {!n.analysis && (
-                          <div className="flex items-center gap-3 mt-2 ml-[38px]">
-                            <button
-                              onClick={() => requestAnalysis(n.emailId)}
-                              disabled={n.analyzing}
-                              className="text-xs text-primary active:text-primary/80 md:hover:text-primary/80 font-medium flex items-center gap-1 disabled:opacity-50 transition-colors"
-                            >
-                              {n.analyzing ? (
-                                <>
-                                  <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-                                  分析中...
-                                </>
-                              ) : (
-                                <>
-                                  <span className="material-symbols-outlined text-sm">auto_awesome</span>
-                                  {t('emailAgent.analyze' as any) || 'AI 分析'}
-                                </>
-                              )}
-                            </button>
+                        {/* Expanded analysis panel */}
+                        {n.analysis && expandedAnalysis.has(n.emailId) && (
+                          <div className="mx-3 mb-3 rounded-lg bg-surface-container-highest/40 border border-outline-variant/8 overflow-hidden">
+                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/5 border-b border-outline-variant/8">
+                              <span className="material-symbols-outlined text-primary text-sm">auto_awesome</span>
+                              <span className="text-[11px] font-semibold text-on-surface">AI 深度分析</span>
+                            </div>
+                            <div className="px-3 py-2.5 text-sm text-on-surface-variant leading-relaxed overflow-x-hidden overflow-y-auto max-h-[400px]">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]} components={analysisMd}>
+                                {n.analysis}
+                              </ReactMarkdown>
+                            </div>
                           </div>
                         )}
                       </div>

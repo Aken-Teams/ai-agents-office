@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
 import { dbGet, dbAll, dbRun } from '../db.js';
-import { registerConnection, unregisterConnection, pushEvent, isConnected, getConnectionId, unregisterIfMatch } from '../services/emailAgentRegistry.js';
+import { registerConnection, unregisterConnection, pushEvent, isConnected, getConnectionId, unregisterIfMatch, markTaskActive, markTaskDone } from '../services/emailAgentRegistry.js';
 import { generateLayer2Analysis } from '../services/emailAgentPoller.js';
 import { extractEmailAgentMemory, buildEmailAgentMemoryContext } from '../services/emailAgentMemory.js';
 import { resolveClaudeCliPath } from '../services/resolveClaudeCli.js';
@@ -130,7 +130,9 @@ ${chatHistory}
 用戶最新訊息：${message.trim()}`;
 
     // Spawn Claude CLI and stream response via SSE
+    markTaskActive(userId, 'chat');
     const responseText = await spawnChatClaude(userId, prompt);
+    markTaskDone(userId, 'chat');
 
     // Save assistant response
     if (responseText) {
@@ -151,6 +153,7 @@ ${chatHistory}
 
     res.json({ ok: true });
   } catch (err) {
+    markTaskDone(userId, 'chat');
     console.error('[EmailAgent] Chat error:', err);
     res.status(500).json({ error: 'Internal error' });
   }

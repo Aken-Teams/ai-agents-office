@@ -24,6 +24,10 @@ interface UserConnection {
   lastSeenIds: Set<string>;
 }
 
+// Track active AI tasks per user so reconnecting clients can restore animation state.
+// Keys are task descriptors like "analyze:<emailId>" or "chat".
+const activeTasks = new Map<string, Set<string>>();
+
 let nextConnId = 1;
 
 const connections = new Map<string, UserConnection>();
@@ -79,9 +83,10 @@ export async function registerConnection(userId: string, res: Response): Promise
   const conn: UserConnection = { id: connId, res, pollTimer: null as any, keepaliveTimer, lastSeenIds };
   connections.set(userId, conn);
 
-  // Send connected status
-  pushEvent(userId, { type: 'status', data: { connected: true } });
-  console.log(`[EmailAgent] User ${userId} connected (${connections.size} total)`);
+  // Send connected status (include any active AI tasks so client can restore animation)
+  const currentTasks = getActiveTasks(userId);
+  pushEvent(userId, { type: 'status', data: { connected: true, activeTasks: currentTasks } });
+  console.log(`[EmailAgent] User ${userId} connected (${connections.size} total, activeTasks=${currentTasks.length})`);
 
   // Initial poll: always send recent unread emails
   pollNewEmails(userId, true).catch(err =>
@@ -170,4 +175,27 @@ export function unregisterIfMatch(userId: string, connId: number): void {
   if (conn && conn.id === connId) {
     unregisterConnection(userId);
   }
+}
+
+/** Mark an AI task as active for a user. */
+export function markTaskActive(userId: string, taskKey: string): void {
+  let tasks = activeTasks.get(userId);
+  if (!tasks) { tasks = new Set(); activeTasks.set(userId, tasks); }
+  tasks.add(taskKey);
+  pushEvent(userId, { type: 'status', data: { activeTasks: [...tasks] } });
+}
+
+/** Mark an AI task as completed for a user. */
+export function markTaskDone(userId: string, taskKey: string): void {
+  const tasks = activeTasks.get(userId);
+  if (tasks) {
+    tasks.delete(taskKey);
+    if (tasks.size === 0) activeTasks.delete(userId);
+  }
+  pushEvent(userId, { type: 'status', data: { activeTasks: tasks ? [...tasks] : [] } });
+}
+
+/** Get current active tasks for a user (used on reconnect). */
+export function getActiveTasks(userId: string): string[] {
+  return [...(activeTasks.get(userId) ?? [])];
 }
