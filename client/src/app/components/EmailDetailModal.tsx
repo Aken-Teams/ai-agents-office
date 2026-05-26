@@ -112,6 +112,7 @@ export default function EmailDetailModal({
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<MessageDetail | null>(null);
   const [activePanel, setActivePanel] = useState<'body' | 'analysis'>('body');
+  const [recipientsExpanded, setRecipientsExpanded] = useState(false);
 
   // Fetch full message detail
   useEffect(() => {
@@ -240,23 +241,23 @@ export default function EmailDetailModal({
 
         {/* Security Banner */}
         {security.hasRisk && (
-          <div className={`flex items-center gap-3 px-5 py-3 border-b shrink-0 ${
+          <div className={`flex items-center gap-2.5 md:gap-3 px-4 md:px-5 py-2.5 md:py-3 border-b shrink-0 ${
             security.riskLevel === 'high'
               ? 'bg-error/10 border-b-error/20'
               : 'bg-warning/10 border-b-warning/20'
           }`}>
-            <span className={`material-symbols-outlined text-xl ${
+            <span className={`material-symbols-outlined text-lg md:text-xl ${
               security.riskLevel === 'high' ? 'text-error' : 'text-warning'
             }`}>shield</span>
             <div className="flex-1 min-w-0">
-              <p className={`text-sm font-semibold ${
+              <p className={`text-[13px] md:text-sm font-semibold ${
                 security.riskLevel === 'high' ? 'text-error' : 'text-warning'
               }`}>
                 {security.riskLevel === 'high' ? '高風險警告' : '安全提醒'}
               </p>
-              <div className="flex flex-wrap gap-1.5 mt-1">
+              <div className="flex flex-wrap gap-1 md:gap-1.5 mt-0.5 md:mt-1">
                 {security.flags.map(flag => (
-                  <span key={flag} className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                  <span key={flag} className={`text-[10px] md:text-[11px] font-medium px-1.5 md:px-2 py-0.5 rounded-full ${
                     security.riskLevel === 'high'
                       ? 'bg-error/15 text-error'
                       : 'bg-warning/15 text-warning'
@@ -268,61 +269,73 @@ export default function EmailDetailModal({
         )}
 
         {/* Email Header */}
-        <div className="px-5 py-4 border-b border-outline-variant/10 shrink-0">
-          <div className="flex items-start gap-3">
-            {/* Close button (top-right) */}
-            <div className="flex-1 min-w-0">
-              <h2 className="text-base md:text-lg font-bold text-on-surface leading-snug mb-3">{email.subject}</h2>
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-tertiary/15 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-tertiary text-xl">person</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <span className="text-sm font-bold text-on-surface">{email.from.name || email.from.address}</span>
-                    <span className="text-xs text-on-surface-variant/70 truncate max-w-[200px]">{'<'}{email.from.address}{'>'}</span>
-                  </div>
-                  <p className="text-xs text-on-surface-variant/70 mt-0.5">{formatFullDate(email.receivedAt)}</p>
-                  {detail?.to && detail.to.length > 0 && (
-                    <div className="flex items-start gap-1.5 mt-2">
-                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-tertiary/10 text-tertiary px-1.5 py-0.5 rounded mt-px">To</span>
-                      <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2">{detail.to.map(r => r.name || r.address).join(', ')}</p>
-                    </div>
-                  )}
-                  {detail?.cc && detail.cc.length > 0 && (
-                    <div className="flex items-start gap-1.5 mt-1">
-                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-warning/10 text-warning px-1.5 py-0.5 rounded mt-px">CC</span>
-                      <p className="text-xs text-on-surface-variant leading-relaxed line-clamp-2">{detail.cc.map(r => r.name || r.address).join(', ')}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              {/* Priority badge */}
+        <div className="px-4 py-2.5 md:px-5 md:py-4 border-b border-outline-variant/10 shrink-0">
+          {/* Top row: subject + close */}
+          <div className="flex items-start gap-2">
+            <h2 className="flex-1 min-w-0 text-[15px] md:text-lg font-bold text-on-surface leading-snug line-clamp-2 md:line-clamp-none">{email.subject}</h2>
+            <div className="flex items-center gap-1 shrink-0 -mt-0.5">
               <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
                 email.priority === '高' ? 'bg-error/10 text-error' : email.priority === '中' ? 'bg-warning/10 text-warning' : 'bg-surface-container text-on-surface-variant/60'
               }`}>{email.priority}優先</span>
-              <button onClick={onClose} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface-container-highest transition-colors">
+              <button onClick={onClose} className="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-full hover:bg-surface-container-highest transition-colors">
                 <span className="material-symbols-outlined text-xl text-on-surface-variant">close</span>
               </button>
             </div>
           </div>
+          {/* Sender row */}
+          <div className="flex items-center gap-2.5 mt-2">
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-tertiary/15 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-tertiary text-lg md:text-xl">person</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-1.5 flex-wrap">
+                <span className="text-sm font-bold text-on-surface">{email.from.name || email.from.address}</span>
+                <span className="text-[11px] text-on-surface-variant/60 truncate max-w-[160px] md:max-w-[200px] hidden md:inline">{'<'}{email.from.address}{'>'}</span>
+              </div>
+              <p className="text-[11px] text-on-surface-variant/60 mt-px">{formatFullDate(email.receivedAt)}</p>
+            </div>
+            {/* Mobile: expandable recipients toggle */}
+            {(detail?.to?.length || detail?.cc?.length) ? (
+              <button
+                onClick={() => setRecipientsExpanded(v => !v)}
+                className="md:hidden shrink-0 flex items-center gap-0.5 text-[11px] text-on-surface-variant/70 hover:text-on-surface-variant transition-colors px-1.5 py-1 -mr-1"
+              >
+                <span className="material-symbols-outlined text-sm" style={{ transform: recipientsExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 150ms' }}>expand_more</span>
+              </button>
+            ) : null}
+          </div>
+          {/* Recipients: always visible on desktop, collapsible on mobile */}
+          {(detail?.to?.length || detail?.cc?.length) ? (
+            <div className={`mt-1.5 ml-[42px] md:ml-[52px] space-y-1 ${recipientsExpanded ? '' : 'hidden md:block'}`}>
+              {detail?.to && detail.to.length > 0 && (
+                <div className="flex items-start gap-1.5">
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-tertiary/10 text-tertiary px-1.5 py-0.5 rounded mt-px">To</span>
+                  <p className="text-[11px] md:text-xs text-on-surface-variant leading-relaxed line-clamp-1 md:line-clamp-2">{detail.to.map(r => r.name || r.address).join(', ')}</p>
+                </div>
+              )}
+              {detail?.cc && detail.cc.length > 0 && (
+                <div className="flex items-start gap-1.5">
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide bg-warning/10 text-warning px-1.5 py-0.5 rounded mt-px">CC</span>
+                  <p className="text-[11px] md:text-xs text-on-surface-variant leading-relaxed line-clamp-1 md:line-clamp-2">{detail.cc.map(r => r.name || r.address).join(', ')}</p>
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
 
         {/* Attachments bar */}
         {nonInlineAttachments.length > 0 && (
-          <div className="px-5 py-2.5 border-b border-outline-variant/10 shrink-0">
-            <div className="flex flex-wrap gap-2">
+          <div className="px-4 md:px-5 py-2 md:py-2.5 border-b border-outline-variant/10 shrink-0">
+            <div className="flex gap-2 overflow-x-auto md:flex-wrap md:overflow-x-visible scrollbar-none">
               {nonInlineAttachments.map(att => (
                 <button
                   key={att.id}
                   onClick={() => handleDownload(email.emailId, att.id, att.filename, att.content_type)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-outline-variant/20 bg-surface-container-high/30 hover:bg-surface-container-high/60 active:bg-surface-container-high/60 transition-colors cursor-pointer max-w-[200px]"
+                  className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-3 py-1.5 md:py-2 rounded-lg border border-outline-variant/20 bg-surface-container-high/30 hover:bg-surface-container-high/60 active:bg-surface-container-high/60 transition-colors cursor-pointer max-w-[160px] md:max-w-[200px] shrink-0 md:shrink"
                 >
                   <span className="material-symbols-outlined text-tertiary text-base shrink-0">{attIcon(att.content_type)}</span>
                   <div className="min-w-0 flex-1 text-left">
-                    <p className="text-xs font-medium text-on-surface truncate">{att.filename}</p>
+                    <p className="text-[11px] md:text-xs font-medium text-on-surface truncate">{att.filename}</p>
                     <p className="text-[10px] text-on-surface-variant/60">{formatFileSize(att.size)}</p>
                   </div>
                   <span className="material-symbols-outlined text-on-surface-variant/50 text-sm shrink-0">download</span>
@@ -341,11 +354,11 @@ export default function EmailDetailModal({
             <button
               key={tab.id}
               onClick={() => setActivePanel(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors relative ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[13px] font-medium transition-colors relative ${
                 activePanel === tab.id ? 'text-primary' : 'text-on-surface-variant'
               }`}
             >
-              <span className="material-symbols-outlined text-lg">{tab.icon}</span>
+              <span className="material-symbols-outlined text-[17px]">{tab.icon}</span>
               {tab.label}
               {tab.id === 'analysis' && email.analyzing && (
                 <span className="material-symbols-outlined text-sm text-primary animate-spin">progress_activity</span>
@@ -360,7 +373,10 @@ export default function EmailDetailModal({
         {/* Main content: two-column (desktop) / tabbed (mobile) */}
         <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
           {/* Email body panel */}
-          <div className={`${activePanel === 'body' ? 'flex' : 'hidden'} md:flex flex-col flex-1 min-w-0 overflow-y-auto border-r-0 md:border-r md:border-outline-variant/10`}>
+          <div
+            className={`${activePanel === 'body' ? 'flex' : 'hidden'} md:flex flex-col flex-1 min-h-0 min-w-0 overflow-y-auto md:border-r md:border-outline-variant/10`}
+            style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+          >
             {loading ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
                 <span className="material-symbols-outlined animate-spin text-primary text-2xl">progress_activity</span>
@@ -369,7 +385,7 @@ export default function EmailDetailModal({
             ) : srcdoc ? (
               <iframe
                 srcDoc={srcdoc}
-                className="w-full border-0 flex-1 min-h-[300px]"
+                className="w-full border-0 flex-1 min-h-[200px] md:min-h-[300px]"
                 sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
                 title="Email body"
                 onLoad={iframeOnLoad}
@@ -387,7 +403,7 @@ export default function EmailDetailModal({
           </div>
 
           {/* AI Analysis panel */}
-          <div className={`${activePanel === 'analysis' ? 'flex' : 'hidden'} md:flex flex-col md:w-[380px] shrink-0 overflow-y-auto`}>
+          <div className={`${activePanel === 'analysis' ? 'flex' : 'hidden'} md:flex flex-col flex-1 md:flex-initial min-h-0 md:w-[380px] md:shrink-0 overflow-hidden`}>
             <div className="flex items-center gap-2 px-4 py-3 border-b border-outline-variant/10 shrink-0 bg-surface-container-high/30">
               <span className="material-symbols-outlined text-primary text-lg">auto_awesome</span>
               <span className="text-sm font-semibold text-on-surface">AI 深度分析</span>
@@ -395,7 +411,10 @@ export default function EmailDetailModal({
                 <span className="ml-auto text-[10px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">已完成</span>
               )}
             </div>
-            <div className="flex-1 overflow-y-auto p-4">
+            <div
+              className="flex-1 min-h-0 overflow-y-auto p-4"
+              style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+            >
               {email.analyzing ? (
                 <div className="flex flex-col items-center justify-center py-12 gap-3">
                   <span className="material-symbols-outlined animate-spin text-primary text-2xl">progress_activity</span>
@@ -431,10 +450,10 @@ export default function EmailDetailModal({
         </div>
 
         {/* Bottom action bar */}
-        <div className="border-t border-outline-variant/10 px-5 py-3 flex items-center gap-3 shrink-0 bg-surface-container-high/30">
+        <div className="border-t border-outline-variant/10 px-3 py-2 md:px-5 md:py-3 flex items-center gap-2 md:gap-3 shrink-0 bg-surface-container-high/30">
           <button
             onClick={() => onChatAboutEmail(email.subject, email.from.name || email.from.address)}
-            className="flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container hover:bg-surface-container-highest active:bg-surface-container-highest text-sm font-medium text-on-surface transition-colors"
+            className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 rounded-full bg-surface-container hover:bg-surface-container-highest active:bg-surface-container-highest text-[13px] md:text-sm font-medium text-on-surface transition-colors"
           >
             <span className="material-symbols-outlined text-lg">chat</span>
             聊聊這封信
@@ -442,16 +461,17 @@ export default function EmailDetailModal({
           {!email.analysis && !email.analyzing && (
             <button
               onClick={() => onRequestAnalysis(email.emailId)}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-surface-container hover:bg-surface-container-highest active:bg-surface-container-highest text-sm font-medium text-primary transition-colors"
+              className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 rounded-full bg-surface-container hover:bg-surface-container-highest active:bg-surface-container-highest text-[13px] md:text-sm font-medium text-primary transition-colors"
             >
               <span className="material-symbols-outlined text-lg">auto_awesome</span>
-              AI 分析
+              <span className="hidden md:inline">AI 分析</span>
+              <span className="md:hidden">分析</span>
             </button>
           )}
           <div className="flex-1" />
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-full text-sm text-on-surface-variant hover:bg-surface-container active:bg-surface-container transition-colors"
+            className="px-3 md:px-4 py-2 rounded-full text-[13px] md:text-sm text-on-surface-variant hover:bg-surface-container active:bg-surface-container transition-colors"
           >
             關閉
           </button>
