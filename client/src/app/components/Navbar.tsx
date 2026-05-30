@@ -692,73 +692,89 @@ export default function Navbar() {
             const visibleLinks = group.links.filter(l => hasPermission('frontendNav', l.permKey));
             if (visibleLinks.length === 0) return null;
             const isExpanded = activeGroup === gi;
+            const hasActiveChild = visibleLinks.some(l => pathname === l.href);
             return (
               <div key={gi}>
                 {/* Group header */}
                 {collapsed ? (
-                  <div className="relative group">
+                  /* Collapsed: icon with flyout submenu on hover (same as admin sidebar) */
+                  <div className="relative group/gh">
                     {gi > 0 && <div className="mx-2 my-2 border-t border-outline-variant/15" />}
                     <button
-                      onClick={() => toggleGroup(gi)}
-                      className={`flex items-center justify-center w-full py-2 bg-transparent cursor-pointer rounded-md transition-colors ${
-                        isExpanded
-                          ? 'text-primary bg-primary/10'
-                          : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/40'
+                      className={`flex items-center justify-center py-2.5 w-full bg-transparent cursor-pointer transition-all duration-200 ${
+                        hasActiveChild
+                          ? 'text-primary'
+                          : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/50'
                       }`}
                     >
                       <span className="material-symbols-outlined text-[20px]">{group.icon}</span>
                     </button>
-                    <span className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
-                      {t(group.labelKey as any)}
-                    </span>
+                    {/* Flyout submenu */}
+                    <div className="absolute left-full top-0 pl-2 opacity-0 group-hover/gh:opacity-100 pointer-events-none group-hover/gh:pointer-events-auto transition-opacity duration-200 z-[60]">
+                      <div className="py-1.5 bg-surface-container-highest rounded-lg shadow-lg border border-outline-variant/10 min-w-[160px]">
+                        <div className="px-3 py-1.5 text-xs font-bold text-on-surface-variant uppercase tracking-widest">{t(group.labelKey as any)}</div>
+                        {visibleLinks.map(link => {
+                          const isActive = pathname === link.href;
+                          return (
+                            <Link
+                              key={link.href}
+                              href={link.href}
+                              className={`flex items-center gap-2.5 px-3 py-2 no-underline text-sm transition-colors ${
+                                isActive ? 'text-primary font-bold' : 'text-on-surface hover:bg-surface-container'
+                              }`}
+                            >
+                              <span className="material-symbols-outlined text-[18px]">{link.icon}</span>
+                              <span>{t(link.labelKey)}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => toggleGroup(gi)}
-                    className={`flex items-center gap-2.5 w-full px-3 py-2.5 transition-all bg-transparent cursor-pointer rounded-lg border ${
-                      isExpanded
-                        ? 'text-on-surface bg-surface-container/60 border-outline-variant/10'
-                        : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/30 border-transparent'
-                    }`}
-                  >
-                    <span className={`material-symbols-outlined text-[18px] ${isExpanded ? 'text-primary' : ''}`}>{group.icon}</span>
-                    <span className="text-sm font-medium flex-1 text-left">{t(group.labelKey as any)}</span>
-                    <span className={`material-symbols-outlined text-[16px] text-on-surface-variant/40 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
-                      expand_more
-                    </span>
-                  </button>
+                  /* Expanded: clickable group header with accordion */
+                  <>
+                    <button
+                      onClick={() => toggleGroup(gi)}
+                      className={`flex items-center gap-2.5 w-full px-3 py-2.5 transition-all bg-transparent cursor-pointer rounded-lg border ${
+                        isExpanded
+                          ? 'text-on-surface bg-surface-container/60 border-outline-variant/10'
+                          : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/30 border-transparent'
+                      }`}
+                    >
+                      <span className={`material-symbols-outlined text-[18px] ${isExpanded ? 'text-primary' : ''}`}>{group.icon}</span>
+                      <span className="text-sm font-medium flex-1 text-left">{t(group.labelKey as any)}</span>
+                      <span className={`material-symbols-outlined text-[16px] text-on-surface-variant/40 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
+                        expand_more
+                      </span>
+                    </button>
+                    <div
+                      className={`overflow-hidden transition-all duration-200 ease-in-out ml-3 pl-3 border-l border-outline-variant/10 ${
+                        !isExpanded ? 'max-h-0 opacity-0' : 'max-h-[500px] opacity-100'
+                      }`}
+                    >
+                      <div className="space-y-0.5 py-1">
+                        {visibleLinks.map(link => {
+                          const isActive = pathname === link.href;
+                          return (
+                            <Link
+                              key={link.href}
+                              href={link.href}
+                              className={`flex items-center gap-2.5 py-2 px-3 no-underline transition-all duration-150 rounded-md ${
+                                isActive
+                                  ? 'text-primary bg-primary/10 font-medium'
+                                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/40'
+                              }`}
+                            >
+                              <span className={`material-symbols-outlined text-[18px] ${isActive ? 'text-primary' : ''}`}>{link.icon}</span>
+                              <span className="text-[13px]">{t(link.labelKey)}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
                 )}
-                {/* Group items */}
-                <div
-                  className={`transition-all duration-200 ease-in-out ${
-                    !isExpanded ? 'max-h-0 opacity-0 overflow-hidden' : 'max-h-[500px] opacity-100'
-                  } ${!collapsed ? 'ml-3 pl-3 border-l border-outline-variant/10 overflow-hidden' : 'overflow-visible'}`}
-                >
-                  <div className={`space-y-0.5 ${!collapsed ? 'py-1' : ''}`}>
-                    {visibleLinks.map(link => {
-                      const isActive = pathname === link.href;
-                      return (
-                        <Link
-                          key={link.href}
-                          href={link.href}
-                          className={`relative group flex items-center gap-2.5 py-2 no-underline transition-all duration-150 rounded-md ${collapsed ? 'justify-center px-0' : 'px-3'} ${
-                            isActive
-                              ? 'text-primary bg-primary/10 font-medium'
-                              : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/40'
-                          }`}
-                        >
-                          <span className={`material-symbols-outlined text-[18px] ${isActive ? 'text-primary' : ''}`}>{link.icon}</span>
-                          {!collapsed && <span className="text-[13px]">{t(link.labelKey)}</span>}
-                          {collapsed && (
-                            <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
-                              {t(link.labelKey)}
-                            </span>
-                          )}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
               </div>
             );
           })}
