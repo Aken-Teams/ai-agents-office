@@ -14,15 +14,36 @@ const SIDEBAR_KEY = 'sidebar-collapsed';
 const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
 const isPanjit = deployMode === 'pro-panjit';
 
-const NAV_LINKS = [
-  { href: '/dashboard', permKey: 'dashboard', labelKey: 'nav.dashboard' as const, icon: 'dashboard' },
-  { href: '/assistant', permKey: 'assistant', labelKey: 'nav.assistant' as const, icon: 'smart_toy' },
-  { href: '/conversations', permKey: 'conversations', labelKey: 'nav.conversations' as const, icon: 'chat' },
-  { href: '/files', permKey: 'files', labelKey: 'nav.files' as const, icon: 'folder_open' },
-  { href: '/usage', permKey: 'usage', labelKey: 'nav.usage' as const, icon: 'bar_chart' },
-  { href: '/memories', permKey: 'memories', labelKey: 'nav.memories' as const, icon: 'psychology' },
-  { href: '/guide', permKey: 'guide', labelKey: 'nav.guide' as const, icon: 'menu_book' },
+const NAV_GROUPS = [
+  {
+    labelKey: 'nav.group.main' as const,
+    icon: 'smart_toy',
+    links: [
+      { href: '/dashboard', permKey: 'dashboard', labelKey: 'nav.dashboard' as const, icon: 'dashboard' },
+      { href: '/assistant', permKey: 'assistant', labelKey: 'nav.assistant' as const, icon: 'smart_toy' },
+    ],
+  },
+  {
+    labelKey: 'nav.group.manage' as const,
+    icon: 'folder_managed',
+    links: [
+      { href: '/conversations', permKey: 'conversations', labelKey: 'nav.conversations' as const, icon: 'chat' },
+      { href: '/files', permKey: 'files', labelKey: 'nav.files' as const, icon: 'folder_open' },
+    ],
+  },
+  {
+    labelKey: 'nav.group.system' as const,
+    icon: 'settings',
+    links: [
+      { href: '/usage', permKey: 'usage', labelKey: 'nav.usage' as const, icon: 'bar_chart' },
+      { href: '/memories', permKey: 'memories', labelKey: 'nav.memories' as const, icon: 'psychology' },
+      { href: '/guide', permKey: 'guide', labelKey: 'nav.guide' as const, icon: 'menu_book' },
+    ],
+  },
 ];
+
+// Flat list for mobile nav and permission checks
+const NAV_LINKS = NAV_GROUPS.flatMap(g => g.links);
 
 const DOC_TYPES = [
   { id: 'pptx-gen', labelKey: 'nav.docTypes.pptx.label' as const, descKey: 'nav.docTypes.pptx.desc' as const, icon: 'present_to_all', colorClass: 'text-warning' },
@@ -133,6 +154,23 @@ export default function Navbar() {
     if (typeof window !== 'undefined') return localStorage.getItem(SIDEBAR_KEY) === '1';
     return false;
   });
+
+  // Nav group accordion — only one open at a time, auto-expand group matching current route
+  const getGroupForPath = (p: string) => NAV_GROUPS.findIndex(g => g.links.some(l => p.startsWith(l.href)));
+  const [activeGroup, setActiveGroup] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const gi = getGroupForPath(window.location.pathname);
+      return gi >= 0 ? gi : 0;
+    }
+    return 0;
+  });
+  const toggleGroup = (gi: number) => setActiveGroup(prev => prev === gi ? -1 : gi);
+
+  // Sync active group when route changes
+  useEffect(() => {
+    const gi = getGroupForPath(pathname);
+    if (gi >= 0) setActiveGroup(gi);
+  }, [pathname]);
 
   // Display name edit state
   const [editingName, setEditingName] = useState(false);
@@ -554,22 +592,47 @@ export default function Navbar() {
             <div className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${mobileUserExpanded ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'}`}>
               <div className="overflow-hidden">
                 <nav className="py-1 border-t border-outline-variant/10">
-                  {NAV_LINKS.filter(l => hasPermission('frontendNav', l.permKey)).map(link => {
-                    const isActive = pathname === link.href;
+                  {NAV_GROUPS.map((group, gi) => {
+                    const visibleLinks = group.links.filter(l => hasPermission('frontendNav', l.permKey));
+                    if (visibleLinks.length === 0) return null;
+                    const isExpanded = activeGroup === gi;
                     return (
-                      <Link
-                        key={link.href}
-                        href={link.href}
-                        onClick={() => setMobileMenuOpen(false)}
-                        className={`flex items-center gap-3 px-5 py-3.5 no-underline transition-colors ${
-                          isActive
-                            ? 'text-primary bg-primary/5'
-                            : 'text-on-surface-variant active:bg-surface-container'
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-xl">{link.icon}</span>
-                        <span className="text-sm font-headline font-bold">{t(link.labelKey)}</span>
-                      </Link>
+                      <div key={gi}>
+                        <button
+                          onClick={() => toggleGroup(gi)}
+                          className={`flex items-center gap-3 w-full px-5 py-3 bg-transparent cursor-pointer transition-colors ${
+                            isExpanded
+                              ? 'text-on-surface bg-surface-container/40'
+                              : 'text-on-surface-variant active:bg-surface-container'
+                          }`}
+                        >
+                          <span className={`material-symbols-outlined text-xl ${isExpanded ? 'text-primary' : ''}`}>{group.icon}</span>
+                          <span className="text-sm font-headline font-bold flex-1 text-left">{t(group.labelKey as any)}</span>
+                          <span className={`material-symbols-outlined text-base text-on-surface-variant/40 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
+                            expand_more
+                          </span>
+                        </button>
+                        <div className={`overflow-hidden transition-all duration-200 ease-in-out ${isExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                          {visibleLinks.map(link => {
+                            const isActive = pathname === link.href;
+                            return (
+                              <Link
+                                key={link.href}
+                                href={link.href}
+                                onClick={() => setMobileMenuOpen(false)}
+                                className={`flex items-center gap-2.5 pl-14 pr-5 py-2.5 no-underline transition-colors ${
+                                  isActive
+                                    ? 'text-primary bg-primary/5'
+                                    : 'text-on-surface-variant active:bg-surface-container'
+                                }`}
+                              >
+                                <span className="material-symbols-outlined text-lg">{link.icon}</span>
+                                <span className="text-[13px] font-headline">{t(link.labelKey)}</span>
+                              </Link>
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })}
                   {(user.role === 'admin' || user.role === 'readonly') && (
@@ -624,27 +687,79 @@ export default function Navbar() {
         </div>
 
         {/* Navigation */}
-        <nav className={`flex-1 space-y-1 ${collapsed ? 'px-2' : 'px-4'}`}>
-          {NAV_LINKS.filter(l => hasPermission('frontendNav', l.permKey)).map(link => {
-            const isActive = pathname === link.href;
+        <nav className={`flex-1 space-y-0.5 ${collapsed ? 'px-2' : 'px-3'}`}>
+          {NAV_GROUPS.map((group, gi) => {
+            const visibleLinks = group.links.filter(l => hasPermission('frontendNav', l.permKey));
+            if (visibleLinks.length === 0) return null;
+            const isExpanded = activeGroup === gi;
             return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`relative group flex items-center gap-3 py-2.5 no-underline transition-all duration-200 ${collapsed ? 'justify-center px-0' : 'px-3'} ${
-                  isActive
-                    ? 'text-primary bg-surface-container border-l-2 border-primary'
-                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/50'
-                }`}
-              >
-                <span className="material-symbols-outlined">{link.icon}</span>
-                {!collapsed && <span>{t(link.labelKey)}</span>}
-                {collapsed && (
-                  <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
-                    {t(link.labelKey)}
-                  </span>
+              <div key={gi}>
+                {/* Group header */}
+                {collapsed ? (
+                  <div className="relative group">
+                    {gi > 0 && <div className="mx-2 my-2 border-t border-outline-variant/15" />}
+                    <button
+                      onClick={() => toggleGroup(gi)}
+                      className={`flex items-center justify-center w-full py-2 bg-transparent cursor-pointer rounded-md transition-colors ${
+                        isExpanded
+                          ? 'text-primary bg-primary/10'
+                          : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/40'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[20px]">{group.icon}</span>
+                    </button>
+                    <span className="absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
+                      {t(group.labelKey as any)}
+                    </span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => toggleGroup(gi)}
+                    className={`flex items-center gap-2.5 w-full px-3 py-2.5 transition-all bg-transparent cursor-pointer rounded-lg border ${
+                      isExpanded
+                        ? 'text-on-surface bg-surface-container/60 border-outline-variant/10'
+                        : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/30 border-transparent'
+                    }`}
+                  >
+                    <span className={`material-symbols-outlined text-[18px] ${isExpanded ? 'text-primary' : ''}`}>{group.icon}</span>
+                    <span className="text-sm font-medium flex-1 text-left">{t(group.labelKey as any)}</span>
+                    <span className={`material-symbols-outlined text-[16px] text-on-surface-variant/40 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
+                      expand_more
+                    </span>
+                  </button>
                 )}
-              </Link>
+                {/* Group items */}
+                <div
+                  className={`transition-all duration-200 ease-in-out ${
+                    !isExpanded ? 'max-h-0 opacity-0 overflow-hidden' : 'max-h-[500px] opacity-100'
+                  } ${!collapsed ? 'ml-3 pl-3 border-l border-outline-variant/10 overflow-hidden' : 'overflow-visible'}`}
+                >
+                  <div className={`space-y-0.5 ${!collapsed ? 'py-1' : ''}`}>
+                    {visibleLinks.map(link => {
+                      const isActive = pathname === link.href;
+                      return (
+                        <Link
+                          key={link.href}
+                          href={link.href}
+                          className={`relative group flex items-center gap-2.5 py-2 no-underline transition-all duration-150 rounded-md ${collapsed ? 'justify-center px-0' : 'px-3'} ${
+                            isActive
+                              ? 'text-primary bg-primary/10 font-medium'
+                              : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/40'
+                          }`}
+                        >
+                          <span className={`material-symbols-outlined text-[18px] ${isActive ? 'text-primary' : ''}`}>{link.icon}</span>
+                          {!collapsed && <span className="text-[13px]">{t(link.labelKey)}</span>}
+                          {collapsed && (
+                            <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
+                              {t(link.labelKey)}
+                            </span>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             );
           })}
         </nav>
