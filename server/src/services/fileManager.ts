@@ -350,6 +350,117 @@ export async function captureBlocksForFile(
     }
   }
 
+  // Fallback: extract blocks directly from the generated file
+  // file_path is relative to workspaceRoot (e.g. "{userId}/{convId}/file.pptx")
+  const filePath = path.join(config.workspaceRoot, fileRecord.file_path);
+  if (fs.existsSync(filePath)) {
+    try {
+      const blocks = await extractBlocksFromFile(filePath, ext);
+      if (blocks && blocks.length > 0) {
+        const finalDocType = docType || (isHtml ? 'slides' : ext) as DocType;
+        await dbRun(
+          `INSERT INTO document_blocks (id, file_id, user_id, conversation_id, doc_type, doc_meta, blocks, version)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          uuidv4(), fileRecord.id, userId, conversationId,
+          finalDocType, JSON.stringify({}), JSON.stringify(blocks), fileRecord.version
+        );
+        console.log(`[FileManager] Captured ${blocks.length} blocks from file ${fileRecord.filename} (${finalDocType}) [fallback]`);
+        return blocks;
+      }
+    } catch (err) {
+      console.error(`[FileManager] Fallback block extraction failed for ${fileRecord.filename}:`, err);
+    }
+  }
+
   console.warn(`[FileManager] No block structure found for ${fileRecord.filename} (searched ${searchDirs.length} dirs)`);
   return null;
+}
+
+/**
+ * Fallback: extract block structure directly from the output file.
+ * Supports PPTX (slide extraction via XML) and DOCX (section extraction via mammoth).
+ */
+async function extractBlocksFromFile(filePath: string, ext: string): Promise<DocumentBlock[] | null> {
+  if (ext === 'pptx' || ext === 'ppt') {
+    return extractBlocksFromPptx(filePath);
+  }
+  if (ext === 'docx' || ext === 'doc') {
+    return extractBlocksFromDocx(filePath);
+  }
+  return null;
+}
+
+async function extractBlocksFromPptx(filePath: string): Promise<DocumentBlock[] | null> {
+  const JSZip = (await import('jszip')).default;
+  const data = fs.readFileSync(filePath);
+  const zip = await JSZip.loadAsync(data);
+
+  const slideFiles: string[] = [];
+  zip.forEach((p) => {
+    if (/^ppt\/slides\/slide\d+\.xml$/.test(p)) slideFiles.push(p);
+  });
+  slideFiles.sort((a, b) => {
+    const na = parseInt(a.match(/slide(\d+)/)?.[1] || '0');
+    const nb = parseInt(b.match(/slide(\d+)/)?.[1] || '0');
+    return na - nb;
+  });
+
+  if (slideFiles.length === 0) return null;
+
+  const blocks: DocumentBlock[] = [];
+  for (let i = 0; i < slideFiles.length; i++) {
+    const xml = await zip.file(slideFiles[i])!.async('text');
+    const texts = extractTextsFromXml(xml);
+    const title = texts[0] || `Slide ${i + 1}`;
+    const bullets = texts.slice(1);
+
+    blocks.push({
+      id: uuidv4(),
+      type: i === 0 ? 'title' : 'content',
+      order: i,
+      data: { title, bullets, slideIndex: i },
+    });
+  }
+  return blocks;
+}
+
+async function extractBlocksFromDocx(filePath: string): Promise<DocumentBlock[] | null> {
+  const mammoth = (await import('mammoth')).default;
+  const result = await mammoth.extractRawText({ path: filePath });
+  const text = result.value;
+  if (!text.trim()) return null;
+
+  // Split by double newlines into sections
+  const sections = text.split(/\n{2,}/).filter(s => s.trim());
+  if (sections.length === 0) return null;
+
+  return sections.map((section, i) => {
+    const lines = section.split('\n').filter(l => l.trim());
+    const title = lines[0] || `Section ${i + 1}`;
+    const content = lines.slice(1).join('\n');
+    return {
+      id: uuidv4(),
+      type: i === 0 ? 'heading' : 'paragraph',
+      order: i,
+      data: { title, content },
+    };
+  });
+}
+
+/** Extract text paragraphs from PowerPoint slide XML */
+function extractTextsFromXml(xml: string): string[] {
+  const paragraphs: string[] = [];
+  const pRegex = /<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g;
+  let pMatch;
+  while ((pMatch = pRegex.exec(xml)) !== null) {
+    const parts: string[] = [];
+    const tRegex = /<a:t>([\s\S]*?)<\/a:t>/g;
+    let tMatch;
+    while ((tMatch = tRegex.exec(pMatch[1])) !== null) {
+      parts.push(tMatch[1]);
+    }
+    const text = parts.join('').trim();
+    if (text) paragraphs.push(text);
+  }
+  return paragraphs;
 }

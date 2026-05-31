@@ -3,9 +3,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { DocumentBlock, BlockRecord } from '../../editor/hooks/useDocumentBlocks';
 import type { DocLayoutType } from '../hooks/useDocumentMode';
+import dynamic from 'next/dynamic';
 import SlideBlockPreview from '../../editor/renderers/SlideBlockPreview';
 import DocBlockPreview from '../../editor/renderers/DocBlockPreview';
 import SheetBlockPreview from '../../editor/renderers/SheetBlockPreview';
+
+const PdfSlideThumbs = dynamic(() => import('./PdfSlideThumbs'), { ssr: false });
+const PdfPagePreview = dynamic(() => import('./PdfPagePreview'), { ssr: false });
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
@@ -80,6 +84,8 @@ export default function DocumentCanvas({
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [previewType, setPreviewType] = useState<'html' | 'pdf' | 'other'>('html');
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [selectedPageIndex, setSelectedPageIndex] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const previewKeyRef = useRef(0);
   const visibleCount = useStaggerReveal(blocks.length);
 
@@ -131,6 +137,41 @@ export default function DocumentCanvas({
     return () => { if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Sync selectedBlockId → page index
+  useEffect(() => {
+    if (selectedBlockId && blocks.length > 0) {
+      const idx = blocks.findIndex(b => b.id === selectedBlockId);
+      if (idx >= 0) setSelectedPageIndex(idx);
+    }
+  }, [selectedBlockId, blocks]);
+
+  // Keyboard navigation for slides
+  useEffect(() => {
+    if (layoutType !== 'slides') return;
+    const maxPage = totalPages > 0 ? totalPages : blocks.length;
+    if (maxPage === 0) return;
+
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedPageIndex(prev => {
+          const next = Math.max(0, prev - 1);
+          if (blocks[next]) onSelectBlock(blocks[next].id);
+          return next;
+        });
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedPageIndex(prev => {
+          const next = Math.min(maxPage - 1, prev + 1);
+          if (blocks[next]) onSelectBlock(blocks[next].id);
+          return next;
+        });
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [layoutType, totalPages, blocks, onSelectBlock]);
+
   const renderBlockPreview = (block: DocumentBlock) => {
     if (layoutType === 'slides') {
       return <SlideBlockPreview data={block.data} type={block.type} />;
@@ -139,6 +180,33 @@ export default function DocumentCanvas({
       return <SheetBlockPreview data={block.data} type={block.type} />;
     }
     return <DocBlockPreview data={block.data} type={block.type} />;
+  };
+
+  /** Mini slide thumbnail — looks like a real slide (dark bg, 16:9, centered text) */
+  const renderSlideThumbnail = (block: DocumentBlock) => {
+    const t = (block.data.title as string) || '';
+    const bullets = (block.data.bullets as string[]) || [];
+    const isTitle = block.type === 'title' || block.type === 'title_slide';
+    return (
+      <div className="aspect-[16/9] bg-[#1B2A4A] rounded flex flex-col justify-center px-2 py-1.5 overflow-hidden">
+        <div className={`font-bold text-white truncate ${isTitle ? 'text-[10px] text-center' : 'text-[8px]'}`}>
+          {t}
+        </div>
+        {!isTitle && bullets.length > 0 && (
+          <div className="mt-0.5 space-y-px">
+            {bullets.slice(0, 3).map((b, i) => (
+              <div key={i} className="text-[6px] text-gray-300 truncate flex items-start gap-0.5">
+                <span className="text-[5px] mt-[2px] shrink-0">•</span>
+                <span>{typeof b === 'string' ? b : ''}</span>
+              </div>
+            ))}
+            {bullets.length > 3 && (
+              <div className="text-[5px] text-gray-500">+{bullets.length - 3}</div>
+            )}
+          </div>
+        )}
+      </div>
+    );
   };
 
   // Slides layout: thumbnail strip + main preview
@@ -150,7 +218,7 @@ export default function DocumentCanvas({
           <div className="flex-1 min-w-0">
             {title && <div className="text-sm font-semibold text-on-surface truncate">{title}</div>}
             <div className="text-[10px] text-on-surface-variant uppercase tracking-wider">
-              {docType || 'slides'} · {blocks.length} {t('editor.blocks')}
+              {docType || 'slides'} · {totalPages || blocks.length} {t('editor.blocks')}
             </div>
           </div>
           <button
@@ -182,9 +250,9 @@ export default function DocumentCanvas({
 
         {/* Main content area */}
         <div className="flex-1 flex min-h-0">
-          {/* Thumbnail strip (left) */}
-          <div className="w-32 lg:w-40 border-r border-outline-variant/10 overflow-y-auto p-2 space-y-2 shrink-0 bg-surface-container/20">
-            {streaming && blocks.length === 0 && (
+          {/* Thumbnail strip (left) — real PDF page thumbnails */}
+          <div className="w-32 lg:w-40 border-r border-outline-variant/10 overflow-y-auto p-2 shrink-0 bg-surface-container/20">
+            {streaming && !previewBlobUrl && (
               <div className="space-y-2 p-1">
                 {agentActivity && agentActivity.length > 0 ? (
                   <div className="space-y-1.5">
@@ -204,84 +272,65 @@ export default function DocumentCanvas({
                 )}
               </div>
             )}
-            {blocks.map((block, index) => (
-              <button
-                key={block.id}
-                onClick={() => onSelectBlock(selectedBlockId === block.id ? null : block.id)}
-                className={`w-full text-left transition-all duration-300 cursor-pointer rounded-lg overflow-hidden border-2 ${
-                  index < visibleCount ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
-                } ${
-                  selectedBlockId === block.id
-                    ? 'border-primary shadow-md'
-                    : 'border-transparent hover:border-outline-variant/30'
-                }`}
-              >
-                <div className="relative">
-                  <div className="scale-[0.85] origin-top-left w-[118%]">
-                    {renderBlockPreview(block)}
-                  </div>
-                  <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-black/60 text-white text-[9px] font-bold rounded">
-                    {index + 1}
-                  </div>
-                </div>
-              </button>
-            ))}
+            {previewBlobUrl && (
+              <PdfSlideThumbs
+                pdfUrl={previewBlobUrl}
+                slideCount={blocks.length || undefined}
+                selectedIndex={selectedPageIndex}
+                onSelect={(index) => {
+                  setSelectedPageIndex(index);
+                  // Also select corresponding block if available
+                  if (blocks[index]) {
+                    onSelectBlock(blocks[index].id);
+                  }
+                }}
+              />
+            )}
           </div>
 
-          {/* Main preview (right) */}
+          {/* Main preview (right) — rendered PDF page via pdf.js */}
           <div className="flex-1 flex flex-col min-w-0">
             {previewLoading ? (
-              <div className="flex-1 flex items-center justify-center">
-                <span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span>
+              <div className="flex-1 flex items-center justify-center bg-neutral-800">
+                <span className="material-symbols-outlined animate-spin text-white/40 text-3xl">progress_activity</span>
               </div>
+            ) : previewBlobUrl && previewType === 'pdf' ? (
+              <PdfPagePreview
+                key={previewKeyRef.current}
+                pdfUrl={previewBlobUrl}
+                pageIndex={selectedPageIndex}
+                onPageCount={(count) => setTotalPages(count)}
+              />
             ) : previewBlobUrl ? (
-              previewType === 'pdf' ? (
-                <embed
-                  key={previewKeyRef.current}
-                  src={previewBlobUrl}
-                  type="application/pdf"
-                  className="flex-1 w-full border-0 bg-white"
-                  title="Document Preview"
-                />
-              ) : (
-                <iframe
-                  key={previewKeyRef.current}
-                  src={previewBlobUrl}
-                  className="flex-1 w-full border-0 bg-white"
-                  title="Document Preview"
-                  sandbox="allow-scripts allow-same-origin"
-                  tabIndex={-1}
-                />
-              )
-            ) : selectedBlockId ? (
-              <div className="flex-1 flex items-center justify-center p-6">
-                <div className="w-full max-w-lg">
-                  {renderBlockPreview(blocks.find(b => b.id === selectedBlockId)!)}
-                </div>
-              </div>
+              <iframe
+                key={previewKeyRef.current}
+                src={previewBlobUrl}
+                className="flex-1 w-full border-0 bg-white"
+                title="Document Preview"
+                sandbox="allow-scripts allow-same-origin"
+                tabIndex={-1}
+              />
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-on-surface-variant/30 gap-3">
+              <div className="flex-1 flex flex-col items-center justify-center text-on-surface-variant/30 gap-3 bg-neutral-800">
                 {streaming ? (
                   <>
-                    <span className="material-symbols-outlined text-4xl text-primary animate-spin">progress_activity</span>
-                    <span className="text-sm text-on-surface-variant">{t('chat.docMode.generating')}</span>
+                    <span className="material-symbols-outlined text-4xl text-white/40 animate-spin">progress_activity</span>
+                    <span className="text-sm text-white/50">{t('chat.docMode.generating')}</span>
                     {agentActivity && agentActivity.length > 0 && (
                       <div className="mt-2 w-full max-w-xs space-y-1.5">
                         {agentActivity.slice(-5).map((act, i) => (
-                          <div key={act.id || i} className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-surface-container/50 text-[11px]">
-                            <span className={`material-symbols-outlined text-xs ${act.status === 'completed' ? 'text-primary' : 'text-on-surface-variant/60 animate-pulse'}`}>
+                          <div key={act.id || i} className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-white/5 text-[11px]">
+                            <span className={`material-symbols-outlined text-xs ${act.status === 'completed' ? 'text-primary' : 'text-white/40 animate-pulse'}`}>
                               {act.status === 'completed' ? 'check_circle' : 'pending'}
                             </span>
-                            <span className="text-on-surface-variant truncate">{act.tool}</span>
+                            <span className="text-white/60 truncate">{act.tool}</span>
                           </div>
                         ))}
                       </div>
                     )}
                   </>
                 ) : (
-                  <>
-                    <span className="material-symbols-outlined text-5xl">slideshow</span>
-                  </>
+                  <span className="material-symbols-outlined text-5xl text-white/20">slideshow</span>
                 )}
               </div>
             )}
@@ -352,113 +401,107 @@ export default function DocumentCanvas({
         </button>
       </div>
 
-      {/* Block list */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {streaming && blocks.length === 0 && (
-          <div className="space-y-3">
-            {agentActivity && agentActivity.length > 0 ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 px-3 py-2">
-                  <span className="material-symbols-outlined text-primary text-sm animate-spin">progress_activity</span>
-                  <span className="text-xs text-on-surface-variant font-medium">{t('chat.docMode.generating')}</span>
+      {/* Main content area */}
+      <div className="flex-1 flex min-h-0">
+        {/* Section list (left) — only when blocks exist */}
+        {blocks.length > 0 && (
+          <div className="w-48 lg:w-56 border-r border-outline-variant/10 overflow-y-auto p-1.5 space-y-0.5 shrink-0 bg-surface-container/20">
+            {blocks.map((block, index) => (
+              <button
+                key={block.id}
+                onClick={() => onSelectBlock(selectedBlockId === block.id ? null : block.id)}
+                className={`w-full text-left transition-all duration-200 cursor-pointer rounded-lg px-2 py-1.5 ${
+                  index < visibleCount ? 'opacity-100' : 'opacity-0'
+                } ${
+                  selectedBlockId === block.id
+                    ? 'bg-primary/10 text-primary'
+                    : 'hover:bg-surface-container/60 text-on-surface-variant'
+                }`}
+              >
+                <div className="flex items-start gap-1.5">
+                  <span className="text-[9px] font-bold bg-surface-container-highest rounded px-1 py-px shrink-0 mt-0.5">
+                    {index + 1}
+                  </span>
+                  <span className="text-[11px] line-clamp-2 leading-tight">
+                    {(block.data.title as string) || block.type.replace(/_/g, ' ')}
+                  </span>
                 </div>
-                {agentActivity.map((act, i) => (
-                  <div key={act.id || i} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-container/50 border border-outline-variant/5">
-                    <span className={`material-symbols-outlined text-sm ${act.status === 'completed' ? 'text-primary' : 'text-on-surface-variant/60 animate-pulse'}`}>
-                      {act.status === 'completed' ? 'check_circle' : 'pending'}
-                    </span>
-                    <span className="text-xs text-on-surface-variant truncate flex-1">
-                      {act.tool}
-                    </span>
-                    {act.input && (
-                      <span className="text-[10px] text-on-surface-variant/50 truncate max-w-[50%]">{act.input.slice(0, 50)}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <>
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="h-16 rounded-lg bg-surface-container animate-pulse" />
-                ))}
-                <div className="text-center text-xs text-on-surface-variant/50 py-2">
-                  {t('chat.docMode.generating')}
-                </div>
-              </>
-            )}
+              </button>
+            ))}
           </div>
         )}
 
-        {/* When we have blocks, show them */}
-        {blocks.map((block, index) => (
-          <button
-            key={block.id}
-            onClick={() => onSelectBlock(selectedBlockId === block.id ? null : block.id)}
-            className={`w-full text-left transition-all duration-300 cursor-pointer rounded-xl overflow-hidden border-2 ${
-              index < visibleCount ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
-            } ${
-              selectedBlockId === block.id
-                ? 'border-primary shadow-md ring-2 ring-primary/20'
-                : 'border-transparent hover:border-outline-variant/20'
-            }`}
-          >
-            {renderBlockPreview(block)}
-          </button>
-        ))}
-
-        {/* Fallback: no blocks but preview available — show preview */}
-        {!streaming && blocks.length === 0 && previewBlobUrl && (
-          <div className="flex-1 min-h-[400px] rounded-xl overflow-hidden border border-outline-variant/10">
-            {previewType === 'pdf' ? (
+        {/* Main preview (right) */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {previewLoading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span>
+            </div>
+          ) : previewBlobUrl ? (
+            previewType === 'pdf' ? (
               <embed
                 key={previewKeyRef.current}
                 src={previewBlobUrl}
                 type="application/pdf"
-                className="w-full h-full min-h-[400px] border-0 bg-white rounded-xl"
+                className="flex-1 w-full border-0 bg-white"
                 title="Document Preview"
               />
             ) : (
               <iframe
                 key={previewKeyRef.current}
                 src={previewBlobUrl}
-                className="w-full h-full min-h-[400px] border-0 bg-white rounded-xl"
+                className="flex-1 w-full border-0 bg-white"
                 title="Document Preview"
                 sandbox="allow-scripts allow-same-origin"
                 tabIndex={-1}
               />
-            )}
-          </div>
-        )}
+            )
+          ) : streaming ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3">
+              <span className="material-symbols-outlined text-4xl text-primary animate-spin">progress_activity</span>
+              <span className="text-sm text-on-surface-variant">{t('chat.docMode.generating')}</span>
+              {agentActivity && agentActivity.length > 0 && (
+                <div className="mt-2 w-full max-w-xs space-y-1.5">
+                  {agentActivity.slice(-5).map((act, i) => (
+                    <div key={act.id || i} className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-surface-container/50 text-[11px]">
+                      <span className={`material-symbols-outlined text-xs ${act.status === 'completed' ? 'text-primary' : 'text-on-surface-variant/60 animate-pulse'}`}>
+                        {act.status === 'completed' ? 'check_circle' : 'pending'}
+                      </span>
+                      <span className="text-on-surface-variant truncate">{act.tool}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-on-surface-variant/30">
+              <span className="material-symbols-outlined text-5xl">description</span>
+            </div>
+          )}
 
-        {/* No blocks, no preview, not streaming */}
-        {!streaming && blocks.length === 0 && !previewBlobUrl && previewLoading && (
-          <div className="flex-1 flex items-center justify-center py-12">
-            <span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span>
-          </div>
-        )}
-
-        {/* Selected block action bar */}
-        {selectedBlockId && blocks.length > 0 && (
-          <div className="sticky bottom-0 flex items-center gap-2 px-4 py-2.5 bg-surface/90 backdrop-blur-sm border border-outline-variant/10 rounded-xl shadow-lg">
-            <span className="material-symbols-outlined text-primary text-sm">edit_note</span>
-            <span className="text-xs text-on-surface-variant flex-1 truncate">
-              #{(blocks.findIndex(b => b.id === selectedBlockId) + 1)} — {blocks.find(b => b.id === selectedBlockId)?.type.replace(/_/g, ' ')}
-            </span>
-            <button
-              onClick={() => onRegenerate(selectedBlockId)}
-              className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-lg text-xs text-primary font-medium hover:bg-primary/20 transition-colors cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-sm">auto_fix_high</span>
-              AI
-            </button>
-            <button
-              onClick={() => onSelectBlock(null)}
-              className="p-1 rounded hover:bg-surface-container transition-colors cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
-            </button>
-          </div>
-        )}
+          {/* Selected block action bar */}
+          {selectedBlockId && blocks.length > 0 && (
+            <div className="flex items-center gap-2 px-4 py-2 border-t border-outline-variant/10 bg-surface-container/30 shrink-0">
+              <span className="material-symbols-outlined text-primary text-sm">edit_note</span>
+              <span className="text-xs text-on-surface-variant flex-1 truncate">
+                #{(blocks.findIndex(b => b.id === selectedBlockId) + 1)} — {blocks.find(b => b.id === selectedBlockId)?.type.replace(/_/g, ' ')}
+              </span>
+              <button
+                onClick={() => onRegenerate(selectedBlockId)}
+                className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-lg text-xs text-primary font-medium hover:bg-primary/20 transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-sm">auto_fix_high</span>
+                AI
+              </button>
+              <button
+                onClick={() => onSelectBlock(null)}
+                className="p-1 rounded hover:bg-surface-container transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
