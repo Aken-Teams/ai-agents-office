@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import SlideShapeOverlay, { type ShapeRect } from './SlideShapeOverlay';
 
 interface PdfPagePreviewProps {
   pdfUrl: string;
@@ -8,15 +9,32 @@ interface PdfPagePreviewProps {
   pageIndex: number;
   /** Total page count callback */
   onPageCount?: (count: number) => void;
+  /** Shape overlays for the current slide */
+  shapes?: ShapeRect[];
+  /** Currently selected shape id */
+  selectedShapeId?: string | null;
+  /** Called when a shape is hovered */
+  onShapeHover?: (id: string | null) => void;
+  /** Called when a shape is clicked */
+  onShapeSelect?: (shape: ShapeRect) => void;
 }
 
 /**
  * Renders a single PDF page at high resolution using pdf.js.
- * Replaces the browser's built-in PDF viewer for a cleaner look.
+ * Supports shape overlay for interactive element selection.
  */
-export default function PdfPagePreview({ pdfUrl, pageIndex, onPageCount }: PdfPagePreviewProps) {
+export default function PdfPagePreview({
+  pdfUrl,
+  pageIndex,
+  onPageCount,
+  shapes,
+  selectedShapeId,
+  onShapeHover,
+  onShapeSelect,
+}: PdfPagePreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const slideWrapRef = useRef<HTMLDivElement>(null);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [rendering, setRendering] = useState(false);
   const [pageCount, setPageCount] = useState(0);
@@ -50,7 +68,6 @@ export default function PdfPagePreview({ pdfUrl, pageIndex, onPageCount }: PdfPa
     let cancelled = false;
 
     const renderPage = async () => {
-      // Cancel any in-progress render
       if (renderTaskRef.current) {
         try { renderTaskRef.current.cancel(); } catch {}
         renderTaskRef.current = null;
@@ -64,16 +81,14 @@ export default function PdfPagePreview({ pdfUrl, pageIndex, onPageCount }: PdfPa
         const container = containerRef.current!;
         const canvas = canvasRef.current!;
 
-        // Calculate scale to fit container width while maintaining aspect ratio
         const unscaledVp = page.getViewport({ scale: 1 });
-        const containerWidth = container.clientWidth - 48; // padding
+        const containerWidth = container.clientWidth - 48;
         const containerHeight = container.clientHeight - 48;
 
         const scaleByWidth = containerWidth / unscaledVp.width;
         const scaleByHeight = containerHeight / unscaledVp.height;
-        const scale = Math.min(scaleByWidth, scaleByHeight, 3); // cap at 3x
+        const scale = Math.min(scaleByWidth, scaleByHeight, 3);
 
-        // Use device pixel ratio for sharp rendering
         const dpr = window.devicePixelRatio || 1;
         const viewport = page.getViewport({ scale: scale * dpr });
 
@@ -81,6 +96,12 @@ export default function PdfPagePreview({ pdfUrl, pageIndex, onPageCount }: PdfPa
         canvas.height = viewport.height;
         canvas.style.width = `${viewport.width / dpr}px`;
         canvas.style.height = `${viewport.height / dpr}px`;
+
+        // Also size the overlay wrapper to match the canvas
+        if (slideWrapRef.current) {
+          slideWrapRef.current.style.width = `${viewport.width / dpr}px`;
+          slideWrapRef.current.style.height = `${viewport.height / dpr}px`;
+        }
 
         const ctx = canvas.getContext('2d')!;
         const task = (page as any).render({ canvasContext: ctx, viewport });
@@ -108,13 +129,14 @@ export default function PdfPagePreview({ pdfUrl, pageIndex, onPageCount }: PdfPa
     const handleResize = () => {
       clearTimeout(timeout);
       timeout = setTimeout(() => {
-        // Force re-render by toggling a dummy state
-        setPdfDoc((prev: any) => prev); // trigger useEffect
+        setPdfDoc((prev: any) => prev);
       }, 200);
     };
     window.addEventListener('resize', handleResize);
     return () => { window.removeEventListener('resize', handleResize); clearTimeout(timeout); };
   }, [pdfDoc]);
+
+  const hasShapes = shapes && shapes.length > 0;
 
   return (
     <div ref={containerRef} className="flex-1 flex items-center justify-center bg-neutral-800 overflow-auto p-6 relative">
@@ -123,11 +145,26 @@ export default function PdfPagePreview({ pdfUrl, pageIndex, onPageCount }: PdfPa
           <span className="material-symbols-outlined animate-spin text-white/40 text-3xl">progress_activity</span>
         </div>
       )}
-      <canvas
-        ref={canvasRef}
-        className="shadow-2xl rounded-sm"
-        style={{ maxWidth: '100%', maxHeight: '100%' }}
-      />
+
+      {/* Slide wrapper — positions canvas + shape overlay together */}
+      <div ref={slideWrapRef} className="relative shadow-2xl rounded-sm">
+        <canvas
+          ref={canvasRef}
+          className="block"
+          style={{ width: '100%', height: '100%' }}
+        />
+
+        {/* Shape overlay — only when shapes are available */}
+        {hasShapes && onShapeSelect && (
+          <SlideShapeOverlay
+            shapes={shapes}
+            selectedId={selectedShapeId ?? null}
+            onHover={onShapeHover ?? (() => {})}
+            onSelect={onShapeSelect}
+          />
+        )}
+      </div>
+
       {/* Page indicator */}
       {pageCount > 0 && (
         <div className="absolute bottom-3 right-3 px-2.5 py-1 bg-black/60 text-white/80 text-xs rounded-full backdrop-blur-sm">

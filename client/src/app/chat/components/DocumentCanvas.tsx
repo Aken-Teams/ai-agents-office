@@ -7,6 +7,8 @@ import dynamic from 'next/dynamic';
 import SlideBlockPreview from '../../editor/renderers/SlideBlockPreview';
 import DocBlockPreview from '../../editor/renderers/DocBlockPreview';
 import SheetBlockPreview from '../../editor/renderers/SheetBlockPreview';
+import SlideElementPanel from './SlideElementPanel';
+import type { ShapeRect } from './SlideShapeOverlay';
 
 const PdfSlideThumbs = dynamic(() => import('./PdfSlideThumbs'), { ssr: false });
 const PdfPagePreview = dynamic(() => import('./PdfPagePreview'), { ssr: false });
@@ -29,7 +31,7 @@ interface DocumentCanvasProps {
   onSelectBlock: (id: string | null) => void;
   onClose: () => void;
   onRebuild: () => void;
-  onRegenerate: (blockId: string) => void;
+  onRegenerate: (blockId: string, elementContext?: string) => void;
   onDownload: () => void;
   streaming: boolean;
   rebuilding: boolean;
@@ -86,6 +88,10 @@ export default function DocumentCanvas({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [selectedPageIndex, setSelectedPageIndex] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [slideShapes, setSlideShapes] = useState<Record<number, ShapeRect[]>>({});
+  const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
+  const [selectedElement, setSelectedElement] = useState<string | null>(null);
+  const [hoveredShapeName, setHoveredShapeName] = useState<string | null>(null);
   const previewKeyRef = useRef(0);
   const visibleCount = useStaggerReveal(blocks.length);
 
@@ -136,6 +142,34 @@ export default function DocumentCanvas({
   useEffect(() => {
     return () => { if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch PPTX shape data for overlay
+  useEffect(() => {
+    if (!token || !fileId || layoutType !== 'slides') return;
+    (async () => {
+      try {
+        const res = await fetch(`${SSE_BASE}/api/files/${fileId}/shapes`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const map: Record<number, ShapeRect[]> = {};
+        for (const slide of data.slides || []) {
+          map[slide.slideIndex] = slide.shapes;
+        }
+        setSlideShapes(map);
+      } catch {
+        // Shapes are optional — silently fail
+      }
+    })();
+  }, [token, fileId, layoutType]);
+
+  // Reset shape selection when switching slides
+  useEffect(() => {
+    setSelectedShapeId(null);
+    setSelectedElement(null);
+    setHoveredShapeName(null);
+  }, [selectedPageIndex]);
 
   // Sync selectedBlockId → page index
   useEffect(() => {
@@ -300,6 +334,19 @@ export default function DocumentCanvas({
                 pdfUrl={previewBlobUrl}
                 pageIndex={selectedPageIndex}
                 onPageCount={(count) => setTotalPages(count)}
+                shapes={slideShapes[selectedPageIndex]}
+                selectedShapeId={selectedShapeId}
+                onShapeHover={(id) => {
+                  const shape = slideShapes[selectedPageIndex]?.find(s => s.id === id);
+                  setHoveredShapeName(shape?.text?.slice(0, 30) || shape?.name || null);
+                }}
+                onShapeSelect={(shape) => {
+                  setSelectedShapeId(prev => prev === shape.id ? null : shape.id);
+                  // Also select the corresponding block
+                  if (blocks[selectedPageIndex]) {
+                    onSelectBlock(blocks[selectedPageIndex].id);
+                  }
+                }}
               />
             ) : previewBlobUrl ? (
               <iframe
@@ -335,27 +382,71 @@ export default function DocumentCanvas({
               </div>
             )}
 
-            {/* Selected block action bar */}
-            {selectedBlockId && (
+            {/* Hovered shape name tooltip */}
+            {hoveredShapeName && !selectedShapeId && (
+              <div className="absolute bottom-14 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-inverse-surface text-inverse-on-surface text-xs rounded-full shadow-lg pointer-events-none z-20 whitespace-nowrap">
+                {hoveredShapeName}
+              </div>
+            )}
+
+            {/* Selected shape/element info bar */}
+            {(selectedBlockId || selectedShapeId) && (
               <div className="flex items-center gap-2 px-4 py-2 border-t border-outline-variant/10 bg-surface-container/30 shrink-0">
                 <span className="material-symbols-outlined text-primary text-sm">edit_note</span>
                 <span className="text-xs text-on-surface-variant flex-1">
-                  #{(blocks.findIndex(b => b.id === selectedBlockId) + 1)} — {blocks.find(b => b.id === selectedBlockId)?.type.replace(/_/g, ' ')}
+                  {selectedShapeId ? (
+                    <>
+                      第 {selectedPageIndex + 1} 頁 ·{' '}
+                      {slideShapes[selectedPageIndex]?.find(s => s.id === selectedShapeId)?.text?.slice(0, 40) ||
+                       slideShapes[selectedPageIndex]?.find(s => s.id === selectedShapeId)?.name || '元素'}
+                    </>
+                  ) : selectedBlockId ? (
+                    <>#{(blocks.findIndex(b => b.id === selectedBlockId) + 1)} — {blocks.find(b => b.id === selectedBlockId)?.type.replace(/_/g, ' ')}</>
+                  ) : null}
                 </span>
                 <button
-                  onClick={() => onRegenerate(selectedBlockId)}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-surface-container-highest border border-outline-variant/10 rounded-lg text-xs text-on-surface hover:bg-surface-variant transition-colors cursor-pointer"
+                  onClick={() => {
+                    if (!selectedBlockId) return;
+                    // Build context from selected shape/element
+                    let ctx = '';
+                    if (selectedShapeId) {
+                      const shape = slideShapes[selectedPageIndex]?.find(s => s.id === selectedShapeId);
+                      if (shape) ctx = `[第${selectedPageIndex + 1}頁 · ${shape.type}: ${shape.text || shape.name}]`;
+                    } else if (selectedElement) {
+                      ctx = `[第${selectedPageIndex + 1}頁 · ${selectedElement}]`;
+                    }
+                    onRegenerate(selectedBlockId, ctx || undefined);
+                  }}
+                  disabled={!selectedBlockId}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-surface-container-highest border border-outline-variant/10 rounded-lg text-xs text-on-surface hover:bg-surface-variant transition-colors cursor-pointer disabled:opacity-50"
                 >
                   <span className="material-symbols-outlined text-primary text-sm">auto_fix_high</span>
                   AI
                 </button>
                 <button
-                  onClick={() => onSelectBlock(null)}
+                  onClick={() => { onSelectBlock(null); setSelectedShapeId(null); }}
                   className="p-1 rounded hover:bg-surface-container transition-colors cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
                 </button>
               </div>
+            )}
+
+            {/* Slide element panel (Option A) — shows block sub-elements as chips */}
+            {blocks[selectedPageIndex] && (
+              <SlideElementPanel
+                block={blocks[selectedPageIndex]}
+                slideIndex={selectedPageIndex}
+                selectedElement={selectedElement}
+                onSelectElement={(key) => {
+                  setSelectedElement(key);
+                  // Auto-select the block too
+                  if (blocks[selectedPageIndex]) {
+                    onSelectBlock(blocks[selectedPageIndex].id);
+                  }
+                }}
+                t={t}
+              />
             )}
           </div>
         </div>

@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { dbGet, dbAll } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { getFileDownloadPath, deleteFile, getFileVersions } from '../services/fileManager.js';
+import { getFileDownloadPath, deleteFile, getFileVersions, extractPptxShapes } from '../services/fileManager.js';
 import { convertOfficeFile } from '../services/filePreview.js';
 import { applyWatermark } from '../services/watermark.js';
 import { config } from '../config.js';
@@ -159,6 +159,24 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
+
+// GET /api/files/:id/shapes — extract shape bounding boxes from PPTX
+router.get('/:id/shapes', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const filePath = await getFileDownloadPath(userId, req.params.id as string);
+  if (!filePath) { res.status(404).json({ error: 'File not found' }); return; }
+
+  const ext = path.extname(filePath).slice(1).toLowerCase();
+  if (ext !== 'pptx') { res.status(400).json({ error: 'Only PPTX files supported' }); return; }
+
+  try {
+    const shapes = await extractPptxShapes(filePath);
+    res.json({ slides: shapes });
+  } catch (err) {
+    console.error('[Shapes] Extraction error:', err);
+    res.status(500).json({ error: 'Shape extraction failed' });
+  }
+});
 
 // GET /api/files/:id/versions
 router.get('/:id/versions', async (req: Request, res: Response) => {

@@ -545,6 +545,7 @@ function ChatContent() {
   const docBlocks = useDocumentBlocks(token);
   const [docRebuilding, setDocRebuilding] = useState(false);
   const [docRegenBlockId, setDocRegenBlockId] = useState<string | null>(null);
+  const [docRegenContext, setDocRegenContext] = useState<string>('');
   const fileGenInRoundRef = useRef(false); // track if file was generated this round
 
   // Custom ReactMarkdown components — intercept ```chart and ```mermaid blocks
@@ -2342,7 +2343,10 @@ function ChatContent() {
                 setFiles(prev => prev.map(f => f.id === docMode.documentFileId ? { ...f, ...(result.file as any) } : f));
               }
             }}
-            onRegenerate={(blockId) => setDocRegenBlockId(blockId)}
+            onRegenerate={(blockId, elementContext) => {
+              setDocRegenBlockId(blockId);
+              setDocRegenContext(elementContext || '');
+            }}
             onDownload={() => {
               if (!docMode.documentFileId || !token) return;
               const file = files.find(f => f.id === docMode.documentFileId);
@@ -2533,13 +2537,19 @@ function ChatContent() {
       {/* Block regeneration modal (document mode) */}
       {docRegenBlockId && (
         <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4"
-             onClick={() => setDocRegenBlockId(null)}>
+             onClick={() => { setDocRegenBlockId(null); setDocRegenContext(''); }}>
           <div className="bg-surface rounded-t-2xl md:rounded-2xl shadow-2xl w-full max-w-lg p-5 relative border border-outline-variant/10"
                onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2 mb-4">
               <span className="material-symbols-outlined text-primary text-xl">auto_fix_high</span>
               <h3 className="text-base font-bold text-on-surface">{t('editor.regenerate.title')}</h3>
             </div>
+            {docRegenContext && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 mb-2 bg-primary/8 border border-primary/15 rounded-lg text-xs text-primary">
+                <span className="material-symbols-outlined text-sm">target</span>
+                {docRegenContext}
+              </div>
+            )}
             <p className="text-xs text-on-surface-variant mb-3">{t('editor.regenerate.hint')}</p>
             <textarea
               id="doc-regen-input"
@@ -2552,7 +2562,8 @@ function ChatContent() {
                   e.preventDefault();
                   const input = (document.getElementById('doc-regen-input') as HTMLTextAreaElement)?.value?.trim();
                   if (input && docMode.documentFileId && docRegenBlockId) {
-                    docBlocks.regenerate(docMode.documentFileId, docRegenBlockId, input).then(result => {
+                    const fullInstruction = docRegenContext ? `${docRegenContext} ${input}` : input;
+                    docBlocks.regenerate(docMode.documentFileId, docRegenBlockId, fullInstruction).then(result => {
                       if (result.success) {
                         setDocRegenBlockId(null);
                         if (result.file) {
@@ -2566,7 +2577,7 @@ function ChatContent() {
             />
             <div className="flex items-center justify-end gap-2 mt-3">
               <button
-                onClick={() => setDocRegenBlockId(null)}
+                onClick={() => { setDocRegenBlockId(null); setDocRegenContext(''); }}
                 className="px-4 py-2 text-sm text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors cursor-pointer"
               >
                 {t('common.cancel')}
@@ -2575,7 +2586,8 @@ function ChatContent() {
                 onClick={() => {
                   const input = (document.getElementById('doc-regen-input') as HTMLTextAreaElement)?.value?.trim();
                   if (input && docMode.documentFileId && docRegenBlockId) {
-                    docBlocks.regenerate(docMode.documentFileId, docRegenBlockId, input).then(result => {
+                    const fullInstruction = docRegenContext ? `${docRegenContext} ${input}` : input;
+                    docBlocks.regenerate(docMode.documentFileId, docRegenBlockId, fullInstruction).then(result => {
                       if (result.success) {
                         setDocRegenBlockId(null);
                         if (result.file) {

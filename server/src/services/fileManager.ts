@@ -447,6 +447,139 @@ async function extractBlocksFromDocx(filePath: string): Promise<DocumentBlock[] 
   });
 }
 
+/** Shape bounding box extracted from PPTX slide XML */
+export interface PptxShape {
+  id: string;
+  name: string;
+  type: 'text' | 'picture' | 'chart' | 'table' | 'group' | 'shape';
+  /** Position/size as percentage of slide dimensions (0–100) */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** First ~80 chars of text content */
+  text?: string;
+}
+
+export interface PptxSlideShapes {
+  slideIndex: number;
+  shapes: PptxShape[];
+}
+
+/**
+ * Extract shape bounding boxes from a PPTX file for overlay rendering.
+ * Returns shape positions as percentages of slide dimensions.
+ */
+export async function extractPptxShapes(filePath: string): Promise<PptxSlideShapes[]> {
+  const JSZip = (await import('jszip')).default;
+  const data = fs.readFileSync(filePath);
+  const zip = await JSZip.loadAsync(data);
+
+  // Get slide dimensions from presentation.xml
+  let slideW = 12192000; // default widescreen EMU
+  let slideH = 6858000;
+  const presXml = await zip.file('ppt/presentation.xml')?.async('text');
+  if (presXml) {
+    const szMatch = presXml.match(/<p:sldSz\s+cx="(\d+)"\s+cy="(\d+)"/);
+    if (szMatch) {
+      slideW = parseInt(szMatch[1]);
+      slideH = parseInt(szMatch[2]);
+    }
+  }
+
+  // Find and sort slide files
+  const slideFiles: string[] = [];
+  zip.forEach((p) => {
+    if (/^ppt\/slides\/slide\d+\.xml$/.test(p)) slideFiles.push(p);
+  });
+  slideFiles.sort((a, b) => {
+    const na = parseInt(a.match(/slide(\d+)/)?.[1] || '0');
+    const nb = parseInt(b.match(/slide(\d+)/)?.[1] || '0');
+    return na - nb;
+  });
+
+  const result: PptxSlideShapes[] = [];
+
+  for (let i = 0; i < slideFiles.length; i++) {
+    const xml = await zip.file(slideFiles[i])!.async('text');
+    const shapes: PptxShape[] = [];
+
+    // Extract <p:sp> shapes (text boxes, titles, etc.)
+    const spRegex = /<p:sp\b[^>]*>([\s\S]*?)<\/p:sp>/g;
+    let spMatch;
+    while ((spMatch = spRegex.exec(xml)) !== null) {
+      const shape = parseShapeXml(spMatch[1], 'text', slideW, slideH);
+      if (shape) shapes.push(shape);
+    }
+
+    // Extract <p:pic> picture shapes
+    const picRegex = /<p:pic\b[^>]*>([\s\S]*?)<\/p:pic>/g;
+    let picMatch;
+    while ((picMatch = picRegex.exec(xml)) !== null) {
+      const shape = parseShapeXml(picMatch[1], 'picture', slideW, slideH);
+      if (shape) shapes.push(shape);
+    }
+
+    // Extract <p:graphicFrame> (charts, tables, etc.)
+    const gfRegex = /<p:graphicFrame\b[^>]*>([\s\S]*?)<\/p:graphicFrame>/g;
+    let gfMatch;
+    while ((gfMatch = gfRegex.exec(xml)) !== null) {
+      const inner = gfMatch[1];
+      const isChart = /chart/.test(inner);
+      const isTable = /<a:tbl\b/.test(inner);
+      const shape = parseShapeXml(inner, isChart ? 'chart' : isTable ? 'table' : 'shape', slideW, slideH);
+      if (shape) shapes.push(shape);
+    }
+
+    result.push({ slideIndex: i, shapes });
+  }
+
+  return result;
+}
+
+function parseShapeXml(
+  xml: string,
+  defaultType: PptxShape['type'],
+  slideW: number,
+  slideH: number,
+): PptxShape | null {
+  // Get name from cNvPr
+  const nameMatch = xml.match(/<p:cNvPr\s[^>]*name="([^"]*)"/) || xml.match(/<p:cNvPr\s[^>]*id="(\d+)"/);
+  const name = nameMatch?.[1] || '';
+
+  // Get id
+  const idMatch = xml.match(/<p:cNvPr\s[^>]*id="([^"]*)"/);
+  const id = idMatch?.[1] || Math.random().toString(36).slice(2, 8);
+
+  // Get transform: <a:off x="" y=""/> and <a:ext cx="" cy=""/>
+  const offMatch = xml.match(/<a:off\s+x="(-?\d+)"\s+y="(-?\d+)"/);
+  const extMatch = xml.match(/<a:ext\s+cx="(\d+)"\s+cy="(\d+)"/);
+  if (!offMatch || !extMatch) return null;
+
+  const x = parseInt(offMatch[1]);
+  const y = parseInt(offMatch[2]);
+  const cx = parseInt(extMatch[1]);
+  const cy = parseInt(extMatch[2]);
+
+  // Skip tiny or zero-size shapes
+  if (cx < slideW * 0.02 && cy < slideH * 0.02) return null;
+
+  // Extract text content preview
+  const texts = extractTextsFromXml(xml);
+  const text = texts.join(' ').slice(0, 80) || undefined;
+
+  return {
+    id,
+    name,
+    type: defaultType,
+    x: (x / slideW) * 100,
+    y: (y / slideH) * 100,
+    width: (cx / slideW) * 100,
+    height: (cy / slideH) * 100,
+    text,
+  };
+}
+
 /** Extract text paragraphs from PowerPoint slide XML */
 function extractTextsFromXml(xml: string): string[] {
   const paragraphs: string[] = [];
