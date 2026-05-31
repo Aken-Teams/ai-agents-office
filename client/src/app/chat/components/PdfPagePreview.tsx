@@ -46,17 +46,28 @@ export default function PdfPagePreview({
     if (!pdfUrl || loadedUrlRef.current === pdfUrl) return;
     loadedUrlRef.current = pdfUrl;
 
+    // Destroy previous document to free memory
+    if (pdfDoc) {
+      try { pdfDoc.destroy(); } catch {}
+      setPdfDoc(null);
+    }
+
     try {
       const pdfjsLib = await import('pdfjs-dist');
       pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
       const pdf = await (pdfjsLib.getDocument as any)({ url: pdfUrl }).promise;
-      setPdfDoc(pdf);
-      setPageCount(pdf.numPages);
-      onPageCount?.(pdf.numPages);
+      // Only set if this is still the current URL (might have changed during async load)
+      if (loadedUrlRef.current === pdfUrl) {
+        setPdfDoc(pdf);
+        setPageCount(pdf.numPages);
+        onPageCount?.(pdf.numPages);
+      } else {
+        pdf.destroy();
+      }
     } catch (err) {
       console.warn('[PdfPagePreview] Failed to load PDF:', err);
     }
-  }, [pdfUrl, onPageCount]);
+  }, [pdfUrl, onPageCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { loadPdf(); }, [loadPdf]);
 

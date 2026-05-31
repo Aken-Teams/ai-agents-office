@@ -123,6 +123,7 @@ router.get('/:id/preview', async (req: Request, res: Response) => {
       const result = await convertOfficeFile(filePath, ext);
       res.setHeader('Content-Type', result.mime);
       res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
       if (Buffer.isBuffer(result.content)) {
         res.setHeader('Content-Length', result.content.length);
         res.end(result.content);

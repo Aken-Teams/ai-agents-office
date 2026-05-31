@@ -107,8 +107,10 @@ export default function DocumentCanvas({
     if (!token || !fileId) return;
     setPreviewLoading(true);
     try {
-      const res = await fetch(`${SSE_BASE}/api/files/${fileId}/preview`, {
+      // Add cache-buster to prevent browser/HTTP caching of stale preview
+      const res = await fetch(`${SSE_BASE}/api/files/${fileId}/preview?t=${Date.now()}`, {
         headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
       });
       if (!res.ok) throw new Error('preview failed');
       const blob = await res.blob();
@@ -118,7 +120,9 @@ export default function DocumentCanvas({
       const type = isPdf ? 'application/pdf' : isHtml ? 'text/html' : ct;
       setPreviewType(isPdf ? 'pdf' : isHtml ? 'html' : 'other');
       if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
-      setPreviewBlobUrl(URL.createObjectURL(new Blob([blob], { type })));
+      const newUrl = URL.createObjectURL(new Blob([blob], { type }));
+      setPreviewBlobUrl(newUrl);
+      previewKeyRef.current++;
     } catch {
       setPreviewBlobUrl(null);
     } finally {
@@ -133,12 +137,14 @@ export default function DocumentCanvas({
     }
   }, [fileId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Refresh preview after rebuild
+  // Refresh preview after rebuild completes
+  const prevRebuilding = useRef(false);
   useEffect(() => {
-    if (!rebuilding && fileId && previewBlobUrl) {
-      previewKeyRef.current++;
+    // Only trigger on transition from rebuilding→done (not on initial mount)
+    if (prevRebuilding.current && !rebuilding && fileId) {
       loadPreview();
     }
+    prevRebuilding.current = rebuilding;
   }, [rebuilding]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cleanup blob on unmount

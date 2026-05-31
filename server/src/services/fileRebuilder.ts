@@ -93,6 +93,10 @@ export async function rebuildFile(fileId: string, userId: string): Promise<Gener
   fs.mkdirSync(sandboxPath, { recursive: true });
   fs.writeFileSync(inputJsonPath, JSON.stringify(nativeJson, null, 2), 'utf-8');
 
+  // Debug: log first slide title to confirm data was updated
+  const firstSlide = (nativeJson as any)[arrayKey]?.[0];
+  console.log(`[FileRebuilder] Rebuilding ${outputFilename}: ${blocks.length} blocks, style=${meta.style || 'default'}, first slide: "${firstSlide?.title || '?'}" (type=${firstSlide?.type || '?'})`);
+
   // Run generator
   const scriptPath = path.join(config.generatorsDir, generatorScript);
   const nodeModulesDir = path.join(config.rootDir, 'server', 'node_modules');
@@ -127,7 +131,15 @@ export async function rebuildFile(fileId: string, userId: string): Promise<Gener
   const cacheDir = path.join(sandboxPath, '.preview-cache');
   const basename = path.basename(outputFilename, path.extname(outputFilename));
   const cachedPdf = path.join(cacheDir, `${basename}.pdf`);
-  try { if (fs.existsSync(cachedPdf)) fs.unlinkSync(cachedPdf); } catch {}
+  if (fs.existsSync(cachedPdf)) {
+    try {
+      fs.unlinkSync(cachedPdf);
+      console.log(`[FileRebuilder] Cleared preview cache: ${cachedPdf}`);
+    } catch (err) {
+      // If delete fails (e.g. file locked on Windows), overwrite source mtime is newer anyway
+      console.warn(`[FileRebuilder] Could not delete cached PDF (will re-convert anyway):`, err);
+    }
+  }
 
   // Update existing file record in-place (keep same ID so frontend doesn't need to track)
   const newSize = fs.statSync(outputPath).size;
