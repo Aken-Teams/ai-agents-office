@@ -2349,13 +2349,9 @@ function ChatContent() {
             }}
             onUpdateBlock={async (blockId, key, value) => {
               if (!docMode.documentFileId || !token) return;
-              const block = docBlocks.blocks.find(b => b.id === blockId);
-              if (!block) return;
-              const newData = { ...block.data, [key]: value };
-              await docBlocks.updateBlock(docMode.documentFileId, blockId, newData);
-              // Auto-rebuild after edit so preview updates
+              // Use in-place patch (modifies PPTX XML directly, preserves formatting)
               setDocRebuilding(true);
-              const result = await docBlocks.rebuild(docMode.documentFileId);
+              const result = await docBlocks.patchField(docMode.documentFileId, blockId, key, value);
               setDocRebuilding(false);
               if (result.success && result.file) {
                 setFiles(prev => prev.map(f => f.id === docMode.documentFileId ? { ...f, ...(result.file as any) } : f));

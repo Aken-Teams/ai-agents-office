@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
-import { rebuildFile } from '../services/fileRebuilder.js';
+import { rebuildFile, patchFileField } from '../services/fileRebuilder.js';
 import { regenerateBlock } from '../services/blockRegenerator.js';
 import { captureBlocksForFile } from '../services/fileManager.js';
 import type { DocumentBlocksRecord, DocumentBlock, GeneratedFile } from '../types.js';
@@ -235,6 +235,32 @@ router.post('/:fileId/block', async (req: Request, res: Response) => {
   );
 
   res.json({ success: true, block: newBlock, blocks });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/blocks/:fileId/patch — In-place text patching (preserves formatting)
+// ---------------------------------------------------------------------------
+router.post('/:fileId/patch', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const fileId = req.params.fileId as string;
+  const { blockId, key, value } = req.body as { blockId: string; key: string; value: unknown };
+
+  if (!blockId || !key) {
+    res.status(400).json({ error: 'blockId and key are required' });
+    return;
+  }
+
+  try {
+    const updatedFile = await patchFileField(fileId, userId, blockId, key, value);
+    if (!updatedFile) {
+      res.status(500).json({ error: 'Failed to patch file' });
+      return;
+    }
+    res.json({ success: true, file: updatedFile });
+  } catch (err: any) {
+    console.error('[Blocks] Patch error:', err);
+    res.status(500).json({ error: err.message || 'Patch failed' });
+  }
 });
 
 // ---------------------------------------------------------------------------

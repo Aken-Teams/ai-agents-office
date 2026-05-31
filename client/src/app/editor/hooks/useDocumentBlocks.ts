@@ -42,6 +42,8 @@ interface UseDocumentBlocksReturn {
   addBlock: (fileId: string, type: string, data: Record<string, unknown>, insertAfter?: string) => Promise<DocumentBlock | null>;
   /** Rebuild file from current blocks */
   rebuild: (fileId: string) => Promise<{ success: boolean; file?: any }>;
+  /** Patch a single field in-place (preserves formatting) */
+  patchField: (fileId: string, blockId: string, key: string, value: unknown) => Promise<{ success: boolean; file?: any }>;
   /** AI regenerate a single block */
   regenerate: (fileId: string, blockId: string, instruction: string) => Promise<{ success: boolean; block?: DocumentBlock; file?: any }>;
   /** Set blocks locally (e.g. from SSE) */
@@ -188,6 +190,25 @@ export function useDocumentBlocks(token: string | null): UseDocumentBlocksReturn
     }
   }, [token, headers]);
 
+  const patchField = useCallback(async (fileId: string, blockId: string, key: string, value: unknown) => {
+    if (!token) return { success: false };
+    setError(null);
+    // Optimistic update
+    setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, data: { ...b.data, [key]: value } } : b));
+    try {
+      const res = await fetch(`${SSE_BASE}/api/blocks/${fileId}/patch`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ blockId, key, value }),
+      });
+      if (!res.ok) throw new Error(`Patch failed: ${res.status}`);
+      return await res.json();
+    } catch (err: any) {
+      setError(err.message);
+      return { success: false };
+    }
+  }, [token, headers]);
+
   const regenerate = useCallback(async (fileId: string, blockId: string, instruction: string) => {
     if (!token) return { success: false };
     setError(null);
@@ -230,6 +251,7 @@ export function useDocumentBlocks(token: string | null): UseDocumentBlocksReturn
     deleteBlock,
     addBlock,
     rebuild,
+    patchField,
     regenerate,
     setBlocksFromSSE,
   };
