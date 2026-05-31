@@ -60,9 +60,11 @@ export default function PdfSlideThumbs({ pdfUrl, slideCount, selectedIndex, onSe
 
   if (loading) {
     return (
-      <div className="space-y-2 p-1">
+      <div className="space-y-2">
         {Array.from({ length: slideCount || 4 }).map((_, i) => (
-          <div key={i} className="aspect-[16/9] rounded bg-surface-container animate-pulse" />
+          <div key={i} className="aspect-[16/9] rounded-lg bg-surface-container border border-outline-variant/10 overflow-hidden relative">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-shimmer" />
+          </div>
         ))}
       </div>
     );
@@ -76,10 +78,10 @@ export default function PdfSlideThumbs({ pdfUrl, slideCount, selectedIndex, onSe
         <button
           key={i}
           onClick={() => onSelect(i)}
-          className={`w-full cursor-pointer rounded overflow-hidden border-2 transition-all ${
+          className={`w-full cursor-pointer rounded-lg overflow-hidden border-2 transition-all shadow-sm ${
             selectedIndex === i
-              ? 'border-primary shadow-md ring-1 ring-primary/30'
-              : 'border-transparent hover:border-outline-variant/40'
+              ? 'border-primary shadow-md ring-1 ring-primary/20 scale-[1.02]'
+              : 'border-outline-variant/20 hover:border-outline-variant/50 hover:shadow-md'
           }`}
         >
           <div className="relative">
@@ -89,7 +91,7 @@ export default function PdfSlideThumbs({ pdfUrl, slideCount, selectedIndex, onSe
               className="w-full block"
               draggable={false}
             />
-            <div className="absolute top-0.5 left-0.5 px-1 py-px bg-black/70 text-white text-[8px] font-bold rounded">
+            <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-black/60 text-white text-[9px] font-semibold rounded-md backdrop-blur-sm">
               {i + 1}
             </div>
           </div>

@@ -294,25 +294,19 @@ export default function DocumentCanvas({
         {/* Main content area */}
         <div className="flex-1 flex min-h-0">
           {/* Thumbnail strip (left) — real PDF page thumbnails */}
-          <div className="w-32 lg:w-40 border-r border-outline-variant/10 overflow-y-auto p-2 shrink-0 bg-surface-container/20">
+          <div className="w-36 lg:w-44 border-r border-outline-variant/10 overflow-y-auto p-2 shrink-0 bg-surface-container/20">
             {streaming && !previewBlobUrl && (
-              <div className="space-y-2 p-1">
-                {agentActivity && agentActivity.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {agentActivity.map((act, i) => (
-                      <div key={act.id || i} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-surface-container/60 text-[10px]">
-                        <span className={`material-symbols-outlined text-xs ${act.status === 'completed' ? 'text-primary' : 'text-on-surface-variant animate-pulse'}`}>
-                          {act.status === 'completed' ? 'check_circle' : 'pending'}
-                        </span>
-                        <span className="text-on-surface-variant truncate">{act.tool}{act.input ? `: ${act.input.slice(0, 30)}` : ''}</span>
-                      </div>
-                    ))}
+              <div className="space-y-2">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="aspect-[16/9] rounded-lg bg-surface-container border border-outline-variant/10 overflow-hidden relative">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-shimmer" />
+                    <div className="p-2 space-y-1.5">
+                      <div className="h-2 w-3/5 rounded bg-on-surface/6" />
+                      <div className="h-1.5 w-4/5 rounded bg-on-surface/4" />
+                      <div className="h-1.5 w-2/3 rounded bg-on-surface/4" />
+                    </div>
                   </div>
-                ) : (
-                  [1, 2, 3].map(i => (
-                    <div key={i} className="aspect-[16/9] rounded-lg bg-surface-container animate-pulse" />
-                  ))
-                )}
+                ))}
               </div>
             )}
             {previewBlobUrl && (
@@ -334,8 +328,8 @@ export default function DocumentCanvas({
           {/* Main preview (right) — rendered PDF page via pdf.js */}
           <div className="flex-1 flex flex-col min-w-0">
             {previewLoading ? (
-              <div className="flex-1 flex items-center justify-center bg-neutral-800">
-                <span className="material-symbols-outlined animate-spin text-white/40 text-3xl">progress_activity</span>
+              <div className="flex-1 flex items-center justify-center bg-surface-container/50">
+                <span className="material-symbols-outlined animate-spin text-primary/60 text-3xl">progress_activity</span>
               </div>
             ) : previewBlobUrl && previewType === 'pdf' ? (
               <PdfPagePreview
@@ -367,26 +361,40 @@ export default function DocumentCanvas({
                 tabIndex={-1}
               />
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-on-surface-variant/30 gap-3 bg-neutral-800">
+              <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-surface-container/30">
                 {streaming ? (
                   <>
-                    <span className="material-symbols-outlined text-4xl text-white/40 animate-spin">progress_activity</span>
-                    <span className="text-sm text-white/50">{t('chat.docMode.generating')}</span>
+                    {/* Animated slide skeleton */}
+                    <div className="w-[70%] max-w-md aspect-[16/9] rounded-xl bg-surface-container border border-outline-variant/10 shadow-sm overflow-hidden relative">
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-shimmer" />
+                      <div className="p-6 space-y-3">
+                        <div className="h-5 w-3/5 rounded bg-on-surface/8 animate-pulse" />
+                        <div className="h-3 w-4/5 rounded bg-on-surface/5 animate-pulse delay-75" />
+                        <div className="h-3 w-2/3 rounded bg-on-surface/5 animate-pulse delay-150" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-on-surface-variant/60">
+                      <span className="material-symbols-outlined text-lg animate-spin text-primary/70">progress_activity</span>
+                      <span className="text-xs font-medium">{t('chat.docMode.generating')}</span>
+                    </div>
                     {agentActivity && agentActivity.length > 0 && (
-                      <div className="mt-2 w-full max-w-xs space-y-1.5">
-                        {agentActivity.slice(-5).map((act, i) => (
-                          <div key={act.id || i} className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-white/5 text-[11px]">
-                            <span className={`material-symbols-outlined text-xs ${act.status === 'completed' ? 'text-primary' : 'text-white/40 animate-pulse'}`}>
+                      <div className="w-full max-w-xs space-y-1">
+                        {agentActivity.slice(-4).map((act, i) => (
+                          <div key={act.id || i} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container/80 text-[11px]">
+                            <span className={`material-symbols-outlined text-xs ${act.status === 'completed' ? 'text-primary' : 'text-on-surface-variant/50 animate-pulse'}`}>
                               {act.status === 'completed' ? 'check_circle' : 'pending'}
                             </span>
-                            <span className="text-white/60 truncate">{act.tool}</span>
+                            <span className="text-on-surface-variant/70 truncate">{act.tool}</span>
                           </div>
                         ))}
                       </div>
                     )}
                   </>
                 ) : (
-                  <span className="material-symbols-outlined text-5xl text-white/20">slideshow</span>
+                  <div className="flex flex-col items-center gap-2 text-on-surface-variant/30">
+                    <span className="material-symbols-outlined text-5xl">slideshow</span>
+                    <span className="text-xs">Preview</span>
+                  </div>
                 )}
               </div>
             )}

@@ -298,20 +298,30 @@ async function patchPptxField(
 
   if (fieldKey === 'title' || fieldKey === 'subtitle' || fieldKey === 'quote' ||
       fieldKey === 'attribution' || fieldKey === 'description' || fieldKey === 'content') {
-    // Simple text replacement: find old text and replace with new
     const oldText = String(oldValue || '');
     const newText = String(newValue || '');
+    console.log(`[FileRebuilder] patchPptxField: slide=${slideIndex}, field=${fieldKey}, old="${oldText.slice(0, 50)}", new="${newText.slice(0, 50)}"`);
     if (oldText && oldText !== newText) {
-      // PPTX text can be split across multiple <a:r> runs within a <a:p>.
-      // Try exact match first (text in a single <a:t> element)
-      const escapedOld = escapeXml(oldText);
-      const escapedNew = escapeXml(newText);
-      if (xml.includes(escapedOld)) {
-        xml = xml.replace(escapedOld, escapedNew);
+      // Try 1: direct match (oldText might already be XML-escaped from capture)
+      if (xml.includes(oldText)) {
+        xml = xml.replace(oldText, escapeXml(newText));
         modified = true;
-      } else {
-        // Text might be split across runs — try to find and replace across <a:t> elements
-        modified = false; // Can't handle split runs reliably; will still update DB
+        console.log(`[FileRebuilder] → direct match (raw oldText)`);
+      }
+      // Try 2: escaped match
+      else if (xml.includes(escapeXml(oldText))) {
+        xml = xml.replace(escapeXml(oldText), escapeXml(newText));
+        modified = true;
+        console.log(`[FileRebuilder] → direct match (escaped oldText)`);
+      }
+      // Try 3: paragraph-level concatenation match
+      else {
+        const result = replaceTextAcrossRuns(xml, oldText, newText);
+        xml = result.xml;
+        modified = result.found;
+        if (!result.found) {
+          console.warn(`[FileRebuilder] → ALL match strategies failed for field "${fieldKey}"`);
+        }
       }
     }
   } else if (fieldKey === 'bullets' || fieldKey === 'points') {
@@ -327,6 +337,11 @@ async function patchPptxField(
         if (xml.includes(escaped)) {
           xml = xml.replace(escaped, escapedNew);
           modified = true;
+        } else {
+          // Bullet text split across runs
+          const result = replaceTextAcrossRuns(xml, oldB, newB);
+          xml = result.xml;
+          if (result.found) modified = true;
         }
       }
     }
@@ -374,6 +389,99 @@ async function patchDocxField(
   }
 
   return true;
+}
+
+/**
+ * Replace text in a slide's <a:p> paragraphs.
+ *
+ * Strategies (in order):
+ * 1. Exact paragraph match (concatenated runs === oldText)
+ * 2. Fuzzy match: find the paragraph whose text best overlaps with oldText
+ *    (handles cases where the generator transforms the title, e.g. strips year)
+ *
+ * Returns { xml, found } so caller knows if replacement actually happened.
+ */
+function replaceTextAcrossRuns(xml: string, oldText: string, newText: string): { xml: string; found: boolean } {
+  const escapedNew = escapeXml(newText);
+  const oldTrimmed = oldText.trim();
+  const oldEscaped = escapeXml(oldText).trim();
+
+  // Parse all paragraphs with their text
+  const pRegex = /<a:p\b[^>]*>[\s\S]*?<\/a:p>/g;
+  const paragraphs: { raw: string; text: string; tMatches: { full: string; text: string }[] }[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = pRegex.exec(xml)) !== null) {
+    const raw = match[0];
+    const tRegex = /<a:t\b[^>]*>([^<]*)<\/a:t>/g;
+    const tMatches: { full: string; text: string }[] = [];
+    let tMatch: RegExpExecArray | null;
+    while ((tMatch = tRegex.exec(raw)) !== null) {
+      tMatches.push({ full: tMatch[0], text: tMatch[1] });
+    }
+    if (tMatches.length === 0) continue;
+    const text = tMatches.map(t => t.text).join('').trim();
+    if (text) paragraphs.push({ raw, text, tMatches });
+  }
+
+  // Strategy 1: exact match
+  let target = paragraphs.find(p =>
+    p.text === oldTrimmed || p.text === oldEscaped
+  );
+
+  // Strategy 2: containment match (also normalizing whitespace)
+  // Pick the longest matching paragraph (most specific) with minimum 4 chars overlap
+  if (!target) {
+    const MIN_OVERLAP = 4;
+    const normalize = (s: string) => s.replace(/\s+/g, ' ').trim();
+    const oldNorm = normalize(oldTrimmed);
+    const oldEscNorm = normalize(oldEscaped);
+    let bestScore = 0;
+    for (const p of paragraphs) {
+      if (p.text.length < MIN_OVERLAP) continue;
+      const pNorm = normalize(p.text);
+      // Exact match with normalized whitespace
+      if (pNorm === oldNorm || pNorm === oldEscNorm) {
+        target = p;
+        break;
+      }
+      // Containment: oldText contains paragraph text or vice versa
+      if (oldNorm.includes(pNorm) || oldEscNorm.includes(pNorm)) {
+        if (pNorm.length > bestScore) {
+          bestScore = pNorm.length;
+          target = p;
+        }
+      } else if (pNorm.includes(oldNorm) || pNorm.includes(oldEscNorm)) {
+        if (pNorm.length > bestScore) {
+          bestScore = pNorm.length;
+          target = p;
+        }
+      }
+    }
+    if (target) {
+      console.log(`[FileRebuilder] Fuzzy matched paragraph: "${target.text.slice(0, 40)}" for old: "${oldTrimmed.slice(0, 40)}"`);
+    }
+  }
+
+  if (target) {
+    let newParagraph = target.raw;
+    for (let i = 0; i < target.tMatches.length; i++) {
+      if (i === 0) {
+        const attrMatch = target.tMatches[i].full.match(/^<a:t([^>]*)>/);
+        const attrs = attrMatch ? attrMatch[1] : '';
+        newParagraph = newParagraph.replace(target.tMatches[i].full, `<a:t${attrs}>${escapedNew}</a:t>`);
+      } else {
+        newParagraph = newParagraph.replace(target.tMatches[i].full, target.tMatches[i].full.replace(/>[^<]*</, '><'));
+      }
+    }
+    const result = xml.replace(target.raw, newParagraph);
+    console.log(`[FileRebuilder] Patched text: "${target.text.slice(0, 40)}" → "${newText.slice(0, 40)}"`);
+    return { xml: result, found: true };
+  }
+
+  console.warn(`[FileRebuilder] replaceTextAcrossRuns FAILED for: "${oldTrimmed.slice(0, 60)}"`);
+  console.warn(`[FileRebuilder] Available paragraphs:`, paragraphs.map(p => `"${p.text.slice(0, 50)}"`));
+  return { xml, found: false };
 }
 
 function escapeXml(str: string): string {

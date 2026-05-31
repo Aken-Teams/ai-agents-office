@@ -397,6 +397,14 @@ html.locale-zh-CN {
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.animate-shimmer {
+  animation: shimmer 2s infinite ease-in-out;
+}
+
 /* === Chat Markdown (theme-aware) === */
 .chat-markdown h1,
 .chat-markdown h2,
