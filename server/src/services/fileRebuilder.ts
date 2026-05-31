@@ -1,14 +1,12 @@
 import path from 'path';
 import fs from 'fs';
-import { execFile } from 'child_process';
+import { exec } from 'child_process';
 import { promisify } from 'util';
-import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbRun } from '../db.js';
 import { config } from '../config.js';
-import { registerNewFiles, getExistingFilePaths, snapshotExistingFiles } from './fileManager.js';
 import type { DocumentBlocksRecord, DocumentBlock, GeneratedFile } from '../types.js';
 
-const execFileAsync = promisify(execFile);
+const execAsync = promisify(exec);
 
 /** Map doc_type → generator script name */
 const GENERATOR_SCRIPTS: Record<string, string> = {
@@ -78,7 +76,10 @@ export async function rebuildFile(fileId: string, userId: string): Promise<Gener
 
   const nativeJson = {
     ...meta,
-    [arrayKey]: blocks.sort((a, b) => a.order - b.order).map(b => b.data),
+    [arrayKey]: blocks.sort((a, b) => a.order - b.order).map(b => ({
+      type: b.type,  // generator needs slide type to render correctly
+      ...b.data,
+    })),
   };
 
   // Determine sandbox and output paths
@@ -92,19 +93,19 @@ export async function rebuildFile(fileId: string, userId: string): Promise<Gener
   fs.mkdirSync(sandboxPath, { recursive: true });
   fs.writeFileSync(inputJsonPath, JSON.stringify(nativeJson, null, 2), 'utf-8');
 
-  // Snapshot existing files before regeneration
-  await snapshotExistingFiles(userId, conversation_id);
-  const existingPaths = await getExistingFilePaths(conversation_id);
-
   // Run generator
   const scriptPath = path.join(config.generatorsDir, generatorScript);
-  const nodeModulesDir = path.join(config.rootDir, 'node_modules');
+  const nodeModulesDir = path.join(config.rootDir, 'server', 'node_modules');
 
   try {
-    await execFileAsync('node', ['--import', 'tsx', scriptPath, 'input.json', outputFilename], {
+    // Use tsx binary with absolute path to avoid module resolution issues in sandbox cwd
+    // Use exec (not execFile) so the .CMD shim works on Windows
+    const tsxBin = path.join(config.rootDir, 'server', 'node_modules', '.bin', 'tsx');
+    const cmd = `"${tsxBin}" "${scriptPath}" "input.json" "${outputFilename}"`;
+    await execAsync(cmd, {
       cwd: sandboxPath,
       env: { ...process.env, NODE_PATH: nodeModulesDir },
-      timeout: 120_000, // 2 minutes should be plenty for rebuild
+      timeout: 120_000,
     });
   } catch (err: any) {
     console.error(`[FileRebuilder] Generator failed:`, err.stderr || err.message);
@@ -116,18 +117,36 @@ export async function rebuildFile(fileId: string, userId: string): Promise<Gener
   // Clean up input.json
   try { fs.unlinkSync(inputJsonPath); } catch {}
 
-  // Register new file version
-  const newFiles = await registerNewFiles(userId, conversation_id, sandboxPath, existingPaths);
-  const rebuilt = newFiles.find(f => f.filename === outputFilename) || newFiles[0];
-
-  if (rebuilt) {
-    // Update block record to point to new file version
-    await dbRun(
-      `UPDATE document_blocks SET file_id = ?, version = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-      rebuilt.id, rebuilt.version, blockRecord.id
-    );
-    console.log(`[FileRebuilder] Rebuilt ${outputFilename} → v${rebuilt.version}`);
+  // Verify output file was generated
+  if (!fs.existsSync(outputPath)) {
+    console.error(`[FileRebuilder] Output file not found: ${outputPath}`);
+    return null;
   }
 
-  return rebuilt || null;
+  // Invalidate preview cache (delete cached PDF so next preview re-converts)
+  const cacheDir = path.join(sandboxPath, '.preview-cache');
+  const basename = path.basename(outputFilename, path.extname(outputFilename));
+  const cachedPdf = path.join(cacheDir, `${basename}.pdf`);
+  try { if (fs.existsSync(cachedPdf)) fs.unlinkSync(cachedPdf); } catch {}
+
+  // Update existing file record in-place (keep same ID so frontend doesn't need to track)
+  const newSize = fs.statSync(outputPath).size;
+  await dbRun(
+    `UPDATE generated_files SET file_size = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    newSize, fileId
+  );
+
+  // Update block record timestamp
+  await dbRun(
+    `UPDATE document_blocks SET updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    blockRecord.id
+  );
+
+  console.log(`[FileRebuilder] Rebuilt ${outputFilename} (${newSize} bytes), cache cleared`);
+
+  // Return the updated file record
+  const updatedFile = await dbGet<GeneratedFile>(
+    'SELECT * FROM generated_files WHERE id = ?', fileId
+  );
+  return updatedFile || null;
 }

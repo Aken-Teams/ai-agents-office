@@ -32,6 +32,8 @@ interface DocumentCanvasProps {
   onClose: () => void;
   onRebuild: () => void;
   onRegenerate: (blockId: string, elementContext?: string) => void;
+  /** Update a single block field (for inline editing) */
+  onUpdateBlock?: (blockId: string, key: string, value: unknown) => void;
   onDownload: () => void;
   streaming: boolean;
   rebuilding: boolean;
@@ -76,6 +78,7 @@ export default function DocumentCanvas({
   onClose,
   onRebuild,
   onRegenerate,
+  onUpdateBlock,
   onDownload,
   streaming,
   rebuilding,
@@ -432,7 +435,7 @@ export default function DocumentCanvas({
               </div>
             )}
 
-            {/* Slide element panel (Option A) — shows block sub-elements as chips */}
+            {/* Slide element panel — editable fields for current slide */}
             {blocks[selectedPageIndex] && (
               <SlideElementPanel
                 block={blocks[selectedPageIndex]}
@@ -440,10 +443,15 @@ export default function DocumentCanvas({
                 selectedElement={selectedElement}
                 onSelectElement={(key) => {
                   setSelectedElement(key);
-                  // Auto-select the block too
                   if (blocks[selectedPageIndex]) {
                     onSelectBlock(blocks[selectedPageIndex].id);
                   }
+                }}
+                onSaveField={(blockId, key, value) => {
+                  onUpdateBlock?.(blockId, key, value);
+                }}
+                onAiEdit={(blockId, context) => {
+                  onRegenerate(blockId, context);
                 }}
                 t={t}
               />

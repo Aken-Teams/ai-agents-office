@@ -2347,6 +2347,20 @@ function ChatContent() {
               setDocRegenBlockId(blockId);
               setDocRegenContext(elementContext || '');
             }}
+            onUpdateBlock={async (blockId, key, value) => {
+              if (!docMode.documentFileId || !token) return;
+              const block = docBlocks.blocks.find(b => b.id === blockId);
+              if (!block) return;
+              const newData = { ...block.data, [key]: value };
+              await docBlocks.updateBlock(docMode.documentFileId, blockId, newData);
+              // Auto-rebuild after edit so preview updates
+              setDocRebuilding(true);
+              const result = await docBlocks.rebuild(docMode.documentFileId);
+              setDocRebuilding(false);
+              if (result.success && result.file) {
+                setFiles(prev => prev.map(f => f.id === docMode.documentFileId ? { ...f, ...(result.file as any) } : f));
+              }
+            }}
             onDownload={() => {
               if (!docMode.documentFileId || !token) return;
               const file = files.find(f => f.id === docMode.documentFileId);
