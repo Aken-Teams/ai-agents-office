@@ -261,34 +261,52 @@ export async function captureBlocksForFile(
   // For HTML files, determine if it's slides or webapp based on which agent produced it
   const isHtml = ext === 'html' || ext === 'htm';
 
+  // Collect all directories to search: agent dirs + sandbox root
+  const searchDirs: { dir: string; skillId?: string }[] = [];
   for (const skillId of GENERATOR_SKILLS) {
     const agentDir = path.join(sandboxPath, '_agents', skillId);
-    if (!fs.existsSync(agentDir)) continue;
+    if (fs.existsSync(agentDir)) {
+      searchDirs.push({ dir: agentDir, skillId });
+    }
+  }
+  // Also search sandbox root (some agents write JSON alongside the output file)
+  searchDirs.push({ dir: sandboxPath });
 
-    // Find input JSON: try "input.json" first, then any *.json file with slides/sections/sheets
-    let inputJsonPath = path.join(agentDir, 'input.json');
-    if (!fs.existsSync(inputJsonPath)) {
-      // AI agents sometimes use custom filenames (e.g. "report.json" instead of "input.json")
-      const jsonFiles = fs.readdirSync(agentDir).filter(
-        f => f.endsWith('.json') && f !== 'package.json' && f !== 'tsconfig.json'
-      );
-      const found = jsonFiles.find(f => {
-        try {
-          const content = JSON.parse(fs.readFileSync(path.join(agentDir, f), 'utf-8'));
-          return content.slides || content.sections || content.sheets;
-        } catch { return false; }
-      });
-      if (!found) continue;
-      inputJsonPath = path.join(agentDir, found);
+  for (const { dir, skillId } of searchDirs) {
+    // Find input JSON: try well-known names first, then any *.json with slides/sections/sheets
+    let inputJsonPath: string | null = null;
+
+    const wellKnownNames = ['input.json', 'slides.json', 'sections.json', 'sheets.json'];
+    for (const name of wellKnownNames) {
+      const p = path.join(dir, name);
+      if (fs.existsSync(p)) { inputJsonPath = p; break; }
     }
 
-    // Verify this skill matches the file type
-    if (!docType && isHtml && skillId === 'slides-gen') docType = 'slides';
-    if (!docType && isHtml) continue; // webapp-gen doesn't use input.json
-    if (docType && !skillId.startsWith(docType.replace('slides', 'slides'))) {
-      // Check skill matches: pptx-gen → pptx, docx-gen → docx, etc.
-      const skillExt = skillId.replace('-gen', '');
-      if (skillExt !== ext && !(isHtml && skillId === 'slides-gen')) continue;
+    if (!inputJsonPath) {
+      // Search for any JSON file with slides/sections/sheets arrays
+      try {
+        const jsonFiles = fs.readdirSync(dir).filter(
+          f => f.endsWith('.json') && f !== 'package.json' && f !== 'tsconfig.json'
+        );
+        const found = jsonFiles.find(f => {
+          try {
+            const content = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8'));
+            return content.slides || content.sections || content.sheets;
+          } catch { return false; }
+        });
+        if (!found) continue;
+        inputJsonPath = path.join(dir, found);
+      } catch { continue; }
+    }
+
+    // Verify skill matches file type (only when searching agent dirs)
+    if (skillId) {
+      if (!docType && isHtml && skillId === 'slides-gen') docType = 'slides';
+      if (!docType && isHtml) continue;
+      if (docType) {
+        const skillExt = skillId.replace('-gen', '');
+        if (skillExt !== ext && !(isHtml && skillId === 'slides-gen')) continue;
+      }
     }
 
     try {
@@ -325,12 +343,13 @@ export async function captureBlocksForFile(
         finalDocType, JSON.stringify(meta), JSON.stringify(blocks), fileRecord.version
       );
 
-      console.log(`[FileManager] Captured ${blocks.length} blocks for ${fileRecord.filename} (${finalDocType})`);
+      console.log(`[FileManager] Captured ${blocks.length} blocks for ${fileRecord.filename} (${finalDocType}) from ${inputJsonPath}`);
       return blocks;
     } catch (err) {
       console.error(`[FileManager] Failed to capture blocks from ${inputJsonPath}:`, err);
     }
   }
 
+  console.warn(`[FileManager] No block structure found for ${fileRecord.filename} (searched ${searchDirs.length} dirs)`);
   return null;
 }

@@ -165,3 +165,21 @@ If specific content (company names, **department / business-unit / division / gr
 - Always name the output file descriptively (e.g., "marketing-plan-2026.pptx")
 - Place all files in the current working directory
 - Inform the user when the file is ready
+- **CRITICAL**: After generating the PPTX, also write a `slides.json` file in the same directory that describes the slide structure. This enables the interactive editor. Format:
+
+```json
+{
+  "title": "Presentation Title",
+  "style": "corporate",
+  "slides": [
+    { "type": "title", "title": "...", "subtitle": "..." },
+    { "type": "stats", "title": "...", "kpis": [{"value": "...", "label": "..."}] },
+    { "type": "content", "title": "...", "bullets": ["...", "..."] },
+    { "type": "two_column", "title": "...", "left": {...}, "right": {...} },
+    { "type": "section_divider", "title": "..." },
+    { "type": "quote", "quote": "...", "attribution": "..." }
+  ]
+}
+```
+
+Each slide object must include `type` and `title` at minimum. Include all content data (bullets, kpis, quote text, etc.) so the editor can display and modify individual slides.

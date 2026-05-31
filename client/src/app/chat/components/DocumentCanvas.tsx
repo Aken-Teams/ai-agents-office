@@ -9,6 +9,13 @@ import SheetBlockPreview from '../../editor/renderers/SheetBlockPreview';
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
+interface AgentActivity {
+  tool: string;
+  id?: string;
+  status?: string;
+  input?: string;
+}
+
 interface DocumentCanvasProps {
   layoutType: DocLayoutType;
   fileId: string | null;
@@ -23,6 +30,8 @@ interface DocumentCanvasProps {
   streaming: boolean;
   rebuilding: boolean;
   token: string | null;
+  /** Live agent activity during generation */
+  agentActivity?: AgentActivity[];
   t: (key: any, params?: Record<string, string | number>) => string;
 }
 
@@ -66,8 +75,10 @@ export default function DocumentCanvas({
   rebuilding,
   token,
   t,
+  agentActivity,
 }: DocumentCanvasProps) {
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [previewType, setPreviewType] = useState<'html' | 'pdf' | 'other'>('html');
   const [previewLoading, setPreviewLoading] = useState(false);
   const previewKeyRef = useRef(0);
   const visibleCount = useStaggerReveal(blocks.length);
@@ -76,18 +87,21 @@ export default function DocumentCanvas({
   const meta = record?.meta || {};
   const title = (meta.title as string) || (meta.name as string) || '';
 
-  // Load live preview for HTML/PDF files
+  // Load live preview (uses /preview endpoint which handles Office conversion)
   const loadPreview = useCallback(async () => {
     if (!token || !fileId) return;
     setPreviewLoading(true);
     try {
-      const res = await fetch(`${SSE_BASE}/api/files/${fileId}/download`, {
+      const res = await fetch(`${SSE_BASE}/api/files/${fileId}/preview`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('preview failed');
       const blob = await res.blob();
       const ct = res.headers.get('Content-Type') || '';
-      const type = ct.includes('pdf') ? 'application/pdf' : ct.includes('html') ? 'text/html' : ct;
+      const isPdf = ct.includes('pdf');
+      const isHtml = ct.includes('html');
+      const type = isPdf ? 'application/pdf' : isHtml ? 'text/html' : ct;
+      setPreviewType(isPdf ? 'pdf' : isHtml ? 'html' : 'other');
       if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
       setPreviewBlobUrl(URL.createObjectURL(new Blob([blob], { type })));
     } catch {
@@ -97,12 +111,12 @@ export default function DocumentCanvas({
     }
   }, [token, fileId, previewBlobUrl]);
 
-  // Load preview when fileId changes or blocks arrive
+  // Load preview when fileId is available
   useEffect(() => {
-    if (fileId && blocks.length > 0 && (layoutType === 'slides' || layoutType === 'webapp')) {
+    if (fileId) {
       loadPreview();
     }
-  }, [fileId, blocks.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fileId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Refresh preview after rebuild
   useEffect(() => {
@@ -171,10 +185,23 @@ export default function DocumentCanvas({
           {/* Thumbnail strip (left) */}
           <div className="w-32 lg:w-40 border-r border-outline-variant/10 overflow-y-auto p-2 space-y-2 shrink-0 bg-surface-container/20">
             {streaming && blocks.length === 0 && (
-              <div className="space-y-2">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="aspect-[16/9] rounded-lg bg-surface-container animate-pulse" />
-                ))}
+              <div className="space-y-2 p-1">
+                {agentActivity && agentActivity.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {agentActivity.map((act, i) => (
+                      <div key={act.id || i} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-surface-container/60 text-[10px]">
+                        <span className={`material-symbols-outlined text-xs ${act.status === 'completed' ? 'text-primary' : 'text-on-surface-variant animate-pulse'}`}>
+                          {act.status === 'completed' ? 'check_circle' : 'pending'}
+                        </span>
+                        <span className="text-on-surface-variant truncate">{act.tool}{act.input ? `: ${act.input.slice(0, 30)}` : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  [1, 2, 3].map(i => (
+                    <div key={i} className="aspect-[16/9] rounded-lg bg-surface-container animate-pulse" />
+                  ))
+                )}
               </div>
             )}
             {blocks.map((block, index) => (
@@ -208,14 +235,24 @@ export default function DocumentCanvas({
                 <span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span>
               </div>
             ) : previewBlobUrl ? (
-              <iframe
-                key={previewKeyRef.current}
-                src={previewBlobUrl}
-                className="flex-1 w-full border-0 bg-white"
-                title="Document Preview"
-                sandbox="allow-scripts allow-same-origin"
-                tabIndex={-1}
-              />
+              previewType === 'pdf' ? (
+                <embed
+                  key={previewKeyRef.current}
+                  src={previewBlobUrl}
+                  type="application/pdf"
+                  className="flex-1 w-full border-0 bg-white"
+                  title="Document Preview"
+                />
+              ) : (
+                <iframe
+                  key={previewKeyRef.current}
+                  src={previewBlobUrl}
+                  className="flex-1 w-full border-0 bg-white"
+                  title="Document Preview"
+                  sandbox="allow-scripts allow-same-origin"
+                  tabIndex={-1}
+                />
+              )
             ) : selectedBlockId ? (
               <div className="flex-1 flex items-center justify-center p-6">
                 <div className="w-full max-w-lg">
@@ -223,9 +260,29 @@ export default function DocumentCanvas({
                 </div>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-on-surface-variant/30 gap-2">
-                <span className="material-symbols-outlined text-5xl">slideshow</span>
-                <span className="text-sm">{streaming ? t('chat.docMode.generating') : ''}</span>
+              <div className="flex-1 flex flex-col items-center justify-center text-on-surface-variant/30 gap-3">
+                {streaming ? (
+                  <>
+                    <span className="material-symbols-outlined text-4xl text-primary animate-spin">progress_activity</span>
+                    <span className="text-sm text-on-surface-variant">{t('chat.docMode.generating')}</span>
+                    {agentActivity && agentActivity.length > 0 && (
+                      <div className="mt-2 w-full max-w-xs space-y-1.5">
+                        {agentActivity.slice(-5).map((act, i) => (
+                          <div key={act.id || i} className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-surface-container/50 text-[11px]">
+                            <span className={`material-symbols-outlined text-xs ${act.status === 'completed' ? 'text-primary' : 'text-on-surface-variant/60 animate-pulse'}`}>
+                              {act.status === 'completed' ? 'check_circle' : 'pending'}
+                            </span>
+                            <span className="text-on-surface-variant truncate">{act.tool}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-5xl">slideshow</span>
+                  </>
+                )}
               </div>
             )}
 
@@ -299,15 +356,40 @@ export default function DocumentCanvas({
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {streaming && blocks.length === 0 && (
           <div className="space-y-3">
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} className="h-16 rounded-lg bg-surface-container animate-pulse" />
-            ))}
-            <div className="text-center text-xs text-on-surface-variant/50 py-2">
-              {t('chat.docMode.generating')}
-            </div>
+            {agentActivity && agentActivity.length > 0 ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <span className="material-symbols-outlined text-primary text-sm animate-spin">progress_activity</span>
+                  <span className="text-xs text-on-surface-variant font-medium">{t('chat.docMode.generating')}</span>
+                </div>
+                {agentActivity.map((act, i) => (
+                  <div key={act.id || i} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-container/50 border border-outline-variant/5">
+                    <span className={`material-symbols-outlined text-sm ${act.status === 'completed' ? 'text-primary' : 'text-on-surface-variant/60 animate-pulse'}`}>
+                      {act.status === 'completed' ? 'check_circle' : 'pending'}
+                    </span>
+                    <span className="text-xs text-on-surface-variant truncate flex-1">
+                      {act.tool}
+                    </span>
+                    {act.input && (
+                      <span className="text-[10px] text-on-surface-variant/50 truncate max-w-[50%]">{act.input.slice(0, 50)}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <>
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="h-16 rounded-lg bg-surface-container animate-pulse" />
+                ))}
+                <div className="text-center text-xs text-on-surface-variant/50 py-2">
+                  {t('chat.docMode.generating')}
+                </div>
+              </>
+            )}
           </div>
         )}
 
+        {/* When we have blocks, show them */}
         {blocks.map((block, index) => (
           <button
             key={block.id}
@@ -323,6 +405,37 @@ export default function DocumentCanvas({
             {renderBlockPreview(block)}
           </button>
         ))}
+
+        {/* Fallback: no blocks but preview available — show preview */}
+        {!streaming && blocks.length === 0 && previewBlobUrl && (
+          <div className="flex-1 min-h-[400px] rounded-xl overflow-hidden border border-outline-variant/10">
+            {previewType === 'pdf' ? (
+              <embed
+                key={previewKeyRef.current}
+                src={previewBlobUrl}
+                type="application/pdf"
+                className="w-full h-full min-h-[400px] border-0 bg-white rounded-xl"
+                title="Document Preview"
+              />
+            ) : (
+              <iframe
+                key={previewKeyRef.current}
+                src={previewBlobUrl}
+                className="w-full h-full min-h-[400px] border-0 bg-white rounded-xl"
+                title="Document Preview"
+                sandbox="allow-scripts allow-same-origin"
+                tabIndex={-1}
+              />
+            )}
+          </div>
+        )}
+
+        {/* No blocks, no preview, not streaming */}
+        {!streaming && blocks.length === 0 && !previewBlobUrl && previewLoading && (
+          <div className="flex-1 flex items-center justify-center py-12">
+            <span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span>
+          </div>
+        )}
 
         {/* Selected block action bar */}
         {selectedBlockId && blocks.length > 0 && (

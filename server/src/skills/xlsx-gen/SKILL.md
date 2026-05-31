@@ -79,3 +79,14 @@ If specific content (company names, frameworks, slogans, methodologies, propriet
 - Always name the output file descriptively
 - Place all files in the current working directory
 - Inform the user when the file is ready
+- **CRITICAL**: Also write a `sheets.json` file describing the spreadsheet structure for the interactive editor:
+
+```json
+{
+  "title": "Spreadsheet Title",
+  "sheets": [
+    { "type": "sheet", "title": "Sheet 1", "headers": ["Col A", "Col B"], "rowCount": 10, "summary": "..." },
+    { "type": "sheet", "title": "Sheet 2", "headers": ["Col A", "Col B"], "rowCount": 5, "summary": "..." }
+  ]
+}
+```

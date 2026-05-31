@@ -873,6 +873,49 @@ function ChatContent() {
       docMode.enterDocumentMode(skillId);
     }
 
+    // Block-targeted modification: if a block is selected, regenerate just that block
+    if (docMode.viewMode === 'document' && docMode.selectedBlockId && docMode.documentFileId) {
+      const blockId = docMode.selectedBlockId;
+      const fileId = docMode.documentFileId;
+      docMode.setSelectedBlockId(null);
+      try {
+        const result = await docBlocks.regenerate(fileId, blockId, userMessage);
+        if (result.success && result.block) {
+          // Add assistant response to chat
+          setMessages(prev => [...prev, {
+            id: `regen-${Date.now()}`,
+            conversation_id: conversationId,
+            role: 'assistant',
+            content: `✅ ${t('chat.docMode.blockUpdated' as any) || 'Block updated successfully.'}`,
+            created_at: new Date().toISOString(),
+          }]);
+          // Update file version if returned
+          if (result.file) {
+            setFiles(prev => prev.map(f => f.id === fileId ? { ...f, ...(result.file as any) } : f));
+          }
+        } else {
+          setMessages(prev => [...prev, {
+            id: `err-${Date.now()}`,
+            conversation_id: conversationId,
+            role: 'assistant',
+            content: `⚠️ ${t('chat.error.unknown')}`,
+            created_at: new Date().toISOString(),
+          }]);
+        }
+      } catch {
+        setMessages(prev => [...prev, {
+          id: `err-${Date.now()}`,
+          conversation_id: conversationId,
+          role: 'assistant',
+          content: `⚠️ ${t('chat.error.unknown')}`,
+          created_at: new Date().toISOString(),
+        }]);
+      } finally {
+        setStreaming(false);
+      }
+      return;
+    }
+
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -1050,10 +1093,14 @@ function ChatContent() {
             if (event.type === 'file_generated') {
               fileGenInRoundRef.current = true;
             }
-            // When blocks_ready arrives, also fetch full block record
+            // When blocks_ready arrives, set blocks immediately from SSE data
             if (event.type === 'blocks_ready') {
-              const bData = event.data as { fileId: string };
-              if (bData.fileId) docBlocks.fetchBlocks(bData.fileId);
+              const bData = event.data as { fileId: string; blocks: any[] };
+              if (bData.fileId && bData.blocks) {
+                docBlocks.setBlocksFromSSE({ fileId: bData.fileId, blocks: bData.blocks });
+              } else if (bData.fileId) {
+                docBlocks.fetchBlocks(bData.fileId);
+              }
             }
 
             if (event.type === 'error') {
@@ -1366,7 +1413,7 @@ function ChatContent() {
             : 'flex-1'
         }`}>
           {/* Title Bar */}
-          <header className="flex items-center gap-2 md:gap-4 px-3 md:px-8 h-11 md:h-14 bg-surface/80 backdrop-blur-xl shrink-0 border-b border-outline-variant/10">
+          <header className={`flex items-center gap-2 px-3 h-11 bg-surface/80 backdrop-blur-xl shrink-0 border-b border-outline-variant/10 ${docMode.viewMode === 'chat' ? 'md:gap-4 md:px-8 md:h-14' : ''}`}>
             <button
               onClick={() => router.push(convCategory === 'assistant' ? '/assistant' : '/conversations')}
               className="text-on-surface-variant hover:text-on-surface active:text-on-surface transition-colors bg-transparent cursor-pointer p-1"
@@ -1453,7 +1500,7 @@ function ChatContent() {
           )}
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 md:px-8 py-4 md:py-8 space-y-4 md:space-y-8">
+          <div className={`flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-4 ${docMode.viewMode === 'chat' ? 'md:px-8 md:py-8 md:space-y-8' : 'space-y-3'}`}>
             {messages.map((msg, idx) => {
               const sources = msg.role === 'assistant' ? extractSources(msg.content) : [];
               const { text: userMsgText, refs: userMsgRefs } = msg.role === 'user'
@@ -1734,8 +1781,8 @@ function ChatContent() {
               </div>
             )}
 
-            {/* Inline File Preview — only show files from latest generation */}
-            {latestFiles.length > 0 && !streaming && (
+            {/* Inline File Preview — only show files from latest generation (hidden in document mode) */}
+            {latestFiles.length > 0 && !streaming && docMode.viewMode !== 'document' && (
               <div className="max-w-full md:max-w-[85%] space-y-3 ml-0 md:ml-13">
                 {latestFiles.map(file => (
                   <div key={file.id} className="bg-surface-container-low rounded-xl border border-outline-variant/10 overflow-visible">
@@ -1821,7 +1868,10 @@ function ChatContent() {
                           </button>
                         )}
                         <button
-                          onClick={() => router.push(`/editor/${conversationId}`)}
+                          onClick={() => {
+                            docMode.manualToggle(file.id, file.file_type);
+                            docBlocks.fetchBlocks(file.id);
+                          }}
                           className="p-1.5 md:p-2 rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-primary md:hover:text-primary transition-colors cursor-pointer"
                           title={t('editor.openEditor' as any)}
                         >
@@ -1936,7 +1986,7 @@ function ChatContent() {
           )}
 
           {/* Input Area */}
-          <div className="p-2 md:p-6 md:pt-0">
+          <div className={`p-2 ${docMode.viewMode === 'chat' ? 'md:p-6 md:pt-0' : ''}`}>
             {/* Block selection indicator */}
             {docMode.viewMode === 'document' && docMode.selectedBlockId && (
               <div className="mb-2 flex items-center gap-2 px-2.5 md:px-3 py-1.5 bg-primary/8 border border-primary/15 rounded-lg">
@@ -2301,6 +2351,7 @@ function ChatContent() {
             streaming={streaming}
             rebuilding={docRebuilding}
             token={token}
+            agentActivity={tools}
             t={t}
           />
         )}
@@ -2404,10 +2455,14 @@ function ChatContent() {
               </div>
             )}
 
-            {/* Open in Editor button */}
+            {/* Open in Editor (split view) button */}
             {files.length > 0 && (
               <button
-                onClick={() => router.push(`/editor/${conversationId}`)}
+                onClick={() => {
+                  const latestFile = files[files.length - 1];
+                  docMode.manualToggle(latestFile?.id, latestFile?.file_type);
+                  if (latestFile) docBlocks.fetchBlocks(latestFile.id);
+                }}
                 className="w-full flex items-center justify-center gap-2 px-3 py-2.5 mt-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-sm font-medium transition-colors cursor-pointer border border-primary/10"
               >
                 <span className="material-symbols-outlined text-base">edit_note</span>

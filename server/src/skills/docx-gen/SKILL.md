@@ -89,3 +89,16 @@ If specific content (company names, **department / business-unit / division / gr
 - Always name the output file descriptively
 - Place all files in the current working directory
 - Inform the user when the file is ready
+- **CRITICAL**: Also write a `sections.json` file describing the document structure for the interactive editor:
+
+```json
+{
+  "title": "Document Title",
+  "sections": [
+    { "type": "heading", "title": "Introduction", "content": "..." },
+    { "type": "paragraph", "title": "Background", "content": "..." },
+    { "type": "list", "title": "Key Points", "items": ["...", "..."] },
+    { "type": "table", "title": "Comparison", "headers": [...], "rows": [...] }
+  ]
+}
+```

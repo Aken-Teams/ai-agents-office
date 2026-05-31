@@ -1288,6 +1288,7 @@ const zhCN = {
   'chat.docMode.clearSelection': '取消选取',
   'chat.docMode.rebuild': '重建',
   'chat.docMode.download': '下载',
+  'chat.docMode.blockUpdated': '区块已更新',
 } as const;
 
 export default zhCN;

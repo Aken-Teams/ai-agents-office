@@ -1295,6 +1295,7 @@ const zhTW = {
   'chat.docMode.clearSelection': '取消選取',
   'chat.docMode.rebuild': '重建',
   'chat.docMode.download': '下載',
+  'chat.docMode.blockUpdated': '區塊已更新',
 } as const;
 
 export default zhTW;

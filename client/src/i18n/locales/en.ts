@@ -1268,6 +1268,7 @@ const en = {
   'chat.docMode.clearSelection': 'Clear selection',
   'chat.docMode.rebuild': 'Rebuild',
   'chat.docMode.download': 'Download',
+  'chat.docMode.blockUpdated': 'Block updated successfully',
 } as const;
 
 export default en;
