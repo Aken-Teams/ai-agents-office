@@ -1235,6 +1235,39 @@ const en = {
   'emailAgent.notifications': 'Notifications',
   'emailAgent.noNotifications': 'No new notifications',
   'emailAgent.showChat': 'Chat',
+
+  // Editor
+  'editor.title': 'Document Editor',
+  'editor.subtitle': 'Block-based interactive editing',
+  'editor.backToChat': 'Back to chat',
+  'editor.download': 'Download',
+  'editor.files': 'Files',
+  'editor.noFiles': 'No generated files yet',
+  'editor.selectFile': 'Select a file',
+  'editor.blocks': 'blocks',
+  'editor.noBlocks': 'No block data for this file',
+  'editor.noBlocksHint': 'Blocks will appear after generating a document via chat',
+  'editor.rebuild': 'Rebuild',
+  'editor.openEditor': 'Open in Editor',
+  'editor.regenerate.title': 'AI Block Regeneration',
+  'editor.regenerate.hint': 'Describe what you want to change — AI will regenerate only this block',
+  'editor.regenerate.placeholder': 'e.g. Make the title more catchy, add more data...',
+  'editor.regenerate.submit': 'Regenerate',
+  'editor.editPanel.title': 'Edit Block',
+  'editor.addBlock.title': 'Add Block',
+  'editor.addBlock.button': 'Add block',
+  'editor.viewSplit': 'Preview + Blocks',
+  'editor.viewBlocks': 'Blocks only',
+  'editor.preview': 'Document Preview',
+  'editor.previewUnavailable': 'Live preview not available for this file type',
+
+  // Document mode (chat-embedded)
+  'chat.docMode.enter': 'Document Mode',
+  'chat.docMode.generating': 'Generating document...',
+  'chat.docMode.editingBlock': 'Editing #{n}: {type}',
+  'chat.docMode.clearSelection': 'Clear selection',
+  'chat.docMode.rebuild': 'Rebuild',
+  'chat.docMode.download': 'Download',
 } as const;
 
 export default en;

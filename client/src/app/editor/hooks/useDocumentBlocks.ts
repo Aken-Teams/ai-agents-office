@@ -1,0 +1,236 @@
+'use client';
+
+import { useState, useCallback, useRef } from 'react';
+
+const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+
+export interface DocumentBlock {
+  id: string;
+  type: string;
+  order: number;
+  data: Record<string, unknown>;
+  status?: 'idle' | 'regenerating' | 'dirty';
+}
+
+export interface BlockRecord {
+  id: string;
+  fileId: string;
+  docType: string;
+  meta: Record<string, unknown>;
+  blocks: DocumentBlock[];
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface UseDocumentBlocksReturn {
+  record: BlockRecord | null;
+  blocks: DocumentBlock[];
+  loading: boolean;
+  error: string | null;
+  /** Fetch blocks for a file */
+  fetchBlocks: (fileId: string) => Promise<void>;
+  /** Fetch all blocks in a conversation */
+  fetchConversationBlocks: (conversationId: string) => Promise<BlockRecord[]>;
+  /** Update entire blocks array (reorder / batch) */
+  updateBlocks: (fileId: string, blocks: DocumentBlock[]) => Promise<void>;
+  /** Update a single block's data */
+  updateBlock: (fileId: string, blockId: string, data: Record<string, unknown>) => Promise<void>;
+  /** Delete a block */
+  deleteBlock: (fileId: string, blockId: string) => Promise<void>;
+  /** Add a new block */
+  addBlock: (fileId: string, type: string, data: Record<string, unknown>, insertAfter?: string) => Promise<DocumentBlock | null>;
+  /** Rebuild file from current blocks */
+  rebuild: (fileId: string) => Promise<{ success: boolean; file?: any }>;
+  /** AI regenerate a single block */
+  regenerate: (fileId: string, blockId: string, instruction: string) => Promise<{ success: boolean; block?: DocumentBlock; file?: any }>;
+  /** Set blocks locally (e.g. from SSE) */
+  setBlocksFromSSE: (data: { fileId: string; blocks: DocumentBlock[] }) => void;
+}
+
+export function useDocumentBlocks(token: string | null): UseDocumentBlocksReturn {
+  const [record, setRecord] = useState<BlockRecord | null>(null);
+  const [blocks, setBlocks] = useState<DocumentBlock[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const headers = useCallback(() => ({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  }), [token]);
+
+  const fetchBlocks = useCallback(async (fileId: string) => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${SSE_BASE}/api/blocks/${fileId}`, { headers: headers() });
+      if (!res.ok) {
+        if (res.status === 404) {
+          setRecord(null);
+          setBlocks([]);
+          return;
+        }
+        throw new Error(`Failed to fetch blocks: ${res.status}`);
+      }
+      const data: BlockRecord = await res.json();
+      setRecord(data);
+      setBlocks(data.blocks);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, headers]);
+
+  const fetchConversationBlocks = useCallback(async (conversationId: string): Promise<BlockRecord[]> => {
+    if (!token) return [];
+    try {
+      const res = await fetch(`${SSE_BASE}/api/blocks/conversation/${conversationId}`, { headers: headers() });
+      if (!res.ok) return [];
+      return await res.json();
+    } catch {
+      return [];
+    }
+  }, [token, headers]);
+
+  const updateBlocks = useCallback(async (fileId: string, newBlocks: DocumentBlock[]) => {
+    if (!token) return;
+    setError(null);
+    // Optimistic update
+    setBlocks(newBlocks);
+    try {
+      const res = await fetch(`${SSE_BASE}/api/blocks/${fileId}`, {
+        method: 'PUT',
+        headers: headers(),
+        body: JSON.stringify({ blocks: newBlocks }),
+      });
+      if (!res.ok) throw new Error(`Update failed: ${res.status}`);
+      const data = await res.json();
+      setBlocks(data.blocks);
+    } catch (err: any) {
+      setError(err.message);
+      // Revert on failure
+      if (record) setBlocks(record.blocks);
+    }
+  }, [token, headers, record]);
+
+  const updateBlock = useCallback(async (fileId: string, blockId: string, data: Record<string, unknown>) => {
+    if (!token) return;
+    setError(null);
+    try {
+      const res = await fetch(`${SSE_BASE}/api/blocks/${fileId}/block/${blockId}`, {
+        method: 'PUT',
+        headers: headers(),
+        body: JSON.stringify({ data }),
+      });
+      if (!res.ok) throw new Error(`Update failed: ${res.status}`);
+      const result = await res.json();
+      setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, data: result.block.data } : b));
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }, [token, headers]);
+
+  const deleteBlock = useCallback(async (fileId: string, blockId: string) => {
+    if (!token) return;
+    setError(null);
+    const prevBlocks = blocks;
+    // Optimistic
+    setBlocks(prev => prev.filter(b => b.id !== blockId));
+    try {
+      const res = await fetch(`${SSE_BASE}/api/blocks/${fileId}/block/${blockId}`, {
+        method: 'DELETE',
+        headers: headers(),
+      });
+      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+      const data = await res.json();
+      setBlocks(data.blocks);
+    } catch (err: any) {
+      setError(err.message);
+      setBlocks(prevBlocks);
+    }
+  }, [token, headers, blocks]);
+
+  const addBlock = useCallback(async (fileId: string, type: string, data: Record<string, unknown>, insertAfter?: string): Promise<DocumentBlock | null> => {
+    if (!token) return null;
+    setError(null);
+    try {
+      const res = await fetch(`${SSE_BASE}/api/blocks/${fileId}/block`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ type, data, insertAfter }),
+      });
+      if (!res.ok) throw new Error(`Add failed: ${res.status}`);
+      const result = await res.json();
+      setBlocks(result.blocks);
+      return result.block;
+    } catch (err: any) {
+      setError(err.message);
+      return null;
+    }
+  }, [token, headers]);
+
+  const rebuild = useCallback(async (fileId: string) => {
+    if (!token) return { success: false };
+    setError(null);
+    try {
+      const res = await fetch(`${SSE_BASE}/api/blocks/${fileId}/rebuild`, {
+        method: 'POST',
+        headers: headers(),
+      });
+      if (!res.ok) throw new Error(`Rebuild failed: ${res.status}`);
+      return await res.json();
+    } catch (err: any) {
+      setError(err.message);
+      return { success: false };
+    }
+  }, [token, headers]);
+
+  const regenerate = useCallback(async (fileId: string, blockId: string, instruction: string) => {
+    if (!token) return { success: false };
+    setError(null);
+    // Mark block as regenerating
+    setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, status: 'regenerating' } : b));
+    try {
+      const res = await fetch(`${SSE_BASE}/api/blocks/${fileId}/regenerate/${blockId}`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({ instruction }),
+      });
+      if (!res.ok) throw new Error(`Regenerate failed: ${res.status}`);
+      const result = await res.json();
+      if (result.success && result.block) {
+        setBlocks(prev => prev.map(b => b.id === blockId ? { ...result.block, status: 'idle' } : b));
+      } else {
+        setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, status: 'idle' } : b));
+      }
+      return result;
+    } catch (err: any) {
+      setError(err.message);
+      setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, status: 'idle' } : b));
+      return { success: false };
+    }
+  }, [token, headers]);
+
+  const setBlocksFromSSE = useCallback((data: { fileId: string; blocks: DocumentBlock[] }) => {
+    setBlocks(data.blocks);
+  }, []);
+
+  return {
+    record,
+    blocks,
+    loading,
+    error,
+    fetchBlocks,
+    fetchConversationBlocks,
+    updateBlocks,
+    updateBlock,
+    deleteBlock,
+    addBlock,
+    rebuild,
+    regenerate,
+    setBlocksFromSSE,
+  };
+}

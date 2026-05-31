@@ -11,6 +11,9 @@ import UploadAlertModal, { type UploadAlertItem } from '../../components/UploadA
 import ShareModal from '../../components/ShareModal';
 import { I18nProvider, useTranslation } from '../../../i18n';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
+import { useDocumentMode, FILE_GEN_SKILLS } from '../hooks/useDocumentMode';
+import { useDocumentBlocks } from '../../editor/hooks/useDocumentBlocks';
+import DocumentCanvas from '../components/DocumentCanvas';
 
 const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { ssr: false });
 const ChatEChart = dynamic(() => import('../../components/charts/ChatEChart'), { ssr: false });
@@ -537,6 +540,13 @@ function ChatContent() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
+  // Document mode (split view for file-generation tasks)
+  const docMode = useDocumentMode(conversationId);
+  const docBlocks = useDocumentBlocks(token);
+  const [docRebuilding, setDocRebuilding] = useState(false);
+  const [docRegenBlockId, setDocRegenBlockId] = useState<string | null>(null);
+  const fileGenInRoundRef = useRef(false); // track if file was generated this round
+
   // Custom ReactMarkdown components — intercept ```chart and ```mermaid blocks
   // Memoized to prevent chart/map components from re-mounting on every render
   const markdownComponents = useMemo(() => ({
@@ -856,6 +866,12 @@ function ChatContent() {
     setAttachedFiles([]);
     setLatestFiles([]);
     setSelectedRefs([]);
+    fileGenInRoundRef.current = false;
+
+    // If this conversation uses a file-gen skill, enter document mode immediately
+    if (skillId && FILE_GEN_SKILLS.has(skillId)) {
+      docMode.enterDocumentMode(skillId);
+    }
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -1026,6 +1042,20 @@ function ChatContent() {
                 }]);
               }
             }
+            // Document mode SSE events
+            if (event.type === 'router_plan' || event.type === 'task_dispatched' || event.type === 'skill_started' || event.type === 'blocks_ready' || event.type === 'file_generated') {
+              docMode.handleSSEEvent(event);
+            }
+            // Track if file was generated this round
+            if (event.type === 'file_generated') {
+              fileGenInRoundRef.current = true;
+            }
+            // When blocks_ready arrives, also fetch full block record
+            if (event.type === 'blocks_ready') {
+              const bData = event.data as { fileId: string };
+              if (bData.fileId) docBlocks.fetchBlocks(bData.fileId);
+            }
+
             if (event.type === 'error') {
               const errMsg = typeof event.data === 'string' ? event.data : 'Unknown error';
               fullText += `\n\n> **${t('chat.error.prefix')}:** ${errMsg}`;
@@ -1042,6 +1072,9 @@ function ChatContent() {
               }
               setStreamText('');
               setThinkingText('');
+              // Auto-exit document mode if no file was generated this round
+              docMode.onGenerationDone(fileGenInRoundRef.current);
+              fileGenInRoundRef.current = false;
             }
           } catch { /* skip parse errors */ }
         }
@@ -1327,7 +1360,11 @@ function ChatContent() {
 
       <div className={`${sidebarMargin} h-[100svh] md:h-screen flex overflow-hidden transition-all duration-300`}>
         {/* === Central Chat Area === */}
-        <section className="flex flex-col flex-1 min-h-0 min-w-0">
+        <section className={`flex flex-col min-h-0 min-w-0 transition-all duration-300 ${
+          docMode.viewMode === 'document'
+            ? 'w-[33%] min-w-[320px] max-w-[420px] border-r border-outline-variant/10'
+            : 'flex-1'
+        }`}>
           {/* Title Bar */}
           <header className="flex items-center gap-2 md:gap-4 px-3 md:px-8 h-11 md:h-14 bg-surface/80 backdrop-blur-xl shrink-0 border-b border-outline-variant/10">
             <button
@@ -1343,6 +1380,21 @@ function ChatContent() {
               </span>
             )}
             <span className="flex-1" />
+            {/* Document mode toggle */}
+            {files.length > 0 && docMode.viewMode === 'chat' && (
+              <button
+                onClick={() => {
+                  const latestFile = files[files.length - 1];
+                  docMode.manualToggle(latestFile?.id, latestFile?.file_type);
+                  if (latestFile) docBlocks.fetchBlocks(latestFile.id);
+                }}
+                className="hidden md:flex items-center gap-1 px-2 py-1 text-on-surface-variant hover:text-primary hover:bg-primary/5 active:text-primary transition-colors bg-transparent cursor-pointer shrink-0 rounded-lg text-xs"
+                title={t('chat.docMode.enter')}
+              >
+                <span className="material-symbols-outlined text-sm">vertical_split</span>
+                <span className="hidden lg:inline">{t('chat.docMode.enter')}</span>
+              </button>
+            )}
             {/* Share button */}
             <button
               onClick={() => setShowShareModal(true)}
@@ -1769,6 +1821,13 @@ function ChatContent() {
                           </button>
                         )}
                         <button
+                          onClick={() => router.push(`/editor/${conversationId}`)}
+                          className="p-1.5 md:p-2 rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-primary md:hover:text-primary transition-colors cursor-pointer"
+                          title={t('editor.openEditor' as any)}
+                        >
+                          <span className="material-symbols-outlined text-base md:text-lg">edit_note</span>
+                        </button>
+                        <button
                           onClick={() => handleDownload(file.id, file.filename)}
                           className="p-1.5 md:p-2 rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-primary md:hover:text-primary transition-colors cursor-pointer"
                           title={t('chat.preview.download' as any)}
@@ -1878,6 +1937,24 @@ function ChatContent() {
 
           {/* Input Area */}
           <div className="p-2 md:p-6 md:pt-0">
+            {/* Block selection indicator */}
+            {docMode.viewMode === 'document' && docMode.selectedBlockId && (
+              <div className="mb-2 flex items-center gap-2 px-2.5 md:px-3 py-1.5 bg-primary/8 border border-primary/15 rounded-lg">
+                <span className="material-symbols-outlined text-primary text-sm">edit_note</span>
+                <span className="text-xs text-primary font-medium flex-1 truncate">
+                  {t('chat.docMode.editingBlock', {
+                    n: (docBlocks.blocks.findIndex(b => b.id === docMode.selectedBlockId) + 1),
+                    type: docBlocks.blocks.find(b => b.id === docMode.selectedBlockId)?.type.replace(/_/g, ' ') || '',
+                  })}
+                </span>
+                <button
+                  onClick={() => docMode.setSelectedBlockId(null)}
+                  className="text-on-surface-variant hover:text-error transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-sm">close</span>
+                </button>
+              </div>
+            )}
             {/* Template banner */}
             {pendingTemplate && (
               <div className="mb-2 flex items-center gap-2 px-2.5 md:px-3 py-1.5 md:py-2 bg-primary/10 border border-primary/20 rounded-lg text-xs md:text-sm text-primary">
@@ -2196,8 +2273,42 @@ function ChatContent() {
           </div>
         )}
 
-        {/* === Right Sidebar === */}
-        <aside className="w-72 bg-surface-container-low border-l border-outline-variant/10 overflow-y-auto p-5 hidden lg:flex flex-col gap-6 shrink-0">
+        {/* === Document Canvas (right 2/3 in document mode) === */}
+        {docMode.viewMode === 'document' && (
+          <DocumentCanvas
+            layoutType={docMode.docLayoutType || 'slides'}
+            fileId={docMode.documentFileId}
+            blocks={docBlocks.blocks}
+            record={docBlocks.record}
+            selectedBlockId={docMode.selectedBlockId}
+            onSelectBlock={docMode.setSelectedBlockId}
+            onClose={() => docMode.exitDocumentMode()}
+            onRebuild={async () => {
+              if (!docMode.documentFileId) return;
+              setDocRebuilding(true);
+              const result = await docBlocks.rebuild(docMode.documentFileId);
+              setDocRebuilding(false);
+              if (result.success && result.file) {
+                setFiles(prev => prev.map(f => f.id === docMode.documentFileId ? { ...f, ...(result.file as any) } : f));
+              }
+            }}
+            onRegenerate={(blockId) => setDocRegenBlockId(blockId)}
+            onDownload={() => {
+              if (!docMode.documentFileId || !token) return;
+              const file = files.find(f => f.id === docMode.documentFileId);
+              if (file) handleDownload(file.id, file.filename);
+            }}
+            streaming={streaming}
+            rebuilding={docRebuilding}
+            token={token}
+            t={t}
+          />
+        )}
+
+        {/* === Right Sidebar (only in chat mode) === */}
+        <aside className={`w-72 bg-surface-container-low border-l border-outline-variant/10 overflow-y-auto p-5 flex-col gap-6 shrink-0 ${
+          docMode.viewMode === 'chat' ? 'hidden lg:flex' : 'hidden'
+        }`}>
           {/* System Status */}
           <div className="space-y-3">
             <h4 className="text-sm font-headline font-bold text-outline tracking-widest uppercase">{t('chat.sidebar.systemStatus')}</h4>
@@ -2292,6 +2403,17 @@ function ChatContent() {
                 ))}
               </div>
             )}
+
+            {/* Open in Editor button */}
+            {files.length > 0 && (
+              <button
+                onClick={() => router.push(`/editor/${conversationId}`)}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 mt-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-sm font-medium transition-colors cursor-pointer border border-primary/10"
+              >
+                <span className="material-symbols-outlined text-base">edit_note</span>
+                {t('editor.openEditor' as any)}
+              </button>
+            )}
           </div>
 
           {/* Uploaded Files (conversation history) — show latest 3 */}
@@ -2352,6 +2474,70 @@ function ChatContent() {
           )}
         </aside>
       </div>
+
+      {/* Block regeneration modal (document mode) */}
+      {docRegenBlockId && (
+        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4"
+             onClick={() => setDocRegenBlockId(null)}>
+          <div className="bg-surface rounded-t-2xl md:rounded-2xl shadow-2xl w-full max-w-lg p-5 relative border border-outline-variant/10"
+               onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="material-symbols-outlined text-primary text-xl">auto_fix_high</span>
+              <h3 className="text-base font-bold text-on-surface">{t('editor.regenerate.title')}</h3>
+            </div>
+            <p className="text-xs text-on-surface-variant mb-3">{t('editor.regenerate.hint')}</p>
+            <textarea
+              id="doc-regen-input"
+              placeholder={t('editor.regenerate.placeholder')}
+              rows={3}
+              className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-lg py-2.5 px-3.5 text-sm text-on-surface placeholder:text-outline focus:ring-1 focus:ring-primary/40 focus:border-primary/40 outline-none resize-none"
+              autoFocus
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  const input = (document.getElementById('doc-regen-input') as HTMLTextAreaElement)?.value?.trim();
+                  if (input && docMode.documentFileId && docRegenBlockId) {
+                    docBlocks.regenerate(docMode.documentFileId, docRegenBlockId, input).then(result => {
+                      if (result.success) {
+                        setDocRegenBlockId(null);
+                        if (result.file) {
+                          setFiles(prev => prev.map(f => f.id === docMode.documentFileId ? { ...f, ...(result.file as any) } : f));
+                        }
+                      }
+                    });
+                  }
+                }
+              }}
+            />
+            <div className="flex items-center justify-end gap-2 mt-3">
+              <button
+                onClick={() => setDocRegenBlockId(null)}
+                className="px-4 py-2 text-sm text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors cursor-pointer"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                onClick={() => {
+                  const input = (document.getElementById('doc-regen-input') as HTMLTextAreaElement)?.value?.trim();
+                  if (input && docMode.documentFileId && docRegenBlockId) {
+                    docBlocks.regenerate(docMode.documentFileId, docRegenBlockId, input).then(result => {
+                      if (result.success) {
+                        setDocRegenBlockId(null);
+                        if (result.file) {
+                          setFiles(prev => prev.map(f => f.id === docMode.documentFileId ? { ...f, ...(result.file as any) } : f));
+                        }
+                      }
+                    });
+                  }
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:bg-primary-hover transition-colors cursor-pointer"
+              >
+                {t('editor.regenerate.submit')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

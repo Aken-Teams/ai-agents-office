@@ -15,6 +15,7 @@ import greetingRoutes from './routes/greeting.js';
 import quotaRequestRoutes from './routes/quota-request.js';
 import outlookRoutes from './routes/outlook.js';
 import emailAgentRoutes from './routes/emailAgent.js';
+import blockRoutes from './routes/blocks.js';
 
 async function main() {
   // Initialize database
@@ -52,6 +53,7 @@ async function main() {
   app.use('/api/quota-request', quotaRequestRoutes);
   app.use('/api/outlook', outlookRoutes);
   app.use('/api/email-agent', emailAgentRoutes);
+  app.use('/api/blocks', blockRoutes);
 
   // Start server
   app.listen(config.port, () => {

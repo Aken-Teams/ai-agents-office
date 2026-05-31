@@ -72,8 +72,34 @@ export interface SSEEvent {
     // Multi-agent orchestration events
     | 'task_dispatched' | 'task_completed' | 'task_failed'
     | 'pipeline_started' | 'pipeline_completed'
-    | 'agent_status' | 'agent_stream' | 'router_plan';
+    | 'agent_status' | 'agent_stream' | 'router_plan'
+    // Block editor events
+    | 'blocks_ready' | 'skill_started';
   data: unknown;
+}
+
+// --- Document block editor types ---
+
+export type DocType = 'pptx' | 'docx' | 'xlsx' | 'pdf' | 'slides' | 'webapp';
+
+export interface DocumentBlock {
+  id: string;
+  type: string;           // native type: title|content|stats|section|sheet...
+  order: number;
+  data: Record<string, unknown>;  // native block payload, varies by doc_type
+}
+
+export interface DocumentBlocksRecord {
+  id: string;
+  file_id: string;
+  user_id: string;
+  conversation_id: string;
+  doc_type: DocType;
+  doc_meta: string | null;   // JSON string
+  blocks: string;            // JSON string of DocumentBlock[]
+  version: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface SkillDefinition {

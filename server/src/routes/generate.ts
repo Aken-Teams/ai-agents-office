@@ -7,7 +7,7 @@ import { spawnClaude } from '../services/claudeCli.js';
 import { getSandboxPath } from '../services/sandbox.js';
 import { analyzeInput, logSecurityEvent, WARN_THRESHOLD } from '../services/inputGuard.js';
 import { recordTokenUsage } from '../services/tokenTracker.js';
-import { registerNewFiles, getExistingFilePaths, snapshotExistingFiles } from '../services/fileManager.js';
+import { registerNewFiles, getExistingFilePaths, snapshotExistingFiles, captureBlocksForFile } from '../services/fileManager.js';
 import { getUserStorageUsed } from './files.js';
 import { getSkill, buildSystemPrompt, buildMemoryContext, buildCrossAssistantContext, loadSkills, getRouterSkill } from '../skills/loader.js';
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from '../services/uploadContext.js';
@@ -275,6 +275,16 @@ async function handleOrchestrated(
         type: 'file_generated',
         data: newFiles.map(f => ({ id: f.id, filename: f.filename, file_path: f.file_path, file_type: f.file_type, file_size: f.file_size, version: f.version })),
       });
+      // Capture block structure — await to ensure blocks_ready arrives before done
+      const captureResults = await Promise.allSettled(
+        newFiles.map(f => captureBlocksForFile(f, userId, conversationId, sandboxPath))
+      );
+      for (let i = 0; i < newFiles.length; i++) {
+        const r = captureResults[i];
+        if (r.status === 'fulfilled' && r.value) {
+          sseWriter({ type: 'blocks_ready', data: { fileId: newFiles[i].id, blocks: r.value } });
+        }
+      }
     }
   } catch (err) {
     console.error(`[Generate] Orchestrator error for ${conversationId}:`, err);
@@ -370,6 +380,9 @@ async function handleDirect(
     catch { sseOpen = false; }
   }
 
+  // Notify frontend which skill is being used (for document mode detection)
+  sseWrite({ type: 'skill_started', data: { skillId: effectiveSkillId } });
+
   async function startClaude(sid: string, isResume: boolean) {
     let systemPrompt = baseSystemPrompt;
     if (!isResume) {
@@ -450,6 +463,16 @@ async function handleDirect(
               type: 'file_generated',
               data: newFiles.map(f => ({ id: f.id, filename: f.filename, file_path: f.file_path, file_type: f.file_type, file_size: f.file_size, version: f.version })),
             });
+            // Capture block structure — await to ensure blocks_ready arrives before done
+            const captureResults = await Promise.allSettled(
+              newFiles.map(f => captureBlocksForFile(f, userId, conversationId, sandboxPath))
+            );
+            for (let i = 0; i < newFiles.length; i++) {
+              const r = captureResults[i];
+              if (r.status === 'fulfilled' && r.value) {
+                sseWrite({ type: 'blocks_ready', data: { fileId: newFiles[i].id, blocks: r.value } });
+              }
+            }
           }
 
           // Fire-and-forget: extract conversation summary + user memories

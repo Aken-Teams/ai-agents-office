@@ -1262,6 +1262,39 @@ const zhTW = {
   'emailAgent.notifications': '通知',
   'emailAgent.noNotifications': '目前沒有新通知',
   'emailAgent.showChat': '對話',
+
+  // Editor
+  'editor.title': '文件編輯器',
+  'editor.subtitle': '區塊式互動編輯',
+  'editor.backToChat': '返回對話',
+  'editor.download': '下載',
+  'editor.files': '檔案列表',
+  'editor.noFiles': '尚無產生的檔案',
+  'editor.selectFile': '選擇檔案',
+  'editor.blocks': '個區塊',
+  'editor.noBlocks': '此檔案尚無區塊資料',
+  'editor.noBlocksHint': '透過對話產生文件後，區塊將自動出現',
+  'editor.rebuild': '重建檔案',
+  'editor.openEditor': '在編輯器中開啟',
+  'editor.regenerate.title': 'AI 區塊重生成',
+  'editor.regenerate.hint': '描述你想要修改的內容，AI 將只重生成這個區塊',
+  'editor.regenerate.placeholder': '例如：把標題改成更吸引人的、加入更多數據...',
+  'editor.regenerate.submit': '重生成',
+  'editor.editPanel.title': '編輯區塊',
+  'editor.addBlock.title': '新增區塊',
+  'editor.addBlock.button': '新增區塊',
+  'editor.viewSplit': '預覽 + 區塊',
+  'editor.viewBlocks': '僅區塊',
+  'editor.preview': '文件預覽',
+  'editor.previewUnavailable': '此檔案類型不支援即時預覽',
+
+  // Document mode (chat-embedded)
+  'chat.docMode.enter': '文件模式',
+  'chat.docMode.generating': '文件產生中...',
+  'chat.docMode.editingBlock': '正在編輯 #{n}: {type}',
+  'chat.docMode.clearSelection': '取消選取',
+  'chat.docMode.rebuild': '重建',
+  'chat.docMode.download': '下載',
 } as const;
 
 export default zhTW;

@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { config } from '../config.js';
 import { scanSandboxFiles, validateFilePath } from './sandbox.js';
-import type { GeneratedFile } from '../types.js';
+import type { GeneratedFile, DocType, DocumentBlock } from '../types.js';
 
 /**
  * Scan sandbox directory for new or updated files and register them in the database.
@@ -230,4 +230,107 @@ export async function deleteFile(userId: string, fileId: string): Promise<boolea
 
   await dbRun('DELETE FROM generated_files WHERE id = ?', fileId);
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Block capture — intercept input.json written by agents
+// ---------------------------------------------------------------------------
+
+/** Map file extension → doc type for block capture */
+const EXT_TO_DOC_TYPE: Record<string, DocType> = {
+  pptx: 'pptx', docx: 'docx', xlsx: 'xlsx', pdf: 'pdf',
+};
+
+/** Agent skill ids that use generator scripts with input.json */
+const GENERATOR_SKILLS = ['pptx-gen', 'docx-gen', 'xlsx-gen', 'pdf-gen', 'slides-gen'];
+
+/**
+ * After a file is registered, scan agent directories for input.json
+ * and store the structured block data in document_blocks table.
+ */
+export async function captureBlocksForFile(
+  fileRecord: GeneratedFile,
+  userId: string,
+  conversationId: string,
+  sandboxPath: string,
+): Promise<DocumentBlock[] | null> {
+  // Determine doc type from file extension
+  const ext = fileRecord.file_type.replace('.', '').toLowerCase();
+  let docType: DocType | undefined = EXT_TO_DOC_TYPE[ext];
+
+  // For HTML files, determine if it's slides or webapp based on which agent produced it
+  const isHtml = ext === 'html' || ext === 'htm';
+
+  for (const skillId of GENERATOR_SKILLS) {
+    const agentDir = path.join(sandboxPath, '_agents', skillId);
+    if (!fs.existsSync(agentDir)) continue;
+
+    // Find input JSON: try "input.json" first, then any *.json file with slides/sections/sheets
+    let inputJsonPath = path.join(agentDir, 'input.json');
+    if (!fs.existsSync(inputJsonPath)) {
+      // AI agents sometimes use custom filenames (e.g. "report.json" instead of "input.json")
+      const jsonFiles = fs.readdirSync(agentDir).filter(
+        f => f.endsWith('.json') && f !== 'package.json' && f !== 'tsconfig.json'
+      );
+      const found = jsonFiles.find(f => {
+        try {
+          const content = JSON.parse(fs.readFileSync(path.join(agentDir, f), 'utf-8'));
+          return content.slides || content.sections || content.sheets;
+        } catch { return false; }
+      });
+      if (!found) continue;
+      inputJsonPath = path.join(agentDir, found);
+    }
+
+    // Verify this skill matches the file type
+    if (!docType && isHtml && skillId === 'slides-gen') docType = 'slides';
+    if (!docType && isHtml) continue; // webapp-gen doesn't use input.json
+    if (docType && !skillId.startsWith(docType.replace('slides', 'slides'))) {
+      // Check skill matches: pptx-gen → pptx, docx-gen → docx, etc.
+      const skillExt = skillId.replace('-gen', '');
+      if (skillExt !== ext && !(isHtml && skillId === 'slides-gen')) continue;
+    }
+
+    try {
+      const raw = JSON.parse(fs.readFileSync(inputJsonPath, 'utf-8'));
+
+      // Identify the block array key
+      const blockArrayKey = raw.slides ? 'slides'
+        : raw.sections ? 'sections'
+        : raw.sheets ? 'sheets'
+        : null;
+      if (!blockArrayKey) continue;
+
+      const blockArray = raw[blockArrayKey];
+      if (!Array.isArray(blockArray) || blockArray.length === 0) continue;
+
+      // Wrap each native block with id + order
+      const blocks: DocumentBlock[] = blockArray.map((block: any, i: number) => ({
+        id: uuidv4(),
+        type: block.type || (blockArrayKey === 'sheets' ? 'sheet' : 'section'),
+        order: i,
+        data: block,
+      }));
+
+      // Extract doc-level metadata (everything except the block array)
+      const meta = { ...raw };
+      delete meta[blockArrayKey];
+
+      const finalDocType = docType || (isHtml ? 'slides' : ext) as DocType;
+
+      await dbRun(
+        `INSERT INTO document_blocks (id, file_id, user_id, conversation_id, doc_type, doc_meta, blocks, version)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        uuidv4(), fileRecord.id, userId, conversationId,
+        finalDocType, JSON.stringify(meta), JSON.stringify(blocks), fileRecord.version
+      );
+
+      console.log(`[FileManager] Captured ${blocks.length} blocks for ${fileRecord.filename} (${finalDocType})`);
+      return blocks;
+    } catch (err) {
+      console.error(`[FileManager] Failed to capture blocks from ${inputJsonPath}:`, err);
+    }
+  }
+
+  return null;
 }

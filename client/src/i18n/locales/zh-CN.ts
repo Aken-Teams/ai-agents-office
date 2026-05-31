@@ -1255,6 +1255,39 @@ const zhCN = {
   'emailAgent.notifications': '通知',
   'emailAgent.noNotifications': '目前没有新通知',
   'emailAgent.showChat': '对话',
+
+  // Editor
+  'editor.title': '文档编辑器',
+  'editor.subtitle': '区块式交互编辑',
+  'editor.backToChat': '返回对话',
+  'editor.download': '下载',
+  'editor.files': '文件列表',
+  'editor.noFiles': '暂无生成的文件',
+  'editor.selectFile': '选择文件',
+  'editor.blocks': '个区块',
+  'editor.noBlocks': '此文件暂无区块数据',
+  'editor.noBlocksHint': '通过对话生成文档后，区块将自动出现',
+  'editor.rebuild': '重建文件',
+  'editor.openEditor': '在编辑器中打开',
+  'editor.regenerate.title': 'AI 区块重生成',
+  'editor.regenerate.hint': '描述你想要修改的内容，AI 将只重生成这个区块',
+  'editor.regenerate.placeholder': '例如：把标题改成更吸引人的、加入更多数据...',
+  'editor.regenerate.submit': '重生成',
+  'editor.editPanel.title': '编辑区块',
+  'editor.addBlock.title': '新增区块',
+  'editor.addBlock.button': '新增区块',
+  'editor.viewSplit': '预览 + 区块',
+  'editor.viewBlocks': '仅区块',
+  'editor.preview': '文档预览',
+  'editor.previewUnavailable': '此文件类型不支持即时预览',
+
+  // Document mode (chat-embedded)
+  'chat.docMode.enter': '文档模式',
+  'chat.docMode.generating': '文档生成中...',
+  'chat.docMode.editingBlock': '正在编辑 #{n}: {type}',
+  'chat.docMode.clearSelection': '取消选取',
+  'chat.docMode.rebuild': '重建',
+  'chat.docMode.download': '下载',
 } as const;
 
 export default zhCN;

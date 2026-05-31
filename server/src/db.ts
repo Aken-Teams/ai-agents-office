@@ -459,6 +459,27 @@ export async function initializeDatabase(): Promise<void> {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // Document blocks: stores the structured JSON (slides/sections/sheets) used to generate files
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS document_blocks (
+        id              VARCHAR(36) PRIMARY KEY,
+        file_id         VARCHAR(36) NOT NULL,
+        user_id         VARCHAR(36) NOT NULL,
+        conversation_id VARCHAR(36) NOT NULL,
+        doc_type        VARCHAR(20) NOT NULL,
+        doc_meta        TEXT DEFAULT NULL,
+        blocks          LONGTEXT NOT NULL,
+        version         INT NOT NULL DEFAULT 1,
+        created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_blocks_file (file_id),
+        INDEX idx_blocks_conv (conversation_id),
+        FOREIGN KEY (file_id) REFERENCES generated_files(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     // Email summary + analysis cache (avoid re-generating AI for same emails)
     // IMPORTANT: email_id uses utf8mb4_bin (case-sensitive) because Outlook message IDs
     // are base64-encoded and differ only in case (e.g. "6PoAAA=" vs "6POAAA=" are DIFFERENT emails)
