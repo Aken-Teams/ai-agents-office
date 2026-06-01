@@ -151,6 +151,17 @@ export default function SheetTableView({
     return typeof val === 'number' || (typeof val === 'string' && !isNaN(Number(val)) && val.trim() !== '');
   };
 
+  /** Format cell value for display — round numbers, keep strings as-is */
+  const formatCell = (val: unknown): string => {
+    if (val == null) return '';
+    if (typeof val === 'number') {
+      if (Number.isInteger(val)) return val.toLocaleString();
+      // Round to 2 decimal places for display
+      return val.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    }
+    return String(val);
+  };
+
   const colCount = headers.length || (rows[0]?.length ?? 0);
 
   return (
@@ -216,7 +227,7 @@ export default function SheetTableView({
                       />
                     ) : (
                       <span className="block truncate max-w-[200px]">
-                        {val != null ? String(val) : ''}
+                        {formatCell(val)}
                       </span>
                     )}
                   </td>
