@@ -401,14 +401,18 @@ export default function DocumentCanvas({
                       <span className="text-xs font-medium">{t('chat.docMode.generating')}</span>
                     </div>
                     {agentActivity && agentActivity.length > 0 && (
-                      <div className="w-full max-w-xs space-y-1">
-                        {agentActivity.slice(-4).map((act, i) => (
-                          <div key={act.id || i} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container/80 text-[11px]">
-                            <span className={`material-symbols-outlined text-xs ${act.status === 'completed' ? 'text-primary' : 'text-on-surface-variant/50 animate-pulse'}`}>
-                              {act.status === 'completed' ? 'check_circle' : 'pending'}
+                      <div className="flex items-center gap-1.5 flex-wrap justify-center max-w-sm">
+                        {agentActivity.slice(-6).map((act, i) => (
+                          <span key={act.id || i} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] ${
+                            act.status === 'completed'
+                              ? 'bg-primary/10 text-primary/60'
+                              : 'bg-surface-container text-on-surface-variant/70'
+                          }`}>
+                            <span className={`material-symbols-outlined ${act.status !== 'completed' ? 'animate-pulse' : ''}`} style={{ fontSize: '10px' }}>
+                              {act.status === 'completed' ? 'check' : 'pending'}
                             </span>
-                            <span className="text-on-surface-variant/70 truncate">{act.tool}</span>
-                          </div>
+                            <span className="truncate max-w-[80px]">{(act.tool || '').split(':').pop()}</span>
+                          </span>
                         ))}
                       </div>
                     )}
@@ -591,14 +595,18 @@ export default function DocumentCanvas({
               <span className="material-symbols-outlined text-4xl text-primary animate-spin">progress_activity</span>
               <span className="text-sm text-on-surface-variant">{t('chat.docMode.generating')}</span>
               {agentActivity && agentActivity.length > 0 && (
-                <div className="mt-2 w-full max-w-xs space-y-1.5">
-                  {agentActivity.slice(-5).map((act, i) => (
-                    <div key={act.id || i} className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-surface-container/50 text-[11px]">
-                      <span className={`material-symbols-outlined text-xs ${act.status === 'completed' ? 'text-primary' : 'text-on-surface-variant/60 animate-pulse'}`}>
-                        {act.status === 'completed' ? 'check_circle' : 'pending'}
+                <div className="mt-2 flex items-center gap-1.5 flex-wrap justify-center max-w-sm">
+                  {agentActivity.slice(-6).map((act, i) => (
+                    <span key={act.id || i} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] ${
+                      act.status === 'completed'
+                        ? 'bg-primary/10 text-primary/60'
+                        : 'bg-surface-container text-on-surface-variant/70'
+                    }`}>
+                      <span className={`material-symbols-outlined ${act.status !== 'completed' ? 'animate-pulse' : ''}`} style={{ fontSize: '10px' }}>
+                        {act.status === 'completed' ? 'check' : 'pending'}
                       </span>
-                      <span className="text-on-surface-variant truncate">{act.tool}</span>
-                    </div>
+                      <span className="truncate max-w-[80px]">{(act.tool || '').split(':').pop()}</span>
+                    </span>
                   ))}
                 </div>
               )}

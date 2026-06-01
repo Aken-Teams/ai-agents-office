@@ -1269,6 +1269,7 @@ const en = {
   'chat.docMode.rebuild': 'Rebuild',
   'chat.docMode.download': 'Download',
   'chat.docMode.blockUpdated': 'Block updated successfully',
+  'chat.docMode.viewingBlock': 'Viewing',
 } as const;
 
 export default en;

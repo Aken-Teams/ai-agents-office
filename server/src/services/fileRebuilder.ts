@@ -187,6 +187,7 @@ const PATCHABLE_FIELDS = new Set([
   'title', 'subtitle', 'quote', 'attribution', 'description', 'content',
   'bullets', 'points',
   'backgroundColor', 'textColor',
+  'accentColor', 'accentColor2', 'titleColor', 'subtitleColor',
 ]);
 
 /**

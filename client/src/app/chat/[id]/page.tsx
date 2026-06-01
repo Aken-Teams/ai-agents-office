@@ -911,48 +911,26 @@ function ChatContent() {
       docMode.enterDocumentMode(skillId);
     }
 
-    // Block-targeted modification: if a block is selected, regenerate just that block
-    if (docMode.viewMode === 'document' && docMode.selectedBlockId && docMode.documentFileId) {
-      const blockId = docMode.selectedBlockId;
-      const fileId = docMode.documentFileId;
-      docMode.setSelectedBlockId(null);
-      try {
-        const result = await docBlocks.regenerate(fileId, blockId, userMessage);
-        if (result.success && result.block) {
-          // Add assistant response to chat
-          setMessages(prev => [...prev, {
-            id: `regen-${Date.now()}`,
-            conversation_id: conversationId,
-            role: 'assistant',
-            content: `✅ ${t('chat.docMode.blockUpdated' as any) || 'Block updated successfully.'}`,
-            created_at: new Date().toISOString(),
-          }]);
-          // Update file version if returned
-          if (result.file) {
-            setFiles(prev => prev.map(f => f.id === fileId ? { ...f, ...(result.file as any) } : f));
-          }
-        } else {
-          setMessages(prev => [...prev, {
-            id: `err-${Date.now()}`,
-            conversation_id: conversationId,
-            role: 'assistant',
-            content: `⚠️ ${t('chat.error.unknown')}`,
-            created_at: new Date().toISOString(),
-          }]);
-        }
-      } catch {
-        setMessages(prev => [...prev, {
-          id: `err-${Date.now()}`,
-          conversation_id: conversationId,
-          role: 'assistant',
-          content: `⚠️ ${t('chat.error.unknown')}`,
-          created_at: new Date().toISOString(),
-        }]);
-      } finally {
-        setStreaming(false);
+    // Document mode context: auto-prefix message with document info so AI understands
+    // the document context (regardless of whether a block is selected for viewing)
+    let contextualMessage = userMessage;
+    if (docMode.viewMode === 'document' && docMode.documentFileId) {
+      const selectedBlock = docMode.selectedBlockId
+        ? docBlocks.blocks.find(b => b.id === docMode.selectedBlockId)
+        : null;
+
+      if (selectedBlock) {
+        // User is viewing a specific page — give AI full context of that page
+        const pageNum = docBlocks.blocks.findIndex(b => b.id === docMode.selectedBlockId) + 1;
+        contextualMessage = `[DOC_CONTEXT: 使用者正在查看第 ${pageNum}/${docBlocks.blocks.length} 頁 (${selectedBlock.type})。該頁內容: ${JSON.stringify(selectedBlock.data)}]\n\n${userMessage}`;
+      } else {
+        // No specific page selected — give overview
+        const blockSummary = docBlocks.blocks.map((b, i) => `#${i + 1} ${b.type}: ${(b.data as any).title || ''}`).join(', ');
+        contextualMessage = `[DOC_CONTEXT: 正在編輯 ${docMode.docLayoutType || 'document'} 文件，共 ${docBlocks.blocks.length} 頁: ${blockSummary}]\n\n${userMessage}`;
       }
-      return;
     }
+    // NOTE: Block-targeted regeneration is handled via the canvas "AI 修改" button → submitDocRegen().
+    // The chat input always goes through normal conversational flow.
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -965,7 +943,7 @@ function ChatContent() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          message: userMessage,
+          message: contextualMessage,
           ...(skillId && { skillId }),
           ...(currentUploadIds.length > 0 && { uploadIds: currentUploadIds }),
           ...(selectedRefs.length > 0 && { referencedConvIds: selectedRefs.map(r => r.id) }),
@@ -1511,8 +1489,8 @@ function ChatContent() {
 
           {/* Background processing indicator */}
           {backgroundProcessing && !streaming && (
-            <div className="mx-3 md:mx-8 mt-2 px-3 py-2 bg-primary/8 border border-primary/15 rounded-lg">
-              <div className="flex items-center gap-1.5 flex-wrap">
+            <div className={`mx-3 mt-2 px-3 py-2 bg-primary/8 border border-primary/15 rounded-lg ${docMode.viewMode === 'chat' ? 'md:mx-8' : ''}`}>
+              <div className="flex items-center gap-1.5 flex-wrap overflow-hidden">
                 <span className="material-symbols-outlined text-sm animate-spin text-primary/60 shrink-0">progress_activity</span>
                 <span className="text-xs text-primary/60 mr-1">{t('chat.backgroundProcessing' as any)}</span>
                 {bgTasks.map(task => {
@@ -1521,7 +1499,7 @@ function ChatContent() {
                   const skillIcon = SKILL_ICONS[task.skill_id] || 'smart_toy';
                   const skillName = (t(`skill.${task.skill_id}` as any) as string) || task.skill_id;
                   return (
-                    <span key={task.id} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium ${
+                    <span key={task.id} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium whitespace-nowrap max-w-[140px] ${
                       isDone ? 'bg-success/10 text-success' :
                       isFail ? 'bg-error/10 text-error' :
                       'bg-primary/10 text-primary'
@@ -1529,7 +1507,7 @@ function ChatContent() {
                       <span className={`material-symbols-outlined shrink-0 ${!isDone && !isFail ? 'animate-spin' : ''}`} style={{ fontSize: '11px' }}>
                         {isDone ? 'check_circle' : isFail ? 'error' : skillIcon}
                       </span>
-                      {skillName}
+                      <span className="truncate">{skillName}</span>
                     </span>
                   );
                 })}
@@ -1542,19 +1520,19 @@ function ChatContent() {
             {messages.map((msg, idx) => {
               const sources = msg.role === 'assistant' ? extractSources(msg.content) : [];
               const { text: userMsgText, refs: userMsgRefs } = msg.role === 'user'
-                ? parseMessageRefs(msg.content)
+                ? parseMessageRefs(msg.content.replace(/^\[DOC_CONTEXT:[^\]]*\]\n\n/, ''))
                 : { text: msg.content, refs: [] };
               return (
-                <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : 'flex gap-2 md:gap-4'}>
+                <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : `flex gap-2 ${docMode.viewMode === 'chat' ? 'md:gap-4' : ''}`}>
                   {msg.role === 'assistant' && (
-                    <div className="w-7 h-7 md:w-9 md:h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
-                      <span className="material-symbols-outlined text-primary text-xs md:text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
+                    <div className={`w-7 h-7 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg ${docMode.viewMode === 'chat' ? 'md:w-9 md:h-9' : ''}`}>
+                      <span className={`material-symbols-outlined text-primary text-xs ${docMode.viewMode === 'chat' ? 'md:text-sm' : ''}`} style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
                     </div>
                   )}
                   <div className={
                     msg.role === 'user'
-                      ? 'max-w-[85%] md:max-w-[70%] bg-surface-container px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tr-sm text-on-surface shadow-lg'
-                      : 'max-w-[90%] md:max-w-[85%] min-w-0'
+                      ? `max-w-[85%] bg-surface-container px-3.5 py-3 rounded-xl rounded-tr-sm text-on-surface shadow-lg ${docMode.viewMode === 'chat' ? 'md:max-w-[70%] md:px-5 md:py-4' : ''}`
+                      : `max-w-[90%] min-w-0 ${docMode.viewMode === 'chat' ? 'md:max-w-[85%]' : ''}`
                   }>
                     {msg.role === 'user' ? (
                       <>
@@ -1574,7 +1552,7 @@ function ChatContent() {
                         </span>
                       </>
                     ) : (
-                      <div className="bg-surface-container-low px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tl-sm border border-outline-variant/10 overflow-hidden">
+                      <div className={`bg-surface-container-low px-3.5 py-3 rounded-xl rounded-tl-sm border border-outline-variant/10 overflow-hidden ${docMode.viewMode === 'chat' ? 'md:px-5 md:py-4' : ''}`}>
                         {(() => {
                           const { text: msgText, choices } = parseChoices(msg.content);
                           const isLatestMsg = idx === messages.length - 1;
@@ -1625,12 +1603,12 @@ function ChatContent() {
 
             {/* Streaming text preview */}
             {streamText && streamText.trim() && (
-              <div className="flex gap-2 md:gap-4">
-                <div className="w-7 h-7 md:w-9 md:h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
-                  <span className="material-symbols-outlined text-primary text-xs md:text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
+              <div className={`flex gap-2 ${docMode.viewMode === 'chat' ? 'md:gap-4' : ''}`}>
+                <div className={`w-7 h-7 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg ${docMode.viewMode === 'chat' ? 'md:w-9 md:h-9' : ''}`}>
+                  <span className={`material-symbols-outlined text-primary text-xs ${docMode.viewMode === 'chat' ? 'md:text-sm' : ''}`} style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
                 </div>
-                <div className="max-w-[90%] md:max-w-[85%] min-w-0">
-                  <div className="bg-surface-container-low px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tl-sm border border-primary/20 border-dashed overflow-hidden">
+                <div className={`max-w-[90%] min-w-0 ${docMode.viewMode === 'chat' ? 'md:max-w-[85%]' : ''}`}>
+                  <div className={`bg-surface-container-low px-3.5 py-3 rounded-xl rounded-tl-sm border border-primary/20 border-dashed overflow-hidden ${docMode.viewMode === 'chat' ? 'md:px-5 md:py-4' : ''}`}>
                     <div className="chat-markdown text-sm leading-relaxed text-on-surface-variant">
                       <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{streamText}</ReactMarkdown>
                       <span className="inline-block w-0.5 h-4 bg-primary ml-0.5 align-text-bottom animate-pulse" />
@@ -1642,7 +1620,7 @@ function ChatContent() {
 
             {/* Processing Panel */}
             {(hasActivity || showCompletedPanel) && (
-              <div className="bg-surface-container-low rounded-lg border-l-2 border-primary/40 max-w-full md:max-w-[85%] overflow-hidden">
+              <div className={`bg-surface-container-low rounded-lg border-l-2 border-primary/40 max-w-full overflow-hidden ${docMode.viewMode === 'chat' ? 'md:max-w-[85%]' : ''}`}>
                 <div
                   className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-3 bg-surface-container cursor-pointer select-none active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors"
                   onClick={() => setPanelCollapsed(c => !c)}
@@ -2025,21 +2003,18 @@ function ChatContent() {
 
           {/* Input Area */}
           <div className={`p-2 ${docMode.viewMode === 'chat' ? 'md:p-6 md:pt-0' : ''}`}>
-            {/* Block selection indicator */}
+            {/* Block viewing indicator — purely informational, chat still works normally */}
             {docMode.viewMode === 'document' && docMode.selectedBlockId && (
-              <div className="mb-2 flex items-center gap-2 px-2.5 md:px-3 py-1.5 bg-primary/8 border border-primary/15 rounded-lg">
-                <span className="material-symbols-outlined text-primary text-sm">edit_note</span>
-                <span className="text-xs text-primary font-medium flex-1 truncate">
-                  {t('chat.docMode.editingBlock', {
-                    n: (docBlocks.blocks.findIndex(b => b.id === docMode.selectedBlockId) + 1),
-                    type: docBlocks.blocks.find(b => b.id === docMode.selectedBlockId)?.type.replace(/_/g, ' ') || '',
-                  })}
+              <div className="mb-2 flex items-center gap-2 px-2.5 py-1 bg-surface-container border border-outline-variant/15 rounded-lg">
+                <span className="material-symbols-outlined text-on-surface-variant text-sm">visibility</span>
+                <span className="text-[11px] text-on-surface-variant flex-1 truncate">
+                  {t('chat.docMode.viewingBlock')}: #{docBlocks.blocks.findIndex(b => b.id === docMode.selectedBlockId) + 1} {docBlocks.blocks.find(b => b.id === docMode.selectedBlockId)?.type.replace(/_/g, ' ') || ''}
                 </span>
                 <button
                   onClick={() => docMode.setSelectedBlockId(null)}
                   className="text-on-surface-variant hover:text-error transition-colors cursor-pointer"
                 >
-                  <span className="material-symbols-outlined text-sm">close</span>
+                  <span className="material-symbols-outlined text-xs">close</span>
                 </button>
               </div>
             )}

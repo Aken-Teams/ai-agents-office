@@ -406,6 +406,11 @@ html.locale-zh-CN {
 }
 
 /* === Chat Markdown (theme-aware) === */
+.chat-markdown {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
 .chat-markdown h1,
 .chat-markdown h2,
 .chat-markdown h3,
@@ -512,7 +517,7 @@ html.locale-zh-CN {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   margin: 6px 0;
-  max-width: calc(100vw - 6rem);
+  max-width: 100%;
 }
 
 .chat-markdown table {

@@ -1289,6 +1289,7 @@ const zhCN = {
   'chat.docMode.rebuild': '重建',
   'chat.docMode.download': '下载',
   'chat.docMode.blockUpdated': '区块已更新',
+  'chat.docMode.viewingBlock': '查看中',
 } as const;
 
 export default zhCN;

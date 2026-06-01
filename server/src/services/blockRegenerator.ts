@@ -54,18 +54,30 @@ export async function regenerateBlock(
 
   // Build a focused prompt for single-block regeneration
   const systemPrompt = [
-    'You are a document block editor. Your job is to modify a single block of a document based on user instructions.',
+    'You are a document block editor. Modify a single block based on user instructions.',
     '',
     `Document type: ${blockRecord.doc_type}`,
     `Document title: ${meta.title || 'Untitled'}`,
     `Block type: ${targetBlock.type}`,
     '',
-    'IMPORTANT RULES:',
-    '1. Return ONLY a valid JSON object representing the updated block data.',
-    '2. Do NOT wrap the output in markdown code fences or any other text.',
-    '3. Preserve the same schema/structure as the input block.',
-    '4. Only modify what the user asks for.',
-    '5. Keep all existing fields unless explicitly asked to remove them.',
+    'AVAILABLE STYLE FIELDS (for visual/style changes, apply ALL relevant ones for a cohesive theme):',
+    '- backgroundColor: slide background hex color (e.g. "#FFC0CB" for pink)',
+    '- textColor: main text color (ensure high contrast with backgroundColor)',
+    '- accentColor: accent elements like bars, highlights, dividers',
+    '- accentColor2: secondary accent for panel backgrounds',
+    '- titleColor: heading/title text color',
+    '- subtitleColor: subtitle text color',
+    '',
+    'STYLE TIPS:',
+    '- For style/theme requests (e.g. "粉色風格", "dark mode"), change MULTIPLE color fields as a cohesive palette',
+    '- Always ensure text readability (sufficient contrast between text and background)',
+    '- You may add style fields that don\'t exist yet in the current data',
+    '',
+    'RULES:',
+    '1. Return ONLY a valid JSON object (the updated block data).',
+    '2. Do NOT wrap in markdown code fences or any other text.',
+    '3. Preserve content fields (title, bullets, etc.) unless user explicitly asks to change them.',
+    '4. For style/theme requests, apply changes holistically across all relevant style fields.',
   ].join('\n');
 
   const userMessage = [

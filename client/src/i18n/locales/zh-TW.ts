@@ -1296,6 +1296,7 @@ const zhTW = {
   'chat.docMode.rebuild': '重建',
   'chat.docMode.download': '下載',
   'chat.docMode.blockUpdated': '區塊已更新',
+  'chat.docMode.viewingBlock': '查看中',
 } as const;
 
 export default zhTW;
