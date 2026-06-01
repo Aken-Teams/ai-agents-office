@@ -341,6 +341,7 @@ function cleanup(dir: string) {
 const PATCHABLE_FIELDS = new Set([
   'title', 'subtitle', 'quote', 'attribution', 'description', 'content',
   'bullets', 'points',
+  'heading', // DOCX section heading
 ]);
 
 /**
@@ -635,7 +636,7 @@ async function patchDocxField(
   oldValue: unknown,
   newValue: unknown,
 ): Promise<boolean> {
-  if (fieldKey !== 'title' && fieldKey !== 'content') return false;
+  if (fieldKey !== 'title' && fieldKey !== 'content' && fieldKey !== 'heading') return false;
 
   const data = fs.readFileSync(filePath);
   const zip = await JSZip.loadAsync(data);
