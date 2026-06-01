@@ -44,8 +44,8 @@ interface UseDocumentBlocksReturn {
   rebuild: (fileId: string) => Promise<{ success: boolean; file?: any }>;
   /** Patch a single field in-place (preserves formatting) */
   patchField: (fileId: string, blockId: string, key: string, value: unknown) => Promise<{ success: boolean; file?: any }>;
-  /** AI regenerate a single block */
-  regenerate: (fileId: string, blockId: string, instruction: string) => Promise<{ success: boolean; block?: DocumentBlock; file?: any }>;
+  /** AI regenerate a single block (streams SSE events via onEvent callback) */
+  regenerate: (fileId: string, blockId: string, instruction: string, onEvent?: (event: { type: string; data?: any }) => void) => Promise<{ success: boolean; block?: DocumentBlock; file?: any }>;
   /** Set blocks locally (e.g. from SSE) */
   setBlocksFromSSE: (data: { fileId: string; blocks: DocumentBlock[] }) => void;
 }
@@ -209,41 +209,76 @@ export function useDocumentBlocks(token: string | null): UseDocumentBlocksReturn
     }
   }, [token, headers]);
 
-  const regenerate = useCallback(async (fileId: string, blockId: string, instruction: string) => {
+  const regenerate = useCallback(async (
+    fileId: string,
+    blockId: string,
+    instruction: string,
+    onEvent?: (event: { type: string; data?: any }) => void,
+  ) => {
     if (!token) return { success: false };
     setError(null);
     // Mark block as regenerating locally
     setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, status: 'regenerating' } : b));
     try {
-      // Fire-and-forget POST — server responds immediately
+      // SSE streaming — sends Accept: text/event-stream for real-time events
       const res = await fetch(`${SSE_BASE}/api/blocks/${fileId}/regenerate/${blockId}`, {
         method: 'POST',
-        headers: headers(),
+        headers: { ...headers(), Accept: 'text/event-stream' },
         body: JSON.stringify({ instruction }),
       });
       if (!res.ok) throw new Error(`Regenerate failed: ${res.status}`);
-      const startResult = await res.json();
-      if (!startResult.success) throw new Error('Server rejected regeneration');
 
-      // Poll for completion: check block status every 3s, up to 2 minutes
-      const MAX_POLLS = 40;
-      const POLL_INTERVAL = 3000;
-      for (let i = 0; i < MAX_POLLS; i++) {
-        await new Promise(r => setTimeout(r, POLL_INTERVAL));
-        try {
-          const pollRes = await fetch(`${SSE_BASE}/api/blocks/${fileId}`, { headers: headers() });
-          if (!pollRes.ok) continue;
-          const data: BlockRecord = await pollRes.json();
-          const block = data.blocks.find(b => b.id === blockId);
-          if (block && block.status !== 'regenerating') {
-            // Regeneration complete — update all blocks
-            setRecord(data);
-            setBlocks(data.blocks);
-            return { success: true, block, file: null };
+      // Read SSE stream
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No response body');
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse SSE lines
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+            onEvent?.(event);
+
+            if (event.type === 'block_updated' && event.data) {
+              // Immediately update canvas with new block content (before file patch)
+              setBlocks(event.data.blocks);
+            }
+            if (event.type === 'done' && event.data) {
+              // Final update with idle status
+              setBlocks(event.data.blocks);
+              const block = event.data.block;
+              return { success: true, block, file: null };
+            }
+            if (event.type === 'error') {
+              throw new Error(event.data || 'Regeneration failed');
+            }
+          } catch (parseErr: any) {
+            if (parseErr.message === 'Regeneration failed' || parseErr.message?.startsWith('Regenerate')) throw parseErr;
+            // Ignore JSON parse errors for partial data
           }
-        } catch { /* keep polling */ }
+        }
       }
-      // Timed out — reset status
+
+      // Stream ended without 'done' event — try fetching final state
+      const pollRes = await fetch(`${SSE_BASE}/api/blocks/${fileId}`, { headers: headers() });
+      if (pollRes.ok) {
+        const data: BlockRecord = await pollRes.json();
+        setRecord(data);
+        setBlocks(data.blocks);
+        const block = data.blocks.find(b => b.id === blockId);
+        return { success: true, block: block || undefined, file: null };
+      }
+
       setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, status: 'idle' } : b));
       return { success: false };
     } catch (err: any) {

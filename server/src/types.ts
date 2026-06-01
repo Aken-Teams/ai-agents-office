@@ -87,6 +87,7 @@ export interface DocumentBlock {
   type: string;           // native type: title|content|stats|section|sheet...
   order: number;
   data: Record<string, unknown>;  // native block payload, varies by doc_type
+  status?: 'idle' | 'regenerating' | 'dirty';
 }
 
 export interface DocumentBlocksRecord {

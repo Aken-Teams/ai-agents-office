@@ -178,6 +178,107 @@ export async function rebuildFile(fileId: string, userId: string): Promise<Gener
 }
 
 // ---------------------------------------------------------------------------
+// In-place block patching — patch all changed fields for a single block
+// Used by blockRegenerator for fast single-block updates.
+// ---------------------------------------------------------------------------
+
+/** Fields that can be patched in-place via XML manipulation */
+const PATCHABLE_FIELDS = new Set([
+  'title', 'subtitle', 'quote', 'attribution', 'description', 'content',
+  'bullets', 'points',
+]);
+
+/**
+ * Patch a single block's changed fields directly in the PPTX/DOCX file.
+ * Compares oldData vs newData and patches each changed field.
+ * Returns true if patching was attempted (even if some fields couldn't match).
+ * Returns false if patching is not supported for this doc type (caller should rebuild).
+ */
+export async function patchBlockInPlace(
+  fileId: string,
+  userId: string,
+  slideIndex: number,
+  oldData: Record<string, unknown>,
+  newData: Record<string, unknown>,
+  docType: string,
+): Promise<boolean> {
+  if (docType !== 'pptx' && docType !== 'docx') {
+    return false; // Not supported — caller should use rebuildFile()
+  }
+
+  // Load file record to get path
+  const fileRecord = await dbGet<GeneratedFile>(
+    'SELECT * FROM generated_files WHERE id = ? AND user_id = ?',
+    fileId, userId,
+  );
+  if (!fileRecord) return false;
+
+  const filePath = path.join(config.workspaceRoot, fileRecord.file_path);
+  if (!fs.existsSync(filePath)) return false;
+
+  // Find changed patchable fields
+  const changedFields: { key: string; oldVal: unknown; newVal: unknown }[] = [];
+  for (const key of Object.keys(newData)) {
+    if (!PATCHABLE_FIELDS.has(key)) continue;
+    const oldVal = oldData[key];
+    const newVal = newData[key];
+    if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+      changedFields.push({ key, oldVal, newVal });
+    }
+  }
+
+  if (changedFields.length === 0) {
+    console.log(`[FileRebuilder] patchBlockInPlace: no patchable field changes detected`);
+    return true; // Nothing to patch
+  }
+
+  // Apply patches
+  let anyPatched = false;
+  if (docType === 'pptx') {
+    for (const { key, oldVal, newVal } of changedFields) {
+      const ok = await patchPptxField(filePath, slideIndex, key, oldVal, newVal);
+      if (ok) anyPatched = true;
+    }
+  } else if (docType === 'docx') {
+    for (const { key, oldVal, newVal } of changedFields) {
+      const ok = await patchDocxField(filePath, slideIndex, key, oldVal, newVal);
+      if (ok) anyPatched = true;
+    }
+  }
+
+  if (!anyPatched) return true; // Fields were attempted but no XML match
+
+  // Invalidate preview cache
+  const blockRecord = await dbGet<DocumentBlocksRecord>(
+    'SELECT * FROM document_blocks WHERE file_id = ? AND user_id = ?',
+    fileId, userId,
+  );
+  const dir = path.dirname(filePath);
+  const basename = path.basename(fileRecord.filename, path.extname(fileRecord.filename));
+  const cachedPdf = path.join(dir, '.preview-cache', `${basename}.pdf`);
+  if (fs.existsSync(cachedPdf)) {
+    try { fs.unlinkSync(cachedPdf); } catch {}
+  }
+  if (blockRecord) {
+    const sandboxPath = path.join(config.workspaceRoot, userId, blockRecord.conversation_id);
+    const rootCachedPdf = path.join(sandboxPath, '.preview-cache', `${basename}.pdf`);
+    if (rootCachedPdf !== cachedPdf && fs.existsSync(rootCachedPdf)) {
+      try { fs.unlinkSync(rootCachedPdf); } catch {}
+    }
+  }
+
+  // Update file size
+  const newSize = fs.statSync(filePath).size;
+  await dbRun(
+    'UPDATE generated_files SET file_size = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?',
+    newSize, fileId,
+  );
+
+  console.log(`[FileRebuilder] patchBlockInPlace: patched ${changedFields.length} fields for slide ${slideIndex + 1}`);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // In-place field patching — modify text directly inside PPTX/DOCX XML
 // This preserves all formatting, charts, and visual elements.
 // ---------------------------------------------------------------------------

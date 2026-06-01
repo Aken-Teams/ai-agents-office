@@ -284,9 +284,9 @@ router.post('/:fileId/rebuild', async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/blocks/:fileId/regenerate/:blockId — AI partial regeneration
-// Returns immediately so the Next.js proxy doesn't time out.
-// Frontend polls GET /api/blocks/:fileId to detect completion.
+// POST /api/blocks/:fileId/regenerate/:blockId — AI partial regeneration (SSE)
+// Streams real-time events so the frontend can show AI activity.
+// Falls back to fire-and-forget if client doesn't accept SSE.
 // ---------------------------------------------------------------------------
 const activeRegenerations = new Map<string, boolean>();
 
@@ -327,11 +327,49 @@ router.post('/:fileId/regenerate/:blockId', async (req: Request, res: Response) 
     }
   } catch {}
 
-  // Respond immediately — frontend will poll for result
   activeRegenerations.set(regenKey, true);
+
+  // SSE mode: stream real-time events to the client
+  const acceptsSSE = req.headers.accept?.includes('text/event-stream');
+  if (acceptsSSE) {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    const keepalive = setInterval(() => {
+      try { res.write(': keepalive\n\n'); } catch { /* closed */ }
+    }, 10000);
+
+    const emit = (event: any) => {
+      try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* closed */ }
+    };
+
+    regenerateBlock(fileId, blockId, userId, instruction, emit)
+      .then(result => {
+        if (result) {
+          console.log(`[Blocks] Regeneration complete for block ${blockId}`);
+        } else {
+          console.error(`[Blocks] Regeneration returned null for block ${blockId}`);
+        }
+      })
+      .catch(err => {
+        console.error('[Blocks] SSE regeneration error:', err);
+        emit({ type: 'error', data: String(err) });
+      })
+      .finally(() => {
+        activeRegenerations.delete(regenKey);
+        clearInterval(keepalive);
+        try { res.end(); } catch {}
+      });
+    return;
+  }
+
+  // Non-SSE fallback: respond immediately, run in background
   res.json({ success: true, started: true });
 
-  // Run regeneration in background
   regenerateBlock(fileId, blockId, userId, instruction)
     .then(result => {
       if (result) {
@@ -342,7 +380,7 @@ router.post('/:fileId/regenerate/:blockId', async (req: Request, res: Response) 
     })
     .catch(err => {
       console.error('[Blocks] Background regeneration error:', err);
-      // Reset block status on failure
+      // Reset block status on unhandled failure
       dbGet<DocumentBlocksRecord>(
         'SELECT * FROM document_blocks WHERE file_id = ? AND user_id = ?',
         fileId, userId,
@@ -350,7 +388,7 @@ router.post('/:fileId/regenerate/:blockId', async (req: Request, res: Response) 
         if (!rec) return;
         const blocks: DocumentBlock[] = JSON.parse(rec.blocks);
         const b = blocks.find(x => x.id === blockId);
-        if (b) {
+        if (b && b.status === 'regenerating') {
           b.status = 'idle';
           dbRun('UPDATE document_blocks SET blocks = ? WHERE id = ?', JSON.stringify(blocks), rec.id);
         }

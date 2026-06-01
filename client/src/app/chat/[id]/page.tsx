@@ -547,10 +547,11 @@ function ChatContent() {
   const [docRegenBlockId, setDocRegenBlockId] = useState<string | null>(null);
   const [docRegenContext, setDocRegenContext] = useState<string>('');
   const [docRegenInstruction, setDocRegenInstruction] = useState<string>(''); // shown in canvas while regenerating
+  const [docRegenPhase, setDocRegenPhase] = useState<string>(''); // 'ai_thinking' | 'rebuilding' | ''
   const docRegenInFlight = useRef(false); // prevent duplicate regenerate calls
   const fileGenInRoundRef = useRef(false); // track if file was generated this round
 
-  /** Submit regeneration: close modal immediately, run in background, show status in canvas */
+  /** Submit regeneration: close modal immediately, stream SSE events, show real-time status */
   const submitDocRegen = useCallback(() => {
     const input = (document.getElementById('doc-regen-input') as HTMLTextAreaElement)?.value?.trim();
     if (!input || !docMode.documentFileId || !docRegenBlockId || docRegenInFlight.current) return;
@@ -559,16 +560,28 @@ function ChatContent() {
     const fullInstruction = docRegenContext ? `${docRegenContext} ${input}` : input;
     // Close modal immediately & show instruction in canvas
     setDocRegenInstruction(fullInstruction);
+    setDocRegenPhase('ai_thinking');
     setDocRegenBlockId(null);
     setDocRegenContext('');
-    // Fire regeneration — polls until complete (fire-and-forget POST + polling)
-    docBlocks.regenerate(docMode.documentFileId, blockId, fullInstruction).then(result => {
+    // Fire regeneration with SSE streaming
+    docBlocks.regenerate(docMode.documentFileId, blockId, fullInstruction, (event) => {
+      // Handle real-time SSE events
+      if (event.type === 'started') setDocRegenPhase('ai_thinking');
+      else if (event.type === 'ai_text') setDocRegenPhase('ai_thinking');
+      else if (event.type === 'block_updated') {
+        // Immediately show new content in canvas (before file patch)
+        setDocRegenPhase('patching');
+      }
+      else if (event.type === 'patching') setDocRegenPhase('patching');
+    }).then(() => {
       docRegenInFlight.current = false;
       setDocRegenInstruction('');
-      // Blocks are already updated by polling; preview refresh is triggered by regenInstruction→'' transition
+      setDocRegenPhase('');
+      // Preview refresh is triggered by regenInstruction→'' transition in DocumentCanvas
     }).catch(() => {
       docRegenInFlight.current = false;
       setDocRegenInstruction('');
+      setDocRegenPhase('');
     });
   }, [docRegenBlockId, docRegenContext, docMode.documentFileId, docBlocks]);
 
@@ -2389,6 +2402,7 @@ function ChatContent() {
             streaming={streaming}
             rebuilding={docRebuilding}
             regenInstruction={docRegenInstruction}
+            regenPhase={docRegenPhase}
             token={token}
             agentActivity={tools}
             t={t}

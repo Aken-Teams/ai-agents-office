@@ -115,6 +115,7 @@ export interface ClaudeCliOptions {
   customDisallowedTools?: string[];     // Override default disallowed tools
   sandboxSubdir?: string;              // Subdirectory within sandbox (e.g. _agents/research)
   useApiKey?: boolean;                 // Internal: force API key auth (set by retry logic)
+  model?: string;                      // Override default model (e.g. 'claude-haiku-4-5-20251001' for fast edits)
 }
 
 interface ClaudeResult {
@@ -249,6 +250,11 @@ export function spawnClaude(
     '--output-format', 'stream-json',  // Structured streaming output
     '--verbose',
   ];
+
+  // Model override: use a faster model for lightweight tasks (e.g. block edits)
+  if (options.model) {
+    args.push('--model', options.model);
+  }
 
   // Note: Claude CLI auto-memory is per-project (based on cwd path hash).
   // Each user/conversation/skill gets a unique sandbox path, so auto-memory is already isolated.

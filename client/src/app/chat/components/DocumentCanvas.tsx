@@ -39,6 +39,8 @@ interface DocumentCanvasProps {
   rebuilding: boolean;
   /** Instruction text shown while AI regeneration is in progress */
   regenInstruction?: string;
+  /** Current phase of regeneration: 'ai_thinking' | 'rebuilding' | '' */
+  regenPhase?: string;
   token: string | null;
   /** Live agent activity during generation */
   agentActivity?: AgentActivity[];
@@ -85,6 +87,7 @@ export default function DocumentCanvas({
   streaming,
   rebuilding,
   regenInstruction,
+  regenPhase,
   token,
   t,
   agentActivity,
@@ -340,7 +343,9 @@ export default function DocumentCanvas({
               <div className="flex items-center gap-2.5 px-4 py-2.5 bg-primary/8 border-b border-primary/15 shrink-0 z-10">
                 <span className="material-symbols-outlined text-primary text-base animate-spin">progress_activity</span>
                 <div className="flex-1 min-w-0">
-                  <span className="text-xs font-medium text-primary">AI 重生成中</span>
+                  <span className="text-xs font-medium text-primary">
+                    {regenPhase === 'patching' ? '套用變更中...' : regenPhase === 'rebuilding' ? '重建文件中...' : 'AI 修改中...'}
+                  </span>
                   <p className="text-[11px] text-on-surface-variant truncate mt-0.5">{regenInstruction}</p>
                 </div>
               </div>
@@ -518,7 +523,9 @@ export default function DocumentCanvas({
         <div className="flex items-center gap-2.5 px-4 py-2.5 bg-primary/8 border-b border-primary/15 shrink-0">
           <span className="material-symbols-outlined text-primary text-base animate-spin">progress_activity</span>
           <div className="flex-1 min-w-0">
-            <span className="text-xs font-medium text-primary">AI 重生成中</span>
+            <span className="text-xs font-medium text-primary">
+              {regenPhase === 'patching' ? '套用變更中...' : regenPhase === 'rebuilding' ? '重建文件中...' : 'AI 修改中...'}
+            </span>
             <p className="text-[11px] text-on-surface-variant truncate mt-0.5">{regenInstruction}</p>
           </div>
         </div>
