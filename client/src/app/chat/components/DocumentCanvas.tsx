@@ -365,10 +365,14 @@ export default function DocumentCanvas({
     }
   }, [token, fileId, previewBlobUrl]);
 
-  // Load preview when fileId is available
+  // Load preview when fileId is available; reset state for new file
   useEffect(() => {
     if (fileId) {
       loadPreview();
+      setSelectedPageIndex(0);
+      setSelectedShapeId(null);
+      setSelectedElement(null);
+      setHoveredShapeName(null);
     }
   }, [fileId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -393,8 +397,11 @@ export default function DocumentCanvas({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch PPTX shape data for overlay (only for PDF-based slides, not HTML)
+  const hasBlocks = blocks.length > 0;
   useEffect(() => {
-    if (!token || !fileId || layoutType !== 'slides' || blocks.length === 0) return;
+    if (!token || !fileId || layoutType !== 'slides' || !hasBlocks) return;
+    // Reset shapes when switching files
+    setSlideShapes({});
     (async () => {
       try {
         const res = await fetch(`${SSE_BASE}/api/files/${fileId}/shapes`, {
@@ -411,7 +418,7 @@ export default function DocumentCanvas({
         // Shapes are optional — silently fail
       }
     })();
-  }, [token, fileId, layoutType]);
+  }, [token, fileId, layoutType, hasBlocks]);
 
   // Reset shape selection when switching slides
   useEffect(() => {
