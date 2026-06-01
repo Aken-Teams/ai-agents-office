@@ -9,6 +9,8 @@ import DocBlockPreview from '../../editor/renderers/DocBlockPreview';
 import SheetBlockPreview from '../../editor/renderers/SheetBlockPreview';
 import SlideElementPanel from './SlideElementPanel';
 import DocElementPanel from './DocElementPanel';
+import SheetTableView, { type CellRef, type CellRange } from './SheetTableView';
+import SheetElementPanel from './SheetElementPanel';
 import type { ShapeRect } from './SlideShapeOverlay';
 
 const PdfSlideThumbs = dynamic(() => import('./PdfSlideThumbs'), { ssr: false });
@@ -322,6 +324,8 @@ export default function DocumentCanvas({
   const [showRebuildConfirm, setShowRebuildConfirm] = useState(false);
   const [docPageCount, setDocPageCount] = useState(0);
   const [docPageTexts, setDocPageTexts] = useState<string[]>([]);
+  const [selectedCell, setSelectedCell] = useState<CellRef | null>(null);
+  const [selectedRange, setSelectedRange] = useState<CellRange | null>(null);
   const previewKeyRef = useRef(0);
   const visibleCount = useStaggerReveal(blocks.length);
 
@@ -796,7 +800,137 @@ export default function DocumentCanvas({
     );
   }
 
-  // Doc / Sheet / Webapp layout: vertical block list with optional preview
+  // Sheet layout: tab bar + interactive table + element panel
+  if (layoutType === 'sheet') {
+    const selectedSheetBlock = blocks.find(b => b.id === selectedBlockId) || blocks[0];
+    const selectedSheetIndex = selectedSheetBlock ? blocks.findIndex(b => b.id === selectedSheetBlock.id) : 0;
+
+    const handleCellEdit = (row: number, col: number, value: string | number) => {
+      if (!selectedSheetBlock) return;
+      const rows = [...((selectedSheetBlock.data.rows as any[][]) || [])];
+      if (!rows[row]) return;
+      const newRow = [...rows[row]];
+      newRow[col] = value;
+      rows[row] = newRow;
+      onUpdateBlock?.(selectedSheetBlock.id, 'rows', rows);
+    };
+
+    return (
+      <><div className="flex-1 flex flex-col min-w-0 bg-surface">
+        {/* Toolbar */}
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-outline-variant/10 bg-surface-container/30 shrink-0">
+          <div className="flex-1 min-w-0">
+            {title && <div className="text-sm font-semibold text-on-surface truncate">{title}</div>}
+            <div className="text-[10px] text-on-surface-variant uppercase tracking-wider">
+              {docType || 'xlsx'} · {blocks.length} {blocks.length === 1 ? 'sheet' : 'sheets'}
+            </div>
+          </div>
+          <button
+            onClick={() => setShowRebuildConfirm(true)}
+            disabled={rebuilding || blocks.length === 0}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:bg-primary-hover transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+          >
+            {rebuilding ? (
+              <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+            ) : (
+              <span className="material-symbols-outlined text-sm">build</span>
+            )}
+            {t('chat.docMode.rebuild')}
+          </button>
+          <button
+            onClick={onDownload}
+            className="p-1.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
+            title={t('chat.docMode.download')}
+          >
+            <span className="material-symbols-outlined text-on-surface-variant text-lg">download</span>
+          </button>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-on-surface-variant text-lg">close</span>
+          </button>
+        </div>
+
+        {/* AI regeneration banner */}
+        {regenInstruction && (
+          <div className="flex items-center gap-2.5 px-4 py-2.5 bg-primary/8 border-b border-primary/15 shrink-0">
+            <span className="material-symbols-outlined text-primary text-base animate-spin">progress_activity</span>
+            <div className="flex-1 min-w-0">
+              <span className="text-xs font-medium text-primary">
+                {regenPhase === 'rebuilding' ? 'AI 重新產生中...' : 'AI 修改中...'}
+              </span>
+              <p className="text-[11px] text-on-surface-variant truncate mt-0.5">{regenInstruction}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Sheet tabs */}
+        {blocks.length > 1 && (
+          <div className="flex items-center border-b border-outline-variant/10 bg-surface-container/20 px-2 overflow-x-auto shrink-0">
+            {blocks.map((block, i) => {
+              const name = (block.data.name as string) || (block.data.title as string) || (block.data.sheetName as string) || `Sheet ${i + 1}`;
+              const active = selectedSheetBlock?.id === block.id;
+              return (
+                <button
+                  key={block.id}
+                  onClick={() => {
+                    onSelectBlock(block.id);
+                    setSelectedCell(null);
+                    setSelectedRange(null);
+                  }}
+                  className={`px-3 py-1.5 text-xs whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
+                    active
+                      ? 'border-primary text-primary font-semibold bg-surface'
+                      : 'border-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/40'
+                  }`}
+                >
+                  {name}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Main table area */}
+        {selectedSheetBlock ? (
+          <SheetTableView
+            block={selectedSheetBlock}
+            sheetIndex={selectedSheetIndex}
+            selectedCell={selectedCell}
+            selectedRange={selectedRange}
+            onSelectCell={setSelectedCell}
+            onSelectRange={setSelectedRange}
+            onCellEdit={handleCellEdit}
+          />
+        ) : streaming ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3">
+            <span className="material-symbols-outlined text-4xl text-primary animate-spin">progress_activity</span>
+            <span className="text-sm text-on-surface-variant">{t('chat.docMode.generating')}</span>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-on-surface-variant/30">
+            <span className="material-symbols-outlined text-5xl">table_chart</span>
+          </div>
+        )}
+
+        {/* Bottom panel */}
+        {selectedSheetBlock && (
+          <SheetElementPanel
+            block={selectedSheetBlock}
+            sheetIndex={selectedSheetIndex}
+            selectedCell={selectedCell}
+            selectedRange={selectedRange}
+            onSaveField={(blockId, key, value) => onUpdateBlock?.(blockId, key, value)}
+            onAiEdit={(blockId, ctx) => onRegenerate(blockId, ctx)}
+            t={t}
+          />
+        )}
+      </div>{rebuildModal}</>
+    );
+  }
+
+  // Doc layout: vertical block list with optional preview
   return (
     <>
     <div className="flex-1 flex flex-col min-w-0 bg-surface">

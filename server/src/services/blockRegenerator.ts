@@ -59,7 +59,8 @@ export async function regenerateBlock(
   // Build surrounding blocks summary for context
   const pageIndex = blocks.findIndex(b => b.id === blockId);
   const isDocx = blockRecord.doc_type === 'docx' || blockRecord.doc_type === 'pdf';
-  const blockLabel = isDocx ? 'SECTION' : 'SLIDE';
+  const isXlsx = blockRecord.doc_type === 'xlsx';
+  const blockLabel = isDocx ? 'SECTION' : isXlsx ? 'SHEET' : 'SLIDE';
   const surroundingSummary = blocks
     .map((b, i) => {
       const t = (b.data as any).title || (b.data as any).heading || '';
@@ -68,10 +69,12 @@ export async function regenerateBlock(
     })
     .join('\n');
 
-  // Build a focused prompt — different for DOCX vs PPTX
+  // Build a focused prompt — different for DOCX vs XLSX vs PPTX
   const systemPrompt = isDocx
     ? buildDocxRegenPrompt(meta, targetBlock, pageIndex, blocks.length)
-    : buildPptxRegenPrompt(blockRecord.doc_type, meta, targetBlock, pageIndex, blocks.length);
+    : isXlsx
+      ? buildXlsxRegenPrompt(meta, targetBlock, pageIndex, blocks.length)
+      : buildPptxRegenPrompt(blockRecord.doc_type, meta, targetBlock, pageIndex, blocks.length);
 
   // Parse metadata prefixes out of instruction so they don't confuse the AI
   let cleanInstruction = instruction;
@@ -95,9 +98,20 @@ export async function regenerateBlock(
     targetElement = sectionCtxMatch[2]?.trim() || '';
     cleanInstruction = cleanInstruction.slice(sectionCtxMatch[0].length);
   }
+  // Handle [工作表: SheetName] [選取: A1:C5] format from SheetElementPanel
+  const sheetCtxMatch = cleanInstruction.match(/^\[工作表:\s*([^\]]+)\]\s*/);
+  if (sheetCtxMatch) {
+    shapesContext = sheetCtxMatch[1].trim();
+    cleanInstruction = cleanInstruction.slice(sheetCtxMatch[0].length);
+  }
+  const cellRefMatch = cleanInstruction.match(/^\[選取:\s*([^\]]+)\]\s*/);
+  if (cellRefMatch) {
+    targetElement = cellRefMatch[1].trim();
+    cleanInstruction = cleanInstruction.slice(cellRefMatch[0].length);
+  }
 
-  const dataLabel = isDocx ? 'Current section data' : 'Current slide data';
-  const returnLabel = isDocx ? 'Return the updated section JSON only.' : 'Return the updated slide JSON only.';
+  const dataLabel = isDocx ? 'Current section data' : isXlsx ? 'Current sheet data' : 'Current slide data';
+  const returnLabel = isDocx ? 'Return the updated section JSON only.' : isXlsx ? 'Return the updated sheet JSON only.' : 'Return the updated slide JSON only.';
 
   const userMessageParts = [
     `Document outline:`,
@@ -261,6 +275,43 @@ export async function regenerateBlock(
       }
     });
   });
+}
+
+/** Build system prompt for XLSX block regeneration */
+function buildXlsxRegenPrompt(
+  meta: any, targetBlock: DocumentBlock, pageIndex: number, totalBlocks: number,
+): string {
+  return [
+    'You are a professional spreadsheet editor. You edit a single sheet\'s JSON data for an Excel workbook to fulfill the user\'s request.',
+    '',
+    `Workbook: "${meta.title || 'Untitled'}"`,
+    `Sheet: "${(targetBlock.data as any).name || `Sheet ${pageIndex + 1}`}"`,
+    `Sheet position: #${pageIndex + 1} of ${totalBlocks}`,
+    '',
+    'CRITICAL: Your entire response must be a single valid JSON object. No text, no markdown, no explanation.',
+    '',
+    '## SHEET STRUCTURE',
+    'A sheet contains these fields:',
+    '- name: Sheet tab name (string)',
+    '- headers: Column headers (string[])',
+    '- rows: Data rows — array of arrays, each inner array is one row matching headers order',
+    '- summary: Brief description of the sheet content (string, optional)',
+    '',
+    '## DATA QUALITY RULES',
+    '- Keep data types consistent within columns (all numbers, all strings, all dates).',
+    '- When adding formulas or calculations, represent them as computed values (not Excel formula syntax).',
+    '- Maintain column count consistency: every row must have the same number of cells as headers.',
+    '- For numerical corrections: recalculate totals, averages, percentages as needed.',
+    '- Preserve existing data unless explicitly asked to change it.',
+    '- Use realistic, professional data.',
+    '- Dates should use ISO format (YYYY-MM-DD) or locale-appropriate format.',
+    '',
+    '## TARGETED EDITING',
+    'When a cell reference is specified (e.g., B3 or A1:C10):',
+    '- ONLY modify cells within that range.',
+    '- Keep all other cells and headers unchanged.',
+    'When no target is specified, you may modify the entire sheet structure.',
+  ].join('\n');
 }
 
 /** Build system prompt for DOCX block regeneration */
