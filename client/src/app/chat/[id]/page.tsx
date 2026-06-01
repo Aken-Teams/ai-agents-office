@@ -553,6 +553,7 @@ function ChatContent() {
   const [docSlideShapes, setDocSlideShapes] = useState<Array<{ name: string; type: string }>>([]); // shapes on current slide
   const [docChatCollapsed, setDocChatCollapsed] = useState(false); // collapse left chat in doc mode
   const [docChatWidth, setDocChatWidth] = useState(33); // chat panel width % in doc mode
+  const [mobileDocView, setMobileDocView] = useState<'preview' | 'chat'>('preview'); // mobile: toggle chat vs preview
   const docDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const fileGenInRoundRef = useRef(false); // track if file was generated this round
 
@@ -923,6 +924,7 @@ function ChatContent() {
     // If this conversation uses a file-gen skill, enter document mode immediately
     if (skillId && FILE_GEN_SKILLS.has(skillId)) {
       docMode.enterDocumentMode(skillId);
+      setMobileDocView('preview'); // mobile: show preview when entering doc mode
     }
 
     // Document mode: detect whether message is a QUESTION (→ chat) or EDIT request (→ regeneration)
@@ -1489,7 +1491,11 @@ function ChatContent() {
         <section
           className={`flex flex-col min-h-0 min-w-0 transition-all duration-300 ${
             docMode.viewMode === 'document'
-              ? docChatCollapsed ? 'w-0 overflow-hidden' : 'min-w-[280px]'
+              ? docChatCollapsed
+                ? 'w-0 overflow-hidden'
+                : mobileDocView === 'preview'
+                  ? 'hidden sm:flex min-w-[280px]'
+                  : 'flex-1 sm:flex min-w-[280px]'
               : 'flex-1'
           }`}
           style={docMode.viewMode === 'document' && !docChatCollapsed ? { width: `${docChatWidth}%` } : undefined}
@@ -1509,6 +1515,16 @@ function ChatContent() {
               </span>
             )}
             <span className="flex-1" />
+            {/* Mobile: switch to preview in doc mode */}
+            {docMode.viewMode === 'document' && mobileDocView === 'chat' && (
+              <button
+                onClick={() => setMobileDocView('preview')}
+                className="sm:hidden p-1 text-on-surface-variant active:text-primary transition-colors bg-transparent cursor-pointer shrink-0"
+                title="切換至預覽"
+              >
+                <span className="material-symbols-outlined text-sm">visibility</span>
+              </button>
+            )}
             {/* Document mode toggle */}
             {files.length > 0 && docMode.viewMode === 'chat' && (
               <button
@@ -2435,9 +2451,9 @@ function ChatContent() {
           </div>
         )}
 
-        {/* === Resizable Divider (between chat & canvas in doc mode) === */}
+        {/* === Resizable Divider (between chat & canvas in doc mode) — desktop only === */}
         {docMode.viewMode === 'document' && (
-          <div className="relative flex-shrink-0 group z-10">
+          <div className="relative flex-shrink-0 group z-10 hidden sm:block">
             {/* Drag handle */}
             <div
               className="w-1 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
@@ -2483,6 +2499,7 @@ function ChatContent() {
 
         {/* === Document Canvas (right side in document mode) === */}
         {docMode.viewMode === 'document' && (
+          <div className={`flex-1 flex min-w-0 ${mobileDocView === 'chat' ? 'hidden sm:flex' : 'flex'}`}>
           <DocumentCanvas
             layoutType={docMode.docLayoutType || 'slides'}
             fileId={docMode.documentFileId}
@@ -2534,8 +2551,10 @@ function ChatContent() {
             agentActivity={tools}
             onElementSelect={setDocSelectedElement}
             onShapesAvailable={setDocSlideShapes}
+            onMobileSwitchToChat={() => setMobileDocView('chat')}
             t={t}
           />
+          </div>
         )}
 
         {/* === Right Sidebar (only in chat mode) === */}

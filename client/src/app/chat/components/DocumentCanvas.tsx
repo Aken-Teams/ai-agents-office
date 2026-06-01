@@ -51,6 +51,8 @@ interface DocumentCanvasProps {
   onElementSelect?: (elementKey: string | null) => void;
   /** Callback when slide shapes are available for the current page */
   onShapesAvailable?: (shapes: Array<{ name: string; type: string }>) => void;
+  /** Mobile: switch to chat view */
+  onMobileSwitchToChat?: () => void;
   t: (key: any, params?: Record<string, string | number>) => string;
 }
 
@@ -311,6 +313,7 @@ export default function DocumentCanvas({
   agentActivity,
   onElementSelect,
   onShapesAvailable,
+  onMobileSwitchToChat,
 }: DocumentCanvasProps) {
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [previewType, setPreviewType] = useState<'html' | 'pdf' | 'other'>('html');
@@ -598,22 +601,31 @@ export default function DocumentCanvas({
             className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:bg-primary-hover transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
           >
             {rebuilding ? (
-              <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+              <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
             ) : (
               <span className="material-symbols-outlined text-sm">build</span>
             )}
             <span className="hidden sm:inline">{t('chat.docMode.rebuild')}</span>
           </button>
+          {onMobileSwitchToChat && (
+            <button
+              onClick={onMobileSwitchToChat}
+              className="sm:hidden p-1 rounded hover:bg-surface-container transition-colors cursor-pointer shrink-0"
+              title="切換至對話"
+            >
+              <span className="material-symbols-outlined text-on-surface-variant text-sm">chat</span>
+            </button>
+          )}
           <button
             onClick={onDownload}
             className="p-1.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
             title={t('chat.docMode.download')}
           >
-            <span className="material-symbols-outlined text-on-surface-variant text-lg">download</span>
+            <span className="material-symbols-outlined text-on-surface-variant text-sm">download</span>
           </button>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
+            className="hidden sm:block p-1.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
           >
             <span className="material-symbols-outlined text-on-surface-variant text-lg">close</span>
           </button>
@@ -942,22 +954,31 @@ export default function DocumentCanvas({
             className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:bg-primary-hover transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
           >
             {rebuilding ? (
-              <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+              <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
             ) : (
               <span className="material-symbols-outlined text-sm">build</span>
             )}
             <span className="hidden sm:inline">{t('chat.docMode.rebuild')}</span>
           </button>
+          {onMobileSwitchToChat && (
+            <button
+              onClick={onMobileSwitchToChat}
+              className="sm:hidden p-1 rounded hover:bg-surface-container transition-colors cursor-pointer shrink-0"
+              title="切換至對話"
+            >
+              <span className="material-symbols-outlined text-on-surface-variant text-sm">chat</span>
+            </button>
+          )}
           <button
             onClick={onDownload}
             className="p-1.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
             title={t('chat.docMode.download')}
           >
-            <span className="material-symbols-outlined text-on-surface-variant text-lg">download</span>
+            <span className="material-symbols-outlined text-on-surface-variant text-sm">download</span>
           </button>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
+            className="hidden sm:block p-1.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
           >
             <span className="material-symbols-outlined text-on-surface-variant text-lg">close</span>
           </button>
@@ -1059,22 +1080,31 @@ export default function DocumentCanvas({
           className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:bg-primary-hover transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
           {rebuilding ? (
-            <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+            <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
           ) : (
             <span className="material-symbols-outlined text-sm">build</span>
           )}
           <span className="hidden sm:inline">{t('chat.docMode.rebuild')}</span>
         </button>
+        {onMobileSwitchToChat && (
+          <button
+            onClick={onMobileSwitchToChat}
+            className="sm:hidden p-1 rounded hover:bg-surface-container transition-colors cursor-pointer shrink-0"
+            title="切換至對話"
+          >
+            <span className="material-symbols-outlined text-on-surface-variant text-sm">chat</span>
+          </button>
+        )}
         <button
           onClick={onDownload}
           className="p-1.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
           title={t('chat.docMode.download')}
         >
-          <span className="material-symbols-outlined text-on-surface-variant text-lg">download</span>
+          <span className="material-symbols-outlined text-on-surface-variant text-sm">download</span>
         </button>
         <button
           onClick={onClose}
-          className="p-1.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
+          className="hidden sm:block p-1.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
         >
           <span className="material-symbols-outlined text-on-surface-variant text-lg">close</span>
         </button>
