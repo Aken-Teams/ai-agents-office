@@ -52,15 +52,73 @@ router.get('/:fileId', async (req: Request, res: Response) => {
     return;
   }
 
+  // Fix xlsx blocks with missing rows: re-extract from the actual .xlsx file
+  if (record.doc_type === 'xlsx') {
+    const blocks: DocumentBlock[] = JSON.parse(record.blocks);
+    const needsFix = blocks.length > 0 && blocks.some(b => {
+      const headers = (b.data as any).headers as any[] | undefined;
+      const rows = (b.data as any).rows as any[][] | undefined;
+      // No rows at all
+      if (!rows || (Array.isArray(rows) && rows.length === 0)) return true;
+      if (!Array.isArray(rows)) return false;
+      // Object values (formula cells stored as { formula, result })
+      if (rows.some((row: any[]) => Array.isArray(row) && row.some(cell => cell !== null && typeof cell === 'object')
+      )) return true;
+      // Columns that are ALL null while other columns have data (= uncomputed formulas)
+      if (headers && headers.length > 0 && rows.length > 1) {
+        for (let c = 0; c < headers.length; c++) {
+          const allNull = rows.every(row => Array.isArray(row) && (row[c] == null || row[c] === ''));
+          const otherColsHaveData = rows.some(row => Array.isArray(row) && row.some((cell, ci) => ci !== c && cell != null && cell !== ''));
+          if (allNull && otherColsHaveData) return true;
+        }
+      }
+      return false;
+    });
+    if (needsFix) {
+      const fileRecord = await dbGet<GeneratedFile>(
+        'SELECT * FROM generated_files WHERE id = ? AND user_id = ?',
+        fileId, userId
+      );
+      if (fileRecord) {
+        const filePath = path.join(config.workspaceRoot, fileRecord.file_path);
+        try {
+          const { extractBlocksFromXlsx } = await import('../services/fileManager.js');
+          const extracted = await extractBlocksFromXlsx(filePath);
+          if (extracted && extracted.length > 0) {
+            // Merge: keep existing block ids but use extracted data
+            const fixedBlocks = blocks.map((b, i) => {
+              const source = extracted[i];
+              if (source) {
+                return { ...b, data: { ...b.data, ...source.data } };
+              }
+              return b;
+            });
+            await dbRun(
+              'UPDATE document_blocks SET blocks = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+              JSON.stringify(fixedBlocks), record.id
+            );
+            console.log(`[Blocks] Fixed ${fixedBlocks.length} xlsx blocks (missing/broken data) for file ${fileId}`);
+            record = await dbGet<DocumentBlocksRecord>(
+              'SELECT * FROM document_blocks WHERE file_id = ? AND user_id = ?',
+              fileId, userId
+            );
+          }
+        } catch (err) {
+          console.error('[Blocks] Failed to fix xlsx blocks:', err);
+        }
+      }
+    }
+  }
+
   res.json({
-    id: record.id,
-    fileId: record.file_id,
-    docType: record.doc_type,
-    meta: record.doc_meta ? JSON.parse(record.doc_meta) : {},
-    blocks: JSON.parse(record.blocks) as DocumentBlock[],
-    version: record.version,
-    createdAt: record.created_at,
-    updatedAt: record.updated_at,
+    id: record!.id,
+    fileId: record!.file_id,
+    docType: record!.doc_type,
+    meta: record!.doc_meta ? JSON.parse(record!.doc_meta) : {},
+    blocks: JSON.parse(record!.blocks) as DocumentBlock[],
+    version: record!.version,
+    createdAt: record!.created_at,
+    updatedAt: record!.updated_at,
   });
 });
 
