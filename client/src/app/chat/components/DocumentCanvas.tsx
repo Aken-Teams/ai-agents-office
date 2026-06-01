@@ -388,9 +388,9 @@ export default function DocumentCanvas({
     return () => { if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch PPTX shape data for overlay
+  // Fetch PPTX shape data for overlay (only for PDF-based slides, not HTML)
   useEffect(() => {
-    if (!token || !fileId || layoutType !== 'slides') return;
+    if (!token || !fileId || layoutType !== 'slides' || blocks.length === 0) return;
     (async () => {
       try {
         const res = await fetch(`${SSE_BASE}/api/files/${fileId}/shapes`, {
@@ -574,7 +574,7 @@ export default function DocumentCanvas({
           <div className="flex-1 min-w-0">
             {title && <div className="text-sm font-semibold text-on-surface truncate">{title}</div>}
             <div className="text-[10px] text-on-surface-variant uppercase tracking-wider">
-              {docType || 'slides'} · {totalPages || blocks.length} {t('editor.blocks')}
+              {docType || 'slides'}{blocks.length > 0 ? ` · ${totalPages || blocks.length} ${t('editor.blocks')}` : ' · interactive'}
             </div>
           </div>
           <button
@@ -606,39 +606,40 @@ export default function DocumentCanvas({
 
         {/* Main content area */}
         <div className="flex-1 flex min-h-0">
-          {/* Thumbnail strip (left) — real PDF page thumbnails */}
-          <div className="w-36 lg:w-44 border-r border-outline-variant/10 overflow-y-auto p-2 shrink-0 bg-surface-container/20">
-            {streaming && !previewBlobUrl && (
-              <div className="space-y-2">
-                {[1, 2, 3, 4].map(i => (
-                  <div key={i} className="aspect-[16/9] rounded-lg bg-surface-container border border-outline-variant/10 overflow-hidden relative">
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-shimmer" />
-                    <div className="p-2 space-y-1.5">
-                      <div className="h-2 w-3/5 rounded bg-on-surface/6" />
-                      <div className="h-1.5 w-4/5 rounded bg-on-surface/4" />
-                      <div className="h-1.5 w-2/3 rounded bg-on-surface/4" />
+          {/* Thumbnail strip (left) — only for PDF-based previews (PPTX) */}
+          {previewType === 'pdf' && (
+            <div className="w-36 lg:w-44 border-r border-outline-variant/10 overflow-y-auto p-2 shrink-0 bg-surface-container/20">
+              {streaming && !previewBlobUrl && (
+                <div className="space-y-2">
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="aspect-[16/9] rounded-lg bg-surface-container border border-outline-variant/10 overflow-hidden relative">
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-shimmer" />
+                      <div className="p-2 space-y-1.5">
+                        <div className="h-2 w-3/5 rounded bg-on-surface/6" />
+                        <div className="h-1.5 w-4/5 rounded bg-on-surface/4" />
+                        <div className="h-1.5 w-2/3 rounded bg-on-surface/4" />
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {previewBlobUrl && (
-              <PdfSlideThumbs
-                pdfUrl={previewBlobUrl}
-                slideCount={blocks.length || undefined}
-                selectedIndex={selectedPageIndex}
-                onSelect={(index) => {
-                  setSelectedPageIndex(index);
-                  // Also select corresponding block if available
-                  if (blocks[index]) {
-                    onSelectBlock(blocks[index].id);
-                  }
-                }}
-              />
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+              {previewBlobUrl && (
+                <PdfSlideThumbs
+                  pdfUrl={previewBlobUrl}
+                  slideCount={blocks.length || undefined}
+                  selectedIndex={selectedPageIndex}
+                  onSelect={(index) => {
+                    setSelectedPageIndex(index);
+                    if (blocks[index]) {
+                      onSelectBlock(blocks[index].id);
+                    }
+                  }}
+                />
+              )}
+            </div>
+          )}
 
-          {/* Main preview (right) — rendered PDF page via pdf.js */}
+          {/* Main preview — PDF page viewer (PPTX) or full-width iframe (HTML slides) */}
           <div className="flex-1 flex flex-col min-w-0 relative">
             {/* AI regeneration in-progress banner */}
             {regenInstruction && (
@@ -687,8 +688,8 @@ export default function DocumentCanvas({
                 src={previewBlobUrl}
                 className="flex-1 w-full border-0 bg-white"
                 title="Document Preview"
-                sandbox="allow-scripts allow-same-origin"
-                tabIndex={-1}
+                sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
+                tabIndex={0}
               />
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-surface-container/30">
@@ -740,8 +741,8 @@ export default function DocumentCanvas({
               </div>
             )}
 
-            {/* Selected shape/element info bar */}
-            {(selectedBlockId || selectedShapeId) && (
+            {/* Selected shape/element info bar (only when blocks exist — not for HTML slides) */}
+            {blocks.length > 0 && (selectedBlockId || selectedShapeId) && (
               <div className="flex items-center gap-2 px-4 py-2 border-t border-outline-variant/10 bg-surface-container/30 shrink-0">
                 <span className="material-symbols-outlined text-primary text-sm">edit_note</span>
                 <span className="text-xs text-on-surface-variant flex-1 min-w-0">
