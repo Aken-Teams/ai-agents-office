@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbRun } from '../db.js';
 import { spawnClaude } from './claudeCli.js';
 import { patchBlockInPlace } from './fileRebuilder.js';
-import { agentRebuild } from './agentRebuilder.js';
+import { agentRebuildSlide } from './agentRebuilder.js';
 import type { DocumentBlocksRecord, DocumentBlock, GeneratedFile } from '../types.js';
 
 export type RegenEvent =
@@ -239,35 +239,26 @@ export async function regenerateBlock(
 
           let newFile: GeneratedFile | null = null;
           if (!patched) {
-            // Non-patchable fields changed (e.g. colors, chart, kpis) → agent rebuild
-            // Uses the full pptx-gen worker for same quality as left-side chat
-            console.log(`[BlockRegenerator] In-place patch not supported, triggering agent rebuild...`);
+            // Non-patchable fields changed (e.g. colors, chart, kpis) → agent single-slide rebuild
+            // Spawns pptx-gen worker for this ONE slide (same quality as left-side chat)
+            // then splices the generated slide into the original PPTX
+            console.log(`[BlockRegenerator] In-place patch not supported, triggering agent single-slide rebuild...`);
             send({ type: 'rebuilding' });
             try {
-              const result = await agentRebuild(fileId, userId, (ev) => {
-                // Forward agent events to the regen SSE stream
-                if (ev.type === 'agent_text') send({ type: 'agent_text', data: ev.data });
-                else if (ev.type === 'agent_tool') send({ type: 'agent_tool', data: ev.data });
-              });
-              if (result) {
-                newFile = result.file;
-                // Agent may have re-captured blocks — update local reference
-                const updatedBlocks = result.blocks;
-                const updatedTarget = updatedBlocks.find(b => b.id === blockId) || targetBlock;
-                updatedTarget.status = 'idle';
-                await dbRun(
-                  'UPDATE document_blocks SET blocks = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                  JSON.stringify(updatedBlocks), blockRecord.id,
-                );
-                send({ type: 'done', data: { block: updatedTarget, blocks: updatedBlocks } });
-                resolved = true;
-                resolve({ updatedBlock: updatedTarget, newFile });
-                return;
+              newFile = await agentRebuildSlide(
+                fileId, userId, targetBlock.order, updatedData, meta, blocks,
+                (ev) => {
+                  if (ev.type === 'agent_text') send({ type: 'agent_text', data: ev.data });
+                  else if (ev.type === 'agent_tool') send({ type: 'agent_tool', data: ev.data });
+                },
+              );
+              if (newFile) {
+                console.log(`[BlockRegenerator] Agent single-slide rebuild successful: slide ${targetBlock.order + 1}`);
               } else {
-                console.warn(`[BlockRegenerator] Agent rebuild returned null — block data updated in DB only.`);
+                console.warn(`[BlockRegenerator] Agent single-slide rebuild returned null — block data updated in DB only.`);
               }
             } catch (rebuildErr) {
-              console.error(`[BlockRegenerator] Agent rebuild failed:`, rebuildErr);
+              console.error(`[BlockRegenerator] Agent single-slide rebuild failed:`, rebuildErr);
             }
           }
 

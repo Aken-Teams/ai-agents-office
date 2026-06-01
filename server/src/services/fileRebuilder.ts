@@ -178,6 +178,159 @@ export async function rebuildFile(fileId: string, userId: string): Promise<Gener
 }
 
 // ---------------------------------------------------------------------------
+// Single-slide rebuild — regenerate ONE slide and splice it into the PPTX
+// Used by blockRegenerator for non-patchable changes (colors, charts, etc.)
+// Only modifies the target slide; all other slides stay untouched.
+// ---------------------------------------------------------------------------
+
+/**
+ * Rebuild a single slide by generating a 1-slide PPTX with the shared generator
+ * (which applies resolveSlideStyle for per-slide color overrides), then splicing
+ * the generated slide XML into the original PPTX.
+ *
+ * Returns true if successful, false if not supported.
+ */
+export async function rebuildSingleSlide(
+  fileId: string,
+  userId: string,
+  slideIndex: number,
+  slideData: Record<string, unknown>,
+  docMeta: Record<string, unknown>,
+): Promise<GeneratedFile | null> {
+  const fileRecord = await dbGet<GeneratedFile>(
+    'SELECT * FROM generated_files WHERE id = ? AND user_id = ?',
+    fileId, userId,
+  );
+  if (!fileRecord) return null;
+
+  const blockRecord = await dbGet<DocumentBlocksRecord>(
+    'SELECT * FROM document_blocks WHERE file_id = ? AND user_id = ?',
+    fileId, userId,
+  );
+  if (!blockRecord) return null;
+
+  const originalFilePath = path.join(config.workspaceRoot, fileRecord.file_path);
+  if (!fs.existsSync(originalFilePath)) return null;
+
+  // 1. Create temporary input.json with just the target slide
+  const sandboxPath = path.join(config.workspaceRoot, userId, blockRecord.conversation_id);
+  const tmpDir = path.join(sandboxPath, '_tmp_slide_rebuild');
+  fs.mkdirSync(tmpDir, { recursive: true });
+
+  const tmpInputPath = path.join(tmpDir, 'input.json');
+  const tmpOutputPath = path.join(tmpDir, 'output.pptx');
+
+  const tmpInput = {
+    ...docMeta,
+    slides: [{ type: slideData.type, ...slideData }],
+  };
+  fs.writeFileSync(tmpInputPath, JSON.stringify(tmpInput, null, 2), 'utf-8');
+
+  // 2. Run the shared generator to produce a 1-slide PPTX
+  const scriptPath = path.join(config.generatorsDir, 'generate-pptx.ts');
+  const nodeModulesDir = path.join(config.rootDir, 'server', 'node_modules');
+  const tsxBin = path.join(config.rootDir, 'server', 'node_modules', '.bin', 'tsx');
+
+  try {
+    const cmd = `"${tsxBin}" "${scriptPath}" "input.json" "output.pptx"`;
+    await execAsync(cmd, {
+      cwd: tmpDir,
+      env: { ...process.env, NODE_PATH: nodeModulesDir },
+      timeout: 30_000,
+    });
+  } catch (err: any) {
+    console.error('[FileRebuilder] Single-slide generator failed:', err.stderr || err.message);
+    cleanup(tmpDir);
+    return null;
+  }
+
+  if (!fs.existsSync(tmpOutputPath)) {
+    console.error('[FileRebuilder] Single-slide output not found');
+    cleanup(tmpDir);
+    return null;
+  }
+
+  // 3. Extract slide1.xml from the 1-slide PPTX
+  try {
+    const tmpData = fs.readFileSync(tmpOutputPath);
+    const tmpZip = await JSZip.loadAsync(tmpData);
+    const newSlideXml = await tmpZip.file('ppt/slides/slide1.xml')?.async('text');
+    if (!newSlideXml) throw new Error('No slide1.xml in generated PPTX');
+
+    // Also extract slide1 rels if present
+    const newSlideRels = await tmpZip.file('ppt/slides/_rels/slide1.xml.rels')?.async('text') || null;
+
+    // 4. Splice into original PPTX
+    const origData = fs.readFileSync(originalFilePath);
+    const origZip = await JSZip.loadAsync(origData);
+
+    // Find slide files and sort by number
+    const slideFiles: string[] = [];
+    origZip.forEach((p) => {
+      if (/^ppt\/slides\/slide\d+\.xml$/.test(p)) slideFiles.push(p);
+    });
+    slideFiles.sort((a, b) => {
+      const na = parseInt(a.match(/slide(\d+)/)?.[1] || '0');
+      const nb = parseInt(b.match(/slide(\d+)/)?.[1] || '0');
+      return na - nb;
+    });
+
+    if (slideIndex >= slideFiles.length) {
+      console.error(`[FileRebuilder] Slide index ${slideIndex} out of range (${slideFiles.length} slides)`);
+      cleanup(tmpDir);
+      return null;
+    }
+
+    const targetSlideFile = slideFiles[slideIndex];
+    const targetSlideNum = targetSlideFile.match(/slide(\d+)/)?.[1] || '1';
+
+    // Replace the slide XML
+    origZip.file(targetSlideFile, newSlideXml);
+    console.log(`[FileRebuilder] Replaced ${targetSlideFile} with regenerated slide`);
+
+    // Replace rels if the new slide has them
+    if (newSlideRels) {
+      const targetRelsFile = `ppt/slides/_rels/slide${targetSlideNum}.xml.rels`;
+      origZip.file(targetRelsFile, newSlideRels);
+    }
+
+    // Write updated PPTX
+    const output = await origZip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+    fs.writeFileSync(originalFilePath, output);
+
+    // Update file size
+    const newSize = fs.statSync(originalFilePath).size;
+    await dbRun(
+      'UPDATE generated_files SET file_size = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?',
+      newSize, fileId,
+    );
+
+    // Invalidate preview cache
+    const dir = path.dirname(originalFilePath);
+    const basename = path.basename(fileRecord.filename, path.extname(fileRecord.filename));
+    for (const cacheDir of new Set([dir, sandboxPath])) {
+      const cachedPdf = path.join(cacheDir, '.preview-cache', `${basename}.pdf`);
+      if (fs.existsSync(cachedPdf)) {
+        try { fs.unlinkSync(cachedPdf); } catch {}
+      }
+    }
+
+    console.log(`[FileRebuilder] Single-slide rebuild complete: slide ${slideIndex + 1} updated (${newSize} bytes)`);
+    cleanup(tmpDir);
+
+    return await dbGet<GeneratedFile>('SELECT * FROM generated_files WHERE id = ?', fileId) || null;
+  } catch (err: any) {
+    console.error('[FileRebuilder] Single-slide splice failed:', err);
+    cleanup(tmpDir);
+    return null;
+  }
+}
+
+function cleanup(dir: string) {
+  try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+}
+
+// ---------------------------------------------------------------------------
 // In-place block patching — patch all changed fields for a single block
 // Used by blockRegenerator for fast single-block updates.
 // ---------------------------------------------------------------------------
