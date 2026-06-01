@@ -117,7 +117,7 @@ async function buildChatHistory(conversationId: string): Promise<string> {
 router.post('/:conversationId', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const conversationId = req.params.conversationId as string;
-  const { message, skillId, uploadIds, referencedConvIds: rawRefIds } = req.body;
+  const { message, docContext, skillId, uploadIds, referencedConvIds: rawRefIds } = req.body;
   const referencedConvIds: string[] = Array.isArray(rawRefIds)
     ? rawRefIds.filter((id: unknown) => typeof id === 'string').slice(0, 3)
     : [];
@@ -208,10 +208,15 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
     ? await buildCrossReferenceContext(userId, referencedConvIds)
     : '';
 
+  // Prepend doc context for AI processing (not stored in DB — already saved above without it)
+  const aiMessage = docContext
+    ? `[DOC_CONTEXT: ${docContext}]\n\n${sanitizedMessage}`
+    : sanitizedMessage;
+
   if (useOrchestrator) {
-    await handleOrchestrated(req, res, userId, conversationId, sanitizedMessage, validUploadIds, userLocale, conversation.category || 'document', refContext, conversation.system_prompt || '');
+    await handleOrchestrated(req, res, userId, conversationId, aiMessage, validUploadIds, userLocale, conversation.category || 'document', refContext, conversation.system_prompt || '');
   } else {
-    await handleDirect(req, res, userId, conversationId, conversation, sanitizedMessage, skillId, validUploadIds, userLocale, refContext);
+    await handleDirect(req, res, userId, conversationId, conversation, aiMessage, skillId, validUploadIds, userLocale, refContext);
   }
 });
 

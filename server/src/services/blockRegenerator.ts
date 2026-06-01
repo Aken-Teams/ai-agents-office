@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbRun } from '../db.js';
 import { spawnClaude } from './claudeCli.js';
-import { patchBlockInPlace } from './fileRebuilder.js';
+import { patchBlockInPlace, rebuildFile } from './fileRebuilder.js';
 import type { DocumentBlocksRecord, DocumentBlock, GeneratedFile } from '../types.js';
 
 export type RegenEvent =
@@ -192,10 +192,18 @@ export async function regenerateBlock(
 
           let newFile: GeneratedFile | null = null;
           if (!patched) {
-            // Cannot patch in-place (unsupported doc type or fields).
-            // Do NOT fallback to rebuildFile() here — it destroys all other slides/pages.
-            // Block data is already saved in DB; user can manually trigger full rebuild if needed.
-            console.log(`[BlockRegenerator] In-place patch not supported for this change. Block data updated in DB only.`);
+            // Non-patchable fields changed (e.g. chart, kpis, steps) → full rebuild from blocks
+            console.log(`[BlockRegenerator] In-place patch not supported, triggering full rebuild...`);
+            try {
+              newFile = await rebuildFile(fileId, userId);
+              if (newFile) {
+                console.log(`[BlockRegenerator] Rebuild successful: ${newFile.filename}`);
+              } else {
+                console.warn(`[BlockRegenerator] Rebuild returned null — block data updated in DB only.`);
+              }
+            } catch (rebuildErr) {
+              console.error(`[BlockRegenerator] Rebuild failed:`, rebuildErr);
+            }
           }
 
           // Mark as idle

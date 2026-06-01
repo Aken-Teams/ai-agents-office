@@ -889,10 +889,19 @@ function ChatContent() {
     const refsTag = selectedRefs.length > 0
       ? '\n\n[refs:' + JSON.stringify(selectedRefs.map(r => ({ id: r.id, title: r.title }))) + ']'
       : '';
+    // Build a short, human-readable doc context tag for display
+    let docTag = '';
+    if (docMode.viewMode === 'document' && docMode.documentFileId && docMode.selectedBlockId) {
+      const block = docBlocks.blocks.find(b => b.id === docMode.selectedBlockId);
+      const pageNum = docBlocks.blocks.findIndex(b => b.id === docMode.selectedBlockId) + 1;
+      const title = (block?.data as any)?.title || '';
+      const elLabel = docSelectedElement ? ` · ${docSelectedElement}` : '';
+      docTag = `[doc:p${pageNum}/${docBlocks.blocks.length}:${block?.type || ''}:${title}${elLabel}]`;
+    }
     setMessages(prev => [...prev, {
       id: `temp-${Date.now()}`,
       role: 'user',
-      content: userMessage + attachmentNote + refsTag,
+      content: (docTag ? docTag + '\n' : '') + userMessage + attachmentNote + refsTag,
       created_at: new Date().toISOString(),
     }]);
 
@@ -965,21 +974,20 @@ function ChatContent() {
       // Question (no edit intent) → falls through to normal chat with DOC_CONTEXT below
     }
 
-    // Document mode context: include slide info for AI understanding
-    let contextualMessage = userMessage;
+    // Document mode context: send as separate field (not embedded in message text)
+    let docContext = '';
     if (isDocEditMode) {
       if (docMode.selectedBlockId) {
-        // Specific page selected — give full context for the page
         const block = docBlocks.blocks.find(b => b.id === docMode.selectedBlockId);
         const pageNum = docBlocks.blocks.findIndex(b => b.id === docMode.selectedBlockId) + 1;
         const elementInfo = docSelectedElement ? `，使用者選取了元素「${docSelectedElement}」` : '';
         const shapesInfo = docSlideShapes.length > 0
           ? `\n投影片上的視覺元素: ${docSlideShapes.map(s => `${s.name}(${s.type})`).join(', ')}`
           : '';
-        contextualMessage = `[DOC_CONTEXT: 使用者正在查看第 ${pageNum}/${docBlocks.blocks.length} 頁 (${block?.type || 'unknown'})${elementInfo}。該頁數據: ${JSON.stringify(block?.data)}${shapesInfo}]\n\n${userMessage}`;
+        docContext = `使用者正在查看第 ${pageNum}/${docBlocks.blocks.length} 頁 (${block?.type || 'unknown'})${elementInfo}。該頁數據: ${JSON.stringify(block?.data)}${shapesInfo}`;
       } else {
         const blockSummary = docBlocks.blocks.map((b, i) => `#${i + 1} ${b.type}: ${(b.data as any).title || ''}`).join(', ');
-        contextualMessage = `[DOC_CONTEXT: 正在編輯 ${docMode.docLayoutType || 'document'} 文件，共 ${docBlocks.blocks.length} 頁: ${blockSummary}]\n\n${userMessage}`;
+        docContext = `正在編輯 ${docMode.docLayoutType || 'document'} 文件，共 ${docBlocks.blocks.length} 頁: ${blockSummary}`;
       }
     }
 
@@ -994,7 +1002,8 @@ function ChatContent() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          message: contextualMessage,
+          message: userMessage,
+          ...(docContext && { docContext }),
           ...(skillId && { skillId }),
           ...(currentUploadIds.length > 0 && { uploadIds: currentUploadIds }),
           ...(selectedRefs.length > 0 && { referencedConvIds: selectedRefs.map(r => r.id) }),
@@ -1570,8 +1579,26 @@ function ChatContent() {
           <div className={`flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-4 ${docMode.viewMode === 'chat' ? 'md:px-8 md:py-8 md:space-y-8' : 'space-y-3'}`}>
             {messages.map((msg, idx) => {
               const sources = msg.role === 'assistant' ? extractSources(msg.content) : [];
+              // Parse doc context tag [doc:p3/9:stats:Title · Element] and legacy [DOC_CONTEXT:...]
+              let docChip: { page: string; type: string; title: string; element?: string } | null = null;
+              let cleanedContent = msg.content;
+              if (msg.role === 'user') {
+                // New format: [doc:p3/9:stats:Title · Element]
+                const docTagMatch = cleanedContent.match(/^\[doc:p(\d+\/\d+):([^:]*):([^\]]*)\]\n?/);
+                if (docTagMatch) {
+                  const [, page, type, rest] = docTagMatch;
+                  const parts = rest.split(' · ');
+                  docChip = { page, type, title: parts[0] || '', element: parts[1] };
+                  cleanedContent = cleanedContent.slice(docTagMatch[0].length);
+                }
+                // Legacy format: [DOC_CONTEXT: ...]
+                const legacyMatch = cleanedContent.match(/^\[DOC_CONTEXT:[\s\S]*?\]\n\n/);
+                if (legacyMatch) {
+                  cleanedContent = cleanedContent.slice(legacyMatch[0].length);
+                }
+              }
               const { text: userMsgText, refs: userMsgRefs } = msg.role === 'user'
-                ? parseMessageRefs(msg.content.replace(/^\[DOC_CONTEXT:[^\]]*\]\n\n/, ''))
+                ? parseMessageRefs(cleanedContent)
                 : { text: msg.content, refs: [] };
               return (
                 <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : `flex gap-2 ${docMode.viewMode === 'chat' ? 'md:gap-4' : ''}`}>
@@ -1587,6 +1614,14 @@ function ChatContent() {
                   }>
                     {msg.role === 'user' ? (
                       <>
+                        {docChip && (
+                          <div className="flex items-center gap-1 mb-1.5 text-[11px] text-on-surface-variant/70">
+                            <span className="material-symbols-outlined text-xs" style={{ fontVariationSettings: "'FILL' 1" }}>description</span>
+                            <span>第 {docChip.page} 頁</span>
+                            {docChip.title && <span className="truncate max-w-[120px]">· {docChip.title}</span>}
+                            {docChip.element && <span className="text-primary/70">· {docChip.element}</span>}
+                          </div>
+                        )}
                         <p className="text-sm leading-relaxed whitespace-pre-wrap">{userMsgText}</p>
                         {userMsgRefs.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
