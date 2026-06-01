@@ -54,58 +54,57 @@ export async function regenerateBlock(
 
   // Build a focused prompt for single-block regeneration
   const systemPrompt = [
-    'You are a document block editor. Modify a single block based on user instructions.',
+    'You are a JSON block editor. You receive a JSON block and modify it per the user instruction.',
     '',
-    `Document type: ${blockRecord.doc_type}`,
-    `Document title: ${meta.title || 'Untitled'}`,
+    `Document: ${blockRecord.doc_type} — "${meta.title || 'Untitled'}"`,
     `Block type: ${targetBlock.type}`,
     '',
-    'AVAILABLE STYLE FIELDS (for visual/style changes, apply ALL relevant ones for a cohesive theme):',
-    '- backgroundColor: slide background hex color (e.g. "#FFC0CB" for pink)',
-    '- textColor: main text color (ensure high contrast with backgroundColor)',
-    '- accentColor: accent elements like bars, highlights, dividers',
-    '- accentColor2: secondary accent for panel backgrounds',
-    '- titleColor: heading/title text color',
-    '- subtitleColor: subtitle text color',
+    'CRITICAL: Your entire response must be a single valid JSON object. No text, no markdown, no explanation.',
     '',
-    'STYLE TIPS:',
-    '- For style/theme requests (e.g. "粉色風格", "dark mode"), change MULTIPLE color fields as a cohesive palette',
-    '- Always ensure text readability (sufficient contrast between text and background)',
-    '- You may add style fields that don\'t exist yet in the current data',
+    'Style fields you may use: backgroundColor, textColor, accentColor, accentColor2, titleColor, subtitleColor.',
+    'For style/theme requests, change multiple color fields as a cohesive palette with good contrast.',
     '',
-    'SLIDE SHAPES CONTEXT:',
-    '- The instruction may start with [投影片元素: ...] listing the visual shapes on the slide (e.g., "Title 1(text), Chart 1(chart), Chart 2(chart)").',
-    '- These shapes represent what the user SEES on the rendered slide. They map to data fields as follows:',
-    '  - text shapes → title, subtitle, bullets, content fields',
-    '  - chart shapes → chart objects in data (e.g., lineChart, doughnut, barChart), or KPIs rendered as charts by the template',
-    '  - table shapes → rows/headers fields',
-    '  - picture shapes → imageSrc field',
-    '- IMPORTANT: For "stats" type blocks, the PPTX template renders KPIs as visual charts. So "Chart 1" may correspond to the kpis array, not a separate chart field.',
+    'Shape-to-data mapping (when visual shapes are mentioned):',
+    '- text shapes → title, subtitle, bullets, content',
+    '- chart shapes → chart objects (lineChart, doughnut, barChart) or kpis array (for "stats" type blocks)',
+    '- table shapes → rows/headers',
+    '- picture shapes → imageSrc',
     '',
-    'TARGETED ELEMENT EDITING:',
-    '- If the instruction contains [目標元素: xxx], focus changes on ONLY that specific element.',
-    '- The target can be a data field key (e.g., "chart", "lineChart", "kpis") or a shape name (e.g., "Chart 1", "Title 1").',
-    '- For shape names, use the shapes context above to identify which data field drives that visual element.',
-    '- Keep all other fields unchanged when a target element is specified.',
-    '',
-    'RULES:',
-    '1. Return ONLY a valid JSON object (the updated block data).',
-    '2. Do NOT wrap in markdown code fences or any other text.',
-    '3. Preserve content fields (title, bullets, etc.) unless user explicitly asks to change them.',
-    '4. For style/theme requests, apply changes holistically across all relevant style fields.',
-    '5. When a target element is specified, ONLY modify that element.',
+    'When a target element is specified, ONLY modify that element. Keep all other fields unchanged.',
+    'Preserve all fields unless the user explicitly asks to change them.',
   ].join('\n');
 
-  const userMessage = [
+  // Parse metadata prefixes out of instruction so they don't confuse the AI
+  let cleanInstruction = instruction;
+  let shapesContext = '';
+  let targetElement = '';
+
+  const shapesMatch = cleanInstruction.match(/^\[投影片元素:\s*([^\]]+)\]\s*/);
+  if (shapesMatch) {
+    shapesContext = shapesMatch[1].trim();
+    cleanInstruction = cleanInstruction.slice(shapesMatch[0].length);
+  }
+  const targetMatch = cleanInstruction.match(/^\[目標元素:\s*([^\]]+)\]\s*/);
+  if (targetMatch) {
+    targetElement = targetMatch[1].trim();
+    cleanInstruction = cleanInstruction.slice(targetMatch[0].length);
+  }
+
+  const userMessageParts = [
     'Current block data:',
     '```json',
     JSON.stringify(targetBlock.data, null, 2),
     '```',
-    '',
-    `User instruction: ${instruction}`,
-    '',
-    'Return the updated block JSON only.',
-  ].join('\n');
+  ];
+  if (shapesContext) {
+    userMessageParts.push('', `Visual shapes on this slide: ${shapesContext}`);
+  }
+  if (targetElement) {
+    userMessageParts.push('', `Target element to modify: ${targetElement}`);
+  }
+  userMessageParts.push('', `User instruction: ${cleanInstruction}`, '', 'Return the updated block JSON only.');
+
+  const userMessage = userMessageParts.join('\n');
 
   send({ type: 'started' });
 
@@ -136,12 +135,32 @@ export async function regenerateBlock(
         try {
           console.log(`[BlockRegenerator] Raw responseText (${responseText.length} chars): ${responseText.substring(0, 500)}`);
 
-          // Extract JSON from response (handle potential markdown fences)
+          if (!responseText.trim()) {
+            throw new Error('AI returned empty response');
+          }
+
+          // Extract JSON from response — try multiple strategies
           let jsonStr = responseText.trim();
+
+          // Strategy 1: markdown code fences
           const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
           if (fenceMatch) jsonStr = fenceMatch[1].trim();
 
-          const updatedData = JSON.parse(jsonStr);
+          let updatedData: Record<string, unknown>;
+          try {
+            updatedData = JSON.parse(jsonStr);
+          } catch {
+            // Strategy 2: find the outermost {...} in the response
+            const braceStart = responseText.indexOf('{');
+            const braceEnd = responseText.lastIndexOf('}');
+            if (braceStart !== -1 && braceEnd > braceStart) {
+              const extracted = responseText.slice(braceStart, braceEnd + 1);
+              console.log(`[BlockRegenerator] Direct parse failed, trying brace extraction (${braceStart}..${braceEnd})`);
+              updatedData = JSON.parse(extracted); // Will throw if still invalid
+            } else {
+              throw new Error('No JSON object found in AI response');
+            }
+          }
           const dataChanged = JSON.stringify(oldData) !== JSON.stringify(updatedData);
           console.log(`[BlockRegenerator] Data changed: ${dataChanged}, oldKeys: [${Object.keys(oldData).join(',')}], newKeys: [${Object.keys(updatedData).join(',')}]`);
           if (!dataChanged) {
@@ -150,7 +169,7 @@ export async function regenerateBlock(
 
           // Update the block in the array
           targetBlock.data = updatedData;
-          if (updatedData.type) targetBlock.type = updatedData.type;
+          if (updatedData.type) targetBlock.type = updatedData.type as string;
 
           // Save updated blocks to DB
           await dbRun(
