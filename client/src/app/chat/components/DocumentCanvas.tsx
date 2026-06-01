@@ -658,13 +658,11 @@ export default function DocumentCanvas({
                     onClick={() => {
                       setSelectedPageIndex(index);
                       onSelectBlock(block.id);
-                      // Navigate iframe to this slide
+                      // Navigate main iframe to this slide
                       try {
                         const win = iframeRef.current?.contentWindow;
                         if (win) {
-                          // Try postMessage first (new files with listener)
                           win.postMessage({ type: 'goToSlide', index }, '*');
-                          // Direct DOM fallback (works for existing files via same-origin blob)
                           const el = win.document?.querySelector?.('#slide-' + index);
                           if (el) el.scrollIntoView({ behavior: 'smooth' });
                         }
@@ -676,7 +674,25 @@ export default function DocumentCanvas({
                         : 'border-transparent hover:border-outline-variant/30'
                     }`}
                   >
-                    {renderSlideThumbnail(block)}
+                    {previewBlobUrl ? (
+                      <div className="relative w-full overflow-hidden bg-[#1B2A4A]" style={{ aspectRatio: '16/9' }}>
+                        <iframe
+                          src={`${previewBlobUrl}#slide-${index}`}
+                          className="absolute top-0 left-0 border-0 origin-top-left"
+                          style={{
+                            width: '1000%',
+                            height: '1000%',
+                            transform: 'scale(0.1)',
+                            pointerEvents: 'none',
+                          }}
+                          tabIndex={-1}
+                          sandbox="allow-scripts allow-same-origin"
+                          loading="lazy"
+                        />
+                      </div>
+                    ) : (
+                      renderSlideThumbnail(block)
+                    )}
                     <div className={`text-[9px] py-0.5 text-center ${
                       selectedPageIndex === index ? 'text-primary font-semibold' : 'text-on-surface-variant/50'
                     }`}>
