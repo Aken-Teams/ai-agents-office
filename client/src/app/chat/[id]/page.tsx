@@ -551,6 +551,9 @@ function ChatContent() {
   const docRegenInFlight = useRef(false); // prevent duplicate regenerate calls
   const [docSelectedElement, setDocSelectedElement] = useState<string | null>(null); // selected sub-element (chart, field, etc.)
   const [docSlideShapes, setDocSlideShapes] = useState<Array<{ name: string; type: string }>>([]); // shapes on current slide
+  const [docChatCollapsed, setDocChatCollapsed] = useState(false); // collapse left chat in doc mode
+  const [docChatWidth, setDocChatWidth] = useState(33); // chat panel width % in doc mode
+  const docDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const fileGenInRoundRef = useRef(false); // track if file was generated this round
 
   /** Submit regeneration: close modal immediately, stream SSE events, show real-time status */
@@ -1483,11 +1486,14 @@ function ChatContent() {
 
       <div className={`${sidebarMargin} h-[100svh] md:h-screen flex overflow-hidden transition-all duration-300`}>
         {/* === Central Chat Area === */}
-        <section className={`flex flex-col min-h-0 min-w-0 transition-all duration-300 ${
-          docMode.viewMode === 'document'
-            ? 'w-[33%] min-w-[320px] max-w-[420px] border-r border-outline-variant/10'
-            : 'flex-1'
-        }`}>
+        <section
+          className={`flex flex-col min-h-0 min-w-0 transition-all duration-300 ${
+            docMode.viewMode === 'document'
+              ? docChatCollapsed ? 'w-0 overflow-hidden' : 'min-w-[280px]'
+              : 'flex-1'
+          }`}
+          style={docMode.viewMode === 'document' && !docChatCollapsed ? { width: `${docChatWidth}%` } : undefined}
+        >
           {/* Title Bar */}
           <header className={`flex items-center gap-2 px-3 h-11 bg-surface/80 backdrop-blur-xl shrink-0 border-b border-outline-variant/10 ${docMode.viewMode === 'chat' ? 'md:gap-4 md:px-8 md:h-14' : ''}`}>
             <button
@@ -2429,7 +2435,53 @@ function ChatContent() {
           </div>
         )}
 
-        {/* === Document Canvas (right 2/3 in document mode) === */}
+        {/* === Resizable Divider (between chat & canvas in doc mode) === */}
+        {docMode.viewMode === 'document' && (
+          <div className="relative flex-shrink-0 group z-10">
+            {/* Drag handle */}
+            <div
+              className="w-1 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                const container = (e.target as HTMLElement).closest('[class*="h-[100svh]"]') as HTMLElement;
+                if (!container) return;
+                const containerWidth = container.offsetWidth;
+                docDragRef.current = { startX: e.clientX, startWidth: docChatWidth };
+                const onMove = (ev: MouseEvent) => {
+                  if (!docDragRef.current) return;
+                  const delta = ev.clientX - docDragRef.current.startX;
+                  const newPct = docDragRef.current.startWidth + (delta / containerWidth) * 100;
+                  setDocChatWidth(Math.max(15, Math.min(60, newPct)));
+                  if (newPct < 10) setDocChatCollapsed(true);
+                  else setDocChatCollapsed(false);
+                };
+                const onUp = () => {
+                  docDragRef.current = null;
+                  document.removeEventListener('mousemove', onMove);
+                  document.removeEventListener('mouseup', onUp);
+                  document.body.style.cursor = '';
+                  document.body.style.userSelect = '';
+                };
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+              }}
+            />
+            {/* Collapse / expand toggle */}
+            <button
+              onClick={() => { setDocChatCollapsed(prev => !prev); if (docChatCollapsed) setDocChatWidth(w => w < 15 ? 33 : w); }}
+              className="absolute top-1/2 -translate-y-1/2 -left-2.5 w-5 h-8 bg-surface-container border border-outline-variant/20 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity cursor-pointer shadow-sm"
+              title={docChatCollapsed ? '展開對話' : '收合對話'}
+            >
+              <span className="material-symbols-outlined text-xs text-on-surface-variant">
+                {docChatCollapsed ? 'chevron_right' : 'chevron_left'}
+              </span>
+            </button>
+          </div>
+        )}
+
+        {/* === Document Canvas (right side in document mode) === */}
         {docMode.viewMode === 'document' && (
           <DocumentCanvas
             layoutType={docMode.docLayoutType || 'slides'}

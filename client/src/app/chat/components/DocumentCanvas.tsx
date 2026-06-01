@@ -107,6 +107,7 @@ export default function DocumentCanvas({
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
   const [hoveredShapeName, setHoveredShapeName] = useState<string | null>(null);
+  const [showRebuildConfirm, setShowRebuildConfirm] = useState(false);
   const previewKeyRef = useRef(0);
   const visibleCount = useStaggerReveal(blocks.length);
 
@@ -289,7 +290,7 @@ export default function DocumentCanvas({
             </div>
           </div>
           <button
-            onClick={onRebuild}
+            onClick={() => setShowRebuildConfirm(true)}
             disabled={rebuilding || blocks.length === 0}
             className="flex items-center gap-1 px-2.5 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:bg-primary-hover transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
           >
@@ -513,6 +514,7 @@ export default function DocumentCanvas({
 
   // Doc / Sheet / Webapp layout: vertical block list with optional preview
   return (
+    <>
     <div className="flex-1 flex flex-col min-w-0 bg-surface">
       {/* Toolbar */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-outline-variant/10 bg-surface-container/30 shrink-0">
@@ -523,7 +525,7 @@ export default function DocumentCanvas({
           </div>
         </div>
         <button
-          onClick={onRebuild}
+          onClick={() => setShowRebuildConfirm(true)}
           disabled={rebuilding || blocks.length === 0}
           className="flex items-center gap-1 px-2.5 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:bg-primary-hover transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
@@ -662,5 +664,38 @@ export default function DocumentCanvas({
         </div>
       </div>
     </div>
+
+    {/* Rebuild confirmation modal */}
+    {showRebuildConfirm && (
+      <div className="fixed inset-0 z-[110] flex items-center justify-center" onClick={() => setShowRebuildConfirm(false)}>
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+        <div className="relative bg-surface-container rounded-xl shadow-2xl border border-outline-variant/10 w-full max-w-sm mx-4 overflow-hidden animate-in" onClick={e => e.stopPropagation()}>
+          <div className="flex flex-col items-center pt-6 pb-3 px-6">
+            <div className="w-12 h-12 rounded-full bg-tertiary/10 flex items-center justify-center mb-3">
+              <span className="material-symbols-outlined text-tertiary text-2xl">build</span>
+            </div>
+            <h3 className="font-bold text-base text-on-surface mb-1.5">重新產生文件</h3>
+            <p className="text-sm text-on-surface-variant text-center leading-relaxed">
+              所有頁面將根據目前的區塊資料重新生成，這可能會改變排版及樣式。
+            </p>
+          </div>
+          <div className="flex gap-2 px-6 pb-6 pt-2">
+            <button
+              onClick={() => setShowRebuildConfirm(false)}
+              className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-on-surface-variant bg-surface-container-high hover:bg-surface-container-highest transition-colors cursor-pointer"
+            >
+              取消
+            </button>
+            <button
+              onClick={() => { setShowRebuildConfirm(false); onRebuild(); }}
+              className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-on-primary bg-primary hover:bg-primary-hover transition-colors cursor-pointer"
+            >
+              確定重建
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
