@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbRun } from '../db.js';
 import { spawnClaude } from './claudeCli.js';
-import { patchBlockInPlace, rebuildFile } from './fileRebuilder.js';
+import { patchBlockInPlace } from './fileRebuilder.js';
 import type { DocumentBlocksRecord, DocumentBlock, GeneratedFile } from '../types.js';
 
 export type RegenEvent =
@@ -93,72 +93,87 @@ export async function regenerateBlock(
       model: 'claude-haiku-4-5-20251001', // Fast model for single-block edits
     });
 
-    result.emitter.on('text', (chunk: string) => {
-      responseText += chunk;
-      send({ type: 'ai_text', data: chunk });
-    });
-
-    result.emitter.on('error', (err: any) => {
-      console.error('[BlockRegenerator] AI error:', err);
-      send({ type: 'error', data: String(err) });
-      resolve(null);
-    });
-
-    result.emitter.on('done', async () => {
-      try {
-        // Extract JSON from response (handle potential markdown fences)
-        let jsonStr = responseText.trim();
-        const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
-        if (fenceMatch) jsonStr = fenceMatch[1].trim();
-
-        const updatedData = JSON.parse(jsonStr);
-
-        // Update the block in the array
-        targetBlock.data = updatedData;
-        if (updatedData.type) targetBlock.type = updatedData.type;
-
-        // Save updated blocks to DB
-        await dbRun(
-          'UPDATE document_blocks SET blocks = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-          JSON.stringify(blocks), blockRecord.id
-        );
-
-        // Immediately emit block_updated so frontend can show new content
-        send({ type: 'block_updated', data: { block: targetBlock, blocks } });
-
-        // Patch file in-place (fast: just XML manipulation, no generator script)
-        send({ type: 'patching' });
-        const patched = await patchBlockInPlace(
-          fileId, userId, targetBlock.order, oldData, updatedData, blockRecord.doc_type,
-        );
-
-        let newFile: GeneratedFile | null = null;
-        if (!patched) {
-          // Fallback to full rebuild for unsupported doc types
-          console.log(`[BlockRegenerator] In-place patch not supported, falling back to full rebuild`);
-          newFile = await rebuildFile(fileId, userId);
-        }
-
-        // Mark as idle
-        targetBlock.status = 'idle';
-        await dbRun(
-          'UPDATE document_blocks SET blocks = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-          JSON.stringify(blocks), blockRecord.id
-        );
-
-        send({ type: 'done', data: { block: targetBlock, blocks } });
-        resolve({ updatedBlock: targetBlock, newFile });
-      } catch (err) {
-        console.error('[BlockRegenerator] Failed to parse AI response:', err);
-        console.error('[BlockRegenerator] Raw response:', responseText);
-        // Reset status on failure
-        targetBlock.status = 'idle';
-        await dbRun(
-          'UPDATE document_blocks SET blocks = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-          JSON.stringify(blocks), blockRecord.id
-        ).catch(() => {});
-        send({ type: 'error', data: 'Failed to parse AI response' });
+    let resolved = false;
+    result.emitter.on('event', async (event: any) => {
+      if (resolved) return; // Prevent processing after resolve
+      if (event.type === 'text') {
+        responseText += event.data;
+        send({ type: 'ai_text', data: event.data });
+      } else if (event.type === 'error') {
+        console.error('[BlockRegenerator] AI error:', event.data);
+        send({ type: 'error', data: String(event.data) });
+        resolved = true;
         resolve(null);
+      } else if (event.type === 'done') {
+        try {
+          console.log(`[BlockRegenerator] Raw responseText (${responseText.length} chars): ${responseText.substring(0, 500)}`);
+
+          // Extract JSON from response (handle potential markdown fences)
+          let jsonStr = responseText.trim();
+          const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+          if (fenceMatch) jsonStr = fenceMatch[1].trim();
+
+          const updatedData = JSON.parse(jsonStr);
+          const dataChanged = JSON.stringify(oldData) !== JSON.stringify(updatedData);
+          console.log(`[BlockRegenerator] Data changed: ${dataChanged}, oldKeys: [${Object.keys(oldData).join(',')}], newKeys: [${Object.keys(updatedData).join(',')}]`);
+          if (!dataChanged) {
+            console.log(`[BlockRegenerator] WARNING: AI returned identical data. Instruction was: "${instruction}"`);
+          }
+
+          // Update the block in the array
+          targetBlock.data = updatedData;
+          if (updatedData.type) targetBlock.type = updatedData.type;
+
+          // Save updated blocks to DB
+          await dbRun(
+            'UPDATE document_blocks SET blocks = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            JSON.stringify(blocks), blockRecord.id
+          );
+
+          // Immediately emit block_updated so frontend can show new content
+          send({ type: 'block_updated', data: { block: targetBlock, blocks } });
+
+          // Patch file in-place (fast: just XML manipulation, no generator script)
+          send({ type: 'patching' });
+          // If AI returned identical data, the file may be out of sync from a previous
+          // failed patch. Force-sync by passing empty oldData so all patchable fields
+          // are treated as "changed" and applied to the file.
+          const patchOld = dataChanged ? oldData : {};
+          const patched = await patchBlockInPlace(
+            fileId, userId, targetBlock.order, patchOld, updatedData, blockRecord.doc_type,
+          );
+
+          let newFile: GeneratedFile | null = null;
+          if (!patched) {
+            // Cannot patch in-place (unsupported doc type or fields).
+            // Do NOT fallback to rebuildFile() here — it destroys all other slides/pages.
+            // Block data is already saved in DB; user can manually trigger full rebuild if needed.
+            console.log(`[BlockRegenerator] In-place patch not supported for this change. Block data updated in DB only.`);
+          }
+
+          // Mark as idle
+          targetBlock.status = 'idle';
+          await dbRun(
+            'UPDATE document_blocks SET blocks = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            JSON.stringify(blocks), blockRecord.id
+          );
+
+          send({ type: 'done', data: { block: targetBlock, blocks } });
+          resolved = true;
+          resolve({ updatedBlock: targetBlock, newFile });
+        } catch (err) {
+          console.error('[BlockRegenerator] Failed to parse AI response:', err);
+          console.error('[BlockRegenerator] Raw response:', responseText);
+          // Reset status on failure
+          targetBlock.status = 'idle';
+          await dbRun(
+            'UPDATE document_blocks SET blocks = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            JSON.stringify(blocks), blockRecord.id
+          ).catch(() => {});
+          send({ type: 'error', data: 'Failed to parse AI response' });
+          resolved = true;
+          resolve(null);
+        }
       }
     });
   });

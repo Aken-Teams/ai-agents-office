@@ -357,6 +357,16 @@ export function spawnClaude(
     let model = '';
     let stdoutBuffer = '';
 
+    // Shared token accumulator state (persists across processStreamEvent calls)
+    const tokenState: TokenAccumulator = {
+      getInputTokens: () => inputTokens,
+      getOutputTokens: () => outputTokens,
+      addInputTokens: (n: number) => { inputTokens += n; },
+      addOutputTokens: (n: number) => { outputTokens += n; },
+      setModel: (m: string) => { model = m; },
+      hasStreamedText: false,
+    };
+
     // Parse stream-json output line by line
     proc.stdout!.on('data', (data: Buffer) => {
       const chunk = data.toString();
@@ -368,13 +378,7 @@ export function spawnClaude(
         if (!line.trim()) continue;
         try {
           const parsed = JSON.parse(line);
-          processStreamEvent(parsed, emitter, {
-            getInputTokens: () => inputTokens,
-            getOutputTokens: () => outputTokens,
-            addInputTokens: (n: number) => { inputTokens += n; },
-            addOutputTokens: (n: number) => { outputTokens += n; },
-            setModel: (m: string) => { model = m; },
-          });
+          processStreamEvent(parsed, emitter, tokenState);
         } catch {
           // Skip malformed JSON lines
         }
@@ -389,8 +393,16 @@ export function spawnClaude(
       console.error(`[Claude CLI stderr] ${chunk.trim()}`);
     });
 
-    // Process exit
-    proc.on('exit', (code) => {
+    // Process close — fires AFTER all stdio streams are drained (exit fires earlier,
+    // potentially before stdout data is fully read, causing data loss race condition)
+    proc.on('close', (code) => {
+      // Process any remaining buffered stdout data
+      if (stdoutBuffer.trim()) {
+        try {
+          const parsed = JSON.parse(stdoutBuffer);
+          processStreamEvent(parsed, emitter, tokenState);
+        } catch { /* partial line, ignore */ }
+      }
       console.log(`[Claude CLI] ${logRole}/${logSkill} ${modeLabel} exited with code ${code}`);
       if (stderrBuffer) {
         console.error(`[Claude CLI] ${logRole}/${logSkill} stderr:\n${stderrBuffer.substring(0, 1000)}`);
@@ -467,6 +479,7 @@ interface TokenAccumulator {
   addInputTokens: (n: number) => void;
   addOutputTokens: (n: number) => void;
   setModel: (m: string) => void;
+  hasStreamedText: boolean; // True if text was streamed via content_block_delta (avoid duplication)
 }
 
 /**
@@ -494,13 +507,14 @@ function processStreamEvent(
     }
   }
 
-  // Text content streaming (content_block_delta — may appear for long responses)
+  // Text content streaming (content_block_delta — real-time streaming chunks)
   if (type === 'content_block_delta') {
     const delta = parsed.delta as Record<string, unknown> | undefined;
     if (delta?.type === 'text_delta' && delta.text) {
       const rawDelta = delta.text as string;
       const translated = humanizeClaudeError(rawDelta);
       const safeText = sanitizeOutput(translated || rawDelta);
+      tokens.hasStreamedText = true; // Mark that we received streaming text
       emitter.emit('event', {
         type: translated ? 'error' : 'text',
         data: safeText,
@@ -515,6 +529,8 @@ function processStreamEvent(
   }
 
   // Assistant message — mark previous tools completed, extract text + new tool use
+  // NOTE: Only emit text from assistant if we didn't already stream it via content_block_delta,
+  // to avoid duplicating responseText in callers that accumulate text events.
   if (type === 'assistant') {
     // Signal: all previously running tools have completed (Claude got their results)
     emitter.emit('event', {
@@ -526,7 +542,8 @@ function processStreamEvent(
     const content = message?.content as Array<Record<string, unknown>> | undefined;
     if (content) {
       for (const block of content) {
-        if (block.type === 'text' && block.text) {
+        if (block.type === 'text' && block.text && !tokens.hasStreamedText) {
+          // Only emit if text wasn't already streamed via content_block_delta
           const rawText = block.text as string;
           const translated = humanizeClaudeError(rawText);
           const safeText = sanitizeOutput(translated || rawText);
