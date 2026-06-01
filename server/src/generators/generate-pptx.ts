@@ -122,6 +122,47 @@ interface SlideData {
   author?: string;
   role?: string;
   imagePath?: string;
+  // Per-slide style overrides (set by block regenerator AI)
+  backgroundColor?: string;
+  textColor?: string;
+  titleColor?: string;
+  subtitleColor?: string;
+  accentColor?: string;
+  accentColor2?: string;
+}
+
+/** Merge per-slide color overrides into the global style preset */
+function resolveSlideStyle(base: StylePreset, slide: SlideData): StylePreset {
+  const hasOverride = slide.backgroundColor || slide.textColor || slide.titleColor ||
+    slide.subtitleColor || slide.accentColor || slide.accentColor2;
+  if (!hasOverride) return base;
+
+  const strip = (c?: string) => c?.replace('#', '') || '';
+  const bg = strip(slide.backgroundColor) || base.bg;
+  const accent = strip(slide.accentColor) || base.accentColor;
+  const heading = strip(slide.titleColor) || base.headingColor;
+  const body = strip(slide.textColor) || base.bodyColor;
+  const subtitle = strip(slide.subtitleColor) || base.subtitleColor;
+  const accent2 = strip(slide.accentColor2) || base.accentColor2;
+
+  // Determine if the overridden bg is dark (for title/section slide text)
+  const isDark = parseInt(bg.substring(0, 2), 16) < 100;
+  const lightText = isDark ? 'FFFFFF' : heading;
+
+  return {
+    ...base,
+    bg,
+    titleSlideBg: isDark ? bg : base.titleSlideBg,
+    sectionSlideBg: isDark ? bg : base.sectionSlideBg,
+    titleColor: heading,
+    titleSlideTextColor: lightText,
+    subtitleColor: subtitle,
+    headingColor: heading,
+    bodyColor: body,
+    accentColor: accent,
+    accentColor2: accent2,
+    topBarColor: accent,
+  };
 }
 
 interface PptxInput {
@@ -156,7 +197,7 @@ function sanitizeSlide(slide: SlideData): SlideData {
 
 async function generatePptx(inputPath: string, outputPath: string) {
   const input: PptxInput = JSON.parse(fs.readFileSync(inputPath, 'utf-8'));
-  const s = STYLES[input.style || ''] || DEFAULT_STYLE;
+  const baseStyle = STYLES[input.style || ''] || DEFAULT_STYLE;
   const pptx = new PptxGenJS();
 
   pptx.title = input.title;
@@ -167,6 +208,7 @@ async function generatePptx(inputPath: string, outputPath: string) {
 
   for (let slideIdx = 0; slideIdx < totalSlides; slideIdx++) {
     const slideData = sanitizeSlide(input.slides[slideIdx]);
+    const s = resolveSlideStyle(baseStyle, slideData); // per-slide style with overrides
     const slide = pptx.addSlide();
 
     // ── Helper: top accent bar ──

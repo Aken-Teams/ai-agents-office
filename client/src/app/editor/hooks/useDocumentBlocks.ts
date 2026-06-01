@@ -40,8 +40,8 @@ interface UseDocumentBlocksReturn {
   deleteBlock: (fileId: string, blockId: string) => Promise<void>;
   /** Add a new block */
   addBlock: (fileId: string, type: string, data: Record<string, unknown>, insertAfter?: string) => Promise<DocumentBlock | null>;
-  /** Rebuild file from current blocks */
-  rebuild: (fileId: string) => Promise<{ success: boolean; file?: any }>;
+  /** Rebuild file using agent (SSE streaming). onEvent streams progress. */
+  rebuild: (fileId: string, onEvent?: (event: { type: string; data?: any }) => void) => Promise<{ success: boolean; file?: any; blocks?: DocumentBlock[] }>;
   /** Patch a single field in-place (preserves formatting) */
   patchField: (fileId: string, blockId: string, key: string, value: unknown) => Promise<{ success: boolean; file?: any }>;
   /** AI regenerate a single block (streams SSE events via onEvent callback) */
@@ -174,16 +174,55 @@ export function useDocumentBlocks(token: string | null): UseDocumentBlocksReturn
     }
   }, [token, headers]);
 
-  const rebuild = useCallback(async (fileId: string) => {
+  const rebuild = useCallback(async (
+    fileId: string,
+    onEvent?: (event: { type: string; data?: any }) => void,
+  ): Promise<{ success: boolean; file?: any; blocks?: DocumentBlock[] }> => {
     if (!token) return { success: false };
     setError(null);
     try {
       const res = await fetch(`${SSE_BASE}/api/blocks/${fileId}/rebuild`, {
         method: 'POST',
-        headers: headers(),
+        headers: { ...headers(), Accept: 'text/event-stream' },
       });
       if (!res.ok) throw new Error(`Rebuild failed: ${res.status}`);
-      return await res.json();
+
+      // Stream SSE events
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No response body');
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let resultFile: any = null;
+      let resultBlocks: DocumentBlock[] | undefined;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+            onEvent?.(event);
+            if (event.type === 'file_ready') resultFile = event.data?.file;
+            if (event.type === 'blocks_updated') {
+              resultBlocks = event.data?.blocks;
+              if (resultBlocks) setBlocks(resultBlocks);
+            }
+            if (event.type === 'done') {
+              resultFile = event.data?.file || resultFile;
+              resultBlocks = event.data?.blocks || resultBlocks;
+              if (resultBlocks) setBlocks(resultBlocks);
+            }
+          } catch { /* skip malformed SSE */ }
+        }
+      }
+
+      return { success: !!resultFile, file: resultFile, blocks: resultBlocks };
     } catch (err: any) {
       setError(err.message);
       return { success: false };

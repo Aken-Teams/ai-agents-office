@@ -2494,8 +2494,15 @@ function ChatContent() {
             onRebuild={async () => {
               if (!docMode.documentFileId) return;
               setDocRebuilding(true);
-              const result = await docBlocks.rebuild(docMode.documentFileId);
+              setDocRegenPhase('rebuilding');
+              const result = await docBlocks.rebuild(docMode.documentFileId, (event) => {
+                // Stream agent progress
+                if (event.type === 'agent_tool') {
+                  setDocRegenPhase('rebuilding');
+                }
+              });
               setDocRebuilding(false);
+              setDocRegenPhase('');
               if (result.success && result.file) {
                 setFiles(prev => prev.map(f => f.id === docMode.documentFileId ? { ...f, ...(result.file as any) } : f));
               }

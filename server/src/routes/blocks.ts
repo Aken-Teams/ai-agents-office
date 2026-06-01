@@ -6,6 +6,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
 import { rebuildFile, patchFileField } from '../services/fileRebuilder.js';
 import { regenerateBlock } from '../services/blockRegenerator.js';
+import { agentRebuild } from '../services/agentRebuilder.js';
 import { captureBlocksForFile } from '../services/fileManager.js';
 import type { DocumentBlocksRecord, DocumentBlock, GeneratedFile } from '../types.js';
 
@@ -264,22 +265,60 @@ router.post('/:fileId/patch', async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/blocks/:fileId/rebuild — Rebuild file from current blocks
+// POST /api/blocks/:fileId/rebuild — Rebuild file using pptx-gen worker agent (SSE)
+// Uses the same multi-agent quality as left-side chat generation.
+// Falls back to fast rebuild (shared generator) for non-SSE requests.
 // ---------------------------------------------------------------------------
 router.post('/:fileId/rebuild', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const fileId = req.params.fileId as string;
 
-  try {
-    const newFile = await rebuildFile(fileId, userId);
-    if (!newFile) {
-      res.status(500).json({ error: 'Failed to rebuild file' });
-      return;
+  const acceptsSSE = req.headers.accept?.includes('text/event-stream');
+
+  if (acceptsSSE) {
+    // SSE mode: stream agent progress to client
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    const keepalive = setInterval(() => {
+      try { res.write(': keepalive\n\n'); } catch { /* closed */ }
+    }, 10000);
+
+    const emit = (event: any) => {
+      try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* closed */ }
+    };
+
+    agentRebuild(fileId, userId, emit)
+      .then(result => {
+        if (!result) {
+          emit({ type: 'error', data: 'Agent rebuild failed' });
+        }
+      })
+      .catch(err => {
+        console.error('[Blocks] Agent rebuild error:', err);
+        emit({ type: 'error', data: String(err) });
+      })
+      .finally(() => {
+        clearInterval(keepalive);
+        try { res.end(); } catch {}
+      });
+  } else {
+    // Non-SSE fallback: use fast shared-generator rebuild
+    try {
+      const newFile = await rebuildFile(fileId, userId);
+      if (!newFile) {
+        res.status(500).json({ error: 'Failed to rebuild file' });
+        return;
+      }
+      res.json({ success: true, file: newFile });
+    } catch (err: any) {
+      console.error('[Blocks] Rebuild error:', err);
+      res.status(500).json({ error: err.message || 'Rebuild failed' });
     }
-    res.json({ success: true, file: newFile });
-  } catch (err: any) {
-    console.error('[Blocks] Rebuild error:', err);
-    res.status(500).json({ error: err.message || 'Rebuild failed' });
   }
 });
 

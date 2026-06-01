@@ -289,7 +289,7 @@ export default function DocumentCanvas({
           </div>
           <h3 className="font-bold text-base text-on-surface mb-1.5">重新產生文件</h3>
           <p className="text-sm text-on-surface-variant text-center leading-relaxed">
-            所有頁面將根據目前的區塊資料重新生成，這可能會改變排版及樣式。
+            AI 將根據目前的區塊資料重新設計並產生簡報，品質與左側對話相同。此過程約需 1-3 分鐘。
           </p>
         </div>
         <div className="flex gap-2 px-6 pb-6 pt-2">
@@ -390,7 +390,7 @@ export default function DocumentCanvas({
                 <span className="material-symbols-outlined text-primary text-base animate-spin">progress_activity</span>
                 <div className="flex-1 min-w-0">
                   <span className="text-xs font-medium text-primary">
-                    {regenPhase === 'patching' ? '套用變更中...' : regenPhase === 'rebuilding' ? '重建文件中...' : 'AI 修改中...'}
+                    {regenPhase === 'patching' ? '套用變更中...' : regenPhase === 'rebuilding' ? 'AI 重新設計中...' : 'AI 修改中...'}
                   </span>
                   <p className="text-[11px] text-on-surface-variant truncate mt-0.5">{regenInstruction}</p>
                 </div>
@@ -589,7 +589,7 @@ export default function DocumentCanvas({
           <span className="material-symbols-outlined text-primary text-base animate-spin">progress_activity</span>
           <div className="flex-1 min-w-0">
             <span className="text-xs font-medium text-primary">
-              {regenPhase === 'patching' ? '套用變更中...' : regenPhase === 'rebuilding' ? '重建文件中...' : 'AI 修改中...'}
+              {regenPhase === 'patching' ? '套用變更中...' : regenPhase === 'rebuilding' ? 'AI 重新設計中...' : 'AI 修改中...'}
             </span>
             <p className="text-[11px] text-on-surface-variant truncate mt-0.5">{regenInstruction}</p>
           </div>

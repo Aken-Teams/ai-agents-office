@@ -182,12 +182,12 @@ export async function rebuildFile(fileId: string, userId: string): Promise<Gener
 // Used by blockRegenerator for fast single-block updates.
 // ---------------------------------------------------------------------------
 
-/** Fields that can be patched in-place via XML manipulation */
+/** Fields that can be patched in-place via XML manipulation (text only).
+ *  Color/style fields are NOT patchable — they require a full rebuild so the
+ *  generator can apply comprehensive theme overrides (accent bars, cards, etc.). */
 const PATCHABLE_FIELDS = new Set([
   'title', 'subtitle', 'quote', 'attribution', 'description', 'content',
   'bullets', 'points',
-  'backgroundColor', 'textColor',
-  'accentColor', 'accentColor2', 'titleColor', 'subtitleColor',
 ]);
 
 /**
@@ -232,12 +232,14 @@ export async function patchBlockInPlace(
     }
   }
 
+  // If ANY non-patchable fields changed (colors, charts, layout), force full rebuild.
+  // The rebuild also handles text changes, so we don't lose patchable field updates.
+  if (nonPatchableChanges.length > 0) {
+    console.log(`[FileRebuilder] patchBlockInPlace: non-patchable fields changed: [${nonPatchableChanges.join(', ')}] → fallback to rebuild`);
+    return false;
+  }
+
   if (changedFields.length === 0) {
-    if (nonPatchableChanges.length > 0) {
-      // AI changed fields we can't patch in-place (e.g. colors, layout) → need full rebuild
-      console.log(`[FileRebuilder] patchBlockInPlace: non-patchable fields changed: [${nonPatchableChanges.join(', ')}] → fallback to rebuild`);
-      return false;
-    }
     console.log(`[FileRebuilder] patchBlockInPlace: no field changes detected at all`);
     return true; // Genuinely nothing changed
   }
@@ -456,50 +458,10 @@ async function patchPptxField(
         }
       }
     }
-  } else if (fieldKey === 'backgroundColor') {
-    // Patch slide background color directly in XML
-    const hexColor = String(newValue || '').replace(/^#/, '');
-    if (hexColor.length === 6) {
-      const bgXml = `<p:bg><p:bgPr><a:solidFill><a:srgbClr val="${hexColor}"/></a:solidFill><a:effectLst/></p:bgPr></p:bg>`;
-      // Remove existing <p:bg>...</p:bg> if present
-      const bgRegex = /<p:bg>[\s\S]*?<\/p:bg>/;
-      if (bgRegex.test(xml)) {
-        xml = xml.replace(bgRegex, bgXml);
-        modified = true;
-        console.log(`[FileRebuilder] → replaced existing background with #${hexColor}`);
-      } else {
-        // Insert <p:bg> as first child of <p:cSld> (before <p:spTree>)
-        const spTreePos = xml.indexOf('<p:spTree');
-        if (spTreePos > 0) {
-          xml = xml.slice(0, spTreePos) + bgXml + xml.slice(spTreePos);
-          modified = true;
-          console.log(`[FileRebuilder] → inserted new background #${hexColor}`);
-        }
-      }
-    }
-  } else if (fieldKey === 'textColor') {
-    // Patch all text run colors in this slide
-    const hexColor = String(newValue || '').replace(/^#/, '');
-    if (hexColor.length === 6) {
-      // Replace all <a:solidFill><a:srgbClr val="..."/></a:solidFill> within <a:rPr> (run properties)
-      const rPrColorRegex = /(<a:rPr[^>]*>)([\s\S]*?)(<\/a:rPr>)/g;
-      xml = xml.replace(rPrColorRegex, (match, open, inner, close) => {
-        // Replace existing solidFill in run properties
-        const fillRegex = /<a:solidFill>[\s\S]*?<\/a:solidFill>/;
-        if (fillRegex.test(inner)) {
-          const newInner = inner.replace(fillRegex, `<a:solidFill><a:srgbClr val="${hexColor}"/></a:solidFill>`);
-          modified = true;
-          return open + newInner + close;
-        }
-        // Add solidFill if not present
-        modified = true;
-        return open + `<a:solidFill><a:srgbClr val="${hexColor}"/></a:solidFill>` + inner + close;
-      });
-      if (modified) {
-        console.log(`[FileRebuilder] → patched text color to #${hexColor}`);
-      }
-    }
   }
+  // Note: color/style fields (backgroundColor, textColor, accentColor, etc.)
+  // are no longer patchable in-place — they trigger a full rebuild via the
+  // generator script, which applies comprehensive theme overrides.
 
   if (modified) {
     zip.file(slideFile, xml);
