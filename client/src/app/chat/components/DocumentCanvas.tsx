@@ -327,6 +327,7 @@ export default function DocumentCanvas({
   const [selectedCell, setSelectedCell] = useState<CellRef | null>(null);
   const [selectedRange, setSelectedRange] = useState<CellRange | null>(null);
   const previewKeyRef = useRef(0);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const visibleCount = useStaggerReveal(blocks.length);
 
   const docType = record?.docType || '';
@@ -469,6 +470,20 @@ export default function DocumentCanvas({
     }
   }, [selectedBlockId, selectedElement, docPageTexts, blocks, layoutType]);
 
+  // Listen for slide change messages from HTML iframe (sync thumbnail selection)
+  useEffect(() => {
+    if (layoutType !== 'slides' || previewType === 'pdf') return;
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'slideChanged' && typeof e.data.index === 'number') {
+        const idx = e.data.index;
+        setSelectedPageIndex(idx);
+        if (blocks[idx]) onSelectBlock(blocks[idx].id);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [layoutType, previewType, blocks, onSelectBlock]);
+
   // Keyboard navigation for slides
   useEffect(() => {
     if (layoutType !== 'slides') return;
@@ -574,7 +589,7 @@ export default function DocumentCanvas({
           <div className="flex-1 min-w-0">
             {title && <div className="text-sm font-semibold text-on-surface truncate">{title}</div>}
             <div className="text-[10px] text-on-surface-variant uppercase tracking-wider">
-              {docType || 'slides'}{blocks.length > 0 ? ` · ${totalPages || blocks.length} ${t('editor.blocks')}` : ' · interactive'}
+              {docType || 'slides'} · {totalPages || blocks.length} {t('editor.blocks')}
             </div>
           </div>
           <button
@@ -606,38 +621,72 @@ export default function DocumentCanvas({
 
         {/* Main content area */}
         <div className="flex-1 flex min-h-0">
-          {/* Thumbnail strip (left) — only for PDF-based previews (PPTX) */}
-          {previewType === 'pdf' && (
-            <div className="w-36 lg:w-44 border-r border-outline-variant/10 overflow-y-auto p-2 shrink-0 bg-surface-container/20">
-              {streaming && !previewBlobUrl && (
-                <div className="space-y-2">
-                  {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="aspect-[16/9] rounded-lg bg-surface-container border border-outline-variant/10 overflow-hidden relative">
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-shimmer" />
-                      <div className="p-2 space-y-1.5">
-                        <div className="h-2 w-3/5 rounded bg-on-surface/6" />
-                        <div className="h-1.5 w-4/5 rounded bg-on-surface/4" />
-                        <div className="h-1.5 w-2/3 rounded bg-on-surface/4" />
-                      </div>
+          {/* Thumbnail strip (left) */}
+          <div className="w-36 lg:w-44 border-r border-outline-variant/10 overflow-y-auto p-2 shrink-0 bg-surface-container/20">
+            {streaming && !previewBlobUrl && (
+              <div className="space-y-2">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="aspect-[16/9] rounded-lg bg-surface-container border border-outline-variant/10 overflow-hidden relative">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/5 to-transparent animate-shimmer" />
+                    <div className="p-2 space-y-1.5">
+                      <div className="h-2 w-3/5 rounded bg-on-surface/6" />
+                      <div className="h-1.5 w-4/5 rounded bg-on-surface/4" />
+                      <div className="h-1.5 w-2/3 rounded bg-on-surface/4" />
                     </div>
-                  ))}
-                </div>
-              )}
-              {previewBlobUrl && (
-                <PdfSlideThumbs
-                  pdfUrl={previewBlobUrl}
-                  slideCount={blocks.length || undefined}
-                  selectedIndex={selectedPageIndex}
-                  onSelect={(index) => {
-                    setSelectedPageIndex(index);
-                    if (blocks[index]) {
-                      onSelectBlock(blocks[index].id);
-                    }
-                  }}
-                />
-              )}
-            </div>
-          )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {previewBlobUrl && previewType === 'pdf' && (
+              <PdfSlideThumbs
+                pdfUrl={previewBlobUrl}
+                slideCount={blocks.length || undefined}
+                selectedIndex={selectedPageIndex}
+                onSelect={(index) => {
+                  setSelectedPageIndex(index);
+                  if (blocks[index]) {
+                    onSelectBlock(blocks[index].id);
+                  }
+                }}
+              />
+            )}
+            {previewType !== 'pdf' && blocks.length > 0 && (
+              <div className="space-y-1.5">
+                {blocks.map((block, index) => (
+                  <button
+                    key={block.id}
+                    onClick={() => {
+                      setSelectedPageIndex(index);
+                      onSelectBlock(block.id);
+                      // Navigate iframe to this slide
+                      try {
+                        const win = iframeRef.current?.contentWindow;
+                        if (win) {
+                          // Try postMessage first (new files with listener)
+                          win.postMessage({ type: 'goToSlide', index }, '*');
+                          // Direct DOM fallback (works for existing files via same-origin blob)
+                          const el = win.document?.querySelector?.('#slide-' + index);
+                          if (el) el.scrollIntoView({ behavior: 'smooth' });
+                        }
+                      } catch { /* cross-origin — ignored */ }
+                    }}
+                    className={`w-full rounded-lg border-2 transition-all cursor-pointer overflow-hidden ${
+                      selectedPageIndex === index
+                        ? 'border-primary shadow-md ring-1 ring-primary/30'
+                        : 'border-transparent hover:border-outline-variant/30'
+                    }`}
+                  >
+                    {renderSlideThumbnail(block)}
+                    <div className={`text-[9px] py-0.5 text-center ${
+                      selectedPageIndex === index ? 'text-primary font-semibold' : 'text-on-surface-variant/50'
+                    }`}>
+                      {index + 1}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Main preview — PDF page viewer (PPTX) or full-width iframe (HTML slides) */}
           <div className="flex-1 flex flex-col min-w-0 relative">
@@ -684,6 +733,7 @@ export default function DocumentCanvas({
               />
             ) : previewBlobUrl ? (
               <iframe
+                ref={iframeRef}
                 key={previewKeyRef.current}
                 src={previewBlobUrl}
                 className="flex-1 w-full border-0 bg-white"

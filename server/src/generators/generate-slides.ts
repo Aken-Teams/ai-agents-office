@@ -2333,6 +2333,7 @@ function generateHtml(input: SlidesInput): string {
       dots.forEach(function(d, i) { d.classList.toggle('active', i === idx); });
       progress.style.transform = 'scaleX(' + ((idx + 1) / allSlides.length) + ')';
       counterCurrent.textContent = idx + 1;
+      if (typeof reportSlide === 'function') reportSlide(idx);
     }
 
     // Track current slide via IntersectionObserver
@@ -2363,8 +2364,25 @@ function generateHtml(input: SlidesInput): string {
       }
     });
 
+    // Listen for parent postMessage navigation (for embedded iframe control)
+    window.addEventListener('message', function(e) {
+      if (e.data && e.data.type === 'goToSlide' && typeof e.data.index === 'number') {
+        scrollToSlide(e.data.index);
+      }
+    });
+
+    // Report current slide to parent when it changes
+    var prevReportedIndex = -1;
+    function reportSlide(idx) {
+      if (idx !== prevReportedIndex && window.parent !== window) {
+        prevReportedIndex = idx;
+        try { window.parent.postMessage({ type: 'slideChanged', index: idx }, '*'); } catch(e) {}
+      }
+    }
+
     // Fullscreen toggle
-    document.querySelector('.fullscreen-btn').addEventListener('click', function() {
+    var fsBtn = document.querySelector('.fullscreen-btn');
+    if (fsBtn) fsBtn.addEventListener('click', function() {
       if (!document.fullscreenElement) document.documentElement.requestFullscreen();
       else document.exitFullscreen();
     });
