@@ -546,7 +546,31 @@ function ChatContent() {
   const [docRebuilding, setDocRebuilding] = useState(false);
   const [docRegenBlockId, setDocRegenBlockId] = useState<string | null>(null);
   const [docRegenContext, setDocRegenContext] = useState<string>('');
+  const [docRegenInstruction, setDocRegenInstruction] = useState<string>(''); // shown in canvas while regenerating
+  const docRegenInFlight = useRef(false); // prevent duplicate regenerate calls
   const fileGenInRoundRef = useRef(false); // track if file was generated this round
+
+  /** Submit regeneration: close modal immediately, run in background, show status in canvas */
+  const submitDocRegen = useCallback(() => {
+    const input = (document.getElementById('doc-regen-input') as HTMLTextAreaElement)?.value?.trim();
+    if (!input || !docMode.documentFileId || !docRegenBlockId || docRegenInFlight.current) return;
+    docRegenInFlight.current = true;
+    const blockId = docRegenBlockId;
+    const fullInstruction = docRegenContext ? `${docRegenContext} ${input}` : input;
+    // Close modal immediately & show instruction in canvas
+    setDocRegenInstruction(fullInstruction);
+    setDocRegenBlockId(null);
+    setDocRegenContext('');
+    // Fire regeneration — polls until complete (fire-and-forget POST + polling)
+    docBlocks.regenerate(docMode.documentFileId, blockId, fullInstruction).then(result => {
+      docRegenInFlight.current = false;
+      setDocRegenInstruction('');
+      // Blocks are already updated by polling; preview refresh is triggered by regenInstruction→'' transition
+    }).catch(() => {
+      docRegenInFlight.current = false;
+      setDocRegenInstruction('');
+    });
+  }, [docRegenBlockId, docRegenContext, docMode.documentFileId, docBlocks]);
 
   // Custom ReactMarkdown components — intercept ```chart and ```mermaid blocks
   // Memoized to prevent chart/map components from re-mounting on every render
@@ -2364,6 +2388,7 @@ function ChatContent() {
             }}
             streaming={streaming}
             rebuilding={docRebuilding}
+            regenInstruction={docRegenInstruction}
             token={token}
             agentActivity={tools}
             t={t}
@@ -2570,18 +2595,7 @@ function ChatContent() {
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  const input = (document.getElementById('doc-regen-input') as HTMLTextAreaElement)?.value?.trim();
-                  if (input && docMode.documentFileId && docRegenBlockId) {
-                    const fullInstruction = docRegenContext ? `${docRegenContext} ${input}` : input;
-                    docBlocks.regenerate(docMode.documentFileId, docRegenBlockId, fullInstruction).then(result => {
-                      if (result.success) {
-                        setDocRegenBlockId(null);
-                        if (result.file) {
-                          setFiles(prev => prev.map(f => f.id === docMode.documentFileId ? { ...f, ...(result.file as any) } : f));
-                        }
-                      }
-                    });
-                  }
+                  submitDocRegen();
                 }
               }}
             />
@@ -2593,20 +2607,7 @@ function ChatContent() {
                 {t('common.cancel')}
               </button>
               <button
-                onClick={() => {
-                  const input = (document.getElementById('doc-regen-input') as HTMLTextAreaElement)?.value?.trim();
-                  if (input && docMode.documentFileId && docRegenBlockId) {
-                    const fullInstruction = docRegenContext ? `${docRegenContext} ${input}` : input;
-                    docBlocks.regenerate(docMode.documentFileId, docRegenBlockId, fullInstruction).then(result => {
-                      if (result.success) {
-                        setDocRegenBlockId(null);
-                        if (result.file) {
-                          setFiles(prev => prev.map(f => f.id === docMode.documentFileId ? { ...f, ...(result.file as any) } : f));
-                        }
-                      }
-                    });
-                  }
-                }}
+                onClick={submitDocRegen}
                 className="flex items-center gap-1.5 px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:bg-primary-hover transition-colors cursor-pointer"
               >
                 {t('editor.regenerate.submit')}

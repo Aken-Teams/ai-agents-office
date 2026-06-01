@@ -212,22 +212,40 @@ export function useDocumentBlocks(token: string | null): UseDocumentBlocksReturn
   const regenerate = useCallback(async (fileId: string, blockId: string, instruction: string) => {
     if (!token) return { success: false };
     setError(null);
-    // Mark block as regenerating
+    // Mark block as regenerating locally
     setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, status: 'regenerating' } : b));
     try {
+      // Fire-and-forget POST — server responds immediately
       const res = await fetch(`${SSE_BASE}/api/blocks/${fileId}/regenerate/${blockId}`, {
         method: 'POST',
         headers: headers(),
         body: JSON.stringify({ instruction }),
       });
       if (!res.ok) throw new Error(`Regenerate failed: ${res.status}`);
-      const result = await res.json();
-      if (result.success && result.block) {
-        setBlocks(prev => prev.map(b => b.id === blockId ? { ...result.block, status: 'idle' } : b));
-      } else {
-        setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, status: 'idle' } : b));
+      const startResult = await res.json();
+      if (!startResult.success) throw new Error('Server rejected regeneration');
+
+      // Poll for completion: check block status every 3s, up to 2 minutes
+      const MAX_POLLS = 40;
+      const POLL_INTERVAL = 3000;
+      for (let i = 0; i < MAX_POLLS; i++) {
+        await new Promise(r => setTimeout(r, POLL_INTERVAL));
+        try {
+          const pollRes = await fetch(`${SSE_BASE}/api/blocks/${fileId}`, { headers: headers() });
+          if (!pollRes.ok) continue;
+          const data: BlockRecord = await pollRes.json();
+          const block = data.blocks.find(b => b.id === blockId);
+          if (block && block.status !== 'regenerating') {
+            // Regeneration complete — update all blocks
+            setRecord(data);
+            setBlocks(data.blocks);
+            return { success: true, block, file: null };
+          }
+        } catch { /* keep polling */ }
       }
-      return result;
+      // Timed out — reset status
+      setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, status: 'idle' } : b));
+      return { success: false };
     } catch (err: any) {
       setError(err.message);
       setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, status: 'idle' } : b));

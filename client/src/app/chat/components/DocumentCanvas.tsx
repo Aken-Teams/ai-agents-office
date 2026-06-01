@@ -37,6 +37,8 @@ interface DocumentCanvasProps {
   onDownload: () => void;
   streaming: boolean;
   rebuilding: boolean;
+  /** Instruction text shown while AI regeneration is in progress */
+  regenInstruction?: string;
   token: string | null;
   /** Live agent activity during generation */
   agentActivity?: AgentActivity[];
@@ -82,6 +84,7 @@ export default function DocumentCanvas({
   onDownload,
   streaming,
   rebuilding,
+  regenInstruction,
   token,
   t,
   agentActivity,
@@ -137,15 +140,20 @@ export default function DocumentCanvas({
     }
   }, [fileId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Refresh preview after rebuild completes
+  // Refresh preview after rebuild or regeneration completes
   const prevRebuilding = useRef(false);
+  const prevRegenInstruction = useRef('');
   useEffect(() => {
-    // Only trigger on transition from rebuilding→done (not on initial mount)
+    // Trigger on transition from rebuilding→done or regen→done
     if (prevRebuilding.current && !rebuilding && fileId) {
       loadPreview();
     }
+    if (prevRegenInstruction.current && !regenInstruction && fileId) {
+      loadPreview();
+    }
     prevRebuilding.current = rebuilding;
-  }, [rebuilding]); // eslint-disable-line react-hooks/exhaustive-deps
+    prevRegenInstruction.current = regenInstruction || '';
+  }, [rebuilding, regenInstruction]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cleanup blob on unmount
   useEffect(() => {
@@ -326,7 +334,17 @@ export default function DocumentCanvas({
           </div>
 
           {/* Main preview (right) — rendered PDF page via pdf.js */}
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 relative">
+            {/* AI regeneration in-progress banner */}
+            {regenInstruction && (
+              <div className="flex items-center gap-2.5 px-4 py-2.5 bg-primary/8 border-b border-primary/15 shrink-0 z-10">
+                <span className="material-symbols-outlined text-primary text-base animate-spin">progress_activity</span>
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-medium text-primary">AI 重生成中</span>
+                  <p className="text-[11px] text-on-surface-variant truncate mt-0.5">{regenInstruction}</p>
+                </div>
+              </div>
+            )}
             {previewLoading ? (
               <div className="flex-1 flex items-center justify-center bg-surface-container/50">
                 <span className="material-symbols-outlined animate-spin text-primary/60 text-3xl">progress_activity</span>
@@ -422,25 +440,6 @@ export default function DocumentCanvas({
                   ) : null}
                 </span>
                 <button
-                  onClick={() => {
-                    if (!selectedBlockId) return;
-                    // Build context from selected shape/element
-                    let ctx = '';
-                    if (selectedShapeId) {
-                      const shape = slideShapes[selectedPageIndex]?.find(s => s.id === selectedShapeId);
-                      if (shape) ctx = `[第${selectedPageIndex + 1}頁 · ${shape.type}: ${shape.text || shape.name}]`;
-                    } else if (selectedElement) {
-                      ctx = `[第${selectedPageIndex + 1}頁 · ${selectedElement}]`;
-                    }
-                    onRegenerate(selectedBlockId, ctx || undefined);
-                  }}
-                  disabled={!selectedBlockId}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-surface-container-highest border border-outline-variant/10 rounded-lg text-xs text-on-surface hover:bg-surface-variant transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  <span className="material-symbols-outlined text-primary text-sm">auto_fix_high</span>
-                  AI
-                </button>
-                <button
                   onClick={() => { onSelectBlock(null); setSelectedShapeId(null); }}
                   className="p-1 rounded hover:bg-surface-container transition-colors cursor-pointer"
                 >
@@ -513,6 +512,17 @@ export default function DocumentCanvas({
           <span className="material-symbols-outlined text-on-surface-variant text-lg">close</span>
         </button>
       </div>
+
+      {/* AI regeneration in-progress banner */}
+      {regenInstruction && (
+        <div className="flex items-center gap-2.5 px-4 py-2.5 bg-primary/8 border-b border-primary/15 shrink-0">
+          <span className="material-symbols-outlined text-primary text-base animate-spin">progress_activity</span>
+          <div className="flex-1 min-w-0">
+            <span className="text-xs font-medium text-primary">AI 重生成中</span>
+            <p className="text-[11px] text-on-surface-variant truncate mt-0.5">{regenInstruction}</p>
+          </div>
+        </div>
+      )}
 
       {/* Main content area */}
       <div className="flex-1 flex min-h-0">
@@ -599,13 +609,6 @@ export default function DocumentCanvas({
               <span className="text-xs text-on-surface-variant flex-1 truncate">
                 #{(blocks.findIndex(b => b.id === selectedBlockId) + 1)} — {blocks.find(b => b.id === selectedBlockId)?.type.replace(/_/g, ' ')}
               </span>
-              <button
-                onClick={() => onRegenerate(selectedBlockId)}
-                className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-lg text-xs text-primary font-medium hover:bg-primary/20 transition-colors cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-sm">auto_fix_high</span>
-                AI
-              </button>
               <button
                 onClick={() => onSelectBlock(null)}
                 className="p-1 rounded hover:bg-surface-container transition-colors cursor-pointer"

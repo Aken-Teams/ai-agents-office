@@ -285,7 +285,11 @@ router.post('/:fileId/rebuild', async (req: Request, res: Response) => {
 
 // ---------------------------------------------------------------------------
 // POST /api/blocks/:fileId/regenerate/:blockId — AI partial regeneration
+// Returns immediately so the Next.js proxy doesn't time out.
+// Frontend polls GET /api/blocks/:fileId to detect completion.
 // ---------------------------------------------------------------------------
+const activeRegenerations = new Map<string, boolean>();
+
 router.post('/:fileId/regenerate/:blockId', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const fileId = req.params.fileId as string;
@@ -297,22 +301,64 @@ router.post('/:fileId/regenerate/:blockId', async (req: Request, res: Response) 
     return;
   }
 
-  try {
-    const result = await regenerateBlock(fileId, blockId, userId, instruction);
-    if (!result) {
-      res.status(500).json({ error: 'Failed to regenerate block' });
-      return;
-    }
-
-    res.json({
-      success: true,
-      block: result.updatedBlock,
-      file: result.newFile,
-    });
-  } catch (err: any) {
-    console.error('[Blocks] Regenerate error:', err);
-    res.status(500).json({ error: err.message || 'Regeneration failed' });
+  // Prevent duplicate concurrent regeneration of the same block
+  const regenKey = `${fileId}:${blockId}`;
+  if (activeRegenerations.get(regenKey)) {
+    res.status(409).json({ error: 'Regeneration already in progress for this block' });
+    return;
   }
+
+  // Mark block as regenerating in DB immediately
+  try {
+    const blockRecord = await dbGet<DocumentBlocksRecord>(
+      'SELECT * FROM document_blocks WHERE file_id = ? AND user_id = ?',
+      fileId, userId,
+    );
+    if (blockRecord) {
+      const blocks: DocumentBlock[] = JSON.parse(blockRecord.blocks);
+      const block = blocks.find(b => b.id === blockId);
+      if (block) {
+        block.status = 'regenerating';
+        await dbRun(
+          'UPDATE document_blocks SET blocks = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          JSON.stringify(blocks), blockRecord.id,
+        );
+      }
+    }
+  } catch {}
+
+  // Respond immediately — frontend will poll for result
+  activeRegenerations.set(regenKey, true);
+  res.json({ success: true, started: true });
+
+  // Run regeneration in background
+  regenerateBlock(fileId, blockId, userId, instruction)
+    .then(result => {
+      if (result) {
+        console.log(`[Blocks] Regeneration complete for block ${blockId}`);
+      } else {
+        console.error(`[Blocks] Regeneration returned null for block ${blockId}`);
+      }
+    })
+    .catch(err => {
+      console.error('[Blocks] Background regeneration error:', err);
+      // Reset block status on failure
+      dbGet<DocumentBlocksRecord>(
+        'SELECT * FROM document_blocks WHERE file_id = ? AND user_id = ?',
+        fileId, userId,
+      ).then(rec => {
+        if (!rec) return;
+        const blocks: DocumentBlock[] = JSON.parse(rec.blocks);
+        const b = blocks.find(x => x.id === blockId);
+        if (b) {
+          b.status = 'idle';
+          dbRun('UPDATE document_blocks SET blocks = ? WHERE id = ?', JSON.stringify(blocks), rec.id);
+        }
+      }).catch(() => {});
+    })
+    .finally(() => {
+      activeRegenerations.delete(regenKey);
+    });
 });
 
 export default router;

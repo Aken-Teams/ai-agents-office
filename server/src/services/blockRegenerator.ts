@@ -92,6 +92,7 @@ export async function regenerateBlock(
         // Update the block in the array
         targetBlock.data = updatedData;
         if (updatedData.type) targetBlock.type = updatedData.type;
+        targetBlock.status = 'idle'; // Mark as complete (frontend polls for this)
 
         // Save updated blocks to DB
         await dbRun(
