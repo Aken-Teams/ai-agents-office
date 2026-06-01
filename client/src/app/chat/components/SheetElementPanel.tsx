@@ -184,9 +184,9 @@ export default function SheetElementPanel({
       )}
 
       {/* Toolbar */}
-      <div className="flex items-center gap-1.5 px-3 py-1.5 overflow-x-auto scrollbar-thin">
+      <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 overflow-x-auto scrollbar-thin">
         {/* Sheet name badge */}
-        <span className="text-[10px] text-on-surface-variant/50 shrink-0 flex items-center gap-1">
+        <span className="text-[10px] text-on-surface-variant/50 shrink-0 flex items-center gap-1 hidden sm:flex">
           <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>table_chart</span>
           {sheetName}
         </span>

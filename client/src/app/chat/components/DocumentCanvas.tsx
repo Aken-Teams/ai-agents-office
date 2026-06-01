@@ -585,9 +585,9 @@ export default function DocumentCanvas({
     return (
       <><div className="flex-1 flex flex-col min-w-0 bg-surface">
         {/* Toolbar */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-outline-variant/10 bg-surface-container/30 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 border-b border-outline-variant/10 bg-surface-container/30 shrink-0">
           <div className="flex-1 min-w-0">
-            {title && <div className="text-sm font-semibold text-on-surface truncate">{title}</div>}
+            {title && <div className="text-xs sm:text-sm font-semibold text-on-surface truncate">{title}</div>}
             <div className="text-[10px] text-on-surface-variant uppercase tracking-wider">
               {docType || 'slides'} · {totalPages || blocks.length} {t('editor.blocks')}
             </div>
@@ -595,14 +595,14 @@ export default function DocumentCanvas({
           <button
             onClick={() => setShowRebuildConfirm(true)}
             disabled={rebuilding || blocks.length === 0}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:bg-primary-hover transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:bg-primary-hover transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
           >
             {rebuilding ? (
               <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
             ) : (
               <span className="material-symbols-outlined text-sm">build</span>
             )}
-            {t('chat.docMode.rebuild')}
+            <span className="hidden sm:inline">{t('chat.docMode.rebuild')}</span>
           </button>
           <button
             onClick={onDownload}
@@ -619,10 +619,53 @@ export default function DocumentCanvas({
           </button>
         </div>
 
+        {/* Mobile horizontal thumbnail strip */}
+        {blocks.length > 0 && (
+          <div className="sm:hidden flex items-center gap-1.5 px-2 py-1.5 border-b border-outline-variant/10 bg-surface-container/20 overflow-x-auto shrink-0 scrollbar-thin">
+            {blocks.map((block, index) => (
+              <button
+                key={block.id}
+                onClick={() => {
+                  setSelectedPageIndex(index);
+                  onSelectBlock(block.id);
+                  try {
+                    const win = iframeRef.current?.contentWindow;
+                    if (win) {
+                      win.postMessage({ type: 'goToSlide', index }, '*');
+                      const el = win.document?.querySelector?.('#slide-' + index);
+                      if (el) el.scrollIntoView({ behavior: 'smooth' });
+                    }
+                  } catch { /* ignored */ }
+                }}
+                className={`shrink-0 rounded border-2 transition-all cursor-pointer overflow-hidden ${
+                  selectedPageIndex === index
+                    ? 'border-primary shadow-sm'
+                    : 'border-transparent opacity-60'
+                }`}
+                style={{ width: '64px' }}
+              >
+                <div className="aspect-[16/9] bg-[#1B2A4A] rounded-sm flex flex-col justify-center px-1 py-0.5 overflow-hidden">
+                  <div className={`font-bold text-white truncate ${
+                    block.type === 'title' || block.type === 'title_slide' ? 'text-[5px] text-center' : 'text-[4px]'
+                  }`}>
+                    {(block.data.title as string) || ''}
+                  </div>
+                </div>
+                <div className={`text-[8px] text-center ${
+                  selectedPageIndex === index ? 'text-primary font-semibold' : 'text-on-surface-variant/50'
+                }`}>
+                  {index + 1}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Main content area */}
         <div className="flex-1 flex min-h-0">
-          {/* Thumbnail strip (left) */}
-          <div className="w-36 lg:w-44 border-r border-outline-variant/10 overflow-y-auto p-2 shrink-0 bg-surface-container/20">
+          {/* Thumbnail strip (left) — desktop only, hide when no blocks (interactive web) */}
+          {(blocks.length > 0 || previewType === 'pdf' || (streaming && !previewBlobUrl)) && (
+          <div className="hidden sm:block w-36 lg:w-44 border-r border-outline-variant/10 overflow-y-auto p-2 shrink-0 bg-surface-container/20">
             {streaming && !previewBlobUrl && (
               <div className="space-y-2">
                 {[1, 2, 3, 4].map(i => (
@@ -703,6 +746,7 @@ export default function DocumentCanvas({
               </div>
             )}
           </div>
+          )}
 
           {/* Main preview — PDF page viewer (PPTX) or full-width iframe (HTML slides) */}
           <div className="flex-1 flex flex-col min-w-0 relative">
@@ -809,7 +853,7 @@ export default function DocumentCanvas({
 
             {/* Selected shape/element info bar (only when blocks exist — not for HTML slides) */}
             {blocks.length > 0 && (selectedBlockId || selectedShapeId) && (
-              <div className="flex items-center gap-2 px-4 py-2 border-t border-outline-variant/10 bg-surface-container/30 shrink-0">
+              <div className="flex items-center gap-2 px-2 sm:px-4 py-1.5 sm:py-2 border-t border-outline-variant/10 bg-surface-container/30 shrink-0">
                 <span className="material-symbols-outlined text-primary text-sm">edit_note</span>
                 <span className="text-xs text-on-surface-variant flex-1 min-w-0">
                   {selectedShapeId ? (
@@ -885,9 +929,9 @@ export default function DocumentCanvas({
     return (
       <><div className="flex-1 flex flex-col min-w-0 bg-surface">
         {/* Toolbar */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-outline-variant/10 bg-surface-container/30 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 border-b border-outline-variant/10 bg-surface-container/30 shrink-0">
           <div className="flex-1 min-w-0">
-            {title && <div className="text-sm font-semibold text-on-surface truncate">{title}</div>}
+            {title && <div className="text-xs sm:text-sm font-semibold text-on-surface truncate">{title}</div>}
             <div className="text-[10px] text-on-surface-variant uppercase tracking-wider">
               {docType || 'xlsx'} · {blocks.length} {blocks.length === 1 ? 'sheet' : 'sheets'}
             </div>
@@ -895,14 +939,14 @@ export default function DocumentCanvas({
           <button
             onClick={() => setShowRebuildConfirm(true)}
             disabled={rebuilding || blocks.length === 0}
-            className="flex items-center gap-1 px-2.5 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:bg-primary-hover transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:bg-primary-hover transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
           >
             {rebuilding ? (
               <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
             ) : (
               <span className="material-symbols-outlined text-sm">build</span>
             )}
-            {t('chat.docMode.rebuild')}
+            <span className="hidden sm:inline">{t('chat.docMode.rebuild')}</span>
           </button>
           <button
             onClick={onDownload}
@@ -1002,9 +1046,9 @@ export default function DocumentCanvas({
     <>
     <div className="flex-1 flex flex-col min-w-0 bg-surface">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-outline-variant/10 bg-surface-container/30 shrink-0">
+      <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 border-b border-outline-variant/10 bg-surface-container/30 shrink-0">
         <div className="flex-1 min-w-0">
-          {title && <div className="text-sm font-semibold text-on-surface truncate">{title}</div>}
+          {title && <div className="text-xs sm:text-sm font-semibold text-on-surface truncate">{title}</div>}
           <div className="text-[10px] text-on-surface-variant uppercase tracking-wider">
             {docType || layoutType} · {blocks.length} {t('editor.blocks')}
           </div>
@@ -1012,14 +1056,14 @@ export default function DocumentCanvas({
         <button
           onClick={() => setShowRebuildConfirm(true)}
           disabled={rebuilding || blocks.length === 0}
-          className="flex items-center gap-1 px-2.5 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:bg-primary-hover transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+          className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:bg-primary-hover transition-colors disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
         >
           {rebuilding ? (
             <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
           ) : (
             <span className="material-symbols-outlined text-sm">build</span>
           )}
-          {t('chat.docMode.rebuild')}
+          <span className="hidden sm:inline">{t('chat.docMode.rebuild')}</span>
         </button>
         <button
           onClick={onDownload}
@@ -1049,11 +1093,34 @@ export default function DocumentCanvas({
         </div>
       )}
 
+      {/* Mobile horizontal section strip */}
+      {blocks.length > 0 && (
+        <div className="sm:hidden flex items-center gap-1 px-2 py-1.5 border-b border-outline-variant/10 bg-surface-container/20 overflow-x-auto shrink-0 scrollbar-thin">
+          {blocks.map((block, index) => {
+            const label = (block.data.heading as string) || (block.data.title as string) || block.type.replace(/_/g, ' ');
+            const selected = selectedBlockId === block.id;
+            return (
+              <button
+                key={block.id}
+                onClick={() => onSelectBlock(selected ? null : block.id)}
+                className={`shrink-0 px-2 py-1 rounded-md text-[10px] whitespace-nowrap transition-colors cursor-pointer ${
+                  selected
+                    ? 'bg-primary/10 text-primary font-semibold border border-primary/20'
+                    : 'text-on-surface-variant/70 hover:bg-surface-container-highest/50'
+                }`}
+              >
+                {label.length > 12 ? label.slice(0, 12) + '…' : label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Main content area */}
       <div className="flex-1 flex min-h-0">
-        {/* Section list (left) — only when blocks exist */}
+        {/* Section list (left) — desktop only */}
         {blocks.length > 0 && (
-          <div className="w-56 lg:w-64 border-r border-outline-variant/10 overflow-y-auto py-1 shrink-0 bg-surface-container/20">
+          <div className="hidden sm:block w-56 lg:w-64 border-r border-outline-variant/10 overflow-y-auto py-1 shrink-0 bg-surface-container/20">
             {blocks.map((block, index) => {
               const level = (block.data.level as number) || 1;
               const blockType = block.type;

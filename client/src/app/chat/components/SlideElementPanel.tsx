@@ -421,7 +421,7 @@ export default function SlideElementPanel({
       )}
 
       {/* Toolbar — single compact row */}
-      <div className="flex items-center gap-1.5 px-3 py-1.5 overflow-x-auto scrollbar-thin">
+      <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 overflow-x-auto scrollbar-thin">
         <span className="text-[10px] text-on-surface-variant/50 shrink-0">第{slideIndex + 1}頁</span>
         <div className="w-px h-4 bg-outline-variant/15 shrink-0" />
         {fields.map((field) => {
