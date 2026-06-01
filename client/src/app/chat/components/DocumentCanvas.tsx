@@ -52,22 +52,64 @@ interface DocumentCanvasProps {
   t: (key: any, params?: Record<string, string | number>) => string;
 }
 
+/** Find the best matching PDF page for a block, avoiding TOC false matches */
+function findBestPage(heading: string, content: string, blockIndex: number, totalBlocks: number, pageTexts: string[]): number {
+  if (heading) {
+    const norm = heading.replace(/\s+/g, '');
+    const matches = pageTexts.map((t, pi) => t.replace(/\s+/g, '').includes(norm) ? pi : -1).filter(pi => pi >= 0);
+    if (matches.length === 1) return matches[0];
+    if (matches.length > 1) {
+      // Multiple matches (e.g. heading appears in TOC + actual section) — pick closest to proportional estimate
+      const est = blockIndex * pageTexts.length / totalBlocks;
+      return matches.reduce((best, p) => Math.abs(p - est) < Math.abs(best - est) ? p : best);
+    }
+  }
+  if (content) {
+    const snippet = content.slice(0, 40).replace(/\s+/g, '');
+    if (snippet.length >= 6) {
+      const idx = pageTexts.findIndex(t => t.replace(/\s+/g, '').includes(snippet));
+      if (idx >= 0) return idx;
+    }
+  }
+  return Math.min(Math.floor(blockIndex * pageTexts.length / totalBlocks), pageTexts.length - 1);
+}
+
+/** Find text position on a page — returns topFrac (0-1, 0=top) or null */
+function findTextOnPage(items: Array<{ str: string; topFrac: number }>, search: string): number | null {
+  const norm = search.replace(/\s+/g, '');
+  if (!norm) return null;
+  for (const item of items) {
+    if (item.str.replace(/\s+/g, '').includes(norm)) return item.topFrac;
+  }
+  let running = '';
+  for (const item of items) {
+    running += item.str;
+    if (running.replace(/\s+/g, '').includes(norm)) return item.topFrac;
+  }
+  return null;
+}
+
 /**
  * Renders ALL pages of a PDF vertically in a scrollable view,
  * each page looking like a paper sheet with shadow — matching actual DOCX output.
+ * Supports section highlight overlay via text position matching.
  */
-function DocPdfPages({ pdfUrl, previewKey, onPageCount, onPageTexts }: {
+function DocPdfPages({ pdfUrl, previewKey, onPageCount, onPageTexts, highlightInfo }: {
   pdfUrl: string; previewKey: number;
   onPageCount?: (count: number) => void;
   onPageTexts?: (texts: string[]) => void;
+  highlightInfo?: { pageIndex: number; heading: string; nextHeading?: string } | null;
 }) {
   const [pageImages, setPageImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  // Store text items with vertical positions for highlight computation
+  const pageItemsRef = useRef<Array<Array<{ str: string; topFrac: number }>>>([]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setPageImages([]);
+    pageItemsRef.current = [];
 
     (async () => {
       try {
@@ -76,11 +118,11 @@ function DocPdfPages({ pdfUrl, previewKey, onPageCount, onPageTexts }: {
         const pdf = await (pdfjsLib.getDocument as any)({ url: pdfUrl }).promise;
         const images: string[] = [];
         const texts: string[] = [];
+        const allItems: Array<Array<{ str: string; topFrac: number }>> = [];
 
         for (let i = 1; i <= pdf.numPages; i++) {
           if (cancelled) break;
           const page = await pdf.getPage(i);
-          // Render at 2x for crisp display
           const viewport = page.getViewport({ scale: 2 });
           const canvas = document.createElement('canvas');
           canvas.width = viewport.width;
@@ -88,15 +130,22 @@ function DocPdfPages({ pdfUrl, previewKey, onPageCount, onPageTexts }: {
           const ctx = canvas.getContext('2d')!;
           await page.render({ canvasContext: ctx, viewport }).promise;
           images.push(canvas.toDataURL('image/png', 0.92));
-          // Extract text for block-to-page mapping
-          const textContent = await page.getTextContent();
-          texts.push(textContent.items.map((item: any) => item.str).join(''));
+
+          // Extract text with vertical positions for highlight + page matching
+          const tc = await page.getTextContent();
+          const pageH = viewport.height / 2; // unscaled page height
+          texts.push(tc.items.map((item: any) => item.str).join(''));
+          allItems.push(tc.items.map((item: any) => ({
+            str: item.str as string,
+            topFrac: Math.max(0, Math.min(1, 1 - ((item.transform?.[5] ?? 0) + (item.height ?? 0)) / pageH)),
+          })));
           page.cleanup();
         }
 
         if (!cancelled) {
           setPageImages(images);
           setLoading(false);
+          pageItemsRef.current = allItems;
           onPageCount?.(images.length);
           onPageTexts?.(texts);
         }
@@ -109,6 +158,28 @@ function DocPdfPages({ pdfUrl, previewKey, onPageCount, onPageTexts }: {
     return () => { cancelled = true; };
   }, [pdfUrl, previewKey]);
 
+  // Compute highlight overlay position
+  const highlight = (() => {
+    if (!highlightInfo || !pageItemsRef.current[highlightInfo.pageIndex]) return null;
+    const { pageIndex, heading, nextHeading } = highlightInfo;
+    const items = pageItemsRef.current[pageIndex];
+
+    const topFrac = findTextOnPage(items, heading);
+    if (topFrac == null) return null;
+    const topPct = Math.max(0, topFrac * 100 - 0.5);
+
+    // Find where the next section starts (end of highlight)
+    let bottomPct = 100;
+    if (nextHeading) {
+      const nextFrac = findTextOnPage(items, nextHeading);
+      if (nextFrac != null && nextFrac * 100 > topPct + 3) {
+        bottomPct = nextFrac * 100 - 0.5;
+      }
+    }
+
+    return { pageIdx: pageIndex, topPct, bottomPct };
+  })();
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -120,8 +191,18 @@ function DocPdfPages({ pdfUrl, previewKey, onPageCount, onPageTexts }: {
   return (
     <div className="py-4 px-4 space-y-4">
       {pageImages.map((src, i) => (
-        <div key={i} id={`doc-pdf-page-${i}`} className="mx-auto bg-white shadow-md" style={{ maxWidth: '740px' }}>
+        <div key={i} id={`doc-pdf-page-${i}`} className="mx-auto bg-white shadow-md relative overflow-hidden" style={{ maxWidth: '740px' }}>
           <img src={src} alt={`Page ${i + 1}`} className="w-full h-auto block" />
+          {highlight && highlight.pageIdx === i && (
+            <div
+              className="absolute left-0 right-0 pointer-events-none border-l-[3px] border-primary/40"
+              style={{
+                top: `${highlight.topPct}%`,
+                height: `${highlight.bottomPct - highlight.topPct}%`,
+                backgroundColor: 'rgba(43, 108, 176, 0.06)',
+              }}
+            />
+          )}
         </div>
       ))}
     </div>
@@ -292,41 +373,32 @@ export default function DocumentCanvas({
     }
   }, [selectedBlockId, blocks]);
 
-  // Auto-scroll PDF to the correct page when a doc block is selected
-  // Uses text extraction from pdf.js to match block headings → PDF pages
+  // Auto-scroll PDF + compute highlight when a doc block is selected
+  const [docHighlight, setDocHighlight] = useState<{ pageIndex: number; heading: string; nextHeading?: string } | null>(null);
+
   useEffect(() => {
-    if (layoutType === 'slides' || !selectedBlockId || docPageTexts.length === 0 || blocks.length === 0) return;
-    const block = blocks.find(b => b.id === selectedBlockId);
-    if (!block) return;
+    if (layoutType === 'slides' || !selectedBlockId || docPageTexts.length === 0 || blocks.length === 0) {
+      if (!selectedBlockId) setDocHighlight(null);
+      return;
+    }
+    const idx = blocks.findIndex(b => b.id === selectedBlockId);
+    const block = blocks[idx];
+    if (!block) { setDocHighlight(null); return; }
 
     const heading = (block.data.heading as string) || (block.data.title as string) || '';
     const content = (block.data.content as string) || (block.data.text as string) || '';
-    let targetPage = -1;
+    const targetPage = findBestPage(heading, content, idx, blocks.length, docPageTexts);
 
-    // 1) Search for heading text in PDF pages
-    if (heading) {
-      const norm = heading.replace(/\s+/g, '');
-      targetPage = docPageTexts.findIndex(t => t.replace(/\s+/g, '').includes(norm));
-    }
-    // 2) Fallback: search for content snippet
-    if (targetPage < 0 && content) {
-      const snippet = content.slice(0, 40).replace(/\s+/g, '');
-      if (snippet.length >= 6) {
-        targetPage = docPageTexts.findIndex(t => t.replace(/\s+/g, '').includes(snippet));
-      }
-    }
-    // 3) Fallback: proportional estimate
-    if (targetPage < 0) {
-      const idx = blocks.findIndex(b => b.id === selectedBlockId);
-      targetPage = Math.min(Math.floor(idx * docPageTexts.length / blocks.length), docPageTexts.length - 1);
-    }
+    // Next block heading — used to compute highlight end boundary
+    const nextBlock = blocks[idx + 1];
+    const nextHeading = nextBlock ? ((nextBlock.data.heading as string) || (nextBlock.data.title as string) || '') : '';
 
-    if (targetPage >= 0) {
-      const timer = setTimeout(() => {
-        document.getElementById(`doc-pdf-page-${targetPage}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 50);
-      return () => clearTimeout(timer);
-    }
+    setDocHighlight(heading ? { pageIndex: targetPage, heading, nextHeading } : null);
+
+    const timer = setTimeout(() => {
+      document.getElementById(`doc-pdf-page-${targetPage}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+    return () => clearTimeout(timer);
   }, [selectedBlockId, docPageTexts, blocks, layoutType]);
 
   // Keyboard navigation for slides
@@ -834,6 +906,7 @@ export default function DocumentCanvas({
                 previewKey={previewKeyRef.current}
                 onPageCount={setDocPageCount}
                 onPageTexts={setDocPageTexts}
+                highlightInfo={docHighlight}
               />
             </div>
           ) : streaming ? (
