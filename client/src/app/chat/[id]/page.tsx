@@ -11,7 +11,7 @@ import UploadAlertModal, { type UploadAlertItem } from '../../components/UploadA
 import ShareModal from '../../components/ShareModal';
 import { I18nProvider, useTranslation } from '../../../i18n';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
-import { useDocumentMode, FILE_GEN_SKILLS } from '../hooks/useDocumentMode';
+import { useDocumentMode, FILE_GEN_SKILLS, FILE_TYPE_TO_LAYOUT } from '../hooks/useDocumentMode';
 import { useDocumentBlocks } from '../../editor/hooks/useDocumentBlocks';
 import DocumentCanvas from '../components/DocumentCanvas';
 
@@ -2438,34 +2438,41 @@ function ChatContent() {
                 {files.map(file => (
                   <div key={file.id} className="group relative">
                     <div
-                      className="flex items-center justify-between p-3 hover:bg-surface-container rounded-lg cursor-pointer transition-colors border border-transparent hover:border-primary/20"
+                      className="flex items-center gap-2 p-2.5 hover:bg-surface-container rounded-lg cursor-pointer transition-colors border border-transparent hover:border-primary/20"
                       onClick={() => handleDownload(file.id, file.filename)}
                       role="button"
                       tabIndex={0}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className={`material-symbols-outlined ${getFileColor(file.file_type)} text-lg`}>
-                          {getFileIcon(file.file_type)}
+                      <span className={`material-symbols-outlined ${getFileColor(file.file_type)} text-lg shrink-0`}>
+                        {getFileIcon(file.file_type)}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-on-surface font-medium block truncate">{file.filename}</span>
+                        <span className="text-xs text-outline">
+                          {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
                         </span>
-                        <div className="min-w-0">
-                          <span className="text-sm text-on-surface font-medium block truncate">{file.filename}</span>
-                          <span className="text-sm text-outline">
-                            {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
-                          </span>
-                        </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0 relative" data-version-dropdown>
+                      <div className="flex items-center gap-0.5 shrink-0 relative" data-version-dropdown>
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleVersionDropdown(`sidebar-${file.id}`); }}
-                          className="flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors cursor-pointer"
+                          className="px-1 py-0.5 text-[10px] font-bold text-primary/70 hover:bg-primary/10 rounded transition-colors cursor-pointer"
                           title={t('chat.preview.versions' as any)}
                         >
                           v{file.version || 1}
-                          <span className="material-symbols-outlined text-[10px]">expand_more</span>
                         </button>
-                        <span className="material-symbols-outlined text-sm text-outline group-hover:text-primary transition-colors">
-                          download
-                        </span>
+                        {FILE_TYPE_TO_LAYOUT[file.file_type] ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              docMode.manualToggle(file.id, file.file_type);
+                              docBlocks.fetchBlocks(file.id);
+                            }}
+                            className="p-1 rounded hover:bg-primary/10 text-outline hover:text-primary transition-colors cursor-pointer"
+                            title={t('editor.openEditor' as any)}
+                          >
+                            <span className="material-symbols-outlined text-base">edit_note</span>
+                          </button>
+                        ) : null}
                         {/* Sidebar version dropdown — absolute overlay */}
                         {versionDropdown === `sidebar-${file.id}` && versionCache[file.id] && (
                           <div className="absolute right-0 top-full mt-2 z-50 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl min-w-[220px] py-1.5 max-h-[7.5rem] overflow-y-auto">
@@ -2505,20 +2512,6 @@ function ChatContent() {
               </div>
             )}
 
-            {/* Open in Editor (split view) button */}
-            {files.length > 0 && (
-              <button
-                onClick={() => {
-                  const latestFile = files[files.length - 1];
-                  docMode.manualToggle(latestFile?.id, latestFile?.file_type);
-                  if (latestFile) docBlocks.fetchBlocks(latestFile.id);
-                }}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 mt-2 bg-primary/10 hover:bg-primary/20 text-primary rounded-lg text-sm font-medium transition-colors cursor-pointer border border-primary/10"
-              >
-                <span className="material-symbols-outlined text-base">edit_note</span>
-                {t('editor.openEditor' as any)}
-              </button>
-            )}
           </div>
 
           {/* Uploaded Files (conversation history) — show latest 3 */}
