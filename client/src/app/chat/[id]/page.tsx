@@ -911,26 +911,48 @@ function ChatContent() {
       docMode.enterDocumentMode(skillId);
     }
 
-    // Document mode context: auto-prefix message with document info so AI understands
-    // the document context (regardless of whether a block is selected for viewing)
+    // Document mode: if a specific page is selected, use fast single-block regeneration
+    // instead of full multi-agent orchestration
+    if (docMode.viewMode === 'document' && docMode.documentFileId && docMode.selectedBlockId) {
+      const blockId = docMode.selectedBlockId;
+      const pageNum = docBlocks.blocks.findIndex(b => b.id === blockId) + 1;
+      setDocRegenInstruction(userMessage);
+      setDocRegenPhase('ai_thinking');
+      docBlocks.regenerate(docMode.documentFileId, blockId, userMessage, (event) => {
+        if (event.type === 'started') setDocRegenPhase('ai_thinking');
+        else if (event.type === 'ai_text') setDocRegenPhase('ai_thinking');
+        else if (event.type === 'block_updated') setDocRegenPhase('patching');
+        else if (event.type === 'patching') setDocRegenPhase('patching');
+      }).then(() => {
+        setMessages(prev => [...prev, {
+          id: `regen-${Date.now()}`,
+          conversation_id: conversationId,
+          role: 'assistant',
+          content: t('chat.docMode.blockUpdated') + ` (第 ${pageNum} 頁)`,
+          created_at: new Date().toISOString(),
+        }]);
+      }).catch(() => {
+        setMessages(prev => [...prev, {
+          id: `err-${Date.now()}`,
+          conversation_id: conversationId,
+          role: 'assistant',
+          content: `⚠️ ${t('chat.error.unknown')}`,
+          created_at: new Date().toISOString(),
+        }]);
+      }).finally(() => {
+        setDocRegenInstruction('');
+        setDocRegenPhase('');
+        setStreaming(false);
+      });
+      return; // Skip normal generate flow
+    }
+
+    // Document mode context (no specific page selected): give overview
     let contextualMessage = userMessage;
     if (docMode.viewMode === 'document' && docMode.documentFileId) {
-      const selectedBlock = docMode.selectedBlockId
-        ? docBlocks.blocks.find(b => b.id === docMode.selectedBlockId)
-        : null;
-
-      if (selectedBlock) {
-        // User is viewing a specific page — give AI full context of that page
-        const pageNum = docBlocks.blocks.findIndex(b => b.id === docMode.selectedBlockId) + 1;
-        contextualMessage = `[DOC_CONTEXT: 使用者正在查看第 ${pageNum}/${docBlocks.blocks.length} 頁 (${selectedBlock.type})。該頁內容: ${JSON.stringify(selectedBlock.data)}]\n\n${userMessage}`;
-      } else {
-        // No specific page selected — give overview
-        const blockSummary = docBlocks.blocks.map((b, i) => `#${i + 1} ${b.type}: ${(b.data as any).title || ''}`).join(', ');
-        contextualMessage = `[DOC_CONTEXT: 正在編輯 ${docMode.docLayoutType || 'document'} 文件，共 ${docBlocks.blocks.length} 頁: ${blockSummary}]\n\n${userMessage}`;
-      }
+      const blockSummary = docBlocks.blocks.map((b, i) => `#${i + 1} ${b.type}: ${(b.data as any).title || ''}`).join(', ');
+      contextualMessage = `[DOC_CONTEXT: 正在編輯 ${docMode.docLayoutType || 'document'} 文件，共 ${docBlocks.blocks.length} 頁: ${blockSummary}]\n\n${userMessage}`;
     }
-    // NOTE: Block-targeted regeneration is handled via the canvas "AI 修改" button → submitDocRegen().
-    // The chat input always goes through normal conversational flow.
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -1622,7 +1644,7 @@ function ChatContent() {
             {(hasActivity || showCompletedPanel) && (
               <div className={`bg-surface-container-low rounded-lg border-l-2 border-primary/40 max-w-full overflow-hidden ${docMode.viewMode === 'chat' ? 'md:max-w-[85%]' : ''}`}>
                 <div
-                  className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-3 bg-surface-container cursor-pointer select-none active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors"
+                  className={`flex items-center gap-2 px-3 py-2.5 bg-surface-container cursor-pointer select-none active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors ${docMode.viewMode === 'chat' ? 'md:gap-3 md:px-4 md:py-3' : ''}`}
                   onClick={() => setPanelCollapsed(c => !c)}
                   role="button"
                   tabIndex={0}
@@ -1648,7 +1670,7 @@ function ChatContent() {
 
                 {!panelCollapsed && (
                   <>
-                    <div className="px-3 md:px-4 py-2 space-y-1 font-mono text-xs md:text-sm">
+                    <div className={`px-3 py-2 space-y-1 font-mono text-xs ${docMode.viewMode === 'chat' ? 'md:px-4 md:text-sm' : ''}`}>
                       {/* Connected */}
                       <div className="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant">
                         <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
@@ -1685,15 +1707,15 @@ function ChatContent() {
                         const askOptions = baseTool === 'AskUserQuestion' ? parseAskUserOptions(tool.input) : null;
                         return (
                           <div key={tool.id || i}>
-                            <div className={`flex items-center gap-2 px-2 py-1.5 rounded ${isDone ? 'text-outline' : 'text-on-surface-variant bg-surface-container/50'}`}>
+                            <div className={`flex items-center gap-2 px-2 py-1.5 rounded whitespace-nowrap overflow-hidden ${isDone ? 'text-outline' : 'text-on-surface-variant bg-surface-container/50'}`}>
                               {isDone
-                                ? <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
-                                : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
+                                ? <span className="material-symbols-outlined text-green-400 text-sm shrink-0">check_circle</span>
+                                : <span className="material-symbols-outlined text-primary text-sm animate-spin shrink-0">refresh</span>
                               }
-                              <span className="material-symbols-outlined text-sm">{info.icon}</span>
-                              <span className={isDone ? 'line-through opacity-60' : ''}>{info.label}</span>
+                              <span className="material-symbols-outlined text-sm shrink-0">{info.icon}</span>
+                              <span className={`shrink-0 ${isDone ? 'line-through opacity-60' : ''}`}>{info.label}</span>
                               {detail && (
-                                <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[150px] md:max-w-[400px]">
+                                <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate min-w-0">
                                   {detail}
                                 </span>
                               )}
@@ -1728,21 +1750,21 @@ function ChatContent() {
                       {agentTasks.map(task => (
                         <div
                           key={task.taskId}
-                          className={`flex items-center gap-2 px-2 py-1.5 rounded ${
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded whitespace-nowrap overflow-hidden ${
                             task.status === 'completed' ? 'text-outline'
                             : task.status === 'failed' ? 'text-warning bg-warning/5'
                             : 'text-on-surface-variant bg-surface-container/50'
                           }`}
                         >
                           {task.status === 'completed'
-                            ? <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
+                            ? <span className="material-symbols-outlined text-green-400 text-sm shrink-0">check_circle</span>
                             : task.status === 'failed'
-                            ? <span className="material-symbols-outlined text-warning text-sm">warning</span>
-                            : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
+                            ? <span className="material-symbols-outlined text-warning text-sm shrink-0">warning</span>
+                            : <span className="material-symbols-outlined text-primary text-sm animate-spin shrink-0">refresh</span>
                           }
-                          <span className="material-symbols-outlined text-sm">smart_toy</span>
-                          <span>{t(`skill.${task.skillId}` as any) || task.skillId}</span>
-                          <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[150px] md:max-w-[400px]">
+                          <span className="material-symbols-outlined text-sm shrink-0">smart_toy</span>
+                          <span className="shrink-0">{t(`skill.${task.skillId}` as any) || task.skillId}</span>
+                          <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate min-w-0">
                             {task.status === 'failed'
                               ? (task.error || t('chat.error.timedOut')).substring(0, 50)
                               : task.description.substring(0, 60)}

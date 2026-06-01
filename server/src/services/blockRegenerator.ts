@@ -102,7 +102,7 @@ export async function regenerateBlock(
       conversationId: blockRecord.conversation_id,
       role: 'router', // No tools needed, just text generation
       sandboxSubdir: '_agents/_block-editor',
-      model: 'claude-haiku-4-5-20251001', // Fast model for single-block edits
+      model: 'claude-sonnet-4-6', // Balanced: good quality + reasonable speed for single-block edits
     });
 
     let resolved = false;
