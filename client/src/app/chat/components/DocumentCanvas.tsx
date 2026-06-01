@@ -44,6 +44,10 @@ interface DocumentCanvasProps {
   token: string | null;
   /** Live agent activity during generation */
   agentActivity?: AgentActivity[];
+  /** Callback when a sub-element (chart, field, etc.) is selected in the panel */
+  onElementSelect?: (elementKey: string | null) => void;
+  /** Callback when slide shapes are available for the current page */
+  onShapesAvailable?: (shapes: Array<{ name: string; type: string }>) => void;
   t: (key: any, params?: Record<string, string | number>) => string;
 }
 
@@ -91,6 +95,8 @@ export default function DocumentCanvas({
   token,
   t,
   agentActivity,
+  onElementSelect,
+  onShapesAvailable,
 }: DocumentCanvasProps) {
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [previewType, setPreviewType] = useState<'html' | 'pdf' | 'other'>('html');
@@ -189,7 +195,14 @@ export default function DocumentCanvas({
     setSelectedShapeId(null);
     setSelectedElement(null);
     setHoveredShapeName(null);
-  }, [selectedPageIndex]);
+    onElementSelect?.(null);
+  }, [selectedPageIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Notify parent of available shapes for current slide (for AI context)
+  useEffect(() => {
+    const shapes = slideShapes[selectedPageIndex] || [];
+    onShapesAvailable?.(shapes.map(s => ({ name: s.name, type: s.type })));
+  }, [selectedPageIndex, slideShapes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync selectedBlockId → page index
   useEffect(() => {
@@ -367,11 +380,16 @@ export default function DocumentCanvas({
                   setHoveredShapeName(shape?.text?.slice(0, 30) || shape?.name || null);
                 }}
                 onShapeSelect={(shape) => {
-                  setSelectedShapeId(prev => prev === shape.id ? null : shape.id);
+                  const isDeselect = selectedShapeId === shape.id;
+                  setSelectedShapeId(isDeselect ? null : shape.id);
                   // Also select the corresponding block
                   if (blocks[selectedPageIndex]) {
                     onSelectBlock(blocks[selectedPageIndex].id);
                   }
+                  // Propagate shape name as element context for AI instructions
+                  const shapeName = isDeselect ? null : (shape.name || shape.text?.slice(0, 40) || null);
+                  setSelectedElement(isDeselect ? null : shapeName);
+                  onElementSelect?.(isDeselect ? null : shapeName);
                 }}
               />
             ) : previewBlobUrl ? (
@@ -437,19 +455,27 @@ export default function DocumentCanvas({
             {(selectedBlockId || selectedShapeId) && (
               <div className="flex items-center gap-2 px-4 py-2 border-t border-outline-variant/10 bg-surface-container/30 shrink-0">
                 <span className="material-symbols-outlined text-primary text-sm">edit_note</span>
-                <span className="text-xs text-on-surface-variant flex-1">
+                <span className="text-xs text-on-surface-variant flex-1 min-w-0">
                   {selectedShapeId ? (
                     <>
                       第 {selectedPageIndex + 1} 頁 ·{' '}
-                      {slideShapes[selectedPageIndex]?.find(s => s.id === selectedShapeId)?.text?.slice(0, 40) ||
-                       slideShapes[selectedPageIndex]?.find(s => s.id === selectedShapeId)?.name || '元素'}
+                      <span className="text-primary font-medium">
+                        {slideShapes[selectedPageIndex]?.find(s => s.id === selectedShapeId)?.text?.slice(0, 40) ||
+                         slideShapes[selectedPageIndex]?.find(s => s.id === selectedShapeId)?.name || '元素'}
+                      </span>
+                      <span className="text-on-surface-variant/50 ml-2">← 在左側輸入修改需求</span>
                     </>
                   ) : selectedBlockId ? (
                     <>#{(blocks.findIndex(b => b.id === selectedBlockId) + 1)} — {blocks.find(b => b.id === selectedBlockId)?.type.replace(/_/g, ' ')}</>
                   ) : null}
                 </span>
                 <button
-                  onClick={() => { onSelectBlock(null); setSelectedShapeId(null); }}
+                  onClick={() => {
+                    onSelectBlock(null);
+                    setSelectedShapeId(null);
+                    setSelectedElement(null);
+                    onElementSelect?.(null);
+                  }}
                   className="p-1 rounded hover:bg-surface-container transition-colors cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-on-surface-variant text-sm">close</span>
@@ -465,6 +491,7 @@ export default function DocumentCanvas({
                 selectedElement={selectedElement}
                 onSelectElement={(key) => {
                   setSelectedElement(key);
+                  onElementSelect?.(key);
                   if (blocks[selectedPageIndex]) {
                     onSelectBlock(blocks[selectedPageIndex].id);
                   }

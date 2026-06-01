@@ -46,8 +46,32 @@ export default function SlideBlockPreview({ data, type }: { data: Record<string,
         </>
       )}
 
+      {/* Two-column layout */}
+      {type === 'two_column' && (
+        <>
+          {title && <div className="text-xs font-bold text-on-surface truncate">{title}</div>}
+          <div className="grid grid-cols-2 gap-1.5">
+            {data.left && <div className="text-[9px] text-on-surface-variant line-clamp-3">{typeof data.left === 'string' ? data.left : JSON.stringify(data.left).slice(0, 60)}</div>}
+            {data.right && <div className="text-[9px] text-on-surface-variant line-clamp-3">{typeof data.right === 'string' ? data.right : JSON.stringify(data.right).slice(0, 60)}</div>}
+          </div>
+        </>
+      )}
+
+      {/* Table of Contents */}
+      {type === 'toc' && (
+        <>
+          {title && <div className="text-xs font-bold text-on-surface truncate">{title}</div>}
+          {(data.items as any[])?.slice(0, 5).map((item: any, i: number) => (
+            <div key={i} className="flex items-center gap-1.5 text-[9px]">
+              <span className="text-primary font-medium shrink-0">{item.num || i + 1}.</span>
+              <span className="text-on-surface-variant truncate">{item.title || ''}</span>
+            </div>
+          ))}
+        </>
+      )}
+
       {/* Content / bullets */}
-      {type === 'content' && (
+      {(type === 'content') && (
         <>
           {title && <div className="text-xs font-bold text-on-surface truncate">{title}</div>}
           {bullets.length > 0 && (
@@ -191,21 +215,50 @@ export default function SlideBlockPreview({ data, type }: { data: Record<string,
         </>
       )}
 
-      {/* Generic fallback */}
-      {!['title', 'title_slide', 'content', 'dashboard', 'kpi', 'stats', 'chart',
+      {/* Generic fallback — detect charts/KPIs in data */}
+      {!['title', 'title_slide', 'content', 'two_column', 'toc', 'dashboard', 'kpi', 'stats', 'chart',
         'table', 'icon-grid', 'process', 'quote', 'image', 'photo', 'media',
-        'timeline', 'roadmap'].includes(type) && (
-        <>
-          {title && <div className="text-xs font-bold text-on-surface truncate">{title}</div>}
-          {description ? (
-            <div className="text-[10px] text-on-surface-variant line-clamp-2">{description}</div>
-          ) : content ? (
-            <div className="text-[10px] text-on-surface-variant line-clamp-2">{content}</div>
-          ) : (
-            <div className="text-[10px] text-on-surface-variant/50 uppercase tracking-wider py-2 text-center">{type}</div>
-          )}
-        </>
-      )}
+        'timeline', 'roadmap'].includes(type) && (() => {
+        // Detect chart-like objects in data
+        const chartKeys = Object.entries(data).filter(([, v]) =>
+          v && typeof v === 'object' && !Array.isArray(v) &&
+          ((v as any).labels || (v as any).values || (v as any).bars || (v as any).slices || (v as any).series)
+        );
+        return (
+          <>
+            {title && <div className="text-xs font-bold text-on-surface truncate">{title}</div>}
+            {items.length > 0 && (
+              <div className="grid grid-cols-2 gap-1">
+                {items.slice(0, 4).map((item, i) => (
+                  <div key={i} className="bg-surface-container rounded p-1 text-center">
+                    <div className="text-[10px] font-bold text-primary truncate">{item.value || '—'}</div>
+                    <div className="text-[7px] text-on-surface-variant truncate">{item.label || ''}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {chartKeys.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                {chartKeys.slice(0, 2).map(([key, val]) => (
+                  <div key={key} className="flex-1 bg-surface-container rounded h-8 flex items-center justify-center gap-1">
+                    <span className="material-symbols-outlined text-sm text-on-surface-variant/30">bar_chart</span>
+                    <span className="text-[8px] text-on-surface-variant/50 truncate">{(val as any).title || key}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {!items.length && !chartKeys.length && (
+              subtitle ? (
+                <div className="text-[10px] text-on-surface-variant line-clamp-2">{subtitle}</div>
+              ) : description ? (
+                <div className="text-[10px] text-on-surface-variant line-clamp-2">{description}</div>
+              ) : (
+                <div className="text-[10px] text-on-surface-variant/50 uppercase tracking-wider py-2 text-center">{type.replace(/_/g, ' ')}</div>
+              )
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 }

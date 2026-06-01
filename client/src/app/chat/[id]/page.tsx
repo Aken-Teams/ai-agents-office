@@ -549,6 +549,8 @@ function ChatContent() {
   const [docRegenInstruction, setDocRegenInstruction] = useState<string>(''); // shown in canvas while regenerating
   const [docRegenPhase, setDocRegenPhase] = useState<string>(''); // 'ai_thinking' | 'rebuilding' | ''
   const docRegenInFlight = useRef(false); // prevent duplicate regenerate calls
+  const [docSelectedElement, setDocSelectedElement] = useState<string | null>(null); // selected sub-element (chart, field, etc.)
+  const [docSlideShapes, setDocSlideShapes] = useState<Array<{ name: string; type: string }>>([]); // shapes on current slide
   const fileGenInRoundRef = useRef(false); // track if file was generated this round
 
   /** Submit regeneration: close modal immediately, stream SSE events, show real-time status */
@@ -911,47 +913,74 @@ function ChatContent() {
       docMode.enterDocumentMode(skillId);
     }
 
-    // Document mode: if a specific page is selected, use fast single-block regeneration
-    // instead of full multi-agent orchestration
-    if (docMode.viewMode === 'document' && docMode.documentFileId && docMode.selectedBlockId) {
-      const blockId = docMode.selectedBlockId;
-      const pageNum = docBlocks.blocks.findIndex(b => b.id === blockId) + 1;
-      setDocRegenInstruction(userMessage);
-      setDocRegenPhase('ai_thinking');
-      docBlocks.regenerate(docMode.documentFileId, blockId, userMessage, (event) => {
-        if (event.type === 'started') setDocRegenPhase('ai_thinking');
-        else if (event.type === 'ai_text') setDocRegenPhase('ai_thinking');
-        else if (event.type === 'block_updated') setDocRegenPhase('patching');
-        else if (event.type === 'patching') setDocRegenPhase('patching');
-      }).then(() => {
-        setMessages(prev => [...prev, {
-          id: `regen-${Date.now()}`,
-          conversation_id: conversationId,
-          role: 'assistant',
-          content: t('chat.docMode.blockUpdated') + ` (第 ${pageNum} 頁)`,
-          created_at: new Date().toISOString(),
-        }]);
-      }).catch(() => {
-        setMessages(prev => [...prev, {
-          id: `err-${Date.now()}`,
-          conversation_id: conversationId,
-          role: 'assistant',
-          content: `⚠️ ${t('chat.error.unknown')}`,
-          created_at: new Date().toISOString(),
-        }]);
-      }).finally(() => {
-        setDocRegenInstruction('');
-        setDocRegenPhase('');
-        setStreaming(false);
-      });
-      return; // Skip normal generate flow
+    // Document mode: detect whether message is a QUESTION (→ chat) or EDIT request (→ regeneration)
+    const isDocEditMode = docMode.viewMode === 'document' && docMode.documentFileId;
+
+    if (isDocEditMode && docMode.selectedBlockId) {
+      // Heuristic: is this a question/inquiry, or an edit request?
+      const isQuestion = /[?？]/.test(userMessage.trim()) ||
+        /(?:什麼|是什麼|嗎|呢|是否|能不能|有沒有|怎麼|如何|為什麼|為何|哪個|哪些|誰|幾|看到|看看|描述|解釋|告訴|說明)/.test(userMessage);
+      const hasEditIntent = /(?:改|修改|換|更新|調整|變|設定|加入|加上|刪|移除|增加|替換|修正|優化|重做|改成|換成|變成|新增|把.*改|把.*換|把.*變|將.*改|將.*換)/.test(userMessage);
+
+      // Edit request (or not a question) → fast single-block regeneration
+      if (!isQuestion || hasEditIntent) {
+        const blockId = docMode.selectedBlockId;
+        const pageNum = docBlocks.blocks.findIndex(b => b.id === blockId) + 1;
+        const elementHint = docSelectedElement ? `[目標元素: ${docSelectedElement}] ` : '';
+        // Include shapes context in instruction so AI knows what's on the slide
+        const shapesHint = docSlideShapes.length > 0
+          ? `[投影片元素: ${docSlideShapes.map(s => `${s.name}(${s.type})`).join(', ')}] `
+          : '';
+        const instruction = `${shapesHint}${elementHint}${userMessage}`;
+        setDocRegenInstruction(userMessage);
+        setDocRegenPhase('ai_thinking');
+        docBlocks.regenerate(docMode.documentFileId!, blockId, instruction, (event) => {
+          if (event.type === 'started') setDocRegenPhase('ai_thinking');
+          else if (event.type === 'ai_text') setDocRegenPhase('ai_thinking');
+          else if (event.type === 'block_updated') setDocRegenPhase('patching');
+          else if (event.type === 'patching') setDocRegenPhase('patching');
+        }).then(() => {
+          setMessages(prev => [...prev, {
+            id: `regen-${Date.now()}`,
+            conversation_id: conversationId,
+            role: 'assistant',
+            content: t('chat.docMode.blockUpdated') + ` (第 ${pageNum} 頁)`,
+            created_at: new Date().toISOString(),
+          }]);
+        }).catch(() => {
+          setMessages(prev => [...prev, {
+            id: `err-${Date.now()}`,
+            conversation_id: conversationId,
+            role: 'assistant',
+            content: `⚠️ ${t('chat.error.unknown')}`,
+            created_at: new Date().toISOString(),
+          }]);
+        }).finally(() => {
+          setDocRegenInstruction('');
+          setDocRegenPhase('');
+          setStreaming(false);
+        });
+        return; // Skip normal generate flow
+      }
+      // Question (no edit intent) → falls through to normal chat with DOC_CONTEXT below
     }
 
-    // Document mode context (no specific page selected): give overview
+    // Document mode context: include slide info for AI understanding
     let contextualMessage = userMessage;
-    if (docMode.viewMode === 'document' && docMode.documentFileId) {
-      const blockSummary = docBlocks.blocks.map((b, i) => `#${i + 1} ${b.type}: ${(b.data as any).title || ''}`).join(', ');
-      contextualMessage = `[DOC_CONTEXT: 正在編輯 ${docMode.docLayoutType || 'document'} 文件，共 ${docBlocks.blocks.length} 頁: ${blockSummary}]\n\n${userMessage}`;
+    if (isDocEditMode) {
+      if (docMode.selectedBlockId) {
+        // Specific page selected — give full context for the page
+        const block = docBlocks.blocks.find(b => b.id === docMode.selectedBlockId);
+        const pageNum = docBlocks.blocks.findIndex(b => b.id === docMode.selectedBlockId) + 1;
+        const elementInfo = docSelectedElement ? `，使用者選取了元素「${docSelectedElement}」` : '';
+        const shapesInfo = docSlideShapes.length > 0
+          ? `\n投影片上的視覺元素: ${docSlideShapes.map(s => `${s.name}(${s.type})`).join(', ')}`
+          : '';
+        contextualMessage = `[DOC_CONTEXT: 使用者正在查看第 ${pageNum}/${docBlocks.blocks.length} 頁 (${block?.type || 'unknown'})${elementInfo}。該頁數據: ${JSON.stringify(block?.data)}${shapesInfo}]\n\n${userMessage}`;
+      } else {
+        const blockSummary = docBlocks.blocks.map((b, i) => `#${i + 1} ${b.type}: ${(b.data as any).title || ''}`).join(', ');
+        contextualMessage = `[DOC_CONTEXT: 正在編輯 ${docMode.docLayoutType || 'document'} 文件，共 ${docBlocks.blocks.length} 頁: ${blockSummary}]\n\n${userMessage}`;
+      }
     }
 
     const controller = new AbortController();
@@ -2031,6 +2060,7 @@ function ChatContent() {
                 <span className="material-symbols-outlined text-on-surface-variant text-sm">visibility</span>
                 <span className="text-[11px] text-on-surface-variant flex-1 truncate">
                   {t('chat.docMode.viewingBlock')}: #{docBlocks.blocks.findIndex(b => b.id === docMode.selectedBlockId) + 1} {docBlocks.blocks.find(b => b.id === docMode.selectedBlockId)?.type.replace(/_/g, ' ') || ''}
+                  {docSelectedElement && <span className="text-primary ml-1">· {docSelectedElement}</span>}
                 </span>
                 <button
                   onClick={() => docMode.setSelectedBlockId(null)}
@@ -2186,7 +2216,13 @@ function ChatContent() {
                       sendMessage();
                     }
                   }}
-                  placeholder={t('chat.input.placeholder')}
+                  placeholder={
+                    docMode.viewMode === 'document' && docSelectedElement
+                      ? `輸入對「${docSelectedElement}」的修改需求...`
+                      : docMode.viewMode === 'document' && docMode.selectedBlockId
+                        ? `輸入對第 ${docBlocks.blocks.findIndex(b => b.id === docMode.selectedBlockId) + 1} 頁的修改需求...`
+                        : t('chat.input.placeholder')
+                  }
                   rows={1}
                   disabled={streaming}
                 />
@@ -2402,6 +2438,8 @@ function ChatContent() {
             regenPhase={docRegenPhase}
             token={token}
             agentActivity={tools}
+            onElementSelect={setDocSelectedElement}
+            onShapesAvailable={setDocSlideShapes}
             t={t}
           />
         )}
