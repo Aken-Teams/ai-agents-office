@@ -75,18 +75,56 @@ function findBestPage(heading: string, content: string, blockIndex: number, tota
 }
 
 /** Find text position on a page — returns topFrac (0-1, 0=top) or null */
-function findTextOnPage(items: Array<{ str: string; topFrac: number }>, search: string): number | null {
+function findTextOnPage(items: Array<{ str: string; topFrac: number }>, search: string, afterFrac = 0): number | null {
   const norm = search.replace(/\s+/g, '');
-  if (!norm) return null;
+  if (!norm || norm.length < 2) return null;
+  // Direct item match
   for (const item of items) {
+    if (item.topFrac < afterFrac) continue;
     if (item.str.replace(/\s+/g, '').includes(norm)) return item.topFrac;
   }
+  // Running concatenation match (for text split across items)
   let running = '';
   for (const item of items) {
     running += item.str;
+    if (item.topFrac < afterFrac) continue;
     if (running.replace(/\s+/g, '').includes(norm)) return item.topFrac;
   }
   return null;
+}
+
+/** Extract search texts for a specific element field within a block */
+function getElementSearchTexts(data: Record<string, unknown>, key: string): { start: string; end: string } | null {
+  switch (key) {
+    case 'heading': case 'title': case 'subtitle':
+      return data[key] ? { start: String(data[key]).slice(0, 30), end: String(data[key]).slice(0, 30) } : null;
+    case 'content': case 'text': case 'body': case 'description': {
+      const t = String(data[key] || '');
+      return t ? { start: t.slice(0, 30), end: t.slice(-30) } : null;
+    }
+    case 'rows': {
+      const rows = data.rows as any[];
+      if (!rows?.length) return null;
+      const first = rows[0];
+      const last = rows[rows.length - 1];
+      const fCell = String(Array.isArray(first) ? first[0] : Object.values(first)[0] || '');
+      const lCell = String(Array.isArray(last) ? last[last.length - 1] || last[0] : Object.values(last).pop() || '');
+      return { start: fCell.slice(0, 20), end: lCell.slice(0, 20) };
+    }
+    case 'bullets': case 'items': case 'points': {
+      const arr = (data[key] as any[]) || [];
+      if (!arr.length) return null;
+      const f = typeof arr[0] === 'string' ? arr[0] : (arr[0] as any).text || '';
+      const l = typeof arr[arr.length - 1] === 'string' ? arr[arr.length - 1] : (arr[arr.length - 1] as any).text || '';
+      return { start: String(f).slice(0, 25), end: String(l).slice(0, 25) };
+    }
+    case 'paragraphs': {
+      const ps = (data.paragraphs as string[]) || [];
+      if (!ps.length) return null;
+      return { start: ps[0].slice(0, 30), end: ps[ps.length - 1].slice(0, 30) };
+    }
+    default: return null;
+  }
 }
 
 /**
@@ -98,7 +136,10 @@ function DocPdfPages({ pdfUrl, previewKey, onPageCount, onPageTexts, highlightIn
   pdfUrl: string; previewKey: number;
   onPageCount?: (count: number) => void;
   onPageTexts?: (texts: string[]) => void;
-  highlightInfo?: { pageIndex: number; heading: string; nextHeading?: string } | null;
+  highlightInfo?: {
+    pageIndex: number; heading: string; nextHeading?: string;
+    elementSearch?: { start: string; end: string };
+  } | null;
 }) {
   const [pageImages, setPageImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -158,17 +199,31 @@ function DocPdfPages({ pdfUrl, previewKey, onPageCount, onPageTexts, highlightIn
     return () => { cancelled = true; };
   }, [pdfUrl, previewKey]);
 
-  // Compute highlight overlay position
+  // Compute highlight overlay position (section-level or element-level)
   const highlight = (() => {
     if (!highlightInfo || !pageItemsRef.current[highlightInfo.pageIndex]) return null;
-    const { pageIndex, heading, nextHeading } = highlightInfo;
+    const { pageIndex, heading, nextHeading, elementSearch } = highlightInfo;
     const items = pageItemsRef.current[pageIndex];
 
+    // Element-level highlight: find start/end of a specific field (table, bullets, etc.)
+    if (elementSearch) {
+      const startFrac = findTextOnPage(items, elementSearch.start);
+      if (startFrac == null) return null;
+      const topPct = Math.max(0, startFrac * 100 - 0.5);
+      // Find end text after the start position
+      const endFrac = elementSearch.end !== elementSearch.start
+        ? findTextOnPage(items, elementSearch.end, startFrac + 0.01)
+        : null;
+      const bottomPct = endFrac != null
+        ? Math.min(100, endFrac * 100 + 2.5)
+        : Math.min(100, topPct + 15); // fallback: ~15% of page
+      return { pageIdx: pageIndex, topPct, bottomPct };
+    }
+
+    // Section-level highlight: from heading to next heading
     const topFrac = findTextOnPage(items, heading);
     if (topFrac == null) return null;
     const topPct = Math.max(0, topFrac * 100 - 0.5);
-
-    // Find where the next section starts (end of highlight)
     let bottomPct = 100;
     if (nextHeading) {
       const nextFrac = findTextOnPage(items, nextHeading);
@@ -176,7 +231,6 @@ function DocPdfPages({ pdfUrl, previewKey, onPageCount, onPageTexts, highlightIn
         bottomPct = nextFrac * 100 - 0.5;
       }
     }
-
     return { pageIdx: pageIndex, topPct, bottomPct };
   })();
 
@@ -195,11 +249,11 @@ function DocPdfPages({ pdfUrl, previewKey, onPageCount, onPageTexts, highlightIn
           <img src={src} alt={`Page ${i + 1}`} className="w-full h-auto block" />
           {highlight && highlight.pageIdx === i && (
             <div
-              className="absolute left-0 right-0 pointer-events-none border-l-[3px] border-primary/40"
+              className="absolute left-0 right-0 pointer-events-none border-l-[3px] border-amber-300/50"
               style={{
                 top: `${highlight.topPct}%`,
                 height: `${highlight.bottomPct - highlight.topPct}%`,
-                backgroundColor: 'rgba(43, 108, 176, 0.06)',
+                backgroundColor: 'rgba(251, 191, 36, 0.06)',
               }}
             />
           )}
@@ -373,8 +427,12 @@ export default function DocumentCanvas({
     }
   }, [selectedBlockId, blocks]);
 
-  // Auto-scroll PDF + compute highlight when a doc block is selected
-  const [docHighlight, setDocHighlight] = useState<{ pageIndex: number; heading: string; nextHeading?: string } | null>(null);
+  // Auto-scroll PDF + compute highlight when a doc block/element is selected
+  const [docHighlight, setDocHighlight] = useState<{
+    pageIndex: number; heading: string; nextHeading?: string;
+    elementSearch?: { start: string; end: string };
+  } | null>(null);
+  const prevScrollBlockRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (layoutType === 'slides' || !selectedBlockId || docPageTexts.length === 0 || blocks.length === 0) {
@@ -389,17 +447,23 @@ export default function DocumentCanvas({
     const content = (block.data.content as string) || (block.data.text as string) || '';
     const targetPage = findBestPage(heading, content, idx, blocks.length, docPageTexts);
 
-    // Next block heading — used to compute highlight end boundary
     const nextBlock = blocks[idx + 1];
     const nextHeading = nextBlock ? ((nextBlock.data.heading as string) || (nextBlock.data.title as string) || '') : '';
 
-    setDocHighlight(heading ? { pageIndex: targetPage, heading, nextHeading } : null);
+    // Element-level search when a specific chip is selected
+    const elementSearch = selectedElement ? getElementSearchTexts(block.data, selectedElement) ?? undefined : undefined;
 
-    const timer = setTimeout(() => {
-      document.getElementById(`doc-pdf-page-${targetPage}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [selectedBlockId, docPageTexts, blocks, layoutType]);
+    setDocHighlight(heading || elementSearch ? { pageIndex: targetPage, heading, nextHeading, elementSearch } : null);
+
+    // Only scroll when block selection changes (not element chip changes)
+    if (selectedBlockId !== prevScrollBlockRef.current) {
+      prevScrollBlockRef.current = selectedBlockId;
+      const timer = setTimeout(() => {
+        document.getElementById(`doc-pdf-page-${targetPage}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedBlockId, selectedElement, docPageTexts, blocks, layoutType]);
 
   // Keyboard navigation for slides
   useEffect(() => {
