@@ -56,7 +56,11 @@ interface DocumentCanvasProps {
  * Renders ALL pages of a PDF vertically in a scrollable view,
  * each page looking like a paper sheet with shadow — matching actual DOCX output.
  */
-function DocPdfPages({ pdfUrl, previewKey }: { pdfUrl: string; previewKey: number }) {
+function DocPdfPages({ pdfUrl, previewKey, onPageCount, onPageTexts }: {
+  pdfUrl: string; previewKey: number;
+  onPageCount?: (count: number) => void;
+  onPageTexts?: (texts: string[]) => void;
+}) {
   const [pageImages, setPageImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -71,6 +75,7 @@ function DocPdfPages({ pdfUrl, previewKey }: { pdfUrl: string; previewKey: numbe
         pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
         const pdf = await (pdfjsLib.getDocument as any)({ url: pdfUrl }).promise;
         const images: string[] = [];
+        const texts: string[] = [];
 
         for (let i = 1; i <= pdf.numPages; i++) {
           if (cancelled) break;
@@ -83,12 +88,17 @@ function DocPdfPages({ pdfUrl, previewKey }: { pdfUrl: string; previewKey: numbe
           const ctx = canvas.getContext('2d')!;
           await page.render({ canvasContext: ctx, viewport }).promise;
           images.push(canvas.toDataURL('image/png', 0.92));
+          // Extract text for block-to-page mapping
+          const textContent = await page.getTextContent();
+          texts.push(textContent.items.map((item: any) => item.str).join(''));
           page.cleanup();
         }
 
         if (!cancelled) {
           setPageImages(images);
           setLoading(false);
+          onPageCount?.(images.length);
+          onPageTexts?.(texts);
         }
         pdf.destroy();
       } catch {
@@ -110,7 +120,7 @@ function DocPdfPages({ pdfUrl, previewKey }: { pdfUrl: string; previewKey: numbe
   return (
     <div className="py-4 px-4 space-y-4">
       {pageImages.map((src, i) => (
-        <div key={i} className="mx-auto bg-white shadow-md" style={{ maxWidth: '740px' }}>
+        <div key={i} id={`doc-pdf-page-${i}`} className="mx-auto bg-white shadow-md" style={{ maxWidth: '740px' }}>
           <img src={src} alt={`Page ${i + 1}`} className="w-full h-auto block" />
         </div>
       ))}
@@ -175,6 +185,8 @@ export default function DocumentCanvas({
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
   const [hoveredShapeName, setHoveredShapeName] = useState<string | null>(null);
   const [showRebuildConfirm, setShowRebuildConfirm] = useState(false);
+  const [docPageCount, setDocPageCount] = useState(0);
+  const [docPageTexts, setDocPageTexts] = useState<string[]>([]);
   const previewKeyRef = useRef(0);
   const visibleCount = useStaggerReveal(blocks.length);
 
@@ -279,6 +291,43 @@ export default function DocumentCanvas({
       if (idx >= 0) setSelectedPageIndex(idx);
     }
   }, [selectedBlockId, blocks]);
+
+  // Auto-scroll PDF to the correct page when a doc block is selected
+  // Uses text extraction from pdf.js to match block headings → PDF pages
+  useEffect(() => {
+    if (layoutType === 'slides' || !selectedBlockId || docPageTexts.length === 0 || blocks.length === 0) return;
+    const block = blocks.find(b => b.id === selectedBlockId);
+    if (!block) return;
+
+    const heading = (block.data.heading as string) || (block.data.title as string) || '';
+    const content = (block.data.content as string) || (block.data.text as string) || '';
+    let targetPage = -1;
+
+    // 1) Search for heading text in PDF pages
+    if (heading) {
+      const norm = heading.replace(/\s+/g, '');
+      targetPage = docPageTexts.findIndex(t => t.replace(/\s+/g, '').includes(norm));
+    }
+    // 2) Fallback: search for content snippet
+    if (targetPage < 0 && content) {
+      const snippet = content.slice(0, 40).replace(/\s+/g, '');
+      if (snippet.length >= 6) {
+        targetPage = docPageTexts.findIndex(t => t.replace(/\s+/g, '').includes(snippet));
+      }
+    }
+    // 3) Fallback: proportional estimate
+    if (targetPage < 0) {
+      const idx = blocks.findIndex(b => b.id === selectedBlockId);
+      targetPage = Math.min(Math.floor(idx * docPageTexts.length / blocks.length), docPageTexts.length - 1);
+    }
+
+    if (targetPage >= 0) {
+      const timer = setTimeout(() => {
+        document.getElementById(`doc-pdf-page-${targetPage}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedBlockId, docPageTexts, blocks, layoutType]);
 
   // Keyboard navigation for slides
   useEffect(() => {
@@ -667,54 +716,124 @@ export default function DocumentCanvas({
       <div className="flex-1 flex min-h-0">
         {/* Section list (left) — only when blocks exist */}
         {blocks.length > 0 && (
-          <div className="w-52 lg:w-60 border-r border-outline-variant/10 overflow-y-auto p-1.5 space-y-px shrink-0 bg-surface-container/20">
+          <div className="w-56 lg:w-64 border-r border-outline-variant/10 overflow-y-auto py-1 shrink-0 bg-surface-container/20">
             {blocks.map((block, index) => {
               const level = (block.data.level as number) || 1;
-              const isMainSection = level === 1 || block.type === 'cover' || block.type === 'title_page' || block.type === 'toc';
-              const indent = isMainSection ? 0 : level >= 3 ? 2 : 1;
-              const label = (block.data.heading as string) || (block.data.title as string) || block.type.replace(/_/g, ' ');
-              const icon = block.type === 'cover' || block.type === 'title_page' ? 'menu_book'
-                : block.type === 'toc' || block.type === 'table_of_contents' ? 'toc'
-                : block.type === 'list' || block.type === 'bullets' ? 'format_list_bulleted'
+              const blockType = block.type;
+              const isSpecial = blockType === 'cover' || blockType === 'title_page' || blockType === 'toc' || blockType === 'table_of_contents';
+              const isMainSection = level === 1 || isSpecial;
+              const label = (block.data.heading as string) || (block.data.title as string) || blockType.replace(/_/g, ' ');
+              const selected = selectedBlockId === block.id;
+
+              // Content badges — show what's inside each block
+              const bullets = (block.data.bullets as string[]) || (block.data.items as string[]) || (block.data.points as string[]) || [];
+              const paragraphs = (block.data.paragraphs as string[]) || [];
+              const subsections = (block.data.subsections as any[]) || [];
+              const rows = (block.data.rows as any[]) || [];
+              const snippet = (block.data.content as string) || (block.data.text as string) || (block.data.body as string) || '';
+              const badges: string[] = [];
+              if (paragraphs.length > 0) badges.push(`${paragraphs.length}段`);
+              if (bullets.length > 0) badges.push(`${bullets.length}點`);
+              if (subsections.length > 0) badges.push(`${subsections.length}子節`);
+              if (rows.length > 0) badges.push(`${rows.length}行`);
+
+              // Icons
+              const icon = blockType === 'cover' || blockType === 'title_page' ? 'menu_book'
+                : blockType === 'toc' || blockType === 'table_of_contents' ? 'toc'
+                : blockType === 'list' || blockType === 'bullets' ? 'format_list_bulleted'
+                : blockType === 'table' ? 'table_chart'
                 : isMainSection ? 'segment' : '';
+
+              // Separator before main sections (except first)
+              const showSep = index > 0 && isMainSection;
+
+              // Tree connector: ├ for middle children, └ for last child before next main
+              const nextBlock = blocks[index + 1];
+              const nextIsMain = !nextBlock || ((nextBlock.data.level as number) || 1) === 1 ||
+                ['cover', 'title_page', 'toc', 'table_of_contents'].includes(nextBlock.type);
+
               return (
-                <button
-                  key={block.id}
-                  onClick={() => onSelectBlock(selectedBlockId === block.id ? null : block.id)}
-                  className={`w-full text-left transition-all duration-200 cursor-pointer rounded-lg py-1.5 ${
-                    index < visibleCount ? 'opacity-100' : 'opacity-0'
-                  } ${
-                    selectedBlockId === block.id
-                      ? 'bg-primary/10 text-primary'
-                      : 'hover:bg-surface-container/60 text-on-surface-variant'
-                  }`}
-                  style={{ paddingLeft: `${8 + indent * 12}px`, paddingRight: '8px' }}
-                >
-                  <div className="flex items-center gap-1.5">
-                    {icon ? (
-                      <span className={`material-symbols-outlined shrink-0 ${selectedBlockId === block.id ? 'text-primary' : 'text-on-surface-variant/40'}`} style={{ fontSize: '14px' }}>{icon}</span>
-                    ) : (
-                      <span className="text-[9px] font-bold bg-surface-container-highest rounded px-1 py-px shrink-0">
-                        {index + 1}
-                      </span>
-                    )}
-                    <span className={`line-clamp-1 leading-tight ${isMainSection ? 'text-[12px] font-semibold' : 'text-[11px]'}`}>
-                      {label}
-                    </span>
+                <div key={block.id}>
+                  {showSep && <div className="h-px mx-3 my-1 bg-outline-variant/10" />}
+                  <div className={isMainSection ? 'px-1' : 'pl-5 pr-1'}>
+                    <button
+                      onClick={() => onSelectBlock(selected ? null : block.id)}
+                      className={`w-full text-left rounded-md transition-colors duration-150 cursor-pointer pr-2 ${
+                        index < visibleCount ? 'opacity-100' : 'opacity-0'
+                      } ${
+                        selected
+                          ? 'bg-primary/10 text-primary'
+                          : 'hover:bg-surface-container-highest/50 text-on-surface-variant'
+                      } ${isMainSection ? 'py-1.5 pl-2.5' : 'py-1 pl-1.5'}`}
+                    >
+                      <div className="flex items-start gap-1.5">
+                        {isMainSection ? (
+                          icon ? <span className={`material-symbols-outlined shrink-0 mt-px ${selected ? 'text-primary' : 'text-on-surface-variant/40'}`} style={{ fontSize: '15px' }}>{icon}</span> : null
+                        ) : (
+                          <span className={`text-[11px] shrink-0 leading-none mt-1 ${selected ? 'text-primary/40' : 'text-on-surface-variant/20'}`}>
+                            {nextIsMain ? '\u2514' : '\u251C'}
+                          </span>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <span className={`line-clamp-1 leading-tight block ${
+                            isMainSection ? 'text-xs font-semibold' : 'text-[11px]'
+                          } ${!isMainSection && !selected ? 'text-on-surface-variant/70' : ''}`}>
+                            {label}
+                          </span>
+                          {/* Content badges */}
+                          {badges.length > 0 && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                              {badges.map((b, bi) => (
+                                <span key={bi} className={`text-[9px] px-1 py-px rounded ${selected ? 'bg-primary/10 text-primary/60' : 'bg-surface-container-highest/60 text-on-surface-variant/40'}`}>{b}</span>
+                              ))}
+                            </div>
+                          )}
+                          {/* Content snippet for main sections */}
+                          {isMainSection && snippet && (
+                            <span className={`text-[10px] line-clamp-1 block mt-0.5 ${selected ? 'text-primary/50' : 'text-on-surface-variant/40'}`}>
+                              {snippet.slice(0, 60)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
         )}
 
         {/* Main content — PDF page-by-page view (matches actual DOCX output) */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 relative">
+          {/* Selected section floating indicator */}
+          {selectedBlockId && previewBlobUrl && !regenInstruction && (() => {
+            const blk = blocks.find(b => b.id === selectedBlockId);
+            if (!blk) return null;
+            const idx = blocks.findIndex(b => b.id === selectedBlockId);
+            const sLabel = (blk.data.heading as string) || (blk.data.title as string) || blk.type.replace(/_/g, ' ');
+            return (
+              <div className="absolute top-2 left-0 right-0 z-10 flex justify-center pointer-events-none">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-inverse-surface/80 text-inverse-on-surface rounded-full text-[11px] shadow-lg backdrop-blur-sm pointer-events-auto">
+                  <span className="material-symbols-outlined" style={{ fontSize: '13px' }}>edit_note</span>
+                  <span>第{idx + 1}段 · {sLabel}</span>
+                  <button
+                    onClick={() => { onSelectBlock(null); setSelectedElement(null); onElementSelect?.(null); }}
+                    className="ml-0.5 p-0.5 rounded-full hover:bg-white/20 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>close</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
           {previewBlobUrl ? (
             <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#E8E8E8' }}>
               <DocPdfPages
                 pdfUrl={previewBlobUrl}
                 previewKey={previewKeyRef.current}
+                onPageCount={setDocPageCount}
+                onPageTexts={setDocPageTexts}
               />
             </div>
           ) : streaming ? (
