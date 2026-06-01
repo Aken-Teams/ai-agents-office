@@ -53,268 +53,67 @@ interface DocumentCanvasProps {
 }
 
 /**
- * DOCX style presets — mirrors server/src/generators/generate-docx.ts
- * so the interactive preview matches the actual DOCX output.
+ * Renders ALL pages of a PDF vertically in a scrollable view,
+ * each page looking like a paper sheet with shadow — matching actual DOCX output.
  */
-interface DocStylePreset {
-  font: string;
-  titleColor: string;
-  headingColor: string;
-  bodyColor: string;
-  accentColor: string;
-  titleAlign: 'center' | 'left';
-  accentBorder: boolean;
-  lineHeight: string;   // CSS line-height
-}
+function DocPdfPages({ pdfUrl, previewKey }: { pdfUrl: string; previewKey: number }) {
+  const [pageImages, setPageImages] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
-const DOC_STYLES: Record<string, DocStylePreset> = {
-  formal: {
-    font: '"Times New Roman", Times, serif',
-    titleColor: '#000000', headingColor: '#1B3A5C', bodyColor: '#333333', accentColor: '#1B3A5C',
-    titleAlign: 'center', accentBorder: false, lineHeight: '1.8',
-  },
-  modern: {
-    font: 'Calibri, "Segoe UI", sans-serif',
-    titleColor: '#2D2D2D', headingColor: '#2B6CB0', bodyColor: '#444444', accentColor: '#2B6CB0',
-    titleAlign: 'left', accentBorder: true, lineHeight: '1.5',
-  },
-  academic: {
-    font: '"Times New Roman", Times, serif',
-    titleColor: '#000000', headingColor: '#000000', bodyColor: '#000000', accentColor: '#333333',
-    titleAlign: 'center', accentBorder: false, lineHeight: '2.0',
-  },
-  compact: {
-    font: 'Arial, Helvetica, sans-serif',
-    titleColor: '#1A1A1A', headingColor: '#333333', bodyColor: '#444444', accentColor: '#666666',
-    titleAlign: 'left', accentBorder: false, lineHeight: '1.3',
-  },
-};
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setPageImages([]);
 
-const DEFAULT_DOC_STYLE = DOC_STYLES['modern'];
+    (async () => {
+      try {
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+        const pdf = await (pdfjsLib.getDocument as any)({ url: pdfUrl }).promise;
+        const images: string[] = [];
 
-/** Render a table from headers + rows */
-function DocTable({ headers, rows, s }: { headers?: string[]; rows: any[][]; s: DocStylePreset }) {
-  return (
-    <div className="mt-2 mb-2 overflow-x-auto">
-      <table className="w-full text-[12px] border-collapse" style={{ fontFamily: s.font, color: s.bodyColor }}>
-        {headers && headers.length > 0 && (
-          <thead>
-            <tr>
-              {headers.map((h, i) => (
-                <th key={i} className="text-left px-2.5 py-1.5 font-semibold" style={{
-                  backgroundColor: s.accentColor, color: '#FFFFFF',
-                  borderBottom: '1px solid #ddd',
-                }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-        )}
-        <tbody>
-          {rows.map((row, ri) => (
-            <tr key={ri} style={{ backgroundColor: ri % 2 === 0 ? '#FFFFFF' : '#F8F9FA' }}>
-              {(Array.isArray(row) ? row : Object.values(row)).map((cell, ci) => (
-                <td key={ci} className="px-2.5 py-1.5" style={{ borderBottom: '1px solid #E5E7EB' }}>
-                  {typeof cell === 'string' ? cell : JSON.stringify(cell)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+        for (let i = 1; i <= pdf.numPages; i++) {
+          if (cancelled) break;
+          const page = await pdf.getPage(i);
+          // Render at 2x for crisp display
+          const viewport = page.getViewport({ scale: 2 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext('2d')!;
+          await page.render({ canvasContext: ctx, viewport }).promise;
+          images.push(canvas.toDataURL('image/png', 0.92));
+          page.cleanup();
+        }
 
-/** Render callout/note/tip boxes */
-function DocCallout({ text, label, type }: { text: string; label?: string; type?: string }) {
-  const colors: Record<string, { bg: string; border: string; icon: string }> = {
-    note: { bg: '#FFF9E6', border: '#F0C000', icon: 'lightbulb' },
-    tip: { bg: '#E8F5E9', border: '#4CAF50', icon: 'tips_and_updates' },
-    warning: { bg: '#FFF3E0', border: '#FF9800', icon: 'warning' },
-    info: { bg: '#E3F2FD', border: '#2196F3', icon: 'info' },
-    guide: { bg: '#FFF9E6', border: '#F0C000', icon: 'lightbulb' },
-  };
-  const c = colors[type || 'note'] || colors.note;
-  return (
-    <div className="mt-2 mb-2 rounded px-3 py-2 text-[12px]" style={{
-      backgroundColor: c.bg, borderLeft: `3px solid ${c.border}`,
-    }}>
-      {label && (
-        <div className="flex items-center gap-1 font-semibold text-[11px] mb-1" style={{ color: c.border }}>
-          <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>{c.icon}</span>
-          {label}
-        </div>
-      )}
-      <div style={{ color: '#555' }}>{text}</div>
-    </div>
-  );
-}
+        if (!cancelled) {
+          setPageImages(images);
+          setLoading(false);
+        }
+        pdf.destroy();
+      } catch {
+        if (!cancelled) setLoading(false);
+      }
+    })();
 
-/** Render key-value metadata pairs as a compact table */
-function DocMetaTable({ entries, s }: { entries: Record<string, string> | Array<{ key: string; value: string }>; s: DocStylePreset }) {
-  const pairs = Array.isArray(entries)
-    ? entries
-    : Object.entries(entries).map(([key, value]) => ({ key, value: String(value) }));
-  if (pairs.length === 0) return null;
-  return (
-    <div className="mt-2 mb-2">
-      <table className="text-[12px] border-collapse" style={{ fontFamily: s.font }}>
-        <tbody>
-          {pairs.map((p, i) => (
-            <tr key={i}>
-              <td className="px-2.5 py-1 font-semibold whitespace-nowrap" style={{
-                color: s.headingColor, backgroundColor: '#F0F4F8', borderBottom: '1px solid #E5E7EB',
-              }}>{p.key}</td>
-              <td className="px-2.5 py-1" style={{
-                color: s.bodyColor, borderBottom: '1px solid #E5E7EB', minWidth: '180px',
-              }}>{p.value}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+    return () => { cancelled = true; };
+  }, [pdfUrl, previewKey]);
 
-/** Render a DOCX block matching the actual DOCX generator output */
-function DocBlockRenderer({ block, docStyle }: { block: DocumentBlock; docStyle: string }) {
-  const s = DOC_STYLES[docStyle] || DEFAULT_DOC_STYLE;
-  const data = block.data;
-  const heading = (data.heading as string) || (data.title as string) || '';
-  const content = (data.content as string) || (data.text as string) || (data.body as string) || '';
-  const paragraphs = (data.paragraphs as string[]) || [];
-  const bullets = (data.bullets as string[]) || (data.items as string[]) || (data.points as string[]) || [];
-  const subsections = (data.subsections as any[]) || [];
-  const headers = (data.headers as string[]) || [];
-  const rows = (data.rows as any[][]) || [];
-  const level = (data.level as number) || 1;
-  const type = block.type;
-
-  const bodyStyle: React.CSSProperties = { fontFamily: s.font, color: s.bodyColor, lineHeight: s.lineHeight };
-
-  // Cover / title page — may include metadata table
-  if (type === 'cover' || type === 'title' || type === 'title_page') {
-    const meta = (data.metadata as any) || (data.meta as any);
+  if (loading) {
     return (
-      <div className="py-8" style={{ textAlign: s.titleAlign }}>
-        {heading && (
-          <div className="text-2xl font-bold" style={{ fontFamily: s.font, color: s.titleColor }}>
-            {heading}
-          </div>
-        )}
-        {(data.subtitle as string) && (
-          <div className="text-base mt-3" style={{ fontFamily: s.font, color: s.bodyColor }}>
-            {data.subtitle as string}
-          </div>
-        )}
-        {(data.author as string) && (
-          <div className="text-sm mt-2" style={{ fontFamily: s.font, color: s.bodyColor, opacity: 0.7 }}>
-            {data.author as string}
-          </div>
-        )}
-        {meta && typeof meta === 'object' && <DocMetaTable entries={meta} s={s} />}
-        {rows.length > 0 && <DocTable headers={headers} rows={rows} s={s} />}
+      <div className="flex items-center justify-center py-12">
+        <span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span>
       </div>
     );
   }
 
-  // Section heading styles based on level
-  const headingEl = heading ? (() => {
-    const base: React.CSSProperties = { fontFamily: s.font, color: s.headingColor, fontWeight: 700 };
-    if (level === 1) {
-      return (
-        <div
-          className="mb-2"
-          style={{
-            ...base,
-            fontSize: '16px',
-            ...(s.accentBorder ? {
-              borderLeft: `3px solid ${s.accentColor}`,
-              backgroundColor: '#F0F4F8',
-              padding: '6px 10px',
-              borderRadius: '2px',
-            } : {}),
-            marginTop: '16px',
-          }}
-        >
-          {heading}
-        </div>
-      );
-    }
-    if (level === 2) {
-      return (
-        <div className="mb-1.5" style={{ ...base, fontSize: '14px', marginTop: '12px' }}>
-          {heading}
-        </div>
-      );
-    }
-    return (
-      <div className="mb-1" style={{ ...base, fontSize: '13px', marginTop: '8px' }}>
-        {heading}
-      </div>
-    );
-  })() : null;
-
-  // Detect callout/note/tip fields
-  const callout = (data.callout as string) || (data.note as string) || (data.tip as string) || (data.guide as string) || '';
-  const calloutLabel = data.callout ? '備註' : data.note ? '注意' : data.tip ? '提示' : data.guide ? '撰寫指引' : '';
-  const calloutType = data.callout ? 'note' : data.note ? 'info' : data.tip ? 'tip' : data.guide ? 'guide' : 'note';
-
   return (
-    <div>
-      {headingEl}
-      {content && (
-        <p className="mb-2 text-[13px]" style={bodyStyle}>{content}</p>
-      )}
-      {paragraphs.length > 0 && (
-        <div className="space-y-2">
-          {paragraphs.map((p, i) => (
-            <p key={i} className="text-[13px]" style={bodyStyle}>{p}</p>
-          ))}
+    <div className="py-4 px-4 space-y-4">
+      {pageImages.map((src, i) => (
+        <div key={i} className="mx-auto bg-white shadow-md" style={{ maxWidth: '740px' }}>
+          <img src={src} alt={`Page ${i + 1}`} className="w-full h-auto block" />
         </div>
-      )}
-      {bullets.length > 0 && (
-        <ul className="mt-1 space-y-0.5 list-disc" style={{ ...bodyStyle, paddingLeft: '24px' }}>
-          {bullets.map((b, i) => (
-            <li key={i} className="text-[13px]">{typeof b === 'string' ? b : (b as any).text || JSON.stringify(b)}</li>
-          ))}
-        </ul>
-      )}
-      {/* Tables */}
-      {rows.length > 0 && <DocTable headers={headers} rows={rows} s={s} />}
-      {/* Callout / note / tip */}
-      {callout && <DocCallout text={callout} label={calloutLabel} type={calloutType} />}
-      {/* Subsections — recursively render children */}
-      {subsections.length > 0 && (
-        <div className="mt-2 space-y-2">
-          {subsections.map((sub, i) => (
-            <div key={i} className="pl-3" style={{ borderLeft: `2px solid ${s.accentColor}20` }}>
-              <div className="text-[13px] font-semibold" style={{ fontFamily: s.font, color: s.headingColor }}>
-                {sub.title || sub.heading || `Section ${i + 1}`}
-              </div>
-              {sub.content && <p className="text-[13px] mt-0.5" style={bodyStyle}>{sub.content}</p>}
-              {sub.paragraphs?.length > 0 && sub.paragraphs.map((p: string, j: number) => (
-                <p key={j} className="text-[13px] mt-1" style={bodyStyle}>{p}</p>
-              ))}
-              {sub.bullets?.length > 0 && (
-                <ul className="mt-0.5 space-y-0.5 list-disc" style={{ ...bodyStyle, paddingLeft: '20px' }}>
-                  {sub.bullets.map((b: string, j: number) => (
-                    <li key={j} className="text-[13px]">{b}</li>
-                  ))}
-                </ul>
-              )}
-              {sub.rows?.length > 0 && <DocTable headers={sub.headers} rows={sub.rows} s={s} />}
-              {(sub.callout || sub.note || sub.guide) && (
-                <DocCallout
-                  text={sub.callout || sub.note || sub.guide}
-                  label={sub.callout ? '備註' : sub.note ? '注意' : '撰寫指引'}
-                  type={sub.callout ? 'note' : sub.note ? 'info' : 'guide'}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      ))}
     </div>
   );
 }
@@ -909,47 +708,14 @@ export default function DocumentCanvas({
           </div>
         )}
 
-        {/* Main content — interactive document view */}
+        {/* Main content — PDF page-by-page view (matches actual DOCX output) */}
         <div className="flex-1 flex flex-col min-w-0">
-          {blocks.length > 0 ? (
+          {previewBlobUrl ? (
             <div className="flex-1 overflow-y-auto" style={{ backgroundColor: '#E8E8E8' }}>
-              {/* Paper-like container */}
-              <div className="max-w-[740px] mx-auto my-6 bg-white shadow-md rounded-sm" style={{ minHeight: 'calc(100% - 48px)' }}>
-                <div className="px-12 py-10 md:px-16">
-                  {/* Blocks as clickable sections */}
-                  {blocks.map((block, index) => {
-                    const isSelected = selectedBlockId === block.id;
-                    const isRegenerating = block.status === 'regenerating';
-                    return (
-                      <div
-                        key={block.id}
-                        onClick={() => onSelectBlock(isSelected ? null : block.id)}
-                        className={`relative group cursor-pointer rounded transition-all duration-150 px-3 py-1 -mx-3 ${
-                          index < visibleCount ? 'opacity-100' : 'opacity-0'
-                        } ${
-                          isSelected
-                            ? 'ring-1 ring-primary/30 bg-primary/3'
-                            : 'hover:bg-black/[0.02]'
-                        } ${isRegenerating ? 'animate-pulse' : ''}`}
-                      >
-                        {/* Selection indicator */}
-                        {isSelected && (
-                          <div className="absolute left-0 top-1 bottom-1 w-[3px] bg-primary rounded-full" />
-                        )}
-
-                        <DocBlockRenderer block={block} docStyle={String(meta.style || 'modern')} />
-
-                        {/* Hover hint */}
-                        {!isSelected && (
-                          <div className="absolute right-1 top-1 opacity-0 group-hover:opacity-60 transition-opacity">
-                            <span className="material-symbols-outlined text-gray-400" style={{ fontSize: '14px' }}>edit_note</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              <DocPdfPages
+                pdfUrl={previewBlobUrl}
+                previewKey={previewKeyRef.current}
+              />
             </div>
           ) : streaming ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-3">
@@ -971,6 +737,10 @@ export default function DocumentCanvas({
                   ))}
                 </div>
               )}
+            </div>
+          ) : previewLoading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span>
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center text-on-surface-variant/30">
