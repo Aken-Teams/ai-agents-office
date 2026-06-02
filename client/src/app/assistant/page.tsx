@@ -1064,6 +1064,45 @@ function TeamCreateModal({ token, onCreated, onCancel }: { token: string | null;
   );
 }
 
+// ── Team Delete Modal ───────────────────────────────────────────────────────
+function TeamDeleteModal({ team, onDelete, onDisband, onCancel }: { team: Team; onDelete: () => void; onDisband: () => void; onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onCancel}>
+      <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-xl bg-error/10 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-error">delete</span>
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-lg font-headline font-bold text-on-surface truncate">刪除團隊「{team.title}」？</h3>
+            <p className="text-xs text-on-surface-variant">這個團隊有 {team.member_count} 位助手</p>
+          </div>
+        </div>
+        <p className="text-sm text-on-surface-variant mb-4">你想怎麼處理團隊裡的助手？</p>
+        <div className="space-y-2.5">
+          <button onClick={onDelete} className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-error/30 bg-error/5 hover:bg-error/10 transition-colors cursor-pointer text-left">
+            <span className="material-symbols-outlined text-error shrink-0">delete_forever</span>
+            <span className="min-w-0">
+              <span className="block text-sm font-bold text-on-surface">刪除團隊與所有助手</span>
+              <span className="block text-xs text-on-surface-variant">助手與其對話一併刪除（無法復原）</span>
+            </span>
+          </button>
+          <button onClick={onDisband} className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-outline-variant/20 bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer text-left">
+            <span className="material-symbols-outlined text-on-surface-variant shrink-0">group_remove</span>
+            <span className="min-w-0">
+              <span className="block text-sm font-bold text-on-surface">只解散團隊</span>
+              <span className="block text-xs text-on-surface-variant">保留助手，移為「獨立助手」</span>
+            </span>
+          </button>
+        </div>
+        <div className="flex justify-end mt-5">
+          <button onClick={onCancel} className="px-5 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer">取消</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Content ───────────────────────────────────────────────────────────
 function AssistantContent() {
   const { user, token, isLoading } = useAuth();
@@ -1112,9 +1151,10 @@ function AssistantContent() {
     return n;
   });
 
-  const handleDeleteTeam = useCallback(async () => {
+  const handleTeamDelete = useCallback(async (withAgents: boolean) => {
     if (!teamDeleteTarget || !token) return;
-    await fetch(`/api/teams/${teamDeleteTarget.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    const q = withAgents ? '?withAgents=1' : '';
+    await fetch(`/api/teams/${teamDeleteTarget.id}${q}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
     setTeamDeleteTarget(null);
     refreshAll();
   }, [teamDeleteTarget, token, refreshAll]);
@@ -1354,9 +1394,10 @@ function AssistantContent() {
         <TeamCreateModal token={token} onCreated={refreshAll} onCancel={() => setTeamModalOpen(false)} />
       )}
       {teamDeleteTarget && (
-        <DeleteConfirmModal
-          title={`團隊「${teamDeleteTarget.title}」`}
-          onConfirm={handleDeleteTeam}
+        <TeamDeleteModal
+          team={teamDeleteTarget}
+          onDelete={() => handleTeamDelete(true)}
+          onDisband={() => handleTeamDelete(false)}
           onCancel={() => setTeamDeleteTarget(null)}
         />
       )}
@@ -1469,12 +1510,12 @@ function AssistantContent() {
                       </div>
                       <span className="material-symbols-outlined text-on-surface-variant ml-1 transition-transform" style={{ transform: collapsed ? 'rotate(-90deg)' : 'none' }}>expand_more</span>
                     </button>
-                    <button onClick={() => setTeamDeleteTarget(team)} className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer border border-outline-variant/10 shrink-0" title="解散團隊">
-                      <span className="material-symbols-outlined text-[18px]">group_remove</span>
+                    <button onClick={() => setTeamDeleteTarget(team)} className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer border border-outline-variant/10 shrink-0" title="刪除團隊">
+                      <span className="material-symbols-outlined text-[18px]">delete</span>
                     </button>
                   </div>
                   {!collapsed && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       {members.map((conv, i) => renderCard(conv, i))}
                     </div>
                   )}
