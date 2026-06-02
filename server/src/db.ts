@@ -585,6 +585,32 @@ export async function initializeDatabase(): Promise<void> {
     try {
       await conn.query('ALTER TABLE conversations ADD INDEX idx_conversations_team (team_id)');
     } catch { /* index already exists */ }
+
+    // Rolling distilled "team memory" — updated after each collaboration run,
+    // injected into every member's prompt on the next run (shared memory).
+    try {
+      await conn.query('ALTER TABLE agent_teams ADD COLUMN shared_memory TEXT DEFAULT NULL');
+    } catch { /* column already exists */ }
+
+    // One row per "team collaboration run" — the question, each member's
+    // analysis (JSON), and the coordinator's final synthesis.
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS team_runs (
+        id              VARCHAR(36) PRIMARY KEY,
+        team_id         VARCHAR(36) NOT NULL,
+        user_id         VARCHAR(36) NOT NULL,
+        question        TEXT NOT NULL,
+        result          LONGTEXT,
+        member_outputs  LONGTEXT,
+        input_tokens    INT NOT NULL DEFAULT 0,
+        output_tokens   INT NOT NULL DEFAULT 0,
+        status          VARCHAR(20) NOT NULL DEFAULT 'running',
+        created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_team_runs_team (team_id),
+        FOREIGN KEY (team_id) REFERENCES agent_teams(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
     // ─── end Agent Teams ─────────────────────────────────────────
 
     // Terms of Service: add acceptance tracking column

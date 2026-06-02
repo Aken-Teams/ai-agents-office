@@ -14,6 +14,9 @@ import { dbGet, dbAll, dbRun } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
 import { TEAM_TEMPLATES, getTeamTemplate, type TeamAgentTemplate } from '../data/teamTemplates.js';
+import { runTeam, estimateRunTokens, estimateCostUsd } from '../services/teamRun.js';
+import { checkUserUsageLimit } from '../services/usageLimit.js';
+import { analyzeInput, logSecurityEvent } from '../services/inputGuard.js';
 import type { Conversation } from '../types.js';
 
 const router = Router();
@@ -163,6 +166,85 @@ router.delete('/:id', async (req: Request, res: Response) => {
   }
   await dbRun('DELETE FROM agent_teams WHERE id = ? AND user_id = ?', team.id, userId);
   res.json({ success: true });
+});
+
+// GET /api/teams/:id/estimate — pre-run token/cost estimate for the UI.
+router.get('/:id/estimate', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const row = await dbGet<{ c: number }>(
+    "SELECT COUNT(*) AS c FROM conversations WHERE team_id = ? AND user_id = ? AND status != 'deleted'",
+    req.params.id, userId,
+  );
+  const memberCount = row?.c ?? 0;
+  const est = estimateRunTokens(memberCount);
+  res.json({ memberCount, ...est, costUsd: estimateCostUsd(est.inputTokens, est.outputTokens) });
+});
+
+// GET /api/teams/:id/runs — recent collaboration runs (history).
+router.get('/:id/runs', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const runs = await dbAll(
+    `SELECT id, question, result, member_outputs, input_tokens, output_tokens, status, created_at
+     FROM team_runs WHERE team_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 20`,
+    req.params.id, userId,
+  );
+  res.json({ runs });
+});
+
+// POST /api/teams/:id/run — run a team collaboration. Streams progress as SSE.
+router.post('/:id/run', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const { message } = req.body as { message?: string };
+  if (!message || typeof message !== 'string' || !message.trim()) {
+    res.status(400).json({ error: 'message is required' });
+    return;
+  }
+
+  const team = await dbGet<{ id: string }>('SELECT id FROM agent_teams WHERE id = ? AND user_id = ?', req.params.id, userId);
+  if (!team) { res.status(404).json({ error: 'Team not found' }); return; }
+
+  // Input safety — reuse the same guard as the chat flow.
+  const guard = analyzeInput(message);
+  if (guard.blocked) {
+    logSecurityEvent(userId, 'prompt_injection', 'high', `team-run blocked (score=${guard.score})`, message);
+    res.status(400).json({ error: '訊息內容被安全檢查阻擋' });
+    return;
+  }
+
+  // Quota — reuse the same accounting as the web/LINE flow.
+  const usage = await checkUserUsageLimit(userId);
+  if (usage.exceeded) {
+    res.status(403).json({ error: `本月用量已達上限 USD $${usage.limit.toFixed(2)}` });
+    return;
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  // Flush headers + prime the stream immediately so the proxy starts forwarding
+  // (without this the first events sit buffered during a member's silent think).
+  res.flushHeaders?.();
+  try { res.write(': connected\n\n'); } catch { /* closed */ }
+
+  // Keepalive forces a periodic flush during silent stretches (member analysis).
+  const keepalive = setInterval(() => { try { res.write(': keepalive\n\n'); } catch { /* closed */ } }, 10000);
+
+  const writer = (event: { type: string; data?: unknown }) => {
+    try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* client closed */ }
+  };
+
+  try {
+    await runTeam({ userId, teamId: String(req.params.id), question: message.trim(), writer });
+  } catch (err) {
+    console.error('[teams] run failed:', err);
+    writer({ type: 'error', data: { error: err instanceof Error ? err.message : String(err) } });
+  } finally {
+    clearInterval(keepalive);
+    res.end();
+  }
 });
 
 export default router;

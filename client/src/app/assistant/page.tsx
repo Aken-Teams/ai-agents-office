@@ -1510,6 +1510,10 @@ function AssistantContent() {
                       </div>
                       <span className="material-symbols-outlined text-on-surface-variant ml-1 transition-transform" style={{ transform: collapsed ? 'rotate(-90deg)' : 'none' }}>expand_more</span>
                     </button>
+                    <Link href={`/team/${team.id}`} className="flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-bold text-on-primary cyber-gradient hover:brightness-110 active:scale-95 transition-all cursor-pointer shrink-0 no-underline" title="跑團隊協作分析">
+                      <span className="material-symbols-outlined text-[18px]">bolt</span>
+                      <span className="hidden sm:inline">跑團隊分析</span>
+                    </Link>
                     <button onClick={() => setTeamDeleteTarget(team)} className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer border border-outline-variant/10 shrink-0" title="刪除團隊">
                       <span className="material-symbols-outlined text-[18px]">delete</span>
                     </button>
