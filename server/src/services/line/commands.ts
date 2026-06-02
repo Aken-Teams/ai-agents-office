@@ -98,17 +98,13 @@ export async function handleLink(lineUserId: string, args: string): Promise<void
     throw err;
   }
 
+  // Bind-only model: the user is already logged in on the web (that's where
+  // they generated the QR). Just confirm — no web-login link. The web page is
+  // polling and will flip to "已綁定" on its own.
   await pushMessage(lineUserId, [{
     type: 'text',
-    text: '✅ 綁定成功！直接傳訊息即可開始對話。底下會再傳一個網頁登入連結。',
+    text: '✅ 綁定成功！您的 LINE 已連結到您的帳號，現在可以直接在這裡傳訊息使用 AI 助理。',
   }]);
-
-  // Hand off to the same magic-link path used by the rich-menu "Open Web"
-  // tile so the user can hop to the browser immediately.
-  const fresh = await getLineUser(lineUserId);
-  if (fresh) {
-    try { await handleWebLink(fresh); } catch (err) { console.error('[LINE] post-link magic link failed:', err); }
-  }
 }
 
 export async function handleNew(lineUser: LineUserRow): Promise<void> {
