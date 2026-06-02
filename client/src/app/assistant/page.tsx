@@ -1008,6 +1008,20 @@ function TeamCreateModal({ token, onCreated, onCancel }: { token: string | null;
             <div className="flex justify-center py-10"><span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span></div>
           ) : (
             <>
+              {/* AI custom team — prominent full-width option above the templates */}
+              <button onClick={() => { setCustomMode(true); setSelected(null); }}
+                className={`w-full flex items-center gap-3 p-4 mb-4 rounded-xl border transition-all cursor-pointer text-left ${customMode ? 'border-tertiary bg-tertiary/5 ring-1 ring-tertiary/30' : 'border-outline-variant/20 bg-surface-container hover:border-tertiary/50'}`}>
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors ${customMode ? 'bg-tertiary text-on-primary' : 'bg-surface-container-high text-tertiary'}`}>
+                  <span className="material-symbols-outlined text-xl">auto_awesome</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-on-surface text-sm">AI 自訂團隊</div>
+                  <div className="text-xs text-on-surface-variant">描述你的情境，AI 依需求自動組成 3–5 位分工互補的助手</div>
+                </div>
+                {customMode && <span className="material-symbols-outlined text-tertiary shrink-0">check_circle</span>}
+              </button>
+
+              <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant/70 mb-2 px-1">或從範本領域選擇</p>
               {/* Template grid — 5 per row, simplified cards */}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 mb-4">
                 {templates.map(tpl => {
@@ -1024,16 +1038,6 @@ function TeamCreateModal({ token, onCreated, onCancel }: { token: string | null;
                     </button>
                   );
                 })}
-                {/* AI custom team — design from a free-form scenario */}
-                <button onClick={() => { setCustomMode(true); setSelected(null); }}
-                  className={`relative flex flex-col items-center text-center p-4 rounded-xl border transition-all cursor-pointer ${customMode ? 'border-tertiary bg-tertiary/5 ring-1 ring-tertiary/30' : 'border-dashed border-outline-variant/40 bg-surface-container hover:border-tertiary/50'}`}>
-                  {customMode && <span className="material-symbols-outlined absolute top-2 right-2 text-tertiary text-lg">check_circle</span>}
-                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-2 transition-colors ${customMode ? 'bg-tertiary text-on-primary' : 'bg-surface-container-high text-tertiary'}`}>
-                    <span className="material-symbols-outlined text-xl">auto_awesome</span>
-                  </div>
-                  <div className="font-bold text-on-surface text-sm leading-tight">AI 自訂團隊</div>
-                  <div className="text-[11px] text-on-surface-variant mt-0.5">依你的情境</div>
-                </button>
               </div>
 
               {/* Members preview — custom hint, or the chosen template's roster */}
