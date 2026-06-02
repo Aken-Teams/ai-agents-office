@@ -16,6 +16,7 @@ import quotaRequestRoutes from './routes/quota-request.js';
 import outlookRoutes from './routes/outlook.js';
 import emailAgentRoutes from './routes/emailAgent.js';
 import blockRoutes from './routes/blocks.js';
+import teamRoutes from './routes/teams.js';
 import lineRoutes from './routes/line.js';
 import { rawBodyMiddleware } from './middleware/rawBody.js';
 import { loadLineSettings } from './services/lineSettings.js';
@@ -73,6 +74,7 @@ async function main() {
   app.use('/api/outlook', outlookRoutes);
   app.use('/api/email-agent', emailAgentRoutes);
   app.use('/api/blocks', blockRoutes);
+  app.use('/api/teams', teamRoutes);
 
   // Start the LINE BullMQ worker only when the bot is enabled, so disabling
   // LINE_BOT_ENABLED in .env produces no Redis traffic and no idle worker.

@@ -53,6 +53,16 @@ interface AssistantConversation {
   skill_id: string | null;
   system_prompt: string | null;
   icon: string | null;
+  team_id: string | null;
+}
+
+interface Team {
+  id: string;
+  title: string;
+  topic: string | null;
+  template_id: string | null;
+  icon: string | null;
+  member_count: number;
 }
 
 interface SkillOption {
@@ -942,6 +952,118 @@ function EmailModal({ token, onClose }: { token: string; onClose: () => void }) 
   );
 }
 
+// ── Team Create Modal ───────────────────────────────────────────────────────
+interface TeamTemplate {
+  id: string;
+  title: string;
+  icon: string;
+  description: string;
+  agents: { name: string; icon: string; skillId: string | null }[];
+}
+
+function TeamCreateModal({ token, onCreated, onCancel }: { token: string | null; onCreated: () => void; onCancel: () => void }) {
+  const [templates, setTemplates] = useState<TeamTemplate[]>([]);
+  const [selected, setSelected] = useState<TeamTemplate | null>(null);
+  const [topic, setTopic] = useState('');
+  const [aiTune, setAiTune] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/teams/templates', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(r => r.json())
+      .then(d => { setTemplates(Array.isArray(d.templates) ? d.templates : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [token]);
+
+  const handleCreate = async () => {
+    if (!selected || !token) return;
+    setCreating(true);
+    try {
+      const res = await fetch('/api/teams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ templateId: selected.id, topic: topic.trim() || undefined, aiTune }),
+      });
+      if (res.ok) { onCreated(); onCancel(); }
+    } finally { setCreating(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onCancel}>
+      <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-5xl max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="p-6 md:p-7">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="material-symbols-outlined text-primary">groups</span>
+            <h3 className="text-lg font-headline font-bold text-on-surface">建立 AI 助手團隊</h3>
+          </div>
+          <p className="text-sm text-on-surface-variant mb-5">選一個領域，系統會自動建立一組分工合作的 AI 助手。</p>
+
+          {loading ? (
+            <div className="flex justify-center py-10"><span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span></div>
+          ) : (
+            <>
+              {/* Template grid — 5 per row, simplified cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 mb-4">
+                {templates.map(tpl => {
+                  const isSel = selected?.id === tpl.id;
+                  return (
+                    <button key={tpl.id} onClick={() => setSelected(tpl)}
+                      className={`relative flex flex-col items-center text-center p-4 rounded-xl border transition-all cursor-pointer ${isSel ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-outline-variant/20 bg-surface-container hover:border-primary/40'}`}>
+                      {isSel && <span className="material-symbols-outlined absolute top-2 right-2 text-primary text-lg">check_circle</span>}
+                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-2 transition-colors ${isSel ? 'cyber-gradient text-on-primary' : 'bg-surface-container-high text-primary'}`}>
+                        <span className="material-symbols-outlined text-xl">{tpl.icon}</span>
+                      </div>
+                      <div className="font-bold text-on-surface text-sm leading-tight">{tpl.title}</div>
+                      <div className="text-[11px] text-on-surface-variant mt-0.5">{tpl.agents.length} 位助手</div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Selected team's members — shown only for the chosen template */}
+              {selected && (
+                <div className="flex flex-wrap items-center gap-1.5 mb-5 px-1">
+                  <span className="text-xs text-on-surface-variant mr-1">團隊成員：</span>
+                  {selected.agents.map(a => (
+                    <span key={a.name} className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary">{a.name}</span>
+                  ))}
+                </div>
+              )}
+
+              {/* Topic + inline AI-tune toggle */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">議題（選填，讓團隊更聚焦）</label>
+                  <button type="button" onClick={() => setAiTune(v => !v)} title="開啟後會多花一次輕量 AI 呼叫，依議題微調每位助手的角色"
+                    className="flex items-center gap-1.5 text-xs font-medium text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
+                    <span className="material-symbols-outlined text-sm text-primary">auto_awesome</span>
+                    AI 依議題微調角色
+                    <span className={`relative w-9 h-5 rounded-full transition-colors ${aiTune ? 'bg-primary' : 'bg-outline-variant/40'}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${aiTune ? 'translate-x-4' : ''}`} />
+                    </span>
+                  </button>
+                </div>
+                <input value={topic} onChange={e => setTopic(e.target.value)} placeholder="例如：2025 下半年台股佈局、新產品上市行銷…"
+                  className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-4 py-2.5 text-sm text-on-surface focus:outline-none focus:border-primary" />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-5 mt-1 border-t border-outline-variant/15">
+                <button onClick={onCancel} className="px-5 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer">取消</button>
+                <button onClick={handleCreate} disabled={!selected || creating}
+                  className="px-6 py-2.5 rounded-xl text-sm font-bold text-on-primary cyber-gradient disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center gap-2">
+                  <span className={`material-symbols-outlined text-base ${creating ? 'animate-spin' : ''}`}>{creating ? 'progress_activity' : 'group_add'}</span>
+                  {selected ? `建立團隊（${selected.agents.length} 位助手）` : '請先選領域'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Content ───────────────────────────────────────────────────────────
 function AssistantContent() {
   const { user, token, isLoading } = useAuth();
@@ -960,6 +1082,44 @@ function AssistantContent() {
   const [emailConnected, setEmailConnected] = useState<boolean | null>(null); // null = loading/not available
   const [deployMode, setDeployMode] = useState<string>('');
   const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [teamModalOpen, setTeamModalOpen] = useState(false);
+
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [collapsedTeams, setCollapsedTeams] = useState<Set<string>>(new Set());
+  const [teamDeleteTarget, setTeamDeleteTarget] = useState<Team | null>(null);
+
+  const loadConversations = useCallback(() => {
+    if (!token) return;
+    fetch('/api/conversations?category=assistant', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(data => setConversations(Array.isArray(data) ? data : []))
+      .catch(console.error);
+  }, [token]);
+
+  const loadTeams = useCallback(() => {
+    if (!token) return;
+    fetch('/api/teams', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setTeams(Array.isArray(d.teams) ? d.teams : []))
+      .catch(() => {});
+  }, [token]);
+
+  const refreshAll = useCallback(() => { loadConversations(); loadTeams(); }, [loadConversations, loadTeams]);
+
+  const toggleTeam = (id: string) => setCollapsedTeams(prev => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+
+  const handleDeleteTeam = useCallback(async () => {
+    if (!teamDeleteTarget || !token) return;
+    await fetch(`/api/teams/${teamDeleteTarget.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+    setTeamDeleteTarget(null);
+    refreshAll();
+  }, [teamDeleteTarget, token, refreshAll]);
+
+  useEffect(() => { loadTeams(); }, [loadTeams]);
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
@@ -1094,8 +1254,82 @@ function AssistantContent() {
 
   if (isLoading || !user) return null;
 
-  const totalPages = Math.max(1, Math.ceil(conversations.length / PAGE_SIZE));
-  const pageConvs = conversations.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const standaloneConvs = conversations.filter(c => !c.team_id);
+  const teamsWithMembers = teams
+    .map(team => ({ team, members: conversations.filter(c => c.team_id === team.id) }))
+    .filter(g => g.members.length > 0);
+
+  const renderCard = (conv: AssistantConversation, index: number) => {
+    const cardIcon = conv.icon || 'smart_toy';
+    return (
+      <div key={conv.id} className="group relative flex flex-col bg-surface-container rounded-2xl border border-outline-variant/10 hover:border-primary/30 transition-all overflow-hidden">
+        <div className="h-1 cyber-gradient w-full" />
+        <div className="p-5 flex flex-col flex-1">
+          <div className="flex items-start justify-between mb-4">
+            <div className="relative">
+              <div className="w-12 h-12 rounded-xl cyber-gradient flex items-center justify-center">
+                <span className="material-symbols-outlined text-on-primary text-2xl">{cardIcon}</span>
+              </div>
+              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-success rounded-full border-2 border-surface-container">
+                <span className="absolute inset-0 rounded-full bg-success animate-ping opacity-60" />
+              </span>
+            </div>
+            <span className="text-xs font-mono font-bold text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">#{index + 1}</span>
+          </div>
+          <h3 className="font-headline font-bold text-on-surface text-base mb-1 group-hover:text-primary transition-colors line-clamp-1">{conv.title}</h3>
+          {conv.summary ? (
+            <p className="text-xs text-on-surface-variant/80 line-clamp-2 mb-2 leading-relaxed">{conv.summary}</p>
+          ) : (
+            <p className="text-xs text-outline/50 mb-2 italic">{t('assistant.noSummary' as any) || '對話中...'}</p>
+          )}
+          <div className="flex items-center gap-2 text-xs text-on-surface-variant mb-3 flex-wrap">
+            {processingIds.has(conv.id) ? (
+              <span className="flex items-center gap-1 text-primary">
+                <span className="material-symbols-outlined text-[13px] animate-spin">progress_activity</span>
+                {t('assistant.processing' as any)}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
+                {t('conversations.status.active' as any) || '進行中'}
+              </span>
+            )}
+            <span className="text-outline-variant/40">·</span>
+            <span>{formatDate(conv.created_at)}</span>
+            {conv.skill_id ? (
+              <>
+                <span className="text-outline-variant/40">·</span>
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-primary/10 rounded text-primary font-medium">
+                  <span className="material-symbols-outlined text-[12px]">{SKILL_ICON_MAP[conv.skill_id] || 'bolt'}</span>
+                  {getSkillName(conv.skill_id)}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-outline-variant/40">·</span>
+                <span className="flex items-center gap-1 text-tertiary">
+                  <span className="material-symbols-outlined text-[13px]">psychology</span>
+                  {t('assistant.memoryActive' as any) || '記憶中'}
+                </span>
+              </>
+            )}
+          </div>
+          <div className="mt-auto flex items-center gap-2">
+            <Link href={`/chat/${conv.id}`} className="flex-1 flex items-center justify-center gap-1.5 py-2 cyber-gradient text-on-primary rounded-lg text-sm font-bold font-headline hover:brightness-110 active:scale-95 transition-all no-underline">
+              <span className="material-symbols-outlined text-base">chat</span>
+              {t('assistant.openChat' as any) || '開啟對話'}
+            </Link>
+            <button onClick={() => setEditTarget(conv)} className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer border border-outline-variant/10" title={t('assistant.settings' as any) || '設定'}>
+              <span className="material-symbols-outlined text-[18px]">tune</span>
+            </button>
+            <button onClick={() => setDeleteTarget(conv)} className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer border border-outline-variant/10" title={t('assistant.delete' as any) || '刪除'}>
+              <span className="material-symbols-outlined text-[18px]">delete</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-surface-container-lowest">
@@ -1115,6 +1349,16 @@ function AssistantContent() {
       )}
       {emailModalOpen && token && (
         <EmailModal token={token} onClose={() => setEmailModalOpen(false)} />
+      )}
+      {teamModalOpen && (
+        <TeamCreateModal token={token} onCreated={refreshAll} onCancel={() => setTeamModalOpen(false)} />
+      )}
+      {teamDeleteTarget && (
+        <DeleteConfirmModal
+          title={`團隊「${teamDeleteTarget.title}」`}
+          onConfirm={handleDeleteTeam}
+          onCancel={() => setTeamDeleteTarget(null)}
+        />
       )}
 
       <main className={`${sidebarMargin} md:pt-10 pb-12 px-4 md:px-10 transition-all duration-300`}>
@@ -1163,6 +1407,14 @@ function AssistantContent() {
                   {emailConnected && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-success rounded-full border-2 border-surface-container-lowest" />}
                 </button>
               )}
+              {/* Create team button */}
+              <button
+                onClick={() => setTeamModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-primary/30 bg-primary/5 text-primary font-bold text-sm hover:bg-primary/10 active:scale-95 transition-all cursor-pointer shadow-sm"
+              >
+                <span className="material-symbols-outlined text-base">groups</span>
+                <span className="hidden sm:inline">建立團隊</span>
+              </button>
               {/* New assistant button */}
               <button
                 onClick={() => setEditTarget('new')}
@@ -1197,134 +1449,58 @@ function AssistantContent() {
             </div>
           </button>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            {pageConvs.map((conv, idx) => {
-              const globalIdx = (currentPage - 1) * PAGE_SIZE + idx;
-              const cardIcon = conv.icon || 'smart_toy';
+          <div className="space-y-10">
+            {/* Team sections */}
+            {teamsWithMembers.map(({ team, members }) => {
+              const collapsed = collapsedTeams.has(team.id);
               return (
-                <div
-                  key={conv.id}
-                  className="group relative flex flex-col bg-surface-container rounded-2xl border border-outline-variant/10 hover:border-primary/30 transition-all overflow-hidden"
-                >
-                  <div className="h-1 cyber-gradient w-full" />
-                  <div className="p-5 flex flex-col flex-1">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="relative">
-                        <div className="w-12 h-12 rounded-xl cyber-gradient flex items-center justify-center">
-                          <span className="material-symbols-outlined text-on-primary text-2xl">{cardIcon}</span>
-                        </div>
-                        <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-success rounded-full border-2 border-surface-container">
-                          <span className="absolute inset-0 rounded-full bg-success animate-ping opacity-60" />
-                        </span>
+                <section key={team.id}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <button onClick={() => toggleTeam(team.id)} className="group flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer">
+                      <div className="w-11 h-11 rounded-xl cyber-gradient flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined text-on-primary text-xl">{team.icon || 'groups'}</span>
                       </div>
-                      <span className="text-xs font-mono font-bold text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">
-                        #{globalIdx + 1}
-                      </span>
-                    </div>
-
-                    <h3 className="font-headline font-bold text-on-surface text-base mb-1 group-hover:text-primary transition-colors line-clamp-1">
-                      {conv.title}
-                    </h3>
-
-                    {conv.summary ? (
-                      <p className="text-xs text-on-surface-variant/80 line-clamp-2 mb-2 leading-relaxed">{conv.summary}</p>
-                    ) : (
-                      <p className="text-xs text-outline/50 mb-2 italic">{t('assistant.noSummary' as any) || '對話中...'}</p>
-                    )}
-
-                    <div className="flex items-center gap-2 text-xs text-on-surface-variant mb-3 flex-wrap">
-                      {processingIds.has(conv.id) ? (
-                        <span className="flex items-center gap-1 text-primary">
-                          <span className="material-symbols-outlined text-[13px] animate-spin">progress_activity</span>
-                          {t('assistant.processing' as any)}
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
-                          {t('conversations.status.active' as any) || '進行中'}
-                        </span>
-                      )}
-                      <span className="text-outline-variant/40">·</span>
-                      <span>{formatDate(conv.created_at)}</span>
-                      {conv.skill_id ? (
-                        <>
-                          <span className="text-outline-variant/40">·</span>
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-primary/10 rounded text-primary font-medium">
-                            <span className="material-symbols-outlined text-[12px]">{SKILL_ICON_MAP[conv.skill_id] || 'bolt'}</span>
-                            {getSkillName(conv.skill_id)}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-outline-variant/40">·</span>
-                          <span className="flex items-center gap-1 text-tertiary">
-                            <span className="material-symbols-outlined text-[13px]">psychology</span>
-                            {t('assistant.memoryActive' as any) || '記憶中'}
-                          </span>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="mt-auto flex items-center gap-2">
-                      <Link
-                        href={`/chat/${conv.id}`}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 cyber-gradient text-on-primary rounded-lg text-sm font-bold font-headline hover:brightness-110 active:scale-95 transition-all no-underline"
-                      >
-                        <span className="material-symbols-outlined text-base">chat</span>
-                        {t('assistant.openChat' as any) || '開啟對話'}
-                      </Link>
-                      <button
-                        onClick={() => setEditTarget(conv)}
-                        className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer border border-outline-variant/10"
-                        title={t('assistant.settings' as any) || '設定'}
-                      >
-                        <span className="material-symbols-outlined text-[18px]">tune</span>
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(conv)}
-                        className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer border border-outline-variant/10"
-                        title={t('assistant.delete' as any) || '刪除'}
-                      >
-                        <span className="material-symbols-outlined text-[18px]">delete</span>
-                      </button>
-                    </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-headline font-bold text-on-surface text-lg truncate group-hover:text-primary transition-colors">{team.title}</h3>
+                          <span className="text-xs text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full shrink-0">{members.length} 位</span>
+                        </div>
+                        {team.topic && <p className="text-xs text-on-surface-variant truncate">議題：{team.topic}</p>}
+                      </div>
+                      <span className="material-symbols-outlined text-on-surface-variant ml-1 transition-transform" style={{ transform: collapsed ? 'rotate(-90deg)' : 'none' }}>expand_more</span>
+                    </button>
+                    <button onClick={() => setTeamDeleteTarget(team)} className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer border border-outline-variant/10 shrink-0" title="解散團隊">
+                      <span className="material-symbols-outlined text-[18px]">group_remove</span>
+                    </button>
                   </div>
-                </div>
+                  {!collapsed && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                      {members.map((conv, i) => renderCard(conv, i))}
+                    </div>
+                  )}
+                </section>
               );
             })}
-          </div>
-        )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-8">
-            <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="w-9 h-9 flex items-center justify-center rounded-lg border border-outline-variant/20 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <span className="material-symbols-outlined text-base">chevron_left</span>
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-              <button
-                key={p}
-                onClick={() => setCurrentPage(p)}
-                className={`w-9 h-9 flex items-center justify-center rounded-lg text-sm font-bold transition-colors cursor-pointer ${
-                  p === currentPage
-                    ? 'cyber-gradient text-on-primary'
-                    : 'border border-outline-variant/20 text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
-                }`}
-              >
-                {p}
-              </button>
-            ))}
-            <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="w-9 h-9 flex items-center justify-center rounded-lg border border-outline-variant/20 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <span className="material-symbols-outlined text-base">chevron_right</span>
-            </button>
+            {/* Standalone assistants */}
+            {standaloneConvs.length > 0 && (
+              <section>
+                {teamsWithMembers.length > 0 && (
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-11 h-11 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-on-surface-variant text-xl">person</span>
+                    </div>
+                    <div>
+                      <h3 className="font-headline font-bold text-on-surface text-lg">獨立助手</h3>
+                      <p className="text-xs text-on-surface-variant">不屬於任何團隊</p>
+                    </div>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                  {standaloneConvs.map((conv, i) => renderCard(conv, i))}
+                </div>
+              </section>
+            )}
           </div>
         )}
 

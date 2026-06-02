@@ -560,6 +560,33 @@ export async function initializeDatabase(): Promise<void> {
     `);
     // ─── end LINE Bot integration tables ─────────────────────────
 
+    // ─── Agent Teams (議題 → 團隊) ───────────────────────────────
+    // A team groups several assistant conversations under one topic so they
+    // can share memory and be run together by the coordinator orchestrator.
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS agent_teams (
+        id           VARCHAR(36) PRIMARY KEY,
+        user_id      VARCHAR(36) NOT NULL,
+        title        VARCHAR(200) NOT NULL,
+        topic        VARCHAR(1000),
+        template_id  VARCHAR(50),
+        icon         VARCHAR(50),
+        created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_teams_user (user_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Link assistant conversations to a team (nullable — standalone assistants
+    // keep team_id NULL). Nulled out when the team is deleted.
+    try {
+      await conn.query('ALTER TABLE conversations ADD COLUMN team_id VARCHAR(36) DEFAULT NULL');
+    } catch { /* column already exists */ }
+    try {
+      await conn.query('ALTER TABLE conversations ADD INDEX idx_conversations_team (team_id)');
+    } catch { /* index already exists */ }
+    // ─── end Agent Teams ─────────────────────────────────────────
+
     // Terms of Service: add acceptance tracking column
     try {
       await conn.query('ALTER TABLE users ADD COLUMN terms_accepted_at DATETIME DEFAULT NULL');
