@@ -27,7 +27,7 @@ interface MemberRow { id: string; title: string; icon: string | null; skill_id: 
 
 const MEMBER_TRUNCATE = 1500;      // chars of each member output fed to the coordinator
 const SHARED_MEMORY_MAX = 2000;    // chars of rolling team memory kept across runs
-const MEMBER_CONCURRENCY = 3;      // parallel Claude processes (memory cap)
+const MEMBER_CONCURRENCY = 5;      // parallel Claude processes (covers the ≤5 team cap)
 const MEMBER_TIMEOUT_MS = 150_000;
 const SYNTH_TIMEOUT_MS = 180_000;
 
@@ -36,11 +36,13 @@ const SYNTH_TIMEOUT_MS = 180_000;
  * deliberately a little generous.
  */
 export function estimateRunTokens(memberCount: number): { inputTokens: number; outputTokens: number } {
-  const perMemberIn = 900, perMemberOut = 1200;
-  const synthIn = 700 + memberCount * 450, synthOut = 1500;
+  // Round 1 (independent) + Round 2 (discussion, larger input — sees peers) + synthesis.
+  const r1In = 900, r1Out = 1200;
+  const r2In = 2800, r2Out = 1000;
+  const synthIn = 700 + memberCount * 500, synthOut = 1500;
   return {
-    inputTokens: memberCount * perMemberIn + synthIn,
-    outputTokens: memberCount * perMemberOut + synthOut,
+    inputTokens: memberCount * (r1In + r2In) + synthIn,
+    outputTokens: memberCount * (r1Out + r2Out) + synthOut,
   };
 }
 
@@ -59,6 +61,23 @@ ${role}${mem}
 
 請針對使用者提出的議題，從你的專業角度提出分析與觀點：聚焦、具體、有明確結論。
 直接輸出純文字分析即可，不需要產生檔案、不需要客套開場白。`;
+}
+
+function buildDiscussionSystemPrompt(member: MemberRow, ownFinding: string, peersBlock: string): string {
+  const role = (member.system_prompt || `你是「${member.title}」。`).trim();
+  return `你是一個 AI 團隊的成員「${member.title}」。${role}
+
+你第一輪的分析重點：
+${ownFinding ? truncateResultForRouter(ownFinding, 800) : '（無）'}
+
+團隊其他成員的觀點：
+${peersBlock || '（無）'}
+
+現在進入「討論回合」。請針對其他成員的觀點做交流：
+- 你同意哪些？為什麼
+- 你不同意或想補充哪些？說清楚理由
+- 看完別人觀點後，要不要修正自己先前的判斷？
+聚焦在交流與收斂，不要重複第一輪已講過的內容。繁體中文、精簡、要有結論。`;
 }
 
 function runOneClaude(
@@ -170,11 +189,39 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
     results.push(...batchResults);
   }
 
+  // ── Round 2: discussion — members see each other's findings and react ───
+  const round2: Record<string, string> = {};
+  let round2In = 0, round2Out = 0;
+  writer({ type: 'discussion_start' });
+  for (let i = 0; i < members.length; i += MEMBER_CONCURRENCY) {
+    const batch = members.slice(i, i + MEMBER_CONCURRENCY);
+    await Promise.all(batch.map(async member => {
+      const own = results.find(r => r.member.id === member.id)?.text || '';
+      const peers = results
+        .filter(r => r.member.id !== member.id)
+        .map(r => `### ${r.member.title}\n${r.text ? truncateResultForRouter(r.text, 700) : '（無）'}`)
+        .join('\n\n');
+      writer({ type: 'member_status', data: { memberId: member.id, status: 'running' } });
+      writer({ type: 'member_stream', data: { memberId: member.id, content: '\n\n---\n\n**🔄 第二輪 · 回應其他成員**\n\n' } });
+      const r = await runOneClaude(
+        userId, member.id, `_team/${member.id}`, question, buildDiscussionSystemPrompt(member, own, peers), MEMBER_TIMEOUT_MS,
+        chunk => writer({ type: 'member_stream', data: { memberId: member.id, content: chunk } }),
+      );
+      round2[member.id] = r.text.trim();
+      round2In += r.inputTokens; round2Out += r.outputTokens;
+      writer({ type: 'member_done', data: { memberId: member.id, status: r.text.trim() ? 'done' : 'failed', tokens: { inputTokens: r.inputTokens, outputTokens: r.outputTokens } } });
+    }));
+  }
+
   // ── Coordinator synthesis ───────────────────────────────────────────────
   writer({ type: 'synthesis_status', data: { status: 'running' } });
 
   const findingsBlock = results
-    .map(r => `### ${r.member.title}\n${r.text ? truncateResultForRouter(r.text, MEMBER_TRUNCATE) : '（此成員未提供分析）'}`)
+    .map(r => {
+      const r2 = round2[r.member.id];
+      const combined = (r.text || '（此成員未提供分析）') + (r2 ? `\n\n【討論回應】\n${r2}` : '');
+      return `### ${r.member.title}\n${truncateResultForRouter(combined, MEMBER_TRUNCATE)}`;
+    })
     .join('\n\n');
 
   const synthSystem = `你是一個 AI 團隊的協調者。團隊成員已各自針對議題提出分析，你的任務是整合成一份對使用者有用的最終結論：
@@ -209,13 +256,20 @@ ${findingsBlock}
 
   const finalText = synth.text.trim() || '（統整未產生內容，請重試）';
 
-  const totalIn = results.reduce((s, r) => s + r.inputTokens, 0) + synth.inputTokens;
-  const totalOut = results.reduce((s, r) => s + r.outputTokens, 0) + synth.outputTokens;
+  const totalIn = results.reduce((s, r) => s + r.inputTokens, 0) + round2In + synth.inputTokens;
+  const totalOut = results.reduce((s, r) => s + r.outputTokens, 0) + round2Out + synth.outputTokens;
 
   writer({ type: 'synthesis_done', data: { result: finalText, tokens: { inputTokens: synth.inputTokens, outputTokens: synth.outputTokens } } });
 
   // ── Persist run + record tokens ─────────────────────────────────────────
-  const memberOutputs = results.map(r => ({ memberId: r.member.id, name: r.member.title, icon: r.member.icon, text: r.text }));
+  // Store both rounds so history replay shows the full discussion.
+  const memberOutputs = results.map(r => {
+    const r2 = round2[r.member.id];
+    return {
+      memberId: r.member.id, name: r.member.title, icon: r.member.icon,
+      text: r.text + (r2 ? `\n\n---\n\n**🔄 第二輪 · 回應其他成員**\n\n${r2}` : ''),
+    };
+  });
   await dbRun(
     'UPDATE team_runs SET result = ?, member_outputs = ?, input_tokens = ?, output_tokens = ?, status = ? WHERE id = ?',
     finalText, JSON.stringify(memberOutputs), totalIn, totalOut, 'done', runId,

@@ -91,6 +91,8 @@ function TeamRunContent() {
   const [history, setHistory] = useState<RunRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [runDeleteTarget, setRunDeleteTarget] = useState<RunRow | null>(null);
+  const [discussing, setDiscussing] = useState(false);
+  const [expanded, setExpanded] = useState<{ title: string; icon: string; text: string } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const authHeaders = useCallback((): HeadersInit => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
@@ -130,6 +132,7 @@ function TeamRunContent() {
     setError(null);
     setSynthesis('');
     setSynthRunning(false);
+    setDiscussing(false);
     setTotals(null);
     setMembers(prev => {
       const next: Record<string, MemberStream> = {};
@@ -192,7 +195,11 @@ function TeamRunContent() {
       case 'member_done':
         setMembers(prev => prev[d.memberId] ? { ...prev, [d.memberId]: { ...prev[d.memberId], status: d.status === 'failed' ? 'failed' : 'done' } } : prev);
         break;
+      case 'discussion_start':
+        setDiscussing(true);
+        break;
       case 'synthesis_status':
+        setDiscussing(false);
         setSynthRunning(true);
         break;
       case 'synthesis_stream':
@@ -311,6 +318,13 @@ function TeamRunContent() {
           </div>
         )}
 
+        {discussing && (
+          <div className="flex items-center gap-2 p-3 mb-4 rounded-xl bg-tertiary/5 border border-tertiary/20 text-sm text-tertiary">
+            <span className="material-symbols-outlined text-base animate-pulse">forum</span>
+            第二輪：成員正在互相討論、回應彼此的觀點…
+          </div>
+        )}
+
         {/* Member streams */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {memberOrder.map(id => {
@@ -328,6 +342,12 @@ function TeamRunContent() {
                     <span className={`material-symbols-outlined text-[13px] ${meta.spin ? 'animate-spin' : ''}`}>{meta.icon}</span>
                     {meta.label}
                   </span>
+                  {m.text && (
+                    <button onClick={() => setExpanded({ title: m.name, icon: m.icon || 'smart_toy', text: m.text })}
+                      className="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0" title="放大檢視">
+                      <span className="material-symbols-outlined text-[16px]">open_in_full</span>
+                    </button>
+                  )}
                 </div>
                 <div className="p-3 text-xs text-on-surface-variant leading-relaxed max-h-72 overflow-y-auto min-h-[80px]">
                   {m.text
@@ -347,6 +367,12 @@ function TeamRunContent() {
               <span className="font-headline font-bold text-on-surface">協調者統整</span>
               {synthRunning && <span className="material-symbols-outlined animate-spin text-primary text-base ml-1">progress_activity</span>}
               {totals && <span className="ml-auto text-xs text-on-surface-variant">{(totals.inputTokens + totals.outputTokens).toLocaleString()} tokens · ${totals.costUsd}</span>}
+              {synthesis && (
+                <button onClick={() => setExpanded({ title: '協調者統整', icon: 'hub', text: synthesis })}
+                  className={`w-7 h-7 flex items-center justify-center rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0 ${totals ? 'ml-1' : 'ml-auto'}`} title="放大檢視">
+                  <span className="material-symbols-outlined text-[18px]">open_in_full</span>
+                </button>
+              )}
             </div>
             <div className="p-5 text-sm text-on-surface leading-relaxed">
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{synthesis || '統整中…'}</ReactMarkdown>
