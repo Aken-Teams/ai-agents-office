@@ -37,7 +37,6 @@ const NAV_GROUPS = [
     links: [
       { href: '/usage', permKey: 'usage', labelKey: 'nav.usage' as const, icon: 'bar_chart' },
       { href: '/memories', permKey: 'memories', labelKey: 'nav.memories' as const, icon: 'psychology' },
-      { href: '/line-bind', permKey: 'dashboard', labelKey: 'nav.lineBind' as const, icon: 'qr_code_2' },
       { href: '/guide', permKey: 'guide', labelKey: 'nav.guide' as const, icon: 'menu_book' },
     ],
   },

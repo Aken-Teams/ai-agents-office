@@ -21,7 +21,6 @@ const zhTW = {
   'nav.usage': '用量統計',
   'nav.assistant': 'AI 助手',
   'nav.memories': 'AI 記憶',
-  'nav.lineBind': '綁定 LINE',
   'nav.guide': '使用說明',
   'nav.group.main': '主要',
   'nav.group.manage': '管理',

@@ -21,7 +21,6 @@ const zhCN = {
   'nav.usage': '用量统计',
   'nav.assistant': 'AI 助手',
   'nav.memories': 'AI 记忆',
-  'nav.lineBind': '绑定 LINE',
   'nav.guide': '使用说明',
   'nav.group.main': '主要',
   'nav.group.manage': '管理',

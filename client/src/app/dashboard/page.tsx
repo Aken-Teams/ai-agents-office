@@ -356,7 +356,7 @@ function DashboardContent() {
               onClick={() => setShowLineModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#06C755]/10 text-[#06C755] hover:bg-[#06C755]/20 transition-colors cursor-pointer"
             >
-              <span className="material-symbols-outlined text-[18px]">smart_toy</span>
+              <span className="material-symbols-outlined text-[18px]">qr_code_2</span>
               <span className="text-sm font-bold">綁定 LINE</span>
             </button>
             <div className="flex items-center gap-1.5 px-3 py-1 bg-primary/10 rounded-full">
@@ -410,7 +410,7 @@ function DashboardContent() {
             className="flex items-center gap-3 w-full px-4 py-3.5 bg-surface-container rounded-2xl active:bg-surface-container-high transition-colors cursor-pointer"
           >
             <div className="w-10 h-10 rounded-xl bg-[#06C755] flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-white text-xl">smart_toy</span>
+              <span className="material-symbols-outlined text-white text-xl">qr_code_2</span>
             </div>
             <div className="text-left">
               <span className="text-sm font-headline font-bold text-on-surface">綁定 LINE 機器人</span>
