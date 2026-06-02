@@ -10,6 +10,7 @@
 
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
@@ -180,15 +181,41 @@ router.get('/:id/estimate', async (req: Request, res: Response) => {
   res.json({ memberCount, ...est, costUsd: estimateCostUsd(est.inputTokens, est.outputTokens) });
 });
 
-// GET /api/teams/:id/runs — recent collaboration runs (history).
+// GET /api/teams/:id/runs — recent collaboration runs (history) + cumulative total.
 router.get('/:id/runs', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const runs = await dbAll(
-    `SELECT id, question, result, member_outputs, input_tokens, output_tokens, status, created_at
+    `SELECT id, question, result, member_outputs, input_tokens, output_tokens, status, created_at, share_token
      FROM team_runs WHERE team_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 20`,
     req.params.id, userId,
   );
-  res.json({ runs });
+  const agg = await dbGet<{ count: number; in_tok: number; out_tok: number }>(
+    `SELECT COUNT(*) AS count, COALESCE(SUM(input_tokens), 0) AS in_tok, COALESCE(SUM(output_tokens), 0) AS out_tok
+     FROM team_runs WHERE team_id = ? AND user_id = ?`,
+    req.params.id, userId,
+  );
+  const inTok = agg?.in_tok ?? 0, outTok = agg?.out_tok ?? 0;
+  res.json({
+    runs,
+    total: { count: agg?.count ?? 0, inputTokens: inTok, outputTokens: outTok, costUsd: estimateCostUsd(inTok, outTok) },
+  });
+});
+
+// POST /api/teams/:id/runs/:runId/share — mint (or reuse) a public read-only
+// share token for one run. Returns the token; the public URL is built client-side.
+router.post('/:id/runs/:runId/share', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const run = await dbGet<{ id: string; share_token: string | null }>(
+    'SELECT id, share_token FROM team_runs WHERE id = ? AND team_id = ? AND user_id = ?',
+    req.params.runId, req.params.id, userId,
+  );
+  if (!run) { res.status(404).json({ error: 'Run not found' }); return; }
+  let token = run.share_token;
+  if (!token) {
+    token = crypto.randomBytes(8).toString('hex');
+    await dbRun('UPDATE team_runs SET share_token = ? WHERE id = ?', token, run.id);
+  }
+  res.json({ token });
 });
 
 // DELETE /api/teams/:id/runs/:runId — delete a single collaboration run.

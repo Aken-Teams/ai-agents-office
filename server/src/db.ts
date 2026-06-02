@@ -605,12 +605,21 @@ export async function initializeDatabase(): Promise<void> {
         input_tokens    INT NOT NULL DEFAULT 0,
         output_tokens   INT NOT NULL DEFAULT 0,
         status          VARCHAR(20) NOT NULL DEFAULT 'running',
+        share_token     VARCHAR(32) DEFAULT NULL,
         created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_team_runs_team (team_id),
+        INDEX idx_team_runs_share (share_token),
         FOREIGN KEY (team_id) REFERENCES agent_teams(id) ON DELETE CASCADE,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+    // Existing team_runs tables — add the public share token column.
+    try {
+      await conn.query('ALTER TABLE team_runs ADD COLUMN share_token VARCHAR(32) DEFAULT NULL');
+    } catch { /* column already exists */ }
+    try {
+      await conn.query('ALTER TABLE team_runs ADD INDEX idx_team_runs_share (share_token)');
+    } catch { /* index already exists */ }
     // ─── end Agent Teams ─────────────────────────────────────────
 
     // Terms of Service: add acceptance tracking column
