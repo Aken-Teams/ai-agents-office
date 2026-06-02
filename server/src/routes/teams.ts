@@ -191,6 +191,13 @@ router.get('/:id/runs', async (req: Request, res: Response) => {
   res.json({ runs });
 });
 
+// DELETE /api/teams/:id/runs/:runId — delete a single collaboration run.
+router.delete('/:id/runs/:runId', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  await dbRun('DELETE FROM team_runs WHERE id = ? AND team_id = ? AND user_id = ?', req.params.runId, req.params.id, userId);
+  res.json({ success: true });
+});
+
 // POST /api/teams/:id/run — run a team collaboration. Streams progress as SSE.
 router.post('/:id/run', async (req: Request, res: Response) => {
   const userId = req.user!.userId;

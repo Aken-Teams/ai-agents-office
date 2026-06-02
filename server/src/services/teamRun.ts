@@ -186,7 +186,13 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
 請用 Markdown 格式輸出，讓結論清楚易讀：
 - 用 ## 小標題分段（例如：## 共識 / ## 分歧 / ## 核心洞察 / ## 建議）
 - 重點用條列清單（- 或 1.）
-- 需要比較多個項目時用 Markdown 表格（| 欄 | 欄 |）`;
+- 需要比較多個項目時用 Markdown 表格（| 欄 | 欄 |）
+
+若有實際數據適合視覺化，可插入圖表程式碼區塊（只在數據合理時用，不要硬湊）：
+- 長條圖：\`\`\`chart 換行 {"type":"bar","title":"標題","data":[{"name":"項目A","value":10}]}
+- 折線/區域圖：\`\`\`chart 換行 {"type":"line","title":"標題","series":[{"name":"系列","data":[{"name":"X","value":10}]}]}
+- 圓餅圖：\`\`\`chart 換行 {"type":"pie","title":"標題","data":[{"name":"項目A","value":10}]}
+（圖表用獨立的 \`\`\`chart 程式碼區塊包住純 JSON，前後不要加註解）`;
 
   const synthMessage = `議題：${question}
 

@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AuthProvider, useAuth } from '../../components/AuthProvider';
@@ -17,6 +18,13 @@ import Navbar from '../../components/Navbar';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+
+// Reuse the chat page's visualization components for chart code fences.
+const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { ssr: false });
+const ChatEChart = dynamic(() => import('../../components/charts/ChatEChart'), { ssr: false });
+const ChatMermaid = dynamic(() => import('../../components/charts/ChatMermaid'), { ssr: false });
+const ChatMindmap = dynamic(() => import('../../components/charts/ChatMindmap'), { ssr: false });
+const ChatMap = dynamic(() => import('../../components/charts/ChatMap'), { ssr: false });
 
 interface Agent { id: string; title: string; icon: string | null; skill_id: string | null }
 interface TeamInfo { id: string; title: string; topic: string | null; icon: string | null }
@@ -48,7 +56,16 @@ const mdComponents: Record<string, any> = {
   hr: () => <hr className="my-3 border-outline-variant/15" />,
   blockquote: ({ children }: any) => <blockquote className="border-l-2 border-primary/30 pl-3 my-2 text-on-surface-variant">{children}</blockquote>,
   a: ({ children, href }: any) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{children}</a>,
-  code: ({ children }: any) => <code className="px-1 py-0.5 rounded bg-surface-container-high text-[0.9em] font-mono">{children}</code>,
+  pre: ({ children }: any) => <>{children}</>,
+  code: ({ className, children }: any) => {
+    const text = String(children).replace(/\n$/, '');
+    if (className === 'language-chart') return <ChatChart rawJson={text} />;
+    if (className === 'language-echart') return <ChatEChart rawJson={text} />;
+    if (className === 'language-mermaid') return <ChatMermaid code={text} />;
+    if (className === 'language-mindmap') return <ChatMindmap code={text} />;
+    if (className === 'language-map') return <ChatMap rawJson={text} />;
+    return <code className="px-1 py-0.5 rounded bg-surface-container-high text-[0.9em] font-mono">{children}</code>;
+  },
   table: ({ children }: any) => <div className="overflow-x-auto my-2 rounded-lg border border-outline-variant/20"><table className="w-full text-xs border-collapse">{children}</table></div>,
   thead: ({ children }: any) => <thead className="bg-surface-container-high">{children}</thead>,
   th: ({ children }: any) => <th className="text-left px-2 py-1.5 font-semibold text-on-surface border-b border-outline-variant/20">{children}</th>,
@@ -73,6 +90,7 @@ function TeamRunContent() {
   const [totals, setTotals] = useState<{ inputTokens: number; outputTokens: number; costUsd: number } | null>(null);
   const [history, setHistory] = useState<RunRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [runDeleteTarget, setRunDeleteTarget] = useState<RunRow | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const authHeaders = useCallback((): HeadersInit => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
@@ -81,6 +99,13 @@ function TeamRunContent() {
     fetch(`/api/teams/${teamId}/runs`, { headers: authHeaders() })
       .then(r => r.json()).then(d => setHistory(Array.isArray(d.runs) ? d.runs : [])).catch(() => {});
   }, [teamId, authHeaders]);
+
+  const handleDeleteRun = useCallback(async () => {
+    if (!runDeleteTarget) return;
+    await fetch(`/api/teams/${teamId}/runs/${runDeleteTarget.id}`, { method: 'DELETE', headers: authHeaders() });
+    setRunDeleteTarget(null);
+    loadHistory();
+  }, [runDeleteTarget, teamId, authHeaders, loadHistory]);
 
   useEffect(() => {
     if (!token) return;
@@ -211,6 +236,26 @@ function TeamRunContent() {
   return (
     <div className="min-h-screen bg-surface-container-lowest">
       <Navbar />
+      {runDeleteTarget && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setRunDeleteTarget(null)}>
+          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-error/10 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-error">delete</span>
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-base font-headline font-bold text-on-surface">刪除這筆協作紀錄？</h3>
+                <p className="text-xs text-on-surface-variant truncate">{runDeleteTarget.question}</p>
+              </div>
+            </div>
+            <p className="text-sm text-on-surface-variant mb-5">刪除後無法復原。</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setRunDeleteTarget(null)} className="px-4 py-2 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer">取消</button>
+              <button onClick={handleDeleteRun} className="px-4 py-2 rounded-xl text-sm font-bold text-on-primary bg-error hover:brightness-110 transition-all cursor-pointer">刪除</button>
+            </div>
+          </div>
+        </div>
+      )}
       <main className={`${sidebarMargin} md:pt-10 pb-16 px-4 md:px-10 transition-all duration-300`}>
         {/* Header */}
         <div className="mt-4 md:mt-0 mb-6 flex items-center gap-3">
@@ -252,6 +297,12 @@ function TeamRunContent() {
             <span>{running ? '協作分析中…' : (estimate ? `預估 ~${(estimate.inputTokens + estimate.outputTokens).toLocaleString()} tokens · 約 $${estimate.costUsd}` : ' ')}</span>
             <span className="ml-auto text-outline hidden sm:inline">⌘ / Ctrl + Enter 送出</span>
           </div>
+          {history.length > 0 && !running && (
+            <p className="mt-1.5 px-1 text-xs text-tertiary flex items-center gap-1">
+              <span className="material-symbols-outlined text-[14px]">psychology</span>
+              團隊會記得先前的協作結論，可直接接續提問
+            </p>
+          )}
         </div>
 
         {error && (
@@ -309,15 +360,21 @@ function TeamRunContent() {
             <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3">歷史協作</h3>
             <div className="space-y-2">
               {history.map(run => (
-                <button key={run.id} onClick={() => loadPastRun(run)}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl border border-outline-variant/15 bg-surface-container hover:border-primary/40 transition-colors cursor-pointer text-left">
-                  <span className="material-symbols-outlined text-on-surface-variant shrink-0">history</span>
-                  <span className="flex-1 min-w-0">
-                    <span className="block text-sm text-on-surface truncate">{run.question}</span>
-                    <span className="block text-xs text-on-surface-variant">{new Date(run.created_at).toLocaleString()} · {(run.input_tokens + run.output_tokens).toLocaleString()} tokens</span>
-                  </span>
+                <div key={run.id}
+                  className="w-full flex items-center gap-2 p-3 rounded-xl border border-outline-variant/15 bg-surface-container hover:border-primary/40 transition-colors">
+                  <button onClick={() => loadPastRun(run)} className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer">
+                    <span className="material-symbols-outlined text-on-surface-variant shrink-0">history</span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm text-on-surface truncate">{run.question}</span>
+                      <span className="block text-xs text-on-surface-variant">{new Date(run.created_at).toLocaleString()} · {(run.input_tokens + run.output_tokens).toLocaleString()} tokens</span>
+                    </span>
+                  </button>
                   {run.status !== 'done' && <span className="text-[11px] px-2 py-0.5 rounded-full bg-warning/10 text-warning shrink-0">{run.status}</span>}
-                </button>
+                  <button onClick={() => setRunDeleteTarget(run)} title="刪除此協作紀錄"
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer shrink-0">
+                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                  </button>
+                </div>
               ))}
             </div>
           </div>
