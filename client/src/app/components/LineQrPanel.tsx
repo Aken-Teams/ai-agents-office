@@ -40,7 +40,7 @@ function authHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export function LineQrPanel({ title, caption, hint = '掃描 · 點擊傳送 · 回到此頁', onLinked }: Props) {
+export function LineQrPanel({ title, caption, hint = '請用手機的 LINE 掃描上方 QR Code', onLinked }: Props) {
   const [data, setData] = useState<QrResponse | null>(null);
   const [linked, setLinked] = useState(false);
   const [linkedName, setLinkedName] = useState<string | null>(null);
@@ -136,22 +136,27 @@ export function LineQrPanel({ title, caption, hint = '掃描 · 點擊傳送 · 
         ) : null}
       </div>
 
-      {/* Hint — hidden once linked. */}
+      {/* Hint + steps — hidden once linked. */}
       {!linked && (
-        <p className="text-xs text-on-surface-variant text-center">{hint}</p>
+        <div className="text-center space-y-1.5">
+          <p className="text-sm text-on-surface-variant">{hint}</p>
+          <p className="text-xs text-on-surface-variant/70">掃描後在 LINE 點「傳送」即可自動完成綁定</p>
+        </div>
       )}
 
       {/* Bind-code receipt — easy to copy / open. */}
       {!linked && data?.code && (
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold">綁定碼</span>
-          <span className="text-sm font-mono text-on-surface tracking-[0.18em]">{data.code}</span>
+        <div className="flex flex-col items-center gap-2">
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold">綁定碼</span>
+            <span className="text-sm font-mono text-on-surface tracking-[0.18em]">{data.code}</span>
+          </div>
           {data.lineUrl && (
             <a
               href={data.lineUrl}
               className="text-xs font-bold text-primary hover:underline"
             >
-              在 LINE 開啟
+              手機請點此開啟 LINE（桌機請改用掃描）
             </a>
           )}
         </div>

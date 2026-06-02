@@ -404,6 +404,21 @@ function DashboardContent() {
             </div>
           )}
 
+          {/* LINE bind card */}
+          <button
+            onClick={() => setShowLineModal(true)}
+            className="flex items-center gap-3 w-full px-4 py-3.5 bg-surface-container rounded-2xl active:bg-surface-container-high transition-colors cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-xl bg-[#06C755] flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-white text-xl">smart_toy</span>
+            </div>
+            <div className="text-left">
+              <span className="text-sm font-headline font-bold text-on-surface">綁定 LINE 機器人</span>
+              <p className="text-xs text-on-surface-variant mt-0.5">在 LINE 直接使用 AI 助理</p>
+            </div>
+            <span className="material-symbols-outlined text-on-surface-variant ml-auto">chevron_right</span>
+          </button>
+
           {/* Template Wizard button */}
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('open-template-wizard'))}

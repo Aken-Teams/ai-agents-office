@@ -19,6 +19,7 @@ const en = {
   'nav.usage': 'Usage',
   'nav.assistant': 'AI Assistant',
   'nav.memories': 'AI Memory',
+  'nav.lineBind': 'Link LINE',
   'nav.guide': 'User Guide',
   'nav.group.main': 'Main',
   'nav.group.manage': 'Manage',

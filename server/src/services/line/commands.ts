@@ -58,12 +58,14 @@ export async function handleHelp(lineUserId: string): Promise<void> {
 export async function handleLink(lineUserId: string, args: string): Promise<void> {
   const inviteCode = args.split(/\s+/)[0] || '';
 
-  // Already-linked → treat the command as a re-login. The QR-code flow
-  // re-uses this path: a user who scans the login QR while already linked
-  // should immediately get a magic link back, not an error.
+  // Already-linked → just confirm. No web-login link: the account was bound
+  // from an already-logged-in web session, so there's nothing to log into.
   const existing = await getLineUser(lineUserId);
   if (existing) {
-    await handleWebLink(existing);
+    await pushMessage(lineUserId, [{
+      type: 'text',
+      text: '✅ 您的 LINE 已綁定帳號，直接傳訊息即可開始對話。',
+    }]);
     return;
   }
 
