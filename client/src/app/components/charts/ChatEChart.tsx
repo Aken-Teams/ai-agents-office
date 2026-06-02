@@ -104,20 +104,12 @@ export default function ChatEChart({ rawJson }: ChatEChartProps) {
         echartsInstanceRef.current.dispose();
       }
 
-      const el = chartRef.current;
-      if (!el.clientWidth || !el.clientHeight) return;
-
       const { themeOption } = buildEChartsTheme();
-      const instance = echarts.init(el);
+      const instance = echarts.init(chartRef.current);
       // Merge theme defaults with user option
       const mergedOption = { ...themeOption, ...parsed.option };
       if (!parsed.option.color) mergedOption.color = themeOption.color;
-      try {
-        instance.setOption(mergedOption);
-      } catch {
-        instance.dispose();
-        return;
-      }
+      instance.setOption(mergedOption);
       echartsInstanceRef.current = instance;
 
       roRef.current?.disconnect();

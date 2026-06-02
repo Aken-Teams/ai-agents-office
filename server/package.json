@@ -7,26 +7,36 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc && node scripts/copy-assets.mjs",
     "start": "node dist/index.js",
-    "init-db": "tsx scripts/init-db.mjs"
+    "init-db": "tsx scripts/init-db.mjs",
+    "e2e": "tsx scripts/e2e-generate.ts"
   },
   "dependencies": {
+    "@types/qrcode": "^1.5.6",
     "bcrypt": "^5.1.1",
+    "bullmq": "^5.77.6",
     "cors": "^2.8.5",
     "docx": "^9.4.1",
+    "echarts": "^6.0.0",
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
     "google-auth-library": "^10.6.2",
     "gray-matter": "^4.0.3",
+    "hnswlib-node": "^3.0.0",
+    "ioredis": "^5.11.0",
     "jsonwebtoken": "^9.0.2",
     "jszip": "^3.10.1",
     "mammoth": "^1.12.0",
     "multer": "^2.1.1",
     "mysql2": "^3.20.0",
     "pdf-lib": "^1.17.1",
+    "pdf-parse": "^2.4.5",
     "pdfkit": "^0.16.0",
     "pptxgenjs": "^4.0.1",
+    "qrcode": "^1.5.4",
     "resend": "^6.9.4",
-    "uuid": "^10.0.0"
+    "sharp": "^0.34.5",
+    "uuid": "^10.0.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
@@ -36,6 +46,7 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/multer": "^2.1.0",
     "@types/node": "^22.15.3",
+    "@types/pdf-parse": "^1.1.5",
     "@types/uuid": "^10.0.0",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"

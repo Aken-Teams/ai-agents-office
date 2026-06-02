@@ -6,7 +6,7 @@ AI-powered document generation service. Users describe requirements via web UI, 
 - **Backend**: Express 5 + TypeScript + MySQL (mysql2)
 - **Frontend**: Next.js 15 (App Router) + TypeScript
 - **Auth**: Simple email/password + bcrypt + JWT
-- **AI Engine**: Claude CLI (local spawn process)
+- **AI Engine**: Local CLI agents only — no Claude API. Orchestrator engine is pluggable: `claude` (Claude CLI) or `codex` (Codex CLI), which share the same spawn signature and SSE protocol. Engine is resolved per request: explicit `engine` in the generate request body wins, then the conversation's sticky choice (`conversations.agent_engine`), then the global default `AGENTS_OFFICE_AGENT_ENGINE` (default `claude`). A new explicit choice is persisted to the conversation so it sticks across turns and the UI restores it (engine toggle in the chat composer). Codex requires `codex login` (or `CODEX_HOME`/`AGENTS_OFFICE_CODEX_HOME`) on the host. Lightweight text (greeting/memory) always runs through the Claude CLI (`runClaudeText`), regardless of engine.
 - **Streaming**: SSE (Server-Sent Events)
 - **Doc Generation**: Hybrid (pre-built scripts + Claude flexibility)
 

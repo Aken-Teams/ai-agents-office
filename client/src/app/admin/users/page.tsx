@@ -17,6 +17,9 @@ interface UserRow {
   total_output_tokens: number;
   file_count: number;
   conversation_count: number;
+  line_user_id?: string | null;
+  line_linked_via?: string | null;
+  line_last_message_at?: string | null;
 }
 
 function calcCost(input: number, output: number): number {
@@ -90,8 +93,7 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 export default function AdminUsers() {
-  const { token, isReadonly, canOperate } = useAdminAuth();
-  const canEdit = !isReadonly || canOperate('users');
+  const { token, isReadonly } = useAdminAuth();
   const { t } = useTranslation();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -266,6 +268,40 @@ export default function AdminUsers() {
     }
   }
 
+  async function unlinkLine(userId: string) {
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/line-binding`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        await fetchUsers();
+        await selectUser(userId);
+      }
+    } catch (err) {
+      console.error('Unlink LINE failed:', err);
+    }
+  }
+
+  async function issuePersonalInvite() {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/admin/invite-codes/personal', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: 'LINE 邀請（個人）' }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        try { await navigator.clipboard.writeText(data.code); } catch { /* ignore */ }
+        alert(`已建立邀請碼：${data.code}\n（已複製到剪貼簿）`);
+      }
+    } catch (err) {
+      console.error('Issue invite code failed:', err);
+    }
+  }
+
   async function updateQuota(userId: string) {
     if (!token || quotaLoading) return;
     setQuotaLoading(true);
@@ -317,7 +353,7 @@ export default function AdminUsers() {
         <div className="px-4 py-3 border-b border-outline-variant/10">
           <div className="flex items-center gap-2">
             <span className="text-xs uppercase tracking-wider text-on-surface-variant font-bold">{t('admin.users.detail.roleLabel')}</span>
-            {canEdit && (
+            {!isReadonly && (
               <div className="flex rounded overflow-hidden border border-outline-variant/15 ml-auto">
                 {(['user', 'readonly', 'admin'] as const).map(r => (
                   <button
@@ -388,7 +424,7 @@ export default function AdminUsers() {
               onChange={e => { if (/^\d*\.?\d{0,2}$/.test(e.target.value) || e.target.value === '') setQuotaInput(e.target.value); }}
               className="flex-1 bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-1.5 px-2.5 text-xs font-mono rounded placeholder:text-outline min-w-0 [appearance:textfield]"
             />
-            {canEdit && (
+            {!isReadonly && (
               <button
                 onClick={() => updateQuota(detail.id)}
                 disabled={quotaLoading}
@@ -403,7 +439,7 @@ export default function AdminUsers() {
             {detail.quota_override != null ? (
               <>
                 <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 rounded-full">{t('admin.quotaGroups.source.personal' as any)}: ${detail.quota_override}</span>
-                {canEdit && (
+                {!isReadonly && (
                   <button
                     onClick={() => { setQuotaInput(''); updateQuota(detail.id); }}
                     className="text-[10px] text-error hover:text-error/80 transition-colors cursor-pointer"
@@ -476,7 +512,7 @@ export default function AdminUsers() {
         </div>
 
         {/* Actions */}
-        {canEdit && <div className="px-4 py-3 space-y-2">
+        {!isReadonly && <div className="px-4 py-3 space-y-2">
           {(detail.status === 'pending' || detail.status === 'pending_verification') ? (
             <div className="flex gap-2">
               <button
@@ -517,6 +553,25 @@ export default function AdminUsers() {
           >
             <span className="material-symbols-outlined text-xs">delete_forever</span>
             {t('admin.users.detail.delete')}
+          </button>
+
+          {(detail as { line_user_id?: string }).line_user_id && (
+            <button
+              onClick={() => unlinkLine(detail.id)}
+              className="w-full h-9 flex items-center justify-center gap-1.5 border border-warning/30 text-warning/80 text-xs font-bold uppercase tracking-wider rounded hover:bg-warning/10 hover:text-warning transition-colors cursor-pointer"
+              title={`LINE: ${(detail as { line_user_id?: string }).line_user_id}`}
+            >
+              <span className="material-symbols-outlined text-xs">link_off</span>
+              解除 LINE 綁定
+            </button>
+          )}
+
+          <button
+            onClick={issuePersonalInvite}
+            className="w-full h-9 flex items-center justify-center gap-1.5 border border-primary/30 text-primary/80 text-xs font-bold uppercase tracking-wider rounded hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-xs">qr_code_2</span>
+            產生 LINE 邀請碼
           </button>
         </div>}
       </>
@@ -593,6 +648,7 @@ export default function AdminUsers() {
                   <th className="py-3 px-4 font-bold">{t('admin.users.table.user')}</th>
                   <th className="py-3 px-4 font-bold">{t('admin.users.table.role')}</th>
                   <th className="py-3 px-4 font-bold">{t('admin.users.table.status')}</th>
+                  <th className="py-3 px-4 font-bold">LINE</th>
                   <th className="py-3 px-4 font-bold text-right">
                     <button onClick={() => toggleSort('tokens')} className="inline-flex items-center gap-1 cursor-pointer hover:text-on-surface transition-colors">
                       Tokens
@@ -634,6 +690,19 @@ export default function AdminUsers() {
                     </td>
                     <td className="py-3 px-4"><RoleBadge role={user.role} /></td>
                     <td className="py-3 px-4"><StatusBadge status={user.status} /></td>
+                    <td className="py-3 px-4">
+                      {user.line_user_id ? (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-success/10 text-success text-xs font-mono"
+                          title={`LINE: ${user.line_user_id}\n${user.line_linked_via ? `via ${user.line_linked_via}` : ''}`}
+                        >
+                          <span className="material-symbols-outlined text-sm">link</span>
+                          …{user.line_user_id.slice(-6)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-on-surface-variant/40 font-mono">—</span>
+                      )}
+                    </td>
                     <td className="py-3 px-4 text-right text-sm font-mono">
                       <span className="text-on-surface">{formatTokens(user.total_tokens)}</span>
                       {calcCost(user.total_input_tokens, user.total_output_tokens) >= 0.01 && (
@@ -650,7 +719,7 @@ export default function AdminUsers() {
                 ))}
                 {users.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-on-surface-variant">{t('admin.users.table.empty')}</td>
+                    <td colSpan={8} className="py-12 text-center text-on-surface-variant">{t('admin.users.table.empty')}</td>
                   </tr>
                 )}
               </tbody>

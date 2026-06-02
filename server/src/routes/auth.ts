@@ -7,8 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { dbGet, dbRun, dbAll } from '../db.js';
 import { config } from '../config.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { checkUserUsageLimit, getUserUsageLimitUsd, getStorageQuotaGb, getUploadQuotaMb } from '../services/usageLimit.js';
-import { getRolePermissions } from '../services/rolePermissions.js';
+import { checkUserUsageLimit } from '../services/usageLimit.js';
 import { isEmailEnabled, sendVerificationCode, sendPasswordResetEmail } from '../services/email.js';
 import type { User } from '../types.js';
 
@@ -309,11 +308,6 @@ router.post('/login', async (req: Request, res: Response) => {
       res.status(400).json({ error: '此帳號使用 Google 登入，請使用 Google 按鈕登入', code: 'OAUTH_ONLY' }); return;
     }
 
-    // pro-panjit mode: only whitelisted emails can use email/password login
-    if (config.deployMode === 'pro-panjit' && !config.emailLoginWhitelist.includes(email.toLowerCase().trim())) {
-      res.status(403).json({ error: '此帳號需使用 AD 工號登入', code: 'AD_LOGIN_REQUIRED' }); return;
-    }
-
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) { recordLoginFailure(email.toLowerCase().trim()); res.status(401).json({ error: '電子信箱或密碼錯誤' }); return; }
 
@@ -338,6 +332,49 @@ router.post('/login', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: '登入失敗，請稍後再試' });
+  }
+});
+
+/* ============================================================
+   POST /api/auth/demo-login
+   One-click demo entry. No password — issues a JWT for the seeded
+   `demo@theaken.com` user. Rate limited so a single IP can't spam
+   the demo account.
+   ============================================================ */
+const DEMO_EMAIL = 'demo@theaken.com';
+router.post('/demo-login', async (req: Request, res: Response) => {
+  try {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    if (!checkAuthRate(ip, 'demo', 5, 60 * 60_000)) {
+      res.status(429).json({ error: 'Demo 試用次數過多，請 1 小時後再試' });
+      return;
+    }
+
+    const user = await dbGet<User>('SELECT * FROM users WHERE email = ?', DEMO_EMAIL);
+    if (!user) {
+      res.status(503).json({ error: 'Demo 帳號尚未啟用，請聯繫管理者' });
+      return;
+    }
+    if ((user.status || 'active') !== 'active') {
+      res.status(403).json({ error: 'Demo 帳號目前不可用' });
+      return;
+    }
+
+    const role = user.role || 'user';
+    if (role !== 'admin') {
+      const usage = await checkUserUsageLimit(user.id);
+      if (usage.exceeded) {
+        res.status(403).json({ error: 'Demo 帳號今日用量已達上限，請稍後再試', code: 'USAGE_EXCEEDED' });
+        return;
+      }
+    }
+
+    await dbRun('UPDATE users SET last_login_at = NOW() WHERE id = ?', user.id);
+    const token = jwt.sign({ userId: user.id, email: user.email, role }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+    res.json({ token, user: { id: user.id, email: user.email, displayName: user.display_name, role } });
+  } catch (error) {
+    console.error('Demo login error:', error);
+    res.status(500).json({ error: '進入 Demo 失敗，請稍後再試' });
   }
 });
 
@@ -367,12 +404,6 @@ router.post('/google', async (req: Request, res: Response) => {
       const userinfo = await userinfoRes.json() as { email?: string; name?: string; sub?: string };
       if (!userinfo.email) { res.status(400).json({ error: 'Failed to get email from Google' }); return; }
       email = userinfo.email.toLowerCase().trim(); name = userinfo.name || ''; googleId = userinfo.sub || '';
-    }
-
-    // pro-panjit mode: only whitelisted emails can use Google login
-    if (config.deployMode === 'pro-panjit' && !config.emailLoginWhitelist.includes(email)) {
-      res.status(403).json({ error: '此 Google 帳號未獲授權登入，請聯繫管理者', code: 'GOOGLE_NOT_WHITELISTED' });
-      return;
     }
 
     let user = await dbGet<User>('SELECT * FROM users WHERE email = ?', email);
@@ -440,7 +471,7 @@ router.post('/google', async (req: Request, res: Response) => {
    ============================================================ */
 router.get('/me', authMiddleware, async (req: Request, res: Response) => {
   const user = await dbGet<User>(
-    'SELECT id, email, password_hash, display_name, role, status, locale, theme, oauth_provider, company, onboarding_completed, terms_accepted_at, created_at FROM users WHERE id = ?',
+    'SELECT id, email, password_hash, display_name, role, status, locale, theme, oauth_provider, company, onboarding_completed, created_at FROM users WHERE id = ?',
     req.user!.userId
   );
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
@@ -453,71 +484,15 @@ router.get('/me', authMiddleware, async (req: Request, res: Response) => {
     hasPassword: user.password_hash !== OAUTH_NO_PASSWORD,
     createdAt: user.created_at,
     company: user.company || null,
-    onboardingRequired: !user.onboarding_completed && config.deployMode === 'pro-out',
-    termsRequired: !(user as any).terms_accepted_at && config.deployMode === 'pro-panjit',
+    // LINE-provisioned accounts always need onboarding regardless of deploy
+    // mode — their email is a placeholder (`line:<id>@bot.local`) and the
+    // display name was copied straight from LINE.
+    onboardingRequired:
+      !user.onboarding_completed && (
+        config.deployMode === 'pro-out'
+        || (typeof user.email === 'string' && user.email.startsWith('line:'))
+      ),
   });
-});
-
-/* ============================================================
-   GET /api/auth/permissions — get effective permissions for current user
-   ============================================================ */
-router.get('/permissions', authMiddleware, async (req: Request, res: Response) => {
-  const user = await dbGet<{ role: string }>('SELECT role FROM users WHERE id = ?', req.user!.userId);
-  const role = user?.role || 'user';
-
-  // Admin gets full access
-  if (role === 'admin') {
-    res.json({ adminSidebar: ['*'], adminSidebarOperate: ['*'], frontendNav: ['*'], features: ['*'] });
-    return;
-  }
-
-  const perms = await getRolePermissions();
-
-  if (role === 'readonly') {
-    res.json({
-      adminSidebar: perms.adminSidebar.readonly || [],
-      adminSidebarOperate: perms.adminSidebar.readonlyOperate || [],
-      frontendNav: perms.frontendNav.readonly || [],
-      features: perms.features.readonly || [],
-    });
-    return;
-  }
-
-  // Regular user
-  res.json({
-    adminSidebar: [],
-    adminSidebarOperate: [],
-    frontendNav: perms.frontendNav.user || [],
-    features: perms.features.user || [],
-  });
-});
-
-/* ============================================================
-   GET /api/auth/terms — get TOS content with placeholders resolved
-   ============================================================ */
-router.get('/terms', authMiddleware, async (_req: Request, res: Response) => {
-  const tosRow = await dbGet<{ value: string }>("SELECT value FROM system_settings WHERE `key` = 'tos_content'");
-  if (!tosRow) { res.status(404).json({ error: 'TOS not configured' }); return; }
-
-  const usageLimitUsd = await getUserUsageLimitUsd();
-  const storageQuotaGb = await getStorageQuotaGb();
-  const uploadQuotaMb = await getUploadQuotaMb();
-
-  let content = tosRow.value;
-  content = content.replace(/\{\{usage_limit_usd\}\}/g, String(usageLimitUsd));
-  content = content.replace(/\{\{storage_quota_gb\}\}/g, String(storageQuotaGb));
-  content = content.replace(/\{\{upload_quota_mb\}\}/g, String(uploadQuotaMb));
-
-  const versionRow = await dbGet<{ value: string }>("SELECT value FROM system_settings WHERE `key` = 'tos_version'");
-  res.json({ content, version: versionRow?.value || '1' });
-});
-
-/* ============================================================
-   POST /api/auth/accept-terms — mark TOS as accepted
-   ============================================================ */
-router.post('/accept-terms', authMiddleware, async (req: Request, res: Response) => {
-  await dbRun('UPDATE users SET terms_accepted_at = NOW(), updated_at = NOW() WHERE id = ?', req.user!.userId);
-  res.json({ success: true });
 });
 
 /* ============================================================
@@ -525,20 +500,46 @@ router.post('/accept-terms', authMiddleware, async (req: Request, res: Response)
    ============================================================ */
 router.post('/onboarding', authMiddleware, async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { company } = req.body;
+  const rawDisplayName = typeof req.body?.displayName === 'string' ? req.body.displayName.trim() : '';
+  const rawEmail = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+  const rawCompany = typeof req.body?.company === 'string' ? req.body.company.trim() : '';
 
-  if (!company || typeof company !== 'string' || company.trim().length === 0) {
-    res.status(400).json({ error: 'Company name is required' });
-    return;
+  // Validation — fail fast with the *specific* field name so the client can
+  // surface inline errors instead of a generic toast.
+  if (!rawDisplayName) { res.status(400).json({ error: 'displayName required', field: 'displayName' }); return; }
+  if (rawDisplayName.length > 50) { res.status(400).json({ error: 'displayName too long (max 50)', field: 'displayName' }); return; }
+
+  if (!rawEmail) { res.status(400).json({ error: 'email required', field: 'email' }); return; }
+  // Loose RFC-ish check — covers everything the bcrypt/lowercase-normalised
+  // login flow can later verify.
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail) || rawEmail.length > 255) {
+    res.status(400).json({ error: 'invalid email', field: 'email' }); return;
   }
-  if (company.trim().length > 100) {
-    res.status(400).json({ error: 'Company name must be 100 characters or less' });
+
+  if (!rawCompany) { res.status(400).json({ error: 'company required', field: 'company' }); return; }
+  if (rawCompany.length > 100) { res.status(400).json({ error: 'company too long (max 100)', field: 'company' }); return; }
+
+  const normalizedEmail = rawEmail.toLowerCase();
+
+  // Uniqueness — block if another user already owns this email. LINE users
+  // who try to claim an email already used by their web account end up here;
+  // the right move is to surface the conflict so they know to log in via the
+  // existing path instead.
+  const conflict = await dbGet<{ id: string }>(
+    'SELECT id FROM users WHERE email = ? AND id != ?',
+    normalizedEmail, userId,
+  );
+  if (conflict) {
+    res.status(409).json({ error: 'email already in use', field: 'email' });
     return;
   }
 
   await dbRun(
-    'UPDATE users SET company = ?, onboarding_completed = 1, updated_at = NOW() WHERE id = ?',
-    company.trim(), userId
+    `UPDATE users
+       SET display_name = ?, email = ?, company = ?,
+           onboarding_completed = 1, updated_at = NOW()
+     WHERE id = ?`,
+    rawDisplayName, normalizedEmail, rawCompany, userId,
   );
   res.json({ success: true });
 });
@@ -725,291 +726,163 @@ router.delete('/memories', authMiddleware, async (req: Request, res: Response) =
   res.json({ success: true });
 });
 
-/* ============================================================
-   AD Login Routes (pro-panjit only)
-   ============================================================ */
+/**
+ * GET /api/auth/line-qr
+ * Public — no auth. Mints a single-use invite code, builds the LINE deep
+ * link, returns the QR as a base64 data URL. Rate-limited to 5/min per IP.
+ *
+ * Front-end shows the QR on the login & register pages; the user opens
+ * LINE, scans it, taps Send on the pre-filled `/link <code>` message, the
+ * bot binds them and pushes a magic-link URL. They tap that URL and land
+ * back in /auto-login → /dashboard.
+ */
+router.get('/line-qr', async (req: Request, res: Response) => {
+  const { mintQrCode, checkQrRateLimit } = await import('../services/line/qrAuth.js');
 
-interface AdUser {
-  username: string;
-  displayName: string;
-  mail: string | null;
-  department: string | null;
-  telephoneNumber: string | null;
-  domain: string;
-}
+  if (!config.line.enabled || !config.line.botBasicId) {
+    res.status(404).json({ error: 'LINE login not available' });
+    return;
+  }
 
-async function callAdAuth(username: string, password: string, domain?: string): Promise<AdUser | null> {
+  // Express's req.ip uses the configured trust-proxy setting; behind
+  // Cloudflare we just take the X-Forwarded-For first hop as a best effort.
+  const ip = (req.headers['x-forwarded-for']?.toString().split(',')[0].trim()) || req.ip || 'unknown';
+  if (!checkQrRateLimit(ip)) {
+    res.status(429).json({ error: 'Too many requests, please wait a minute and try again.' });
+    return;
+  }
+
   try {
-    const body: Record<string, string> = { username, password };
-    if (domain) body.domain = domain;
-    const res = await fetch(`${config.adApiUrl}/auth`, {
+    const result = await mintQrCode('LINE QR 註冊');
+    res.json(result);
+  } catch (err) {
+    console.error('[Auth] line-qr mint failed:', err);
+    res.status(500).json({ error: 'QR generation failed' });
+  }
+});
+
+/**
+ * POST /api/auth/line-magic
+ * Exchanges a single-use, 5-minute LINE magic-link token for a regular
+ * 7-day session token. The magic token is minted in services/line/commands.ts
+ * `handleWebLink()` when a LINE user taps the rich-menu "open web" tile.
+ *
+ * The magic token has audience='line-magic-link' so it cannot be used as a
+ * normal session token by the auth middleware (which doesn't pass an
+ * audience matcher).
+ */
+router.post('/line-magic', async (req: Request, res: Response) => {
+  const raw = typeof req.body?.token === 'string' ? req.body.token : '';
+  if (!raw) { res.status(400).json({ error: 'token required' }); return; }
+
+  let payload: { userId: string; email: string; role: string; magic?: boolean };
+  try {
+    payload = jwt.verify(raw, config.jwtSecret, { audience: 'line-magic-link' }) as typeof payload;
+  } catch {
+    res.status(401).json({ error: 'Invalid or expired link' });
+    return;
+  }
+  if (!payload.magic) { res.status(401).json({ error: 'Not a magic-link token' }); return; }
+
+  const user = await dbGet<{ id: string; email: string; role: string; status: string; display_name: string | null }>(
+    'SELECT id, email, role, status, display_name FROM users WHERE id = ?',
+    payload.userId,
+  );
+  if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+  if (user.status !== 'active') { res.status(403).json({ error: 'Account inactive' }); return; }
+
+  const session = jwt.sign(
+    { userId: user.id, email: user.email, role: user.role },
+    config.jwtSecret,
+    { expiresIn: config.jwtExpiresIn },
+  );
+  res.json({
+    token: session,
+    user: { id: user.id, email: user.email, role: user.role, displayName: user.display_name },
+  });
+});
+
+/**
+ * POST /api/auth/liff-login
+ *
+ * Exchange a LIFF ID token (obtained client-side via `liff.getIDToken()`)
+ * for a normal 7-day session JWT.
+ *
+ * Verification: we POST the ID token to LINE's `/oauth2/v2.1/verify` endpoint
+ * with the LINE Login channel ID as `client_id`. LINE rejects forged or
+ * expired tokens, so we don't need to fetch JWKs ourselves. The verified
+ * `sub` claim is the user's stable LINE userId — we look that up in the
+ * `line_users` mapping table to find the corresponding internal account.
+ *
+ * If the LINE user hasn't completed `/link <inviteCode>` yet, this returns
+ * 404 with `error: 'unlinked'` so the client can show binding instructions
+ * instead of a generic login failure.
+ *
+ * The LINE Login channel ID is the prefix of LINE_LIFF_ID (format
+ * `{channelId}-{liffAppId}`). Override via LINE_LOGIN_CHANNEL_ID if you need
+ * to point this at a separate channel.
+ */
+router.post('/liff-login', async (req: Request, res: Response) => {
+  const idToken = typeof req.body?.idToken === 'string' ? req.body.idToken.trim() : '';
+  if (!idToken) { res.status(400).json({ error: 'idToken required' }); return; }
+
+  const channelId =
+    process.env.LINE_LOGIN_CHANNEL_ID
+    || (config.line.liffId ? config.line.liffId.split('-')[0] : '');
+  if (!channelId) {
+    res.status(503).json({ error: 'LIFF not configured' });
+    return;
+  }
+
+  let verified: { sub?: string; aud?: string; iss?: string; exp?: number };
+  try {
+    const verifyRes = await fetch('https://api.line.me/oauth2/v2.1/verify', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(10_000),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ id_token: idToken, client_id: channelId }),
     });
-    if (!res.ok) return null;
-    const data = await res.json() as { success?: boolean; user?: AdUser };
-    if (!data.success || !data.user) return null;
-    return data.user;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchAdUserDetail(username: string, domain: string): Promise<Partial<AdUser>> {
-  if (!config.adApiKey) return {};
-  try {
-    const res = await fetch(`${config.adApiUrl}/users/${encodeURIComponent(username)}?domain=${encodeURIComponent(domain)}`, {
-      headers: { 'X-API-Key': config.adApiKey },
-      signal: AbortSignal.timeout(8_000),
-    });
-    if (!res.ok) return {};
-    const data = await res.json() as Partial<AdUser>;
-    return data;
-  } catch {
-    return {};
-  }
-}
-
-/* POST /api/auth/ad/login */
-router.post('/ad/login', async (req: Request, res: Response) => {
-  try {
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
-    if (!checkAuthRate(ip, 'adlogin', 10, 15 * 60_000)) {
-      res.status(429).json({ error: '登入請求過於頻繁，請 15 分鐘後再試' }); return;
-    }
-
-    const { username, password, domain } = req.body;
-    if (!username || !password) {
-      res.status(400).json({ error: '工號和密碼為必填' }); return;
-    }
-
-    // Call AD API
-    const adUser = await callAdAuth(username.trim(), password, domain?.trim() || undefined);
-    if (!adUser) {
-      res.status(401).json({ error: '工號或密碼錯誤，請確認後重試' }); return;
-    }
-
-    const adUsername = adUser.username || username.trim();
-    const adDomain = adUser.domain || domain?.trim() || 'PANJIT';
-
-    // Try to fetch detailed info (for mail) if not already returned
-    let mail = adUser.mail || null;
-    if (!mail && config.adApiKey) {
-      const detail = await fetchAdUserDetail(adUsername, adDomain);
-      mail = detail.mail || null;
-    }
-
-    const fullAdUser: AdUser = { ...adUser, username: adUsername, domain: adDomain, mail };
-
-    // Check if user already exists in DB
-    const existing = await dbGet<{ id: string; role: string; status: string; display_name: string | null }>(
-      'SELECT id, role, status, display_name FROM users WHERE ad_username = ? AND ad_domain = ?',
-      adUsername, adDomain
-    );
-
-    if (existing) {
-      // Returning AD user
-      const status = existing.status || 'active';
-      if (status === 'suspended') {
-        res.status(403).json({ error: '您的帳號已被停用，如有疑問請聯繫管理者', code: 'SUSPENDED' }); return;
-      }
-      // Update display name from AD if changed
-      if (fullAdUser.displayName && fullAdUser.displayName !== existing.display_name) {
-        await dbRun('UPDATE users SET display_name = ?, updated_at = NOW() WHERE id = ?', fullAdUser.displayName, existing.id);
-      }
-      await dbRun('UPDATE users SET last_login_at = NOW() WHERE id = ?', existing.id);
-      // Cache Outlook mail_token for email reading (fire-and-forget)
-      console.log('[Outlook] AD login check — deployMode:', config.deployMode, 'adApiKey:', config.adApiKey ? 'SET' : 'EMPTY');
-      if (config.deployMode === 'pro-panjit' && config.adApiKey) {
-        import('../services/outlookApi.js').then(({ authenticateOutlook }) =>
-          authenticateOutlook(existing.id, username.trim(), password)
-        ).catch(err => console.warn('[Outlook] Token acquisition failed:', err));
-      }
-      const user = await dbGet<{ email: string }>('SELECT email FROM users WHERE id = ?', existing.id);
-      const token = jwt.sign({ userId: existing.id, email: user?.email || '', role: existing.role || 'user' }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
-      res.json({ token, user: { id: existing.id, email: user?.email || '', displayName: fullAdUser.displayName || existing.display_name, role: existing.role || 'user' } });
+    if (!verifyRes.ok) {
+      res.status(401).json({ error: 'invalid_id_token' });
       return;
     }
-
-    // First-time AD login — issue a short-lived session token for the wizard
-    const adSessionToken = jwt.sign(
-      { adUsername, adDomain, displayName: fullAdUser.displayName, mail, department: fullAdUser.department, type: 'ad_session' },
-      config.jwtSecret,
-      { expiresIn: '30m' }
-    );
-
-    res.json({ firstLogin: true, adSessionToken, adUser: fullAdUser });
-  } catch (error) {
-    console.error('AD login error:', error);
-    res.status(500).json({ error: '登入失敗，請稍後再試' });
+    verified = (await verifyRes.json()) as typeof verified;
+  } catch (err) {
+    console.error('[liff-login] LINE verify call failed:', err);
+    res.status(502).json({ error: 'verify_failed' });
+    return;
   }
-});
 
-/* POST /api/auth/ad/register — complete first-time AD user setup (no inheritance) */
-router.post('/ad/register', async (req: Request, res: Response) => {
-  try {
-    const { adSessionToken, displayName: customDisplayName } = req.body;
-    if (!adSessionToken) { res.status(400).json({ error: '缺少必要參數' }); return; }
-
-    let payload: { adUsername: string; adDomain: string; displayName: string; mail: string | null; department: string | null; type: string };
-    try {
-      payload = jwt.verify(adSessionToken, config.jwtSecret) as typeof payload;
-    } catch {
-      res.status(401).json({ error: '登入憑證已過期，請重新登入' }); return;
-    }
-    if (payload.type !== 'ad_session') { res.status(401).json({ error: '無效的登入憑證' }); return; }
-
-    const { adUsername, adDomain, displayName: adDisplayName, mail } = payload;
-
-    // Check again (race condition guard)
-    const existing = await dbGet('SELECT id FROM users WHERE ad_username = ? AND ad_domain = ?', adUsername, adDomain);
-    if (existing) { res.status(409).json({ error: '此 AD 帳號已完成註冊' }); return; }
-
-    const finalDisplayName = (customDisplayName || adDisplayName || adUsername).trim();
-    // Use AD mail or synthetic email
-    const email = mail ? mail.toLowerCase().trim() : `${adUsername.toLowerCase()}@${adDomain.toLowerCase()}.panjit.local`;
-
-    // Check if email already used (could be taken by another user)
-    const emailConflict = await dbGet('SELECT id, ad_username FROM users WHERE email = ?', email);
-    if (emailConflict) {
-      if (emailConflict.ad_username) {
-        res.status(409).json({ error: '此帳號已被其他 AD 使用者繼承' }); return;
-      }
-      // Email exists but no AD — suggest inheritance
-      res.status(409).json({ error: '此信箱已有帳號，請選擇繼承流程', code: 'USE_CLAIM_FLOW' }); return;
-    }
-
-    const id = uuidv4();
-    await dbRun(
-      'INSERT INTO users (id, email, password_hash, display_name, role, status, auth_provider, ad_username, ad_domain, onboarding_completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      id, email, 'AD_NO_PASSWORD', finalDisplayName, 'user', 'active', 'ad', adUsername, adDomain, 1
-    );
-    await dbRun('UPDATE users SET last_login_at = NOW() WHERE id = ?', id);
-
-    const token = jwt.sign({ userId: id, email, role: 'user' }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
-    res.json({ token, user: { id, email, displayName: finalDisplayName, role: 'user' } });
-  } catch (error) {
-    console.error('AD register error:', error);
-    res.status(500).json({ error: '註冊失敗，請稍後再試' });
+  const lineUserId = verified.sub || '';
+  if (!lineUserId) {
+    res.status(401).json({ error: 'invalid_id_token' });
+    return;
   }
-});
 
-/* POST /api/auth/ad/claim/request — send inheritance claim code to old email */
-router.post('/ad/claim/request', async (req: Request, res: Response) => {
-  try {
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
-    if (!checkAuthRate(ip, 'adclaim', 5, 15 * 60_000)) {
-      res.status(429).json({ error: '請求過於頻繁，請稍後再試' }); return;
-    }
-
-    const { adSessionToken, claimEmail } = req.body;
-    if (!adSessionToken || !claimEmail) { res.status(400).json({ error: '缺少必要參數' }); return; }
-    if (!isValidEmail(claimEmail)) { res.status(400).json({ error: '電子信箱格式不正確' }); return; }
-
-    let payload: { adUsername: string; adDomain: string; type: string };
-    try {
-      payload = jwt.verify(adSessionToken, config.jwtSecret) as typeof payload;
-    } catch {
-      res.status(401).json({ error: '登入憑證已過期，請重新登入' }); return;
-    }
-    if (payload.type !== 'ad_session') { res.status(401).json({ error: '無效的登入憑證' }); return; }
-
-    const { adUsername, adDomain } = payload;
-    const normalizedEmail = claimEmail.toLowerCase().trim();
-
-    // Check target email account exists and is not already linked to AD
-    const targetUser = await dbGet<{ id: string; ad_username: string | null }>(
-      'SELECT id, ad_username FROM users WHERE email = ?', normalizedEmail
-    );
-    if (!targetUser) { res.status(404).json({ error: '找不到此電子信箱的帳號' }); return; }
-    if (targetUser.ad_username) { res.status(409).json({ error: '此帳號已被其他 AD 使用者繼承' }); return; }
-
-    // Check email service
-    if (!isEmailEnabled()) {
-      res.status(400).json({ error: '郵件服務暫時不可用，請聯繫管理者' }); return;
-    }
-
-    // Generate code and store in ad_claim_tokens
-    const code = generateVerificationCode();
-    const expiresAt = new Date(Date.now() + 15 * 60_000); // 15 min
-    await dbRun('DELETE FROM ad_claim_tokens WHERE ad_username = ? AND ad_domain = ?', adUsername, adDomain);
-    await dbRun(
-      'INSERT INTO ad_claim_tokens (id, ad_username, ad_domain, claim_email, code, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
-      uuidv4(), adUsername, adDomain, normalizedEmail, code, expiresAt
-    );
-
-    await sendVerificationCode(normalizedEmail, code, 'zh-TW');
-    res.json({ sent: true });
-  } catch (error) {
-    console.error('AD claim request error:', error);
-    res.status(500).json({ error: '發送失敗，請稍後再試' });
+  const mapping = await dbGet<{ internal_user_id: string }>(
+    'SELECT internal_user_id FROM line_users WHERE line_user_id = ?',
+    lineUserId,
+  );
+  if (!mapping) {
+    res.status(404).json({ error: 'unlinked' });
+    return;
   }
-});
 
-/* POST /api/auth/ad/claim/verify — verify claim code and link AD to existing account */
-router.post('/ad/claim/verify', async (req: Request, res: Response) => {
-  try {
-    const { adSessionToken, claimEmail, code } = req.body;
-    if (!adSessionToken || !claimEmail || !code) { res.status(400).json({ error: '缺少必要參數' }); return; }
+  const user = await dbGet<{ id: string; email: string; role: string; status: string; display_name: string | null }>(
+    'SELECT id, email, role, status, display_name FROM users WHERE id = ?',
+    mapping.internal_user_id,
+  );
+  if (!user) { res.status(404).json({ error: 'User not found' }); return; }
+  if (user.status !== 'active') { res.status(403).json({ error: 'Account inactive' }); return; }
 
-    let payload: { adUsername: string; adDomain: string; displayName: string; mail: string | null; type: string };
-    try {
-      payload = jwt.verify(adSessionToken, config.jwtSecret) as typeof payload;
-    } catch {
-      res.status(401).json({ error: '登入憑證已過期，請重新登入' }); return;
-    }
-    if (payload.type !== 'ad_session') { res.status(401).json({ error: '無效的登入憑證' }); return; }
-
-    const { adUsername, adDomain, displayName, mail: adMail } = payload;
-    const normalizedEmail = claimEmail.toLowerCase().trim();
-
-    // Look up claim token
-    const record = await dbGet<{ id: string; code: string; attempts: number; expires_at: Date; claim_email: string }>(
-      'SELECT id, code, attempts, expires_at, claim_email FROM ad_claim_tokens WHERE ad_username = ? AND ad_domain = ?',
-      adUsername, adDomain
-    );
-
-    if (!record) { res.status(400).json({ error: '找不到驗證碼，請重新申請' }); return; }
-    if (record.claim_email !== normalizedEmail) { res.status(400).json({ error: '信箱不一致，請重新申請' }); return; }
-    if (new Date(record.expires_at) < new Date()) {
-      await dbRun('DELETE FROM ad_claim_tokens WHERE id = ?', record.id);
-      res.status(400).json({ error: '驗證碼已過期，請重新申請', expired: true }); return;
-    }
-    if (record.attempts >= 5) {
-      await dbRun('DELETE FROM ad_claim_tokens WHERE id = ?', record.id);
-      res.status(400).json({ error: '驗證碼嘗試次數過多，請重新申請', expired: true }); return;
-    }
-
-    await dbRun('UPDATE ad_claim_tokens SET attempts = attempts + 1 WHERE id = ?', record.id);
-
-    if (record.code !== code.trim()) {
-      res.status(400).json({ error: '驗證碼不正確' }); return;
-    }
-
-    // Code correct — link AD to existing account
-    const user = await dbGet<{ id: string; role: string; status: string; ad_username: string | null }>(
-      'SELECT id, role, status, ad_username FROM users WHERE email = ?', normalizedEmail
-    );
-    if (!user) { res.status(404).json({ error: '找不到對應的帳號' }); return; }
-    if (user.ad_username) { res.status(409).json({ error: '此帳號已被繼承' }); return; }
-
-    // Use AD mail as the new email if available, otherwise keep old email
-    const newEmail = adMail ? adMail.toLowerCase().trim() : normalizedEmail;
-
-    await dbRun(
-      'UPDATE users SET ad_username = ?, ad_domain = ?, auth_provider = ?, display_name = ?, email = ?, onboarding_completed = 1, last_login_at = NOW(), updated_at = NOW() WHERE id = ?',
-      adUsername, adDomain, 'ad', displayName || null, newEmail, user.id
-    );
-    await dbRun('DELETE FROM ad_claim_tokens WHERE id = ?', record.id);
-
-    const token = jwt.sign({ userId: user.id, email: newEmail, role: user.role || 'user' }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
-    res.json({ token, user: { id: user.id, email: newEmail, displayName: displayName || null, role: user.role || 'user' } });
-  } catch (error) {
-    console.error('AD claim verify error:', error);
-    res.status(500).json({ error: '驗證失敗，請稍後再試' });
-  }
+  const session = jwt.sign(
+    { userId: user.id, email: user.email, role: user.role },
+    config.jwtSecret,
+    { expiresIn: config.jwtExpiresIn },
+  );
+  res.json({
+    token: session,
+    user: { id: user.id, email: user.email, role: user.role, displayName: user.display_name },
+  });
 });
 
 export default router;

@@ -1,10 +1,7 @@
-import { spawn } from 'child_process';
-import fs from 'fs';
-import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { config } from '../config.js';
-import { resolveClaudeCliPath } from './resolveClaudeCli.js';
+import { runClaudeText } from './claudeCli.js';
 
 // Thresholds
 const MIN_MSGS_FOR_SUMMARY = 1;   // Summary: extract from any conversation
@@ -39,7 +36,7 @@ export async function extractMemoryAndSummary(
     // Skip if summary already exists (avoid duplicate extraction)
     // Exception: assistant conversations always re-extract to keep work_log current
     const conv = await dbGet<{ summary: string | null }>(
-      'SELECT summary FROM conversations WHERE id = ? AND user_id = ?', conversationId, userId
+      'SELECT summary FROM conversations WHERE id = ?', conversationId
     );
     if (conv?.summary && conversationCategory !== 'assistant') return;
 
@@ -86,8 +83,8 @@ export async function extractMemoryAndSummary(
     // Save summary
     if (parsed.summary) {
       await dbRun(
-        'UPDATE conversations SET summary = ? WHERE id = ? AND user_id = ?',
-        parsed.summary.substring(0, 500), conversationId, userId
+        'UPDATE conversations SET summary = ? WHERE id = ?',
+        parsed.summary.substring(0, 500), conversationId
       );
       console.log(`[MemoryExtractor] Summary saved for conversation ${conversationId}`);
 
@@ -95,12 +92,12 @@ export async function extractMemoryAndSummary(
       // so cross-assistant context always reflects the latest state
       if (conversationCategory === 'assistant') {
         const existingWorkLog = await dbGet<{ id: string }>(
-          "SELECT id FROM user_memories WHERE source_conversation_id = ? AND memory_type = 'work_log' AND user_id = ?",
-          conversationId, userId
+          "SELECT id FROM user_memories WHERE source_conversation_id = ? AND memory_type = 'work_log'",
+          conversationId
         );
         if (existingWorkLog) {
-          await dbRun('UPDATE user_memories SET content = ? WHERE id = ? AND user_id = ?',
-            parsed.summary.substring(0, 200), existingWorkLog.id, userId);
+          await dbRun('UPDATE user_memories SET content = ? WHERE id = ?',
+            parsed.summary.substring(0, 200), existingWorkLog.id);
           console.log(`[MemoryExtractor] work_log updated for assistant conversation ${conversationId}`);
         } else if (!atMemoryLimit) {
           await dbRun(
@@ -197,83 +194,28 @@ function parseExtractionResult(text: string): ExtractionResult | null {
   }
 }
 
-function spawnExtractionClaude(prompt: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    const resolvedCmd = resolveClaudeCliPath(config.claudeCliPath);
-    const args = [
-      '-p',
-      '--verbose',
-      '--output-format', 'stream-json',
-      '--max-turns', '1',
-      '--disallowedTools', 'Bash,Write,Read,Edit,WebSearch,WebFetch,Glob,Grep,Task,TodoWrite,NotebookEdit',
-    ];
-
-    const tmpDir = path.join(config.workspaceRoot, '_memory');
-    fs.mkdirSync(tmpDir, { recursive: true });
-
-    const cleanEnv = { ...process.env };
-    for (const key of Object.keys(cleanEnv)) {
-      if (key.toUpperCase().startsWith('CLAUDE')) delete cleanEnv[key];
-    }
-
-    let proc;
-    try {
-      proc = spawn(resolvedCmd.bin, [...resolvedCmd.prefix, ...args], {
-        cwd: tmpDir,
-        shell: false,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: cleanEnv,
-      });
-    } catch {
-      resolve(null);
-      return;
-    }
-
-    proc.stdin!.write(prompt);
-    proc.stdin!.end();
-
-    let output = '';
-    let stdoutBuffer = '';
-
-    proc.stdout!.on('data', (data: Buffer) => {
-      stdoutBuffer += data.toString();
-      const lines = stdoutBuffer.split('\n');
-      stdoutBuffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const parsed = JSON.parse(line);
-          if (parsed.type === 'content_block_delta') {
-            const delta = parsed.delta;
-            if (delta?.type === 'text_delta' && delta.text) {
-              output += delta.text;
-            }
-          } else if (parsed.type === 'assistant') {
-            const content = parsed.message?.content;
-            if (Array.isArray(content)) {
-              for (const block of content) {
-                if (block.type === 'text' && block.text) output += block.text;
-              }
-            }
-          }
-        } catch { /* skip malformed */ }
-      }
+async function spawnExtractionClaude(prompt: string): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), EXTRACTION_TIMEOUT_MS);
+  try {
+    const result = await runClaudeText({
+      model: config.claudeText.extractionModel,
+      maxTokens: 1500,
+      temperature: 0.2,
+      system: 'You extract structured memory and a short summary from a chat transcript. Output only the requested format. No commentary, no markdown fences unless explicitly requested.',
+      prompt,
+      signal: controller.signal,
     });
-
-    proc.stderr!.on('data', (data: Buffer) => {
-      console.error(`[MemoryExtractor stderr] ${data.toString().trim()}`);
-    });
-
-    const timeout = setTimeout(() => {
-      try { proc.kill(); } catch { /* already dead */ }
+    return result?.text || null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (controller.signal.aborted) {
       console.warn('[MemoryExtractor] Timed out');
-      resolve(null);
-    }, EXTRACTION_TIMEOUT_MS);
-
-    proc.on('exit', () => {
-      clearTimeout(timeout);
-      resolve(output || null);
-    });
-  });
+    } else {
+      console.error(`[MemoryExtractor] extraction failed: ${msg}`);
+    }
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }

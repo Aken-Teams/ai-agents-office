@@ -58,8 +58,7 @@ export default function AdminAnnouncements() {
 }
 
 function AnnouncementsContent() {
-  const { token, isReadonly, canOperate } = useAdminAuth();
-  const canEdit = !isReadonly || canOperate('announcements');
+  const { token, isReadonly } = useAdminAuth();
   const { t } = useTranslation();
   const [items, setItems] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -163,7 +162,7 @@ function AnnouncementsContent() {
           <span className="text-base md:text-lg font-black text-on-surface font-headline shrink-0">{t('admin.announcements.title' as any)}</span>
           <span className="hidden md:inline text-sm text-on-surface-variant font-mono truncate">{t('admin.announcements.description' as any)}</span>
         </div>
-        {canEdit && (
+        {!isReadonly && (
           <button
             onClick={openCreate}
             className="flex items-center gap-1.5 ml-3 px-3 md:px-4 py-2 md:py-2.5 cyber-gradient rounded-xl text-on-primary text-xs md:text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all cursor-pointer shrink-0"
@@ -282,7 +281,7 @@ function AnnouncementsContent() {
                       </span>
                     </div>
                   </div>
-                  {canEdit && (
+                  {!isReadonly && (
                     <div className="flex items-center gap-0.5 shrink-0 -mt-0.5">
                       <button
                         onClick={() => toggleActive(a)}

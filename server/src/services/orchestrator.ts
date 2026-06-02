@@ -3,11 +3,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { EventEmitter } from 'events';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { spawnClaude } from './claudeCli.js';
+import { spawnCodex } from './codexCli.js';
 import { parsePipelineBlocks, truncateResultForRouter } from './taskParser.js';
 import { getSkill, buildSystemPrompt, buildMemoryContext, buildCrossAssistantContext, getRouterSkill, buildRouterPrompt } from '../skills/loader.js';
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from './uploadContext.js';
 import { getSandboxPath } from './sandbox.js';
-import { config } from '../config.js';
+import { config, type AgentEngine } from '../config.js';
 import type { SSEEvent, ParsedTask, ParsedPipeline, TaskExecution } from '../types.js';
 
 const MAX_ORCHESTRATION_DEPTH = 3;
@@ -29,6 +30,19 @@ const SKILL_TIMEOUT: Record<string, number> = {
   'rag-analyst': 600_000, // 10 min — cross-file analysis + charts/visualizations
 };
 const DEFAULT_TASK_TIMEOUT_MS = 300_000; // 5 min fallback for unknown skills
+
+/**
+ * Convert a spawnAgent failure into a user-facing message. We special-case
+ * the Anthropic 401 blips (Claude CLI text starts with "Failed to
+ * authenticate. API Error: 4xx") since exposing the raw fragment looks like
+ * a server bug to end users — it's actually a transient upstream issue.
+ */
+function friendlyAgentFailure(skillId: string, errMsg: string): string {
+  if (errMsg === 'upstream_auth_transient' || /upstream_auth_transient/i.test(errMsg)) {
+    return '⚠️ 暫時無法連線到模型服務（上游驗證問題），請過一兩分鐘後再試一次。如果持續失敗請聯繫管理員。';
+  }
+  return `Agent ${skillId} failed: ${errMsg}`;
+}
 
 export interface OrchestratorResult {
   assistantText: string;
@@ -61,9 +75,10 @@ export class Orchestrator {
   private uploadIds: string[];
   private userLocale: string;
   private referenceContext: string;
-  private customRolePrompt: string;
+  // Per-conversation engine override. undefined → fall back to config.agentEngine.
+  private engine?: AgentEngine;
 
-  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document', referenceContext: string = '', customRolePrompt: string = '') {
+  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document', referenceContext: string = '', engine?: AgentEngine) {
     this.userId = userId;
     this.conversationId = conversationId;
     this.conversationCategory = conversationCategory;
@@ -71,7 +86,7 @@ export class Orchestrator {
     this.userLocale = userLocale;
     this.uploadIds = uploadIds;
     this.referenceContext = referenceContext;
-    this.customRolePrompt = customRolePrompt;
+    this.engine = engine;
   }
 
   async run(message: string): Promise<OrchestratorResult> {
@@ -93,17 +108,31 @@ export class Orchestrator {
       "SELECT content FROM user_memories WHERE user_id = ? AND memory_type = 'preference' ORDER BY created_at DESC LIMIT 10", this.userId
     );
 
-    // For assistant conversations: inject cross-assistant context (same user only)
+    // For assistant conversations: inject cross-assistant context + this
+    // assistant's custom persona/task instructions (if the user set one).
     let crossAssistantContext = '';
+    let agentPersona = '';
     if (this.conversationCategory === 'assistant') {
       const otherSummaries = await dbAll<{ title: string; summary: string; created_at: string }>(
         "SELECT title, summary, created_at FROM conversations WHERE user_id = ? AND category = 'assistant' AND id != ? AND summary IS NOT NULL ORDER BY created_at DESC LIMIT 3",
         this.userId, this.conversationId
       );
       crossAssistantContext = buildCrossAssistantContext(otherSummaries, this.conversationId);
+
+      const personaRow = await dbGet<{ agent_instructions: string | null }>(
+        'SELECT agent_instructions FROM conversations WHERE id = ?', this.conversationId
+      );
+      const persona = personaRow?.agent_instructions?.trim();
+      if (persona) {
+        agentPersona =
+          '\n\n## 助手專長設定（使用者自訂，最高優先）\n' +
+          '你是一個被指定用途的專門化助手。請嚴格依照以下設定來理解需求、決定委派與回應風格;' +
+          '若使用者的請求超出此設定範圍,仍可協助,但以下設定為你的主要定位:\n' +
+          persona + '\n';
+      }
     }
 
-    const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale) + this.customRolePrompt + buildMemoryContext(userMemories) + crossAssistantContext;
+    const routerSystemPrompt = buildRouterPrompt(routerSkill, this.userLocale) + agentPersona + buildMemoryContext(userMemories) + crossAssistantContext;
 
     // Load conversation history so Router has full context of what was discussed/generated
     const historyMsgs = await dbAll<{ role: string; content: string }>(
@@ -144,12 +173,6 @@ export class Orchestrator {
       if (fileContext) {
         messageWithFileContext = messageWithFileContext + '\n\n[System: The user has attached files for this request.]\n' + fileContext;
       }
-    }
-    // Inject email data when message mentions email keywords
-    const { messageNeedsEmail, getEmailContextForPrompt } = await import('./emailContext.js');
-    if (messageNeedsEmail(message)) {
-      const emailCtx = await getEmailContextForPrompt(this.userId, message);
-      if (emailCtx) messageWithFileContext += emailCtx;
     }
 
     // Recursive orchestration loop
@@ -199,10 +222,12 @@ export class Orchestrator {
             }
           );
         } catch (retryErr) {
-          // Both attempts failed — bail out
+          // Both attempts failed — bail out with a user-friendly message that
+          // doesn't leak the raw upstream auth fragment.
           const errMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
-          allAssistantText += `\n\nRouter agent failed: ${errMsg}`;
-          this.sseWriter({ type: 'text', data: `\n\nRouter agent failed: ${errMsg}` });
+          const friendly = friendlyAgentFailure('router', errMsg);
+          allAssistantText += `\n\n${friendly}`;
+          this.sseWriter({ type: 'text', data: `\n\n${friendly}` });
           break;
         }
       }
@@ -399,15 +424,6 @@ export class Orchestrator {
       return `Error: ${error}`;
     }
 
-    // Inject email data when worker task mentions email keywords
-    {
-      const { messageNeedsEmail: needsEmail, getEmailContextForPrompt: getEmailCtx } = await import('./emailContext.js');
-      if (needsEmail(task.description)) {
-        const emailCtx = await getEmailCtx(this.userId, task.description);
-        if (emailCtx) task.description += emailCtx;
-      }
-    }
-
     // Build system prompt for this skill (with user upload context)
     // Use the actual agent CWD (including _agents/{skillId} subdirectory) for relative path calculation
     const baseSandboxPath = getSandboxPath(this.userId, this.conversationId);
@@ -459,7 +475,7 @@ export class Orchestrator {
       execution.result = error;
       await this.updateTaskInDb(taskId, 'failed', error);
       this.sseWriter({ type: 'task_failed', data: { taskId, skillId: task.skillId, error } });
-      return `Error executing ${task.skillId}: ${error}`;
+      return friendlyAgentFailure(task.skillId, error);
     }
   }
 
@@ -482,7 +498,13 @@ export class Orchestrator {
       // Look up skill-level tool restrictions
       const skillDef = opts.role !== 'router' ? getSkill(opts.skillId) : undefined;
 
-      const { emitter, abort } = spawnClaude(message, systemPrompt, {
+      // Engine dispatch: Claude CLI (default) or Codex CLI. Both share the
+      // same call signature and SSE event protocol. Per-conversation override
+      // (this.engine) wins; otherwise fall back to the global default.
+      const engine = this.engine ?? config.agentEngine;
+      const spawnAgentProcess = engine === 'codex' ? spawnCodex : spawnClaude;
+
+      const { emitter, abort } = spawnAgentProcess(message, systemPrompt, {
         userId: this.userId,
         conversationId: this.conversationId,
         sessionId: opts.sessionId,
@@ -587,9 +609,23 @@ export class Orchestrator {
             const detail = stderr ? ` (stderr: ${stderr.substring(0, 300)})` : '';
             console.error(`[Orchestrator] Agent ${opts.skillId} FAILED: exitCode=${exitCode}, text="${text}", stderr=${stderr?.substring(0, 300)}`);
             reject(new Error(`Agent ${opts.skillId} failed with no output (exit code ${exitCode})${detail}`));
-          } else {
-            resolve({ text, inputTokens, outputTokens, model });
+            return;
           }
+          // Claude CLI surfaces Anthropic-side auth blips as a normal
+          // assistant message (text="Failed to authenticate. API Error: 401
+          // Invalid authentication credentials") and exits 0. Treat that
+          // pattern as a transient error so the orchestrator's retry path
+          // gets a chance — and the friendly fallback below covers final
+          // failure so users don't see the raw 401 leak.
+          const looksLikeUpstreamAuthFailure =
+            /Failed to authenticate\.\s*API Error: 4\d\d/i.test(text)
+            || /Invalid authentication credentials/i.test(text);
+          if (looksLikeUpstreamAuthFailure) {
+            console.warn(`[Orchestrator] Agent ${opts.skillId} hit upstream auth failure — flagging as transient`);
+            reject(new Error('upstream_auth_transient'));
+            return;
+          }
+          resolve({ text, inputTokens, outputTokens, model });
         }
       });
     });

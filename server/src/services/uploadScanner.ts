@@ -102,8 +102,8 @@ const MAGIC_BYTES: Record<string, number[][]> = {
   '.ico':  [[0x00, 0x00, 0x01, 0x00]],                        // ICO
 };
 
-// Max file size: 50MB
-const MAX_FILE_SIZE = 50 * 1024 * 1024;
+// Max file size: 100MB
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 // Max upload quota per user: 500MB
 export const UPLOAD_QUOTA_BYTES = 500 * 1024 * 1024;

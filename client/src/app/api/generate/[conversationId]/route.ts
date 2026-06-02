@@ -5,26 +5,6 @@ export const dynamic = 'force-dynamic';
 
 const BACKEND = 'http://localhost:12054';
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ conversationId: string }> },
-) {
-  const { conversationId } = await params;
-  const backendRes = await fetch(`${BACKEND}/api/generate/${conversationId}`, {
-    method: 'GET',
-    headers: {
-      Authorization: req.headers.get('Authorization') || '',
-    },
-  });
-  const text = await backendRes.text();
-  return new Response(text, {
-    status: backendRes.status,
-    headers: {
-      'Content-Type': backendRes.headers.get('Content-Type') || 'application/json',
-    },
-  });
-}
-
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ conversationId: string }> },

@@ -125,13 +125,12 @@ function DeleteConfirmModal({
    Preview Modal
    ============================================================ */
 function PreviewModal({
-  file: initialFile, token, onClose, onDownload, isBeta = true,
+  file: initialFile, token, onClose, onDownload,
 }: {
   file: FileItem;
   token: string;
   onClose: () => void;
   onDownload: (id: string, name: string) => void;
-  isBeta?: boolean;
 }) {
   const { t, locale } = useTranslation();
   const [currentFile, setCurrentFile] = useState(initialFile);
@@ -327,18 +326,16 @@ function PreviewModal({
             ) : null}
           </div>
 
-          {/* Watermark overlay — only in Beta mode */}
-          {isBeta && (
-            <div className="absolute inset-0 pointer-events-none overflow-hidden z-30 select-none" aria-hidden>
-              <div className="absolute inset-[-50%] flex flex-wrap gap-24 rotate-[-30deg]">
-                {Array.from({ length: 40 }).map((_, i) => (
-                  <span key={i} className="text-3xl font-headline font-bold tracking-[0.3em] uppercase whitespace-nowrap" style={{ color: 'rgba(128,128,128,0.18)' }}>
-                    {t('files.watermark' as any)}
-                  </span>
-                ))}
-              </div>
+          {/* Watermark overlay — rendered AFTER content so it sits ON TOP of document */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden z-30 select-none" aria-hidden>
+            <div className="absolute inset-[-50%] flex flex-wrap gap-24 rotate-[-30deg]">
+              {Array.from({ length: 40 }).map((_, i) => (
+                <span key={i} className="text-3xl font-headline font-bold tracking-[0.3em] uppercase whitespace-nowrap" style={{ color: 'rgba(128,128,128,0.18)' }}>
+                  {t('files.watermark' as any)}
+                </span>
+              ))}
             </div>
-          )}
+          </div>
         </div>
 
         {/* ===== Right Sidebar (desktop) / Bottom Panel (mobile) ===== */}
@@ -583,22 +580,26 @@ function FilesContent() {
   const [conversations, setConversations] = useState<ConversationInfo[]>([]);
   const [deleteUploadTarget, setDeleteUploadTarget] = useState<UploadItem | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [isBeta, setIsBeta] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
   }, [user, isLoading, router]);
 
+  // Open straight to the uploads/import view when linked with ?tab=uploads
+  // (e.g. the LINE rich-menu "上傳檔案" tile).
+  useEffect(() => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'uploads') {
+      setActiveTab('uploads');
+    }
+  }, []);
+
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(timer);
   }, [toast]);
-
-  useEffect(() => {
-    fetch('/api/health').then(r => r.json()).then(d => setIsBeta(d.isBeta ?? true)).catch(() => {});
-  }, []);
 
   const fetchStorage = useCallback(() => {
     if (!token) return;
@@ -640,6 +641,39 @@ function FilesContent() {
       .then((convs: ConversationInfo[]) => setConversations(convs))
       .catch(console.error);
   }, [token]);
+
+  async function handleImportFiles(fileList: FileList | null) {
+    if (!token || uploading || !fileList || fileList.length === 0) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      Array.from(fileList).forEach(f => fd.append('files', f));
+      fd.append('index', 'true'); // also index into the RAG knowledge base
+      const res = await fetch('/api/uploads', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const all = (data.uploads || []) as Array<{ scanStatus: string }>;
+        const rejected = all.filter(u => u.scanStatus === 'rejected').length;
+        const ok = all.length - rejected;
+        setToast(
+          rejected > 0
+            ? `已上傳 ${ok} 個檔案（${rejected} 個被安全攔截），正在加入知識庫…`
+            : `已上傳 ${ok} 個檔案，正在分析並加入知識庫…`,
+        );
+        fetchUploads();
+      } else {
+        setToast(data.error || '上傳失敗');
+      }
+    } catch {
+      setToast('上傳失敗（網路錯誤）');
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function confirmDeleteUpload() {
     if (!token || !deleteUploadTarget) return;
@@ -740,7 +774,6 @@ function FilesContent() {
           token={token}
           onClose={() => setPreviewFile(null)}
           onDownload={handleDownload}
-          isBeta={isBeta}
         />
       )}
 
@@ -795,6 +828,35 @@ function FilesContent() {
             )}
           </div>
         </div>
+
+        {/* Import to knowledge base — always visible (also the LINE rich-menu
+            "上傳檔案" target), so it shows regardless of the active tab. */}
+        <label
+          onDragOver={e => { e.preventDefault(); }}
+          onDrop={e => { e.preventDefault(); handleImportFiles(e.dataTransfer.files); }}
+          className={`mb-6 md:mb-8 flex flex-col items-center justify-center gap-2 py-7 md:py-8 px-4 border-2 border-dashed rounded-xl text-center transition-colors ${
+            uploading
+              ? 'opacity-70 cursor-wait border-primary/40 bg-primary/5'
+              : 'cursor-pointer border-primary/40 hover:border-primary/70 bg-primary/[0.03] hover:bg-primary/[0.07]'
+          }`}
+        >
+          <input
+            type="file"
+            multiple
+            className="hidden"
+            disabled={uploading}
+            onChange={e => { handleImportFiles(e.target.files); e.currentTarget.value = ''; }}
+          />
+          <span className={`material-symbols-outlined text-3xl text-primary ${uploading ? 'animate-spin' : ''}`}>
+            {uploading ? 'progress_activity' : 'upload_file'}
+          </span>
+          <span className="text-sm md:text-base font-bold font-headline text-on-surface">
+            {uploading ? '上傳中…' : '匯入檔案到知識庫'}
+          </span>
+          <span className="text-xs md:text-sm text-on-surface-variant/70 max-w-md leading-relaxed">
+            點擊選擇檔案（可多選），或將檔案拖曳到這裡。上傳後會自動分析並加入你的 RAG 知識庫，之後在對話中會被優先參考。
+          </span>
+        </label>
 
         {/* Main Tab Switcher: Generated vs Uploads */}
         <div className="flex items-center gap-4 md:gap-6 mb-6 md:mb-8 border-b border-outline-variant/10">

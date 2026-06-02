@@ -3,11 +3,12 @@ import path from 'path';
 import fs from 'fs';
 import { dbGet, dbAll } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { getFileDownloadPath, deleteFile, getFileVersions, extractPptxShapes } from '../services/fileManager.js';
+import { getFileDownloadPath, deleteFile, getFileVersions } from '../services/fileManager.js';
 import { convertOfficeFile } from '../services/filePreview.js';
 import { applyWatermark } from '../services/watermark.js';
 import { config } from '../config.js';
 import { getStorageQuotaGb } from '../services/usageLimit.js';
+import { findValidShare, bumpDownloadCount } from '../services/line/fileShare.js';
 import type { GeneratedFile } from '../types.js';
 
 /** Sum file_size for a given user from generated_files table */
@@ -32,6 +33,63 @@ const MIME_MAP: Record<string, string> = {
 const OFFICE_EXTENSIONS = new Set(['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt']);
 
 const router = Router();
+
+// ─── Public download via file_shares token (NO auth) ─────────────
+// Declared BEFORE the authMiddleware so LINE recipients can tap a share URL
+// without holding a JWT. Token + expiry + download-cap enforced inside.
+router.get('/share/:token', async (req: Request, res: Response) => {
+  const token = String(req.params.token || '');
+  if (!/^[A-Za-z0-9]{8}$/.test(token)) {
+    res.status(400).json({ error: 'Invalid token format' });
+    return;
+  }
+
+  const share = await findValidShare(token);
+  if (!share) {
+    res.status(404).json({ error: 'Share link not found, expired, or exhausted' });
+    return;
+  }
+
+  const filePath = await getFileDownloadPath(share.user_id, share.file_id);
+  if (!filePath) {
+    res.status(404).json({ error: 'File not found' });
+    return;
+  }
+
+  const filename = path.basename(filePath);
+
+  // PDFs and images can be viewed in-browser/LINE (inline); everything else
+  // (Office docs, etc.) forces a download. `?dl=1` forces download even for
+  // previewable types (used by the "下載" button alongside "觀看").
+  const ext = path.extname(filename).slice(1).toLowerCase();
+  const mime = MIME_MAP[ext];
+  const previewable = ext === 'pdf' || (!!mime && mime.startsWith('image/'));
+  const disposition = previewable && req.query.dl !== '1' ? 'inline' : 'attachment';
+  const cd = `${disposition}; filename="${encodeURIComponent(filename)}"`;
+
+  // Count the download as it begins — if the response stream errors out, the
+  // count still bumps so a leaked URL can't infinitely retry past the cap.
+  await bumpDownloadCount(token);
+
+  try {
+    const watermarked = await applyWatermark(filePath);
+    if (watermarked) {
+      if (mime) res.setHeader('Content-Type', mime);
+      res.setHeader('Content-Disposition', cd);
+      res.setHeader('Content-Length', watermarked.length);
+      res.end(watermarked);
+      return;
+    }
+  } catch (err) {
+    console.warn('[Share] Watermark failed, serving original:', err);
+  }
+
+  // sendFile sets Content-Type from the real file extension; we set the
+  // disposition explicitly so previewable types open inline.
+  res.setHeader('Content-Disposition', cd);
+  res.sendFile(path.resolve(filePath));
+});
+
 router.use(authMiddleware);
 
 // GET /api/files — returns only the LATEST version of each file
@@ -87,14 +145,9 @@ router.get('/:id/download', async (req: Request, res: Response) => {
 // GET /api/files/:id/preview
 router.get('/:id/preview', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const fileId = req.params.id as string;
-  const filePath = await getFileDownloadPath(userId, fileId);
+  const filePath = await getFileDownloadPath(userId, req.params.id as string);
 
-  if (!filePath) {
-    console.warn(`[Preview] File not found: id=${fileId}, userId=${userId}`);
-    res.status(404).json({ error: 'File not found' });
-    return;
-  }
+  if (!filePath) { res.status(404).json({ error: 'File not found' }); return; }
 
   const ext = path.extname(filePath).slice(1).toLowerCase();
   const mime = MIME_MAP[ext];
@@ -123,7 +176,6 @@ router.get('/:id/preview', async (req: Request, res: Response) => {
       const result = await convertOfficeFile(filePath, ext);
       res.setHeader('Content-Type', result.mime);
       res.setHeader('Content-Disposition', 'inline');
-      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
       if (Buffer.isBuffer(result.content)) {
         res.setHeader('Content-Length', result.content.length);
         res.end(result.content);
@@ -131,7 +183,7 @@ router.get('/:id/preview', async (req: Request, res: Response) => {
         res.send(result.content);
       }
     } catch (err) {
-      console.error(`[Preview] Conversion error for ${path.basename(filePath)} (${ext}):`, err);
+      console.error('[Preview] Conversion error:', err);
       res.status(500).json({ error: 'Preview conversion failed' });
     }
     return;
@@ -160,24 +212,6 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
-
-// GET /api/files/:id/shapes — extract shape bounding boxes from PPTX
-router.get('/:id/shapes', async (req: Request, res: Response) => {
-  const userId = req.user!.userId;
-  const filePath = await getFileDownloadPath(userId, req.params.id as string);
-  if (!filePath) { res.status(404).json({ error: 'File not found' }); return; }
-
-  const ext = path.extname(filePath).slice(1).toLowerCase();
-  if (ext !== 'pptx') { res.status(400).json({ error: 'Only PPTX files supported' }); return; }
-
-  try {
-    const shapes = await extractPptxShapes(filePath);
-    res.json({ slides: shapes });
-  } catch (err) {
-    console.error('[Shapes] Extraction error:', err);
-    res.status(500).json({ error: 'Shape extraction failed' });
-  }
-});
 
 // GET /api/files/:id/versions
 router.get('/:id/versions', async (req: Request, res: Response) => {

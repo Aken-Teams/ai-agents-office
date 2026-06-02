@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
+import TokenChartBars from '../components/TokenChartBars';
 
 interface TokenSummary {
   totalInput: number;
@@ -16,6 +17,7 @@ interface ChartPoint {
   total_input: number;
   total_output: number;
   invocation_count: number;
+  byModel?: Array<{ model: string; provider: string; input: number; output: number }>;
 }
 
 interface UserBreakdown {
@@ -58,19 +60,13 @@ export default function AdminTokens() {
   const [ledgerTotal, setLedgerTotal] = useState(0);
   const [ledgerPage, setLedgerPage] = useState(1);
   const [ledgerTotalPages, setLedgerTotalPages] = useState(1);
-  const [period, setPeriod] = useState<'7d' | '30d' | 'monthly'>('7d');
-  const [filterFrom, setFilterFrom] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  });
-  const [filterTo, setFilterTo] = useState(() => new Date().toISOString().slice(0, 10));
-  const hasFilter = !!(filterFrom || filterTo);
+  const [period, setPeriod] = useState<'7d' | '30d'>('7d');
   const [exporting, setExporting] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFrom, setExportFrom] = useState('');
   const [exportTo, setExportTo] = useState('');
   const [dateError, setDateError] = useState('');
-  const [modalTab, setModalTab] = useState<'csv' | 'quote'>('quote');
+  const [modalTab, setModalTab] = useState<'csv' | 'quote'>('csv');
   const [quoteMonth, setQuoteMonth] = useState('');
   const [quoteCurrency, setQuoteCurrency] = useState<'USD' | 'TWD'>('USD');
   const [quoteRate, setQuoteRate] = useState('32');
@@ -498,35 +494,25 @@ export default function AdminTokens() {
   useEffect(() => {
     if (!token) return;
     const headers = { Authorization: `Bearer ${token}` };
-    const p = new URLSearchParams();
-    if (filterFrom) p.set('from', filterFrom);
-    if (filterTo)   p.set('to',   filterTo);
-    const qs = p.toString() ? `?${p}` : '';
 
-    fetch(`/api/admin/tokens/summary${qs}`, { headers })
+    fetch('/api/admin/tokens/summary', { headers })
       .then(r => r.json()).then(setSummary).catch(console.error);
 
-    fetch(`/api/admin/tokens/by-user?limit=10&${p}`, { headers })
+    fetch('/api/admin/tokens/by-user?limit=10', { headers })
       .then(r => r.json()).then(setByUser).catch(console.error);
-  }, [token, filterFrom, filterTo]);
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
-    const p = new URLSearchParams({ period });
-    if (filterFrom) p.set('from', filterFrom);
-    if (filterTo)   p.set('to',   filterTo);
-    fetch(`/api/admin/tokens/chart?${p}`, {
+    fetch(`/api/admin/tokens/chart?period=${period}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json()).then(setChart).catch(console.error);
-  }, [token, period, filterFrom, filterTo]);
+  }, [token, period]);
 
   const fetchLedger = useCallback(() => {
     if (!token) return;
-    const p = new URLSearchParams({ page: String(ledgerPage), limit: '10' });
-    if (filterFrom) p.set('from', filterFrom);
-    if (filterTo)   p.set('to',   filterTo);
-    fetch(`/api/admin/tokens/ledger?${p}`, {
+    fetch(`/api/admin/tokens/ledger?page=${ledgerPage}&limit=10`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
@@ -536,51 +522,21 @@ export default function AdminTokens() {
         setLedgerTotalPages(data.totalPages);
       })
       .catch(console.error);
-  }, [token, ledgerPage, filterFrom, filterTo]);
+  }, [token, ledgerPage]);
 
   useEffect(() => { fetchLedger(); }, [fetchLedger]);
 
-  const maxChart = Math.max(...chart.map(v => v.total_input + v.total_output), 1);
   const totalByUserTokens = byUser.reduce((sum, u) => sum + u.total_input + u.total_output, 0) || 1;
 
   return (
     <>
       {/* Header */}
-      {/* Sticky header — title row + inline date filter */}
-      <header className="sticky top-0 z-40 bg-surface/90 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
-        {/* Row 1: title + CSV */}
-        <div className="flex justify-between items-center px-4 md:px-8 h-14 md:h-16">
-          <div className="flex items-center gap-2 md:gap-4 min-w-0">
-            <span className="text-base md:text-lg font-black text-on-surface font-headline truncate">{t('admin.tokens.title')}</span>
-            <span className="text-[10px] md:text-sm px-1.5 md:px-2 py-0.5 bg-success/10 text-success rounded font-bold tracking-wider uppercase shrink-0">{t('admin.tokens.syncStatus')}</span>
-          </div>
-          {/* Desktop: filter inline */}
-          <div className="hidden md:flex items-center gap-2 mx-6">
-            <span className={`material-symbols-outlined text-sm ${hasFilter ? 'text-tertiary' : 'text-on-surface-variant/40'}`}>date_range</span>
-            <input
-              type="date"
-              value={filterFrom}
-              onChange={e => { setFilterFrom(e.target.value); setLedgerPage(1); }}
-              className={`text-on-surface text-xs font-mono px-2 py-1 border focus:outline-none focus:border-primary/50 cursor-pointer transition-colors ${hasFilter ? 'bg-tertiary/5 border-tertiary/30' : 'bg-surface-container border-outline-variant/20'}`}
-            />
-            <span className="text-xs text-on-surface-variant/40">—</span>
-            <input
-              type="date"
-              value={filterTo}
-              onChange={e => { setFilterTo(e.target.value); setLedgerPage(1); }}
-              className={`text-on-surface text-xs font-mono px-2 py-1 border focus:outline-none focus:border-primary/50 cursor-pointer transition-colors ${hasFilter ? 'bg-tertiary/5 border-tertiary/30' : 'bg-surface-container border-outline-variant/20'}`}
-            />
-            {hasFilter && (
-              <button
-                onClick={() => { setFilterFrom(''); setFilterTo(''); setLedgerPage(1); }}
-                className="text-on-surface-variant/50 hover:text-primary transition-colors cursor-pointer"
-                title="清除篩選"
-              >
-                <span className="material-symbols-outlined text-sm">close</span>
-              </button>
-            )}
-          </div>
-          <button
+      <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
+        <div className="flex items-center gap-2 md:gap-4 min-w-0">
+          <span className="text-base md:text-lg font-black text-on-surface font-headline truncate">{t('admin.tokens.title')}</span>
+          <span className="text-[10px] md:text-sm px-1.5 md:px-2 py-0.5 bg-success/10 text-success rounded font-bold tracking-wider uppercase shrink-0">{t('admin.tokens.syncStatus')}</span>
+        </div>
+        <button
             onClick={() => setShowExportModal(true)}
             disabled={exporting}
             className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer shrink-0 disabled:opacity-50"
@@ -589,32 +545,6 @@ export default function AdminTokens() {
             <span className="hidden md:inline">{t('admin.tokens.exportCsv')}</span>
             <span className="md:hidden">CSV</span>
           </button>
-        </div>
-        {/* Row 2 (mobile only): date filter */}
-        <div className={`md:hidden flex items-center gap-2 px-4 py-2 border-t transition-colors ${hasFilter ? 'bg-tertiary/5 border-tertiary/20' : 'border-outline-variant/10'}`}>
-          <span className={`material-symbols-outlined text-sm shrink-0 ${hasFilter ? 'text-tertiary' : 'text-on-surface-variant/40'}`}>date_range</span>
-          <input
-            type="date"
-            value={filterFrom}
-            onChange={e => { setFilterFrom(e.target.value); setLedgerPage(1); }}
-            className="bg-transparent text-on-surface text-xs font-mono focus:outline-none cursor-pointer flex-1 min-w-0"
-          />
-          <span className="text-xs text-on-surface-variant/40 shrink-0">—</span>
-          <input
-            type="date"
-            value={filterTo}
-            onChange={e => { setFilterTo(e.target.value); setLedgerPage(1); }}
-            className="bg-transparent text-on-surface text-xs font-mono focus:outline-none cursor-pointer flex-1 min-w-0"
-          />
-          {hasFilter && (
-            <button
-              onClick={() => { setFilterFrom(''); setFilterTo(''); setLedgerPage(1); }}
-              className="text-on-surface-variant/50 hover:text-primary transition-colors cursor-pointer shrink-0"
-            >
-              <span className="material-symbols-outlined text-sm">close</span>
-            </button>
-          )}
-        </div>
       </header>
 
       {/* Export / Quote Modal */}
@@ -628,7 +558,7 @@ export default function AdminTokens() {
             </div>
             {/* Tabs */}
             <div className="flex px-5 mt-3 gap-1 border-b border-outline-variant/10">
-              {([['quote', 'receipt', '產生報價單']] as const).map(([tab, icon, label]) => (
+              {([['csv', 'download', 'CSV 匯出'], ['quote', 'receipt', '產生報價單']] as const).map(([tab, icon, label]) => (
                 <button
                   key={tab}
                   onClick={() => setModalTab(tab)}
@@ -849,7 +779,7 @@ export default function AdminTokens() {
                 <span className="text-xs md:text-sm font-bold uppercase tracking-widest">{t('admin.tokens.chart.title')}</span>
               </div>
               <div className="flex gap-1">
-                {(['7d', '30d', 'monthly'] as const).map(p => (
+                {(['7d', '30d'] as const).map(p => (
                   <button
                     key={p}
                     onClick={() => setPeriod(p)}
@@ -859,66 +789,13 @@ export default function AdminTokens() {
                       period === p ? 'text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:text-on-surface'
                     }`}
                   >
-                    {p === 'monthly' ? '12M' : p}
+                    {p}
                   </button>
                 ))}
               </div>
             </div>
             <div className="p-4 md:p-6">
-              {chart.length === 0 ? (
-                <div className="h-40 flex items-center justify-center text-on-surface-variant text-sm">
-                  <span className="material-symbols-outlined mr-2">info</span>{t('admin.tokens.chart.noData')}
-                </div>
-              ) : (
-                <div>
-                  <div className={`flex items-end ${period === '30d' ? 'h-52 gap-px' : period === 'monthly' ? 'h-40 md:h-52 gap-2 md:gap-3' : 'h-40 md:h-48 gap-1.5'}`}>
-                    {chart.map((v, i) => {
-                      const total = v.total_input + v.total_output;
-                      const pct = (total / maxChart) * 100;
-                      const barHeight = Math.max(pct, 3);
-                      const tooltipLabel = period === 'monthly'
-                        ? `${v.date} · ${formatTokens(total)}`
-                        : `${v.date.slice(5)} · ${formatTokens(total)}`;
-                      return (
-                        <div key={i} className="flex-1 min-w-0 h-full flex items-end group/bar relative">
-                          <div className={`w-full rounded-t transition-all group-hover/bar:brightness-125 ${period === 'monthly' ? 'bg-tertiary/70' : 'bg-primary/60'}`} style={{ height: `${barHeight}%` }} />
-                          <span className="absolute top-0 left-1/2 -translate-x-1/2 text-[10px] bg-surface-container-highest text-on-surface px-1.5 py-0.5 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity font-mono font-bold whitespace-nowrap pointer-events-none z-10">
-                            {tooltipLabel}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {/* Date labels */}
-                  {period === '30d' ? (
-                    <div className="flex gap-px mt-4 h-14">
-                      {chart.map((v, i) => (
-                        <div key={i} className="flex-1 min-w-0 relative">
-                          <span className="absolute top-0 left-1/2 -translate-x-1/2 origin-top -rotate-55 text-[11px] text-outline font-mono whitespace-nowrap">
-                            {v.date.slice(5)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : period === 'monthly' ? (
-                    <div className="flex gap-2 md:gap-3 mt-2">
-                      {chart.map((v, i) => (
-                        <span key={i} className="flex-1 min-w-0 text-[10px] md:text-xs text-center text-outline font-mono truncate">
-                          {v.date.slice(2, 7).replace('-', '/')}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex gap-1.5 mt-1.5">
-                      {chart.map((v, i) => (
-                        <span key={i} className="flex-1 min-w-0 text-xs text-center text-outline font-mono truncate">
-                          {v.date.slice(5)}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+              <TokenChartBars data={chart.map(c => ({ ...c, byModel: c.byModel ?? [] }))} period={period} />
             </div>
           </div>
 

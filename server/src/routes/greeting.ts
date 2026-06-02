@@ -1,14 +1,13 @@
 import { Router, Request, Response } from 'express';
-import fs from 'fs';
-import path from 'path';
 import { authMiddleware } from '../middleware/auth.js';
 import { dbAll, dbGet } from '../db.js';
 import { config } from '../config.js';
+import { runClaudeText } from '../services/claudeCli.js';
 
 const router = Router();
 router.use(authMiddleware);
 
-// GET /api/greeting — SSE stream a personalized AI greeting via DeepSeek
+// GET /api/greeting — SSE stream a personalized AI greeting
 router.get('/', async (req: Request, res: Response) => {
 
   console.log('[Greeting] Request received');
@@ -21,8 +20,6 @@ router.get('/', async (req: Request, res: Response) => {
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
 
   // Fetch recent conversations (last 5 with summary or latest message)
-  // Exclude auto-created system conversations (email-agent) so first-login users
-  // aren't mistakenly treated as returning users
   const recentConversations = await dbAll<{
     title: string;
     skill_id: string | null;
@@ -33,7 +30,7 @@ router.get('/', async (req: Request, res: Response) => {
     `SELECT c.title, c.skill_id, c.created_at, c.summary,
        (SELECT content FROM messages m WHERE m.conversation_id = c.id AND m.role = 'user' ORDER BY m.created_at DESC LIMIT 1) AS last_message
      FROM conversations c
-     WHERE c.user_id = ? AND (c.category IS NULL OR c.category != 'email-agent')
+     WHERE c.user_id = ?
      ORDER BY c.created_at DESC
      LIMIT 5`,
     userId
@@ -53,17 +50,14 @@ router.get('/', async (req: Request, res: Response) => {
      ORDER BY created_at DESC LIMIT 3`
   );
 
-  // Set up SSE
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no',
-  });
-
   // No conversations — return a static welcome (no AI call needed)
   if (recentConversations.length === 0) {
     console.log('[Greeting] New/idle user, sending static welcome');
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
     const welcomeData: Record<string, any> = {
       type: 'welcome',
       userName: user.display_name || user.email.split('@')[0],
@@ -84,6 +78,7 @@ router.get('/', async (req: Request, res: Response) => {
   console.log(`[Greeting] Found ${recentConversations.length} recent conversations for user ${userName}`);
 
   const conversationSummary = recentConversations.map((c, i) => {
+    // Prefer summary (safe, pre-filtered) over raw message
     const desc = c.summary
       || (c.last_message
         ? (c.last_message.length > 50 ? c.last_message.substring(0, 50) + '...' : c.last_message)
@@ -127,95 +122,50 @@ Write a warm, concise greeting (2-4 sentences max). Be human, natural, and carin
 - Do NOT use markdown formatting (no **, #, -, etc.), just plain text with line breaks
 - Do NOT repeat their conversation titles verbatim, paraphrase naturally${announcementSection}`;
 
+  // Set up SSE
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+
   const keepalive = setInterval(() => {
     try { res.write(': keepalive\n\n'); } catch { /* closed */ }
   }, 10000);
 
-  // Check for API key
-  if (!config.deepseekApiKey) {
-    console.error('[Greeting] DEEPSEEK_API_KEY not configured');
-    clearInterval(keepalive);
-    res.write(`data: ${JSON.stringify({ type: 'error', data: 'AI greeting service not configured' })}\n\n`);
-    res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
-    res.end();
-    return;
-  }
-
-  let aborted = false;
-  let abortController: AbortController | null = new AbortController();
-
+  const controller = new AbortController();
+  let clientClosed = false;
   req.on('close', () => {
-    aborted = true;
-    abortController?.abort();
+    clientClosed = true;
+    controller.abort();
   });
 
   try {
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.deepseekApiKey}`,
+    await runClaudeText({
+      model: config.claudeText.greetingModel,
+      maxTokens: 600,
+      temperature: 0.7,
+      system: 'You are a warm, concise professional assistant writing brief, human-feeling greetings. Plain text only — never use markdown.',
+      prompt,
+      signal: controller.signal,
+      onDelta: (delta) => {
+        if (clientClosed) return;
+        try { res.write(`data: ${JSON.stringify({ type: 'text_delta', data: delta })}\n\n`); }
+        catch { /* SSE closed mid-stream */ }
       },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [{ role: 'user', content: prompt }],
-        stream: true,
-        max_tokens: 300,
-        temperature: 0.7,
-      }),
-      signal: abortController.signal,
     });
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      console.error(`[Greeting] DeepSeek API error ${response.status}: ${errText}`);
-      clearInterval(keepalive);
-      res.write(`data: ${JSON.stringify({ type: 'error', data: 'AI 問候服務暫時無法使用' })}\n\n`);
-      res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
-      res.end();
-      return;
-    }
-
-    const reader = response.body as any;
-    if (!reader) throw new Error('No response body');
-
-    // Node fetch returns a ReadableStream; read it as chunks
-    let buffer = '';
-    for await (const chunk of reader) {
-      if (aborted) break;
-      buffer += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString();
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
-        const data = trimmed.slice(6);
-        if (data === '[DONE]') continue;
-
-        try {
-          const parsed = JSON.parse(data);
-          const delta = parsed.choices?.[0]?.delta?.content;
-          if (delta) {
-            res.write(`data: ${JSON.stringify({ type: 'text_delta', data: delta })}\n\n`);
-          }
-        } catch { /* skip malformed */ }
-      }
-    }
-  } catch (err: any) {
-    if (!aborted) {
-      console.error(`[Greeting] DeepSeek call failed: ${err.message}`);
-      res.write(`data: ${JSON.stringify({ type: 'error', data: 'AI 問候服務暫時無法使用' })}\n\n`);
+  } catch (err) {
+    if (!controller.signal.aborted) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[Greeting] runClaudeText failed: ${msg}`);
+      try { res.write(`data: ${JSON.stringify({ type: 'error', data: 'Failed to generate greeting' })}\n\n`); }
+      catch { /* closed */ }
     }
   } finally {
-    abortController = null;
     clearInterval(keepalive);
-    if (!aborted) {
-      try {
-        res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
-        res.end();
-      } catch { /* already closed */ }
-    }
+    try { res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`); res.end(); }
+    catch { /* already closed */ }
   }
 });
 

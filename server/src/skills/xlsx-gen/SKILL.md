@@ -13,10 +13,10 @@ When the user describes what they want in a spreadsheet, you must:
 3. Generate the XLSX file using the pre-built generator script or custom Node.js code
 
 ## How to Generate (Preferred Method)
-Create an `input.json` file describing the spreadsheet, then call the generator:
+Create a JSON file describing the spreadsheet, then call the generator:
 
 ```bash
-cat > input.json << 'XLSEOF'
+cat > spreadsheet.json << 'XLSEOF'
 {
   "title": "Spreadsheet Title",
   "style": "dashboard",
@@ -32,7 +32,7 @@ cat > input.json << 'XLSEOF'
   ]
 }
 XLSEOF
-node --import tsx generate-xlsx.ts input.json output.xlsx
+node --import tsx generate-xlsx.ts spreadsheet.json output.xlsx
 ```
 
 ## Available Styles
@@ -67,16 +67,7 @@ const sheet = workbook.addWorksheet('Data');
 await workbook.xlsx.writeFile('output.xlsx');
 ```
 
-## CRITICAL — Content Source Rules
-
-**All content in the generated spreadsheet** — sheet names, headers, cell data, branding, terminology, everything — must come from either:
-1. The **task description** provided to you, or
-2. The **user's message** in the conversation
-
-If specific content (company names, frameworks, slogans, methodologies, proprietary terms, etc.) is NOT present in those sources, do NOT include it **anywhere** in the output.
-
 ## Output Rules
 - Always name the output file descriptively
 - Place all files in the current working directory
-- **CRITICAL**: The input JSON file MUST be named `input.json` — this is required for the interactive editor to capture the full spreadsheet data (headers AND rows)
 - Inform the user when the file is ready

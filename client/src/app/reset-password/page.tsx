@@ -4,6 +4,10 @@ import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { I18nProvider, useTranslation } from '../../i18n';
+import { AuthLayout } from '../components/AuthLayout';
+import { AppInput, ShineButton } from '../../components/ui';
+
+const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
 
 function ResetPasswordForm() {
   const { t } = useTranslation();
@@ -43,122 +47,100 @@ function ResetPasswordForm() {
     }
   }
 
+  const layoutProps = {
+    appName: t('common.appName'),
+    subtitle: t(deployMode === 'pro-panjit' ? 'login.brandSubtitle' : 'login.brandSubtitleGeneric' as any),
+    heroTitle: {
+      prefix: t('login.heroTitle.prefix'),
+      highlight: t('login.heroTitle.highlight'),
+      suffix: t('login.heroTitle.suffix'),
+    },
+    heroDescription: t('login.heroDescription'),
+    statusLabel: t('login.systemStatus'),
+  };
+
   if (!token) {
     return (
-      <div className="bg-surface-container-lowest text-on-surface font-body min-h-[100svh] flex flex-col items-center justify-center p-5 md:p-6 overflow-hidden relative selection:bg-primary/30">
-        <div className="absolute inset-0 bg-pattern pointer-events-none opacity-40" />
-        <main className="w-full max-w-md z-10">
-          <div className="bg-surface-container-high p-8 md:p-12 shadow-xl text-center">
-            <div className="w-20 h-20 mx-auto mb-6 bg-error/10 rounded-full flex items-center justify-center">
-              <span className="material-symbols-outlined text-4xl text-error">link_off</span>
-            </div>
-            <h3 className="font-headline text-2xl font-bold mb-3">{t('resetPassword.invalidTitle' as any)}</h3>
-            <p className="text-on-surface-variant text-sm mb-8">{t('resetPassword.invalidMessage' as any)}</p>
-            <Link
-              href="/forgot-password"
-              className="inline-flex items-center gap-2 cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-3 px-8 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 transition-all no-underline"
-            >
-              {t('resetPassword.requestNew' as any)}
-            </Link>
+      <AuthLayout {...layoutProps} panelIcon="link_off">
+        <div className="text-center py-4">
+          <div className="w-20 h-20 mx-auto mb-6 bg-error/10 rounded-full flex items-center justify-center ring-1 ring-error/30">
+            <span className="material-symbols-outlined text-4xl text-error">link_off</span>
           </div>
-        </main>
-      </div>
+          <h3 className="font-headline text-2xl font-bold mb-3">{t('resetPassword.invalidTitle' as any)}</h3>
+          <p className="text-on-surface-variant text-sm mb-8">{t('resetPassword.invalidMessage' as any)}</p>
+          <Link href="/forgot-password" className="inline-block no-underline">
+            <ShineButton type="button" variant="primary" size="md" fullWidth={false}>
+              {t('resetPassword.requestNew' as any)}
+            </ShineButton>
+          </Link>
+        </div>
+      </AuthLayout>
     );
   }
 
   return (
-    <div className="bg-surface-container-lowest text-on-surface font-body min-h-[100svh] flex flex-col items-center justify-center p-5 md:p-6 overflow-hidden relative selection:bg-primary/30">
-      <div className="absolute inset-0 bg-pattern pointer-events-none opacity-40" />
-      <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-5%] left-[-5%] w-[30%] h-[30%] bg-tertiary/5 rounded-full blur-[100px] pointer-events-none" />
-
-      <main className="w-full max-w-md z-10">
-        <div className="bg-surface-container-high p-8 md:p-12 shadow-xl md:shadow-2xl">
-          {/* Logo */}
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 cyber-gradient flex items-center justify-center rounded">
-              <span className="material-symbols-outlined text-on-primary">terminal</span>
+    <AuthLayout {...layoutProps} panelIcon="key">
+      <>
+        {success ? (
+          <div className="text-center py-4">
+            <div className="w-20 h-20 mx-auto mb-6 bg-[color:var(--th-success)]/10 rounded-full flex items-center justify-center ring-1 ring-[color:var(--th-success)]/30">
+              <span className="material-symbols-outlined text-4xl text-[color:var(--th-success)]">check_circle</span>
             </div>
-            <div>
-              <h1 className="font-headline text-xl font-bold tracking-tighter leading-tight">{t('common.appName')}</h1>
-            </div>
-          </div>
-
-          {success ? (
-            <div className="text-center py-4">
-              <div className="w-20 h-20 mx-auto mb-6 bg-success/10 rounded-full flex items-center justify-center">
-                <span className="material-symbols-outlined text-4xl text-success">check_circle</span>
-              </div>
-              <h3 className="font-headline text-2xl font-bold mb-3">{t('resetPassword.successTitle' as any)}</h3>
-              <p className="text-on-surface-variant text-sm mb-8">{t('resetPassword.successMessage' as any)}</p>
-              <Link
-                href="/login"
-                className="inline-flex items-center gap-2 cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-3 px-8 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 transition-all no-underline"
-              >
+            <h3 className="font-headline text-2xl font-bold mb-3">{t('resetPassword.successTitle' as any)}</h3>
+            <p className="text-on-surface-variant text-sm mb-8">{t('resetPassword.successMessage' as any)}</p>
+            <Link href="/login" className="inline-block no-underline">
+              <ShineButton type="button" variant="primary" size="md" fullWidth={false}>
                 {t('resetPassword.goToLogin' as any)}
-                <span className="material-symbols-outlined text-sm">arrow_forward</span>
-              </Link>
+                <span className="material-symbols-outlined text-sm ml-2">arrow_forward</span>
+              </ShineButton>
+            </Link>
+          </div>
+        ) : (
+          <>
+            <div className="mb-8 md:mb-10">
+              <h3 className="font-headline text-2xl font-bold mb-1.5">{t('resetPassword.title' as any)}</h3>
+              <p className="text-on-surface-variant text-sm">{t('resetPassword.subtitle' as any)}</p>
             </div>
-          ) : (
-            <>
-              <div className="mb-8">
-                <h3 className="font-headline text-2xl font-bold mb-1.5">{t('resetPassword.title' as any)}</h3>
-                <p className="text-on-surface-variant text-sm">{t('resetPassword.subtitle' as any)}</p>
-              </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {error && (
-                  <div className="bg-error-container/30 border border-error/20 text-on-error-container px-4 py-3 rounded text-sm">
-                    {error}
-                  </div>
-                )}
-
-                <div className="space-y-1.5">
-                  <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
-                    {t('resetPassword.newPasswordLabel' as any)}
-                  </label>
-                  <input
-                    className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-base md:text-sm font-body rounded placeholder:text-outline"
-                    type="password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder={t('resetPassword.newPasswordPlaceholder' as any)}
-                    minLength={8}
-                    required
-                    autoComplete="new-password"
-                    autoFocus
-                  />
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <div className="bg-error-container/30 border border-error/20 text-on-error-container px-4 py-3 rounded text-sm flex items-start gap-3">
+                  <span className="material-symbols-outlined text-sm mt-0.5 shrink-0">error</span>
+                  {error}
                 </div>
+              )}
 
-                <div className="space-y-1.5">
-                  <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
-                    {t('resetPassword.confirmPasswordLabel' as any)}
-                  </label>
-                  <input
-                    className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-base md:text-sm font-body rounded placeholder:text-outline"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={e => setConfirmPassword(e.target.value)}
-                    placeholder={t('resetPassword.confirmPasswordPlaceholder' as any)}
-                    minLength={8}
-                    required
-                    autoComplete="new-password"
-                  />
-                </div>
+              <AppInput
+                label={t('resetPassword.newPasswordLabel' as any)}
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder={t('resetPassword.newPasswordPlaceholder' as any)}
+                minLength={8}
+                required
+                autoComplete="new-password"
+                autoFocus
+              />
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? t('resetPassword.submitLoading' as any) : t('resetPassword.submit' as any)}
-                </button>
-              </form>
-            </>
-          )}
-        </div>
-      </main>
-    </div>
+              <AppInput
+                label={t('resetPassword.confirmPasswordLabel' as any)}
+                type="password"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                placeholder={t('resetPassword.confirmPasswordPlaceholder' as any)}
+                minLength={8}
+                required
+                autoComplete="new-password"
+              />
+
+              <ShineButton type="submit" variant="primary" size="lg" disabled={loading}>
+                {loading ? t('resetPassword.submitLoading' as any) : t('resetPassword.submit' as any)}
+              </ShineButton>
+            </form>
+          </>
+        )}
+      </>
+    </AuthLayout>
   );
 }
 

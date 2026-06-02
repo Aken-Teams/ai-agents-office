@@ -8,7 +8,9 @@ import { loadSkills } from '../skills/loader.js';
 import { config } from '../config.js';
 import { applyWatermark } from '../services/watermark.js';
 import { getUserUsageLimitUsd, setUserUsageLimitUsd, getUserDisplayCost, getEffectiveUserLimit, getStorageQuotaGb, setStorageQuotaGb, getUploadQuotaMb, setUploadQuotaMb } from '../services/usageLimit.js';
-import { getRolePermissions, setRolePermissions, type RolePermissions } from '../services/rolePermissions.js';
+import { isLocalLlmEnabledSetting, setLocalLlmEnabledSetting } from '../services/llmSettings.js';
+import { getLineSettings, setLineSetting, type LineSettings } from '../services/lineSettings.js';
+import { getMessageQuotaStatus } from '../services/line/client.js';
 
 const router = Router();
 router.use(adminMiddleware);
@@ -16,14 +18,7 @@ router.use(adminMiddleware);
 // ==================== Overview ====================
 
 // GET /api/admin/overview/stats
-router.get('/overview/stats', async (req: Request, res: Response) => {
-  const { from, to } = req.query as { from?: string; to?: string };
-  const conds: string[] = [];
-  const tokenParams: string[] = [];
-  if (from) { conds.push('DATE(created_at) >= ?'); tokenParams.push(from); }
-  if (to)   { conds.push('DATE(created_at) <= ?'); tokenParams.push(to); }
-  const tokenWhere = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
-
+router.get('/overview/stats', async (_req: Request, res: Response) => {
   const totalUsersRow = await dbGet<{ count: number }>(
     'SELECT COUNT(*) as count FROM users'
   );
@@ -31,8 +26,7 @@ router.get('/overview/stats', async (req: Request, res: Response) => {
   const activeSkills = loadSkills().length;
 
   const tokenRow = await dbGet<{ total: number }>(
-    `SELECT COALESCE(SUM(input_tokens + output_tokens), 0) as total FROM token_usage ${tokenWhere}`,
-    ...tokenParams
+    'SELECT COALESCE(SUM(input_tokens + output_tokens), 0) as total FROM token_usage'
   );
 
   const totalFilesRow = await dbGet<{ count: number }>(
@@ -49,91 +43,76 @@ router.get('/overview/stats', async (req: Request, res: Response) => {
   });
 });
 
-// GET /api/admin/overview/token-velocity?period=7d|30d|monthly&from=YYYY-MM-DD&to=YYYY-MM-DD
-router.get('/overview/token-velocity', async (req: Request, res: Response) => {
-  const { from, to, period: periodParam } = req.query as { from?: string; to?: string; period?: string };
-  const period = periodParam || '7d';
+/**
+ * Build per-day token usage broken down by model. Used by both
+ * /overview/token-velocity and /tokens/chart so the two charts stay aligned.
+ */
+interface ModelUsageRow { date: string; model: string | null; provider: string | null; input: number; output: number; invocation_count: number }
+interface ChartByModelEntry { model: string; provider: string; input: number; output: number }
+interface ChartDayPoint {
+  date: string;
+  total_input: number;
+  total_output: number;
+  invocation_count: number;
+  byModel: ChartByModelEntry[];
+}
 
-  // Custom date range mode
-  if (from || to) {
-    const conds: string[] = [];
-    const params: string[] = [];
-    if (from) { conds.push('DATE(created_at) >= ?'); params.push(from); }
-    if (to)   { conds.push('DATE(created_at) <= ?'); params.push(to); }
-    const where = `WHERE ${conds.join(' AND ')}`;
-    const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`
-      SELECT
-        DATE_FORMAT(created_at, '%Y-%m-%d') as date,
-        SUM(input_tokens) as total_input,
-        SUM(output_tokens) as total_output,
-        COUNT(*) as invocation_count
-      FROM token_usage ${where}
-      GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
-      ORDER BY date ASC
-    `, ...params);
-    const dataMap = new Map(rows.map(r => [r.date, r]));
-    const start = new Date(from || new Date().toISOString().slice(0, 10));
-    const end = new Date(to || new Date().toISOString().slice(0, 10));
-    const result = [];
-    for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      result.push(dataMap.get(key) || { date: key, total_input: 0, total_output: 0, invocation_count: 0 });
-    }
-    return res.json(result);
-  }
-
-  if (period === 'monthly') {
-    const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`
-      SELECT
-        DATE_FORMAT(created_at, '%Y-%m') as date,
-        SUM(input_tokens) as total_input,
-        SUM(output_tokens) as total_output,
-        COUNT(*) as invocation_count
-      FROM token_usage
-      WHERE created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-      GROUP BY DATE_FORMAT(created_at, '%Y-%m')
-      ORDER BY date ASC
-    `);
-
-    const dataMap = new Map(rows.map(r => [r.date, r]));
-    const result = [];
-    const now = new Date();
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const existing = dataMap.get(monthStr);
-      result.push(existing || { date: monthStr, total_input: 0, total_output: 0, invocation_count: 0 });
-    }
-    return res.json(result);
-  }
-
-  const days = period === '30d' ? 30 : 7;
-
-  const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`
+async function buildTokenVelocity(days: number): Promise<ChartDayPoint[]> {
+  const rows = await dbAll<ModelUsageRow>(`
     SELECT
       DATE_FORMAT(created_at, '%Y-%m-%d') as date,
-      SUM(input_tokens) as total_input,
-      SUM(output_tokens) as total_output,
+      model,
+      provider,
+      SUM(input_tokens) as input,
+      SUM(output_tokens) as output,
       COUNT(*) as invocation_count
     FROM token_usage
     WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
-    GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
+    GROUP BY date, model, provider
     ORDER BY date ASC
   `);
 
-  // Fill missing dates with zeros
-  const dataMap = new Map(rows.map(r => [r.date, r]));
-  const result = [];
+  // Group rows by date.
+  const perDate = new Map<string, ChartDayPoint>();
+  for (const r of rows) {
+    if (!perDate.has(r.date)) {
+      perDate.set(r.date, { date: r.date, total_input: 0, total_output: 0, invocation_count: 0, byModel: [] });
+    }
+    const day = perDate.get(r.date)!;
+    day.total_input += Number(r.input) || 0;
+    day.total_output += Number(r.output) || 0;
+    day.invocation_count += Number(r.invocation_count) || 0;
+    day.byModel.push({
+      model: r.model ?? 'unknown',
+      provider: r.provider ?? 'unknown',
+      input: Number(r.input) || 0,
+      output: Number(r.output) || 0,
+    });
+  }
+
+  // Fill missing dates with zero-buckets so the chart covers the full range.
+  const result: ChartDayPoint[] = [];
   const now = new Date();
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const existing = dataMap.get(dateStr);
-    result.push(existing || { date: dateStr, total_input: 0, total_output: 0, invocation_count: 0 });
+    result.push(perDate.get(dateStr) ?? {
+      date: dateStr,
+      total_input: 0,
+      total_output: 0,
+      invocation_count: 0,
+      byModel: [],
+    });
   }
+  return result;
+}
 
-  res.json(result);
+// GET /api/admin/overview/token-velocity?period=7d|30d
+router.get('/overview/token-velocity', async (req: Request, res: Response) => {
+  const period = (req.query.period as string) || '7d';
+  const days = period === '30d' ? 30 : 7;
+  res.json(await buildTokenVelocity(days));
 });
 
 // GET /api/admin/overview/recent-activity?limit=20
@@ -191,6 +170,7 @@ router.get('/users', async (req: Request, res: Response) => {
       u.id, u.email, u.display_name, u.status, u.role, u.created_at, u.last_login_at,
       u.company, u.quota_group_id, qg.name as quota_group_name,
       u.invite_code_id, ic.code as invite_code, ic.label as invite_code_label,
+      lu.line_user_id, lu.linked_via as line_linked_via, lu.last_message_at as line_last_message_at,
       COALESCE(t.total_tokens, 0) as total_tokens,
       COALESCE(t.total_input, 0) as total_input_tokens,
       COALESCE(t.total_output, 0) as total_output_tokens,
@@ -199,6 +179,7 @@ router.get('/users', async (req: Request, res: Response) => {
     FROM users u
     LEFT JOIN quota_groups qg ON qg.id = u.quota_group_id
     LEFT JOIN invite_codes ic ON ic.id = u.invite_code_id
+    LEFT JOIN line_users lu ON lu.internal_user_id = u.id
     LEFT JOIN (
       SELECT user_id, SUM(input_tokens + output_tokens) as total_tokens,
         SUM(input_tokens) as total_input, SUM(output_tokens) as total_output
@@ -479,25 +460,80 @@ router.delete('/users/:id', async (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
+// ==================== LINE bindings ====================
+
+// DELETE /api/admin/users/:id/line-binding — unlink a LINE user from the
+// internal account. Does not delete the internal user (their data lives on);
+// just severs the LINE side. The next time someone with that LINE ID writes
+// to the bot, they'll get the "請 /link" greeting again.
+router.delete('/users/:id/line-binding', async (req: Request, res: Response) => {
+  const userId = req.params.id as string;
+  const row = await dbGet<{ line_user_id: string }>(
+    'SELECT line_user_id FROM line_users WHERE internal_user_id = ?',
+    userId,
+  );
+  if (!row) {
+    res.status(404).json({ error: 'No LINE binding for this user' });
+    return;
+  }
+  await dbRun('DELETE FROM line_users WHERE internal_user_id = ?', userId);
+
+  await dbRun(
+    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+    uuidv4(), req.user!.userId, 'unlink_line', 'user', userId,
+    JSON.stringify({ line_user_id: row.line_user_id }),
+  );
+  res.json({ success: true });
+});
+
+// POST /api/admin/invite-codes/personal — issue a single-use invite code
+// for a specific user / purpose. Reuses the invite_codes table so the LINE
+// `/link <code>` flow stays unchanged.
+router.post('/invite-codes/personal', async (req: Request, res: Response) => {
+  const label = typeof req.body?.label === 'string' && req.body.label.trim()
+    ? req.body.label.trim().slice(0, 100)
+    : 'LINE 邀請（個人）';
+
+  // 8-char human-readable code (no I/O/0/1 to avoid confusion when typed
+  // into LINE on a phone). Collisions retried below.
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let attempt = 0; attempt < 5; attempt++) {
+    code = '';
+    for (let i = 0; i < 8; i++) {
+      code += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+    try {
+      await dbRun(
+        'INSERT INTO invite_codes (id, code, label, is_active) VALUES (?, ?, ?, 1)',
+        uuidv4(), code, label,
+      );
+      break;
+    } catch (err) {
+      if ((err as { code?: string }).code === 'ER_DUP_ENTRY' && attempt < 4) continue;
+      throw err;
+    }
+  }
+
+  await dbRun(
+    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+    uuidv4(), req.user!.userId, 'create_invite_code', 'invite_code', code,
+    JSON.stringify({ label }),
+  );
+  res.status(201).json({ code, label });
+});
+
 // ==================== Token Ledger ====================
 
-// GET /api/admin/tokens/summary?from=YYYY-MM-DD&to=YYYY-MM-DD
-router.get('/tokens/summary', async (req: Request, res: Response) => {
-  const { from, to } = req.query as { from?: string; to?: string };
-  const conds: string[] = [];
-  const params: string[] = [];
-  if (from) { conds.push('DATE(created_at) >= ?'); params.push(from); }
-  if (to)   { conds.push('DATE(created_at) <= ?'); params.push(to); }
-  const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
-
+// GET /api/admin/tokens/summary
+router.get('/tokens/summary', async (_req: Request, res: Response) => {
   const row = await dbGet<{ total_input: number; total_output: number; total_invocations: number }>(`
     SELECT
       COALESCE(SUM(input_tokens), 0) as total_input,
       COALESCE(SUM(output_tokens), 0) as total_output,
       COUNT(*) as total_invocations
     FROM token_usage
-    ${where}
-  `, ...params);
+  `);
 
   // Claude Sonnet 4 pricing: $3/M input, $15/M output (×10 billing markup)
   const totalInput = row?.total_input ?? 0;
@@ -512,102 +548,16 @@ router.get('/tokens/summary', async (req: Request, res: Response) => {
   });
 });
 
-// GET /api/admin/tokens/chart?period=7d|30d|monthly&from=YYYY-MM-DD&to=YYYY-MM-DD
+// GET /api/admin/tokens/chart?period=7d|30d
 router.get('/tokens/chart', async (req: Request, res: Response) => {
   const period = (req.query.period as string) || '7d';
-  const { from, to } = req.query as { from?: string; to?: string };
-
-  // Custom date range — return daily data between from and to
-  if (from || to) {
-    const conds: string[] = [];
-    const params: string[] = [];
-    if (from) { conds.push('DATE(created_at) >= ?'); params.push(from); }
-    if (to)   { conds.push('DATE(created_at) <= ?'); params.push(to); }
-    const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`
-      SELECT
-        DATE_FORMAT(created_at, '%Y-%m-%d') as date,
-        SUM(input_tokens) as total_input,
-        SUM(output_tokens) as total_output,
-        COUNT(*) as invocation_count
-      FROM token_usage
-      WHERE ${conds.join(' AND ')}
-      GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
-      ORDER BY date ASC
-    `, ...params);
-    const dataMap = new Map(rows.map(r => [r.date, r]));
-    const result = [];
-    const start = new Date(from || rows[0]?.date || new Date().toISOString().slice(0, 10));
-    const end   = new Date(to   || new Date().toISOString().slice(0, 10));
-    for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const dateStr = d.toISOString().slice(0, 10);
-      result.push(dataMap.get(dateStr) || { date: dateStr, total_input: 0, total_output: 0, invocation_count: 0 });
-    }
-    return res.json(result);
-  }
-
-  if (period === 'monthly') {
-    // Return last 12 months of data grouped by month
-    const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`
-      SELECT
-        DATE_FORMAT(created_at, '%Y-%m') as date,
-        SUM(input_tokens) as total_input,
-        SUM(output_tokens) as total_output,
-        COUNT(*) as invocation_count
-      FROM token_usage
-      WHERE created_at >= DATE_SUB(NOW(), INTERVAL 12 MONTH)
-      GROUP BY DATE_FORMAT(created_at, '%Y-%m')
-      ORDER BY date ASC
-    `);
-
-    const dataMap = new Map(rows.map(r => [r.date, r]));
-    const result = [];
-    const now = new Date();
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const existing = dataMap.get(monthStr);
-      result.push(existing || { date: monthStr, total_input: 0, total_output: 0, invocation_count: 0 });
-    }
-    return res.json(result);
-  }
-
   const days = period === '30d' ? 30 : 7;
-
-  const rows = await dbAll<{ date: string; total_input: number; total_output: number; invocation_count: number }>(`
-    SELECT
-      DATE_FORMAT(created_at, '%Y-%m-%d') as date,
-      SUM(input_tokens) as total_input,
-      SUM(output_tokens) as total_output,
-      COUNT(*) as invocation_count
-    FROM token_usage
-    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
-    GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
-    ORDER BY date ASC
-  `);
-
-  const dataMap = new Map(rows.map(r => [r.date, r]));
-  const result = [];
-  const now = new Date();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const existing = dataMap.get(dateStr);
-    result.push(existing || { date: dateStr, total_input: 0, total_output: 0, invocation_count: 0 });
-  }
-
-  res.json(result);
+  res.json(await buildTokenVelocity(days));
 });
 
-// GET /api/admin/tokens/by-user?limit=10&from=YYYY-MM-DD&to=YYYY-MM-DD
+// GET /api/admin/tokens/by-user?limit=10
 router.get('/tokens/by-user', async (req: Request, res: Response) => {
   const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
-  const { from, to } = req.query as { from?: string; to?: string };
-  const dateConds: string[] = [];
-  const params: (string | number)[] = [];
-  if (from) { dateConds.push('DATE(tu.created_at) >= ?'); params.push(from); }
-  if (to)   { dateConds.push('DATE(tu.created_at) <= ?'); params.push(to); }
-  const dateWhere = dateConds.length ? `AND ${dateConds.join(' AND ')}` : '';
 
   const rows = await dbAll(`
     SELECT
@@ -617,31 +567,22 @@ router.get('/tokens/by-user', async (req: Request, res: Response) => {
       COUNT(*) as invocation_count
     FROM token_usage tu
     JOIN users u ON u.id = tu.user_id
-    WHERE u.role != 'admin' ${dateWhere}
+    WHERE u.role != 'admin'
     GROUP BY tu.user_id
     ORDER BY (SUM(tu.input_tokens) + SUM(tu.output_tokens)) DESC
     LIMIT ?
-  `, ...params, limit);
+  `, limit);
 
   res.json(rows);
 });
 
-// GET /api/admin/tokens/ledger?page=1&limit=20&from=YYYY-MM-DD&to=YYYY-MM-DD
+// GET /api/admin/tokens/ledger?page=1&limit=20
 router.get('/tokens/ledger', async (req: Request, res: Response) => {
   const page = Math.max(parseInt(req.query.page as string) || 1, 1);
   const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
   const offset = (page - 1) * limit;
-  const { from, to } = req.query as { from?: string; to?: string };
-  const conds: string[] = [];
-  const filterParams: string[] = [];
-  if (from) { conds.push('DATE(tu.created_at) >= ?'); filterParams.push(from); }
-  if (to)   { conds.push('DATE(tu.created_at) <= ?'); filterParams.push(to); }
-  const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
 
-  const countRow = await dbGet<{ total: number }>(
-    `SELECT COUNT(*) as total FROM token_usage tu ${where}`,
-    ...filterParams
-  );
+  const countRow = await dbGet<{ total: number }>('SELECT COUNT(*) as total FROM token_usage');
 
   const rows = await dbAll(`
     SELECT
@@ -657,10 +598,9 @@ router.get('/tokens/ledger', async (req: Request, res: Response) => {
     FROM token_usage tu
     LEFT JOIN users u ON u.id = tu.user_id
     LEFT JOIN conversations c ON c.id = tu.conversation_id
-    ${where}
     ORDER BY tu.created_at DESC
     LIMIT ? OFFSET ?
-  `, ...filterParams, limit, offset);
+  `, limit, offset);
 
   res.json({
     entries: rows,
@@ -908,12 +848,13 @@ router.get('/settings', async (_req: Request, res: Response) => {
     usageLimitUsd: await getUserUsageLimitUsd(),
     storageQuotaGb: await getStorageQuotaGb(),
     uploadQuotaMb: await getUploadQuotaMb(),
+    localLlmEnabled: isLocalLlmEnabledSetting(),
   });
 });
 
 // PATCH /api/admin/settings — Update system settings
 router.patch('/settings', async (req: Request, res: Response) => {
-  const { usageLimitUsd, storageQuotaGb, uploadQuotaMb } = req.body;
+  const { usageLimitUsd, storageQuotaGb, uploadQuotaMb, localLlmEnabled } = req.body;
   const changes: string[] = [];
 
   if (typeof usageLimitUsd === 'number' && usageLimitUsd >= 0 && usageLimitUsd <= 100000) {
@@ -930,6 +871,13 @@ router.patch('/settings', async (req: Request, res: Response) => {
     const old = await getUploadQuotaMb();
     await setUploadQuotaMb(uploadQuotaMb);
     changes.push(`uploadQuotaMb: ${old} → ${uploadQuotaMb}`);
+  }
+  if (typeof localLlmEnabled === 'boolean') {
+    const old = isLocalLlmEnabledSetting();
+    if (old !== localLlmEnabled) {
+      await setLocalLlmEnabledSetting(localLlmEnabled);
+      changes.push(`localLlmEnabled: ${old} → ${localLlmEnabled}`);
+    }
   }
 
   if (changes.length === 0) {
@@ -949,7 +897,134 @@ router.patch('/settings', async (req: Request, res: Response) => {
     usageLimitUsd: await getUserUsageLimitUsd(),
     storageQuotaGb: await getStorageQuotaGb(),
     uploadQuotaMb: await getUploadQuotaMb(),
+    localLlmEnabled: isLocalLlmEnabledSetting(),
   });
+});
+
+// ==================== LINE Bot ====================
+
+// Validation ranges for the runtime-editable LINE settings.
+const LINE_SETTING_RANGES: Record<keyof LineSettings, { min: number; max: number }> = {
+  maxMsgPerMin: { min: 1, max: 1000 },
+  conversationIdleHours: { min: 1, max: 168 },
+  fileShareTtlDays: { min: 1, max: 365 },
+  defaultQuotaUsd: { min: 0, max: 100000 },
+};
+
+// GET /api/admin/line/settings — runtime-editable settings + read-only bot status.
+// Secrets (channelSecret/accessToken) are never returned; only whether they're set.
+router.get('/line/settings', (_req: Request, res: Response) => {
+  res.json({
+    settings: getLineSettings(),
+    status: {
+      enabled: config.line.enabled,
+      channelConfigured: !!(config.line.channelSecret && config.line.channelAccessToken),
+      channelId: config.line.channelId,
+      botBasicId: config.line.botBasicId,
+      liffId: config.line.liffId,
+      publicApiBase: config.line.publicApiBase,
+      webhookUrl: config.line.publicApiBase ? `${config.line.publicApiBase}/webhook/line` : '',
+    },
+  });
+});
+
+// PATCH /api/admin/line/settings — update one or more runtime settings (effective immediately).
+router.patch('/line/settings', async (req: Request, res: Response) => {
+  const before = getLineSettings();
+  const changes: string[] = [];
+
+  for (const key of Object.keys(LINE_SETTING_RANGES) as (keyof LineSettings)[]) {
+    const val = req.body[key];
+    if (typeof val !== 'number' || !Number.isFinite(val)) continue;
+    const { min, max } = LINE_SETTING_RANGES[key];
+    if (val < min || val > max) {
+      res.status(400).json({ error: `${key} must be between ${min} and ${max}` });
+      return;
+    }
+    if (val !== before[key]) {
+      await setLineSetting(key, val);
+      changes.push(`${key}: ${before[key]} → ${val}`);
+    }
+  }
+
+  if (changes.length === 0) {
+    res.status(400).json({ error: 'No valid settings to update' });
+    return;
+  }
+
+  await dbRun(
+    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+    uuidv4(), req.user!.userId, 'update_line_settings', 'system', 'line_settings',
+    JSON.stringify({ changes })
+  );
+
+  res.json({ success: true, settings: getLineSettings() });
+});
+
+// GET /api/admin/line/users — LINE-linked users with their quota usage.
+router.get('/line/users', async (_req: Request, res: Response) => {
+  const globalDefault = await getUserUsageLimitUsd();
+  const rows = await dbAll<{
+    line_user_id: string; display_name: string | null; linked_via: string | null;
+    last_message_at: string | null; user_id: string; email: string; status: string;
+    quota_override: number | null; quota_group_id: string | null; group_limit: number | null;
+    in_tok: number; out_tok: number;
+  }>(
+    `SELECT lu.line_user_id, lu.display_name, lu.linked_via, lu.last_message_at,
+            u.id AS user_id, u.email, u.status, u.quota_override, u.quota_group_id,
+            qg.limit_usd AS group_limit,
+            COALESCE(tu.in_tok, 0) AS in_tok, COALESCE(tu.out_tok, 0) AS out_tok
+     FROM line_users lu
+     JOIN users u ON u.id = lu.internal_user_id
+     LEFT JOIN quota_groups qg ON qg.id = u.quota_group_id
+     LEFT JOIN (
+       SELECT user_id, SUM(input_tokens) AS in_tok, SUM(output_tokens) AS out_tok
+       FROM token_usage GROUP BY user_id
+     ) tu ON tu.user_id = u.id
+     ORDER BY (lu.last_message_at IS NULL), lu.last_message_at DESC`
+  );
+
+  const users = rows.map(r => {
+    // Display cost: Claude Sonnet 4 pricing ($3/M in, $15/M out) × 10 markup.
+    const cost = ((r.in_tok / 1_000_000) * 3 + (r.out_tok / 1_000_000) * 15) * 10;
+    // Effective limit: personal override > group > global default.
+    const limit = r.quota_override != null ? r.quota_override
+      : r.group_limit != null ? r.group_limit
+        : globalDefault;
+    const limitSource = r.quota_override != null ? 'personal'
+      : r.group_limit != null ? 'group'
+        : 'global';
+    return {
+      lineUserId: r.line_user_id,
+      displayName: r.display_name,
+      email: r.email,
+      userId: r.user_id,
+      status: r.status,
+      linkedVia: r.linked_via,
+      lastMessageAt: r.last_message_at,
+      cost: Math.round(cost * 100) / 100,
+      limit: Math.round(limit * 100) / 100,
+      remaining: Math.round((limit - cost) * 100) / 100,
+      pctUsed: limit > 0 ? Math.round((cost / limit) * 100) : 0,
+      exceeded: cost >= limit,
+      limitSource,
+    };
+  });
+
+  res.json({ users, count: users.length });
+});
+
+// GET /api/admin/line/message-quota — LINE Official Account monthly push quota.
+// Live call to the LINE API; returns { error } (200) when it can't be fetched
+// (e.g. no access token) so the UI can degrade gracefully.
+router.get('/line/message-quota', async (_req: Request, res: Response) => {
+  try {
+    const quota = await getMessageQuotaStatus();
+    res.json(quota);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.json({ error: msg });
+  }
 });
 
 // GET /api/admin/settings/usage-limit (backwards compat)
@@ -978,48 +1053,6 @@ router.get('/settings/users-usage', async (_req: Request, res: Response) => {
   // Sort by cost descending
   result.sort((a, b) => b.cost - a.cost);
   res.json(result);
-});
-
-// ==================== Terms of Service ====================
-
-// GET /api/admin/terms — raw TOS template for editing
-router.get('/terms', async (_req: Request, res: Response) => {
-  const tosRow = await dbGet<{ value: string }>("SELECT value FROM system_settings WHERE `key` = 'tos_content'");
-  const versionRow = await dbGet<{ value: string }>("SELECT value FROM system_settings WHERE `key` = 'tos_version'");
-  res.json({ content: tosRow?.value || '', version: versionRow?.value || '1' });
-});
-
-// PATCH /api/admin/terms — update TOS content, optionally bump version
-router.patch('/terms', async (req: Request, res: Response) => {
-  const { content, bumpVersion, resetAcceptance } = req.body as {
-    content?: string; bumpVersion?: boolean; resetAcceptance?: boolean;
-  };
-  if (typeof content !== 'string' || !content.trim()) {
-    res.status(400).json({ error: 'Content is required' });
-    return;
-  }
-
-  await dbRun("REPLACE INTO system_settings (`key`, value) VALUES (?, ?)", 'tos_content', content);
-
-  if (bumpVersion) {
-    const versionRow = await dbGet<{ value: string }>("SELECT value FROM system_settings WHERE `key` = 'tos_version'");
-    const newVersion = String(parseInt(versionRow?.value || '1', 10) + 1);
-    await dbRun("REPLACE INTO system_settings (`key`, value) VALUES (?, ?)", 'tos_version', newVersion);
-
-    if (resetAcceptance) {
-      await dbRun('UPDATE users SET terms_accepted_at = NULL');
-    }
-  }
-
-  // Audit log
-  await dbRun(
-    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-    uuidv4(), req.user!.userId, 'update_tos', 'system', 'tos_content',
-    JSON.stringify({ bumpVersion: !!bumpVersion, resetAcceptance: !!resetAcceptance })
-  );
-
-  const newVersionRow = await dbGet<{ value: string }>("SELECT value FROM system_settings WHERE `key` = 'tos_version'");
-  res.json({ success: true, version: newVersionRow?.value || '1' });
 });
 
 // ==================== Conversations ====================
@@ -1716,153 +1749,6 @@ router.get('/tokens/monthly-summary', async (req: Request, res: Response) => {
     ORDER BY month DESC, total_tokens DESC
   `, ...params);
   res.json(rows);
-});
-
-// ==================== Quota Requests ====================
-
-// GET /api/admin/quota-requests — List quota increase requests
-router.get('/quota-requests', async (req: Request, res: Response) => {
-  const status = req.query.status as string | undefined;
-  let where = '';
-  const params: any[] = [];
-  if (status && ['pending', 'approved', 'denied'].includes(status)) {
-    where = 'WHERE qr.status = ?';
-    params.push(status);
-  }
-
-  const rows = await dbAll<any>(`
-    SELECT qr.*, u.email, u.display_name
-    FROM quota_requests qr
-    LEFT JOIN users u ON u.id = qr.user_id
-    ${where}
-    ORDER BY CASE qr.status WHEN 'pending' THEN 0 ELSE 1 END, qr.created_at DESC
-    LIMIT 100
-  `, ...params);
-
-  res.json(rows);
-});
-
-// PATCH /api/admin/quota-requests/:id — Approve or deny a quota request
-router.patch('/quota-requests/:id', async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { action, new_limit, admin_notes } = req.body;
-
-  if (!action || !['approve', 'deny'].includes(action)) {
-    res.status(400).json({ error: 'action must be "approve" or "deny"' });
-    return;
-  }
-
-  const request = await dbGet<any>('SELECT * FROM quota_requests WHERE id = ?', id);
-  if (!request) {
-    res.status(404).json({ error: 'Request not found' });
-    return;
-  }
-  if (request.status !== 'pending') {
-    res.status(400).json({ error: 'Request already reviewed' });
-    return;
-  }
-
-  if (action === 'approve') {
-    if (new_limit == null || isNaN(parseFloat(new_limit)) || parseFloat(new_limit) <= 0) {
-      res.status(400).json({ error: 'new_limit is required for approval' });
-      return;
-    }
-    const limitVal = parseFloat(new_limit);
-
-    // Update request
-    await dbRun(
-      "UPDATE quota_requests SET status = 'approved', new_limit = ?, admin_notes = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?",
-      limitVal, admin_notes || null, req.user!.userId, id
-    );
-
-    // Update user's quota_override
-    await dbRun(
-      'UPDATE users SET quota_override = ?, updated_at = NOW() WHERE id = ?',
-      limitVal, request.user_id
-    );
-
-    // Audit log
-    await dbRun(
-      'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      uuidv4(), req.user!.userId, 'approve_quota_request', 'quota_request', id,
-      JSON.stringify({ user_id: request.user_id, new_limit: limitVal })
-    );
-  } else {
-    // Deny
-    await dbRun(
-      "UPDATE quota_requests SET status = 'denied', admin_notes = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?",
-      admin_notes || null, req.user!.userId, id
-    );
-
-    // Audit log
-    await dbRun(
-      'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      uuidv4(), req.user!.userId, 'deny_quota_request', 'quota_request', id,
-      JSON.stringify({ user_id: request.user_id, admin_notes })
-    );
-  }
-
-  res.json({ success: true });
-});
-
-// ==================== AD Org Chart (pro-panjit only) ====================
-
-const AD_DOMAINS = ['PANJIT', 'PYNMAX', 'WXPJ', 'PJWS', 'GDPJ', 'PJXZ', 'PJSD'];
-
-// GET /api/admin/org/tree?domain=PANJIT
-router.get('/org/tree', async (req: Request, res: Response) => {
-  if (config.deployMode !== 'pro-panjit') {
-    return res.status(403).json({ error: 'Not available in this deployment mode' });
-  }
-  const adUrl = process.env.AD_URL;
-  const adApi = process.env.AD_API;
-  if (!adUrl || !adApi) {
-    return res.status(500).json({ error: 'AD integration not configured' });
-  }
-  const domain = (req.query.domain as string || 'PANJIT').toUpperCase();
-  if (!AD_DOMAINS.includes(domain)) {
-    return res.status(400).json({ error: `Invalid domain. Allowed: ${AD_DOMAINS.join(', ')}` });
-  }
-  try {
-    const upstream = await fetch(`${adUrl}/ldap/api/v1/organizations/tree?domain=${domain}`, {
-      headers: { 'X-API-Key': adApi },
-    });
-    const data = await upstream.json() as Record<string, unknown>;
-    if (!upstream.ok) {
-      return res.status(upstream.status).json({ error: 'AD API error', detail: data });
-    }
-    res.json(data);
-  } catch (err) {
-    console.error('[AD Org] fetch error:', err);
-    res.status(500).json({ error: 'Failed to fetch AD org tree' });
-  }
-});
-
-// GET /api/admin/org/domains
-router.get('/org/domains', (_req: Request, res: Response) => {
-  if (config.deployMode !== 'pro-panjit') {
-    return res.status(403).json({ error: 'Not available in this deployment mode' });
-  }
-  res.json({ domains: AD_DOMAINS });
-});
-
-// ==================== Permissions ====================
-
-// GET /api/admin/permissions — get role permissions config
-router.get('/permissions', async (_req: Request, res: Response) => {
-  const perms = await getRolePermissions();
-  res.json(perms);
-});
-
-// PUT /api/admin/permissions — update role permissions config (admin only, readonly blocked by middleware)
-router.put('/permissions', async (req: Request, res: Response) => {
-  const body = req.body as RolePermissions;
-  if (!body || !body.adminSidebar || !body.frontendNav || !body.features) {
-    res.status(400).json({ error: 'Invalid permissions format' });
-    return;
-  }
-  await setRolePermissions(body);
-  res.json({ success: true });
 });
 
 export default router;

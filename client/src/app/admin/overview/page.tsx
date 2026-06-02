@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
+import TokenChartBars from '../components/TokenChartBars';
 
 interface Stats {
   totalUsers: number;
@@ -18,6 +19,7 @@ interface VelocityPoint {
   total_input: number;
   total_output: number;
   invocation_count: number;
+  byModel?: Array<{ model: string; provider: string; input: number; output: number }>;
 }
 
 interface ActivityEvent {
@@ -48,13 +50,54 @@ export default function AdminOverview() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [velocity, setVelocity] = useState<VelocityPoint[]>([]);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
-  const [period, setPeriod] = useState<'7d' | '30d' | 'monthly'>('7d');
-  const [filterFrom, setFilterFrom] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  });
-  const [filterTo, setFilterTo] = useState(() => new Date().toISOString().slice(0, 10));
-  const hasFilter = !!(filterFrom || filterTo);
+  const [period, setPeriod] = useState<'7d' | '30d'>('7d');
+  const [exporting, setExporting] = useState(false);
+
+  function exportReport() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const parts: string[] = [];
+
+      // Summary
+      if (stats) {
+        parts.push('--- System Summary ---');
+        parts.push(['Metric', 'Value'].join(','));
+        parts.push(['Total Users', stats.totalUsers].join(','));
+        parts.push(['Active Skills', stats.activeSkills].join(','));
+        parts.push(['Total Tokens', stats.totalTokens].join(','));
+        parts.push(['Total Files', stats.totalFiles].join(','));
+        parts.push(['System Uptime (s)', stats.systemUptime].join(','));
+        parts.push('');
+      }
+
+      // Velocity chart
+      if (velocity.length > 0) {
+        parts.push(`--- Token Velocity (${period}) ---`);
+        parts.push(['Date', 'Input Tokens', 'Output Tokens', 'Total', 'Invocations'].join(','));
+        velocity.forEach(v => {
+          parts.push([v.date, v.total_input, v.total_output, v.total_input + v.total_output, v.invocation_count].join(','));
+        });
+        parts.push('');
+      }
+
+      // Recent activity
+      if (activity.length > 0) {
+        parts.push('--- Recent Activity ---');
+        parts.push(['Event Type', 'Description', 'Created At'].join(','));
+        activity.forEach(a => {
+          parts.push([a.event_type, `"${a.description.replace(/"/g, '""')}"`, a.created_at].join(','));
+        });
+      }
+
+      const csv = '\uFEFF' + parts.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `overview_report_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+      URL.revokeObjectURL(url);
+    } finally { setExporting(false); }
+  }
 
   const EVENT_META: Record<string, { icon: string; color: string; label: string }> = {
     user_registered:      { icon: 'person_add', color: 'text-primary', label: t('admin.overview.event.userRegistered') },
@@ -82,97 +125,42 @@ export default function AdminOverview() {
   useEffect(() => {
     if (!token) return;
     const headers = { Authorization: `Bearer ${token}` };
-    const p = new URLSearchParams();
-    if (filterFrom) p.set('from', filterFrom);
-    if (filterTo)   p.set('to',   filterTo);
-    const qs = p.toString() ? `?${p}` : '';
 
-    fetch(`/api/admin/overview/stats${qs}`, { headers })
+    fetch('/api/admin/overview/stats', { headers })
       .then(r => r.json()).then(setStats).catch(console.error);
 
     fetch('/api/admin/overview/recent-activity?limit=3', { headers })
       .then(r => r.json()).then(setActivity).catch(console.error);
-  }, [token, filterFrom, filterTo]);
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
-    const p = new URLSearchParams();
-    if (filterFrom) p.set('from', filterFrom);
-    if (filterTo)   p.set('to',   filterTo);
-    if (!filterFrom && !filterTo) p.set('period', period);
-    fetch(`/api/admin/overview/token-velocity?${p}`, {
+    fetch(`/api/admin/overview/token-velocity?period=${period}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json()).then(setVelocity).catch(console.error);
-  }, [token, period, filterFrom, filterTo]);
-
-  const maxTokens = Math.max(...velocity.map(v => v.total_input + v.total_output), 1);
+  }, [token, period]);
 
   return (
     <>
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-surface/90 backdrop-blur-xl shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
-        {/* Row 1: title + status badge + desktop filter */}
-        <div className="flex justify-between items-center px-4 md:px-8 h-14 md:h-16">
-          <div className="flex items-center gap-2 md:gap-4 min-w-0">
-            <span className="text-base md:text-lg font-black text-on-surface font-headline truncate">{t('admin.overview.title')}</span>
-            <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-primary/10 rounded-full shrink-0">
-              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span className="text-sm text-primary font-bold tracking-widest uppercase">{t('admin.overview.allNodesNormal')}</span>
-            </div>
-          </div>
-          {/* Desktop filter */}
-          <div className="hidden md:flex items-center gap-2 mx-6">
-            <span className={`material-symbols-outlined text-sm ${hasFilter ? 'text-tertiary' : 'text-on-surface-variant/40'}`}>date_range</span>
-            <input
-              type="date"
-              value={filterFrom}
-              onChange={e => setFilterFrom(e.target.value)}
-              className={`text-on-surface text-xs font-mono px-2 py-1 border focus:outline-none focus:border-primary/50 cursor-pointer transition-colors ${hasFilter ? 'bg-tertiary/5 border-tertiary/30' : 'bg-surface-container border-outline-variant/20'}`}
-            />
-            <span className="text-xs text-on-surface-variant/40">—</span>
-            <input
-              type="date"
-              value={filterTo}
-              onChange={e => setFilterTo(e.target.value)}
-              className={`text-on-surface text-xs font-mono px-2 py-1 border focus:outline-none focus:border-primary/50 cursor-pointer transition-colors ${hasFilter ? 'bg-tertiary/5 border-tertiary/30' : 'bg-surface-container border-outline-variant/20'}`}
-            />
-            {hasFilter && (
-              <button
-                onClick={() => { setFilterFrom(''); setFilterTo(''); }}
-                className="text-on-surface-variant/50 hover:text-primary transition-colors cursor-pointer"
-                title="清除篩選"
-              >
-                <span className="material-symbols-outlined text-sm">close</span>
-              </button>
-            )}
+      <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
+        <div className="flex items-center gap-3">
+          <span className="text-base md:text-lg font-black text-on-surface font-headline">{t('admin.overview.title')}</span>
+          <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-primary/10 rounded-full">
+            <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span className="text-sm text-primary font-bold tracking-widest uppercase">{t('admin.overview.allNodesNormal')}</span>
           </div>
         </div>
-        {/* Row 2 (mobile only): date filter */}
-        <div className={`md:hidden flex items-center gap-2 px-4 py-2 border-t transition-colors ${hasFilter ? 'bg-tertiary/5 border-tertiary/20' : 'border-outline-variant/10'}`}>
-          <span className={`material-symbols-outlined text-sm shrink-0 ${hasFilter ? 'text-tertiary' : 'text-on-surface-variant/40'}`}>date_range</span>
-          <input
-            type="date"
-            value={filterFrom}
-            onChange={e => setFilterFrom(e.target.value)}
-            className="bg-transparent text-on-surface text-xs font-mono focus:outline-none cursor-pointer flex-1 min-w-0"
-          />
-          <span className="text-xs text-on-surface-variant/40 shrink-0">—</span>
-          <input
-            type="date"
-            value={filterTo}
-            onChange={e => setFilterTo(e.target.value)}
-            className="bg-transparent text-on-surface text-xs font-mono focus:outline-none cursor-pointer flex-1 min-w-0"
-          />
-          {hasFilter && (
-            <button
-              onClick={() => { setFilterFrom(''); setFilterTo(''); }}
-              className="text-on-surface-variant/50 hover:text-primary transition-colors cursor-pointer shrink-0"
-            >
-              <span className="material-symbols-outlined text-sm">close</span>
-            </button>
-          )}
-        </div>
+        <button
+          onClick={exportReport}
+          disabled={exporting}
+          className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50"
+        >
+          <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'download'}</span>
+          <span className="hidden md:inline">{t('admin.overview.exportReport')}</span>
+          <span className="md:hidden">CSV</span>
+        </button>
       </header>
 
       {/* Content */}
@@ -229,87 +217,26 @@ export default function AdminOverview() {
                 <span className="material-symbols-outlined text-tertiary text-base md:text-[24px]">show_chart</span>
                 <span className="text-xs md:text-sm font-bold uppercase tracking-widest">{t('admin.overview.chart.title')}</span>
               </div>
-              {hasFilter ? (
-                <span className="text-xs text-tertiary font-mono px-2 py-0.5 bg-tertiary/10 rounded">篩選中</span>
-              ) : (
-                <div className="flex gap-1">
-                  {(['7d', '30d', 'monthly'] as const).map(p => (
-                    <button
-                      key={p}
-                      onClick={() => setPeriod(p)}
-                      className={`px-2 md:px-3 py-0.5 md:py-1 text-xs md:text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
-                        p === '30d' ? 'hidden md:inline-block' : ''
-                      } ${
-                        period === p
-                          ? 'text-primary border-b-2 border-primary'
-                          : 'text-on-surface-variant hover:text-on-surface'
-                      }`}
-                    >
-                      {p === 'monthly' ? '12M' : p}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div className="flex gap-1">
+                {(['7d', '30d'] as const).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setPeriod(p)}
+                    className={`px-2 md:px-3 py-0.5 md:py-1 text-xs md:text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
+                      p === '30d' ? 'hidden md:inline-block' : ''
+                    } ${
+                      period === p
+                        ? 'text-primary border-b-2 border-primary'
+                        : 'text-on-surface-variant hover:text-on-surface'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="p-4 md:p-6">
-              {velocity.length === 0 ? (
-                <div className="h-40 flex items-center justify-center text-on-surface-variant text-sm">
-                  <span className="material-symbols-outlined mr-2">info</span>
-                  {t('admin.overview.chart.noData')}
-                </div>
-              ) : (
-                <div>
-                  {/* Bars */}
-                  <div className={`flex items-end h-52 ${period === '30d' ? 'gap-px' : period === 'monthly' ? 'gap-2' : 'gap-1.5'}`}>
-                    {velocity.map((v, i) => {
-                      const total = v.total_input + v.total_output;
-                      const pct = (total / maxTokens) * 100;
-                      const inputPct = total > 0 ? (v.total_input / total) * 100 : 0;
-                      const barHeight = Math.max(pct, 3);
-                      return (
-                        <div key={i} className="flex-1 min-w-0 h-full flex items-end group/bar relative">
-                          <div className="w-full rounded-t overflow-hidden relative transition-all group-hover/bar:brightness-125" style={{ height: `${barHeight}%` }}>
-                            <div className={`absolute inset-0 ${period === 'monthly' ? 'bg-tertiary/70' : 'bg-primary/70'}`} style={{ top: `${100 - inputPct}%` }} />
-                            <div className={`absolute inset-0 ${period === 'monthly' ? 'bg-primary/50' : 'bg-tertiary/50'}`} style={{ bottom: `${inputPct}%` }} />
-                          </div>
-                          {/* Tooltip inside chart area */}
-                          <span className="absolute top-0 left-1/2 -translate-x-1/2 text-[10px] bg-surface-container-highest text-on-surface px-1.5 py-0.5 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity font-mono font-bold whitespace-nowrap pointer-events-none z-10">
-                            {period === 'monthly' ? `${v.date} · ${formatTokens(total)}` : `${v.date.slice(5)} · ${formatTokens(total)}`}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {/* Date labels */}
-                  {period === '30d' ? (
-                    <div className="flex gap-px mt-4 h-14">
-                      {velocity.map((v, i) => (
-                        <div key={i} className="flex-1 min-w-0 relative">
-                          <span className="absolute top-0 left-1/2 -translate-x-1/2 origin-top -rotate-55 text-[11px] text-outline font-mono whitespace-nowrap">
-                            {v.date.slice(5)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : period === 'monthly' ? (
-                    <div className="flex gap-2 mt-1.5">
-                      {velocity.map((v, i) => (
-                        <span key={i} className="flex-1 min-w-0 text-[10px] text-center text-outline font-mono truncate">
-                          {v.date.slice(2, 7).replace('-', '/')}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex gap-1.5 mt-1.5">
-                      {velocity.map((v, i) => (
-                        <span key={i} className="flex-1 min-w-0 text-xs text-center text-outline font-mono truncate">
-                          {v.date.slice(5)}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+              <TokenChartBars data={velocity.map(v => ({ ...v, byModel: v.byModel ?? [] }))} period={period} />
             </div>
           </div>
 

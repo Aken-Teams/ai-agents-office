@@ -12,9 +12,6 @@ export interface User {
   quota_override: number | null;
   company: string | null;
   onboarding_completed: 0 | 1;
-  ad_username: string | null;
-  ad_domain: string | null;
-  auth_provider: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -28,8 +25,10 @@ export interface Conversation {
   mode: string | null;
   status: 'active' | 'completed' | 'failed';
   category: 'document' | 'assistant';
-  system_prompt: string | null;
-  icon: string | null;
+  /** Per-conversation AI engine choice; null → use global default. */
+  agent_engine: 'claude' | 'codex' | null;
+  /** Per-assistant custom persona/task instructions (category='assistant'). */
+  agent_instructions: string | null;
   created_at: string;
 }
 
@@ -68,39 +67,12 @@ export interface TokenUsage {
 export interface SSEEvent {
   type:
     | 'text' | 'thinking' | 'tool_activity' | 'file_generated' | 'usage'
-    | 'done' | 'error' | 'info' | 'session_id'
+    | 'done' | 'error' | 'session_id'
     // Multi-agent orchestration events
     | 'task_dispatched' | 'task_completed' | 'task_failed'
     | 'pipeline_started' | 'pipeline_completed'
-    | 'agent_status' | 'agent_stream' | 'router_plan'
-    // Block editor events
-    | 'blocks_ready' | 'skill_started';
+    | 'agent_status' | 'agent_stream' | 'router_plan';
   data: unknown;
-}
-
-// --- Document block editor types ---
-
-export type DocType = 'pptx' | 'docx' | 'xlsx' | 'pdf' | 'slides' | 'webapp';
-
-export interface DocumentBlock {
-  id: string;
-  type: string;           // native type: title|content|stats|section|sheet...
-  order: number;
-  data: Record<string, unknown>;  // native block payload, varies by doc_type
-  status?: 'idle' | 'regenerating' | 'dirty';
-}
-
-export interface DocumentBlocksRecord {
-  id: string;
-  file_id: string;
-  user_id: string;
-  conversation_id: string;
-  doc_type: DocType;
-  doc_meta: string | null;   // JSON string
-  blocks: string;            // JSON string of DocumentBlock[]
-  version: number;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface SkillDefinition {
@@ -113,7 +85,6 @@ export interface SkillDefinition {
   order?: number;
   allowedTools?: string[];
   disallowedTools?: string[];
-  deployModes?: string[];
 }
 
 // --- Multi-agent orchestration types ---

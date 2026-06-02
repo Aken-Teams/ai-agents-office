@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(env)",
+      "Bash(journalctl --user -u ai-agents-office --since \"2 days ago\" --no-pager)",
+      "Bash(node -e \"fetch\\('https://ollama_pjapi.theaken.com/v1/models',{headers:{Authorization:'Bearer mmXLeKhuegnBRSxs7CaT8tRtduMK3Gm30WLyM0wnv4s'}}\\).then\\(r=>r.text\\(\\)\\).then\\(t=>console.log\\('OK:',t.slice\\(0,200\\)\\)\\).catch\\(e=>console.log\\('ERR:',e.message\\)\\)\")",
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(curl -sS -o /dev/null -w \"agents.theaken.com/admin/settings: %{http_code}\\\\n\" https://agents.theaken.com/admin/settings)",
+      "Bash(node -e 'import\\('\\\\''mysql2/promise'\\\\''\\).then\\(async m => {   const fs = await import\\('\\\\''fs'\\\\''\\); const env = {};   for \\(const l of fs.readFileSync\\('\\\\''../.env'\\\\'','\\\\''utf-8'\\\\''\\).split\\('\\\\''\\\\n'\\\\''\\)\\) { const x = l.match\\(/^\\([^#=\\\\s]+\\)\\\\s*=\\\\s*\\(.*\\)$/\\); if \\(x\\) env[x[1].trim\\(\\)] = x[2].trim\\(\\); }   const c = await m.default.createConnection\\({ host: env.MYSQL_HOST||'\\\\''127.0.0.1'\\\\'', port: +\\(env.MYSQL_PORT||3306\\), user: env.MYSQL_USER, password: env.MYSQL_PASSWORD, database: env.MYSQL_DB }\\);   const [r] = await c.query\\('\\\\''SELECT `key`, value FROM system_settings WHERE `key` = ?'\\\\'', ['\\\\''local_llm_enabled'\\\\'']\\);   console.log\\(r\\); await c.end\\(\\); }\\)')",
+      "Bash(node -e 'import\\('\\\\''mysql2/promise'\\\\''\\).then\\(async m => {   const fs = await import\\('\\\\''fs'\\\\''\\); const env = {};   for \\(const l of fs.readFileSync\\('\\\\''../.env'\\\\'','\\\\''utf-8'\\\\''\\).split\\('\\\\''\\\\n'\\\\''\\)\\) { const x = l.match\\(/^\\([^#=\\\\s]+\\)\\\\s*=\\\\s*\\(.*\\)$/\\); if \\(x\\) env[x[1].trim\\(\\)] = x[2].trim\\(\\); }   const c = await m.default.createConnection\\({ host: env.MYSQL_HOST||'\\\\''127.0.0.1'\\\\'', user: env.MYSQL_USER, password: env.MYSQL_PASSWORD, database: env.MYSQL_DB }\\);   const [r] = await c.query\\(\"SELECT DATE_FORMAT\\(created_at,'\\\\''%Y-%m-%d'\\\\''\\) d, model, provider, SUM\\(input_tokens\\) i, SUM\\(output_tokens\\) o FROM token_usage WHERE created_at >= DATE_SUB\\(NOW\\(\\), INTERVAL 7 DAY\\) GROUP BY d, model, provider ORDER BY d ASC LIMIT 20\"\\);   console.log\\(JSON.stringify\\(r, null, 2\\)\\); await c.end\\(\\); }\\)')",
+      "Bash(curl -sS -o /dev/null -w \"agents.theaken.com/admin/tokens: %{http_code}\\\\n\" https://agents.theaken.com/admin/tokens)",
+      "Bash(curl -sS -o /dev/null -w \"agents.theaken.com/admin/overview: %{http_code}\\\\n\" https://agents.theaken.com/admin/overview)",
+      "Bash(curl -sS -o /dev/null -w \"agents-api.theaken.com/api/admin/tokens/chart \\(no auth\\): %{http_code}\\\\n\" https://agents-api.theaken.com/api/admin/tokens/chart?period=7d)",
+      "Bash(curl -sS -o /dev/null -w \"localhost:12054/api/admin/tokens/chart \\(no auth\\): %{http_code}\\\\n\" http://localhost:12054/api/admin/tokens/chart?period=7d)"
+    ]
+  }
+}

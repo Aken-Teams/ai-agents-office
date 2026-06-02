@@ -21,11 +21,11 @@ interface UsageTotal {
   totalInvocations: number;
 }
 
-interface UsageResponse {
-  summary: DailyUsage[];
-  total: UsageTotal;
-  limit: number;
-  isBeta: boolean;
+interface ProviderTotal {
+  provider: string;
+  totalInput: number;
+  totalOutput: number;
+  totalInvocations: number;
 }
 
 function UsageContent() {
@@ -34,15 +34,9 @@ function UsageContent() {
   const router = useRouter();
   const [daily, setDaily] = useState<DailyUsage[]>([]);
   const [total, setTotal] = useState<UsageTotal | null>(null);
-  const [isBeta, setIsBeta] = useState(true);
-  const [chartPeriod, setChartPeriod] = useState<'7d' | '30d'>('7d');
-  const [filterFrom, setFilterFrom] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  });
-  const [filterTo, setFilterTo] = useState(() => new Date().toISOString().slice(0, 10));
-  const [ledgerPage, setLedgerPage] = useState(1);
-  const PAGE_SIZE = 6;
+  const [byProvider, setByProvider] = useState<ProviderTotal[]>([]);
+  const [showAllRows, setShowAllRows] = useState(false);
+  const LEDGER_DEFAULT_ROWS = 8;
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
@@ -54,65 +48,50 @@ function UsageContent() {
 
     fetch('/api/usage', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
-      .then((data: UsageResponse) => {
+      .then(data => {
         setDaily(data.summary);
         setTotal(data.total);
-        setIsBeta(data.isBeta ?? true);
+        setByProvider(Array.isArray(data.byProvider) ? data.byProvider : []);
       })
       .catch(console.error);
   }, [token]);
 
   if (isLoading || !user) return null;
 
-  // Chart data: filtered range when filter active, else fixed 7D/30D
+  const totalTokens = total ? total.totalInput + total.totalOutput : 0;
+  const inputRatio = totalTokens > 0 ? ((total!.totalInput / totalTokens) * 100).toFixed(1) : '0';
+  const outputRatio = totalTokens > 0 ? ((total!.totalOutput / totalTokens) * 100).toFixed(1) : '0';
+
+  // Cost = Claude tokens × Sonnet 4 pricing × markup. Local LLM is on-prem so charge $0.
+  const claudeProvider = byProvider.find(p => p.provider === 'claude');
+  const localProvider  = byProvider.find(p => p.provider === 'local-llm');
+  const claudeIn  = claudeProvider?.totalInput  ?? total?.totalInput  ?? 0;
+  const claudeOut = claudeProvider?.totalOutput ?? total?.totalOutput ?? 0;
+  const estimatedCost = ((claudeIn / 1_000_000) * 3 + (claudeOut / 1_000_000) * 15) * 10;
+
+  const claudeTokens = claudeIn + claudeOut;
+  const localTokens  = (localProvider?.totalInput ?? 0) + (localProvider?.totalOutput ?? 0);
+  const providerTotal = claudeTokens + localTokens;
+  const claudePct = providerTotal > 0 ? (claudeTokens / providerTotal) * 100 : 0;
+  const localPct  = providerTotal > 0 ? (localTokens  / providerTotal) * 100 : 0;
+
+  // Chart data: always show at least 7 days, fill missing days with 0
+  const CHART_MIN_DAYS = 7;
   const chartData = (() => {
     const dataMap = new Map(daily.map(d => [d.date.slice(0, 10), d]));
     const days: DailyUsage[] = [];
-    if (filterFrom || filterTo) {
-      const start = new Date(filterFrom || daily[daily.length - 1]?.date.slice(0, 10) || new Date().toISOString().slice(0, 10));
-      const end = new Date(filterTo || new Date().toISOString().slice(0, 10));
-      for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const key = d.toISOString().slice(0, 10);
-        days.push(dataMap.get(key) ?? { date: key, total_input: 0, total_output: 0, invocation_count: 0 });
-      }
-    } else {
-      const today = new Date();
-      const totalDays = chartPeriod === '30d' ? 30 : 7;
-      for (let i = totalDays - 1; i >= 0; i--) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        const key = d.toISOString().slice(0, 10);
-        days.push(dataMap.get(key) ?? { date: key, total_input: 0, total_output: 0, invocation_count: 0 });
-      }
+    const today = new Date();
+    // Determine how many days to show: max(7, actual data range)
+    const totalDays = Math.max(CHART_MIN_DAYS, daily.length);
+    for (let i = totalDays - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      days.push(dataMap.get(key) ?? { date: key, total_input: 0, total_output: 0, invocation_count: 0 });
     }
     return days;
   })();
   const maxTokens = Math.max(...chartData.map(d => d.total_input + d.total_output), 1);
-
-  // Ledger: filter by date range
-  const filteredDaily = daily.filter(d => {
-    const date = d.date.slice(0, 10);
-    if (filterFrom && date < filterFrom) return false;
-    if (filterTo && date > filterTo) return false;
-    return true;
-  });
-
-  // When date filter is active, overview card reflects filtered range
-  const hasFilter = !!(filterFrom || filterTo);
-  const activeTotal = hasFilter
-    ? {
-        totalInput: filteredDaily.reduce((s, d) => s + d.total_input, 0),
-        totalOutput: filteredDaily.reduce((s, d) => s + d.total_output, 0),
-        totalInvocations: filteredDaily.reduce((s, d) => s + d.invocation_count, 0),
-      }
-    : total;
-
-  const totalTokens = activeTotal ? activeTotal.totalInput + activeTotal.totalOutput : 0;
-  const inputRatio = totalTokens > 0 ? ((activeTotal!.totalInput / totalTokens) * 100).toFixed(1) : '0';
-  const outputRatio = totalTokens > 0 ? ((activeTotal!.totalOutput / totalTokens) * 100).toFixed(1) : '0';
-  const estimatedCost = activeTotal
-    ? ((activeTotal.totalInput / 1_000_000) * 3 + (activeTotal.totalOutput / 1_000_000) * 15) * 10
-    : 0;
 
   return (
     <div className="min-h-screen bg-surface-container-lowest">
@@ -120,8 +99,7 @@ function UsageContent() {
 
       <main className={`${sidebarMargin} md:pt-10 pb-12 px-4 md:px-10 transition-all duration-300`}>
           {/* Page Header */}
-          <header className="mt-4 md:mt-0 mb-6 md:mb-10 flex flex-col md:flex-row md:justify-between md:items-end gap-4 md:gap-8">
-            {/* Left: Title */}
+          <header className="mt-4 md:mt-0 mb-6 md:mb-10 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-tertiary text-xs md:text-sm font-bold tracking-[0.3em] uppercase">{t('usage.header.subtitle')}</span>
@@ -135,61 +113,29 @@ function UsageContent() {
                 {t('usage.header.description')}
               </p>
             </div>
-            {/* Right: Date filter + CSV */}
-            <div className="flex flex-col gap-2 shrink-0">
-              {/* Date filter bar */}
-              <div className={`flex items-center gap-2 px-3 py-2 border transition-colors ${hasFilter ? 'bg-tertiary/5 border-tertiary/30' : 'bg-surface-container border-outline-variant/20'}`}>
-                <span className={`material-symbols-outlined text-sm ${hasFilter ? 'text-tertiary' : 'text-on-surface-variant/50'}`}>date_range</span>
-                <input
-                  type="date"
-                  value={filterFrom}
-                  onChange={e => { setFilterFrom(e.target.value); setLedgerPage(1); }}
-                  className="bg-transparent text-on-surface text-xs font-mono focus:outline-none cursor-pointer min-w-0"
-                />
-                <span className="text-xs text-on-surface-variant/40 shrink-0">—</span>
-                <input
-                  type="date"
-                  value={filterTo}
-                  onChange={e => { setFilterTo(e.target.value); setLedgerPage(1); }}
-                  className="bg-transparent text-on-surface text-xs font-mono focus:outline-none cursor-pointer min-w-0"
-                />
-                {hasFilter && (
-                  <>
-                    <span className="text-xs text-tertiary font-bold font-mono shrink-0">{filteredDaily.length}d</span>
-                    <button
-                      onClick={() => { setFilterFrom(''); setFilterTo(''); setLedgerPage(1); }}
-                      className="text-on-surface-variant/50 hover:text-primary transition-colors cursor-pointer shrink-0"
-                      title={locale === 'en' ? 'Clear filter' : '清除篩選'}
-                    >
-                      <span className="material-symbols-outlined text-sm">close</span>
-                    </button>
-                  </>
-                )}
-              </div>
-              {/* CSV export button */}
-              <button
-                onClick={() => {
-                  if (!token || daily.length === 0) return;
-                  const q = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-                  const header = [t('usage.ledger.date'), t('usage.ledger.generations'), t('usage.ledger.inputTokens'), t('usage.ledger.outputTokens'), t('usage.ledger.total'), t('usage.overview.estimatedCost') + ' (USD)'].map(q).join(',');
-                  const csvRows = daily.map(d => {
-                    const cost = ((d.total_input / 1_000_000) * 3 + (d.total_output / 1_000_000) * 15) * 10;
-                    return [d.date.slice(0, 10), d.invocation_count, d.total_input * 10, d.total_output * 10, (d.total_input + d.total_output) * 10, `$${cost.toFixed(4)}`].map(q).join(',');
-                  });
-                  const csv = '\uFEFF' + [header, ...csvRows].join('\n');
-                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url; a.download = `token_usage_${new Date().toISOString().slice(0, 10)}.csv`;
-                  document.body.appendChild(a); a.click(); a.remove();
-                  URL.revokeObjectURL(url);
-                }}
-                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-surface-container-high text-on-surface-variant hover:text-primary active:bg-surface-container-highest transition-colors text-sm font-bold uppercase tracking-widest w-full"
-              >
-                <span className="material-symbols-outlined text-sm">download</span>
-                {t('usage.header.exportCsv')}
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                if (!token || daily.length === 0) return;
+                const q = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+                const header = [t('usage.ledger.date'), t('usage.ledger.generations'), t('usage.ledger.inputTokens'), t('usage.ledger.outputTokens'), t('usage.ledger.total'), t('usage.overview.estimatedCost') + ' (USD)'].map(q).join(',');
+                const csvRows = daily.map(d => {
+                  const total = d.total_input + d.total_output;
+                  const cost = ((d.total_input / 1_000_000) * 3 + (d.total_output / 1_000_000) * 15) * 10;
+                  return [d.date.slice(0, 10), d.invocation_count, d.total_input, d.total_output, total, `$${cost.toFixed(4)}`].map(q).join(',');
+                });
+                const csv = '\uFEFF' + [header, ...csvRows].join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `token_usage_${new Date().toISOString().slice(0, 10)}.csv`;
+                document.body.appendChild(a); a.click(); a.remove();
+                URL.revokeObjectURL(url);
+              }}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-surface-container-high text-on-surface-variant hover:text-primary active:bg-surface-container-highest transition-colors text-sm font-bold uppercase tracking-widest shrink-0 w-full md:w-auto"
+            >
+              <span className="material-symbols-outlined text-sm">download</span>
+              {t('usage.header.exportCsv')}
+            </button>
           </header>
 
           {/* ===== Top Bento: Stats + Chart ===== */}
@@ -199,25 +145,9 @@ function UsageContent() {
             <div className="col-span-12 lg:col-span-4 bg-surface-container p-5 md:p-8 relative overflow-hidden flex flex-col justify-between gap-5 md:gap-0">
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-10 -mt-10 blur-3xl" />
               <div>
-                <div className="flex items-center gap-2 mb-2 md:mb-3">
-                  <span className="text-xs md:text-sm uppercase tracking-[0.2em] text-primary font-bold">{t('usage.overview.title')}</span>
-                  {!isBeta && !hasFilter && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold uppercase tracking-wider">
-                      {locale === 'en' ? 'This Month' : '本月'}
-                    </span>
-                  )}
-                  {hasFilter && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-tertiary/10 text-tertiary font-bold uppercase tracking-wider">
-                      {locale === 'en' ? 'Filtered' : '篩選中'}
-                    </span>
-                  )}
-                </div>
-                <h3 className="text-on-surface-variant text-xs md:text-sm mb-1">
-                  {hasFilter
-                    ? (locale === 'en' ? 'Filtered Token Usage' : '篩選期間 Token 用量')
-                    : !isBeta ? (locale === 'en' ? 'This Month\'s Token Usage' : '本月 Token 用量') : t('usage.overview.totalTokenUsage')}
-                </h3>
-                <div className="text-3xl md:text-5xl font-bold text-on-surface font-headline">{(totalTokens * 10).toLocaleString()}</div>
+                <span className="text-xs md:text-sm uppercase tracking-[0.2em] text-primary font-bold mb-2 md:mb-3 block">{t('usage.overview.title')}</span>
+                <h3 className="text-on-surface-variant text-xs md:text-sm mb-1">{t('usage.overview.totalTokenUsage')}</h3>
+                <div className="text-3xl md:text-5xl font-bold text-on-surface font-headline">{totalTokens.toLocaleString()}</div>
                 <p className="text-xs md:text-sm text-on-surface-variant mt-1.5 md:mt-2">
                   {t('usage.overview.estimatedCost')} <span className="text-primary font-bold font-headline text-base md:text-lg">${estimatedCost.toFixed(4)}</span> <span className="text-xs md:text-sm uppercase tracking-wider">USD</span>
                 </p>
@@ -225,15 +155,15 @@ function UsageContent() {
               <div className="grid grid-cols-3 gap-3 md:gap-4">
                 <div>
                   <p className="text-xs md:text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.generations')}</p>
-                  <p className="text-xl md:text-2xl font-headline font-bold text-primary">{activeTotal?.totalInvocations ?? 0}</p>
+                  <p className="text-xl md:text-2xl font-headline font-bold text-primary">{total?.totalInvocations ?? 0}</p>
                 </div>
                 <div>
                   <p className="text-xs md:text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.input')}</p>
-                  <p className="text-xl md:text-2xl font-headline font-bold text-tertiary">{((activeTotal?.totalInput ?? 0) * 10).toLocaleString()}</p>
+                  <p className="text-xl md:text-2xl font-headline font-bold text-tertiary">{total?.totalInput.toLocaleString() ?? 0}</p>
                 </div>
                 <div>
                   <p className="text-xs md:text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.output')}</p>
-                  <p className="text-xl md:text-2xl font-headline font-bold text-secondary">{((activeTotal?.totalOutput ?? 0) * 10).toLocaleString()}</p>
+                  <p className="text-xl md:text-2xl font-headline font-bold text-secondary">{total?.totalOutput.toLocaleString() ?? 0}</p>
                 </div>
               </div>
             </div>
@@ -245,30 +175,15 @@ function UsageContent() {
                   <span className="text-xs md:text-sm uppercase tracking-[0.2em] text-tertiary font-bold block mb-1">{t('usage.chart.title')}</span>
                   <h3 className="text-base md:text-xl font-bold font-headline text-on-surface">{t('usage.chart.subtitle')}</h3>
                 </div>
-                <div className="flex items-center gap-3 md:gap-4 text-xs">
+                <div className="flex items-center gap-3 md:gap-4 text-xs md:text-sm">
                   <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 bg-primary inline-block" />
+                    <span className="w-2 h-2 md:w-2.5 md:h-2.5 bg-primary inline-block" />
                     <span className="text-on-surface-variant uppercase tracking-wider">Input</span>
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 bg-tertiary inline-block" />
+                    <span className="w-2 h-2 md:w-2.5 md:h-2.5 bg-tertiary inline-block" />
                     <span className="text-on-surface-variant uppercase tracking-wider">Output</span>
                   </span>
-                  {!hasFilter && <div className="flex gap-1 ml-2 border-l border-outline-variant/20 pl-3">
-                    {(['7d', '30d'] as const).map(p => (
-                      <button
-                        key={p}
-                        onClick={() => setChartPeriod(p)}
-                        className={`px-2 py-0.5 text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors ${
-                          chartPeriod === p
-                            ? 'text-primary border-b-2 border-primary'
-                            : 'text-on-surface-variant hover:text-on-surface'
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    ))}
-                  </div>}
                 </div>
               </div>
 
@@ -277,70 +192,114 @@ function UsageContent() {
                   <p className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">{t('usage.chart.noData')}</p>
                 </div>
               ) : (
-                <div className="pt-7">
-                  {/* Bars */}
-                  <div className={`relative flex items-end h-36 md:h-52 ${
-                    chartData.length > 20 ? 'gap-px' :
-                    chartData.length > 10 ? 'gap-0.5 md:gap-1' :
-                    'gap-1 md:gap-1.5'
-                  }`}>
-                    {/* Reference lines */}
-                    {[75, 50, 25].map(pct => (
-                      <div key={pct} className="absolute left-0 right-0 h-px bg-outline-variant/10 pointer-events-none" style={{ bottom: `${pct}%` }} />
-                    ))}
-                    {chartData.map(day => {
-                      const dayTotal = day.total_input + day.total_output;
-                      const pct = (dayTotal / maxTokens) * 100;
-                      const inputPct = dayTotal > 0 ? (day.total_input / dayTotal) * 100 : 0;
-                      return (
-                        <div key={day.date} className="flex-1 min-w-0 h-full flex items-end relative z-10 group">
-                          <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-surface-container-highest text-on-surface px-2 py-0.5 text-[10px] md:text-xs font-mono whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
-                            {day.date.slice(5)} · {(dayTotal * 10).toLocaleString()}
+                <div className="flex items-end gap-1 md:gap-1.5 px-1 pt-8 overflow-x-auto no-scrollbar">
+                  {chartData.map(day => {
+                    const dayTotal = day.total_input + day.total_output;
+                    const pct = (dayTotal / maxTokens) * 100;
+                    const inputPct = dayTotal > 0 ? (day.total_input / dayTotal) * 100 : 0;
+                    return (
+                      <div key={day.date} className="flex-1 min-w-[28px] flex flex-col items-center group">
+                        {/* Bar area */}
+                        <div className="w-full h-28 md:h-40 flex flex-col justify-end relative">
+                          {/* Tooltip */}
+                          <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-surface-container-highest text-on-surface px-2 py-0.5 md:px-2.5 md:py-1 text-xs md:text-sm font-mono whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
+                            {dayTotal.toLocaleString()}
                           </div>
                           <div
-                            className="w-full rounded-t-sm overflow-hidden transition-all duration-300 group-hover:brightness-125"
+                            className="w-full rounded-t-sm overflow-hidden transition-all duration-300"
                             style={{ height: `${Math.max(pct, 2)}%` }}
                           >
                             <div className="bg-tertiary/70" style={{ height: `${100 - inputPct}%` }} />
                             <div className="bg-primary" style={{ height: `${inputPct}%` }} />
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                  {/* Date labels */}
-                  {chartData.length > 10 ? (
-                    <div className={`flex mt-2 h-14 ${chartData.length > 20 ? 'gap-px' : 'gap-0.5 md:gap-1'}`}>
-                      {chartData.map((day, i) => {
-                        const step = Math.ceil(chartData.length / 10);
-                        const show = i % step === 0 || i === chartData.length - 1;
-                        return (
-                          <div key={day.date} className="flex-1 min-w-0 relative overflow-visible">
-                            {show && (
-                              <span
-                                className="absolute top-0 left-0 text-[10px] text-outline/60 font-mono whitespace-nowrap leading-none"
-                                style={{ transform: 'rotate(45deg)', transformOrigin: 'top left' }}
-                              >
-                                {day.date.slice(5)}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="flex mt-1.5 gap-1 md:gap-1.5">
-                      {chartData.map(day => (
-                        <span key={day.date} className="flex-1 min-w-0 text-[10px] md:text-xs text-center text-outline/60 font-mono truncate">
-                          {day.date.slice(5)}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                        {/* Date label — show MM/DD on mobile, full date on desktop */}
+                        <span className="mt-1.5 md:mt-2 text-[10px] md:text-sm text-on-surface-variant/60 font-mono md:hidden">{day.date.slice(0, 10).slice(5)}</span>
+                        <span className="mt-2 text-sm text-on-surface-variant/60 font-mono hidden md:block">{day.date.slice(0, 10)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
           </div>
+
+          {/* ===== Provider Split: Claude vs Local LLM ===== */}
+          {byProvider.length > 0 && providerTotal > 0 && (
+            <section className="bg-surface-container p-5 md:p-7 mb-6 md:mb-10 relative overflow-hidden">
+              <div aria-hidden className="absolute -top-12 -right-12 w-40 h-40 bg-tertiary/5 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative">
+                <div className="flex items-start justify-between gap-4 mb-4 md:mb-5">
+                  <div>
+                    <span className="text-tertiary text-xs md:text-sm font-bold tracking-[0.25em] uppercase mb-1.5 block">
+                      Token Source Split
+                    </span>
+                    <h3 className="text-base md:text-xl font-bold font-headline text-on-surface">
+                      推論來源拆帳
+                    </h3>
+                    <p className="text-xs md:text-sm text-on-surface-variant mt-1">
+                      Claude（雲端，記費）與地端 LLM（自有機器，$0）各自分開計算。
+                    </p>
+                  </div>
+                  <div className="hidden md:block text-right shrink-0">
+                    <p className="text-[10px] uppercase tracking-widest text-on-surface-variant/70">Total Tokens</p>
+                    <p className="font-headline font-bold text-2xl text-on-surface">{providerTotal.toLocaleString()}</p>
+                  </div>
+                </div>
+
+                {/* Stacked bar */}
+                <div className="w-full h-2.5 bg-surface-container-highest rounded-sm overflow-hidden flex">
+                  <div className="bg-primary h-full transition-all duration-500" style={{ width: `${claudePct}%` }} />
+                  <div className="bg-[color:var(--th-success)] h-full transition-all duration-500" style={{ width: `${localPct}%` }} />
+                </div>
+
+                {/* Per-provider rows */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mt-5 md:mt-6">
+                  {/* Claude */}
+                  <div className="border-l-2 border-primary/60 pl-4 py-1">
+                    <div className="flex items-baseline justify-between gap-2 mb-1.5">
+                      <span className="font-headline font-bold text-on-surface uppercase tracking-wide text-sm">
+                        Claude · cloud
+                      </span>
+                      <span className="font-mono text-xs text-on-surface-variant">
+                        {claudePct.toFixed(1)}%
+                      </span>
+                    </div>
+                    <p className="text-2xl md:text-3xl font-headline font-bold text-primary">
+                      {claudeTokens.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-on-surface-variant/80 mt-1 font-mono">
+                      in {claudeIn.toLocaleString()} · out {claudeOut.toLocaleString()} · {claudeProvider?.totalInvocations ?? 0} runs
+                    </p>
+                    <p className="text-[11px] text-primary mt-2">
+                      ≈ ${estimatedCost.toFixed(4)} USD
+                    </p>
+                  </div>
+
+                  {/* Local LLM */}
+                  <div className="border-l-2 border-[color:var(--th-success)]/60 pl-4 py-1">
+                    <div className="flex items-baseline justify-between gap-2 mb-1.5">
+                      <span className="font-headline font-bold text-on-surface uppercase tracking-wide text-sm">
+                        Local LLM · on-prem
+                      </span>
+                      <span className="font-mono text-xs text-on-surface-variant">
+                        {localPct.toFixed(1)}%
+                      </span>
+                    </div>
+                    <p className="text-2xl md:text-3xl font-headline font-bold text-[color:var(--th-success)]">
+                      {localTokens.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-on-surface-variant/80 mt-1 font-mono">
+                      in {(localProvider?.totalInput ?? 0).toLocaleString()} · out {(localProvider?.totalOutput ?? 0).toLocaleString()} · {localProvider?.totalInvocations ?? 0} runs
+                    </p>
+                    <p className="text-[11px] text-[color:var(--th-success)] mt-2">
+                      $0 USD（自家機器，邊際成本 0）
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* ===== Bottom: Breakdown + Table ===== */}
           <div className="grid grid-cols-12 gap-4 md:gap-6">
@@ -388,10 +347,10 @@ function UsageContent() {
                       <div className="min-w-0 flex-1">
                         <p className="text-xs md:text-sm font-bold text-on-surface">{new Date(day.date).toLocaleDateString(locale === 'en' ? 'en-US' : 'zh-TW', { month: 'short', day: 'numeric', weekday: 'short' })}</p>
                         <p className="text-xs md:text-sm text-on-surface-variant truncate">
-                          {t('usage.activity.generationCount', { count: day.invocation_count })} · {((day.total_input + day.total_output) * 10).toLocaleString()} tokens
+                          {t('usage.activity.generationCount', { count: day.invocation_count })} · {(day.total_input + day.total_output).toLocaleString()} tokens
                         </p>
                       </div>
-                      <span className="text-xs md:text-sm font-mono text-primary ml-2 shrink-0">{(day.total_output * 10).toLocaleString()}</span>
+                      <span className="text-xs md:text-sm font-mono text-primary ml-2 shrink-0">{day.total_output.toLocaleString()}</span>
                     </div>
                   ))}
                   {daily.length === 0 && (
@@ -403,26 +362,17 @@ function UsageContent() {
 
             {/* Right Column: Session Ledger */}
             <div className="col-span-12 lg:col-span-8 bg-surface-container overflow-hidden">
-              <div className="p-4 md:p-6 border-b border-white/5">
-                <div className="flex justify-between items-center mb-3 md:mb-4">
-                  <h4 className="text-xs md:text-sm font-bold font-headline uppercase tracking-widest text-on-surface">{t('usage.ledger.title')}</h4>
-                  <span className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">
-                    {filterFrom || filterTo
-                      ? `${filteredDaily.length} / ${daily.length}`
-                      : t('usage.ledger.totalRecords', { count: daily.length })}
-                  </span>
-                </div>
+              <div className="p-4 md:p-6 border-b border-white/5 flex justify-between items-center">
+                <h4 className="text-xs md:text-sm font-bold font-headline uppercase tracking-widest text-on-surface">{t('usage.ledger.title')}</h4>
+                <span className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">
+                  {t('usage.ledger.totalRecords', { count: daily.length })}
+                </span>
               </div>
 
               {daily.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 md:py-16">
                   <span className="material-symbols-outlined text-2xl md:text-3xl text-on-surface-variant/30 mb-3">analytics</span>
                   <p className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">{t('usage.ledger.noData')}</p>
-                </div>
-              ) : filteredDaily.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 md:py-16">
-                  <span className="material-symbols-outlined text-2xl md:text-3xl text-on-surface-variant/30 mb-3">search_off</span>
-                  <p className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">查無資料</p>
                 </div>
               ) : (
                 <>
@@ -439,7 +389,7 @@ function UsageContent() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
-                        {filteredDaily.slice((ledgerPage - 1) * PAGE_SIZE, ledgerPage * PAGE_SIZE).map((day, i) => (
+                        {(showAllRows ? daily : daily.slice(0, LEDGER_DEFAULT_ROWS)).map((day, i) => (
                           <tr
                             key={day.date}
                             className={`hover:bg-primary/5 transition-colors ${i % 2 === 1 ? 'bg-surface-container-high/20' : ''}`}
@@ -451,10 +401,10 @@ function UsageContent() {
                                 <span className="text-sm text-on-surface font-medium">{day.invocation_count}</span>
                               </div>
                             </td>
-                            <td className="px-6 py-4 text-sm font-mono text-on-surface">{(day.total_input * 10).toLocaleString()}</td>
-                            <td className="px-6 py-4 text-sm font-mono text-on-surface">{(day.total_output * 10).toLocaleString()}</td>
+                            <td className="px-6 py-4 text-sm font-mono text-on-surface">{day.total_input.toLocaleString()}</td>
+                            <td className="px-6 py-4 text-sm font-mono text-on-surface">{day.total_output.toLocaleString()}</td>
                             <td className="px-6 py-4 text-sm font-mono text-primary font-bold text-right">
-                              {((day.total_input + day.total_output) * 10).toLocaleString()}
+                              {(day.total_input + day.total_output).toLocaleString()}
                             </td>
                           </tr>
                         ))}
@@ -464,7 +414,7 @@ function UsageContent() {
 
                   {/* Mobile Card List */}
                   <div className="md:hidden divide-y divide-white/5">
-                    {filteredDaily.slice((ledgerPage - 1) * PAGE_SIZE, ledgerPage * PAGE_SIZE).map((day, i) => (
+                    {(showAllRows ? daily : daily.slice(0, LEDGER_DEFAULT_ROWS)).map((day, i) => (
                       <div
                         key={day.date}
                         className={`p-3.5 active:bg-primary/5 transition-colors ${i % 2 === 1 ? 'bg-surface-container-high/20' : ''}`}
@@ -473,7 +423,7 @@ function UsageContent() {
                         <div className="flex justify-between items-center mb-1.5">
                           <span className="text-xs font-mono text-on-surface-variant">{day.date.slice(0, 10)}</span>
                           <span className="text-sm font-mono text-primary font-bold">
-                            {((day.total_input + day.total_output) * 10).toLocaleString()}
+                            {(day.total_input + day.total_output).toLocaleString()}
                           </span>
                         </div>
                         {/* Row 2: Generations + Input/Output breakdown */}
@@ -483,53 +433,25 @@ function UsageContent() {
                             {day.invocation_count}
                           </span>
                           <span className="text-on-surface-variant/40">|</span>
-                          <span>In: <span className="font-mono text-on-surface">{(day.total_input * 10).toLocaleString()}</span></span>
-                          <span>Out: <span className="font-mono text-on-surface">{(day.total_output * 10).toLocaleString()}</span></span>
+                          <span>In: <span className="font-mono text-on-surface">{day.total_input.toLocaleString()}</span></span>
+                          <span>Out: <span className="font-mono text-on-surface">{day.total_output.toLocaleString()}</span></span>
                         </div>
                       </div>
                     ))}
                   </div>
                 </>
               )}
-              {(() => {
-                const totalPages = Math.ceil(filteredDaily.length / PAGE_SIZE);
-                if (totalPages <= 1) return null;
-                return (
-                  <div className="p-3 md:p-4 border-t border-white/5 flex items-center justify-between">
-                    <button
-                      onClick={() => setLedgerPage(p => Math.max(1, p - 1))}
-                      disabled={ledgerPage === 1}
-                      className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-sm">chevron_left</span>
-                      上一頁
-                    </button>
-                    <div className="flex items-center gap-1">
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                        <button
-                          key={p}
-                          onClick={() => setLedgerPage(p)}
-                          className={`w-7 h-7 text-xs font-bold font-mono transition-colors cursor-pointer ${
-                            p === ledgerPage
-                              ? 'bg-primary text-on-primary'
-                              : 'text-on-surface-variant hover:text-primary'
-                          }`}
-                        >
-                          {p}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => setLedgerPage(p => Math.min(totalPages, p + 1))}
-                      disabled={ledgerPage === totalPages}
-                      className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                    >
-                      下一頁
-                      <span className="material-symbols-outlined text-sm">chevron_right</span>
-                    </button>
-                  </div>
-                );
-              })()}
+              {daily.length > LEDGER_DEFAULT_ROWS && (
+                <div className="p-3 md:p-4 border-t border-white/5 flex justify-center">
+                  <button
+                    onClick={() => setShowAllRows(v => !v)}
+                    className="text-xs md:text-sm font-bold uppercase tracking-widest text-on-surface-variant hover:text-primary active:text-primary transition-colors cursor-pointer flex items-center gap-1"
+                  >
+                    {showAllRows ? t('usage.ledger.collapse') : t('usage.ledger.showAll', { count: daily.length })}
+                    <span className={`material-symbols-outlined text-xs md:text-sm transition-transform ${showAllRows ? 'rotate-180' : ''}`}>expand_more</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 

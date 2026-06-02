@@ -1,5 +1,4 @@
 import { dbGet, dbRun } from '../db.js';
-import { config } from '../config.js';
 
 /**
  * Get the global per-user usage limit in display dollars (x10 markup).
@@ -22,22 +21,13 @@ export async function setUserUsageLimitUsd(value: number): Promise<void> {
 
 /**
  * Calculate user's total cost in display dollars (x10 markup).
- * Official mode: only counts current month (monthly quota reset).
- * Beta mode: counts lifetime cumulative usage.
+ * Claude Sonnet 4 pricing: $3/M input, $15/M output, then x10 billing markup.
  */
 export async function getUserDisplayCost(userId: string): Promise<number> {
-  let query = 'SELECT COALESCE(SUM(input_tokens), 0) AS total_input, COALESCE(SUM(output_tokens), 0) AS total_output FROM token_usage WHERE user_id = ?';
-  const params: unknown[] = [userId];
-
-  if (!config.isBeta) {
-    // Official: only count current calendar month
-    const now = new Date();
-    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-    query += ' AND created_at >= ?';
-    params.push(monthStart);
-  }
-
-  const row = await dbGet<{ total_input: number; total_output: number }>(query, ...params);
+  const row = await dbGet<{ total_input: number; total_output: number }>(
+    'SELECT COALESCE(SUM(input_tokens), 0) AS total_input, COALESCE(SUM(output_tokens), 0) AS total_output FROM token_usage WHERE user_id = ?',
+    userId
+  );
   if (!row) return 0;
   return ((row.total_input / 1_000_000) * 3 + (row.total_output / 1_000_000) * 15) * 10;
 }

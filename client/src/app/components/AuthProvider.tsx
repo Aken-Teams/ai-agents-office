@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import TermsModal from './TermsModal';
+import { tryLiffAutoLogin } from '../../lib/liff';
 
 interface User {
   id: string;
@@ -15,19 +15,12 @@ interface User {
   hasPassword?: boolean;
 }
 
-interface Permissions {
-  adminSidebar: string[];
-  frontendNav: string[];
-  features: string[];
-}
-
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  permissions: Permissions | null;
-  hasPermission: (category: keyof Permissions, key: string) => boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithDemo: () => Promise<void>;
   loginWithGoogle: (token: string, tokenType?: 'credential' | 'access_token') => Promise<{ needsVerification?: boolean; email?: string } | void>;
   register: (email: string, password: string, displayName: string, inviteCode?: string) => Promise<{ pending: boolean; needsVerification: boolean; email?: string; message?: string }>;
   verifyEmail: (email: string, code: string) => Promise<void>;
@@ -48,17 +41,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [showTermsModal, setShowTermsModal] = useState(false);
-  const [permissions, setPermissions] = useState<Permissions | null>(null);
   const router = useRouter();
 
-  const hasPermission = useCallback((category: keyof Permissions, key: string): boolean => {
-    if (!permissions) return false;
-    const list = permissions[category];
-    return list.includes('*') || list.includes(key);
-  }, [permissions]);
-
-  // Check stored token on mount
+  // Check stored token on mount. If there's no token, fall through to a
+  // LIFF auto-login attempt — when the page is opened from a LINE rich-menu
+  // tile (liff.line.me/...), we trade the LIFF ID token for a normal JWT.
+  // Unlinked LINE users get bounced to /login with a banner explaining how
+  // to bind via the `/link <inviteCode>` LINE command.
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     if (storedToken) {
@@ -68,10 +57,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(null);
         setIsLoading(false);
       });
-    } else {
-      setIsLoading(false);
+      return;
     }
-  }, []);
+
+    let cancelled = false;
+    (async () => {
+      const result = await tryLiffAutoLogin();
+      if (cancelled) return;
+      if (result.status === 'ok' && result.token) {
+        localStorage.setItem('token', result.token);
+        localStorage.setItem('greeting_login_id', String(Date.now()));
+        setToken(result.token);
+        try { await fetchMe(result.token); }
+        catch { localStorage.removeItem('token'); setToken(null); setIsLoading(false); }
+        return;
+      }
+      if (result.status === 'unlinked') {
+        setIsLoading(false);
+        router.replace('/login?reason=liff_unlinked');
+        return;
+      }
+      // 'not_liff' (regular browser) and 'error' both fall through — gated
+      // pages will redirect to /login on their own.
+      setIsLoading(false);
+    })();
+
+    return () => { cancelled = true; };
+  }, [router]);
 
   async function fetchMe(t: string) {
     const res = await fetch('/api/auth/me', {
@@ -83,14 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
     if (data.onboardingRequired) {
       router.replace('/onboarding');
-    } else if (data.termsRequired) {
-      setShowTermsModal(true);
     }
-    // Fetch permissions
-    fetch('/api/auth/permissions', { headers: { Authorization: `Bearer ${t}` } })
-      .then(r => r.ok ? r.json() : null)
-      .then(p => { if (p) setPermissions(p); })
-      .catch(() => {});
   }
 
   const login = useCallback(async (email: string, password: string) => {
@@ -190,6 +195,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const loginWithDemo = useCallback(async () => {
+    const res = await fetch('/api/auth/demo-login', { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Demo 進入失敗');
+    }
+    const data = await res.json();
+    localStorage.setItem('token', data.token);
+    localStorage.setItem('greeting_login_id', String(Date.now()));
+    setToken(data.token);
+    setUser(data.user);
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem('token');
     localStorage.removeItem('greeting_login_id');
@@ -203,11 +221,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, permissions, hasPermission, login, loginWithGoogle, register, verifyEmail, resendCode, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, loginWithDemo, loginWithGoogle, register, verifyEmail, resendCode, logout, updateUser }}>
       {children}
-      {showTermsModal && token && (
-        <TermsModal token={token} onAccepted={() => setShowTermsModal(false)} />
-      )}
     </AuthContext.Provider>
   );
 }

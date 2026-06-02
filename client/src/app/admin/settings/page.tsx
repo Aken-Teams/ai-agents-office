@@ -9,6 +9,7 @@ interface Settings {
   usageLimitUsd: number;
   storageQuotaGb: number;
   uploadQuotaMb: number;
+  localLlmEnabled: boolean;
 }
 
 const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
@@ -22,8 +23,7 @@ export default function AdminSettings() {
 }
 
 function AdminSettingsContent() {
-  const { token, isReadonly, canOperate } = useAdminAuth();
-  const canEditSettings = !isReadonly || canOperate('settings');
+  const { token, isReadonly } = useAdminAuth();
   const { locale, theme, setLocale, setTheme, t } = useTranslation();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [form, setForm] = useState({ usageLimitUsd: '', storageQuotaGb: '', uploadQuotaMb: '' });
@@ -37,7 +37,7 @@ function AdminSettingsContent() {
     fetch('/api/admin/settings', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then((data: Settings) => {
-        setSettings(data);
+        setSettings({ ...data, localLlmEnabled: data.localLlmEnabled ?? true });
         setForm({
           usageLimitUsd: String(data.usageLimitUsd),
           storageQuotaGb: String(data.storageQuotaGb),
@@ -47,7 +47,7 @@ function AdminSettingsContent() {
       .catch(console.error);
   }, [token]);
 
-  async function saveSetting(key: keyof Settings) {
+  async function saveSetting(key: 'usageLimitUsd' | 'storageQuotaGb' | 'uploadQuotaMb') {
     if (!token || saving) return;
     const val = parseFloat(form[key]);
     if (isNaN(val) || val < 0) return;
@@ -61,7 +61,7 @@ function AdminSettingsContent() {
       });
       if (res.ok) {
         const data = await res.json();
-        setSettings({ usageLimitUsd: data.usageLimitUsd, storageQuotaGb: data.storageQuotaGb, uploadQuotaMb: data.uploadQuotaMb });
+        setSettings({ usageLimitUsd: data.usageLimitUsd, storageQuotaGb: data.storageQuotaGb, uploadQuotaMb: data.uploadQuotaMb, localLlmEnabled: data.localLlmEnabled });
         setForm({
           usageLimitUsd: String(data.usageLimitUsd),
           storageQuotaGb: String(data.storageQuotaGb),
@@ -69,6 +69,25 @@ function AdminSettingsContent() {
         });
         setEditing(null);
         setSaved(key);
+        setTimeout(() => setSaved(null), 2000);
+      }
+    } catch { /* ignore */ }
+    setSaving(false);
+  }
+
+  async function saveLocalLlmEnabled(enabled: boolean) {
+    if (!token || saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ localLlmEnabled: enabled }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSettings({ usageLimitUsd: data.usageLimitUsd, storageQuotaGb: data.storageQuotaGb, uploadQuotaMb: data.uploadQuotaMb, localLlmEnabled: data.localLlmEnabled });
+        setSaved('localLlmEnabled');
         setTimeout(() => setSaved(null), 2000);
       }
     } catch { /* ignore */ }
@@ -212,6 +231,55 @@ function AdminSettingsContent() {
           </div>
         </div>
 
+        {/* Local LLM kill-switch */}
+        <div className="bg-surface-container rounded-lg overflow-hidden">
+          <div className="p-4 md:p-6">
+            <div className="flex items-start gap-3 md:gap-4">
+              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-xl md:text-2xl text-secondary">smart_toy</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="text-sm md:text-base font-headline font-bold text-on-surface">{t('admin.settings.localLlm.title' as any)}</h3>
+                  {saved === 'localLlmEnabled' && (
+                    <span className="flex items-center gap-1 text-xs md:text-sm text-success font-bold">
+                      <span className="material-symbols-outlined text-xs md:text-sm">check_circle</span>
+                      {t('admin.settings.saved')}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs md:text-sm text-on-surface-variant leading-relaxed mb-3 md:mb-4">{t('admin.settings.localLlm.description' as any)}</p>
+                <div className="flex gap-1.5 md:gap-2">
+                  <button
+                    onClick={() => !isReadonly && saveLocalLlmEnabled(true)}
+                    disabled={saving || isReadonly}
+                    className={`flex-1 max-w-[140px] px-2 md:px-3 py-1.5 md:py-2 rounded border text-xs md:text-sm font-medium transition-all flex items-center justify-center gap-1.5 md:gap-2 ${
+                      settings?.localLlmEnabled
+                        ? 'border-primary bg-primary/10 text-primary cursor-default'
+                        : 'border-outline-variant/20 bg-surface-container-high text-on-surface-variant hover:border-primary/30 cursor-pointer'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    <span className="material-symbols-outlined text-sm">power</span>
+                    {t('admin.settings.localLlm.on' as any)}
+                  </button>
+                  <button
+                    onClick={() => !isReadonly && saveLocalLlmEnabled(false)}
+                    disabled={saving || isReadonly}
+                    className={`flex-1 max-w-[140px] px-2 md:px-3 py-1.5 md:py-2 rounded border text-xs md:text-sm font-medium transition-all flex items-center justify-center gap-1.5 md:gap-2 ${
+                      !settings?.localLlmEnabled
+                        ? 'border-error bg-error/10 text-error cursor-default'
+                        : 'border-outline-variant/20 bg-surface-container-high text-on-surface-variant hover:border-error/30 cursor-pointer'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    <span className="material-symbols-outlined text-sm">power_off</span>
+                    {t('admin.settings.localLlm.off' as any)}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Usage Limit — full width */}
         {(() => {
           const cfg = SETTINGS_CONFIG[0];
@@ -252,7 +320,7 @@ function AdminSettingsContent() {
                       <div className="flex items-center gap-2 md:gap-3">
                         <span className="text-2xl md:text-3xl font-headline font-black text-on-surface">{cfg.prefix}{value ?? '—'}</span>
                         <span className="text-xs md:text-sm text-on-surface-variant">{cfg.suffix}</span>
-                        {canEditSettings && <button onClick={() => setEditing(cfg.key)} className="ml-2 md:ml-4 px-3 md:px-4 py-1.5 md:py-2 bg-surface-container-high text-on-surface-variant text-xs md:text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer flex items-center gap-1.5">
+                        {!isReadonly && <button onClick={() => setEditing(cfg.key)} className="ml-2 md:ml-4 px-3 md:px-4 py-1.5 md:py-2 bg-surface-container-high text-on-surface-variant text-xs md:text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer flex items-center gap-1.5">
                           <span className="material-symbols-outlined text-xs md:text-sm">edit</span>
                           {t('admin.settings.edit')}
                         </button>}
@@ -305,7 +373,7 @@ function AdminSettingsContent() {
                         <div className="flex items-center gap-2 md:gap-3">
                           <span className="text-2xl md:text-3xl font-headline font-black text-on-surface">{cfg.prefix}{value ?? '—'}</span>
                           <span className="text-xs md:text-sm text-on-surface-variant">{cfg.suffix}</span>
-                          {canEditSettings && <button onClick={() => setEditing(cfg.key)} className="ml-2 md:ml-4 px-3 md:px-4 py-1.5 md:py-2 bg-surface-container-high text-on-surface-variant text-xs md:text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer flex items-center gap-1.5">
+                          {!isReadonly && <button onClick={() => setEditing(cfg.key)} className="ml-2 md:ml-4 px-3 md:px-4 py-1.5 md:py-2 bg-surface-container-high text-on-surface-variant text-xs md:text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer flex items-center gap-1.5">
                             <span className="material-symbols-outlined text-xs md:text-sm">edit</span>
                             {t('admin.settings.edit')}
                           </button>}

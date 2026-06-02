@@ -3,6 +3,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { I18nProvider, useTranslation } from '../../i18n';
+import { AuthLayout } from '../components/AuthLayout';
+import { AppInput, ShineButton } from '../../components/ui';
+
+const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
 
 function ForgotPasswordForm() {
   const { t } = useTranslation();
@@ -34,24 +38,20 @@ function ForgotPasswordForm() {
   }
 
   return (
-    <div className="bg-surface-container-lowest text-on-surface font-body min-h-[100svh] flex flex-col items-center justify-center p-5 md:p-6 overflow-hidden relative selection:bg-primary/30">
-      <div className="absolute inset-0 bg-pattern pointer-events-none opacity-40" />
-      <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-5%] left-[-5%] w-[30%] h-[30%] bg-tertiary/5 rounded-full blur-[100px] pointer-events-none" />
-
-      <main className="w-full max-w-md z-10">
-        <div className="bg-surface-container-high p-8 md:p-12 shadow-xl md:shadow-2xl">
-          {/* Logo */}
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 cyber-gradient flex items-center justify-center rounded">
-              <span className="material-symbols-outlined text-on-primary">terminal</span>
-            </div>
-            <div>
-              <h1 className="font-headline text-xl font-bold tracking-tighter leading-tight">{t('common.appName')}</h1>
-            </div>
-          </div>
-
-          {sent ? (
+    <AuthLayout
+      appName={t('common.appName')}
+      subtitle={t(deployMode === 'pro-panjit' ? 'login.brandSubtitle' : 'login.brandSubtitleGeneric' as any)}
+      heroTitle={{
+        prefix: t('login.heroTitle.prefix'),
+        highlight: t('login.heroTitle.highlight'),
+        suffix: t('login.heroTitle.suffix'),
+      }}
+      heroDescription={t('login.heroDescription')}
+      statusLabel={t('login.systemStatus')}
+      panelIcon="lock_reset"
+    >
+      <>
+        {sent ? (
             <div className="text-center py-4">
               <div className="w-20 h-20 mx-auto mb-6 bg-primary/10 rounded-full flex items-center justify-center">
                 <span className="material-symbols-outlined text-4xl text-primary">forward_to_inbox</span>
@@ -61,12 +61,11 @@ function ForgotPasswordForm() {
                 <p className="text-on-surface-variant text-sm mb-3 text-balance leading-relaxed">{t('forgotPassword.sentMessage' as any)}</p>
                 <p className="text-on-surface-variant text-xs text-balance leading-relaxed">{t('forgotPassword.sentDetail' as any)}</p>
               </div>
-              <Link
-                href="/login"
-                className="inline-flex items-center gap-2 cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-3 px-8 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 transition-all no-underline"
-              >
-                {t('forgotPassword.backToLogin' as any)}
-                <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              <Link href="/login" className="inline-block no-underline">
+                <ShineButton type="button" variant="primary" size="md" fullWidth={false}>
+                  {t('forgotPassword.backToLogin' as any)}
+                  <span className="material-symbols-outlined text-sm ml-2">arrow_forward</span>
+                </ShineButton>
               </Link>
             </div>
           ) : (
@@ -83,29 +82,20 @@ function ForgotPasswordForm() {
                   </div>
                 )}
 
-                <div className="space-y-1.5">
-                  <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">
-                    {t('forgotPassword.emailLabel' as any)}
-                  </label>
-                  <input
-                    className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-base md:text-sm font-body rounded placeholder:text-outline"
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    required
-                    autoComplete="email"
-                    autoFocus
-                  />
-                </div>
+                <AppInput
+                  label={t('forgotPassword.emailLabel' as any)}
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  required
+                  autoComplete="email"
+                  autoFocus
+                />
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full cyber-gradient text-on-primary font-headline font-bold uppercase tracking-widest text-sm py-4 rounded-sm shadow-lg shadow-primary/10 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
+                <ShineButton type="submit" variant="primary" size="lg" disabled={loading}>
                   {loading ? t('forgotPassword.submitLoading' as any) : t('forgotPassword.submit' as any)}
-                </button>
+                </ShineButton>
 
                 <div className="text-center">
                   <Link
@@ -118,9 +108,8 @@ function ForgotPasswordForm() {
               </form>
             </>
           )}
-        </div>
-      </main>
-    </div>
+      </>
+    </AuthLayout>
   );
 }
 

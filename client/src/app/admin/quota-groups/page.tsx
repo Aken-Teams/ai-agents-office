@@ -40,8 +40,7 @@ export default function AdminQuotaGroups() {
 }
 
 function QuotaGroupsContent() {
-  const { token, isReadonly, canOperate } = useAdminAuth();
-  const canEdit = !isReadonly || canOperate('quota-groups');
+  const { token, isReadonly } = useAdminAuth();
   const { t } = useTranslation();
   const [groups, setGroups] = useState<QuotaGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -204,7 +203,7 @@ function QuotaGroupsContent() {
           <span className="text-base md:text-lg font-black text-on-surface font-headline shrink-0">{t('admin.quotaGroups.title' as any)}</span>
           <span className="hidden md:inline text-sm text-on-surface-variant font-mono truncate">{t('admin.quotaGroups.description' as any)}</span>
         </div>
-        {canEdit && (
+        {!isReadonly && (
           <button
             onClick={openCreate}
             className="flex items-center gap-1.5 ml-3 px-3 md:px-4 py-2 md:py-2.5 cyber-gradient rounded-xl text-on-primary text-xs md:text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all cursor-pointer shrink-0"
@@ -254,7 +253,7 @@ function QuotaGroupsContent() {
                   </div>
                 </div>
                 <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
-                  {canEdit && (<>
+                  {!isReadonly && (<>
                     <button
                       onClick={e => { e.stopPropagation(); openEdit(g); }}
                       className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
@@ -281,7 +280,7 @@ function QuotaGroupsContent() {
                     <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">
                       {t('admin.quotaGroups.members' as any)}
                     </span>
-                    {canEdit && (
+                    {!isReadonly && (
                       <button
                         onClick={() => openAssignModal(g.id)}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 rounded-lg transition-colors cursor-pointer"
@@ -345,7 +344,7 @@ function QuotaGroupsContent() {
                                 />
                               </div>
                             </div>
-                            {canEdit && (
+                            {!isReadonly && (
                               <button
                                 onClick={() => handleUnassign([m.id])}
                                 className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant/40 hover:text-error hover:bg-error/10 transition-colors cursor-pointer md:opacity-0 md:group-hover:opacity-100 shrink-0"

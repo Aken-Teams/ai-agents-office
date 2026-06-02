@@ -296,7 +296,7 @@ function TopicAnalysisCard({ period, token }: { period: string; token: string })
         <div className="flex items-center gap-2 md:gap-3">
           <span className="material-symbols-outlined text-primary text-base md:text-[24px]" style={{ fontVariationSettings: "'FILL' 1" }}>psychology</span>
           <span className="text-xs md:text-sm font-bold uppercase tracking-widest">{t('admin.analytics.topicAnalysis' as any)}</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold uppercase tracking-wider">AI</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold uppercase tracking-wider">DeepSeek</span>
         </div>
         <button onClick={analyze} disabled={loading}
           className="flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-primary transition-colors cursor-pointer disabled:opacity-50 bg-transparent">

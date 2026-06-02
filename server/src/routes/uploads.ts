@@ -13,6 +13,7 @@ import {
 } from '../services/uploadScanner.js';
 import { getUploadQuotaMb } from '../services/usageLimit.js';
 import { applyWatermark } from '../services/watermark.js';
+import { getEmbedQueue, defaultJobOptions } from '../services/queue.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -68,7 +69,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
   fileFilter: (_req, file, cb) => {
     // Note: fixFilename is applied in storage.filename callback, not here,
     // to avoid double-conversion which corrupts the name.
@@ -110,6 +111,9 @@ async function getUserUploadSize(userId: string): Promise<number> {
 router.post('/', upload.array('files', 10), async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const conversationId = (req.body?.conversationId as string) || null;
+  // When set, accepted files are also indexed into the user's RAG knowledge
+  // base (same pipeline as LINE uploads) via a background EmbedJob.
+  const indexToRag = String(req.body?.index ?? '') === 'true';
   const files = req.files as Express.Multer.File[];
 
   if (!files || files.length === 0) {
@@ -204,9 +208,24 @@ router.post('/', upload.array('files', 10), async (req: Request, res: Response) 
       scanStatus: scanResult.status,
       scanDetail: scanResult.detail,
     });
+
+    // Index into the personal RAG knowledge base (background job, like LINE).
+    if (indexToRag) {
+      try {
+        await getEmbedQueue().add('index', {
+          userId,
+          filename: file.originalname,
+          fileType: ext.replace('.', '') || 'bin',
+          storagePath: relPath,
+          sourceUploadId: fileId,
+        }, defaultJobOptions());
+      } catch (err) {
+        console.warn('[Uploads] RAG index enqueue failed:', err);
+      }
+    }
   }
 
-  res.json({ uploads: results });
+  res.json({ uploads: results, indexing: indexToRag });
 });
 
 // ---------------------------------------------------------------------------

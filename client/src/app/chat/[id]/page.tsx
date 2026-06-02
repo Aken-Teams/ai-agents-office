@@ -11,9 +11,6 @@ import UploadAlertModal, { type UploadAlertItem } from '../../components/UploadA
 import ShareModal from '../../components/ShareModal';
 import { I18nProvider, useTranslation } from '../../../i18n';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
-import { useDocumentMode, FILE_GEN_SKILLS, FILE_TYPE_TO_LAYOUT } from '../hooks/useDocumentMode';
-import { useDocumentBlocks } from '../../editor/hooks/useDocumentBlocks';
-import DocumentCanvas from '../components/DocumentCanvas';
 
 const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { ssr: false });
 const ChatEChart = dynamic(() => import('../../components/charts/ChatEChart'), { ssr: false });
@@ -54,8 +51,9 @@ function convertMermaidMindmapToMarkdown(mermaidCode: string): string {
   return result.join('\n');
 }
 
-// SSE streaming via Next.js API route proxy (relative path for production).
-const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+// Direct connection to Express for SSE streaming.
+// Next.js rewrites proxy buffers the entire response, preventing real-time updates.
+const SSE_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:12054';
 
 interface Message {
   id: string;
@@ -314,7 +312,7 @@ function parseAskUserOptions(rawInput: string | undefined): { question: string; 
 
 /** Parse [refs:...] metadata tag from user messages for displaying referenced assistants */
 function parseMessageRefs(content: string): { text: string; refs: Array<{id: string; title: string}> } {
-  const match = content.match(/\n\n\[refs:(\[[\s\S]*\])\]$/);
+  const match = content.match(/\n\n\[refs:(\[.*\])\]$/s);
   if (!match) return { text: content, refs: [] };
   try {
     const refs = JSON.parse(match[1]) as Array<{id: string; title: string}>;
@@ -384,113 +382,105 @@ function getFileColor(type: string): string {
     pptx: 'text-warning', ppt: 'text-warning',
     pdf: 'text-error',
     html: 'text-secondary', htm: 'text-secondary',
-    png: 'text-purple-400', jpg: 'text-purple-400', jpeg: 'text-purple-400',
-    gif: 'text-purple-400', webp: 'text-purple-400', bmp: 'text-purple-400',
-    svg: 'text-purple-400', tiff: 'text-purple-400', tif: 'text-purple-400', ico: 'text-purple-400',
-    json: 'text-amber-400', xml: 'text-amber-400', yaml: 'text-amber-400', yml: 'text-amber-400',
+    png: 'text-tertiary', jpg: 'text-tertiary', jpeg: 'text-tertiary',
+    gif: 'text-tertiary', webp: 'text-tertiary', bmp: 'text-tertiary',
+    svg: 'text-tertiary', tiff: 'text-tertiary', tif: 'text-tertiary', ico: 'text-tertiary',
+    json: 'text-warning', xml: 'text-warning', yaml: 'text-warning', yml: 'text-warning',
     txt: 'text-on-surface-variant', md: 'text-on-surface-variant',
   };
   return colors[type] || 'text-primary';
 }
 
-/** Types that can render a live iframe preview (PDF natively, HTML directly) */
-const IFRAME_PREVIEWABLE = new Set(['pdf', 'html', 'htm']);
-/** Types that show a styled file-type cover card */
-const CARD_PREVIEWABLE = new Set(['pptx', 'ppt', 'docx', 'doc', 'xlsx', 'xls']);
-const PREVIEWABLE_TYPES = new Set([...IFRAME_PREVIEWABLE, ...CARD_PREVIEWABLE]);
-
-/** Simple cover card for Office files — light bg + icon */
-function FileTypeCover({ file, onClick }: { file: GeneratedFile; onClick: () => void }) {
-  const { t } = useTranslation();
-  return (
-    <button
-      onClick={onClick}
-      className="relative w-full rounded-t-xl overflow-hidden cursor-pointer group block bg-surface-container-lowest"
-      title={t('chat.preview.fullscreen' as any)}
-    >
-      <div className="h-[100px] md:h-[120px] flex flex-col items-center justify-center gap-1.5">
-        <span className={`material-symbols-outlined text-3xl md:text-4xl ${getFileColor(file.file_type)}`}>
-          {getFileIcon(file.file_type)}
-        </span>
-        <span className="text-[11px] text-on-surface-variant/50 font-medium uppercase tracking-wider">
-          {file.file_type}
-        </span>
-      </div>
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center">
-        <span className="material-symbols-outlined text-on-surface-variant text-xl opacity-0 group-hover:opacity-70 transition-opacity">
-          open_in_full
-        </span>
-      </div>
-    </button>
-  );
-}
-
-/** Live iframe thumbnail for PDF and HTML files */
-function FileThumbnail({ file, token, onClick }: { file: GeneratedFile; token: string; onClick: () => void }) {
+function InlineHtmlPreview({ file, token, onFullscreen }: { file: GeneratedFile; token: string; onFullscreen: () => void }) {
   const { t } = useTranslation();
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [isPdf, setIsPdf] = useState(false);
-
   useEffect(() => {
     let url: string | null = null;
-    const endpoint = file.file_type === 'html'
-      ? `${SSE_BASE}/api/files/${file.id}/download`
-      : `${SSE_BASE}/api/files/${file.id}/preview`;
-    fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => {
-        if (!r.ok) throw new Error(`preview ${r.status}`);
-        const ct = r.headers.get('Content-Type') || '';
-        return r.blob().then(blob => ({ blob, ct }));
-      })
-      .then(({ blob, ct }) => {
-        const pdf = ct.includes('pdf');
-        const type = pdf ? 'application/pdf' : ct.includes('html') ? 'text/html' : ct;
-        url = URL.createObjectURL(new Blob([blob], { type }));
-        setIsPdf(pdf);
+    fetch(`/api/files/${file.id}/download`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.text() : Promise.reject('fetch failed'))
+      .then(html => {
+        url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
         setBlobUrl(url);
       })
-      .catch((err) => {
-        console.warn(`[FileThumbnail] Preview failed for ${file.filename}:`, err);
-        setFailed(true);
-      });
+      .catch(console.error);
     return () => { if (url) URL.revokeObjectURL(url); };
-  }, [file.id, file.file_type, file.filename, token]);
-
-  // Failed: show file type cover card as fallback
-  if (failed) return <FileTypeCover file={file} onClick={onClick} />;
+  }, [file.id, token]);
 
   if (!blobUrl) return (
-    <div className="h-[160px] md:h-[200px] flex items-center justify-center text-on-surface-variant text-sm rounded-t-xl bg-surface-container-lowest">
-      <span className="material-symbols-outlined animate-spin mr-2 text-base">progress_activity</span>
+    <div className="h-[240px] md:h-[360px] flex items-center justify-center text-on-surface-variant text-sm">
+      <span className="material-symbols-outlined animate-spin mr-2">progress_activity</span>
       {t('chart.preview.loading' as any)}
     </div>
   );
 
   return (
-    <button
-      onClick={onClick}
-      className="relative w-full rounded-t-xl overflow-hidden bg-surface-container-lowest cursor-pointer group block"
-      title={t('chat.preview.fullscreen' as any)}
-    >
-      <div className="h-[160px] md:h-[200px] overflow-hidden">
-        <iframe
-          src={isPdf ? `${blobUrl}#toolbar=0&navpanes=0&scrollbar=0&page=1` : blobUrl}
-          className="w-full h-[400px] border-0 scale-[0.5] origin-top-left"
-          style={{ width: '200%', pointerEvents: 'none' }}
-          scrolling="no"
-          tabIndex={-1}
-          title={file.filename}
-          sandbox="allow-scripts allow-same-origin"
-        />
-      </div>
-      <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-surface-container-low to-transparent" />
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-        <span className="material-symbols-outlined text-white text-2xl opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg">
-          open_in_full
-        </span>
-      </div>
-    </button>
+    <div className="relative group rounded-t-xl overflow-hidden">
+      <iframe
+        src={blobUrl}
+        sandbox="allow-scripts allow-same-origin"
+        scrolling="no"
+        className="w-full h-[240px] md:h-[360px] border-b border-outline-variant/10 overflow-hidden"
+        style={{ overflow: 'hidden' }}
+        title={file.filename}
+      />
+      <button
+        onClick={onFullscreen}
+        className="absolute top-3 right-3 p-2 rounded-lg bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-black/70"
+        title={t('chat.preview.fullscreen' as any)}
+      >
+        <span className="material-symbols-outlined text-lg">fullscreen</span>
+      </button>
+    </div>
+  );
+}
+
+/** Inline preview for office/PDF files — shows first page via /preview endpoint */
+const PREVIEWABLE_TYPES = new Set(['pdf', 'pptx', 'ppt', 'docx', 'doc', 'xlsx', 'xls']);
+
+function InlineFilePreview({ file, token }: { file: GeneratedFile; token: string }) {
+  const { t } = useTranslation();
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [contentType, setContentType] = useState<string>('');
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let url: string | null = null;
+    fetch(`/api/files/${file.id}/preview`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => {
+        if (!r.ok) throw new Error('preview failed');
+        const ct = r.headers.get('Content-Type') || '';
+        setContentType(ct);
+        return r.blob().then(blob => ({ blob, ct }));
+      })
+      .then(({ blob, ct }) => {
+        const type = ct.includes('pdf') ? 'application/pdf' : ct.includes('html') ? 'text/html' : ct;
+        url = URL.createObjectURL(new Blob([blob], { type }));
+        setBlobUrl(url);
+      })
+      .catch(() => setFailed(true));
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [file.id, token]);
+
+  if (failed) return null; // Silently skip — file card still shows below
+  if (!blobUrl) return (
+    <div className="h-[240px] md:h-[360px] flex items-center justify-center text-on-surface-variant text-sm rounded-t-xl bg-surface-container-lowest">
+      <span className="material-symbols-outlined animate-spin mr-2 text-base">progress_activity</span>
+      {t('chart.preview.loading' as any)}
+    </div>
+  );
+
+  const isPdf = contentType.includes('pdf');
+  return (
+    <div className="relative rounded-t-xl overflow-hidden bg-surface-container-lowest">
+      <iframe
+        src={isPdf ? `${blobUrl}#toolbar=0&navpanes=0&scrollbar=0` : blobUrl}
+        className="w-full h-[240px] md:h-[360px] border-b border-outline-variant/10"
+        scrolling="no"
+        title={file.filename}
+        sandbox={isPdf ? undefined : 'allow-same-origin'}
+        style={{ overflow: 'hidden', pointerEvents: 'none' }}
+      />
+    </div>
   );
 }
 
@@ -507,14 +497,14 @@ function ChatContent() {
   const [streaming, setStreaming] = useState(false);
   const [streamText, setStreamText] = useState('');
   const [thinkingText, setThinkingText] = useState('');
-  const [isDragging, setIsDragging] = useState(false);
-  const dragCounter = useRef(0);
   const [tools, setTools] = useState<ToolActivity[]>([]);
   const [files, setFiles] = useState<GeneratedFile[]>([]);
   const [latestFiles, setLatestFiles] = useState<GeneratedFile[]>([]);
   const [title, setTitle] = useState('');
   const [skillId, setSkillId] = useState('');
   const [convCategory, setConvCategory] = useState('');
+  // AI engine for this conversation — user-selectable per turn, sticky per conversation.
+  const [engine, setEngine] = useState<'claude' | 'codex'>('claude');
   const [elapsed, setElapsed] = useState(0);
   const [lastUsage, setLastUsage] = useState<{ inputTokens: number; outputTokens: number; model: string } | null>(null);
   const [panelCollapsed, setPanelCollapsed] = useState(false);
@@ -539,57 +529,6 @@ function ChatContent() {
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
-
-  // Document mode (split view for file-generation tasks)
-  const docMode = useDocumentMode(conversationId);
-  const docBlocks = useDocumentBlocks(token);
-  const [docRebuilding, setDocRebuilding] = useState(false);
-  const [docRegenBlockId, setDocRegenBlockId] = useState<string | null>(null);
-  const [docRegenContext, setDocRegenContext] = useState<string>('');
-  const [docRegenInstruction, setDocRegenInstruction] = useState<string>(''); // shown in canvas while regenerating
-  const [docRegenPhase, setDocRegenPhase] = useState<string>(''); // 'ai_thinking' | 'rebuilding' | ''
-  const docRegenInFlight = useRef(false); // prevent duplicate regenerate calls
-  const [docSelectedElement, setDocSelectedElement] = useState<string | null>(null); // selected sub-element (chart, field, etc.)
-  const [docSlideShapes, setDocSlideShapes] = useState<Array<{ name: string; type: string }>>([]); // shapes on current slide
-  const [docChatCollapsed, setDocChatCollapsed] = useState(false); // collapse left chat in doc mode
-  const [docChatWidth, setDocChatWidth] = useState(33); // chat panel width % in doc mode
-  const [mobileDocView, setMobileDocView] = useState<'preview' | 'chat'>('preview'); // mobile: toggle chat vs preview
-  const docDragRef = useRef<{ startX: number; startWidth: number } | null>(null);
-  const fileGenInRoundRef = useRef(false); // track if file was generated this round
-
-  /** Submit regeneration: close modal immediately, stream SSE events, show real-time status */
-  const submitDocRegen = useCallback(() => {
-    const input = (document.getElementById('doc-regen-input') as HTMLTextAreaElement)?.value?.trim();
-    if (!input || !docMode.documentFileId || !docRegenBlockId || docRegenInFlight.current) return;
-    docRegenInFlight.current = true;
-    const blockId = docRegenBlockId;
-    const fullInstruction = docRegenContext ? `${docRegenContext} ${input}` : input;
-    // Close modal immediately & show instruction in canvas
-    setDocRegenInstruction(fullInstruction);
-    setDocRegenPhase('ai_thinking');
-    setDocRegenBlockId(null);
-    setDocRegenContext('');
-    // Fire regeneration with SSE streaming
-    docBlocks.regenerate(docMode.documentFileId, blockId, fullInstruction, (event) => {
-      // Handle real-time SSE events
-      if (event.type === 'started') setDocRegenPhase('ai_thinking');
-      else if (event.type === 'ai_text') setDocRegenPhase('ai_thinking');
-      else if (event.type === 'block_updated') {
-        // Immediately show new content in canvas (before file patch)
-        setDocRegenPhase('patching');
-      }
-      else if (event.type === 'patching') setDocRegenPhase('patching');
-    }).then(() => {
-      docRegenInFlight.current = false;
-      setDocRegenInstruction('');
-      setDocRegenPhase('');
-      // Preview refresh is triggered by regenInstruction→'' transition in DocumentCanvas
-    }).catch(() => {
-      docRegenInFlight.current = false;
-      setDocRegenInstruction('');
-      setDocRegenPhase('');
-    });
-  }, [docRegenBlockId, docRegenContext, docMode.documentFileId, docBlocks]);
 
   // Custom ReactMarkdown components — intercept ```chart and ```mermaid blocks
   // Memoized to prevent chart/map components from re-mounting on every render
@@ -654,6 +593,7 @@ function ChatContent() {
         setTitle(data.title);
         setSkillId(data.skill_id || '');
         setConvCategory(data.category || '');
+        if (data.agent_engine === 'claude' || data.agent_engine === 'codex') setEngine(data.agent_engine);
         setMessages(data.messages || []);
         setConversationLoaded(true);
       })
@@ -893,19 +833,10 @@ function ChatContent() {
     const refsTag = selectedRefs.length > 0
       ? '\n\n[refs:' + JSON.stringify(selectedRefs.map(r => ({ id: r.id, title: r.title }))) + ']'
       : '';
-    // Build a short, human-readable doc context tag for display
-    let docTag = '';
-    if (docMode.viewMode === 'document' && docMode.documentFileId && docMode.selectedBlockId) {
-      const block = docBlocks.blocks.find(b => b.id === docMode.selectedBlockId);
-      const pageNum = docBlocks.blocks.findIndex(b => b.id === docMode.selectedBlockId) + 1;
-      const title = (block?.data as any)?.title || '';
-      const elLabel = docSelectedElement ? ` · ${docSelectedElement}` : '';
-      docTag = `[doc:p${pageNum}/${docBlocks.blocks.length}:${block?.type || ''}:${title}${elLabel}]`;
-    }
     setMessages(prev => [...prev, {
       id: `temp-${Date.now()}`,
       role: 'user',
-      content: (docTag ? docTag + '\n' : '') + userMessage + attachmentNote + refsTag,
+      content: userMessage + attachmentNote + refsTag,
       created_at: new Date().toISOString(),
     }]);
 
@@ -919,82 +850,6 @@ function ChatContent() {
     setAttachedFiles([]);
     setLatestFiles([]);
     setSelectedRefs([]);
-    fileGenInRoundRef.current = false;
-
-    // If this conversation uses a file-gen skill, enter document mode immediately
-    if (skillId && FILE_GEN_SKILLS.has(skillId)) {
-      docMode.enterDocumentMode(skillId);
-      setMobileDocView('preview'); // mobile: show preview when entering doc mode
-    }
-
-    // Document mode: detect whether message is a QUESTION (→ chat) or EDIT request (→ regeneration)
-    const isDocEditMode = docMode.viewMode === 'document' && docMode.documentFileId;
-
-    if (isDocEditMode && docMode.selectedBlockId) {
-      // Heuristic: is this a question/inquiry, or an edit request?
-      const isQuestion = /[?？]/.test(userMessage.trim()) ||
-        /(?:什麼|是什麼|嗎|呢|是否|能不能|有沒有|怎麼|如何|為什麼|為何|哪個|哪些|誰|幾|看到|看看|描述|解釋|告訴|說明)/.test(userMessage);
-      const hasEditIntent = /(?:改|修改|換|更新|調整|變|設定|加入|加上|刪|移除|增加|替換|修正|優化|重做|改成|換成|變成|新增|把.*改|把.*換|把.*變|將.*改|將.*換)/.test(userMessage);
-
-      // Edit request (or not a question) → fast single-block regeneration
-      if (!isQuestion || hasEditIntent) {
-        const blockId = docMode.selectedBlockId;
-        const pageNum = docBlocks.blocks.findIndex(b => b.id === blockId) + 1;
-        const elementHint = docSelectedElement ? `[目標元素: ${docSelectedElement}] ` : '';
-        // Include shapes context in instruction so AI knows what's on the slide
-        const shapesHint = docSlideShapes.length > 0
-          ? `[投影片元素: ${docSlideShapes.map(s => `${s.name}(${s.type})`).join(', ')}] `
-          : '';
-        const instruction = `${shapesHint}${elementHint}${userMessage}`;
-        setDocRegenInstruction(userMessage);
-        setDocRegenPhase('ai_thinking');
-        docBlocks.regenerate(docMode.documentFileId!, blockId, instruction, (event) => {
-          if (event.type === 'started') setDocRegenPhase('ai_thinking');
-          else if (event.type === 'ai_text') setDocRegenPhase('ai_thinking');
-          else if (event.type === 'block_updated') setDocRegenPhase('patching');
-          else if (event.type === 'patching') setDocRegenPhase('patching');
-        }).then(() => {
-          setMessages(prev => [...prev, {
-            id: `regen-${Date.now()}`,
-            conversation_id: conversationId,
-            role: 'assistant',
-            content: t('chat.docMode.blockUpdated') + ` (第 ${pageNum} 頁)`,
-            created_at: new Date().toISOString(),
-          }]);
-        }).catch(() => {
-          setMessages(prev => [...prev, {
-            id: `err-${Date.now()}`,
-            conversation_id: conversationId,
-            role: 'assistant',
-            content: `⚠️ ${t('chat.error.unknown')}`,
-            created_at: new Date().toISOString(),
-          }]);
-        }).finally(() => {
-          setDocRegenInstruction('');
-          setDocRegenPhase('');
-          setStreaming(false);
-        });
-        return; // Skip normal generate flow
-      }
-      // Question (no edit intent) → falls through to normal chat with DOC_CONTEXT below
-    }
-
-    // Document mode context: send as separate field (not embedded in message text)
-    let docContext = '';
-    if (isDocEditMode) {
-      if (docMode.selectedBlockId) {
-        const block = docBlocks.blocks.find(b => b.id === docMode.selectedBlockId);
-        const pageNum = docBlocks.blocks.findIndex(b => b.id === docMode.selectedBlockId) + 1;
-        const elementInfo = docSelectedElement ? `，使用者選取了元素「${docSelectedElement}」` : '';
-        const shapesInfo = docSlideShapes.length > 0
-          ? `\n投影片上的視覺元素: ${docSlideShapes.map(s => `${s.name}(${s.type})`).join(', ')}`
-          : '';
-        docContext = `使用者正在查看第 ${pageNum}/${docBlocks.blocks.length} 頁 (${block?.type || 'unknown'})${elementInfo}。該頁數據: ${JSON.stringify(block?.data)}${shapesInfo}`;
-      } else {
-        const blockSummary = docBlocks.blocks.map((b, i) => `#${i + 1} ${b.type}: ${(b.data as any).title || ''}`).join(', ');
-        docContext = `正在編輯 ${docMode.docLayoutType || 'document'} 文件，共 ${docBlocks.blocks.length} 頁: ${blockSummary}`;
-      }
-    }
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -1008,7 +863,7 @@ function ChatContent() {
         },
         body: JSON.stringify({
           message: userMessage,
-          ...(docContext && { docContext }),
+          engine,
           ...(skillId && { skillId }),
           ...(currentUploadIds.length > 0 && { uploadIds: currentUploadIds }),
           ...(selectedRefs.length > 0 && { referencedConvIds: selectedRefs.map(r => r.id) }),
@@ -1166,24 +1021,6 @@ function ChatContent() {
                 }]);
               }
             }
-            // Document mode SSE events
-            if (event.type === 'router_plan' || event.type === 'task_dispatched' || event.type === 'skill_started' || event.type === 'blocks_ready' || event.type === 'file_generated') {
-              docMode.handleSSEEvent(event);
-            }
-            // Track if file was generated this round
-            if (event.type === 'file_generated') {
-              fileGenInRoundRef.current = true;
-            }
-            // When blocks_ready arrives, set blocks immediately from SSE data
-            if (event.type === 'blocks_ready') {
-              const bData = event.data as { fileId: string; blocks: any[] };
-              if (bData.fileId && bData.blocks) {
-                docBlocks.setBlocksFromSSE({ fileId: bData.fileId, blocks: bData.blocks });
-              } else if (bData.fileId) {
-                docBlocks.fetchBlocks(bData.fileId);
-              }
-            }
-
             if (event.type === 'error') {
               const errMsg = typeof event.data === 'string' ? event.data : 'Unknown error';
               fullText += `\n\n> **${t('chat.error.prefix')}:** ${errMsg}`;
@@ -1200,9 +1037,6 @@ function ChatContent() {
               }
               setStreamText('');
               setThinkingText('');
-              // Auto-exit document mode if no file was generated this round
-              docMode.onGenerationDone(fileGenInRoundRef.current);
-              fileGenInRoundRef.current = false;
             }
           } catch { /* skip parse errors */ }
         }
@@ -1233,7 +1067,7 @@ function ChatContent() {
       // Reload sidebar uploads — dashboard uploads now linked to this conversation
       reloadConversationUploads();
     }
-  }, [input, streaming, token, conversationId, skillId, attachedFiles, pendingTemplate, t, reloadConversationUploads]);
+  }, [input, streaming, token, conversationId, skillId, engine, attachedFiles, pendingTemplate, t, reloadConversationUploads]);
 
   // Load pending template from sessionStorage (set by Navbar modal)
   useEffect(() => {
@@ -1367,7 +1201,7 @@ function ChatContent() {
 
   async function handleDownload(fileId: string, filename: string) {
     try {
-      const res = await fetch(`${SSE_BASE}/api/files/${fileId}/download`, {
+      const res = await fetch(`/api/files/${fileId}/download`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Download failed');
@@ -1387,14 +1221,14 @@ function ChatContent() {
 
   async function openPreview(file: GeneratedFile) {
     try {
-      // Use /preview for all types — it converts Office files to PDF/HTML
-      const res = await fetch(`${SSE_BASE}/api/files/${file.id}/preview`, {
+      const res = await fetch(`/api/files/${file.id}/download`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Preview fetch failed');
-      const contentType = res.headers.get('Content-Type') || 'application/octet-stream';
       const blob = await res.blob();
-      const url = URL.createObjectURL(new Blob([blob], { type: contentType }));
+      const url = URL.createObjectURL(
+        file.file_type === 'html' ? new Blob([await blob.text()], { type: 'text/html' }) : blob
+      );
       setPreviewBlobUrl(url);
       setPreviewFile(file);
     } catch (err) {
@@ -1418,7 +1252,7 @@ function ChatContent() {
     const realFileId = dropdownKey.replace(/^(preview|sidebar|mobile)-/, '');
     if (!versionCache[realFileId]) {
       try {
-        const res = await fetch(`${SSE_BASE}/api/files/${realFileId}/versions`, {
+        const res = await fetch(`/api/files/${realFileId}/versions`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
@@ -1488,20 +1322,9 @@ function ChatContent() {
 
       <div className={`${sidebarMargin} h-[100svh] md:h-screen flex overflow-hidden transition-all duration-300`}>
         {/* === Central Chat Area === */}
-        <section
-          className={`flex flex-col min-h-0 min-w-0 transition-all duration-300 ${
-            docMode.viewMode === 'document'
-              ? docChatCollapsed
-                ? 'w-0 overflow-hidden'
-                : mobileDocView === 'preview'
-                  ? 'hidden sm:flex min-w-[280px]'
-                  : 'flex-1 sm:flex min-w-[280px]'
-              : 'flex-1'
-          }`}
-          style={docMode.viewMode === 'document' && !docChatCollapsed ? { width: `${docChatWidth}%` } : undefined}
-        >
+        <section className="flex flex-col flex-1 min-h-0 min-w-0">
           {/* Title Bar */}
-          <header className={`flex items-center gap-2 px-3 h-11 bg-surface/80 backdrop-blur-xl shrink-0 border-b border-outline-variant/10 ${docMode.viewMode === 'chat' ? 'md:gap-4 md:px-8 md:h-14' : ''}`}>
+          <header className="flex items-center gap-2 md:gap-4 px-3 md:px-8 h-11 md:h-14 bg-surface/80 backdrop-blur-xl shrink-0 border-b border-outline-variant/10">
             <button
               onClick={() => router.push(convCategory === 'assistant' ? '/assistant' : '/conversations')}
               className="text-on-surface-variant hover:text-on-surface active:text-on-surface transition-colors bg-transparent cursor-pointer p-1"
@@ -1515,31 +1338,6 @@ function ChatContent() {
               </span>
             )}
             <span className="flex-1" />
-            {/* Mobile: switch to preview in doc mode */}
-            {docMode.viewMode === 'document' && mobileDocView === 'chat' && (
-              <button
-                onClick={() => setMobileDocView('preview')}
-                className="sm:hidden p-1 text-on-surface-variant active:text-primary transition-colors bg-transparent cursor-pointer shrink-0"
-                title="切換至預覽"
-              >
-                <span className="material-symbols-outlined text-sm">visibility</span>
-              </button>
-            )}
-            {/* Document mode toggle */}
-            {files.length > 0 && docMode.viewMode === 'chat' && (
-              <button
-                onClick={() => {
-                  const latestFile = files[files.length - 1];
-                  docMode.manualToggle(latestFile?.id, latestFile?.file_type);
-                  if (latestFile) docBlocks.fetchBlocks(latestFile.id);
-                }}
-                className="hidden md:flex items-center gap-1 px-2 py-1 text-on-surface-variant hover:text-primary hover:bg-primary/5 active:text-primary transition-colors bg-transparent cursor-pointer shrink-0 rounded-lg text-xs"
-                title={t('chat.docMode.enter')}
-              >
-                <span className="material-symbols-outlined text-sm">vertical_split</span>
-                <span className="hidden lg:inline">{t('chat.docMode.enter')}</span>
-              </button>
-            )}
             {/* Share button */}
             <button
               onClick={() => setShowShareModal(true)}
@@ -1571,8 +1369,8 @@ function ChatContent() {
 
           {/* Background processing indicator */}
           {backgroundProcessing && !streaming && (
-            <div className={`mx-3 mt-2 px-3 py-2 bg-primary/8 border border-primary/15 rounded-lg ${docMode.viewMode === 'chat' ? 'md:mx-8' : ''}`}>
-              <div className="flex items-center gap-1.5 flex-wrap overflow-hidden">
+            <div className="mx-3 md:mx-8 mt-2 px-3 py-2 bg-primary/8 border border-primary/15 rounded-lg">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="material-symbols-outlined text-sm animate-spin text-primary/60 shrink-0">progress_activity</span>
                 <span className="text-xs text-primary/60 mr-1">{t('chat.backgroundProcessing' as any)}</span>
                 {bgTasks.map(task => {
@@ -1581,7 +1379,7 @@ function ChatContent() {
                   const skillIcon = SKILL_ICONS[task.skill_id] || 'smart_toy';
                   const skillName = (t(`skill.${task.skill_id}` as any) as string) || task.skill_id;
                   return (
-                    <span key={task.id} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium whitespace-nowrap max-w-[140px] ${
+                    <span key={task.id} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium ${
                       isDone ? 'bg-success/10 text-success' :
                       isFail ? 'bg-error/10 text-error' :
                       'bg-primary/10 text-primary'
@@ -1589,7 +1387,7 @@ function ChatContent() {
                       <span className={`material-symbols-outlined shrink-0 ${!isDone && !isFail ? 'animate-spin' : ''}`} style={{ fontSize: '11px' }}>
                         {isDone ? 'check_circle' : isFail ? 'error' : skillIcon}
                       </span>
-                      <span className="truncate">{skillName}</span>
+                      {skillName}
                     </span>
                   );
                 })}
@@ -1598,52 +1396,26 @@ function ChatContent() {
           )}
 
           {/* Messages */}
-          <div className={`flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 space-y-4 ${docMode.viewMode === 'chat' ? 'md:px-8 md:py-8 md:space-y-8' : 'space-y-3'}`}>
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 md:px-8 py-4 md:py-8 space-y-4 md:space-y-8">
             {messages.map((msg, idx) => {
               const sources = msg.role === 'assistant' ? extractSources(msg.content) : [];
-              // Parse doc context tag [doc:p3/9:stats:Title · Element] and legacy [DOC_CONTEXT:...]
-              let docChip: { page: string; type: string; title: string; element?: string } | null = null;
-              let cleanedContent = msg.content;
-              if (msg.role === 'user') {
-                // New format: [doc:p3/9:stats:Title · Element]
-                const docTagMatch = cleanedContent.match(/^\[doc:p(\d+\/\d+):([^:]*):([^\]]*)\]\n?/);
-                if (docTagMatch) {
-                  const [, page, type, rest] = docTagMatch;
-                  const parts = rest.split(' · ');
-                  docChip = { page, type, title: parts[0] || '', element: parts[1] };
-                  cleanedContent = cleanedContent.slice(docTagMatch[0].length);
-                }
-                // Legacy format: [DOC_CONTEXT: ...]
-                const legacyMatch = cleanedContent.match(/^\[DOC_CONTEXT:[\s\S]*?\]\n\n/);
-                if (legacyMatch) {
-                  cleanedContent = cleanedContent.slice(legacyMatch[0].length);
-                }
-              }
               const { text: userMsgText, refs: userMsgRefs } = msg.role === 'user'
-                ? parseMessageRefs(cleanedContent)
+                ? parseMessageRefs(msg.content)
                 : { text: msg.content, refs: [] };
               return (
-                <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : `flex gap-2 ${docMode.viewMode === 'chat' ? 'md:gap-4' : ''}`}>
+                <div key={msg.id} className={msg.role === 'user' ? 'flex flex-col items-end' : 'flex gap-2 md:gap-4'}>
                   {msg.role === 'assistant' && (
-                    <div className={`w-7 h-7 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg ${docMode.viewMode === 'chat' ? 'md:w-9 md:h-9' : ''}`}>
-                      <span className={`material-symbols-outlined text-primary text-xs ${docMode.viewMode === 'chat' ? 'md:text-sm' : ''}`} style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
+                    <div className="w-7 h-7 md:w-9 md:h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
+                      <span className="material-symbols-outlined text-primary text-xs md:text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
                     </div>
                   )}
                   <div className={
                     msg.role === 'user'
-                      ? `max-w-[85%] bg-surface-container px-3.5 py-3 rounded-xl rounded-tr-sm text-on-surface shadow-lg ${docMode.viewMode === 'chat' ? 'md:max-w-[70%] md:px-5 md:py-4' : ''}`
-                      : `max-w-[90%] min-w-0 ${docMode.viewMode === 'chat' ? 'md:max-w-[85%]' : ''}`
+                      ? 'max-w-[85%] md:max-w-[70%] bg-surface-container px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tr-sm text-on-surface shadow-lg'
+                      : 'max-w-[90%] md:max-w-[85%] min-w-0'
                   }>
                     {msg.role === 'user' ? (
                       <>
-                        {docChip && (
-                          <div className="flex items-center gap-1 mb-1.5 text-[11px] text-on-surface-variant/70">
-                            <span className="material-symbols-outlined text-xs" style={{ fontVariationSettings: "'FILL' 1" }}>description</span>
-                            <span>第 {docChip.page} 頁</span>
-                            {docChip.title && <span className="truncate max-w-[120px]">· {docChip.title}</span>}
-                            {docChip.element && <span className="text-primary/70">· {docChip.element}</span>}
-                          </div>
-                        )}
                         <p className="text-sm leading-relaxed whitespace-pre-wrap">{userMsgText}</p>
                         {userMsgRefs.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
@@ -1660,7 +1432,7 @@ function ChatContent() {
                         </span>
                       </>
                     ) : (
-                      <div className={`bg-surface-container-low px-3.5 py-3 rounded-xl rounded-tl-sm border border-outline-variant/10 overflow-hidden ${docMode.viewMode === 'chat' ? 'md:px-5 md:py-4' : ''}`}>
+                      <div className="bg-surface-container-low px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tl-sm border border-outline-variant/10 overflow-hidden">
                         {(() => {
                           const { text: msgText, choices } = parseChoices(msg.content);
                           const isLatestMsg = idx === messages.length - 1;
@@ -1711,12 +1483,12 @@ function ChatContent() {
 
             {/* Streaming text preview */}
             {streamText && streamText.trim() && (
-              <div className={`flex gap-2 ${docMode.viewMode === 'chat' ? 'md:gap-4' : ''}`}>
-                <div className={`w-7 h-7 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg ${docMode.viewMode === 'chat' ? 'md:w-9 md:h-9' : ''}`}>
-                  <span className={`material-symbols-outlined text-primary text-xs ${docMode.viewMode === 'chat' ? 'md:text-sm' : ''}`} style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
+              <div className="flex gap-2 md:gap-4">
+                <div className="w-7 h-7 md:w-9 md:h-9 shrink-0 bg-primary-container border border-primary/20 flex items-center justify-center rounded-lg">
+                  <span className="material-symbols-outlined text-primary text-xs md:text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>smart_toy</span>
                 </div>
-                <div className={`max-w-[90%] min-w-0 ${docMode.viewMode === 'chat' ? 'md:max-w-[85%]' : ''}`}>
-                  <div className={`bg-surface-container-low px-3.5 py-3 rounded-xl rounded-tl-sm border border-primary/20 border-dashed overflow-hidden ${docMode.viewMode === 'chat' ? 'md:px-5 md:py-4' : ''}`}>
+                <div className="max-w-[90%] md:max-w-[85%] min-w-0">
+                  <div className="bg-surface-container-low px-3.5 py-3 md:px-5 md:py-4 rounded-xl rounded-tl-sm border border-primary/20 border-dashed overflow-hidden">
                     <div className="chat-markdown text-sm leading-relaxed text-on-surface-variant">
                       <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>{streamText}</ReactMarkdown>
                       <span className="inline-block w-0.5 h-4 bg-primary ml-0.5 align-text-bottom animate-pulse" />
@@ -1728,9 +1500,9 @@ function ChatContent() {
 
             {/* Processing Panel */}
             {(hasActivity || showCompletedPanel) && (
-              <div className={`bg-surface-container-low rounded-lg border-l-2 border-primary/40 max-w-full overflow-hidden ${docMode.viewMode === 'chat' ? 'md:max-w-[85%]' : ''}`}>
+              <div className="bg-surface-container-low rounded-lg border-l-2 border-primary/40 max-w-full md:max-w-[85%] overflow-hidden">
                 <div
-                  className={`flex items-center gap-2 px-3 py-2.5 bg-surface-container cursor-pointer select-none active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors ${docMode.viewMode === 'chat' ? 'md:gap-3 md:px-4 md:py-3' : ''}`}
+                  className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-3 bg-surface-container cursor-pointer select-none active:bg-surface-container-high md:hover:bg-surface-container-high transition-colors"
                   onClick={() => setPanelCollapsed(c => !c)}
                   role="button"
                   tabIndex={0}
@@ -1756,7 +1528,7 @@ function ChatContent() {
 
                 {!panelCollapsed && (
                   <>
-                    <div className={`px-3 py-2 space-y-1 font-mono text-xs ${docMode.viewMode === 'chat' ? 'md:px-4 md:text-sm' : ''}`}>
+                    <div className="px-3 md:px-4 py-2 space-y-1 font-mono text-xs md:text-sm">
                       {/* Connected */}
                       <div className="flex items-center gap-2 px-2 py-1.5 text-on-surface-variant">
                         <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
@@ -1793,15 +1565,15 @@ function ChatContent() {
                         const askOptions = baseTool === 'AskUserQuestion' ? parseAskUserOptions(tool.input) : null;
                         return (
                           <div key={tool.id || i}>
-                            <div className={`flex items-center gap-2 px-2 py-1.5 rounded whitespace-nowrap overflow-hidden ${isDone ? 'text-outline' : 'text-on-surface-variant bg-surface-container/50'}`}>
+                            <div className={`flex items-center gap-2 px-2 py-1.5 rounded ${isDone ? 'text-outline' : 'text-on-surface-variant bg-surface-container/50'}`}>
                               {isDone
-                                ? <span className="material-symbols-outlined text-green-400 text-sm shrink-0">check_circle</span>
-                                : <span className="material-symbols-outlined text-primary text-sm animate-spin shrink-0">refresh</span>
+                                ? <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
+                                : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
                               }
-                              <span className="material-symbols-outlined text-sm shrink-0">{info.icon}</span>
-                              <span className={`shrink-0 ${isDone ? 'line-through opacity-60' : ''}`}>{info.label}</span>
+                              <span className="material-symbols-outlined text-sm">{info.icon}</span>
+                              <span className={isDone ? 'line-through opacity-60' : ''}>{info.label}</span>
                               {detail && (
-                                <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate min-w-0">
+                                <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[150px] md:max-w-[400px]">
                                   {detail}
                                 </span>
                               )}
@@ -1836,21 +1608,21 @@ function ChatContent() {
                       {agentTasks.map(task => (
                         <div
                           key={task.taskId}
-                          className={`flex items-center gap-2 px-2 py-1.5 rounded whitespace-nowrap overflow-hidden ${
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded ${
                             task.status === 'completed' ? 'text-outline'
                             : task.status === 'failed' ? 'text-warning bg-warning/5'
                             : 'text-on-surface-variant bg-surface-container/50'
                           }`}
                         >
                           {task.status === 'completed'
-                            ? <span className="material-symbols-outlined text-green-400 text-sm shrink-0">check_circle</span>
+                            ? <span className="material-symbols-outlined text-green-400 text-sm">check_circle</span>
                             : task.status === 'failed'
-                            ? <span className="material-symbols-outlined text-warning text-sm shrink-0">warning</span>
-                            : <span className="material-symbols-outlined text-primary text-sm animate-spin shrink-0">refresh</span>
+                            ? <span className="material-symbols-outlined text-warning text-sm">warning</span>
+                            : <span className="material-symbols-outlined text-primary text-sm animate-spin">refresh</span>
                           }
-                          <span className="material-symbols-outlined text-sm shrink-0">smart_toy</span>
-                          <span className="shrink-0">{t(`skill.${task.skillId}` as any) || task.skillId}</span>
-                          <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate min-w-0">
+                          <span className="material-symbols-outlined text-sm">smart_toy</span>
+                          <span>{t(`skill.${task.skillId}` as any) || task.skillId}</span>
+                          <span className="text-primary bg-surface-container px-1.5 py-0.5 rounded text-sm truncate max-w-[150px] md:max-w-[400px]">
                             {task.status === 'failed'
                               ? (task.error || t('chat.error.timedOut')).substring(0, 50)
                               : task.description.substring(0, 60)}
@@ -1905,17 +1677,19 @@ function ChatContent() {
               </div>
             )}
 
-            {/* Inline File Preview — only show files from latest generation (hidden in document mode) */}
-            {latestFiles.length > 0 && !streaming && docMode.viewMode !== 'document' && (
+            {/* Inline File Preview — only show files from latest generation */}
+            {latestFiles.length > 0 && !streaming && (
               <div className="max-w-full md:max-w-[85%] space-y-3 ml-0 md:ml-13">
                 {latestFiles.map(file => (
                   <div key={file.id} className="bg-surface-container-low rounded-xl border border-outline-variant/10 overflow-visible">
-                    {/* File cover: iframe preview for PDF/HTML, styled card for Office */}
-                    {IFRAME_PREVIEWABLE.has(file.file_type) || file.file_type === 'html' ? (
-                      <FileThumbnail file={file} token={token!} onClick={() => openPreview(file)} />
-                    ) : CARD_PREVIEWABLE.has(file.file_type) ? (
-                      <FileTypeCover file={file} onClick={() => openPreview(file)} />
-                    ) : null}
+                    {/* HTML slides — iframe preview */}
+                    {file.file_type === 'html' && (
+                      <InlineHtmlPreview file={file} token={token!} onFullscreen={() => openPreview(file)} />
+                    )}
+                    {/* Office/PDF — first page preview */}
+                    {PREVIEWABLE_TYPES.has(file.file_type) && (
+                      <InlineFilePreview file={file} token={token!} />
+                    )}
                     {/* Other file types — card only */}
                     <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2.5 md:py-3">
                       <div className={`w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center shrink-0 ${
@@ -1991,16 +1765,6 @@ function ChatContent() {
                             <span className="material-symbols-outlined text-base md:text-lg">fullscreen</span>
                           </button>
                         )}
-                        <button
-                          onClick={() => {
-                            docMode.manualToggle(file.id, file.file_type);
-                            docBlocks.fetchBlocks(file.id);
-                          }}
-                          className="p-1.5 md:p-2 rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-primary md:hover:text-primary transition-colors cursor-pointer"
-                          title={t('editor.openEditor' as any)}
-                        >
-                          <span className="material-symbols-outlined text-base md:text-lg">edit_note</span>
-                        </button>
                         <button
                           onClick={() => handleDownload(file.id, file.filename)}
                           className="p-1.5 md:p-2 rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-primary md:hover:text-primary transition-colors cursor-pointer"
@@ -2109,24 +1873,9 @@ function ChatContent() {
             </div>
           )}
 
-          {/* Input Area */}
-          <div className={`p-2 ${docMode.viewMode === 'chat' ? 'md:p-6 md:pt-0' : ''}`}>
-            {/* Block viewing indicator — purely informational, chat still works normally */}
-            {docMode.viewMode === 'document' && docMode.selectedBlockId && (
-              <div className="mb-2 flex items-center gap-2 px-2.5 py-1 bg-surface-container border border-outline-variant/15 rounded-lg">
-                <span className="material-symbols-outlined text-on-surface-variant text-sm">visibility</span>
-                <span className="text-[11px] text-on-surface-variant flex-1 truncate">
-                  {t('chat.docMode.viewingBlock')}: #{docBlocks.blocks.findIndex(b => b.id === docMode.selectedBlockId) + 1} {docBlocks.blocks.find(b => b.id === docMode.selectedBlockId)?.type.replace(/_/g, ' ') || ''}
-                  {docSelectedElement && <span className="text-primary ml-1">· {docSelectedElement}</span>}
-                </span>
-                <button
-                  onClick={() => docMode.setSelectedBlockId(null)}
-                  className="text-on-surface-variant hover:text-error transition-colors cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-xs">close</span>
-                </button>
-              </div>
-            )}
+          {/* Input Area — pb expands by safe-area-inset-bottom so the cost row
+              isn't hidden under the iOS home indicator inside LINE LIFF. */}
+          <div className="px-2 md:px-6 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] md:pb-6 md:pt-0">
             {/* Template banner */}
             {pendingTemplate && (
               <div className="mb-2 flex items-center gap-2 px-2.5 md:px-3 py-1.5 md:py-2 bg-primary/10 border border-primary/20 rounded-lg text-xs md:text-sm text-primary">
@@ -2141,23 +1890,7 @@ function ChatContent() {
                 </button>
               </div>
             )}
-            <div
-              className={`bg-surface-container rounded-lg border transition-all p-1.5 md:p-2 ${
-                isDragging
-                  ? 'border-primary border-dashed bg-primary/5'
-                  : 'border-outline-variant/20 focus-within:border-primary/40'
-              }`}
-              onDragEnter={e => { e.preventDefault(); e.stopPropagation(); dragCounter.current++; setIsDragging(true); }}
-              onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
-              onDragLeave={e => { e.preventDefault(); e.stopPropagation(); dragCounter.current--; if (dragCounter.current <= 0) { dragCounter.current = 0; setIsDragging(false); } }}
-              onDrop={e => { e.preventDefault(); e.stopPropagation(); dragCounter.current = 0; setIsDragging(false); if (!streaming && e.dataTransfer.files.length > 0) handleFileAttach(e.dataTransfer.files); }}
-            >
-              {isDragging && (
-                <div className="flex items-center justify-center gap-2 py-3 text-primary pointer-events-none">
-                  <span className="material-symbols-outlined text-xl">upload_file</span>
-                  <span className="text-sm font-medium">{t('chat.input.dropHint' as any) || '放開以上傳檔案'}</span>
-                </div>
-              )}
+            <div className="bg-surface-container rounded-lg border border-outline-variant/20 focus-within:border-primary/40 transition-all p-1.5 md:p-2">
               {/* Attached files chips + reference chips */}
               {(attachedFiles.length > 0 || selectedRefs.length > 0) && (
                 <div className="flex flex-wrap gap-1.5 md:gap-2 px-1.5 md:px-2 pt-1.5 md:pt-2 pb-0.5 md:pb-1">
@@ -2273,13 +2006,7 @@ function ChatContent() {
                       sendMessage();
                     }
                   }}
-                  placeholder={
-                    docMode.viewMode === 'document' && docSelectedElement
-                      ? `輸入對「${docSelectedElement}」的修改需求...`
-                      : docMode.viewMode === 'document' && docMode.selectedBlockId
-                        ? `輸入對第 ${docBlocks.blocks.findIndex(b => b.id === docMode.selectedBlockId) + 1} 頁的修改需求...`
-                        : t('chat.input.placeholder')
-                  }
+                  placeholder={t('chat.input.placeholder')}
                   rows={1}
                   disabled={streaming}
                 />
@@ -2303,9 +2030,25 @@ function ChatContent() {
             </div>
             {/* Input footer info */}
             <div className="mt-1.5 md:mt-2 flex justify-between items-center px-1 md:px-2">
-              <span className="text-[10px] md:text-sm text-outline uppercase tracking-widest truncate">
-                {skillId ? (t(`skill.${skillId}` as any) || skillId) : t('chat.input.autoDetect')}
-              </span>
+              <div className="flex items-center gap-2 min-w-0">
+                {/* AI engine selector — sticky per conversation, sent with each request */}
+                <div className="flex items-center rounded-full bg-surface-container-low p-0.5 shrink-0" title="AI 引擎">
+                  {(['claude', 'codex'] as const).map(eng => (
+                    <button
+                      key={eng}
+                      type="button"
+                      onClick={() => setEngine(eng)}
+                      disabled={streaming}
+                      className={`px-2 md:px-2.5 py-0.5 rounded-full text-[10px] md:text-xs font-headline uppercase tracking-widest transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${engine === eng ? 'cyber-gradient text-on-primary' : 'text-on-surface-variant md:hover:text-on-surface'}`}
+                    >
+                      {eng}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-[10px] md:text-sm text-outline uppercase tracking-widest truncate">
+                  {skillId ? (t(`skill.${skillId}` as any) || skillId) : t('chat.input.autoDetect')}
+                </span>
+              </div>
               {(totalUsage || lastUsage) && (
                 <div className="text-[10px] md:text-sm font-mono text-on-secondary-container/60 bg-surface-container-low px-2 md:px-3 py-0.5 md:py-1 rounded-full shrink-0">
                   {totalUsage ? (
@@ -2451,116 +2194,8 @@ function ChatContent() {
           </div>
         )}
 
-        {/* === Resizable Divider (between chat & canvas in doc mode) — desktop only === */}
-        {docMode.viewMode === 'document' && (
-          <div className="relative flex-shrink-0 group z-10 hidden sm:block">
-            {/* Drag handle */}
-            <div
-              className="w-1 h-full cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                const container = (e.target as HTMLElement).closest('[class*="h-[100svh]"]') as HTMLElement;
-                if (!container) return;
-                const containerWidth = container.offsetWidth;
-                docDragRef.current = { startX: e.clientX, startWidth: docChatWidth };
-                const onMove = (ev: MouseEvent) => {
-                  if (!docDragRef.current) return;
-                  const delta = ev.clientX - docDragRef.current.startX;
-                  const newPct = docDragRef.current.startWidth + (delta / containerWidth) * 100;
-                  setDocChatWidth(Math.max(15, Math.min(60, newPct)));
-                  if (newPct < 10) setDocChatCollapsed(true);
-                  else setDocChatCollapsed(false);
-                };
-                const onUp = () => {
-                  docDragRef.current = null;
-                  document.removeEventListener('mousemove', onMove);
-                  document.removeEventListener('mouseup', onUp);
-                  document.body.style.cursor = '';
-                  document.body.style.userSelect = '';
-                };
-                document.body.style.cursor = 'col-resize';
-                document.body.style.userSelect = 'none';
-                document.addEventListener('mousemove', onMove);
-                document.addEventListener('mouseup', onUp);
-              }}
-            />
-            {/* Collapse / expand toggle */}
-            <button
-              onClick={() => { setDocChatCollapsed(prev => !prev); if (docChatCollapsed) setDocChatWidth(w => w < 15 ? 33 : w); }}
-              className="absolute top-1/2 -translate-y-1/2 -left-2.5 w-5 h-8 bg-surface-container border border-outline-variant/20 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity cursor-pointer shadow-sm"
-              title={docChatCollapsed ? '展開對話' : '收合對話'}
-            >
-              <span className="material-symbols-outlined text-xs text-on-surface-variant">
-                {docChatCollapsed ? 'chevron_right' : 'chevron_left'}
-              </span>
-            </button>
-          </div>
-        )}
-
-        {/* === Document Canvas (right side in document mode) === */}
-        {docMode.viewMode === 'document' && (
-          <div className={`flex-1 flex min-w-0 ${mobileDocView === 'chat' ? 'hidden sm:flex' : 'flex'}`}>
-          <DocumentCanvas
-            layoutType={docMode.docLayoutType || 'slides'}
-            fileId={docMode.documentFileId}
-            blocks={docBlocks.blocks}
-            record={docBlocks.record}
-            selectedBlockId={docMode.selectedBlockId}
-            onSelectBlock={docMode.setSelectedBlockId}
-            onClose={() => docMode.exitDocumentMode()}
-            onRebuild={async () => {
-              if (!docMode.documentFileId) return;
-              setDocRebuilding(true);
-              setDocRegenPhase('rebuilding');
-              const result = await docBlocks.rebuild(docMode.documentFileId, (event) => {
-                // Stream agent progress
-                if (event.type === 'agent_tool') {
-                  setDocRegenPhase('rebuilding');
-                }
-              });
-              setDocRebuilding(false);
-              setDocRegenPhase('');
-              if (result.success && result.file) {
-                setFiles(prev => prev.map(f => f.id === docMode.documentFileId ? { ...f, ...(result.file as any) } : f));
-              }
-            }}
-            onRegenerate={(blockId, elementContext) => {
-              setDocRegenBlockId(blockId);
-              setDocRegenContext(elementContext || '');
-            }}
-            onUpdateBlock={async (blockId, key, value) => {
-              if (!docMode.documentFileId || !token) return;
-              // Use in-place patch (modifies PPTX XML directly, preserves formatting)
-              setDocRebuilding(true);
-              const result = await docBlocks.patchField(docMode.documentFileId, blockId, key, value);
-              setDocRebuilding(false);
-              if (result.success && result.file) {
-                setFiles(prev => prev.map(f => f.id === docMode.documentFileId ? { ...f, ...(result.file as any) } : f));
-              }
-            }}
-            onDownload={() => {
-              if (!docMode.documentFileId || !token) return;
-              const file = files.find(f => f.id === docMode.documentFileId);
-              if (file) handleDownload(file.id, file.filename);
-            }}
-            streaming={streaming}
-            rebuilding={docRebuilding}
-            regenInstruction={docRegenInstruction}
-            regenPhase={docRegenPhase}
-            token={token}
-            agentActivity={tools}
-            onElementSelect={setDocSelectedElement}
-            onShapesAvailable={setDocSlideShapes}
-            onMobileSwitchToChat={() => setMobileDocView('chat')}
-            t={t}
-          />
-          </div>
-        )}
-
-        {/* === Right Sidebar (only in chat mode) === */}
-        <aside className={`w-72 bg-surface-container-low border-l border-outline-variant/10 overflow-y-auto p-5 flex-col gap-6 shrink-0 ${
-          docMode.viewMode === 'chat' ? 'hidden lg:flex' : 'hidden'
-        }`}>
+        {/* === Right Sidebar === */}
+        <aside className="w-72 bg-surface-container-low border-l border-outline-variant/10 overflow-y-auto p-5 hidden lg:flex flex-col gap-6 shrink-0">
           {/* System Status */}
           <div className="space-y-3">
             <h4 className="text-sm font-headline font-bold text-outline tracking-widest uppercase">{t('chat.sidebar.systemStatus')}</h4>
@@ -2589,41 +2224,34 @@ function ChatContent() {
                 {files.map(file => (
                   <div key={file.id} className="group relative">
                     <div
-                      className="flex items-center gap-2 p-2.5 hover:bg-surface-container rounded-lg cursor-pointer transition-colors border border-transparent hover:border-primary/20"
+                      className="flex items-center justify-between p-3 hover:bg-surface-container rounded-lg cursor-pointer transition-colors border border-transparent hover:border-primary/20"
                       onClick={() => handleDownload(file.id, file.filename)}
                       role="button"
                       tabIndex={0}
                     >
-                      <span className={`material-symbols-outlined ${getFileColor(file.file_type)} text-lg shrink-0`}>
-                        {getFileIcon(file.file_type)}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm text-on-surface font-medium block truncate">{file.filename}</span>
-                        <span className="text-xs text-outline">
-                          {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className={`material-symbols-outlined ${getFileColor(file.file_type)} text-lg`}>
+                          {getFileIcon(file.file_type)}
                         </span>
+                        <div className="min-w-0">
+                          <span className="text-sm text-on-surface font-medium block truncate">{file.filename}</span>
+                          <span className="text-sm text-outline">
+                            {file.file_type.toUpperCase()} · {formatSize(file.file_size)}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-0.5 shrink-0 relative" data-version-dropdown>
+                      <div className="flex items-center gap-1 shrink-0 relative" data-version-dropdown>
                         <button
                           onClick={(e) => { e.stopPropagation(); toggleVersionDropdown(`sidebar-${file.id}`); }}
-                          className="px-1 py-0.5 text-[10px] font-bold text-primary/70 hover:bg-primary/10 rounded transition-colors cursor-pointer"
+                          className="flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-bold bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors cursor-pointer"
                           title={t('chat.preview.versions' as any)}
                         >
                           v{file.version || 1}
+                          <span className="material-symbols-outlined text-[10px]">expand_more</span>
                         </button>
-                        {FILE_TYPE_TO_LAYOUT[file.file_type] ? (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              docMode.manualToggle(file.id, file.file_type);
-                              docBlocks.fetchBlocks(file.id);
-                            }}
-                            className="p-1 rounded hover:bg-primary/10 text-outline hover:text-primary transition-colors cursor-pointer"
-                            title={t('editor.openEditor' as any)}
-                          >
-                            <span className="material-symbols-outlined text-base">edit_note</span>
-                          </button>
-                        ) : null}
+                        <span className="material-symbols-outlined text-sm text-outline group-hover:text-primary transition-colors">
+                          download
+                        </span>
                         {/* Sidebar version dropdown — absolute overlay */}
                         {versionDropdown === `sidebar-${file.id}` && versionCache[file.id] && (
                           <div className="absolute right-0 top-full mt-2 z-50 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl min-w-[220px] py-1.5 max-h-[7.5rem] overflow-y-auto">
@@ -2662,7 +2290,6 @@ function ChatContent() {
                 ))}
               </div>
             )}
-
           </div>
 
           {/* Uploaded Files (conversation history) — show latest 3 */}
@@ -2723,54 +2350,6 @@ function ChatContent() {
           )}
         </aside>
       </div>
-
-      {/* Block regeneration modal (document mode) */}
-      {docRegenBlockId && (
-        <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4"
-             onClick={() => { setDocRegenBlockId(null); setDocRegenContext(''); }}>
-          <div className="bg-surface rounded-t-2xl md:rounded-2xl shadow-2xl w-full max-w-lg p-5 relative border border-outline-variant/10"
-               onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="material-symbols-outlined text-primary text-xl">auto_fix_high</span>
-              <h3 className="text-base font-bold text-on-surface">{t('editor.regenerate.title')}</h3>
-            </div>
-            {docRegenContext && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1.5 mb-2 bg-primary/8 border border-primary/15 rounded-lg text-xs text-primary">
-                <span className="material-symbols-outlined text-sm">target</span>
-                {docRegenContext}
-              </div>
-            )}
-            <p className="text-xs text-on-surface-variant mb-3">{t('editor.regenerate.hint')}</p>
-            <textarea
-              id="doc-regen-input"
-              placeholder={t('editor.regenerate.placeholder')}
-              rows={3}
-              className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-lg py-2.5 px-3.5 text-sm text-on-surface placeholder:text-outline focus:ring-1 focus:ring-primary/40 focus:border-primary/40 outline-none resize-none"
-              autoFocus
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  submitDocRegen();
-                }
-              }}
-            />
-            <div className="flex items-center justify-end gap-2 mt-3">
-              <button
-                onClick={() => { setDocRegenBlockId(null); setDocRegenContext(''); }}
-                className="px-4 py-2 text-sm text-on-surface-variant hover:bg-surface-container rounded-lg transition-colors cursor-pointer"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={submitDocRegen}
-                className="flex items-center gap-1.5 px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:bg-primary-hover transition-colors cursor-pointer"
-              >
-                {t('editor.regenerate.submit')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

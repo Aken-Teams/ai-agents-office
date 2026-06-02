@@ -2,7 +2,6 @@ import mysql, { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from './config.js';
-import { DEFAULT_TOS_CONTENT } from './defaults/tos.js';
 
 // ---------------------------------------------------------------------------
 // Connection Pool
@@ -148,13 +147,33 @@ export async function initializeDatabase(): Promise<void> {
         input_tokens    INT NOT NULL DEFAULT 0,
         output_tokens   INT NOT NULL DEFAULT 0,
         model           VARCHAR(100),
+        provider        VARCHAR(20),
         duration_ms     INT,
         created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_usage_user (user_id),
         INDEX idx_usage_created (created_at),
+        INDEX idx_usage_provider (provider),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Migration: add `provider` column to existing token_usage rows (no-op if already present).
+    // Backfill rule: model starting with "claude" → claude; "mlx" / "local" / "ollama" → local-llm; else claude.
+    try {
+      await conn.query('ALTER TABLE token_usage ADD COLUMN provider VARCHAR(20)');
+      await conn.query('ALTER TABLE token_usage ADD INDEX idx_usage_provider (provider)');
+    } catch (e) {
+      const msg = (e as { code?: string }).code || '';
+      if (msg !== 'ER_DUP_FIELDNAME' && msg !== 'ER_DUP_KEYNAME') throw e;
+    }
+    await conn.query(`
+      UPDATE token_usage SET provider = CASE
+        WHEN model LIKE 'claude%' THEN 'claude'
+        WHEN model LIKE 'mlx%' OR model LIKE 'local%' OR model LIKE 'ollama%' THEN 'local-llm'
+        WHEN model LIKE 'deepseek%' THEN 'deepseek'
+        ELSE 'claude'
+      END WHERE provider IS NULL
     `);
 
     await conn.query(`
@@ -342,6 +361,91 @@ export async function initializeDatabase(): Promise<void> {
       await conn.query('ALTER TABLE users ADD COLUMN quota_group_id VARCHAR(36) DEFAULT NULL');
     } catch { /* column already exists */ }
 
+    // ─── LINE Bot integration tables ─────────────────────────────
+    // LINE user ↔ internal user mapping. One internal user per LINE account.
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS line_users (
+        line_user_id      VARCHAR(64) PRIMARY KEY,
+        internal_user_id  VARCHAR(36) NOT NULL,
+        display_name      VARCHAR(255),
+        linked_via        VARCHAR(20) NOT NULL DEFAULT 'invite_code',
+        current_conv_id   VARCHAR(36),
+        last_message_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_line_internal (internal_user_id),
+        FOREIGN KEY (internal_user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Token-based public file download (mirrors conversation_shares pattern).
+    // Used to push LINE-friendly download URLs without requiring auth.
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS file_shares (
+        token            VARCHAR(16) PRIMARY KEY,
+        file_id          VARCHAR(36) NOT NULL,
+        user_id          VARCHAR(36) NOT NULL,
+        source           VARCHAR(20) NOT NULL DEFAULT 'line',
+        expires_at       DATETIME NOT NULL,
+        download_count   INT NOT NULL DEFAULT 0,
+        download_cap     INT NOT NULL DEFAULT 50,
+        created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_file_share_file (file_id),
+        INDEX idx_file_share_expires (expires_at),
+        FOREIGN KEY (file_id) REFERENCES generated_files(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Replay protection — LINE retries failed deliveries; we INSERT IGNORE here.
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS line_webhook_events (
+        event_id    VARCHAR(64) PRIMARY KEY,
+        received_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_line_event_received (received_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Personal RAG document registry.
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS user_documents (
+        id               VARCHAR(36) PRIMARY KEY,
+        user_id          VARCHAR(36) NOT NULL,
+        source_upload_id VARCHAR(36),
+        filename         VARCHAR(500) NOT NULL,
+        file_type        VARCHAR(20) NOT NULL,
+        status           VARCHAR(20) NOT NULL DEFAULT 'pending',
+        total_chunks     INT NOT NULL DEFAULT 0,
+        error            TEXT,
+        created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        indexed_at       DATETIME,
+        INDEX idx_userdoc_user (user_id),
+        INDEX idx_userdoc_status (status),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Personal RAG chunks with embeddings stored as JSON array.
+    // 50K rows at 50-100 users × 50 chunks each handles the planned 50-1000
+    // user range comfortably with in-app cosine similarity. Migrate to pgvector
+    // when row count exceeds ~500K.
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS user_doc_chunks (
+        id           BIGINT PRIMARY KEY AUTO_INCREMENT,
+        user_id      VARCHAR(36) NOT NULL,
+        doc_id       VARCHAR(36) NOT NULL,
+        chunk_index  INT NOT NULL,
+        content      TEXT NOT NULL,
+        embedding    JSON NOT NULL,
+        tokens       INT NOT NULL DEFAULT 0,
+        created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_chunk_user (user_id),
+        INDEX idx_chunk_doc (doc_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (doc_id) REFERENCES user_documents(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    // ─── end LINE Bot integration tables ─────────────────────────
+
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS invite_codes (
         id          VARCHAR(36) PRIMARY KEY,
@@ -368,34 +472,24 @@ export async function initializeDatabase(): Promise<void> {
       await conn.query("ALTER TABLE conversations ADD COLUMN category VARCHAR(20) NOT NULL DEFAULT 'document'");
     } catch { /* column already exists */ }
 
-    // Add system_prompt and icon columns to conversations if not exists
+    // Add agent_engine column to conversations if not exists.
+    // Stores the per-conversation AI engine choice ('claude' | 'codex').
+    // NULL → fall back to the global config.agentEngine default.
     try {
-      await conn.query('ALTER TABLE conversations ADD COLUMN system_prompt TEXT DEFAULT NULL');
+      await conn.query('ALTER TABLE conversations ADD COLUMN agent_engine VARCHAR(16) DEFAULT NULL');
     } catch { /* column already exists */ }
+
+    // Add agent_instructions column to conversations if not exists.
+    // Per-assistant custom persona/task instructions (category='assistant'),
+    // injected into the router system prompt so each assistant specialises.
     try {
-      await conn.query("ALTER TABLE conversations ADD COLUMN icon VARCHAR(50) DEFAULT NULL");
+      await conn.query('ALTER TABLE conversations ADD COLUMN agent_instructions TEXT DEFAULT NULL');
     } catch { /* column already exists */ }
 
     // Add memory_type column to user_memories if not exists
     try {
       await conn.query("ALTER TABLE user_memories ADD COLUMN memory_type VARCHAR(20) NOT NULL DEFAULT 'preference'");
     } catch { /* column already exists */ }
-
-    await conn.execute(`
-      CREATE TABLE IF NOT EXISTS quota_requests (
-        id            VARCHAR(36) PRIMARY KEY,
-        user_id       VARCHAR(36) NOT NULL,
-        current_limit DECIMAL(10,2) NOT NULL,
-        current_cost  DECIMAL(10,2) NOT NULL,
-        reason        TEXT NOT NULL,
-        status        VARCHAR(20) NOT NULL DEFAULT 'pending',
-        new_limit     DECIMAL(10,2) DEFAULT NULL,
-        admin_notes   TEXT DEFAULT NULL,
-        reviewed_by   VARCHAR(36) DEFAULT NULL,
-        created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        reviewed_at   DATETIME DEFAULT NULL
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
 
     // Add onboarding columns to users if not exists
     try {
@@ -405,131 +499,20 @@ export async function initializeDatabase(): Promise<void> {
       await conn.query('ALTER TABLE users ADD COLUMN onboarding_completed TINYINT(1) NOT NULL DEFAULT 0');
     } catch { /* column already exists */ }
 
-    // AD integration columns
+    // Personal RAG: track HNSW lazy-build state per document.
+    //   'json' = embedding only in MySQL (legacy / not yet ported to HNSW)
+    //   'hnsw' = HNSW file on disk is the source of truth (Phase 4 compacted)
+    //   'both' = MySQL JSON + HNSW file present (current default after Phase 1)
     try {
-      await conn.query('ALTER TABLE users ADD COLUMN ad_username VARCHAR(50) DEFAULT NULL');
-    } catch { /* column already exists */ }
-    try {
-      await conn.query('ALTER TABLE users ADD COLUMN ad_domain VARCHAR(50) DEFAULT NULL');
-    } catch { /* column already exists */ }
-    try {
-      await conn.query('ALTER TABLE users ADD COLUMN auth_provider VARCHAR(20) DEFAULT NULL');
-    } catch { /* column already exists */ }
-    try {
-      await conn.query('ALTER TABLE users ADD UNIQUE INDEX idx_users_ad (ad_username, ad_domain)');
-    } catch { /* index already exists */ }
-
-    await conn.execute(`
-      CREATE TABLE IF NOT EXISTS ad_claim_tokens (
-        id          VARCHAR(36) PRIMARY KEY,
-        ad_username VARCHAR(50) NOT NULL,
-        ad_domain   VARCHAR(50) NOT NULL,
-        claim_email VARCHAR(255) NOT NULL,
-        code        VARCHAR(10) NOT NULL,
-        attempts    INT NOT NULL DEFAULT 0,
-        expires_at  DATETIME NOT NULL,
-        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE KEY idx_claim_unique (ad_username, ad_domain),
-        INDEX idx_claim_email (claim_email),
-        INDEX idx_claim_expires (expires_at)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-
-    // Outlook mail token cache (pro-panjit only)
-    await conn.execute(`
-      CREATE TABLE IF NOT EXISTS outlook_tokens (
-        user_id         VARCHAR(36) PRIMARY KEY,
-        mail_token      TEXT NOT NULL,
-        expires_at      DATETIME NOT NULL,
-        credentials_enc TEXT,
-        created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-
-    // Email agent polling state (pro-panjit only)
-    await conn.execute(`
-      CREATE TABLE IF NOT EXISTS email_agent_state (
-        user_id         VARCHAR(36) PRIMARY KEY,
-        last_seen_ids   TEXT DEFAULT NULL,
-        last_poll_at    DATETIME DEFAULT NULL,
-        last_overview   TEXT DEFAULT NULL,
-        created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-
-    // Document blocks: stores the structured JSON (slides/sections/sheets) used to generate files
-    await conn.execute(`
-      CREATE TABLE IF NOT EXISTS document_blocks (
-        id              VARCHAR(36) PRIMARY KEY,
-        file_id         VARCHAR(36) NOT NULL,
-        user_id         VARCHAR(36) NOT NULL,
-        conversation_id VARCHAR(36) NOT NULL,
-        doc_type        VARCHAR(20) NOT NULL,
-        doc_meta        TEXT DEFAULT NULL,
-        blocks          LONGTEXT NOT NULL,
-        version         INT NOT NULL DEFAULT 1,
-        created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_blocks_file (file_id),
-        INDEX idx_blocks_conv (conversation_id),
-        FOREIGN KEY (file_id) REFERENCES generated_files(id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-
-    // Email summary + analysis cache (avoid re-generating AI for same emails)
-    // IMPORTANT: email_id uses utf8mb4_bin (case-sensitive) because Outlook message IDs
-    // are base64-encoded and differ only in case (e.g. "6PoAAA=" vs "6POAAA=" are DIFFERENT emails)
-    await conn.execute(`
-      CREATE TABLE IF NOT EXISTS email_summary_cache (
-        user_id       VARCHAR(36) NOT NULL,
-        email_id      VARCHAR(500) COLLATE utf8mb4_bin NOT NULL,
-        summary       TEXT NOT NULL,
-        priority      VARCHAR(5) NOT NULL DEFAULT '中',
-        category      VARCHAR(50) NOT NULL DEFAULT '一般',
-        analysis      LONGTEXT DEFAULT NULL,
-        email_subject VARCHAR(500) DEFAULT NULL,
-        created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (user_id, email_id),
-        INDEX idx_summary_cache_user (user_id),
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `);
-
-    // Terms of Service: add acceptance tracking column
-    try {
-      await conn.query('ALTER TABLE users ADD COLUMN terms_accepted_at DATETIME DEFAULT NULL');
+      await conn.query("ALTER TABLE user_documents ADD COLUMN embedding_format VARCHAR(10) NOT NULL DEFAULT 'json'");
     } catch { /* column already exists */ }
 
-    // Migration: add last_overview column to email_agent_state
+    // Personal RAG Phase 3: per-chunk metadata for filter DSL.
+    // Defaults set by indexDocument: {filename, fileType, source, uploadedAt, chunkIndex}
+    // plus any caller-supplied tags/categories. NULL allowed for legacy rows.
     try {
-      await conn.query('ALTER TABLE email_agent_state ADD COLUMN last_overview TEXT DEFAULT NULL');
+      await conn.query('ALTER TABLE user_doc_chunks ADD COLUMN metadata JSON DEFAULT NULL');
     } catch { /* column already exists */ }
-
-    // Migration: add credentials_enc column to outlook_tokens
-    try {
-      await conn.query('ALTER TABLE outlook_tokens ADD COLUMN credentials_enc TEXT DEFAULT NULL');
-    } catch { /* column already exists */ }
-
-    // Migration: widen email_id + switch to case-sensitive collation (utf8mb4_bin)
-    // Outlook message IDs are base64-encoded and differ only by case — unicode_ci treats them as equal!
-    try {
-      await conn.query('ALTER TABLE email_summary_cache MODIFY COLUMN email_id VARCHAR(500) COLLATE utf8mb4_bin NOT NULL');
-    } catch { /* already modified or table doesn't exist */ }
-
-    // Migration: add email_subject for cache integrity verification
-    try {
-      await conn.query('ALTER TABLE email_summary_cache ADD COLUMN email_subject VARCHAR(500) DEFAULT NULL');
-    } catch { /* column already exists */ }
-
-    // Migration: clear stale analyses that may have been stored against wrong email IDs
-    // due to case-insensitive collation (one-time cleanup after switching to utf8mb4_bin)
-    try {
-      await conn.query("UPDATE email_summary_cache SET analysis = NULL WHERE analysis IS NOT NULL AND email_subject IS NULL");
-    } catch { /* ignore */ }
 
     // Default system settings
     const defaults: Record<string, string> = {
@@ -548,22 +531,6 @@ export async function initializeDatabase(): Promise<void> {
       }
     }
 
-    // Seed default TOS content if not exists
-    const tosDefaults: Record<string, string> = {
-      tos_content: DEFAULT_TOS_CONTENT,
-      tos_version: '1',
-    };
-    for (const [key, value] of Object.entries(tosDefaults)) {
-      const [tosRows] = await conn.execute<RowDataPacket[]>(
-        'SELECT `key` FROM system_settings WHERE `key` = ?', [key]
-      );
-      if (tosRows.length === 0) {
-        await conn.execute(
-          'INSERT INTO system_settings (`key`, value) VALUES (?, ?)', [key, value]
-        );
-      }
-    }
-
     // Seed admin user
     const [adminRows] = await conn.execute<RowDataPacket[]>(
       "SELECT id FROM users WHERE email = 'admin@zhaoi.ai'"
@@ -576,6 +543,22 @@ export async function initializeDatabase(): Promise<void> {
         [uuidv4(), 'admin@zhaoi.ai', hash, 'System Admin', 'admin', 'active', now, now]
       );
       console.log('Admin user seeded: admin@zhaoi.ai');
+    }
+
+    // Seed demo user (used by /api/auth/demo-login one-click entry button)
+    const [demoRows] = await conn.execute<RowDataPacket[]>(
+      "SELECT id FROM users WHERE email = 'demo@theaken.com'"
+    );
+    if (demoRows.length === 0) {
+      // Random unguessable password — demo entry must go through the
+      // dedicated /demo-login endpoint, not the password form.
+      const hash = bcrypt.hashSync(uuidv4() + uuidv4(), 12);
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      await conn.execute(
+        'INSERT INTO users (id, email, password_hash, display_name, role, status, onboarding_completed, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [uuidv4(), 'demo@theaken.com', hash, '試用訪客', 'user', 'active', 1, now, now]
+      );
+      console.log('Demo user seeded: demo@theaken.com');
     }
   } finally {
     conn.release();

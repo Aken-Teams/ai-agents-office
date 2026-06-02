@@ -17,12 +17,10 @@ const NAV_GROUPS = [
     labelKey: 'admin.sidebar.group.members' as const,
     icon: 'people',
     items: [
-      ...(deployMode === 'pro-panjit' ? [{ href: '/admin/org', permKey: 'org', labelKey: 'admin.sidebar.orgChart' as const, icon: 'account_tree' }] : []),
-      { href: '/admin/users', permKey: 'users', labelKey: 'admin.sidebar.users' as const, icon: 'corporate_fare' },
-      { href: '/admin/conversations', permKey: 'conversations', labelKey: 'admin.sidebar.conversations' as const, icon: 'forum' },
-      { href: '/admin/quota-groups', permKey: 'quota-groups', labelKey: 'admin.sidebar.quotaGroups' as const, icon: 'category' },
-      { href: '/admin/quota-requests', permKey: 'quota-requests', labelKey: 'admin.sidebar.quotaRequests' as const, icon: 'request_quote' },
-      ...(deployMode === 'pro-out' ? [{ href: '/admin/invite-codes', permKey: 'invite-codes', labelKey: 'admin.sidebar.inviteCodes' as const, icon: 'card_membership' }] : []),
+      { href: '/admin/users', labelKey: 'admin.sidebar.users' as const, icon: 'corporate_fare' },
+      { href: '/admin/conversations', labelKey: 'admin.sidebar.conversations' as const, icon: 'forum', readonlyHidden: true },
+      { href: '/admin/quota-groups', labelKey: 'admin.sidebar.quotaGroups' as const, icon: 'category' },
+      ...(deployMode === 'pro-out' ? [{ href: '/admin/invite-codes', labelKey: 'admin.sidebar.inviteCodes' as const, icon: 'card_membership' }] : []),
     ],
   },
   {
@@ -30,11 +28,11 @@ const NAV_GROUPS = [
     labelKey: 'admin.sidebar.group.operations' as const,
     icon: 'tune',
     items: [
-      { href: '/admin/announcements', permKey: 'announcements', labelKey: 'admin.sidebar.announcements' as const, icon: 'campaign' },
-      ...(deployMode === 'pro-panjit' ? [{ href: '/admin/terms', permKey: 'terms', labelKey: 'admin.sidebar.terms' as const, icon: 'gavel' }] : []),
-      { href: '/admin/skills', permKey: 'skills', labelKey: 'admin.sidebar.skills' as const, icon: 'hub' },
-      { href: '/admin/tokens', permKey: 'tokens', labelKey: 'admin.sidebar.tokens' as const, icon: 'payments' },
-      { href: '/admin/analytics', permKey: 'analytics', labelKey: 'admin.sidebar.analytics' as const, icon: 'bar_chart' },
+      { href: '/admin/announcements', labelKey: 'admin.sidebar.announcements' as const, icon: 'campaign', readonlyHidden: true },
+      { href: '/admin/skills', labelKey: 'admin.sidebar.skills' as const, icon: 'hub' },
+      { href: '/admin/tokens', labelKey: 'admin.sidebar.tokens' as const, icon: 'payments' },
+      { href: '/admin/line', labelKey: 'admin.sidebar.line' as const, icon: 'chat' },
+      { href: '/admin/analytics', labelKey: 'admin.sidebar.analytics' as const, icon: 'bar_chart' },
     ],
   },
   {
@@ -42,9 +40,8 @@ const NAV_GROUPS = [
     labelKey: 'admin.sidebar.group.system' as const,
     icon: 'settings',
     items: [
-      { href: '/admin/security', permKey: 'security', labelKey: 'admin.sidebar.security' as const, icon: 'shield_with_heart' },
-      { href: '/admin/permissions', permKey: 'permissions', labelKey: 'admin.sidebar.permissions' as const, icon: 'admin_panel_settings', adminOnly: true },
-      { href: '/admin/settings', permKey: 'settings', labelKey: 'admin.sidebar.settings' as const, icon: 'settings' },
+      { href: '/admin/security', labelKey: 'admin.sidebar.security' as const, icon: 'shield_with_heart' },
+      { href: '/admin/settings', labelKey: 'admin.sidebar.settings' as const, icon: 'settings' },
     ],
   },
 ];
@@ -57,7 +54,7 @@ function findGroupForPath(path: string): string | null {
 export default function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout, isReadonly, hasPermission } = useAdminAuth();
+  const { user, logout, isReadonly } = useAdminAuth();
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem(ADMIN_SIDEBAR_KEY) === '1';
@@ -167,10 +164,7 @@ export default function AdminSidebar() {
                         expand_more
                       </span>
                     </button>
-                    {isOpen && group.items.filter(link => {
-                        if ((link as any).adminOnly && isReadonly) return false;
-                        return hasPermission('adminSidebar', (link as any).permKey);
-                      }).map(link => {
+                    {isOpen && group.items.filter(link => !(isReadonly && (link as any).readonlyHidden)).map(link => {
                       const isActive = pathname.startsWith(link.href);
                       return (
                         <Link
@@ -283,10 +277,7 @@ export default function AdminSidebar() {
                     <div className="absolute left-full top-0 pl-2 opacity-0 group-hover/gh:opacity-100 pointer-events-none group-hover/gh:pointer-events-auto transition-opacity duration-200 z-[60]">
                       <div className="py-1.5 bg-surface-container-highest rounded-lg shadow-lg border border-outline-variant/10 min-w-[160px]">
                       <div className="px-3 py-1.5 text-xs font-bold text-on-surface-variant uppercase tracking-widest">{t(group.labelKey)}</div>
-                      {group.items.filter(link => {
-                        if ((link as any).adminOnly && isReadonly) return false;
-                        return hasPermission('adminSidebar', (link as any).permKey);
-                      }).map(link => {
+                      {group.items.filter(link => !(isReadonly && (link as any).readonlyHidden)).map(link => {
                         const isActive = pathname.startsWith(link.href);
                         return (
                           <Link
@@ -325,10 +316,7 @@ export default function AdminSidebar() {
                 {/* Group Children — only in expanded sidebar */}
                 {!collapsed && isOpen && (
                   <div className="space-y-0.5">
-                    {group.items.filter(link => {
-                        if ((link as any).adminOnly && isReadonly) return false;
-                        return hasPermission('adminSidebar', (link as any).permKey);
-                      }).map(link => {
+                    {group.items.filter(link => !(isReadonly && (link as any).readonlyHidden)).map(link => {
                       const isActive = pathname.startsWith(link.href);
                       return (
                         <Link

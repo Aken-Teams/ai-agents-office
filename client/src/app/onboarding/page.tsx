@@ -1,13 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { AuthProvider, useAuth } from '../components/AuthProvider';
 import { I18nProvider, useTranslation } from '../../i18n';
-
-type StepType = 'terms' | 'welcome' | 'company' | 'features';
 
 const FEATURES = [
   { key: 'ppt',    icon: 'slideshow',       color: 'text-amber-500',   bg: 'bg-amber-500/10',   border: 'border-amber-500/20' },
@@ -22,7 +17,6 @@ const FEATURES = [
 ] as const;
 
 function StepDots({ current, total }: { current: number; total: number }) {
-  if (total <= 1) return null;
   return (
     <div className="flex items-center gap-2 mb-8">
       {Array.from({ length: total }, (_, i) => (
@@ -41,35 +35,14 @@ function OnboardingContent() {
   const { t } = useTranslation();
   const router = useRouter();
   const [step, setStep] = useState(0);
+  const [featureIdx, setFeatureIdx] = useState(0);
+  const [displayName, setDisplayName] = useState('');
+  const [email, setEmail] = useState('');
+  const [company, setCompany] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<{ displayName?: string; email?: string; company?: string }>({});
+  const [submitting, setSubmitting] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
 
-  // Terms state
-  const [needsTerms, setNeedsTerms] = useState(false);
-  const [needsOnboarding, setNeedsOnboarding] = useState(false);
-  const [tosContent, setTosContent] = useState('');
-  const [tosLoading, setTosLoading] = useState(false);
-  const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
-  const [accepting, setAccepting] = useState(false);
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-  // Onboarding state
-  const [featureIdx, setFeatureIdx] = useState(0);
-  const [company, setCompany] = useState('');
-  const [companyError, setCompanyError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  // Dynamic steps
-  const steps = useMemo<StepType[]>(() => {
-    const s: StepType[] = [];
-    if (needsTerms) s.push('terms');
-    if (needsOnboarding) s.push('welcome', 'company', 'features');
-    return s;
-  }, [needsTerms, needsOnboarding]);
-
-  const currentStepType = steps[step];
-
-  // Auth check
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.replace('/login'); return; }
@@ -77,74 +50,53 @@ function OnboardingContent() {
       .then(r => r.json())
       .then(data => {
         if (!data.id) { router.replace('/login'); return; }
-        const terms = !!data.termsRequired;
-        const onboarding = !!data.onboardingRequired;
-        if (!terms && !onboarding) { router.replace('/dashboard'); return; }
-        setNeedsTerms(terms);
-        setNeedsOnboarding(onboarding);
+        if (!data.onboardingRequired) { router.replace('/dashboard'); return; }
+        // Prefill display name from whatever LINE / OAuth provided.
+        if (typeof data.displayName === 'string') setDisplayName(data.displayName);
+        // Skip the placeholder email LINE auto-provision plants in users.email.
+        if (typeof data.email === 'string' && !data.email.startsWith('line:')) {
+          setEmail(data.email);
+        }
+        if (typeof data.company === 'string') setCompany(data.company);
         setAuthChecked(true);
       })
       .catch(() => router.replace('/login'));
   }, [router]);
 
-  // Fetch TOS content when needed
-  useEffect(() => {
-    if (!authChecked || !needsTerms) return;
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    setTosLoading(true);
-    fetch('/api/auth/terms', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.content) setTosContent(data.content);
-        setTosLoading(false);
-      })
-      .catch(() => setTosLoading(false));
-  }, [authChecked, needsTerms]);
-
-  // IntersectionObserver for terms scroll detection
-  useEffect(() => {
-    if (currentStepType !== 'terms' || !sentinelRef.current || tosLoading || !tosContent) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) setHasScrolledToBottom(true);
-      },
-      { root: scrollContainerRef.current, threshold: 0.1 }
-    );
-    observer.observe(sentinelRef.current);
-    return () => observer.disconnect();
-  }, [currentStepType, tosLoading, tosContent]);
-
-  async function handleAcceptTerms() {
-    setAccepting(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('/api/auth/accept-terms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        if (needsOnboarding) {
-          setStep(s => s + 1);
-        } else {
-          router.replace('/dashboard');
-        }
-      }
-    } finally {
-      setAccepting(false);
-    }
+  function validateStep1(): boolean {
+    const errs: typeof fieldErrors = {};
+    if (!displayName.trim()) errs.displayName = '請輸入顯示名稱';
+    else if (displayName.trim().length > 50) errs.displayName = '顯示名稱最多 50 字';
+    if (!email.trim()) errs.email = '請輸入 Email';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errs.email = 'Email 格式不正確';
+    if (!company.trim()) errs.company = '請輸入公司名稱';
+    else if (company.trim().length > 100) errs.company = '公司名稱最多 100 字';
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
   }
 
   async function handleFinish() {
-    if (!company.trim()) { setCompanyError(t('onboarding.step2.companyRequired')); return; }
+    if (!validateStep1()) { setStep(1); return; }
     setSubmitting(true);
     try {
       const token = localStorage.getItem('token');
-      await fetch('/api/auth/onboarding', {
+      const res = await fetch('/api/auth/onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ company: company.trim() }),
+        body: JSON.stringify({
+          displayName: displayName.trim(),
+          email: email.trim(),
+          company: company.trim(),
+        }),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        if (body?.field && typeof body.field === 'string') {
+          setFieldErrors({ [body.field]: body.error || '欄位驗證失敗' });
+        }
+        setStep(1);
+        return;
+      }
       router.replace('/dashboard');
     } finally {
       setSubmitting(false);
@@ -168,7 +120,7 @@ function OnboardingContent() {
       <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-5%] left-[-5%] w-[30%] h-[30%] bg-tertiary/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <main className="relative z-10 w-full max-w-2xl">
+      <main className="relative z-10 w-full max-w-lg">
         {/* Logo */}
         <div className="flex items-center gap-3 mb-10">
           <div className="w-9 h-9 cyber-gradient flex items-center justify-center rounded">
@@ -178,98 +130,10 @@ function OnboardingContent() {
         </div>
 
         <div className="bg-surface-container rounded-2xl shadow-2xl border border-outline-variant/20 p-8 md:p-10">
-          <StepDots current={step} total={steps.length} />
+          <StepDots current={step} total={3} />
 
-          {/* === Terms Step === */}
-          {currentStepType === 'terms' && (
-            <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-primary text-xl">gavel</span>
-                </div>
-                <div>
-                  <h1 className="font-headline text-2xl md:text-3xl font-black text-on-surface">
-                    {t('terms.title' as any) || '系統使用規範與管理辦法'}
-                  </h1>
-                </div>
-              </div>
-              <p className="text-sm text-on-surface-variant mb-5 ml-[52px]">
-                {t('terms.subtitle' as any) || '請詳閱以下使用條款，捲動至底部後方可同意。'}
-              </p>
-
-              {tosLoading ? (
-                <div className="flex items-center justify-center py-16">
-                  <span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span>
-                </div>
-              ) : (
-                <>
-                  <div
-                    ref={scrollContainerRef}
-                    className="max-h-[45vh] overflow-y-auto border border-outline-variant/15 rounded-xl p-5 md:p-6 bg-surface-container-high/50 scroll-smooth"
-                  >
-                    <div className="prose-terms text-sm text-on-surface leading-relaxed">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          h1: ({ children, ...props }) => <h1 className="text-lg font-bold text-on-surface mt-0 mb-3 pb-2 border-b border-outline-variant/15" {...props}>{children}</h1>,
-                          h2: ({ children, ...props }) => <h2 className="text-base font-bold text-on-surface mt-5 mb-2" {...props}>{children}</h2>,
-                          h3: ({ children, ...props }) => <h3 className="text-sm font-semibold text-on-surface mt-3 mb-1.5" {...props}>{children}</h3>,
-                          p: ({ children, ...props }) => <p className="mb-2.5 last:mb-0 leading-relaxed text-on-surface-variant" {...props}>{children}</p>,
-                          ul: ({ children, ...props }) => <ul className="list-disc pl-5 mb-3 space-y-1" {...props}>{children}</ul>,
-                          ol: ({ children, ...props }) => <ol className="list-decimal pl-5 mb-3 space-y-1" {...props}>{children}</ol>,
-                          li: ({ children, ...props }) => <li className="leading-relaxed text-on-surface-variant" {...props}>{children}</li>,
-                          strong: ({ children, ...props }) => <strong className="font-semibold text-on-surface" {...props}>{children}</strong>,
-                          blockquote: ({ children, ...props }) => (
-                            <blockquote className="border-l-3 border-primary/30 pl-3 my-3 text-on-surface-variant bg-primary/5 rounded-r-lg py-2 pr-3" {...props}>{children}</blockquote>
-                          ),
-                          table: ({ children, ...props }) => (
-                            <div className="overflow-x-auto my-3 rounded-lg border border-outline-variant/20">
-                              <table className="w-full text-sm border-collapse" {...props}>{children}</table>
-                            </div>
-                          ),
-                          thead: ({ children, ...props }) => <thead className="bg-surface-container" {...props}>{children}</thead>,
-                          th: ({ children, ...props }) => <th className="text-left px-3 py-2 font-semibold text-on-surface border-b border-outline-variant/20" {...props}>{children}</th>,
-                          td: ({ children, ...props }) => <td className="px-3 py-2 text-on-surface-variant border-b border-outline-variant/10" {...props}>{children}</td>,
-                          hr: (props) => <hr className="my-4 border-outline-variant/15" {...props} />,
-                          a: ({ children, href, ...props }) => (
-                            <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" {...props}>{children}</a>
-                          ),
-                        }}
-                      >
-                        {tosContent}
-                      </ReactMarkdown>
-                    </div>
-                    <div ref={sentinelRef} className="h-1" />
-                  </div>
-
-                  {/* Scroll hint */}
-                  {!hasScrolledToBottom && (
-                    <div className="flex items-center justify-center gap-2 mt-3 text-xs text-on-surface-variant/60 animate-bounce">
-                      <span className="material-symbols-outlined text-sm">keyboard_double_arrow_down</span>
-                      {t('terms.scrollHint' as any) || '請捲動閱讀完整條款'}
-                    </div>
-                  )}
-
-                  {/* Accept button */}
-                  <div className={`mt-5 transition-all duration-300 ${hasScrolledToBottom ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
-                    <button
-                      onClick={handleAcceptTerms}
-                      disabled={accepting || !hasScrolledToBottom}
-                      className="w-full py-3 rounded-xl font-bold text-on-primary bg-primary hover:brightness-110 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                    >
-                      <span className="material-symbols-outlined text-lg">check_circle</span>
-                      {accepting
-                        ? (t('terms.accepting' as any) || '處理中...')
-                        : (t('terms.agree' as any) || '我同意以上條款')}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* === Welcome Step === */}
-          {currentStepType === 'welcome' && (
+          {/* Step 1: Welcome */}
+          {step === 0 && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-300">
               <p className="text-xs font-bold uppercase tracking-widest text-primary mb-2">{t('onboarding.step1.title')}</p>
               <h1 className="font-headline text-3xl md:text-4xl font-black text-on-surface mb-4 leading-tight">
@@ -279,7 +143,7 @@ function OnboardingContent() {
                 {t('onboarding.step1.description')}
               </p>
               <button
-                onClick={() => setStep(s => s + 1)}
+                onClick={() => setStep(1)}
                 className="w-full py-3 rounded-xl font-bold text-on-primary bg-primary hover:brightness-110 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 {t('onboarding.step1.next')}
@@ -288,18 +152,64 @@ function OnboardingContent() {
             </div>
           )}
 
-          {/* === Company Step === */}
-          {currentStepType === 'company' && (
+          {/* Step 2: basic profile — name / email / company */}
+          {step === 1 && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-              <p className="text-xs font-bold uppercase tracking-widest text-primary mb-2">
-                {step + 1} / {steps.length}
-              </p>
+              <p className="text-xs font-bold uppercase tracking-widest text-primary mb-2">2 / 3</p>
               <h1 className="font-headline text-2xl md:text-3xl font-black text-on-surface mb-3">
-                {t('onboarding.step2.title')}
+                您的基本資料
               </h1>
               <p className="text-on-surface-variant text-sm leading-relaxed mb-7">
-                {t('onboarding.step2.description')}
+                這些資訊只用來辨識您與聯絡，不會公開分享。
               </p>
+
+              {/* Display name */}
+              <div className="mb-5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2">
+                  顯示名稱
+                </label>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={e => { setDisplayName(e.target.value); setFieldErrors(prev => ({ ...prev, displayName: undefined })); }}
+                  placeholder="例如：王小明"
+                  className={`w-full bg-surface-container-high border rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:border-primary transition-colors ${fieldErrors.displayName ? 'border-error' : 'border-outline-variant/30'}`}
+                  autoComplete="name"
+                  maxLength={50}
+                  autoFocus
+                />
+                {fieldErrors.displayName && (
+                  <p className="text-xs text-error mt-1.5 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[13px]">error</span>
+                    {fieldErrors.displayName}
+                  </p>
+                )}
+              </div>
+
+              {/* Email */}
+              <div className="mb-5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => { setEmail(e.target.value); setFieldErrors(prev => ({ ...prev, email: undefined })); }}
+                  placeholder="your@email.com"
+                  className={`w-full bg-surface-container-high border rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:border-primary transition-colors ${fieldErrors.email ? 'border-error' : 'border-outline-variant/30'}`}
+                  autoComplete="email"
+                  maxLength={255}
+                  inputMode="email"
+                />
+                {fieldErrors.email && (
+                  <p className="text-xs text-error mt-1.5 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[13px]">error</span>
+                    {fieldErrors.email}
+                  </p>
+                )}
+              </div>
+
+              {/* Company */}
               <div className="mb-6">
                 <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2">
                   {t('onboarding.step2.companyLabel')}
@@ -307,31 +217,29 @@ function OnboardingContent() {
                 <input
                   type="text"
                   value={company}
-                  onChange={e => { setCompany(e.target.value); setCompanyError(''); }}
+                  onChange={e => { setCompany(e.target.value); setFieldErrors(prev => ({ ...prev, company: undefined })); }}
                   placeholder={t('onboarding.step2.companyPlaceholder')}
-                  className={`w-full bg-surface-container-high border rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:border-primary transition-colors ${companyError ? 'border-error' : 'border-outline-variant/30'}`}
-                  onKeyDown={e => e.key === 'Enter' && !companyError && company.trim() && setStep(s => s + 1)}
-                  autoFocus
+                  className={`w-full bg-surface-container-high border rounded-xl px-4 py-3 text-sm text-on-surface focus:outline-none focus:border-primary transition-colors ${fieldErrors.company ? 'border-error' : 'border-outline-variant/30'}`}
+                  autoComplete="organization"
+                  maxLength={100}
                 />
-                {companyError && (
+                {fieldErrors.company && (
                   <p className="text-xs text-error mt-1.5 flex items-center gap-1">
                     <span className="material-symbols-outlined text-[13px]">error</span>
-                    {companyError}
+                    {fieldErrors.company}
                   </p>
                 )}
               </div>
+
               <div className="flex gap-3">
                 <button
-                  onClick={() => setStep(s => s - 1)}
+                  onClick={() => setStep(0)}
                   className="flex-1 py-3 rounded-xl font-bold text-on-surface-variant bg-surface-container-high hover:bg-surface-variant/50 transition-colors cursor-pointer"
                 >
                   {t('onboarding.step2.back')}
                 </button>
                 <button
-                  onClick={() => {
-                    if (!company.trim()) { setCompanyError(t('onboarding.step2.companyRequired')); return; }
-                    setStep(s => s + 1);
-                  }}
+                  onClick={() => { if (validateStep1()) setStep(2); }}
                   className="flex-[2] py-3 rounded-xl font-bold text-on-primary bg-primary hover:brightness-110 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {t('onboarding.step2.next')}
@@ -341,12 +249,10 @@ function OnboardingContent() {
             </div>
           )}
 
-          {/* === Features Step === */}
-          {currentStepType === 'features' && (
+          {/* Step 3: Feature carousel */}
+          {step === 2 && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-              <p className="text-xs font-bold uppercase tracking-widest text-primary mb-2">
-                {step + 1} / {steps.length}
-              </p>
+              <p className="text-xs font-bold uppercase tracking-widest text-primary mb-2">3 / 3</p>
               <h1 className="font-headline text-2xl md:text-3xl font-black text-on-surface mb-1">
                 {t('onboarding.step3.title')}
               </h1>
@@ -382,7 +288,7 @@ function OnboardingContent() {
                     <button
                       key={i}
                       onClick={() => setFeatureIdx(i)}
-                      className={`rounded-full transition-all duration-300 cursor-pointer ${
+                      className={`rounded-full transition-all duration-300 ${
                         i === featureIdx ? 'w-5 h-2 bg-primary' : 'w-2 h-2 bg-surface-variant hover:bg-outline-variant'
                       }`}
                     />
@@ -411,7 +317,7 @@ function OnboardingContent() {
 
               <div className="flex gap-3">
                 <button
-                  onClick={() => setStep(s => s - 1)}
+                  onClick={() => setStep(1)}
                   className="flex-1 py-3 rounded-xl font-bold text-on-surface-variant bg-surface-container-high hover:bg-surface-variant/50 transition-colors cursor-pointer"
                 >
                   {t('onboarding.step3.back')}
@@ -437,16 +343,7 @@ function OnboardingContent() {
 
 export default function OnboardingPage() {
   return (
-    <AuthProvider>
-      <OnboardingWithI18n />
-    </AuthProvider>
-  );
-}
-
-function OnboardingWithI18n() {
-  const { user } = useAuth();
-  return (
-    <I18nProvider initialLocale={user?.locale} initialTheme={user?.theme}>
+    <I18nProvider>
       <OnboardingContent />
     </I18nProvider>
   );

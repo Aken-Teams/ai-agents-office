@@ -3,47 +3,21 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { useAuth } from './AuthProvider';
 import { useTranslation } from '../../i18n';
 import type { Locale, Theme } from '../../i18n/types';
-import EmailAgentWidget from './EmailAgentWidget';
 
 const SIDEBAR_KEY = 'sidebar-collapsed';
-const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
-const isPanjit = deployMode === 'pro-panjit';
 
-const NAV_GROUPS = [
-  {
-    labelKey: 'nav.group.main' as const,
-    icon: 'smart_toy',
-    links: [
-      { href: '/dashboard', permKey: 'dashboard', labelKey: 'nav.dashboard' as const, icon: 'dashboard' },
-      { href: '/assistant', permKey: 'assistant', labelKey: 'nav.assistant' as const, icon: 'smart_toy' },
-    ],
-  },
-  {
-    labelKey: 'nav.group.manage' as const,
-    icon: 'folder_managed',
-    links: [
-      { href: '/conversations', permKey: 'conversations', labelKey: 'nav.conversations' as const, icon: 'chat' },
-      { href: '/files', permKey: 'files', labelKey: 'nav.files' as const, icon: 'folder_open' },
-    ],
-  },
-  {
-    labelKey: 'nav.group.system' as const,
-    icon: 'settings',
-    links: [
-      { href: '/usage', permKey: 'usage', labelKey: 'nav.usage' as const, icon: 'bar_chart' },
-      { href: '/memories', permKey: 'memories', labelKey: 'nav.memories' as const, icon: 'psychology' },
-      { href: '/guide', permKey: 'guide', labelKey: 'nav.guide' as const, icon: 'menu_book' },
-    ],
-  },
+const NAV_LINKS = [
+  { href: '/dashboard', labelKey: 'nav.dashboard' as const, icon: 'dashboard' },
+  { href: '/assistant', labelKey: 'nav.assistant' as const, icon: 'smart_toy' },
+  { href: '/conversations', labelKey: 'nav.conversations' as const, icon: 'chat' },
+  { href: '/files', labelKey: 'nav.files' as const, icon: 'folder_open' },
+  { href: '/usage', labelKey: 'nav.usage' as const, icon: 'bar_chart' },
+  { href: '/memories', labelKey: 'nav.memories' as const, icon: 'psychology' },
+  { href: '/guide', labelKey: 'nav.guide' as const, icon: 'menu_book' },
 ];
-
-// Flat list for mobile nav and permission checks
-const NAV_LINKS = NAV_GROUPS.flatMap(g => g.links);
 
 const DOC_TYPES = [
   { id: 'pptx-gen', labelKey: 'nav.docTypes.pptx.label' as const, descKey: 'nav.docTypes.pptx.desc' as const, icon: 'present_to_all', colorClass: 'text-warning' },
@@ -141,7 +115,7 @@ const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
 ];
 
 export default function Navbar() {
-  const { user, token, logout, updateUser, hasPermission } = useAuth();
+  const { user, token, logout, updateUser } = useAuth();
   const { locale, theme, setLocale, setTheme, t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
@@ -154,23 +128,6 @@ export default function Navbar() {
     if (typeof window !== 'undefined') return localStorage.getItem(SIDEBAR_KEY) === '1';
     return false;
   });
-
-  // Nav group accordion — only one open at a time, auto-expand group matching current route
-  const getGroupForPath = (p: string) => NAV_GROUPS.findIndex(g => g.links.some(l => p.startsWith(l.href)));
-  const [activeGroup, setActiveGroup] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const gi = getGroupForPath(window.location.pathname);
-      return gi >= 0 ? gi : 0;
-    }
-    return 0;
-  });
-  const toggleGroup = (gi: number) => setActiveGroup(prev => prev === gi ? -1 : gi);
-
-  // Sync active group when route changes
-  useEffect(() => {
-    const gi = getGroupForPath(pathname);
-    if (gi >= 0) setActiveGroup(gi);
-  }, [pathname]);
 
   // Display name edit state
   const [editingName, setEditingName] = useState(false);
@@ -190,9 +147,6 @@ export default function Navbar() {
   const [saved, setSaved] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileUserExpanded, setMobileUserExpanded] = useState(false);
-  const [showTermsModal, setShowTermsModal] = useState(false);
-  const [termsContent, setTermsContent] = useState('');
-  const [termsLoading, setTermsLoading] = useState(false);
 
   // AI Memory state
   const [memories, setMemories] = useState<Array<{ id: string; content: string; category: string; created_at: string }>>([]);
@@ -281,18 +235,6 @@ export default function Navbar() {
     await setTheme(newTheme);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
-  }
-
-  function openTermsModal() {
-    setShowTermsModal(true);
-    if (!termsContent && !termsLoading) {
-      setTermsLoading(true);
-      const token = localStorage.getItem('token');
-      fetch('/api/auth/terms', { headers: { Authorization: `Bearer ${token}` } })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => { if (data?.content) setTermsContent(data.content); setTermsLoading(false); })
-        .catch(() => setTermsLoading(false));
-    }
   }
 
   const isOAuthOnly = user.oauthProvider && user.hasPassword === false;
@@ -592,47 +534,22 @@ export default function Navbar() {
             <div className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${mobileUserExpanded ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'}`}>
               <div className="overflow-hidden">
                 <nav className="py-1 border-t border-outline-variant/10">
-                  {NAV_GROUPS.map((group, gi) => {
-                    const visibleLinks = group.links.filter(l => hasPermission('frontendNav', l.permKey));
-                    if (visibleLinks.length === 0) return null;
-                    const isExpanded = activeGroup === gi;
+                  {NAV_LINKS.map(link => {
+                    const isActive = pathname === link.href;
                     return (
-                      <div key={gi}>
-                        <button
-                          onClick={() => toggleGroup(gi)}
-                          className={`flex items-center gap-3 w-full px-5 py-3 bg-transparent cursor-pointer transition-colors ${
-                            isExpanded
-                              ? 'text-on-surface bg-surface-container/40'
-                              : 'text-on-surface-variant active:bg-surface-container'
-                          }`}
-                        >
-                          <span className={`material-symbols-outlined text-xl ${isExpanded ? 'text-primary' : ''}`}>{group.icon}</span>
-                          <span className="text-sm font-headline font-bold flex-1 text-left">{t(group.labelKey as any)}</span>
-                          <span className={`material-symbols-outlined text-base text-on-surface-variant/40 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
-                            expand_more
-                          </span>
-                        </button>
-                        <div className={`overflow-hidden transition-all duration-200 ease-in-out ${isExpanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
-                          {visibleLinks.map(link => {
-                            const isActive = pathname === link.href;
-                            return (
-                              <Link
-                                key={link.href}
-                                href={link.href}
-                                onClick={() => setMobileMenuOpen(false)}
-                                className={`flex items-center gap-2.5 pl-14 pr-5 py-2.5 no-underline transition-colors ${
-                                  isActive
-                                    ? 'text-primary bg-primary/5'
-                                    : 'text-on-surface-variant active:bg-surface-container'
-                                }`}
-                              >
-                                <span className="material-symbols-outlined text-lg">{link.icon}</span>
-                                <span className="text-[13px] font-headline">{t(link.labelKey)}</span>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </div>
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={`flex items-center gap-3 px-5 py-3.5 no-underline transition-colors ${
+                          isActive
+                            ? 'text-primary bg-primary/5'
+                            : 'text-on-surface-variant active:bg-surface-container'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-xl">{link.icon}</span>
+                        <span className="text-sm font-headline font-bold">{t(link.labelKey)}</span>
+                      </Link>
                     );
                   })}
                   {(user.role === 'admin' || user.role === 'readonly') && (
@@ -649,20 +566,9 @@ export default function Navbar() {
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="py-3 border-t border-outline-variant/10 flex items-center justify-center gap-3">
-              {isPanjit && (
-                <>
-                  <button
-                    onClick={() => { setMobileMenuOpen(false); openTermsModal(); }}
-                    className="text-[11px] text-outline active:text-on-surface-variant transition-colors bg-transparent cursor-pointer"
-                  >
-                    {t('userMenu.terms' as any) || '系統使用規範'}
-                  </button>
-                  <span className="text-outline text-[11px]">·</span>
-                </>
-              )}
-              <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className="text-[11px] text-outline hover:text-on-surface-variant transition-colors no-underline">
+            {/* Developer Footer */}
+            <div className="py-3 border-t border-outline-variant/10">
+              <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className="text-[11px] text-outline hover:text-on-surface-variant transition-colors no-underline block text-center">
                 {t('nav.poweredBy')} &copy; 2026
               </a>
             </div>
@@ -687,95 +593,27 @@ export default function Navbar() {
         </div>
 
         {/* Navigation */}
-        <nav className={`flex-1 space-y-0.5 ${collapsed ? 'px-2' : 'px-3'}`}>
-          {NAV_GROUPS.map((group, gi) => {
-            const visibleLinks = group.links.filter(l => hasPermission('frontendNav', l.permKey));
-            if (visibleLinks.length === 0) return null;
-            const isExpanded = activeGroup === gi;
-            const hasActiveChild = visibleLinks.some(l => pathname === l.href);
+        <nav className={`flex-1 space-y-1 ${collapsed ? 'px-2' : 'px-4'}`}>
+          {NAV_LINKS.map(link => {
+            const isActive = pathname === link.href;
             return (
-              <div key={gi}>
-                {/* Group header */}
-                {collapsed ? (
-                  /* Collapsed: icon with flyout submenu on hover (same as admin sidebar) */
-                  <div className="relative group/gh">
-                    {gi > 0 && <div className="mx-2 my-2 border-t border-outline-variant/15" />}
-                    <button
-                      className={`flex items-center justify-center py-2.5 w-full bg-transparent cursor-pointer transition-all duration-200 ${
-                        hasActiveChild
-                          ? 'text-primary'
-                          : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/50'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-[20px]">{group.icon}</span>
-                    </button>
-                    {/* Flyout submenu */}
-                    <div className="absolute left-full top-0 pl-2 opacity-0 group-hover/gh:opacity-100 pointer-events-none group-hover/gh:pointer-events-auto transition-opacity duration-200 z-[60]">
-                      <div className="py-1.5 bg-surface-container-highest rounded-lg shadow-lg border border-outline-variant/10 min-w-[160px]">
-                        <div className="px-3 py-1.5 text-xs font-bold text-on-surface-variant uppercase tracking-widest">{t(group.labelKey as any)}</div>
-                        {visibleLinks.map(link => {
-                          const isActive = pathname === link.href;
-                          return (
-                            <Link
-                              key={link.href}
-                              href={link.href}
-                              className={`flex items-center gap-2.5 px-3 py-2 no-underline text-sm transition-colors ${
-                                isActive ? 'text-primary font-bold' : 'text-on-surface hover:bg-surface-container'
-                              }`}
-                            >
-                              <span className="material-symbols-outlined text-[18px]">{link.icon}</span>
-                              <span>{t(link.labelKey)}</span>
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  /* Expanded: clickable group header with accordion */
-                  <>
-                    <button
-                      onClick={() => toggleGroup(gi)}
-                      className={`flex items-center gap-2.5 w-full px-3 py-2.5 transition-all bg-transparent cursor-pointer rounded-lg border ${
-                        isExpanded
-                          ? 'text-on-surface bg-surface-container/60 border-outline-variant/10'
-                          : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/30 border-transparent'
-                      }`}
-                    >
-                      <span className={`material-symbols-outlined text-[18px] ${isExpanded ? 'text-primary' : ''}`}>{group.icon}</span>
-                      <span className="text-sm font-medium flex-1 text-left">{t(group.labelKey as any)}</span>
-                      <span className={`material-symbols-outlined text-[16px] text-on-surface-variant/40 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
-                        expand_more
-                      </span>
-                    </button>
-                    <div
-                      className={`overflow-hidden transition-all duration-200 ease-in-out ml-3 pl-3 border-l border-outline-variant/10 ${
-                        !isExpanded ? 'max-h-0 opacity-0' : 'max-h-[500px] opacity-100'
-                      }`}
-                    >
-                      <div className="space-y-0.5 py-1">
-                        {visibleLinks.map(link => {
-                          const isActive = pathname === link.href;
-                          return (
-                            <Link
-                              key={link.href}
-                              href={link.href}
-                              className={`flex items-center gap-2.5 py-2 px-3 no-underline transition-all duration-150 rounded-md ${
-                                isActive
-                                  ? 'text-primary bg-primary/10 font-medium'
-                                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/40'
-                              }`}
-                            >
-                              <span className={`material-symbols-outlined text-[18px] ${isActive ? 'text-primary' : ''}`}>{link.icon}</span>
-                              <span className="text-[13px]">{t(link.labelKey)}</span>
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </>
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`relative group flex items-center gap-3 py-2.5 no-underline transition-all duration-200 ${collapsed ? 'justify-center px-0' : 'px-3'} ${
+                  isActive
+                    ? 'text-primary bg-surface-container border-l-2 border-primary'
+                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/50'
+                }`}
+              >
+                <span className="material-symbols-outlined">{link.icon}</span>
+                {!collapsed && <span>{t(link.labelKey)}</span>}
+                {collapsed && (
+                  <span className="absolute left-full ml-3 px-3 py-1.5 bg-surface-container-highest text-on-surface text-sm font-bold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 z-[60] shadow-lg border border-outline-variant/10">
+                    {t(link.labelKey)}
+                  </span>
                 )}
-              </div>
+              </Link>
             );
           })}
         </nav>
@@ -897,7 +735,7 @@ export default function Navbar() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${user.role === 'admin' ? 'bg-warning/20 text-warning' : user.role === 'readonly' ? 'bg-amber-500/15 text-amber-600' : 'bg-primary/10 text-primary'}`}>
-                      {user.role === 'admin' ? t('userMenu.role.admin') : user.role === 'readonly' ? t('userMenu.role.readonly' as any) : t('userMenu.role.user')}
+                      {user.role === 'admin' ? t('userMenu.role.admin') : user.role === 'readonly' ? 'Readonly' : t('userMenu.role.user')}
                     </span>
                     {user.oauthProvider === 'google' && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-surface-container-high text-on-surface-variant">
@@ -1054,24 +892,7 @@ export default function Navbar() {
           </div>
 
           {/* Footer */}
-          <div className="mt-3 pt-3 border-t border-outline-variant/10 px-3 flex flex-col items-center gap-1">
-            {isPanjit && !collapsed && (
-              <button
-                onClick={openTermsModal}
-                className="text-[11px] text-outline hover:text-on-surface-variant transition-colors bg-transparent cursor-pointer"
-              >
-                {t('userMenu.terms' as any) || '系統使用規範'}
-              </button>
-            )}
-            {isPanjit && collapsed && (
-              <button
-                onClick={openTermsModal}
-                className="text-outline hover:text-on-surface-variant transition-colors bg-transparent cursor-pointer"
-                title={t('userMenu.terms' as any) || '系統使用規範'}
-              >
-                <span className="material-symbols-outlined text-sm">gavel</span>
-              </button>
-            )}
+          <div className="mt-3 pt-3 border-t border-outline-variant/10 px-3">
             <a href="https://www.zh-aoi.com/" target="_blank" rel="noopener noreferrer" className={`text-outline hover:text-on-surface-variant transition-colors no-underline block text-center ${collapsed ? 'text-sm' : 'text-[11px]'}`}>
               {collapsed ? '©' : <>{t('nav.poweredBy')} &copy; 2026</>}
             </a>
@@ -1606,85 +1427,6 @@ export default function Navbar() {
                 </div>
               </>
             )}
-          </div>
-        </div>
-      )}
-      {/* Email Agent Widget — pro-panjit only */}
-      {isPanjit && hasPermission('features', 'email-agent') && <EmailAgentWidget />}
-
-      {/* Terms Modal */}
-      {showTermsModal && (
-        <div className="fixed inset-0 z-[200] flex items-end md:items-center md:justify-center md:p-4" onClick={() => setShowTermsModal(false)}>
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-          <div
-            className="relative bg-surface-container shadow-2xl border border-outline-variant/20 w-full flex flex-col rounded-t-2xl max-h-[85vh] md:rounded-2xl md:max-w-2xl md:max-h-[80vh]"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Drag handle (mobile) */}
-            <div className="flex justify-center pt-2 pb-0 md:hidden">
-              <div className="w-8 h-1 rounded-full bg-outline-variant/30" />
-            </div>
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 md:px-5 md:py-4 border-b border-outline-variant/10 shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-base md:text-lg">gavel</span>
-                <h2 className="text-[13px] md:text-sm font-headline font-bold text-on-surface">{t('userMenu.terms' as any) || '系統使用規範'}</h2>
-              </div>
-              <button
-                onClick={() => setShowTermsModal(false)}
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container-high transition-colors cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-lg">close</span>
-              </button>
-            </div>
-            {/* Body */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 md:px-5 md:py-5 min-h-0 overscroll-contain">
-              {termsLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <span className="material-symbols-outlined animate-spin text-primary text-2xl">progress_activity</span>
-                </div>
-              ) : !termsContent ? (
-                <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant">
-                  <span className="material-symbols-outlined text-2xl mb-2 opacity-40">description</span>
-                  <p className="text-xs">{t('common.noData' as any) || '尚無資料'}</p>
-                </div>
-              ) : (
-                <article className="text-on-surface leading-relaxed">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      h1: ({ children, ...props }) => <h1 className="text-sm md:text-base font-bold text-on-surface mt-0 mb-2.5 pb-2 border-b border-outline-variant/15" {...props}>{children}</h1>,
-                      h2: ({ children, ...props }) => <h2 className="text-[13px] md:text-sm font-bold text-on-surface mt-4 mb-1.5" {...props}>{children}</h2>,
-                      h3: ({ children, ...props }) => <h3 className="text-xs md:text-[13px] font-semibold text-on-surface mt-3 mb-1" {...props}>{children}</h3>,
-                      p: ({ children, ...props }) => <p className="mb-2 last:mb-0 leading-relaxed text-on-surface-variant text-xs" {...props}>{children}</p>,
-                      ul: ({ children, ...props }) => <ul className="list-disc pl-4 mb-2 space-y-0.5" {...props}>{children}</ul>,
-                      ol: ({ children, ...props }) => <ol className="list-decimal pl-4 mb-2 space-y-0.5" {...props}>{children}</ol>,
-                      li: ({ children, ...props }) => <li className="leading-relaxed text-on-surface-variant text-xs" {...props}>{children}</li>,
-                      strong: ({ children, ...props }) => <strong className="font-semibold text-on-surface" {...props}>{children}</strong>,
-                      blockquote: ({ children, ...props }) => (
-                        <blockquote className="border-l-2 border-primary/30 pl-3 my-2 text-on-surface-variant bg-primary/5 rounded-r-lg py-1.5 pr-3 text-xs" {...props}>{children}</blockquote>
-                      ),
-                      table: ({ children }) => <div className="my-2.5 space-y-1.5">{children}</div>,
-                      thead: () => null,
-                      tbody: ({ children }) => <div className="space-y-1.5">{children}</div>,
-                      tr: ({ children }) => (
-                        <div className="bg-surface-container-high/60 rounded-lg px-3 py-2 space-y-0.5">{children}</div>
-                      ),
-                      th: () => null,
-                      td: ({ children }) => (
-                        <div className="text-xs leading-relaxed text-on-surface-variant first:text-[13px] first:font-medium first:text-on-surface [&:nth-child(2)]:text-primary [&:nth-child(2)]:font-semibold last:text-[11px] last:text-on-surface-variant/70">{children}</div>
-                      ),
-                      hr: (props) => <hr className="my-3 border-outline-variant/15" {...props} />,
-                      a: ({ children, href, ...props }) => (
-                        <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline" {...props}>{children}</a>
-                      ),
-                    }}
-                  >
-                    {termsContent}
-                  </ReactMarkdown>
-                </article>
-              )}
-            </div>
           </div>
         </div>
       )}

@@ -1279,7 +1279,7 @@ body { margin: 0; padding: 0; font-family: var(--font-body); color: var(--body-c
   transition: opacity 0.3s;
 }
 .slide-counter:hover { opacity: 0.9; }
-${(process.env.Version || 'Beta').toLowerCase() !== 'official' ? `.watermark-overlay {
+.watermark-overlay {
   position: fixed; inset: 0; z-index: 150;
   pointer-events: none; user-select: none;
   overflow: hidden;
@@ -1287,7 +1287,7 @@ ${(process.env.Version || 'Beta').toLowerCase() !== 'official' ? `.watermark-ove
   background-repeat: repeat;
   background-size: 480px 320px;
 }
-@media print { .watermark-overlay { position: absolute; } }` : '.watermark-overlay { display: none; }'}
+@media print { .watermark-overlay { position: absolute; } }
 .fullscreen-btn {
   position: fixed; bottom: 24px; right: 24px; z-index: 200;
   width: 44px; height: 44px; border-radius: 12px;
@@ -2289,7 +2289,7 @@ function generateHtml(input: SlidesInput): string {
     <div class="nav-progress"></div>
     <nav class="slide-nav" aria-label="Slide navigation"></nav>
     <div class="slide-counter"><span class="current-slide">1</span> / <span class="total-slides">${totalSlides}</span></div>
-    ${(process.env.Version || 'Beta').toLowerCase() !== 'official' ? '<div class="watermark-overlay" aria-hidden="true"></div>' : ''}
+    <div class="watermark-overlay" aria-hidden="true"></div>
     <button class="fullscreen-btn" aria-label="Toggle fullscreen">
       <span class="material-symbols-outlined">fullscreen</span>
     </button>
@@ -2333,7 +2333,6 @@ function generateHtml(input: SlidesInput): string {
       dots.forEach(function(d, i) { d.classList.toggle('active', i === idx); });
       progress.style.transform = 'scaleX(' + ((idx + 1) / allSlides.length) + ')';
       counterCurrent.textContent = idx + 1;
-      if (typeof reportSlide === 'function') reportSlide(idx);
     }
 
     // Track current slide via IntersectionObserver
@@ -2364,25 +2363,8 @@ function generateHtml(input: SlidesInput): string {
       }
     });
 
-    // Listen for parent postMessage navigation (for embedded iframe control)
-    window.addEventListener('message', function(e) {
-      if (e.data && e.data.type === 'goToSlide' && typeof e.data.index === 'number') {
-        scrollToSlide(e.data.index);
-      }
-    });
-
-    // Report current slide to parent when it changes
-    var prevReportedIndex = -1;
-    function reportSlide(idx) {
-      if (idx !== prevReportedIndex && window.parent !== window) {
-        prevReportedIndex = idx;
-        try { window.parent.postMessage({ type: 'slideChanged', index: idx }, '*'); } catch(e) {}
-      }
-    }
-
     // Fullscreen toggle
-    var fsBtn = document.querySelector('.fullscreen-btn');
-    if (fsBtn) fsBtn.addEventListener('click', function() {
+    document.querySelector('.fullscreen-btn').addEventListener('click', function() {
       if (!document.fullscreenElement) document.documentElement.requestFullscreen();
       else document.exitFullscreen();
     });

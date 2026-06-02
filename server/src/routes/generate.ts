@@ -4,16 +4,19 @@ import { dbGet, dbAll, dbRun } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { rateLimit } from '../middleware/rateLimit.js';
 import { spawnClaude } from '../services/claudeCli.js';
+import { spawnCodex } from '../services/codexCli.js';
 import { getSandboxPath } from '../services/sandbox.js';
 import { analyzeInput, logSecurityEvent, WARN_THRESHOLD } from '../services/inputGuard.js';
 import { recordTokenUsage } from '../services/tokenTracker.js';
-import { registerNewFiles, getExistingFilePaths, snapshotExistingFiles, captureBlocksForFile } from '../services/fileManager.js';
+import { registerNewFiles, getExistingFilePaths, snapshotExistingFiles } from '../services/fileManager.js';
 import { getUserStorageUsed } from './files.js';
 import { getSkill, buildSystemPrompt, buildMemoryContext, buildCrossAssistantContext, loadSkills, getRouterSkill } from '../skills/loader.js';
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from '../services/uploadContext.js';
 import { Orchestrator } from '../services/orchestrator.js';
 import { extractMemoryAndSummary } from '../services/memoryExtractor.js';
-import { config } from '../config.js';
+import { searchTopK, formatHitsForPrompt, countIndexedChunks } from '../services/personalRag.js';
+import { config, normalizeEngine, type AgentEngine } from '../config.js';
+import { shouldUsePreRouter, classifyIntent, streamSimpleReply } from '../services/preRouter.js';
 import { checkUserUsageLimit, getStorageQuotaGb } from '../services/usageLimit.js';
 import type { Conversation, Message, SSEEvent } from '../types.js';
 
@@ -41,10 +44,8 @@ async function buildCrossReferenceContext(userId: string, referencedConvIds: str
     if (!refConv) continue;
 
     const refMessages = await dbAll<{ role: string; content: string }>(
-      `SELECT m.role, m.content FROM messages m
-       INNER JOIN conversations c ON c.id = m.conversation_id AND c.user_id = ?
-       WHERE m.conversation_id = ? ORDER BY m.created_at DESC LIMIT 10`,
-      userId, refId
+      'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 10',
+      refId
     );
 
     const lines: string[] = [`### 引用：${refConv.title}`];
@@ -117,18 +118,29 @@ async function buildChatHistory(conversationId: string): Promise<string> {
 router.post('/:conversationId', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const conversationId = req.params.conversationId as string;
-  const { message, docContext, skillId, uploadIds, referencedConvIds: rawRefIds } = req.body;
+  const { message, skillId, uploadIds, referencedConvIds: rawRefIds, engine: rawEngine } = req.body;
   const referencedConvIds: string[] = Array.isArray(rawRefIds)
     ? rawRefIds.filter((id: unknown) => typeof id === 'string').slice(0, 3)
     : [];
 
   if (!message) { res.status(400).json({ error: 'Message is required' }); return; }
 
-  const conversation = await dbGet<Conversation & { mode?: string }>(
+  const conversation = await dbGet<Conversation & { mode?: string; agent_engine?: string | null }>(
     'SELECT * FROM conversations WHERE id = ? AND user_id = ?',
     conversationId, userId
   );
   if (!conversation) { res.status(404).json({ error: 'Conversation not found' }); return; }
+
+  // Resolve the AI engine for this request: explicit body choice wins, then
+  // the conversation's sticky choice, then the global default. A new explicit
+  // choice is persisted so it sticks for subsequent turns and the UI can
+  // restore it.
+  const requestedEngine = normalizeEngine(rawEngine);
+  const effectiveEngine: AgentEngine =
+    requestedEngine ?? normalizeEngine(conversation.agent_engine) ?? config.agentEngine;
+  if (requestedEngine && requestedEngine !== normalizeEngine(conversation.agent_engine)) {
+    await dbRun('UPDATE conversations SET agent_engine = ? WHERE id = ?', requestedEngine, conversationId);
+  }
 
   const usageCheck = await checkUserUsageLimit(userId);
   if (usageCheck.exceeded) {
@@ -208,23 +220,139 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
     ? await buildCrossReferenceContext(userId, referencedConvIds)
     : '';
 
-  // Prepend doc context for AI processing (not stored in DB — already saved above without it)
-  const aiMessage = docContext
-    ? `[DOC_CONTEXT: ${docContext}]\n\n${sanitizedMessage}`
-    : sanitizedMessage;
-
   if (useOrchestrator) {
-    await handleOrchestrated(req, res, userId, conversationId, aiMessage, validUploadIds, userLocale, conversation.category || 'document', refContext, conversation.system_prompt || '');
+    // Pre-router fast-path: try classifying simple chat → handle locally to save Claude tokens.
+    const preCtx = {
+      category: conversation.category || 'document',
+      message: sanitizedMessage,
+      hasUploads: validUploadIds.length > 0,
+      hasReferences: referencedConvIds.length > 0,
+    };
+    if (shouldUsePreRouter(preCtx)) {
+      const recentMsgs = await dbAll<{ role: string; content: string }>(
+        'SELECT role, content FROM messages WHERE conversation_id = ? AND id != ? ORDER BY created_at DESC LIMIT 6',
+        conversationId, userMsgId
+      );
+      const intent = await classifyIntent({ ...preCtx, recentMessages: recentMsgs.reverse() });
+      console.log(`[PreRouter] ${conversationId} → ${intent.intent} (${intent.reason})`);
+      if (intent.intent === 'simple_chat') {
+        await handleSimpleChat(req, res, userId, conversationId, sanitizedMessage, recentMsgs, preCtx.category, intent.inputTokens, intent.outputTokens);
+        return;
+      }
+      // complex_task → fall through to orchestrator below
+    }
+    await handleOrchestrated(req, res, userId, conversationId, sanitizedMessage, validUploadIds, userLocale, conversation.category || 'document', refContext, effectiveEngine);
   } else {
-    await handleDirect(req, res, userId, conversationId, conversation, aiMessage, skillId, validUploadIds, userLocale, refContext);
+    await handleDirect(req, res, userId, conversationId, conversation, sanitizedMessage, skillId, validUploadIds, userLocale, refContext, effectiveEngine);
   }
 });
+
+/**
+ * Pre-router 簡單聊天分支：完全用地端 LLM 處理，跳過 Claude orchestrator。
+ * SSE 事件格式必須與 handleOrchestrated 相容（text / usage / done），
+ * 前端 chat/[id]/page.tsx 才能無縫接收。
+ */
+async function handleSimpleChat(
+  req: Request, res: Response,
+  userId: string, conversationId: string, message: string,
+  recentMessages: Array<{ role: string; content: string }>,
+  conversationCategory: string,
+  classifierInputTokens: number,
+  classifierOutputTokens: number,
+) {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive', 'X-Accel-Buffering': 'no',
+  });
+
+  const keepaliveTimer = setInterval(() => {
+    try { res.write(': keepalive\n\n'); } catch { /* closed */ }
+  }, 10000);
+
+  const sseWriter = (event: SSEEvent) => {
+    try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* closed */ }
+  };
+
+  // Mark conversation mode so future loads know this turn went through the local path.
+  await dbRun("UPDATE conversations SET mode = 'simple-chat-local' WHERE id = ?", conversationId);
+
+  const abortCtl = new AbortController();
+  let finished = false;
+  res.on('close', () => { if (!finished) abortCtl.abort(); });
+  activeGenerations.set(conversationId, () => abortCtl.abort());
+
+  // Personal RAG — same retrieval as the orchestrator path. The hits get
+  // prepended to the user's message as a "private knowledge base" prelude;
+  // streamSimpleReply doesn't take a separate referenceContext, so the
+  // simplest way to give the local model the context is in the message body.
+  let messageWithRag = message;
+  try {
+    const hasDocs = (await countIndexedChunks(userId)) > 0;
+    if (hasDocs) {
+      const hits = await searchTopK({ userId, query: message, k: 4 });
+      if (hits.length > 0) {
+        const ragBlock = formatHitsForPrompt(hits);
+        messageWithRag = `${ragBlock}\n\n# 使用者問題\n${message}`;
+      }
+    }
+  } catch (err) {
+    console.warn('[Generate/simple] RAG retrieval failed (non-fatal):', err);
+  }
+
+  let collected = '';
+  let model = '';
+  try {
+    const result = await streamSimpleReply({
+      message: messageWithRag,
+      category: conversationCategory,
+      recentMessages,
+      signal: abortCtl.signal,
+      onDelta: (delta) => {
+        collected += delta;
+        sseWriter({ type: 'text', data: delta });
+      },
+    });
+    model = result.model;
+
+    // Persist assistant reply.
+    if (collected.trim()) {
+      await dbRun(
+        'INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)',
+        uuidv4(), conversationId, 'assistant', collected
+      );
+    }
+
+    // Token accounting: classifier (real) + reply (estimated by char count, since
+    // streaming endpoint doesn't return usage). Char-to-token ratio for CJK ~ 1:1.
+    const estimatedReplyOutput = Math.max(1, Math.ceil(collected.length));
+    const totalInputTokens = classifierInputTokens + Math.ceil(message.length);
+    const totalOutputTokens = classifierOutputTokens + estimatedReplyOutput;
+    if (totalInputTokens > 0 || totalOutputTokens > 0) {
+      await recordTokenUsage({
+        userId, conversationId,
+        inputTokens: totalInputTokens, outputTokens: totalOutputTokens,
+        model: model || 'local-llm',
+        provider: 'local-llm',
+      });
+    }
+    sseWriter({ type: 'usage', data: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens, model: model || 'local-llm', provider: 'local-llm' } });
+  } catch (err) {
+    console.error(`[Generate] Simple-chat error for ${conversationId}:`, err);
+    sseWriter({ type: 'error', data: `Local LLM failed: ${(err as Error).message}` });
+  } finally {
+    finished = true;
+    clearInterval(keepaliveTimer);
+    activeGenerations.delete(conversationId);
+    sseWriter({ type: 'done', data: { exitCode: 0 } });
+    try { res.end(); } catch { /* already closed */ }
+  }
+}
 
 async function handleOrchestrated(
   _req: Request, res: Response,
   userId: string, conversationId: string, message: string,
   uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document',
-  refContext: string = '', systemPrompt: string = '',
+  refContext: string = '', engine?: AgentEngine,
 ) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
@@ -243,10 +371,26 @@ async function handleOrchestrated(
     try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* closed */ }
   };
 
-  const customRolePrompt = systemPrompt
-    ? `\n\n## Custom Role Instructions\nThe user has configured this assistant with the following role:\n${systemPrompt}\nPlease behave according to this role description.\n`
-    : '';
-  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds, userLocale, conversationCategory, refContext, customRolePrompt);
+  // Personal RAG — append retrieved passages from the user's own indexed
+  // documents to the existing cross-conversation reference block. Failures
+  // here must not block the main flow.
+  let combinedRefContext = refContext;
+  try {
+    const hasDocs = (await countIndexedChunks(userId)) > 0;
+    if (hasDocs) {
+      const hits = await searchTopK({ userId, query: message, k: 4 });
+      if (hits.length > 0) {
+        const ragBlock = formatHitsForPrompt(hits);
+        combinedRefContext = combinedRefContext
+          ? `${combinedRefContext}\n\n${ragBlock}`
+          : ragBlock;
+      }
+    }
+  } catch (err) {
+    console.warn('[Generate] RAG retrieval failed (non-fatal):', err);
+  }
+
+  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds, userLocale, conversationCategory, combinedRefContext, engine);
   activeGenerations.set(conversationId, () => orchestrator.abort());
 
   try {
@@ -265,12 +409,13 @@ async function handleOrchestrated(
         userId, conversationId,
         inputTokens: result.totalInputTokens, outputTokens: result.totalOutputTokens,
         model: result.model,
+        provider: 'claude',
       });
     }
 
     sseWriter({
       type: 'usage',
-      data: { inputTokens: result.totalInputTokens, outputTokens: result.totalOutputTokens, model: result.model },
+      data: { inputTokens: result.totalInputTokens, outputTokens: result.totalOutputTokens, model: result.model, provider: 'claude' },
     });
 
     const sandboxPath = getSandboxPath(userId, conversationId);
@@ -280,16 +425,6 @@ async function handleOrchestrated(
         type: 'file_generated',
         data: newFiles.map(f => ({ id: f.id, filename: f.filename, file_path: f.file_path, file_type: f.file_type, file_size: f.file_size, version: f.version })),
       });
-      // Capture block structure — await to ensure blocks_ready arrives before done
-      const captureResults = await Promise.allSettled(
-        newFiles.map(f => captureBlocksForFile(f, userId, conversationId, sandboxPath))
-      );
-      for (let i = 0; i < newFiles.length; i++) {
-        const r = captureResults[i];
-        if (r.status === 'fulfilled' && r.value) {
-          sseWriter({ type: 'blocks_ready', data: { fileId: newFiles[i].id, blocks: r.value } });
-        }
-      }
     }
   } catch (err) {
     console.error(`[Generate] Orchestrator error for ${conversationId}:`, err);
@@ -311,9 +446,11 @@ async function handleDirect(
   _req: Request, res: Response,
   userId: string, conversationId: string, conversation: Conversation,
   sanitizedMessage: string, skillId?: string, uploadIds: string[] = [],
-  userLocale: string = 'zh-TW', refContext: string = '',
+  userLocale: string = 'zh-TW', refContext: string = '', engine?: AgentEngine,
 ) {
   const effectiveSkillId = skillId || conversation.skill_id || 'pptx-gen';
+  // Engine dispatch — same signature & SSE protocol for both CLIs.
+  const spawnAgentProcess = (engine ?? config.agentEngine) === 'codex' ? spawnCodex : spawnClaude;
   const skill = getSkill(effectiveSkillId);
   if (!skill) { res.status(400).json({ error: `Unknown skill: ${effectiveSkillId}` }); return; }
 
@@ -330,7 +467,7 @@ async function handleDirect(
   );
   const memoryContext = buildMemoryContext(userMemories);
 
-  // For assistant conversations: inject cross-assistant context (same user only)
+  // For assistant conversations: inject cross-assistant context from other assistant conversations
   let crossAssistantContext = '';
   if (conversation.category === 'assistant') {
     const otherSummaries = await dbAll<{ title: string; summary: string; created_at: string }>(
@@ -340,20 +477,7 @@ async function handleDirect(
     crossAssistantContext = buildCrossAssistantContext(otherSummaries, conversationId);
   }
 
-  // Pre-fetch email data when user mentions email keywords (any skill)
-  const { messageNeedsEmail, getEmailContextForPrompt } = await import('../services/emailContext.js');
-  const emailContext = messageNeedsEmail(sanitizedMessage)
-    ? await getEmailContextForPrompt(userId, sanitizedMessage)
-    : '';
-
-  // Inject user-defined system_prompt (role description) for this assistant
-  const customRolePrompt = conversation.system_prompt
-    ? `\n\n## Custom Role Instructions\nThe user has configured this assistant with the following role:\n${conversation.system_prompt}\nPlease behave according to this role description.\n`
-    : '';
-  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + customRolePrompt + uploadContext + memoryContext + crossAssistantContext + refContext;
-
-  // Inject email data into user message (not system prompt) so it persists on resume
-  const finalMessage = emailContext ? sanitizedMessage + emailContext : sanitizedMessage;
+  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + uploadContext + memoryContext + crossAssistantContext + refContext;
 
   if (skillId && skillId !== conversation.skill_id) {
     await dbRun('UPDATE conversations SET skill_id = ? WHERE id = ?', skillId, conversationId);
@@ -385,9 +509,6 @@ async function handleDirect(
     catch { sseOpen = false; }
   }
 
-  // Notify frontend which skill is being used (for document mode detection)
-  sseWrite({ type: 'skill_started', data: { skillId: effectiveSkillId } });
-
   async function startClaude(sid: string, isResume: boolean) {
     let systemPrompt = baseSystemPrompt;
     if (!isResume) {
@@ -395,7 +516,7 @@ async function handleDirect(
       if (history) systemPrompt = baseSystemPrompt + history;
     }
 
-    const { emitter, abort } = spawnClaude(finalMessage, systemPrompt, {
+    const { emitter, abort } = spawnAgentProcess(sanitizedMessage, systemPrompt, {
       userId, conversationId, sessionId: sid, isResume, skillId: effectiveSkillId,
       customAllowedTools: skill?.allowedTools,
       customDisallowedTools: skill?.disallowedTools,
@@ -449,6 +570,14 @@ async function handleDirect(
         activeGenerations.delete(conversationId);
 
         (async () => {
+          // Anthropic auth blip leaked through Claude CLI as a fake assistant
+          // message — replace it with a friendly notice instead of persisting
+          // the raw "Failed to authenticate. API Error: 401 ..." string.
+          if (/Failed to authenticate\.\s*API Error: 4\d\d/i.test(assistantText)
+              || /Invalid authentication credentials/i.test(assistantText)) {
+            console.warn(`[Generate] Upstream auth blip on ${conversationId}, substituting friendly message`);
+            assistantText = '⚠️ 暫時無法連線到模型服務（上游驗證問題），請過一兩分鐘後再試一次。如果持續失敗請聯繫管理員。';
+          }
           if (assistantText) {
             const assistantMsgId = uuidv4();
             await dbRun(
@@ -458,7 +587,7 @@ async function handleDirect(
           }
 
           if (totalInputTokens > 0 || totalOutputTokens > 0) {
-            await recordTokenUsage({ userId, conversationId, inputTokens: totalInputTokens, outputTokens: totalOutputTokens, model });
+            await recordTokenUsage({ userId, conversationId, inputTokens: totalInputTokens, outputTokens: totalOutputTokens, model, provider: 'claude' });
           }
 
           const sandboxPath = getSandboxPath(userId, conversationId);
@@ -468,16 +597,6 @@ async function handleDirect(
               type: 'file_generated',
               data: newFiles.map(f => ({ id: f.id, filename: f.filename, file_path: f.file_path, file_type: f.file_type, file_size: f.file_size, version: f.version })),
             });
-            // Capture block structure — await to ensure blocks_ready arrives before done
-            const captureResults = await Promise.allSettled(
-              newFiles.map(f => captureBlocksForFile(f, userId, conversationId, sandboxPath))
-            );
-            for (let i = 0; i < newFiles.length; i++) {
-              const r = captureResults[i];
-              if (r.status === 'fulfilled' && r.value) {
-                sseWrite({ type: 'blocks_ready', data: { fileId: newFiles[i].id, blocks: r.value } });
-              }
-            }
           }
 
           // Fire-and-forget: extract conversation summary + user memories
@@ -505,16 +624,8 @@ async function handleDirect(
 }
 
 // GET /api/generate/:conversationId/status — check if a generation is in progress
-router.get('/:conversationId/status', async (req: Request, res: Response) => {
+router.get('/:conversationId/status', (req: Request, res: Response) => {
   const conversationId = req.params.conversationId as string;
-  const userId = req.user!.userId;
-
-  const conversation = await dbGet<{ id: string }>(
-    'SELECT id FROM conversations WHERE id = ? AND user_id = ?',
-    conversationId, userId
-  );
-  if (!conversation) { res.status(404).json({ error: 'Not found' }); return; }
-
   res.json({ processing: activeGenerations.has(conversationId) });
 });
 
@@ -542,16 +653,8 @@ router.get('/:conversationId/tasks', async (req: Request, res: Response) => {
 });
 
 // POST /api/generate/:conversationId/abort
-router.post('/:conversationId/abort', async (req: Request, res: Response) => {
+router.post('/:conversationId/abort', (req: Request, res: Response) => {
   const conversationId = req.params.conversationId as string;
-  const userId = req.user!.userId;
-
-  const conversation = await dbGet<{ id: string }>(
-    'SELECT id FROM conversations WHERE id = ? AND user_id = ?',
-    conversationId, userId
-  );
-  if (!conversation) { res.status(404).json({ error: 'Not found' }); return; }
-
   const abortFn = activeGenerations.get(conversationId);
   if (abortFn) {
     abortFn(); activeGenerations.delete(conversationId);
