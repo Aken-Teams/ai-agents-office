@@ -9,6 +9,8 @@ import { config } from '../config.js';
 import { applyWatermark } from '../services/watermark.js';
 import { getUserUsageLimitUsd, setUserUsageLimitUsd, getUserDisplayCost, getEffectiveUserLimit, getStorageQuotaGb, setStorageQuotaGb, getUploadQuotaMb, setUploadQuotaMb } from '../services/usageLimit.js';
 import { getRolePermissions, setRolePermissions, type RolePermissions } from '../services/rolePermissions.js';
+import { getLineSettings, setLineSetting, type LineSettings } from '../services/lineSettings.js';
+import { getMessageQuotaStatus } from '../services/line/client.js';
 
 const router = Router();
 router.use(adminMiddleware);
@@ -1863,6 +1865,131 @@ router.put('/permissions', async (req: Request, res: Response) => {
   }
   await setRolePermissions(body);
   res.json({ success: true });
+});
+
+// ==================== LINE Bot admin ====================
+
+const LINE_SETTING_RANGES: Record<keyof LineSettings, { min: number; max: number }> = {
+  maxMsgPerMin: { min: 1, max: 1000 },
+  conversationIdleHours: { min: 1, max: 168 },
+  fileShareTtlDays: { min: 1, max: 365 },
+  defaultQuotaUsd: { min: 0, max: 100000 },
+};
+
+// GET /api/admin/line/settings — runtime-editable settings + read-only bot status.
+// Secrets (channelSecret/accessToken) are never returned; only whether they're set.
+router.get('/line/settings', (_req: Request, res: Response) => {
+  res.json({
+    settings: getLineSettings(),
+    status: {
+      enabled: config.line.enabled,
+      channelConfigured: !!(config.line.channelSecret && config.line.channelAccessToken),
+      channelId: config.line.channelId,
+      botBasicId: config.line.botBasicId,
+      liffId: config.line.liffId,
+      publicApiBase: config.line.publicApiBase,
+      webhookUrl: config.line.publicApiBase ? `${config.line.publicApiBase}/webhook/line` : '',
+    },
+  });
+});
+
+// PATCH /api/admin/line/settings — update one or more runtime settings (effective immediately).
+router.patch('/line/settings', async (req: Request, res: Response) => {
+  const before = getLineSettings();
+  const changes: string[] = [];
+
+  for (const key of Object.keys(LINE_SETTING_RANGES) as (keyof LineSettings)[]) {
+    const val = req.body[key];
+    if (typeof val !== 'number' || !Number.isFinite(val)) continue;
+    const { min, max } = LINE_SETTING_RANGES[key];
+    if (val < min || val > max) {
+      res.status(400).json({ error: `${key} must be between ${min} and ${max}` });
+      return;
+    }
+    if (val !== before[key]) {
+      await setLineSetting(key, val);
+      changes.push(`${key}: ${before[key]} → ${val}`);
+    }
+  }
+
+  if (changes.length === 0) {
+    res.status(400).json({ error: 'No valid settings to update' });
+    return;
+  }
+
+  await dbRun(
+    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+    uuidv4(), req.user!.userId, 'update_line_settings', 'system', 'line_settings',
+    JSON.stringify({ changes })
+  );
+
+  res.json({ success: true, settings: getLineSettings() });
+});
+
+// GET /api/admin/line/users — LINE-linked users with their quota usage.
+router.get('/line/users', async (_req: Request, res: Response) => {
+  const globalDefault = await getUserUsageLimitUsd();
+  const rows = await dbAll<{
+    line_user_id: string; display_name: string | null; linked_via: string | null;
+    last_message_at: string | null; user_id: string; email: string; status: string;
+    quota_override: number | null; quota_group_id: string | null; group_limit: number | null;
+    in_tok: number; out_tok: number;
+  }>(
+    `SELECT lu.line_user_id, lu.display_name, lu.linked_via, lu.last_message_at,
+            u.id AS user_id, u.email, u.status, u.quota_override, u.quota_group_id,
+            qg.limit_usd AS group_limit,
+            COALESCE(tu.in_tok, 0) AS in_tok, COALESCE(tu.out_tok, 0) AS out_tok
+     FROM line_users lu
+     JOIN users u ON u.id = lu.internal_user_id
+     LEFT JOIN quota_groups qg ON qg.id = u.quota_group_id
+     LEFT JOIN (
+       SELECT user_id, SUM(input_tokens) AS in_tok, SUM(output_tokens) AS out_tok
+       FROM token_usage GROUP BY user_id
+     ) tu ON tu.user_id = u.id
+     ORDER BY (lu.last_message_at IS NULL), lu.last_message_at DESC`
+  );
+
+  const users = rows.map(r => {
+    // Display cost: Claude Sonnet 4 pricing ($3/M in, $15/M out) × 10 markup.
+    const cost = ((r.in_tok / 1_000_000) * 3 + (r.out_tok / 1_000_000) * 15) * 10;
+    // Effective limit: personal override > group > global default.
+    const limit = r.quota_override != null ? r.quota_override
+      : r.group_limit != null ? r.group_limit
+        : globalDefault;
+    const limitSource = r.quota_override != null ? 'personal'
+      : r.group_limit != null ? 'group'
+        : 'global';
+    return {
+      lineUserId: r.line_user_id,
+      displayName: r.display_name,
+      email: r.email,
+      userId: r.user_id,
+      status: r.status,
+      linkedVia: r.linked_via,
+      lastMessageAt: r.last_message_at,
+      cost: Math.round(cost * 100) / 100,
+      limit: Math.round(limit * 100) / 100,
+      remaining: Math.round((limit - cost) * 100) / 100,
+      pctUsed: limit > 0 ? Math.round((cost / limit) * 100) : 0,
+      exceeded: cost >= limit,
+      limitSource,
+    };
+  });
+
+  res.json({ users, count: users.length });
+});
+
+// GET /api/admin/line/message-quota — LINE Official Account monthly push quota.
+// Live call to the LINE API; returns { error } (200) when it can't be fetched
+// (e.g. no access token) so the UI can degrade gracefully.
+router.get('/line/message-quota', async (_req: Request, res: Response) => {
+  try {
+    const quota = await getMessageQuotaStatus();
+    res.json(quota);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.json({ error: msg });
+  }
 });
 
 export default router;

@@ -1012,4 +1012,59 @@ router.post('/ad/claim/verify', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/auth/line-bind-qr
+ * Authenticated. Mints a one-shot bind token tied to the logged-in user and
+ * returns a LINE deep-link QR. Scanning it sends `/link <token>` which binds
+ * the user's LINE account to THIS existing account (no new account created).
+ * If the account is already bound, returns { alreadyLinked: true } instead.
+ */
+router.get('/line-bind-qr', authMiddleware, async (req: Request, res: Response) => {
+  if (!config.line.enabled || !config.line.botBasicId) {
+    res.status(404).json({ error: 'LINE binding not available' });
+    return;
+  }
+
+  const userId = req.user!.userId;
+
+  // Already bound? Surface the linked state so the UI can show "已綁定".
+  const bound = await dbGet<{ line_user_id: string; display_name: string | null }>(
+    'SELECT line_user_id, display_name FROM line_users WHERE internal_user_id = ?',
+    userId,
+  );
+  if (bound) {
+    res.json({ alreadyLinked: true, displayName: bound.display_name });
+    return;
+  }
+
+  const { mintBindQrCode, checkQrRateLimit } = await import('../services/line/qrAuth.js');
+  const ip = (req.headers['x-forwarded-for']?.toString().split(',')[0].trim()) || req.ip || 'unknown';
+  if (!checkQrRateLimit(ip)) {
+    res.status(429).json({ error: 'Too many requests, please wait a minute and try again.' });
+    return;
+  }
+
+  try {
+    const result = await mintBindQrCode(userId);
+    res.json({ alreadyLinked: false, ...result });
+  } catch (err) {
+    console.error('[Auth] line-bind-qr mint failed:', err);
+    res.status(500).json({ error: 'QR generation failed' });
+  }
+});
+
+/**
+ * GET /api/auth/line-link-status
+ * Authenticated. Lightweight poll target for the bind UI — returns whether the
+ * current user's LINE account is bound yet (the binding happens asynchronously
+ * when they send the `/link` message inside LINE).
+ */
+router.get('/line-link-status', authMiddleware, async (req: Request, res: Response) => {
+  const bound = await dbGet<{ display_name: string | null }>(
+    'SELECT display_name FROM line_users WHERE internal_user_id = ?',
+    req.user!.userId,
+  );
+  res.json({ linked: !!bound, displayName: bound?.display_name ?? null });
+});
+
 export default router;

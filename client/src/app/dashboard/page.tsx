@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
 import UploadAlertModal, { type UploadAlertItem } from '../components/UploadAlertModal';
+import { LineQrPanel } from '../components/LineQrPanel';
 import GreetingPopup from '../components/GreetingPopup';
 import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
@@ -87,6 +88,7 @@ function DashboardContent() {
   const [showGreeting, setShowGreeting] = useState(false);
   const [quotaHasPending, setQuotaHasPending] = useState(false);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [showLineModal, setShowLineModal] = useState(false);
   const [quotaReason, setQuotaReason] = useState('');
   const [quotaSubmitting, setQuotaSubmitting] = useState(false);
 
@@ -324,6 +326,22 @@ function DashboardContent() {
         </div>
       )}
 
+      {/* LINE Bind Modal */}
+      {showLineModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowLineModal(false)}>
+          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 relative" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => setShowLineModal(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
+              aria-label="關閉"
+            >
+              <span className="material-symbols-outlined text-xl">close</span>
+            </button>
+            <LineQrPanel title="綁定 LINE" caption="連結你的帳號" />
+          </div>
+        </div>
+      )}
+
       <main className={`${sidebarMargin} transition-all duration-300`}>
         {/* Top Header — desktop only as sticky bar, mobile as simple inline header */}
         <header className="sticky top-0 h-16 bg-surface/80 backdrop-blur-xl hidden md:flex justify-between items-center px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
@@ -334,6 +352,13 @@ function DashboardContent() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowLineModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#06C755]/10 text-[#06C755] hover:bg-[#06C755]/20 transition-colors cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[18px]">smart_toy</span>
+              <span className="text-sm font-bold">綁定 LINE</span>
+            </button>
             <div className="flex items-center gap-1.5 px-3 py-1 bg-primary/10 rounded-full">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="text-sm text-primary font-bold tracking-widest uppercase">{t('dashboard.statusRunning')}</span>

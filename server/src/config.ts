@@ -63,6 +63,27 @@ export const config = {
   // Version: 'Beta' = apply watermarks, 'Official' = no watermarks
   isBeta: (process.env.Version || 'Beta').toLowerCase() !== 'official',
 
+  // LINE Bot configuration. Webhook lives at <host>/webhook/line (Next.js
+  // proxies /webhook/* → Express). When `enabled` is false the webhook route
+  // 404s and no auto-provisioning happens.
+  line: {
+    enabled: process.env.LINE_BOT_ENABLED === 'true',
+    channelId: process.env.LINE_CHANNEL_ID || '',
+    channelSecret: process.env.LINE_CHANNEL_SECRET || '',
+    channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || '',
+    publicApiBase: (process.env.LINE_PUBLIC_API_BASE || '').replace(/\/$/, ''),
+    defaultQuotaUsd: parseFloat(process.env.LINE_DEFAULT_QUOTA_USD || '5'),
+    maxMsgPerMin: parseInt(process.env.LINE_MAX_MSG_PER_MIN || '10', 10),
+    fileShareTtlDays: parseInt(process.env.LINE_FILE_SHARE_TTL_DAYS || '7', 10),
+    conversationIdleHours: parseInt(process.env.LINE_CONVERSATION_IDLE_HOURS || '12', 10),
+    richMenuId: process.env.LINE_RICH_MENU_ID || '',
+    botBasicId: process.env.LINE_BOT_BASIC_ID || '',
+    liffId: process.env.LINE_LIFF_ID || '',
+  },
+
+  // Redis (LINE queue + rate-limit)
+  redisUrl: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
+
   // Security
   maxMessageLength: 10_000,
   bcryptRounds: 12,

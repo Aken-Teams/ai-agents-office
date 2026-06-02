@@ -499,6 +499,67 @@ export async function initializeDatabase(): Promise<void> {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // ─── LINE Bot integration tables ─────────────────────────────
+    // LINE user ↔ internal user mapping. One internal user per LINE account.
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS line_users (
+        line_user_id      VARCHAR(64) PRIMARY KEY,
+        internal_user_id  VARCHAR(36) NOT NULL,
+        display_name      VARCHAR(255),
+        linked_via        VARCHAR(20) NOT NULL DEFAULT 'invite_code',
+        current_conv_id   VARCHAR(36),
+        last_message_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_line_internal (internal_user_id),
+        FOREIGN KEY (internal_user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Token-based public file download (mirrors conversation_shares pattern).
+    // Used to push LINE-friendly download URLs without requiring auth.
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS file_shares (
+        token            VARCHAR(16) PRIMARY KEY,
+        file_id          VARCHAR(36) NOT NULL,
+        user_id          VARCHAR(36) NOT NULL,
+        source           VARCHAR(20) NOT NULL DEFAULT 'line',
+        expires_at       DATETIME NOT NULL,
+        download_count   INT NOT NULL DEFAULT 0,
+        download_cap     INT NOT NULL DEFAULT 50,
+        created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_file_share_file (file_id),
+        INDEX idx_file_share_expires (expires_at),
+        FOREIGN KEY (file_id) REFERENCES generated_files(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Replay protection — LINE retries failed deliveries; we INSERT IGNORE here.
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS line_webhook_events (
+        event_id    VARCHAR(64) PRIMARY KEY,
+        received_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_line_event_received (received_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Account-bind tokens. A logged-in web user mints one of these; scanning
+    // the QR sends `/link <code>` which binds their LINE account to this
+    // existing internal user (instead of creating a brand-new account).
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS line_link_tokens (
+        code        VARCHAR(16) PRIMARY KEY,
+        user_id     VARCHAR(36) NOT NULL,
+        expires_at  DATETIME NOT NULL,
+        used        TINYINT NOT NULL DEFAULT 0,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_line_link_user (user_id),
+        INDEX idx_line_link_expires (expires_at),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    // ─── end LINE Bot integration tables ─────────────────────────
+
     // Terms of Service: add acceptance tracking column
     try {
       await conn.query('ALTER TABLE users ADD COLUMN terms_accepted_at DATETIME DEFAULT NULL');

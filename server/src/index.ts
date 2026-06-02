@@ -16,11 +16,20 @@ import quotaRequestRoutes from './routes/quota-request.js';
 import outlookRoutes from './routes/outlook.js';
 import emailAgentRoutes from './routes/emailAgent.js';
 import blockRoutes from './routes/blocks.js';
+import lineRoutes from './routes/line.js';
+import { rawBodyMiddleware } from './middleware/rawBody.js';
+import { loadLineSettings } from './services/lineSettings.js';
+import { pruneExpiredBuckets } from './services/line/rateLimit.js';
+import { startLineWorker, stopQueueSystem } from './services/queue.js';
+import { runLineJob } from './workers/lineMessageWorker.js';
 
 async function main() {
   // Initialize database
   await initializeDatabase();
   console.log('Database initialized');
+
+  // Load runtime LINE bot settings (rate limit, idle, file TTL, default quota).
+  await loadLineSettings();
 
   const app = express();
 
@@ -32,7 +41,17 @@ async function main() {
     origin: corsOrigins,
     credentials: true,
   }));
+  // /webhook/* paths need the raw request body for HMAC signature verification.
+  // Mount BEFORE express.json() so the JSON parser doesn't consume the stream.
+  app.use('/webhook', rawBodyMiddleware);
+
   app.use(express.json({ limit: '1mb' }));
+
+  // LINE webhook (and other webhook integrations later) live under /webhook/*.
+  app.use('/webhook', lineRoutes);
+
+  // Periodically clean up the in-memory LINE rate-limit map.
+  setInterval(pruneExpiredBuckets, 5 * 60 * 1000).unref();
 
   // Health check
   app.get('/api/health', (_req, res) => {
@@ -55,12 +74,30 @@ async function main() {
   app.use('/api/email-agent', emailAgentRoutes);
   app.use('/api/blocks', blockRoutes);
 
+  // Start the LINE BullMQ worker only when the bot is enabled, so disabling
+  // LINE_BOT_ENABLED in .env produces no Redis traffic and no idle worker.
+  if (config.line.enabled) {
+    startLineWorker(runLineJob);
+    console.log(`LINE worker started (chat concurrency=6, redis=${config.redisUrl})`);
+  }
+
   // Start server
-  app.listen(config.port, () => {
+  const server = app.listen(config.port, () => {
     console.log(`AI Agents Office server running on http://localhost:${config.port}`);
     console.log(`Environment: ${config.nodeEnv}`);
     console.log(`Workspace: ${config.workspaceRoot}`);
   });
+
+  // Graceful shutdown — drain in-flight LINE jobs before closing so a restart
+  // doesn't leave orphan Claude CLI processes.
+  const shutdown = async (signal: string) => {
+    console.log(`Received ${signal}, draining workers...`);
+    server.close();
+    try { await stopQueueSystem(); } catch (e) { console.error('Queue shutdown error:', e); }
+    process.exit(0);
+  };
+  process.on('SIGTERM', () => { shutdown('SIGTERM').catch(() => process.exit(1)); });
+  process.on('SIGINT', () => { shutdown('SIGINT').catch(() => process.exit(1)); });
 }
 
 main().catch(err => {
