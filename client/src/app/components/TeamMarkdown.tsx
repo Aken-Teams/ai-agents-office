@@ -9,6 +9,8 @@
 import dynamic from 'next/dynamic';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkCjkFriendly from 'remark-cjk-friendly';
+import remarkFlexibleMarkers from 'remark-flexible-markers';
 
 const ChatChart = dynamic(() => import('./charts/ChatChart'), { ssr: false });
 const ChatEChart = dynamic(() => import('./charts/ChatEChart'), { ssr: false });
@@ -26,6 +28,7 @@ const components: Record<string, any> = {
   li: ({ children }: any) => <li className="leading-relaxed">{children}</li>,
   strong: ({ children }: any) => <strong className="font-bold text-on-surface">{children}</strong>,
   em: ({ children }: any) => <em className="italic">{children}</em>,
+  mark: ({ children }: any) => <mark className="bg-amber-300/40 text-on-surface rounded px-1 py-0.5 font-medium">{children}</mark>,
   hr: () => <hr className="my-3 border-outline-variant/15" />,
   blockquote: ({ children }: any) => <blockquote className="border-l-2 border-primary/30 pl-3 my-2 text-on-surface-variant">{children}</blockquote>,
   a: ({ children, href }: any) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{children}</a>,
@@ -46,5 +49,9 @@ const components: Record<string, any> = {
 };
 
 export default function TeamMarkdown({ children }: { children: string }) {
-  return <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{children}</ReactMarkdown>;
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly, remarkFlexibleMarkers]} components={components}>
+      {children}
+    </ReactMarkdown>
+  );
 }

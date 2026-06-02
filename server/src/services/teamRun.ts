@@ -60,7 +60,9 @@ function buildMemberSystemPrompt(member: MemberRow, sharedMemory: string): strin
 ${role}${mem}
 
 請針對使用者提出的議題，從你的專業角度提出分析與觀點：聚焦、具體、有明確結論。
-直接輸出純文字分析即可，不需要產生檔案、不需要客套開場白。`;
+直接輸出純文字分析即可，不需要產生檔案、不需要客套開場白。
+
+排版重點：粗體（**）請節制，只標少數真正的關鍵詞，不要整句或大量加粗；把「最重要的 1–2 個結論或數字」用 ==重點== 高亮標示，讓讀者一眼抓到重點。`;
 }
 
 function buildDiscussionSystemPrompt(member: MemberRow, ownFinding: string, peersBlock: string): string {
@@ -77,7 +79,8 @@ ${peersBlock || '（無）'}
 - 你同意哪些？為什麼
 - 你不同意或想補充哪些？說清楚理由
 - 看完別人觀點後，要不要修正自己先前的判斷？
-聚焦在交流與收斂，不要重複第一輪已講過的內容。繁體中文、精簡、要有結論。`;
+聚焦在交流與收斂，不要重複第一輪已講過的內容。繁體中文、精簡、要有結論。
+排版：粗體請節制，只標少數關鍵詞；最重要的 1–2 個結論用 ==重點== 高亮標示。`;
 }
 
 function runOneClaude(
@@ -234,6 +237,8 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
 - 用 ## 小標題分段（例如：## 共識 / ## 分歧 / ## 核心洞察 / ## 建議）
 - 重點用條列清單（- 或 1.）
 - 需要比較多個項目時用 Markdown 表格（| 欄 | 欄 |）
+- 粗體（**）請節制，只標少數真正的關鍵詞，不要整段或大量加粗
+- 把「最關鍵的幾個結論或建議」用 ==重點== 高亮標示，讓使用者一眼看到重點
 
 若有實際數據適合視覺化，可插入圖表程式碼區塊（只在數據合理時用，不要硬湊）：
 - 長條圖：\`\`\`chart 換行 {"type":"bar","title":"標題","data":[{"name":"項目A","value":10}]}

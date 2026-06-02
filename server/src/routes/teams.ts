@@ -109,47 +109,117 @@ ${roster}
   }
 }
 
-// POST /api/teams — instantiate a team from a template.
-// Body: { templateId, topic?, aiTune?: boolean }
+const CUSTOM_SKILLS = ['research', 'data-analyst', 'reviewer', 'pptx-gen', 'docx-gen'];
+interface GeneratedAgent { name: string; icon: string; rolePrompt: string; skillId: string | null }
+interface GeneratedSpec { title: string; icon: string; agents: GeneratedAgent[] }
+
+/**
+ * Ask DeepSeek to design a whole team (title + icon + 3–5 specialist agents)
+ * from a free-form scenario. Returns null on any failure.
+ */
+async function generateTeamSpec(topic: string): Promise<GeneratedSpec | null> {
+  if (!config.deepseekApiKey) return null;
+  const prompt = `你是 AI 團隊設計師。使用者描述了一個情境/議題，請設計一個 3–5 人、分工互補的 AI 助手團隊來協作處理它。
+
+情境：${topic}
+
+每個成員可綁定一個技能（skillId），依角色選最合適的，或用 null（一般推理/規劃）：
+- "research"：網路研究、資料蒐集
+- "data-analyst"：數據/量化分析
+- "reviewer"：審閱、校訂、把關
+- "pptx-gen"：簡報產出
+- "docx-gen"：文件產出
+- null：一般分析、策略、規劃
+
+只輸出一個 JSON 物件（不要任何說明、不要 markdown）：
+{
+  "title": "團隊名稱（簡短，4-10字）",
+  "icon": "一個 Google Material Symbols 名稱（小寫底線，如 favorite, psychology, public, insights）",
+  "agents": [
+    { "name": "角色名稱", "icon": "Material Symbols 名稱", "rolePrompt": "此角色的定位、專長與工作方式（繁體中文 60-140字）", "skillId": "research" 或 null }
+  ]
+}
+要求：3–5 個 agent，角色彼此分工互補、緊貼此情境。`;
+
+  try {
+    const dsRes = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.deepseekApiKey}` },
+      body: JSON.stringify({ model: 'deepseek-chat', messages: [{ role: 'user', content: prompt }], temperature: 0.7, max_tokens: 1800 }),
+    });
+    if (!dsRes.ok) { console.error('[teams] generateTeamSpec DeepSeek error:', await dsRes.text()); return null; }
+    const data = await dsRes.json() as { choices: Array<{ message: { content: string } }> };
+    let text = (data.choices?.[0]?.message?.content || '').trim();
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const obj = JSON.parse(text);
+    if (!obj || !Array.isArray(obj.agents)) return null;
+    const agents: GeneratedAgent[] = obj.agents.slice(0, 5).map((a: any) => ({
+      name: String(a?.name || '助手').slice(0, 40),
+      icon: typeof a?.icon === 'string' && a.icon.trim() ? a.icon.trim() : 'smart_toy',
+      rolePrompt: String(a?.rolePrompt || a?.name || '').slice(0, 600),
+      skillId: CUSTOM_SKILLS.includes(a?.skillId) ? a.skillId : null,
+    })).filter((a: GeneratedAgent) => a.name && a.rolePrompt);
+    if (agents.length < 1) return null;
+    return {
+      title: String(obj.title || topic).slice(0, 60),
+      icon: typeof obj.icon === 'string' && obj.icon.trim() ? obj.icon.trim() : 'groups',
+      agents,
+    };
+  } catch (err) {
+    console.error('[teams] generateTeamSpec failed:', err);
+    return null;
+  }
+}
+
+// POST /api/teams — instantiate a team from a template, OR (custom: true) have
+// AI design the whole team from a free-form scenario (topic).
+// Body: { templateId, topic?, aiTune?: boolean } | { custom: true, topic }
 router.post('/', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { templateId, topic, aiTune } = req.body as { templateId?: string; topic?: string; aiTune?: boolean };
-
-  const template = templateId ? getTeamTemplate(templateId) : undefined;
-  if (!template) { res.status(400).json({ error: 'Unknown templateId' }); return; }
-
+  const { templateId, topic, aiTune, custom } = req.body as { templateId?: string; topic?: string; aiTune?: boolean; custom?: boolean };
   const cleanTopic = typeof topic === 'string' ? topic.trim() : '';
-  const teamId = uuidv4();
-  const teamTitle = cleanTopic || template.title;
 
-  await dbRun(
-    'INSERT INTO agent_teams (id, user_id, title, topic, template_id, icon) VALUES (?, ?, ?, ?, ?, ?)',
-    teamId, userId, teamTitle, cleanTopic || null, template.id, template.icon,
-  );
+  let teamTitle: string, teamIcon: string, templateKey: string, aiTuned = false;
+  let agents: GeneratedAgent[];
 
-  // Optionally refine the role prompts for the topic (single DeepSeek call).
-  let tuned: string[] | null = null;
-  if (aiTune && cleanTopic) {
-    tuned = await aiTuneRolePrompts(template.agents, cleanTopic);
+  if (custom) {
+    if (!cleanTopic) { res.status(400).json({ error: '請先描述你的情境' }); return; }
+    if (!config.deepseekApiKey) { res.status(503).json({ error: 'AI 服務未設定' }); return; }
+    const spec = await generateTeamSpec(cleanTopic);
+    if (!spec) { res.status(502).json({ error: 'AI 團隊生成失敗，請重試或改用範本' }); return; }
+    teamTitle = spec.title; teamIcon = spec.icon; templateKey = 'custom'; agents = spec.agents; aiTuned = true;
+  } else {
+    const template = templateId ? getTeamTemplate(templateId) : undefined;
+    if (!template) { res.status(400).json({ error: 'Unknown templateId' }); return; }
+    teamTitle = cleanTopic || template.title; teamIcon = template.icon; templateKey = template.id;
+    let tuned: string[] | null = null;
+    if (aiTune && cleanTopic) tuned = await aiTuneRolePrompts(template.agents, cleanTopic);
+    aiTuned = !!tuned;
+    agents = template.agents.map((a, i) => ({
+      name: a.name, icon: a.icon, skillId: a.skillId,
+      rolePrompt: tuned ? tuned[i] : (cleanTopic ? `${a.rolePrompt}\n\n【本團隊議題】${cleanTopic}` : a.rolePrompt),
+    }));
   }
 
-  for (let i = 0; i < template.agents.length; i++) {
-    const agent = template.agents[i];
-    const base = tuned ? tuned[i] : agent.rolePrompt;
-    const systemPrompt = cleanTopic && !tuned ? `${base}\n\n【本團隊議題】${cleanTopic}` : base;
+  const teamId = uuidv4();
+  await dbRun(
+    'INSERT INTO agent_teams (id, user_id, title, topic, template_id, icon) VALUES (?, ?, ?, ?, ?, ?)',
+    teamId, userId, teamTitle, cleanTopic || null, templateKey, teamIcon,
+  );
+  for (const agent of agents) {
     const mode = agent.skillId ? 'direct' : null;
     await dbRun(
       'INSERT INTO conversations (id, user_id, title, skill_id, mode, category, system_prompt, icon, team_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      uuidv4(), userId, agent.name, agent.skillId, mode, 'assistant', systemPrompt, agent.icon, teamId,
+      uuidv4(), userId, agent.name, agent.skillId, mode, 'assistant', agent.rolePrompt, agent.icon, teamId,
     );
   }
 
   const team = await dbGet<AgentTeamRow>('SELECT * FROM agent_teams WHERE id = ?', teamId);
-  const agents = await dbAll<Conversation>(
+  const created = await dbAll<Conversation>(
     "SELECT * FROM conversations WHERE team_id = ? AND status != 'deleted' ORDER BY created_at ASC",
     teamId,
   );
-  res.status(201).json({ team, agents, aiTuned: !!tuned });
+  res.status(201).json({ team, agents: created, aiTuned });
 });
 
 // DELETE /api/teams/:id — remove the team. Its agents are kept but detached

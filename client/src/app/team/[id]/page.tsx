@@ -29,7 +29,7 @@ interface MemberStream { name: string; icon: string | null; status: MemberStatus
 const STATUS_META: Record<MemberStatus, { label: string; cls: string; icon: string; spin?: boolean }> = {
   pending:    { label: '等待中', cls: 'text-on-surface-variant bg-surface-container-high', icon: 'schedule' },
   running:    { label: '分析中', cls: 'text-primary bg-primary/10', icon: 'progress_activity', spin: true },
-  responding: { label: '回應中', cls: 'text-tertiary bg-tertiary/10', icon: 'forum', spin: true },
+  responding: { label: '回應中', cls: 'text-tertiary bg-tertiary/10', icon: 'forum' },
   done:       { label: '完成',   cls: 'text-success bg-success/10', icon: 'check_circle' },
   failed:     { label: '失敗',   cls: 'text-error bg-error/10', icon: 'error' },
 };
