@@ -1008,8 +1008,8 @@ function TeamCreateModal({ token, onCreated, onCancel }: { token: string | null;
             <div className="flex justify-center py-10"><span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span></div>
           ) : (
             <>
-              {/* AI custom team — prominent full-width option above the templates */}
-              <button onClick={() => { setCustomMode(true); setSelected(null); }}
+              {/* AI custom team — prominent full-width toggle above the templates */}
+              <button onClick={() => { const next = !customMode; setCustomMode(next); if (next) setSelected(null); }}
                 className={`w-full flex items-center gap-3 p-4 mb-4 rounded-xl border transition-all cursor-pointer text-left ${customMode ? 'border-tertiary bg-tertiary/5 ring-1 ring-tertiary/30' : 'border-outline-variant/20 bg-surface-container hover:border-tertiary/50'}`}>
                 <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors ${customMode ? 'bg-tertiary text-on-primary' : 'bg-surface-container-high text-tertiary'}`}>
                   <span className="material-symbols-outlined text-xl">auto_awesome</span>
@@ -1021,47 +1021,53 @@ function TeamCreateModal({ token, onCreated, onCancel }: { token: string | null;
                 {customMode && <span className="material-symbols-outlined text-tertiary shrink-0">check_circle</span>}
               </button>
 
-              <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant/70 mb-2 px-1">或從範本領域選擇</p>
-              {/* Template grid — 5 per row, simplified cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 mb-4">
-                {templates.map(tpl => {
-                  const isSel = !customMode && selected?.id === tpl.id;
-                  return (
-                    <button key={tpl.id} onClick={() => { setSelected(tpl); setCustomMode(false); }}
-                      className={`relative flex flex-col items-center text-center p-4 rounded-xl border transition-all cursor-pointer ${isSel ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-outline-variant/20 bg-surface-container hover:border-primary/40'}`}>
-                      {isSel && <span className="material-symbols-outlined absolute top-2 right-2 text-primary text-lg">check_circle</span>}
-                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-2 transition-colors ${isSel ? 'cyber-gradient text-on-primary' : 'bg-surface-container-high text-primary'}`}>
-                        <span className="material-symbols-outlined text-xl">{tpl.icon}</span>
-                      </div>
-                      <div className="font-bold text-on-surface text-sm leading-tight">{tpl.title}</div>
-                      <div className="text-[11px] text-on-surface-variant mt-0.5">{tpl.agents.length} 位助手</div>
-                    </button>
-                  );
-                })}
-              </div>
+              {/* Template picker — hidden when AI custom mode is on */}
+              {!customMode && (
+                <div className="animate-in fade-in duration-200">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant/70 mb-2 px-1">或從範本領域選擇</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 mb-4">
+                    {templates.map(tpl => {
+                      const isSel = selected?.id === tpl.id;
+                      return (
+                        <button key={tpl.id} onClick={() => { setSelected(tpl); setCustomMode(false); }}
+                          className={`relative flex flex-col items-center text-center p-4 rounded-xl border transition-all cursor-pointer ${isSel ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-outline-variant/20 bg-surface-container hover:border-primary/40'}`}>
+                          {isSel && <span className="material-symbols-outlined absolute top-2 right-2 text-primary text-lg">check_circle</span>}
+                          <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-2 transition-colors ${isSel ? 'cyber-gradient text-on-primary' : 'bg-surface-container-high text-primary'}`}>
+                            <span className="material-symbols-outlined text-xl">{tpl.icon}</span>
+                          </div>
+                          <div className="font-bold text-on-surface text-sm leading-tight">{tpl.title}</div>
+                          <div className="text-[11px] text-on-surface-variant mt-0.5">{tpl.agents.length} 位助手</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {selected && (
+                    <div className="flex flex-wrap items-center gap-1.5 mb-5 px-1">
+                      <span className="text-xs text-on-surface-variant mr-1">團隊成員：</span>
+                      {selected.agents.map(a => (
+                        <span key={a.name} className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary">{a.name}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
-              {/* Members preview — custom hint, or the chosen template's roster */}
+              {/* Scenario (custom) or topic (template) */}
               {customMode ? (
-                <div className="flex items-center gap-1.5 mb-5 px-1 text-xs text-tertiary">
-                  <span className="material-symbols-outlined text-[15px]">auto_awesome</span>
-                  AI 會依你下方描述的情境，自動組成 3–5 位分工互補的助手
+                <div className="animate-in fade-in slide-in-from-top-2 duration-200 mb-6">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">描述你的情境 / 問題（必填）</label>
+                  <p className="text-xs text-tertiary mb-2 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[15px]">auto_awesome</span>
+                    AI 會依此情境，自動組成 3–5 位分工互補的助手
+                  </p>
+                  <textarea value={topic} onChange={e => setTopic(e.target.value)} autoFocus
+                    placeholder="例如：跟戀愛相關的問題，希望能幫我分析星座、解讀對方心理、給我行動建議…"
+                    className="w-full bg-surface-container border border-outline-variant/30 rounded-2xl px-4 py-3.5 text-base text-on-surface placeholder:text-outline focus:outline-none focus:border-primary resize-none min-h-[180px] leading-relaxed" />
                 </div>
-              ) : selected ? (
-                <div className="flex flex-wrap items-center gap-1.5 mb-5 px-1">
-                  <span className="text-xs text-on-surface-variant mr-1">團隊成員：</span>
-                  {selected.agents.map(a => (
-                    <span key={a.name} className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary">{a.name}</span>
-                  ))}
-                </div>
-              ) : null}
-
-              {/* Topic / scenario + (template-only) AI-tune toggle */}
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-                    {customMode ? '描述你的情境 / 問題（必填）' : '議題（選填，讓團隊更聚焦）'}
-                  </label>
-                  {!customMode && (
+              ) : (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">議題（選填，讓團隊更聚焦）</label>
                     <button type="button" onClick={() => setAiTune(v => !v)} title="開啟後會多花一次輕量 AI 呼叫，依議題微調每位助手的角色"
                       className="flex items-center gap-1.5 text-xs font-medium text-on-surface-variant hover:text-primary transition-colors cursor-pointer">
                       <span className="material-symbols-outlined text-sm text-primary">auto_awesome</span>
@@ -1070,12 +1076,12 @@ function TeamCreateModal({ token, onCreated, onCancel }: { token: string | null;
                         <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${aiTune ? 'translate-x-4' : ''}`} />
                       </span>
                     </button>
-                  )}
+                  </div>
+                  <input value={topic} onChange={e => setTopic(e.target.value)}
+                    placeholder="例如：2025 下半年台股佈局、新產品上市行銷…"
+                    className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-4 py-2.5 text-sm text-on-surface focus:outline-none focus:border-primary" />
                 </div>
-                <input value={topic} onChange={e => setTopic(e.target.value)}
-                  placeholder={customMode ? '例如：跟戀愛相關的問題，希望能幫我分析星座…' : '例如：2025 下半年台股佈局、新產品上市行銷…'}
-                  className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-4 py-2.5 text-sm text-on-surface focus:outline-none focus:border-primary" />
-              </div>
+              )}
 
               <div className="flex items-center justify-end gap-2 pt-5 mt-1 border-t border-outline-variant/15">
                 <button onClick={onCancel} className="px-5 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer">取消</button>
