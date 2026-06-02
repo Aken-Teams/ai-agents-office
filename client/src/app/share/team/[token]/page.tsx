@@ -9,7 +9,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import TeamMarkdown from '../../../components/TeamMarkdown';
 
-interface MemberOut { memberId: string; name: string; icon: string | null; text: string }
+interface MemberOut { memberId: string; name: string; icon: string | null; text: string; text2?: string }
 interface SharedRun {
   teamTitle: string;
   teamIcon: string | null;
@@ -97,13 +97,21 @@ export default function TeamSharePage() {
                   <span className="material-symbols-outlined text-on-primary text-base">{m.icon || 'smart_toy'}</span>
                 </div>
                 <span className="text-sm font-bold text-on-surface truncate flex-1">{m.name}</span>
-                <button onClick={() => setExpanded({ title: m.name, icon: m.icon || 'smart_toy', text: m.text })}
+                <button onClick={() => setExpanded({ title: m.name, icon: m.icon || 'smart_toy', text: m.text + (m.text2 ? `\n\n---\n\n**💬 回應其他成員**\n\n${m.text2}` : '') })}
                   className="w-5 h-5 flex items-center justify-center rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0" title="放大檢視">
                   <span className="material-symbols-outlined text-[14px]">open_in_full</span>
                 </button>
               </div>
               <div className="p-3 text-xs text-on-surface-variant leading-relaxed max-h-80 overflow-y-auto">
                 <TeamMarkdown>{m.text}</TeamMarkdown>
+                {m.text2 && (
+                  <div className="mt-3 rounded-lg bg-tertiary/5 border border-tertiary/15 p-2.5">
+                    <div className="flex items-center gap-1 text-[11px] font-bold text-tertiary mb-1.5">
+                      <span className="material-symbols-outlined text-[13px]">forum</span>回應其他成員
+                    </div>
+                    <TeamMarkdown>{m.text2}</TeamMarkdown>
+                  </div>
+                )}
               </div>
             </div>
           ))}

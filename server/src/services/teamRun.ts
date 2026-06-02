@@ -201,8 +201,8 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
         .filter(r => r.member.id !== member.id)
         .map(r => `### ${r.member.title}\n${r.text ? truncateResultForRouter(r.text, 700) : '（無）'}`)
         .join('\n\n');
-      writer({ type: 'member_status', data: { memberId: member.id, status: 'running' } });
-      writer({ type: 'member_stream', data: { memberId: member.id, content: '\n\n---\n\n**🔄 第二輪 · 回應其他成員**\n\n' } });
+      writer({ type: 'member_status', data: { memberId: member.id, status: 'responding' } });
+      writer({ type: 'member_round2', data: { memberId: member.id } });
       const r = await runOneClaude(
         userId, member.id, `_team/${member.id}`, question, buildDiscussionSystemPrompt(member, own, peers), MEMBER_TIMEOUT_MS,
         chunk => writer({ type: 'member_stream', data: { memberId: member.id, content: chunk } }),
@@ -263,13 +263,10 @@ ${findingsBlock}
 
   // ── Persist run + record tokens ─────────────────────────────────────────
   // Store both rounds so history replay shows the full discussion.
-  const memberOutputs = results.map(r => {
-    const r2 = round2[r.member.id];
-    return {
-      memberId: r.member.id, name: r.member.title, icon: r.member.icon,
-      text: r.text + (r2 ? `\n\n---\n\n**🔄 第二輪 · 回應其他成員**\n\n${r2}` : ''),
-    };
-  });
+  const memberOutputs = results.map(r => ({
+    memberId: r.member.id, name: r.member.title, icon: r.member.icon,
+    text: r.text, text2: round2[r.member.id] || '',
+  }));
   await dbRun(
     'UPDATE team_runs SET result = ?, member_outputs = ?, input_tokens = ?, output_tokens = ?, status = ? WHERE id = ?',
     finalText, JSON.stringify(memberOutputs), totalIn, totalOut, 'done', runId,

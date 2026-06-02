@@ -23,14 +23,15 @@ interface Estimate { memberCount: number; inputTokens: number; outputTokens: num
 interface RunRow { id: string; question: string; result: string | null; member_outputs: string | null; input_tokens: number; output_tokens: number; status: string; created_at: string; share_token: string | null }
 interface TeamTotal { count: number; inputTokens: number; outputTokens: number; costUsd: number }
 
-type MemberStatus = 'pending' | 'running' | 'done' | 'failed';
-interface MemberStream { name: string; icon: string | null; status: MemberStatus; text: string }
+type MemberStatus = 'pending' | 'running' | 'responding' | 'done' | 'failed';
+interface MemberStream { name: string; icon: string | null; status: MemberStatus; text: string; text2: string; inRound2: boolean }
 
 const STATUS_META: Record<MemberStatus, { label: string; cls: string; icon: string; spin?: boolean }> = {
-  pending: { label: '等待中', cls: 'text-on-surface-variant bg-surface-container-high', icon: 'schedule' },
-  running: { label: '分析中', cls: 'text-primary bg-primary/10', icon: 'progress_activity', spin: true },
-  done:    { label: '完成',   cls: 'text-success bg-success/10', icon: 'check_circle' },
-  failed:  { label: '失敗',   cls: 'text-error bg-error/10', icon: 'error' },
+  pending:    { label: '等待中', cls: 'text-on-surface-variant bg-surface-container-high', icon: 'schedule' },
+  running:    { label: '分析中', cls: 'text-primary bg-primary/10', icon: 'progress_activity', spin: true },
+  responding: { label: '回應中', cls: 'text-tertiary bg-tertiary/10', icon: 'forum', spin: true },
+  done:       { label: '完成',   cls: 'text-success bg-success/10', icon: 'check_circle' },
+  failed:     { label: '失敗',   cls: 'text-error bg-error/10', icon: 'error' },
 };
 
 function TeamRunContent() {
@@ -95,7 +96,7 @@ function TeamRunContent() {
         const order = d.agents.map(a => a.id);
         setMemberOrder(order);
         const map: Record<string, MemberStream> = {};
-        d.agents.forEach(a => { map[a.id] = { name: a.title, icon: a.icon, status: 'pending', text: '' }; });
+        d.agents.forEach(a => { map[a.id] = { name: a.title, icon: a.icon, status: 'pending', text: '', text2: '', inRound2: false }; });
         setMembers(map);
       })
       .catch(() => router.replace('/assistant'));
@@ -112,7 +113,7 @@ function TeamRunContent() {
     setTotals(null);
     setMembers(prev => {
       const next: Record<string, MemberStream> = {};
-      for (const id of Object.keys(prev)) next[id] = { ...prev[id], status: 'pending', text: '' };
+      for (const id of Object.keys(prev)) next[id] = { ...prev[id], status: 'pending', text: '', text2: '', inRound2: false };
       return next;
     });
   }, []);
@@ -166,7 +167,16 @@ function TeamRunContent() {
         setMembers(prev => prev[d.memberId] ? { ...prev, [d.memberId]: { ...prev[d.memberId], status: d.status } } : prev);
         break;
       case 'member_stream':
-        setMembers(prev => prev[d.memberId] ? { ...prev, [d.memberId]: { ...prev[d.memberId], text: prev[d.memberId].text + d.content } } : prev);
+        setMembers(prev => {
+          const m = prev[d.memberId];
+          if (!m) return prev;
+          return m.inRound2
+            ? { ...prev, [d.memberId]: { ...m, text2: m.text2 + d.content } }
+            : { ...prev, [d.memberId]: { ...m, text: m.text + d.content } };
+        });
+        break;
+      case 'member_round2':
+        setMembers(prev => prev[d.memberId] ? { ...prev, [d.memberId]: { ...prev[d.memberId], inRound2: true, status: 'responding' } } : prev);
         break;
       case 'member_done':
         setMembers(prev => prev[d.memberId] ? { ...prev, [d.memberId]: { ...prev[d.memberId], status: d.status === 'failed' ? 'failed' : 'done' } } : prev);
@@ -200,11 +210,11 @@ function TeamRunContent() {
     setSynthRunning(false);
     setTotals({ inputTokens: run.input_tokens, outputTokens: run.output_tokens, costUsd: Math.round(((run.input_tokens / 1e6) * 3 + (run.output_tokens / 1e6) * 15) * 10 * 100) / 100 });
     setQuestion(run.question);
-    let outs: Array<{ memberId: string; name: string; icon: string | null; text: string }> = [];
+    let outs: Array<{ memberId: string; name: string; icon: string | null; text: string; text2?: string }> = [];
     try { outs = JSON.parse(run.member_outputs || '[]'); } catch { /* ignore */ }
     const map: Record<string, MemberStream> = {};
     const order: string[] = [];
-    outs.forEach(o => { map[o.memberId] = { name: o.name, icon: o.icon, status: 'done', text: o.text }; order.push(o.memberId); });
+    outs.forEach(o => { map[o.memberId] = { name: o.name, icon: o.icon, status: 'done', text: o.text, text2: o.text2 || '', inRound2: false }; order.push(o.memberId); });
     if (order.length) { setMembers(map); setMemberOrder(order); }
   };
 
@@ -300,13 +310,13 @@ function TeamRunContent() {
           <div className="min-w-0">
             <h1 className="font-headline text-xl md:text-2xl font-bold text-on-surface truncate">{team.title} · 團隊協作</h1>
             <p className="text-xs text-on-surface-variant">{memberOrder.length} 位助手協作分析，最後給你一份統整結論</p>
-            {total && total.count > 0 && (
-              <span className="inline-flex items-center gap-1 mt-1.5 text-[11px] text-tertiary bg-tertiary/10 px-2 py-0.5 rounded-full">
-                <span className="material-symbols-outlined text-[13px]">payments</span>
-                此團隊已協作 {total.count} 次 · 累計 {(total.inputTokens + total.outputTokens).toLocaleString()} tokens · ${total.costUsd}
-              </span>
-            )}
           </div>
+          {total && total.count > 0 && (
+            <span className="ml-auto shrink-0 hidden sm:inline-flex items-center gap-1.5 text-xs text-tertiary bg-tertiary/10 px-3 py-1.5 rounded-full">
+              <span className="material-symbols-outlined text-[15px]">payments</span>
+              已協作 {total.count} 次 · 累計 {(total.inputTokens + total.outputTokens).toLocaleString()} tokens · ${total.costUsd}
+            </span>
+          )}
         </div>
 
         {/* Question input */}
@@ -374,7 +384,7 @@ function TeamRunContent() {
                     {meta.label}
                   </span>
                   {m.text && (
-                    <button onClick={() => setExpanded({ title: m.name, icon: m.icon || 'smart_toy', text: m.text })}
+                    <button onClick={() => setExpanded({ title: m.name, icon: m.icon || 'smart_toy', text: m.text + (m.text2 ? `\n\n---\n\n**💬 回應其他成員**\n\n${m.text2}` : '') })}
                       className="w-5 h-5 flex items-center justify-center rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0" title="放大檢視">
                       <span className="material-symbols-outlined text-[14px]">open_in_full</span>
                     </button>
@@ -384,6 +394,14 @@ function TeamRunContent() {
                   {m.text
                     ? <TeamMarkdown>{m.text}</TeamMarkdown>
                     : (m.status === 'pending' ? null : <span className="text-outline italic">分析中…</span>)}
+                  {m.text2 && (
+                    <div className="mt-3 rounded-lg bg-tertiary/5 border border-tertiary/15 p-2.5">
+                      <div className="flex items-center gap-1 text-[11px] font-bold text-tertiary mb-1.5">
+                        <span className="material-symbols-outlined text-[13px]">forum</span>回應其他成員
+                      </div>
+                      <TeamMarkdown>{m.text2}</TeamMarkdown>
+                    </div>
+                  )}
                 </div>
               </div>
             );
