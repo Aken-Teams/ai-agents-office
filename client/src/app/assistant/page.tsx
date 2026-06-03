@@ -1411,20 +1411,22 @@ function AssistantContent() {
     .map(team => ({ team, members: conversations.filter(c => c.team_id === team.id) }))
     .filter(g => g.members.length > 0);
 
-  const renderCard = (conv: AssistantConversation, index: number) => {
+  const renderCard = (conv: AssistantConversation, index: number, muted = false) => {
     const cardIcon = conv.icon || 'smart_toy';
     return (
-      <div key={conv.id} className="group relative flex flex-col bg-surface-container rounded-2xl border border-outline-variant/10 hover:border-primary/30 transition-all overflow-hidden">
-        <div className="h-1 cyber-gradient w-full" />
+      <div key={conv.id} className={`group relative flex flex-col rounded-2xl border transition-all overflow-hidden ${muted ? 'bg-surface-container/50 border-outline-variant/15 hover:border-outline-variant/40' : 'bg-surface-container border-outline-variant/10 hover:border-primary/30'}`}>
+        <div className={`h-1 w-full ${muted ? 'bg-outline-variant/25' : 'cyber-gradient'}`} />
         <div className="p-5 flex flex-col flex-1">
           <div className="flex items-start justify-between mb-4">
             <div className="relative">
-              <div className="w-12 h-12 rounded-xl cyber-gradient flex items-center justify-center">
-                <span className="material-symbols-outlined text-on-primary text-2xl">{cardIcon}</span>
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${muted ? 'bg-surface-container-high' : 'cyber-gradient'}`}>
+                <span className={`material-symbols-outlined text-2xl ${muted ? 'text-on-surface-variant' : 'text-on-primary'}`}>{cardIcon}</span>
               </div>
-              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-success rounded-full border-2 border-surface-container">
-                <span className="absolute inset-0 rounded-full bg-success animate-ping opacity-60" />
-              </span>
+              {!muted && (
+                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-success rounded-full border-2 border-surface-container">
+                  <span className="absolute inset-0 rounded-full bg-success animate-ping opacity-60" />
+                </span>
+              )}
             </div>
             <span className="text-xs font-mono font-bold text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">#{index + 1}</span>
           </div>
@@ -1467,7 +1469,7 @@ function AssistantContent() {
             )}
           </div>
           <div className="mt-auto flex items-center gap-2">
-            <Link href={`/chat/${conv.id}`} className="flex-1 flex items-center justify-center gap-1.5 py-2 cyber-gradient text-on-primary rounded-lg text-sm font-bold font-headline hover:brightness-110 active:scale-95 transition-all no-underline">
+            <Link href={`/chat/${conv.id}`} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-bold font-headline active:scale-95 transition-all no-underline ${muted ? 'bg-surface-container-high text-on-surface hover:bg-surface-variant/50 border border-outline-variant/15' : 'cyber-gradient text-on-primary hover:brightness-110'}`}>
               <span className="material-symbols-outlined text-base">chat</span>
               {t('assistant.openChat' as any) || '開啟對話'}
             </Link>
@@ -1617,14 +1619,15 @@ function AssistantContent() {
             {teamsWithMembers.map(({ team, members }) => {
               const collapsed = collapsedTeams.has(team.id);
               return (
-                <section key={team.id}>
+                <section key={team.id} className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-4 md:p-5">
                   <div className="flex items-center gap-3 mb-4">
                     <button onClick={() => toggleTeam(team.id)} className="group flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer">
                       <div className="w-11 h-11 rounded-xl cyber-gradient flex items-center justify-center shrink-0">
                         <span className="material-symbols-outlined text-on-primary text-xl">{team.icon || 'groups'}</span>
                       </div>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/15 px-1.5 py-0.5 rounded shrink-0">團隊</span>
                           <h3 className="font-headline font-bold text-on-surface text-lg truncate group-hover:text-primary transition-colors">{team.title}</h3>
                           <span className="text-xs text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full shrink-0">{members.length} 位</span>
                         </div>
@@ -1667,8 +1670,8 @@ function AssistantContent() {
                     </div>
                   </div>
                 )}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                  {standaloneConvs.map((conv, i) => renderCard(conv, i))}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {standaloneConvs.map((conv, i) => renderCard(conv, i, true))}
                 </div>
               </section>
             )}
