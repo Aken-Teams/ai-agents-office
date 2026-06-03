@@ -243,6 +243,15 @@ function TeamRunContent() {
     loadHistory();
   }, [token, teamId, authHeaders, router, loadHistory]);
 
+  // Scheduled / background runs execute server-side with no SSE sink. Poll while
+  // any run is still in progress so it flips to done (and tokens update) on its own.
+  const hasInflight = history.some(r => r.status !== 'done' && r.status !== 'error' && r.status !== 'failed');
+  useEffect(() => {
+    if (!hasInflight || !token) return;
+    const t = setInterval(() => { loadHistory(); }, 4000);
+    return () => clearInterval(t);
+  }, [hasInflight, token, loadHistory]);
+
   const resetRun = useCallback(() => {
     setError(null);
     setSynthesis('');
@@ -344,6 +353,17 @@ function TeamRunContent() {
 
   const loadPastRun = (run: RunRow) => {
     setError(null);
+    // Still running in the background (scheduled / 立即測試) — no stored result yet.
+    const inflight = run.status !== 'done' && run.status !== 'error' && run.status !== 'failed';
+    if (inflight && !run.result) {
+      setSynthesis('⏳ **此排程正在背景伺服器執行中**\n\n排程與「立即測試」是在伺服器背景跑的，無法即時逐字觀看。完成後這裡會自動顯示完整結果（畫面每 4 秒自動刷新），並寄到你設定的信箱。\n\n若想**即時觀看**整個協作過程，請直接在上方輸入議題、按 ▶ 執行——那是前景即時串流模式。');
+      setSynthRunning(false);
+      setTotals(null);
+      setQuestion(run.question);
+      setMembers({}); setMemberOrder([]);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     setSynthesis(run.result || '');
     setSynthRunning(false);
     setTotals({ inputTokens: run.input_tokens, outputTokens: run.output_tokens, costUsd: Math.round(((run.input_tokens / 1e6) * 3 + (run.output_tokens / 1e6) * 15) * 10 * 100) / 100 });
@@ -354,6 +374,7 @@ function TeamRunContent() {
     const order: string[] = [];
     outs.forEach(o => { map[o.memberId] = { name: o.name, icon: o.icon, status: 'done', text: o.text, text2: o.text2 || '', inRound2: false }; order.push(o.memberId); });
     if (order.length) { setMembers(map); setMemberOrder(order); }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   if (!team) {
@@ -598,7 +619,11 @@ function TeamRunContent() {
                       </span>
                     </span>
                   </button>
-                  {run.status !== 'done' && <span className="text-[11px] px-2 py-0.5 rounded-full bg-warning/10 text-warning shrink-0">{run.status}</span>}
+                  {run.status !== 'done' && run.status !== 'error' && run.status !== 'failed'
+                    ? <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />背景執行中
+                      </span>
+                    : run.status !== 'done' && <span className="text-[11px] px-2 py-0.5 rounded-full bg-error/10 text-error shrink-0">{run.status}</span>}
                   <button onClick={() => handleShareRun(run)} title="分享（唯讀）"
                     className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0">
                     <span className="material-symbols-outlined text-[18px]">share</span>

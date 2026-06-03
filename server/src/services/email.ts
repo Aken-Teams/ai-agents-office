@@ -133,7 +133,7 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-/** Minimal Markdown → email-safe HTML (headings, bold, highlight, lists, paragraphs). */
+/** Minimal Markdown → email-safe HTML (headings, bold, highlight, lists, tables, paragraphs). */
 function mdToEmailHtml(md: string): string {
   const lines = (md || '').split('\n');
   const out: string[] = [];
@@ -143,9 +143,68 @@ function mdToEmailHtml(md: string): string {
     .replace(/==(.+?)==/g, '<mark style="background:#fde68a;padding:0 2px;border-radius:2px">$1</mark>')
     .replace(/`([^`]+?)`/g, '<code style="background:#f1f5f9;padding:1px 4px;border-radius:3px">$1</code>');
   const closeList = () => { if (inList) { out.push('</ul>'); inList = false; } };
-  for (const raw of lines) {
-    const line = raw.trimEnd();
+  const isTableRow = (s: string) => /^\s*\|.*\|\s*$/.test(s);
+  const isSeparator = (s: string) => /^\s*\|?[\s:]*-{2,}[\s:|-]*\|?\s*$/.test(s) && s.includes('-');
+  const splitCells = (s: string) => s.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+
+  // A ```chart/echart fence → a titled data table; other fences → a "view on site" note.
+  const renderFence = (lang: string, content: string): string => {
+    const chartish = /^(chart|echart)$/i.test(lang);
+    if (chartish) {
+      try {
+        const spec = JSON.parse(content);
+        const title = typeof spec.title === 'string' ? spec.title : '';
+        const data: Array<{ name?: string; value?: number }> = Array.isArray(spec.data) ? spec.data : [];
+        const rows = data.filter(d => d && (d.name != null || d.value != null));
+        if (rows.length) {
+          const trs = rows.map((d, ri) => {
+            const v = typeof d.value === 'number' ? d.value : Number(d.value);
+            const color = !isNaN(v) ? (v > 0 ? '#0f766e' : v < 0 ? '#b91c1c' : '#64748b') : '#334155';
+            const bg = ri % 2 ? '#ffffff' : '#fafbfc';
+            return `<tr style="background:${bg}"><td style="border:1px solid #e2e8f0;padding:5px 10px;font-size:12px;color:#334155">${inline(String(d.name ?? ''))}</td><td style="border:1px solid #e2e8f0;padding:5px 10px;font-size:12px;color:${color};text-align:right;font-weight:600">${escapeHtml(String(d.value ?? ''))}</td></tr>`;
+          }).join('');
+          const cap = title ? `<div style="font-size:12px;font-weight:600;color:#0f172a;margin:0 0 4px">📊 ${inline(title)}</div>` : '';
+          return `<div style="margin:12px 0">${cap}<table style="border-collapse:collapse;width:100%"><tbody>${trs}</tbody></table></div>`;
+        }
+      } catch { /* fall through to note */ }
+    }
+    const label = chartish ? '互動圖表' : /mermaid|mindmap/i.test(lang) ? '流程／心智圖' : /map/i.test(lang) ? '地圖' : '圖表';
+    return `<div style="margin:12px 0;padding:10px 14px;background:#f1f5f9;border:1px dashed #cbd5e1;border-radius:8px;font-size:12px;color:#64748b">📊 此處有一張${label}，請至網站查看互動版本。</div>`;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trimEnd();
     let m: RegExpMatchArray | null;
+
+    // Fenced code block (```lang ... ```) — charts become tables, others a note.
+    if (/^\s*```/.test(line)) {
+      closeList();
+      const lang = line.replace(/^\s*```/, '').trim().toLowerCase();
+      const buf: string[] = [];
+      i++;
+      while (i < lines.length && !/^\s*```/.test(lines[i])) { buf.push(lines[i]); i++; }
+      out.push(renderFence(lang, buf.join('\n')));
+      continue; // i now at closing fence (or EOF); for-loop increments past it
+    }
+
+    // Pipe table: a row line immediately followed by a separator line.
+    if (isTableRow(line) && i + 1 < lines.length && isSeparator(lines[i + 1])) {
+      closeList();
+      const header = splitCells(line);
+      i += 2; // skip header + separator
+      const bodyRows: string[][] = [];
+      while (i < lines.length && isTableRow(lines[i])) { bodyRows.push(splitCells(lines[i])); i++; }
+      i--; // for-loop will increment
+      const ths = header.map(c => `<th style="border:1px solid #e2e8f0;padding:6px 10px;background:#f1f5f9;text-align:left;font-size:12px;color:#0f172a">${inline(c)}</th>`).join('');
+      const trs = bodyRows.map((r, ri) => {
+        const bg = ri % 2 ? '#ffffff' : '#fafbfc';
+        const tds = header.map((_, ci) => `<td style="border:1px solid #e2e8f0;padding:6px 10px;font-size:12px;color:#334155;vertical-align:top">${inline(r[ci] || '')}</td>`).join('');
+        return `<tr style="background:${bg}">${tds}</tr>`;
+      }).join('');
+      out.push(`<div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;margin:12px 0;font-size:12px"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`);
+      continue;
+    }
+
     if (!line.trim()) { closeList(); continue; }
     if ((m = line.match(/^#{1,3}\s+(.*)$/))) { closeList(); out.push(`<h3 style="margin:16px 0 8px;font-size:15px;color:#0f172a">${inline(m[1])}</h3>`); }
     else if ((m = line.match(/^[-*]\s+(.*)$/))) { if (!inList) { out.push('<ul style="margin:6px 0;padding-left:20px">'); inList = true; } out.push(`<li style="margin:3px 0">${inline(m[1])}</li>`); }
