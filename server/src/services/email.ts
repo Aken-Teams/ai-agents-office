@@ -227,7 +227,6 @@ export async function sendTeamReportEmail(to: string, teamTitle: string, questio
   const shareBlock = shareUrl
     ? `<div style="margin:24px 0 0;padding-top:20px;border-top:1px solid #e5e8ed;text-align:center">
         <a href="${escapeHtml(shareUrl)}" style="display:inline-block;background:linear-gradient(135deg,#006970 0%,#009099 100%);color:#ffffff;text-decoration:none;padding:11px 32px;border-radius:8px;font-size:14px;font-weight:600">在網站上查看完整報告</a>
-        <p style="margin:10px 0 0;font-size:11px;color:#94a3b8;word-break:break-all">${escapeHtml(shareUrl)}</p>
       </div>`
     : '';
   const body = `<div style="padding:32px">

@@ -1485,6 +1485,56 @@ function AssistantContent() {
     );
   };
 
+  // Compact card for a team member: emphasises role + "open chat", drops the
+  // summary / status noise so 4 members sit comfortably in a row.
+  const renderMemberCard = (conv: AssistantConversation, index: number) => {
+    const cardIcon = conv.icon || 'smart_toy';
+    return (
+      <div key={conv.id} className="group relative flex flex-col rounded-2xl border border-outline-variant/10 bg-surface-container hover:border-primary/30 transition-all overflow-hidden">
+        <div className="h-1 w-full cyber-gradient" />
+        <div className="p-4 flex flex-col flex-1">
+          <div className="flex items-start justify-between mb-3">
+            <div className="relative">
+              <div className="w-11 h-11 rounded-xl cyber-gradient flex items-center justify-center">
+                <span className="material-symbols-outlined text-xl text-on-primary">{cardIcon}</span>
+              </div>
+              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-success rounded-full border-2 border-surface-container">
+                <span className="absolute inset-0 rounded-full bg-success animate-ping opacity-60" />
+              </span>
+            </div>
+            <span className="text-xs font-mono font-bold text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">#{index + 1}</span>
+          </div>
+          <h3 className="font-headline font-bold text-on-surface text-base mb-2 leading-snug group-hover:text-primary transition-colors line-clamp-2">{conv.title}</h3>
+          <div className="mb-4">
+            {conv.skill_id ? (
+              <span className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 rounded-lg text-primary text-xs font-medium">
+                <span className="material-symbols-outlined text-[14px]">{SKILL_ICON_MAP[conv.skill_id] || 'bolt'}</span>
+                {getSkillName(conv.skill_id)}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-1 bg-tertiary/10 rounded-lg text-tertiary text-xs font-medium">
+                <span className="material-symbols-outlined text-[14px]">psychology</span>
+                {t('assistant.memoryActive' as any) || '自由對話'}
+              </span>
+            )}
+          </div>
+          <div className="mt-auto flex items-center gap-2">
+            <Link href={`/chat/${conv.id}`} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-bold font-headline cyber-gradient text-on-primary hover:brightness-110 active:scale-95 transition-all no-underline">
+              <span className="material-symbols-outlined text-base">chat</span>
+              {t('assistant.openChat' as any) || '開啟對話'}
+            </Link>
+            <button onClick={() => setEditTarget(conv)} className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer border border-outline-variant/10" title={t('assistant.settings' as any) || '設定'}>
+              <span className="material-symbols-outlined text-[18px]">tune</span>
+            </button>
+            <button onClick={() => setDeleteTarget(conv)} className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer border border-outline-variant/10" title={t('assistant.delete' as any) || '刪除'}>
+              <span className="material-symbols-outlined text-[18px]">delete</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-surface-container-lowest">
       <Navbar />
@@ -1648,8 +1698,8 @@ function AssistantContent() {
                     </button>
                   </div>
                   {!collapsed && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {members.map((conv, i) => renderCard(conv, i))}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">
+                      {members.map((conv, i) => renderMemberCard(conv, i))}
                     </div>
                   )}
                 </section>
