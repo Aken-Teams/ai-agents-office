@@ -33,6 +33,10 @@ async function main() {
   // Load runtime LINE bot settings (rate limit, idle, file TTL, default quota).
   await loadLineSettings();
 
+  // Start the team-run scheduler (emails scheduled collaboration reports).
+  const { startTeamScheduler } = await import('./services/teamScheduler.js');
+  startTeamScheduler();
+
   const app = express();
 
   // Middleware

@@ -18,6 +18,7 @@ import { TEAM_TEMPLATES, getTeamTemplate, type TeamAgentTemplate } from '../data
 import { runTeam, estimateRunTokens, estimateCostUsd } from '../services/teamRun.js';
 import { checkUserUsageLimit } from '../services/usageLimit.js';
 import { analyzeInput, logSecurityEvent } from '../services/inputGuard.js';
+import { computeNextRun, mysqlDateTime } from '../services/teamScheduler.js';
 import type { Conversation } from '../types.js';
 
 const router = Router();
@@ -255,8 +256,8 @@ router.get('/:id/estimate', async (req: Request, res: Response) => {
 router.get('/:id/runs', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const runs = await dbAll(
-    `SELECT id, question, result, member_outputs, input_tokens, output_tokens, status, created_at, share_token
-     FROM team_runs WHERE team_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 20`,
+    `SELECT id, question, result, member_outputs, input_tokens, output_tokens, status, created_at, share_token, schedule_id, emailed
+     FROM team_runs WHERE team_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 30`,
     req.params.id, userId,
   );
   const agg = await dbGet<{ count: number; in_tok: number; out_tok: number }>(
@@ -349,6 +350,71 @@ router.post('/:id/run', async (req: Request, res: Response) => {
     clearInterval(keepalive);
     res.end();
   }
+});
+
+// ── Scheduled runs ──────────────────────────────────────────────────────────
+
+// GET /api/teams/:id/schedules — list this team's schedules.
+router.get('/:id/schedules', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const schedules = await dbAll(
+    'SELECT * FROM team_schedules WHERE team_id = ? AND user_id = ? ORDER BY created_at DESC',
+    req.params.id, userId,
+  );
+  res.json({ schedules });
+});
+
+// POST /api/teams/:id/schedules — create a schedule.
+// Body: { question, frequency: 'daily'|'weekly', hour, minute, dayOfWeek?, email }
+router.post('/:id/schedules', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const team = await dbGet<{ id: string }>('SELECT id FROM agent_teams WHERE id = ? AND user_id = ?', req.params.id, userId);
+  if (!team) { res.status(404).json({ error: 'Team not found' }); return; }
+
+  const { question, frequency, hour, minute, dayOfWeek, email } = req.body as {
+    question?: string; frequency?: string; hour?: number; minute?: number; dayOfWeek?: number; email?: string;
+  };
+  if (!question?.trim()) { res.status(400).json({ error: '請填入要分析的議題' }); return; }
+  if (!email?.trim()) { res.status(400).json({ error: '請填入收件 email' }); return; }
+
+  const freq = frequency === 'weekly' ? 'weekly' : 'daily';
+  const h = Math.max(0, Math.min(23, Number(hour) || 0));
+  const m = Math.max(0, Math.min(59, Number(minute) || 0));
+  const dow = freq === 'weekly' ? Math.max(0, Math.min(6, Number(dayOfWeek) || 0)) : null;
+  const next = computeNextRun(freq, h, m, dow);
+
+  const id = uuidv4();
+  await dbRun(
+    'INSERT INTO team_schedules (id, team_id, user_id, question, frequency, hour, minute, day_of_week, email, next_run_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    id, req.params.id, userId, question.trim(), freq, h, m, dow, email.trim(), mysqlDateTime(next),
+  );
+  const schedule = await dbGet('SELECT * FROM team_schedules WHERE id = ?', id);
+  res.status(201).json({ schedule });
+});
+
+// PATCH /api/teams/:id/schedules/:sid — enable/disable (re-enabling recomputes next run).
+router.patch('/:id/schedules/:sid', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const s = await dbGet<{ id: string; frequency: string; hour: number; minute: number; day_of_week: number | null }>(
+    'SELECT id, frequency, hour, minute, day_of_week FROM team_schedules WHERE id = ? AND team_id = ? AND user_id = ?',
+    req.params.sid, req.params.id, userId,
+  );
+  if (!s) { res.status(404).json({ error: 'Schedule not found' }); return; }
+  const { enabled } = req.body as { enabled?: boolean };
+  if (enabled !== undefined) {
+    await dbRun('UPDATE team_schedules SET enabled = ? WHERE id = ?', enabled ? 1 : 0, s.id);
+    if (enabled) {
+      await dbRun('UPDATE team_schedules SET next_run_at = ? WHERE id = ?', mysqlDateTime(computeNextRun(s.frequency, s.hour, s.minute, s.day_of_week)), s.id);
+    }
+  }
+  res.json({ success: true });
+});
+
+// DELETE /api/teams/:id/schedules/:sid
+router.delete('/:id/schedules/:sid', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  await dbRun('DELETE FROM team_schedules WHERE id = ? AND team_id = ? AND user_id = ?', req.params.sid, req.params.id, userId);
+  res.json({ success: true });
 });
 
 export default router;

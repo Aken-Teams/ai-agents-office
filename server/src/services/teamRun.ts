@@ -141,8 +141,8 @@ export interface TeamRunResult { runId: string; result: string; inputTokens: num
  * the final synthesis + token totals. Never throws for member-level failures
  * (a failed member just contributes empty findings).
  */
-export async function runTeam(opts: { userId: string; teamId: string; question: string; writer: TeamRunWriter }): Promise<TeamRunResult> {
-  const { userId, teamId, question, writer } = opts;
+export async function runTeam(opts: { userId: string; teamId: string; question: string; writer: TeamRunWriter; scheduleId?: string }): Promise<TeamRunResult> {
+  const { userId, teamId, question, writer, scheduleId } = opts;
 
   const team = await dbGet<TeamRow>('SELECT id, user_id, title, topic, shared_memory FROM agent_teams WHERE id = ? AND user_id = ?', teamId, userId);
   if (!team) throw new Error('Team not found');
@@ -155,8 +155,8 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
 
   const runId = uuidv4();
   await dbRun(
-    'INSERT INTO team_runs (id, team_id, user_id, question, status) VALUES (?, ?, ?, ?, ?)',
-    runId, teamId, userId, question, 'running',
+    'INSERT INTO team_runs (id, team_id, user_id, question, status, schedule_id) VALUES (?, ?, ?, ?, ?, ?)',
+    runId, teamId, userId, question, 'running', scheduleId || null,
   );
 
   const est = estimateRunTokens(members.length);

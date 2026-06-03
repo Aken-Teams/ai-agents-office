@@ -620,6 +620,36 @@ export async function initializeDatabase(): Promise<void> {
     try {
       await conn.query('ALTER TABLE team_runs ADD INDEX idx_team_runs_share (share_token)');
     } catch { /* index already exists */ }
+    // Tag runs triggered by a schedule + whether the email was delivered.
+    try {
+      await conn.query('ALTER TABLE team_runs ADD COLUMN schedule_id VARCHAR(36) DEFAULT NULL');
+    } catch { /* column already exists */ }
+    try {
+      await conn.query('ALTER TABLE team_runs ADD COLUMN emailed TINYINT DEFAULT NULL');
+    } catch { /* column already exists */ }
+
+    // Scheduled team runs — the scheduler runs due ones and emails the result.
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS team_schedules (
+        id           VARCHAR(36) PRIMARY KEY,
+        team_id      VARCHAR(36) NOT NULL,
+        user_id      VARCHAR(36) NOT NULL,
+        question     TEXT NOT NULL,
+        frequency    VARCHAR(20) NOT NULL DEFAULT 'daily',
+        hour         INT NOT NULL DEFAULT 9,
+        minute       INT NOT NULL DEFAULT 0,
+        day_of_week  INT DEFAULT NULL,
+        email        VARCHAR(255) NOT NULL,
+        enabled      TINYINT NOT NULL DEFAULT 1,
+        last_run_at  DATETIME DEFAULT NULL,
+        next_run_at  DATETIME NOT NULL,
+        created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_team_sched_next (enabled, next_run_at),
+        INDEX idx_team_sched_team (team_id),
+        FOREIGN KEY (team_id) REFERENCES agent_teams(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
     // ─── end Agent Teams ─────────────────────────────────────────
 
     // Terms of Service: add acceptance tracking column

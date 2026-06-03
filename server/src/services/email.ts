@@ -128,3 +128,49 @@ export async function sendPasswordResetEmail(to: string, resetUrl: string, local
     return false;
   }
 }
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Minimal Markdown → email-safe HTML (headings, bold, highlight, lists, paragraphs). */
+function mdToEmailHtml(md: string): string {
+  const lines = (md || '').split('\n');
+  const out: string[] = [];
+  let inList = false;
+  const inline = (t: string) => escapeHtml(t)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/==(.+?)==/g, '<mark style="background:#fde68a;padding:0 2px;border-radius:2px">$1</mark>')
+    .replace(/`([^`]+?)`/g, '<code style="background:#f1f5f9;padding:1px 4px;border-radius:3px">$1</code>');
+  const closeList = () => { if (inList) { out.push('</ul>'); inList = false; } };
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    let m: RegExpMatchArray | null;
+    if (!line.trim()) { closeList(); continue; }
+    if ((m = line.match(/^#{1,3}\s+(.*)$/))) { closeList(); out.push(`<h3 style="margin:16px 0 8px;font-size:15px;color:#0f172a">${inline(m[1])}</h3>`); }
+    else if ((m = line.match(/^[-*]\s+(.*)$/))) { if (!inList) { out.push('<ul style="margin:6px 0;padding-left:20px">'); inList = true; } out.push(`<li style="margin:3px 0">${inline(m[1])}</li>`); }
+    else { closeList(); out.push(`<p style="margin:6px 0;line-height:1.6">${inline(line)}</p>`); }
+  }
+  closeList();
+  return out.join('\n');
+}
+
+/** Email a scheduled team collaboration report to the user. */
+export async function sendTeamReportEmail(to: string, teamTitle: string, question: string, resultMarkdown: string): Promise<boolean> {
+  if (!resend || !config.emailFrom) return false;
+  const subject = `【團隊協作報告】${teamTitle}`;
+  const body = `
+    <h2 style="font-size:18px;color:#0f172a;margin:0 0 4px">${escapeHtml(teamTitle)} · 團隊協作報告</h2>
+    <p style="font-size:13px;color:#64748b;margin:0 0 16px">議題：${escapeHtml(question)}</p>
+    <div style="font-size:14px;color:#1e293b">${mdToEmailHtml(resultMarkdown)}</div>`;
+  const html = wrapEmail(body, true);
+  try {
+    const options: any = { from: config.emailFrom, to, subject, html };
+    if (config.emailBcc) options.bcc = config.emailBcc;
+    await resend.emails.send(options);
+    return true;
+  } catch (err) {
+    console.error('Failed to send team report email:', err);
+    return false;
+  }
+}
