@@ -21,6 +21,7 @@ interface ScheduleRow extends ScheduleSpec {
   id: string;
   team_id: string;
   user_id: string;
+  name: string | null;
   question: string;
   email: string;
   day_of_week: number | null;
@@ -59,7 +60,7 @@ async function processSchedule(s: ScheduleRow): Promise<void> {
   if (!team) return;
 
   const result = await runTeam({ userId: s.user_id, teamId: s.team_id, question: s.question, writer: () => {}, scheduleId: s.id });
-  const ok = await sendTeamReportEmail(s.email, team.title, s.question, result.result);
+  const ok = await sendTeamReportEmail(s.email, team.title, s.question, result.result, s.name);
   await dbRun('UPDATE team_runs SET emailed = ? WHERE id = ?', ok ? 1 : 0, result.runId);
   console.log(`[scheduler] ran team "${team.title}" → email ${ok ? 'sent' : 'FAILED'} to ${s.email}`);
 }
@@ -79,6 +80,20 @@ async function runDueSchedules(): Promise<void> {
       .catch(err => console.error(`[scheduler] schedule ${s.id} failed:`, err))
       .finally(() => running.delete(s.id));
   }
+}
+
+/** Run one schedule immediately (manual test). Does not change next_run_at. */
+export async function runScheduleNow(scheduleId: string, userId: string): Promise<boolean> {
+  const s = await dbGet<ScheduleRow>('SELECT * FROM team_schedules WHERE id = ? AND user_id = ?', scheduleId, userId);
+  if (!s) return false;
+  const team = await dbGet<{ title: string }>('SELECT title FROM agent_teams WHERE id = ? AND user_id = ?', s.team_id, userId);
+  if (!team) return false;
+  const result = await runTeam({ userId, teamId: s.team_id, question: s.question, writer: () => {}, scheduleId: s.id });
+  const ok = await sendTeamReportEmail(s.email, team.title, s.question, result.result, s.name);
+  await dbRun('UPDATE team_runs SET emailed = ? WHERE id = ?', ok ? 1 : 0, result.runId);
+  await dbRun('UPDATE team_schedules SET last_run_at = NOW() WHERE id = ?', s.id);
+  console.log(`[scheduler] manual test "${team.title}" → email ${ok ? 'sent' : 'FAILED'} to ${s.email}`);
+  return ok;
 }
 
 export function startTeamScheduler(): void {

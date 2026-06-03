@@ -634,6 +634,7 @@ export async function initializeDatabase(): Promise<void> {
         id           VARCHAR(36) PRIMARY KEY,
         team_id      VARCHAR(36) NOT NULL,
         user_id      VARCHAR(36) NOT NULL,
+        name         VARCHAR(255) DEFAULT NULL,
         question     TEXT NOT NULL,
         frequency    VARCHAR(20) NOT NULL DEFAULT 'daily',
         hour         INT NOT NULL DEFAULT 9,
@@ -650,6 +651,10 @@ export async function initializeDatabase(): Promise<void> {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+    // Existing team_schedules — add the display name column (separate from question).
+    try {
+      await conn.query('ALTER TABLE team_schedules ADD COLUMN name VARCHAR(255) DEFAULT NULL AFTER user_id');
+    } catch { /* column already exists */ }
     // ─── end Agent Teams ─────────────────────────────────────────
 
     // Terms of Service: add acceptance tracking column

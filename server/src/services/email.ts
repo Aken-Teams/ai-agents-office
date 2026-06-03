@@ -156,13 +156,19 @@ function mdToEmailHtml(md: string): string {
 }
 
 /** Email a scheduled team collaboration report to the user. */
-export async function sendTeamReportEmail(to: string, teamTitle: string, question: string, resultMarkdown: string): Promise<boolean> {
+export async function sendTeamReportEmail(to: string, teamTitle: string, question: string, resultMarkdown: string, scheduleName?: string | null): Promise<boolean> {
   if (!resend || !config.emailFrom) return false;
-  const subject = `【團隊協作報告】${teamTitle}`;
-  const body = `
-    <h2 style="font-size:18px;color:#0f172a;margin:0 0 4px">${escapeHtml(teamTitle)} · 團隊協作報告</h2>
-    <p style="font-size:13px;color:#64748b;margin:0 0 16px">議題：${escapeHtml(question)}</p>
-    <div style="font-size:14px;color:#1e293b">${mdToEmailHtml(resultMarkdown)}</div>`;
+  const label = scheduleName?.trim() || teamTitle;
+  const subject = `【團隊協作報告】${label}`;
+  const nameRow = scheduleName?.trim()
+    ? `<p style="font-size:13px;color:#0f766e;margin:0 0 2px;font-weight:600">${escapeHtml(scheduleName.trim())}</p>`
+    : '';
+  const body = `<div style="padding:32px">
+    <h2 style="font-size:18px;color:#0f172a;margin:0 0 6px">${escapeHtml(teamTitle)} · 團隊協作報告</h2>
+    ${nameRow}
+    <p style="font-size:13px;color:#64748b;margin:0 0 18px;padding:8px 12px;background:#f1f5f9;border-radius:8px">議題：${escapeHtml(question)}</p>
+    <div style="font-size:14px;color:#1e293b">${mdToEmailHtml(resultMarkdown)}</div>
+  </div>`;
   const html = wrapEmail(body, true);
   try {
     const options: any = { from: config.emailFrom, to, subject, html };

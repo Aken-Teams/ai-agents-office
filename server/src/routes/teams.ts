@@ -18,7 +18,7 @@ import { TEAM_TEMPLATES, getTeamTemplate, type TeamAgentTemplate } from '../data
 import { runTeam, estimateRunTokens, estimateCostUsd } from '../services/teamRun.js';
 import { checkUserUsageLimit } from '../services/usageLimit.js';
 import { analyzeInput, logSecurityEvent } from '../services/inputGuard.js';
-import { computeNextRun, mysqlDateTime } from '../services/teamScheduler.js';
+import { computeNextRun, mysqlDateTime, runScheduleNow } from '../services/teamScheduler.js';
 import type { Conversation } from '../types.js';
 
 const router = Router();
@@ -371,8 +371,8 @@ router.post('/:id/schedules', async (req: Request, res: Response) => {
   const team = await dbGet<{ id: string }>('SELECT id FROM agent_teams WHERE id = ? AND user_id = ?', req.params.id, userId);
   if (!team) { res.status(404).json({ error: 'Team not found' }); return; }
 
-  const { question, frequency, hour, minute, dayOfWeek, email } = req.body as {
-    question?: string; frequency?: string; hour?: number; minute?: number; dayOfWeek?: number; email?: string;
+  const { name, question, frequency, hour, minute, dayOfWeek, email } = req.body as {
+    name?: string; question?: string; frequency?: string; hour?: number; minute?: number; dayOfWeek?: number; email?: string;
   };
   if (!question?.trim()) { res.status(400).json({ error: '請填入要分析的議題' }); return; }
   if (!email?.trim()) { res.status(400).json({ error: '請填入收件 email' }); return; }
@@ -382,11 +382,12 @@ router.post('/:id/schedules', async (req: Request, res: Response) => {
   const m = Math.max(0, Math.min(59, Number(minute) || 0));
   const dow = freq === 'weekly' ? Math.max(0, Math.min(6, Number(dayOfWeek) || 0)) : null;
   const next = computeNextRun(freq, h, m, dow);
+  const schedName = name?.trim() ? name.trim().slice(0, 255) : null;
 
   const id = uuidv4();
   await dbRun(
-    'INSERT INTO team_schedules (id, team_id, user_id, question, frequency, hour, minute, day_of_week, email, next_run_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    id, req.params.id, userId, question.trim(), freq, h, m, dow, email.trim(), mysqlDateTime(next),
+    'INSERT INTO team_schedules (id, team_id, user_id, name, question, frequency, hour, minute, day_of_week, email, next_run_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    id, req.params.id, userId, schedName, question.trim(), freq, h, m, dow, email.trim(), mysqlDateTime(next),
   );
   const schedule = await dbGet('SELECT * FROM team_schedules WHERE id = ?', id);
   res.status(201).json({ schedule });
@@ -408,6 +409,16 @@ router.patch('/:id/schedules/:sid', async (req: Request, res: Response) => {
     }
   }
   res.json({ success: true });
+});
+
+// POST /api/teams/:id/schedules/:sid/run-now — run a schedule immediately (test).
+// Fire-and-forget: the run takes ~1 min; the result lands in history + email.
+router.post('/:id/schedules/:sid/run-now', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const s = await dbGet<{ id: string }>('SELECT id FROM team_schedules WHERE id = ? AND team_id = ? AND user_id = ?', req.params.sid, req.params.id, userId);
+  if (!s) { res.status(404).json({ error: 'Schedule not found' }); return; }
+  runScheduleNow(String(req.params.sid), userId).catch(err => console.error('[teams] run-now failed:', err));
+  res.json({ started: true });
 });
 
 // DELETE /api/teams/:id/schedules/:sid

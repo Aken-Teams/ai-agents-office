@@ -35,16 +35,19 @@ const STATUS_META: Record<MemberStatus, { label: string; cls: string; icon: stri
 };
 
 const DOW = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
-interface Schedule { id: string; question: string; frequency: 'daily' | 'weekly'; hour: number; minute: number; day_of_week: number | null; email: string; enabled: number; next_run_at: string }
+interface Schedule { id: string; name: string | null; question: string; frequency: 'daily' | 'weekly'; hour: number; minute: number; day_of_week: number | null; email: string; enabled: number; next_run_at: string }
 
 function ScheduleModal({ teamId, token, defaultEmail, onClose }: { teamId: string; token: string | null; defaultEmail: string; onClose: () => void }) {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [name, setName] = useState('');
   const [question, setQuestion] = useState('');
   const [frequency, setFrequency] = useState<'daily' | 'weekly'>('daily');
   const [dayOfWeek, setDayOfWeek] = useState(1);
   const [time, setTime] = useState('09:00');
   const [email, setEmail] = useState(defaultEmail);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const headers = (): HeadersInit => (token ? { Authorization: `Bearer ${token}` } : {});
 
   const load = useCallback(() => {
@@ -60,9 +63,9 @@ function ScheduleModal({ teamId, token, defaultEmail, onClose }: { teamId: strin
     try {
       const res = await fetch(`/api/teams/${teamId}/schedules`, {
         method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: question.trim(), frequency, hour: h, minute: m, dayOfWeek, email: email.trim() }),
+        body: JSON.stringify({ name: name.trim(), question: question.trim(), frequency, hour: h, minute: m, dayOfWeek, email: email.trim() }),
       });
-      if (res.ok) { setQuestion(''); load(); }
+      if (res.ok) { setName(''); setQuestion(''); load(); }
     } finally { setSaving(false); }
   };
   const toggle = async (s: Schedule) => {
@@ -72,6 +75,13 @@ function ScheduleModal({ teamId, token, defaultEmail, onClose }: { teamId: strin
   const del = async (s: Schedule) => {
     await fetch(`/api/teams/${teamId}/schedules/${s.id}`, { method: 'DELETE', headers: headers() });
     load();
+  };
+  const runNow = async (s: Schedule) => {
+    setTesting(s.id);
+    try {
+      await fetch(`/api/teams/${teamId}/schedules/${s.id}/run-now`, { method: 'POST', headers: headers() });
+      setToast('已觸發測試執行，約 1 分鐘後完成並寄出，結果會出現在「歷史協作」（含寄送狀態）。');
+    } finally { setTesting(null); }
   };
   const fmt = (s: Schedule) => `${s.frequency === 'weekly' && s.day_of_week != null ? DOW[s.day_of_week] : '每天'} ${String(s.hour).padStart(2, '0')}:${String(s.minute).padStart(2, '0')}`;
 
@@ -84,18 +94,33 @@ function ScheduleModal({ teamId, token, defaultEmail, onClose }: { teamId: strin
         </div>
         <p className="text-sm text-on-surface-variant mb-5">設定時間，團隊會自動跑分析、把結果寄到信箱，並記錄在下方「歷史協作」（含寄送狀態）。</p>
 
+        {toast && (
+          <div className="flex items-start gap-2.5 p-3 mb-4 rounded-xl border border-primary/30 bg-primary/[0.07] animate-[fadeIn_0.2s_ease-out]">
+            <span className="material-symbols-outlined text-primary text-[20px] shrink-0">rocket_launch</span>
+            <p className="flex-1 text-sm text-on-surface leading-relaxed">{toast}</p>
+            <button onClick={() => setToast(null)} className="text-on-surface-variant hover:text-on-surface cursor-pointer shrink-0">
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+          </div>
+        )}
+
         {schedules.length > 0 && (
           <div className="space-y-2 mb-5">
             {schedules.map(s => (
               <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl border border-outline-variant/15 bg-surface-container">
                 <span className="material-symbols-outlined text-on-surface-variant shrink-0">{s.enabled ? 'alarm' : 'alarm_off'}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-on-surface truncate">{s.question}</div>
+                  <div className="text-sm font-bold text-on-surface truncate">{s.name || s.question}</div>
+                  {s.name && <div className="text-xs text-on-surface-variant truncate">議題：{s.question}</div>}
                   <div className="text-xs text-on-surface-variant truncate">{fmt(s)} · {s.email}</div>
                   {s.enabled
                     ? <div className="text-[11px] text-tertiary">下次：{new Date(s.next_run_at).toLocaleString()}</div>
                     : <div className="text-[11px] text-on-surface-variant/60">已停用</div>}
                 </div>
+                <button onClick={() => runNow(s)} disabled={testing === s.id} title="立即測試執行（馬上跑一次並寄出）"
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0 disabled:opacity-40">
+                  <span className={`material-symbols-outlined text-[18px] ${testing === s.id ? 'animate-spin' : ''}`}>{testing === s.id ? 'progress_activity' : 'play_arrow'}</span>
+                </button>
                 <button onClick={() => toggle(s)} title={s.enabled ? '停用' : '啟用'}
                   className={`relative w-9 h-5 rounded-full transition-colors shrink-0 cursor-pointer ${s.enabled ? 'bg-primary' : 'bg-outline-variant/40'}`}>
                   <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${s.enabled ? 'translate-x-4' : ''}`} />
@@ -109,6 +134,10 @@ function ScheduleModal({ teamId, token, defaultEmail, onClose }: { teamId: strin
         )}
 
         <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant/70 mb-2">新增排程</p>
+        <label className="block text-xs font-bold text-on-surface-variant mb-1.5">排程名稱<span className="font-normal text-on-surface-variant/60">（給這個排程取個好認的名字）</span></label>
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="例如：每日台股盤勢"
+          className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-3 py-2.5 text-sm text-on-surface focus:outline-none focus:border-primary mb-3" />
+        <label className="block text-xs font-bold text-on-surface-variant mb-1.5">分析議題 / 需求<span className="font-normal text-on-surface-variant/60">（團隊真正要分析的內容）</span></label>
         <textarea value={question} onChange={e => setQuestion(e.target.value)} rows={2} placeholder="要團隊定期分析的議題，例如：今天的台股盤勢與我持股的風險"
           className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-3 py-2.5 text-sm text-on-surface resize-none focus:outline-none focus:border-primary mb-3" />
         <div className="flex flex-wrap items-center gap-3 mb-3">
