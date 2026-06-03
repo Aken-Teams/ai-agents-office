@@ -13,8 +13,9 @@
 
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
-import { dbRun, dbAll } from '../../db.js';
+import { dbRun, dbAll, dbGet } from '../../db.js';
 import { Orchestrator } from '../orchestrator.js';
 import { analyzeInput, logSecurityEvent } from '../inputGuard.js';
 import { checkUserUsageLimit } from '../usageLimit.js';
@@ -26,7 +27,8 @@ import { config } from '../../config.js';
 import { getLineUser, touchLineUser, type LineUserRow } from './userMapping.js';
 import { getOrCreateLineConversation } from './conversationRouter.js';
 import { checkLineRateLimit } from './rateLimit.js';
-import { parseCommand, handleHelp, handleLink, handleNew, handleQuota, handleListFiles, handleWebLink, handleUnlinkedGreeting } from './commands.js';
+import { parseCommand, handleHelp, handleLink, handleNew, handleQuota, handleListFiles, handleWebLink, handleUnlinkedGreeting, handleTeams, handleSetTeam, handleSolo } from './commands.js';
+import { runTeam } from '../teamRun.js';
 import { pushMessage, startLoadingIndicator, fetchMessageContent } from './client.js';
 import { scanUploadedFile, isAllowedExtension } from '../uploadScanner.js';
 import { splitForLine, extractChartBlocks } from './formatter.js';
@@ -116,6 +118,8 @@ export async function processIncomingEvent(event: IncomingEvent): Promise<void> 
     if (cmd.kind === 'help')  { await handleHelp(lineUserId); return; }
     if (cmd.kind === 'new')   { await handleNew(lineUser); return; }
     if (cmd.kind === 'quota') { await handleQuota(lineUser); return; }
+    if (cmd.kind === 'teams') { await handleTeams(lineUser); return; }
+    if (cmd.kind === 'solo')  { await handleSolo(lineUser); return; }
 
     await runConversation(lineUser, event.text);
   } catch (err) {
@@ -154,6 +158,19 @@ async function dispatchPostback(lineUser: LineUserRow, data: string): Promise<vo
       return;
     case 'web_link':
       await handleWebLink(lineUser);
+      return;
+    case 'teams':
+      await handleTeams(lineUser);
+      return;
+    case 'set_team': {
+      const teamId = params.get('team') ?? '';
+      // The picker may be stale; re-read the user so the confirmation reflects state.
+      const fresh = await getLineUser(lineUser.line_user_id);
+      await handleSetTeam(fresh ?? lineUser, teamId);
+      return;
+    }
+    case 'solo':
+      await handleSolo(lineUser);
       return;
     default:
       await pushMessage(lineUser.line_user_id, [{
@@ -294,6 +311,22 @@ async function runConversation(lineUser: LineUserRow, message: string): Promise<
     return;
   }
 
+  // Team mode: if the user has switched to a team (and it still exists), route
+  // the message through that team's collaboration instead of the single
+  // assistant. Otherwise fall through to the rolling-assistant orchestrator.
+  if (lineUser.active_team_id) {
+    const team = await dbGet<{ id: string; title: string }>(
+      'SELECT id, title FROM agent_teams WHERE id = ? AND user_id = ?',
+      lineUser.active_team_id, userId,
+    );
+    if (team) {
+      await runTeamForLine(lineUser, team, message);
+      return;
+    }
+    // Team was deleted — drop back to solo silently and continue as assistant.
+    await dbRun('UPDATE line_users SET active_team_id = NULL WHERE line_user_id = ?', lineUserId);
+  }
+
   const conversation = await getOrCreateLineConversation(lineUser);
 
   // Persist the user message exactly as generate.ts does.
@@ -415,6 +448,66 @@ async function runConversation(lineUser: LineUserRow, message: string): Promise<
   extractMemoryAndSummary(userId, conversation.id, 'zh-TW', 'assistant').catch(e =>
     console.error('[LINE handler] memory extraction failed:', e),
   );
+}
+
+/**
+ * Team mode — run the user's active team's collaboration on the message and
+ * push the synthesis back to LINE. Reuses the same headless `runTeam` engine
+ * the scheduler uses (token usage is recorded inside runTeam). The run is also
+ * recorded as a `team_runs` row, so it shows up in the team's web history; we
+ * mint a public share token and append a "view full report" link (charts and
+ * rich formatting live there, since LINE only gets plain text here).
+ */
+async function runTeamForLine(
+  lineUser: LineUserRow,
+  team: { id: string; title: string },
+  message: string,
+): Promise<void> {
+  const userId = lineUser.internal_user_id;
+  const lineUserId = lineUser.line_user_id;
+
+  await pushMessage(lineUserId, [{
+    type: 'text',
+    text: `🧑‍🤝‍🧑 團隊「${team.title}」協作分析中，需要約 1～3 分鐘，完成後會把統整結論傳給你…`,
+  }]);
+  startLoadingIndicator(lineUserId, 60).catch(() => {});
+
+  let result;
+  try {
+    result = await runTeam({ userId, teamId: team.id, question: message, writer: () => {} });
+  } catch (err) {
+    console.error('[LINE handler] team run failed:', err instanceof Error ? err.stack : err);
+    await pushMessage(lineUserId, [{
+      type: 'text',
+      text: '⚠️ 團隊協作時發生問題，請稍後重試，或用 /solo 改回單一助手。',
+    }]);
+    return;
+  }
+
+  const finalText = (result.result && result.result.trim()) || '（團隊未產生結論，請再試一次）';
+
+  // Mint a public share token for the run so the user can open the full,
+  // chart-rich report on the web. Mirrors the scheduler's share-link approach.
+  let shareUrl = '';
+  try {
+    const token = crypto.randomBytes(8).toString('hex');
+    await dbRun('UPDATE team_runs SET share_token = ? WHERE id = ? AND share_token IS NULL', token, result.runId);
+    const row = await dbGet<{ share_token: string | null }>('SELECT share_token FROM team_runs WHERE id = ?', result.runId);
+    if (row?.share_token) shareUrl = `${config.line.publicApiBase}/share/team/${row.share_token}`;
+  } catch (err) {
+    console.error('[LINE handler] team share mint failed:', err);
+  }
+
+  // LINE budget is 5 messages: leave one for the web-report link when present.
+  const textBudget = shareUrl ? 4 : 5;
+  const messages: LineMessage[] = splitForLine(finalText).slice(0, textBudget);
+  if (shareUrl) {
+    messages.push({
+      type: 'text',
+      text: `🔗 在網頁看完整報告（含圖表）：\n${shareUrl}`,
+    });
+  }
+  await pushMessage(lineUserId, messages.slice(0, 5));
 }
 
 /**

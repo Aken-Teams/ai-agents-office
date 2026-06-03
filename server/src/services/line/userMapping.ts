@@ -19,16 +19,29 @@ export interface LineUserRow {
   display_name: string | null;
   linked_via: string;
   current_conv_id: string | null;
+  active_team_id: string | null;
   last_message_at: string;
   created_at: string;
 }
 
 export async function getLineUser(lineUserId: string): Promise<LineUserRow | null> {
   const row = await dbGet<LineUserRow>(
-    'SELECT line_user_id, internal_user_id, display_name, linked_via, current_conv_id, last_message_at, created_at FROM line_users WHERE line_user_id = ?',
+    'SELECT line_user_id, internal_user_id, display_name, linked_via, current_conv_id, active_team_id, last_message_at, created_at FROM line_users WHERE line_user_id = ?',
     lineUserId,
   );
   return row ?? null;
+}
+
+/**
+ * Switch which "brain" handles this LINE user's messages: a team id routes
+ * through that team's collaboration; null returns to the single rolling
+ * assistant. The team is validated for ownership by the caller.
+ */
+export async function setLineActiveTeam(lineUserId: string, teamId: string | null): Promise<void> {
+  await dbRun(
+    'UPDATE line_users SET active_team_id = ? WHERE line_user_id = ?',
+    teamId, lineUserId,
+  );
 }
 
 /**

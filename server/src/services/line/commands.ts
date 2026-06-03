@@ -9,14 +9,14 @@ import jwt from 'jsonwebtoken';
 import { config } from '../../config.js';
 import { dbGet, dbAll } from '../../db.js';
 import { checkUserUsageLimit } from '../usageLimit.js';
-import { linkLineUser, LinkError, getLineUser, type LineUserRow } from './userMapping.js';
+import { linkLineUser, LinkError, getLineUser, setLineActiveTeam, type LineUserRow } from './userMapping.js';
 import { getOrCreateLineConversation } from './conversationRouter.js';
 import { pushMessage, getUserProfile, type LineTextMessage } from './client.js';
 import { createOrReuseFileShare } from './fileShare.js';
-import { buildFileListFlex, buildUsageFlex, type FileForFlex } from './flex.js';
+import { buildFileListFlex, buildUsageFlex, buildTeamPickerFlex, type FileForFlex, type TeamForFlex } from './flex.js';
 
 export interface ParsedCommand {
-  kind: 'link' | 'new' | 'help' | 'quota' | 'none';
+  kind: 'link' | 'new' | 'help' | 'quota' | 'teams' | 'solo' | 'none';
   args: string;
 }
 
@@ -31,6 +31,9 @@ export function parseCommand(text: string): ParsedCommand {
     case 'new':   return { kind: 'new',   args: rest.trim() };
     case 'help':  return { kind: 'help',  args: rest.trim() };
     case 'quota': return { kind: 'quota', args: rest.trim() };
+    case 'team':  return { kind: 'teams', args: rest.trim() };
+    case 'teams': return { kind: 'teams', args: rest.trim() };
+    case 'solo':  return { kind: 'solo',  args: rest.trim() };
     default:      return { kind: 'none',  args: trimmed };
   }
 }
@@ -45,6 +48,8 @@ const HELP_TEXT = [
   '• 回答跨對話的問題',
   '',
   '可用指令：',
+  '• /teams — 選擇用哪個團隊協作回答',
+  '• /solo — 回到單一助手（預設）',
   '• /new — 開始新的對話',
   '• /quota — 查看本月用量',
   '• /help — 顯示這則說明',
@@ -53,6 +58,62 @@ const HELP_TEXT = [
 
 export async function handleHelp(lineUserId: string): Promise<void> {
   await pushMessage(lineUserId, [{ type: 'text', text: HELP_TEXT }]);
+}
+
+/**
+ * Show the team picker. Lists the user's teams as postback buttons; tapping one
+ * switches LINE into that team's collaboration mode. The footer returns to the
+ * single assistant.
+ */
+export async function handleTeams(lineUser: LineUserRow): Promise<void> {
+  const rows = await dbAll<{ id: string; title: string; topic: string | null; member_count: number }>(
+    `SELECT t.id, t.title, t.topic,
+            (SELECT COUNT(*) FROM conversations c WHERE c.team_id = t.id AND c.status != 'deleted') AS member_count
+     FROM agent_teams t
+     WHERE t.user_id = ?
+     ORDER BY t.created_at DESC`,
+    lineUser.internal_user_id,
+  );
+
+  if (rows.length === 0) {
+    await pushMessage(lineUser.line_user_id, [{
+      type: 'text',
+      text: '你還沒有任何團隊。請先到網頁的「AI 助手」建立一個團隊，再回來用 /teams 切換。',
+    }]);
+    return;
+  }
+
+  const teams: TeamForFlex[] = rows.map(r => ({ id: r.id, title: r.title, topic: r.topic, memberCount: r.member_count }));
+  await pushMessage(lineUser.line_user_id, [buildTeamPickerFlex(teams, lineUser.active_team_id)]);
+}
+
+/**
+ * Switch into a specific team (validated for ownership). Subsequent messages
+ * run through that team's collaboration instead of the single assistant.
+ */
+export async function handleSetTeam(lineUser: LineUserRow, teamId: string): Promise<void> {
+  const team = await dbGet<{ id: string; title: string }>(
+    'SELECT id, title FROM agent_teams WHERE id = ? AND user_id = ?',
+    teamId, lineUser.internal_user_id,
+  );
+  if (!team) {
+    await pushMessage(lineUser.line_user_id, [{ type: 'text', text: '找不到這個團隊，可能已被刪除。請用 /teams 重新選擇。' }]);
+    return;
+  }
+  await setLineActiveTeam(lineUser.line_user_id, team.id);
+  await pushMessage(lineUser.line_user_id, [{
+    type: 'text',
+    text: `✅ 已切換到團隊「${team.title}」。\n接下來你問的問題會由整個團隊協作分析、再給你一份統整結論（較花時間與用量）。\n隨時可用 /solo 回到單一助手。`,
+  }]);
+}
+
+/** Return to the single rolling assistant (clears the active team). */
+export async function handleSolo(lineUser: LineUserRow): Promise<void> {
+  await setLineActiveTeam(lineUser.line_user_id, null);
+  await pushMessage(lineUser.line_user_id, [{
+    type: 'text',
+    text: '✅ 已回到單一助手模式。直接傳訊息即可對話。需要團隊協作時用 /teams 切換。',
+  }]);
 }
 
 export async function handleLink(lineUserId: string, args: string): Promise<void> {

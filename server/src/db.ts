@@ -508,12 +508,18 @@ export async function initializeDatabase(): Promise<void> {
         display_name      VARCHAR(255),
         linked_via        VARCHAR(20) NOT NULL DEFAULT 'invite_code',
         current_conv_id   VARCHAR(36),
+        active_team_id    VARCHAR(36) DEFAULT NULL,
         last_message_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_line_internal (internal_user_id),
         FOREIGN KEY (internal_user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+    // Existing line_users — add the active team pointer (NULL = single-assistant
+    // mode; a team id routes LINE messages through that team's collaboration).
+    try {
+      await conn.query('ALTER TABLE line_users ADD COLUMN active_team_id VARCHAR(36) DEFAULT NULL AFTER current_conv_id');
+    } catch { /* column already exists */ }
 
     // Token-based public file download (mirrors conversation_shares pattern).
     // Used to push LINE-friendly download URLs without requiring auth.

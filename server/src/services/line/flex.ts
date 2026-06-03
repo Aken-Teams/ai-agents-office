@@ -200,6 +200,89 @@ function buildFileButtons(f: FileForFlex): Record<string, unknown>[] {
 }
 
 /* ============================================================
+   Team picker
+   ============================================================ */
+
+export interface TeamForFlex {
+  id: string;
+  title: string;
+  topic?: string | null;
+  memberCount?: number | null;
+}
+
+/**
+ * A single bubble listing the user's teams. Each team is a postback button
+ * (`action=set_team&team=<id>`) that switches LINE into that team's
+ * collaboration mode. A footer button returns to the single assistant. The
+ * currently-active team is marked with a check.
+ */
+export function buildTeamPickerFlex(teams: TeamForFlex[], activeTeamId: string | null): LineFlexMessage {
+  const trimmed = teams.slice(0, MAX_CAROUSEL);
+  const teamButtons = trimmed.map(tm => {
+    const active = tm.id === activeTeamId;
+    const meta = tm.memberCount ? `（${tm.memberCount} 位）` : '';
+    return {
+      type: 'button',
+      style: active ? 'primary' : 'secondary',
+      ...(active ? { color: PALETTE.accent } : {}),
+      height: 'sm',
+      action: {
+        type: 'postback',
+        label: `${active ? '✓ ' : ''}${tm.title}${meta}`.slice(0, 40),
+        data: `action=set_team&team=${encodeURIComponent(tm.id)}`,
+        displayText: `切換到團隊：${tm.title}`,
+      },
+    } as Record<string, unknown>;
+  });
+
+  return {
+    type: 'flex',
+    altText: `選擇要協作的團隊（${trimmed.length} 個）`,
+    contents: {
+      type: 'bubble',
+      size: 'mega',
+      body: {
+        type: 'box',
+        layout: 'vertical',
+        backgroundColor: PALETTE.background,
+        paddingAll: '20px',
+        spacing: 'sm',
+        contents: [
+          { type: 'text', text: 'CHOOSE A TEAM', size: 'xxs', color: PALETTE.caption },
+          { type: 'text', text: '選擇要協作的團隊', size: 'lg', weight: 'bold', color: PALETTE.ink, margin: 'sm' },
+          { type: 'text', text: '選團隊後，你問的問題會由整個團隊協作分析、再給你一份統整結論。', size: 'xs', color: PALETTE.caption, wrap: true, margin: 'sm' },
+          { type: 'separator', margin: 'lg', color: PALETTE.divider },
+          ...(teamButtons.length
+            ? teamButtons
+            : [{ type: 'text', text: '你還沒有任何團隊，請先到網頁建立。', size: 'sm', color: PALETTE.caption, wrap: true, margin: 'md' }]),
+        ],
+      },
+      footer: {
+        type: 'box',
+        layout: 'vertical',
+        paddingAll: '12px',
+        backgroundColor: PALETTE.background,
+        contents: [
+          {
+            type: 'button',
+            style: activeTeamId ? 'secondary' : 'primary',
+            ...(activeTeamId ? {} : { color: PALETTE.accent }),
+            height: 'sm',
+            action: {
+              type: 'postback',
+              label: activeTeamId ? '回到單一助手' : '✓ 單一助手（目前）',
+              data: 'action=solo',
+              displayText: '回到單一助手',
+            },
+          },
+        ],
+      },
+      styles: { footer: { separator: true, separatorColor: PALETTE.divider } },
+    },
+  };
+}
+
+/* ============================================================
    Usage dashboard
    ============================================================ */
 
