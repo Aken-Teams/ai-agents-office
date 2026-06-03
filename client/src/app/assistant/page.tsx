@@ -1138,6 +1138,74 @@ function TeamDeleteModal({ team, onDelete, onDisband, onCancel }: { team: Team; 
   );
 }
 
+// ── Team Add-Member Modal ───────────────────────────────────────────────────
+function TeamAddMemberModal({ team, token, standalone, onCreateNew, onDone, onCancel }: {
+  team: Team; token: string | null; standalone: AssistantConversation[];
+  onCreateNew: () => void; onDone: () => void; onCancel: () => void;
+}) {
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
+  const toggle = (id: string) => setPicked(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+
+  const addPicked = async () => {
+    if (!picked.size || !token) return;
+    setSaving(true);
+    try {
+      await Promise.all([...picked].map(id =>
+        fetch(`/api/conversations/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ team_id: team.id }),
+        }),
+      ));
+      onDone();
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onCancel}>
+      <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col p-6" onClick={e => e.stopPropagation()}>
+        <h3 className="text-lg font-headline font-bold text-on-surface mb-1">加入助手到「{team.title}」</h3>
+        <p className="text-sm text-on-surface-variant mb-4">建立一個新助手，或把現有的獨立助手加進來。</p>
+
+        <button onClick={onCreateNew} className="w-full flex items-center gap-3 p-3.5 mb-4 rounded-xl border border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer text-left">
+          <span className="material-symbols-outlined text-primary">add_circle</span>
+          <span className="min-w-0">
+            <span className="block text-sm font-bold text-on-surface">建立新助手</span>
+            <span className="block text-xs text-on-surface-variant">自訂名稱、角色與技能</span>
+          </span>
+        </button>
+
+        <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant/70 mb-2">或加入現有的獨立助手</p>
+        {standalone.length === 0 ? (
+          <p className="text-sm text-on-surface-variant/70 italic py-4 text-center">目前沒有獨立助手可加入</p>
+        ) : (
+          <div className="flex-1 overflow-y-auto space-y-1.5 -mx-1 px-1 min-h-0">
+            {standalone.map(c => {
+              const sel = picked.has(c.id);
+              return (
+                <button key={c.id} onClick={() => toggle(c.id)} className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-colors cursor-pointer text-left ${sel ? 'border-primary bg-primary/5' : 'border-outline-variant/15 bg-surface-container hover:border-primary/30'}`}>
+                  <div className="w-8 h-8 rounded-lg cyber-gradient flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-on-primary text-base">{c.icon || 'smart_toy'}</span></div>
+                  <span className="flex-1 text-sm text-on-surface truncate">{c.title}</span>
+                  <span className={`material-symbols-outlined ${sel ? 'text-primary' : 'text-outline-variant'}`}>{sel ? 'check_circle' : 'radio_button_unchecked'}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2 pt-4 mt-3 border-t border-outline-variant/15">
+          <button onClick={onCancel} className="px-4 py-2 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer">取消</button>
+          <button onClick={addPicked} disabled={!picked.size || saving} className="px-5 py-2 rounded-xl text-sm font-bold text-on-primary cyber-gradient disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center gap-2">
+            {saving && <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>}
+            加入所選{picked.size ? `（${picked.size}）` : ''}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Content ───────────────────────────────────────────────────────────
 function AssistantContent() {
   const { user, token, isLoading } = useAuth();
@@ -1161,6 +1229,8 @@ function AssistantContent() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [collapsedTeams, setCollapsedTeams] = useState<Set<string>>(new Set());
   const [teamDeleteTarget, setTeamDeleteTarget] = useState<Team | null>(null);
+  const [addMemberTeam, setAddMemberTeam] = useState<Team | null>(null);
+  const [addToTeamId, setAddToTeamId] = useState<string | null>(null);
 
   const loadConversations = useCallback(() => {
     if (!token) return;
@@ -1266,11 +1336,18 @@ function AssistantContent() {
             skillId: data.skill_id || undefined,
             system_prompt: data.system_prompt || undefined,
             icon: data.icon || undefined,
+            team_id: addToTeamId || undefined,
           }),
         });
         const conv = await res.json();
         setEditTarget(null);
-        router.push(`/chat/${conv.id}`);
+        if (addToTeamId) {
+          // Added into a team — stay on this page and refresh the group view.
+          setAddToTeamId(null);
+          refreshAll();
+        } else {
+          router.push(`/chat/${conv.id}`);
+        }
       } finally {
         setCreating(false);
       }
@@ -1294,7 +1371,7 @@ function AssistantContent() {
       ));
       setEditTarget(null);
     }
-  }, [editTarget, token, router]);
+  }, [editTarget, token, router, addToTeamId, refreshAll]);
 
   async function handleDelete() {
     if (!token || !deleteTarget) return;
@@ -1436,6 +1513,16 @@ function AssistantContent() {
           onCancel={() => setTeamDeleteTarget(null)}
         />
       )}
+      {addMemberTeam && (
+        <TeamAddMemberModal
+          team={addMemberTeam}
+          token={token}
+          standalone={conversations.filter(c => !c.team_id)}
+          onCreateNew={() => { setAddToTeamId(addMemberTeam.id); setEditTarget('new'); setAddMemberTeam(null); }}
+          onDone={() => { setAddMemberTeam(null); refreshAll(); }}
+          onCancel={() => setAddMemberTeam(null)}
+        />
+      )}
 
       <main className={`${sidebarMargin} md:pt-10 pb-12 px-4 md:px-10 transition-all duration-300`}>
         {/* Header */}
@@ -1544,6 +1631,10 @@ function AssistantContent() {
                         {team.topic && <p className="text-xs text-on-surface-variant truncate">議題：{team.topic}</p>}
                       </div>
                       <span className="material-symbols-outlined text-on-surface-variant ml-1 transition-transform" style={{ transform: collapsed ? 'rotate(-90deg)' : 'none' }}>expand_more</span>
+                    </button>
+                    <button onClick={() => setAddMemberTeam(team)} title="新增助手到團隊"
+                      className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer border border-outline-variant/10 shrink-0">
+                      <span className="material-symbols-outlined text-[18px]">person_add</span>
                     </button>
                     <Link href={`/team/${team.id}`} className="flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-bold text-on-primary cyber-gradient hover:brightness-110 active:scale-95 transition-all cursor-pointer shrink-0 no-underline" title="跑團隊協作分析">
                       <span className="material-symbols-outlined text-[18px]">bolt</span>

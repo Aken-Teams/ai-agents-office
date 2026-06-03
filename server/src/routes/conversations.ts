@@ -23,16 +23,22 @@ router.get('/', async (req: Request, res: Response) => {
 // POST /api/conversations
 router.post('/', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { title, skillId, category, system_prompt, icon } = req.body;
+  const { title, skillId, category, system_prompt, icon, team_id } = req.body;
   const id = uuidv4();
 
   const effectiveSkillId = skillId || null;
   const mode = effectiveSkillId ? 'direct' : null;
   const effectiveCategory = category === 'assistant' ? 'assistant' : 'document';
+  // Only honour team_id when the team belongs to this user.
+  let teamId: string | null = null;
+  if (team_id) {
+    const team = await dbGet<{ id: string }>('SELECT id FROM agent_teams WHERE id = ? AND user_id = ?', team_id, userId);
+    if (team) teamId = team_id;
+  }
   await dbRun(
-    'INSERT INTO conversations (id, user_id, title, skill_id, mode, category, system_prompt, icon) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO conversations (id, user_id, title, skill_id, mode, category, system_prompt, icon, team_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
     id, userId, title || 'New Conversation', effectiveSkillId, mode, effectiveCategory,
-    system_prompt || null, icon || null
+    system_prompt || null, icon || null, teamId
   );
 
   const conversation = await dbGet<Conversation>('SELECT * FROM conversations WHERE id = ? AND user_id = ?', id, userId);
@@ -60,7 +66,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 // PATCH /api/conversations/:id
 router.patch('/:id', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { title, status, system_prompt, icon, skill_id } = req.body;
+  const { title, status, system_prompt, icon, skill_id, team_id } = req.body;
 
   const conversation = await dbGet<Conversation>(
     'SELECT * FROM conversations WHERE id = ? AND user_id = ?',
@@ -68,6 +74,16 @@ router.patch('/:id', async (req: Request, res: Response) => {
   );
 
   if (!conversation) { res.status(404).json({ error: 'Conversation not found' }); return; }
+
+  // Move into / out of a team (team_id: '<id>' to join, null to detach).
+  if (team_id !== undefined) {
+    let tid: string | null = null;
+    if (team_id) {
+      const team = await dbGet<{ id: string }>('SELECT id FROM agent_teams WHERE id = ? AND user_id = ?', team_id, userId);
+      if (team) tid = team_id;
+    }
+    await dbRun('UPDATE conversations SET team_id = ? WHERE id = ? AND user_id = ?', tid, conversation.id, userId);
+  }
 
   if (title) await dbRun('UPDATE conversations SET title = ? WHERE id = ? AND user_id = ?', title, conversation.id, userId);
   if (status) await dbRun('UPDATE conversations SET status = ? WHERE id = ? AND user_id = ?', status, conversation.id, userId);
