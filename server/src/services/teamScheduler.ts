@@ -5,10 +5,20 @@
  * run on the next tick (catch-up).
  */
 
+import crypto from 'crypto';
 import { dbAll, dbGet, dbRun } from '../db.js';
+import { config } from '../config.js';
 import { runTeam } from './teamRun.js';
 import { sendTeamReportEmail } from './email.js';
 import { checkUserUsageLimit } from './usageLimit.js';
+
+/** Mint (once) a public share token for a run and return its full website URL. */
+async function buildShareUrl(runId: string): Promise<string> {
+  const token = crypto.randomBytes(8).toString('hex');
+  await dbRun('UPDATE team_runs SET share_token = ? WHERE id = ? AND share_token IS NULL', token, runId);
+  const row = await dbGet<{ share_token: string | null }>('SELECT share_token FROM team_runs WHERE id = ?', runId);
+  return `${config.publicWebUrl}/share/team/${row?.share_token || token}`;
+}
 
 export interface ScheduleSpec {
   frequency: 'daily' | 'weekly';
@@ -60,7 +70,8 @@ async function processSchedule(s: ScheduleRow): Promise<void> {
   if (!team) return;
 
   const result = await runTeam({ userId: s.user_id, teamId: s.team_id, question: s.question, writer: () => {}, scheduleId: s.id });
-  const ok = await sendTeamReportEmail(s.email, team.title, s.question, result.result, s.name);
+  const shareUrl = await buildShareUrl(result.runId);
+  const ok = await sendTeamReportEmail(s.email, team.title, s.question, result.result, s.name, shareUrl);
   await dbRun('UPDATE team_runs SET emailed = ? WHERE id = ?', ok ? 1 : 0, result.runId);
   console.log(`[scheduler] ran team "${team.title}" → email ${ok ? 'sent' : 'FAILED'} to ${s.email}`);
 }
@@ -89,7 +100,8 @@ export async function runScheduleNow(scheduleId: string, userId: string): Promis
   const team = await dbGet<{ title: string }>('SELECT title FROM agent_teams WHERE id = ? AND user_id = ?', s.team_id, userId);
   if (!team) return false;
   const result = await runTeam({ userId, teamId: s.team_id, question: s.question, writer: () => {}, scheduleId: s.id });
-  const ok = await sendTeamReportEmail(s.email, team.title, s.question, result.result, s.name);
+  const shareUrl = await buildShareUrl(result.runId);
+  const ok = await sendTeamReportEmail(s.email, team.title, s.question, result.result, s.name, shareUrl);
   await dbRun('UPDATE team_runs SET emailed = ? WHERE id = ?', ok ? 1 : 0, result.runId);
   await dbRun('UPDATE team_schedules SET last_run_at = NOW() WHERE id = ?', s.id);
   console.log(`[scheduler] manual test "${team.title}" → email ${ok ? 'sent' : 'FAILED'} to ${s.email}`);

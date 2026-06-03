@@ -1,0 +1,308 @@
+'use client';
+
+/**
+ * Schedule management + calendar view for one team. Shows every schedule (with
+ * enable/run-now/delete controls), a month calendar marking days that actually
+ * ran (green) vs. each schedule's next planned run (ring), and an execution log
+ * showing whether scheduled runs fired on time and were emailed. Polls so newly
+ * fired runs appear without a manual refresh.
+ */
+
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { AuthProvider, useAuth } from '../../../components/AuthProvider';
+import { I18nProvider } from '../../../../i18n';
+import Navbar from '../../../components/Navbar';
+import { useSidebarMargin } from '../../../hooks/useSidebarCollapsed';
+import ScheduleCreateModal from '../../../components/ScheduleCreateModal';
+
+const DOW = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
+
+interface Schedule { id: string; name: string | null; question: string; frequency: 'daily' | 'weekly'; hour: number; minute: number; day_of_week: number | null; email: string; enabled: number; next_run_at: string; last_run_at: string | null }
+interface RunRow { id: string; question: string; status: string; created_at: string; input_tokens: number; output_tokens: number; share_token: string | null; schedule_id: string | null; emailed: number | null }
+interface TeamInfo { id: string; title: string; icon: string | null }
+
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+function SchedulesContent() {
+  const { token, user } = useAuth();
+  const router = useRouter();
+  const params = useParams();
+  const teamId = String(params.id);
+  const sidebarMargin = useSidebarMargin();
+
+  const [team, setTeam] = useState<TeamInfo | null>(null);
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [runs, setRuns] = useState<RunRow[]>([]);
+  const [testing, setTesting] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [delTarget, setDelTarget] = useState<Schedule | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [cursor, setCursor] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
+
+  const authHeaders = useCallback((): HeadersInit => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
+
+  const loadSchedules = useCallback(() => {
+    fetch(`/api/teams/${teamId}/schedules`, { headers: authHeaders() })
+      .then(r => r.json()).then(d => setSchedules(Array.isArray(d.schedules) ? d.schedules : [])).catch(() => {});
+  }, [teamId, authHeaders]);
+  const loadRuns = useCallback(() => {
+    fetch(`/api/teams/${teamId}/runs`, { headers: authHeaders() })
+      .then(r => r.json()).then(d => setRuns((Array.isArray(d.runs) ? d.runs : []).filter((r: RunRow) => r.schedule_id))).catch(() => {});
+  }, [teamId, authHeaders]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`/api/teams/${teamId}`, { headers: authHeaders() })
+      .then(r => r.json()).then((d: { team: TeamInfo }) => { if (!d.team) { router.replace('/assistant'); return; } setTeam(d.team); })
+      .catch(() => router.replace('/assistant'));
+    loadSchedules();
+    loadRuns();
+  }, [token, teamId, authHeaders, router, loadSchedules, loadRuns]);
+
+  // Poll so scheduled runs appear / complete without a manual refresh.
+  const hasInflight = runs.some(r => r.status !== 'done' && r.status !== 'error' && r.status !== 'failed');
+  useEffect(() => {
+    if (!token) return;
+    const period = hasInflight ? 3500 : 8000;
+    const tick = () => { if (!document.hidden) { loadRuns(); loadSchedules(); } };
+    const t = setInterval(tick, period);
+    const onVisible = () => { if (!document.hidden) { loadRuns(); loadSchedules(); } };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVisible); };
+  }, [hasInflight, token, loadRuns, loadSchedules]);
+
+  const toggle = async (s: Schedule) => {
+    await fetch(`/api/teams/${teamId}/schedules/${s.id}`, { method: 'PATCH', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !s.enabled }) });
+    loadSchedules();
+  };
+  const del = async () => {
+    if (!delTarget) return;
+    await fetch(`/api/teams/${teamId}/schedules/${delTarget.id}`, { method: 'DELETE', headers: authHeaders() });
+    setDelTarget(null);
+    loadSchedules();
+  };
+  const runNow = async (s: Schedule) => {
+    setTesting(s.id);
+    try {
+      await fetch(`/api/teams/${teamId}/schedules/${s.id}/run-now`, { method: 'POST', headers: authHeaders() });
+      setToast('已觸發測試執行，約 1 分鐘後完成。下方「執行紀錄」與日曆會自動更新，並寄到信箱。');
+      setTimeout(loadRuns, 1500);
+    } finally { setTesting(null); }
+  };
+
+  const fmt = (s: Schedule) => `${s.frequency === 'weekly' && s.day_of_week != null ? DOW[s.day_of_week] : '每天'} ${String(s.hour).padStart(2, '0')}:${String(s.minute).padStart(2, '0')}`;
+
+  // --- Calendar derivation ---
+  const todayKey = ymd(new Date());
+  const runsByDay: Record<string, RunRow[]> = {};
+  runs.forEach(r => { const k = ymd(new Date(r.created_at)); (runsByDay[k] ||= []).push(r); });
+  const nextRunDays = new Set(schedules.filter(s => s.enabled).map(s => ymd(new Date(s.next_run_at))));
+
+  const first = new Date(cursor.y, cursor.m, 1);
+  const startPad = first.getDay();
+  const daysInMonth = new Date(cursor.y, cursor.m + 1, 0).getDate();
+  const cells: Array<{ day: number; key: string } | null> = [];
+  for (let i = 0; i < startPad; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, key: ymd(new Date(cursor.y, cursor.m, d)) });
+
+  const monthLabel = `${cursor.y} 年 ${cursor.m + 1} 月`;
+  const shiftMonth = (delta: number) => setCursor(c => { const d = new Date(c.y, c.m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() }; });
+  const schedName = (id: string | null) => schedules.find(s => s.id === id)?.name || null;
+
+  if (!team) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-surface-container-lowest">
+        <span className="material-symbols-outlined animate-spin text-primary text-4xl">progress_activity</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-surface-container-lowest">
+      <Navbar />
+
+      {createOpen && (
+        <ScheduleCreateModal teamId={teamId} token={token} defaultEmail={user?.email || ''}
+          onClose={() => setCreateOpen(false)} onCreated={() => { loadSchedules(); }} />
+      )}
+
+      {delTarget && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setDelTarget(null)}>
+          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-headline font-bold text-on-surface mb-2">刪除排程</h3>
+            <p className="text-sm text-on-surface-variant mb-5">確定要刪除「{delTarget.name || delTarget.question}」這個排程嗎？此動作無法復原（已產生的執行紀錄會保留）。</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDelTarget(null)} className="px-4 py-2 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high cursor-pointer">取消</button>
+              <button onClick={del} className="px-5 py-2 rounded-xl text-sm font-bold text-on-error bg-error hover:bg-error/90 cursor-pointer">刪除</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <main className={`${sidebarMargin} md:pt-10 pb-16 px-4 md:px-10 transition-all duration-300`}>
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6">
+          <Link href={`/team/${teamId}`} className="w-9 h-9 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer shrink-0">
+            <span className="material-symbols-outlined">arrow_back</span>
+          </Link>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl md:text-2xl font-headline font-bold text-on-surface truncate">排程管理</h1>
+            <p className="text-sm text-on-surface-variant truncate">{team.title} · 排定時間、檢視是否如期執行</p>
+          </div>
+          <button onClick={() => setCreateOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-on-primary cyber-gradient transition-all cursor-pointer shrink-0">
+            <span className="material-symbols-outlined text-[18px]">add</span><span className="hidden sm:inline">新增排程</span>
+          </button>
+        </div>
+
+        {toast && (
+          <div className="flex items-start gap-2.5 p-3 mb-5 rounded-xl border border-primary/30 bg-primary/[0.07]">
+            <span className="material-symbols-outlined text-primary text-[20px] shrink-0">bolt</span>
+            <p className="flex-1 text-sm text-on-surface leading-relaxed">{toast}</p>
+            <button onClick={() => setToast(null)} className="text-on-surface-variant hover:text-on-surface cursor-pointer shrink-0">
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Schedule list */}
+          <section>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3">排程清單（{schedules.length}）</h2>
+            {schedules.length === 0 ? (
+              <div className="p-6 rounded-2xl border border-dashed border-outline-variant/30 text-center text-sm text-on-surface-variant">
+                還沒有排程。按右上角「新增排程」設定團隊定時自動分析並寄信。
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {schedules.map(s => (
+                  <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl border border-outline-variant/15 bg-surface-container">
+                    <span className="material-symbols-outlined text-on-surface-variant shrink-0">{s.enabled ? 'alarm' : 'alarm_off'}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-on-surface truncate">{s.name || s.question}</div>
+                      {s.name && <div className="text-xs text-on-surface-variant truncate">議題：{s.question}</div>}
+                      <div className="text-xs text-on-surface-variant truncate">{fmt(s)} · {s.email}</div>
+                      {s.enabled
+                        ? <div className="text-[11px] text-tertiary">下次：{new Date(s.next_run_at).toLocaleString()}</div>
+                        : <div className="text-[11px] text-on-surface-variant/60">已停用</div>}
+                    </div>
+                    <button onClick={() => runNow(s)} disabled={testing === s.id} title="立即測試執行（馬上跑一次並寄出）"
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0 disabled:opacity-40">
+                      <span className={`material-symbols-outlined text-[18px] ${testing === s.id ? 'animate-spin' : ''}`}>{testing === s.id ? 'progress_activity' : 'play_arrow'}</span>
+                    </button>
+                    <button onClick={() => toggle(s)} title={s.enabled ? '停用' : '啟用'}
+                      className={`relative w-9 h-5 rounded-full transition-colors shrink-0 cursor-pointer ${s.enabled ? 'bg-primary' : 'bg-outline-variant/40'}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${s.enabled ? 'translate-x-4' : ''}`} />
+                    </button>
+                    <button onClick={() => setDelTarget(s)} title="刪除" className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer shrink-0">
+                      <span className="material-symbols-outlined text-[18px]">delete</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Calendar */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">執行日曆</h2>
+              <div className="flex items-center gap-1">
+                <button onClick={() => shiftMonth(-1)} className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high cursor-pointer"><span className="material-symbols-outlined text-[18px]">chevron_left</span></button>
+                <span className="text-sm font-bold text-on-surface w-28 text-center">{monthLabel}</span>
+                <button onClick={() => shiftMonth(1)} className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high cursor-pointer"><span className="material-symbols-outlined text-[18px]">chevron_right</span></button>
+              </div>
+            </div>
+            <div className="p-3 rounded-2xl border border-outline-variant/15 bg-surface-container">
+              <div className="grid grid-cols-7 gap-1 mb-1">
+                {DOW.map(d => <div key={d} className="text-center text-[11px] font-bold text-on-surface-variant/70 py-1">{d.replace('週', '')}</div>)}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {cells.map((c, i) => {
+                  if (!c) return <div key={i} />;
+                  const ran = runsByDay[c.key];
+                  const isToday = c.key === todayKey;
+                  const isNext = nextRunDays.has(c.key);
+                  return (
+                    <div key={i} className={`aspect-square rounded-lg flex flex-col items-center justify-center text-xs relative ${isToday ? 'bg-primary/10 ring-1 ring-primary/40' : 'bg-surface-container-lowest'} ${isNext && !ran ? 'ring-1 ring-tertiary/50' : ''}`}>
+                      <span className={`${isToday ? 'font-bold text-primary' : 'text-on-surface-variant'}`}>{c.day}</span>
+                      {ran
+                        ? <span className="mt-0.5 flex items-center gap-0.5 text-[9px] text-success font-bold"><span className="w-1.5 h-1.5 rounded-full bg-success" />{ran.length}</span>
+                        : isNext ? <span className="mt-0.5 text-[9px] text-tertiary">預定</span> : null}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-4 mt-3 pt-3 border-t border-outline-variant/15 text-[11px] text-on-surface-variant">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-success" />已執行</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full ring-1 ring-tertiary/60" />下次預定</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-primary/20 ring-1 ring-primary/40" />今天</span>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        {/* Execution log */}
+        <section className="mt-8">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3">執行紀錄</h2>
+          {runs.length === 0 ? (
+            <div className="p-6 rounded-2xl border border-dashed border-outline-variant/30 text-center text-sm text-on-surface-variant">
+              還沒有排程執行紀錄。時間到時，系統會自動跑分析、寄信，並把每次執行列在這裡。
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {runs.map(r => {
+                const inflight = r.status !== 'done' && r.status !== 'error' && r.status !== 'failed';
+                const nm = schedName(r.schedule_id);
+                return (
+                  <div key={r.id} className="flex items-center gap-3 p-3 rounded-xl border border-outline-variant/15 bg-surface-container">
+                    <span className={`material-symbols-outlined shrink-0 ${inflight ? 'text-primary animate-spin' : r.status === 'done' ? 'text-success' : 'text-error'}`}>
+                      {inflight ? 'progress_activity' : r.status === 'done' ? 'check_circle' : 'error'}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-on-surface truncate">{nm ? `${nm}` : r.question}</div>
+                      <div className="text-xs text-on-surface-variant truncate">
+                        {new Date(r.created_at).toLocaleString()}
+                        {!inflight && r.status === 'done' && ` · ${(r.input_tokens + r.output_tokens).toLocaleString()} tokens`}
+                      </div>
+                    </div>
+                    {inflight
+                      ? <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary shrink-0"><span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />背景執行中</span>
+                      : r.status === 'done'
+                        ? <span className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${r.emailed === 1 ? 'bg-success/10 text-success' : r.emailed === 0 ? 'bg-error/10 text-error' : 'bg-tertiary/10 text-tertiary'}`}>如期執行{r.emailed === 1 ? ' · 已寄送' : r.emailed === 0 ? ' · 寄送失敗' : ''}</span>
+                        : <span className="text-[11px] px-2 py-0.5 rounded-full bg-error/10 text-error shrink-0">執行失敗</span>}
+                    {r.share_token && !inflight && (
+                      <a href={`/share/team/${r.share_token}`} target="_blank" rel="noreferrer" title="查看完整報告"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0">
+                        <span className="material-symbols-outlined text-[18px]">open_in_new</span>
+                      </a>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </main>
+    </div>
+  );
+}
+
+export default function TeamSchedulesPage() {
+  return (
+    <AuthProvider>
+      <SchedulesWithI18n />
+    </AuthProvider>
+  );
+}
+
+function SchedulesWithI18n() {
+  const { user } = useAuth();
+  return (
+    <I18nProvider initialLocale={user?.locale} initialTheme={user?.theme}>
+      <SchedulesContent />
+    </I18nProvider>
+  );
+}

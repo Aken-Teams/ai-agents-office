@@ -163,13 +163,15 @@ function mdToEmailHtml(md: string): string {
             const bg = ri % 2 ? '#ffffff' : '#fafbfc';
             return `<tr style="background:${bg}"><td style="border:1px solid #e2e8f0;padding:5px 10px;font-size:12px;color:#334155">${inline(String(d.name ?? ''))}</td><td style="border:1px solid #e2e8f0;padding:5px 10px;font-size:12px;color:${color};text-align:right;font-weight:600">${escapeHtml(String(d.value ?? ''))}</td></tr>`;
           }).join('');
-          const cap = title ? `<div style="font-size:12px;font-weight:600;color:#0f172a;margin:0 0 4px">📊 ${inline(title)}</div>` : '';
+          const tag = '<span style="display:inline-block;background:#0f766e;color:#ffffff;font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;margin-right:6px;vertical-align:middle">圖表</span>';
+          const cap = title ? `<div style="font-size:12px;font-weight:600;color:#0f172a;margin:0 0 4px">${tag}${inline(title)}</div>` : '';
           return `<div style="margin:12px 0">${cap}<table style="border-collapse:collapse;width:100%"><tbody>${trs}</tbody></table></div>`;
         }
       } catch { /* fall through to note */ }
     }
     const label = chartish ? '互動圖表' : /mermaid|mindmap/i.test(lang) ? '流程／心智圖' : /map/i.test(lang) ? '地圖' : '圖表';
-    return `<div style="margin:12px 0;padding:10px 14px;background:#f1f5f9;border:1px dashed #cbd5e1;border-radius:8px;font-size:12px;color:#64748b">📊 此處有一張${label}，請至網站查看互動版本。</div>`;
+    const tag = '<span style="display:inline-block;background:#94a3b8;color:#ffffff;font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;margin-right:6px;vertical-align:middle">圖</span>';
+    return `<div style="margin:12px 0;padding:10px 14px;background:#f1f5f9;border:1px dashed #cbd5e1;border-radius:8px;font-size:12px;color:#64748b">${tag}此處有一張${label}，請至網站查看互動版本。</div>`;
   };
 
   for (let i = 0; i < lines.length; i++) {
@@ -215,18 +217,25 @@ function mdToEmailHtml(md: string): string {
 }
 
 /** Email a scheduled team collaboration report to the user. */
-export async function sendTeamReportEmail(to: string, teamTitle: string, question: string, resultMarkdown: string, scheduleName?: string | null): Promise<boolean> {
+export async function sendTeamReportEmail(to: string, teamTitle: string, question: string, resultMarkdown: string, scheduleName?: string | null, shareUrl?: string | null): Promise<boolean> {
   if (!resend || !config.emailFrom) return false;
   const label = scheduleName?.trim() || teamTitle;
   const subject = `【團隊協作報告】${label}`;
   const nameRow = scheduleName?.trim()
     ? `<p style="font-size:13px;color:#0f766e;margin:0 0 2px;font-weight:600">${escapeHtml(scheduleName.trim())}</p>`
     : '';
+  const shareBlock = shareUrl
+    ? `<div style="margin:24px 0 0;padding-top:20px;border-top:1px solid #e5e8ed;text-align:center">
+        <a href="${escapeHtml(shareUrl)}" style="display:inline-block;background:linear-gradient(135deg,#006970 0%,#009099 100%);color:#ffffff;text-decoration:none;padding:11px 32px;border-radius:8px;font-size:14px;font-weight:600">在網站上查看完整報告</a>
+        <p style="margin:10px 0 0;font-size:11px;color:#94a3b8;word-break:break-all">${escapeHtml(shareUrl)}</p>
+      </div>`
+    : '';
   const body = `<div style="padding:32px">
     <h2 style="font-size:18px;color:#0f172a;margin:0 0 6px">${escapeHtml(teamTitle)} · 團隊協作報告</h2>
     ${nameRow}
     <p style="font-size:13px;color:#64748b;margin:0 0 18px;padding:8px 12px;background:#f1f5f9;border-radius:8px">議題：${escapeHtml(question)}</p>
     <div style="font-size:14px;color:#1e293b">${mdToEmailHtml(resultMarkdown)}</div>
+    ${shareBlock}
   </div>`;
   const html = wrapEmail(body, true);
   try {

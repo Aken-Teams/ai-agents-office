@@ -47,6 +47,9 @@ export const config = {
   resendApiKey: process.env.RESEND_API_KEY || '',
   emailFrom: process.env.EMAIL_FROM || '',
   emailBcc: process.env.EMAIL_BCC || '',
+  // Public website base URL (used to build share links in emails sent from
+  // background jobs, where there's no request to read the origin from).
+  publicWebUrl: (process.env.PUBLIC_WEB_URL || (process.env.CORS_ORIGINS || '').split(',')[0] || 'http://localhost:3001').trim().replace(/\/$/, ''),
 
   // DeepSeek
   deepseekApiKey: process.env.DEEPSEEK_API_KEY || '',
