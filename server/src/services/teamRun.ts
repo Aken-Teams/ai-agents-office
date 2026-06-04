@@ -239,12 +239,24 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
     })
     .join('\n\n');
 
+  // Per-member truncation above can cut off each member's "資料來源" list (it
+  // sits at the end). Pull every URL from the FULL member text so the synthesis
+  // can rebuild a complete sources section even after truncation.
+  const extractUrls = (t: string): string[] =>
+    (t.match(/https?:\/\/[^\s)\]>"'，。、；）】}]+/g) || []).map(u => u.replace(/[.,;:、，。）]+$/, ''));
+  const allUrls = Array.from(new Set(
+    results.flatMap(r => [...extractUrls(r.text || ''), ...extractUrls(round2[r.member.id] || '')]),
+  ));
+  const sourcesBlock = allUrls.length
+    ? `\n\n【團隊成員實際查到的資料來源網址（請整合、去重後放進最終報告的「資料來源」段落）】\n${allUrls.map(u => `- ${u}`).join('\n')}`
+    : '';
+
   const synthSystem = `你是一個 AI 團隊的協調者。團隊成員已各自針對議題提出分析，你的任務是整合成一份對使用者有用的最終結論：
 - 點出各方的共識、分歧與最關鍵的洞察
 - 給出明確、可行動的建議
 - 不要逐字複述每位成員，要融會貫通
 - 繁體中文、避免冗詞
-- 資料來源：若引用具體數據／新聞／報價，保留並標明來源；若各成員是依知識推論而非即時查證，請在結論中據實說明「此為推論，非即時數據」，不要捏造來源或數字
+- 資料來源（重要）：團隊成員實際查證過的來源網址已附在輸入末端。你**必須**在報告最後加上一個「## 資料來源」段落，把這些網址去重後逐條列出（可加一句說明各來源對應的重點）。內文引用具體數據時也盡量標註來源。若某些判斷只是推論、非即時查證，請在內文標示「（推論）」。嚴禁捏造來源或數字
 
 請用 Markdown 格式輸出，讓結論清楚易讀：
 - 用 ## 小標題分段（例如：## 共識 / ## 分歧 / ## 核心洞察 / ## 建議）
@@ -263,7 +275,7 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
 
 以下是各成員的分析：
 
-${findingsBlock}
+${findingsBlock}${sourcesBlock}
 
 請整合以上分析，輸出最終結論與建議。`;
 
