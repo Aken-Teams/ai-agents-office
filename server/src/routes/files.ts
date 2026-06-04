@@ -8,7 +8,17 @@ import { convertOfficeFile } from '../services/filePreview.js';
 import { applyWatermark } from '../services/watermark.js';
 import { config } from '../config.js';
 import { getStorageQuotaGb } from '../services/usageLimit.js';
+import { findValidShare, bumpDownloadCount } from '../services/line/fileShare.js';
 import type { GeneratedFile } from '../types.js';
+
+const OFFICE_MIME: Record<string, string> = {
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  doc: 'application/msword',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  xls: 'application/vnd.ms-excel',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  ppt: 'application/vnd.ms-powerpoint',
+};
 
 /** Sum file_size for a given user from generated_files table */
 export async function getUserStorageUsed(userId: string): Promise<number> {
@@ -32,6 +42,50 @@ const MIME_MAP: Record<string, string> = {
 const OFFICE_EXTENSIONS = new Set(['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt']);
 
 const router = Router();
+
+// GET /api/files/share/:token — PUBLIC download for files delivered via LINE
+// (no JWT in chat). Defined BEFORE authMiddleware so it stays open. Serves
+// inline by default (view); ?dl=1 forces a download. Validates the opaque
+// token (expiry + download cap) instead of a user session.
+router.get('/share/:token', async (req: Request, res: Response) => {
+  const token = String(req.params.token);
+  const share = await findValidShare(token);
+  if (!share) { res.status(404).json({ error: '連結已失效或已達下載上限' }); return; }
+
+  const filePath = await getFileDownloadPath(share.user_id, share.file_id);
+  if (!filePath || !fs.existsSync(filePath)) { res.status(404).json({ error: 'File not found' }); return; }
+
+  bumpDownloadCount(token).catch(() => { /* best-effort */ });
+
+  const filename = path.basename(filePath);
+  const ext = path.extname(filePath).slice(1).toLowerCase();
+  const wantDownload = req.query.dl === '1';
+  const disposition = wantDownload
+    ? `attachment; filename="${encodeURIComponent(filename)}"`
+    : 'inline';
+
+  // Watermark PDFs (mirrors the authed download); office files are served raw so
+  // the Microsoft Office online viewer can render them from the public URL.
+  if (ext === 'pdf') {
+    try {
+      const wm = await applyWatermark(filePath);
+      if (wm) {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', disposition);
+        res.setHeader('Content-Length', wm.length);
+        res.end(wm); return;
+      }
+    } catch (err) { console.warn('[FileShare] watermark failed, serving original:', err); }
+  }
+
+  const mime = OFFICE_MIME[ext] || MIME_MAP[ext] || 'application/octet-stream';
+  const stat = fs.statSync(filePath);
+  res.setHeader('Content-Type', mime);
+  res.setHeader('Content-Disposition', disposition);
+  res.setHeader('Content-Length', stat.size);
+  fs.createReadStream(filePath).pipe(res);
+});
+
 router.use(authMiddleware);
 
 // GET /api/files — returns only the LATEST version of each file
