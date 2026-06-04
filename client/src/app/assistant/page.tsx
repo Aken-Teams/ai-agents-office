@@ -996,14 +996,16 @@ function TeamCreateModal({ token, onCreated, onCancel }: { token: string | null;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onCancel}>
-      <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-5xl max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="p-6 md:p-7">
+      <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="px-5 md:px-7 pt-5 md:pt-6 pb-3 shrink-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="material-symbols-outlined text-primary">groups</span>
             <h3 className="text-lg font-headline font-bold text-on-surface">建立 AI 助手團隊</h3>
           </div>
-          <p className="text-sm text-on-surface-variant mb-5">選一個領域，系統會自動建立一組分工合作的 AI 助手。</p>
+          <p className="text-sm text-on-surface-variant">選一個領域，系統會自動建立一組分工合作的 AI 助手。</p>
+        </div>
 
+        <div className="flex-1 overflow-y-auto px-5 md:px-7 min-h-0 pt-1 pb-3">
           {loading ? (
             <div className="flex justify-center py-10"><span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span></div>
           ) : (
@@ -1030,10 +1032,10 @@ function TeamCreateModal({ token, onCreated, onCancel }: { token: string | null;
                       const isSel = selected?.id === tpl.id;
                       return (
                         <button key={tpl.id} onClick={() => { setSelected(tpl); setCustomMode(false); }}
-                          className={`relative flex flex-col items-center text-center p-4 rounded-xl border transition-all cursor-pointer ${isSel ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-outline-variant/20 bg-surface-container hover:border-primary/40'}`}>
-                          {isSel && <span className="material-symbols-outlined absolute top-2 right-2 text-primary text-lg">check_circle</span>}
-                          <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-2 transition-colors ${isSel ? 'cyber-gradient text-on-primary' : 'bg-surface-container-high text-primary'}`}>
-                            <span className="material-symbols-outlined text-xl">{tpl.icon}</span>
+                          className={`relative flex flex-col items-center text-center p-3 md:p-4 rounded-xl border transition-all cursor-pointer ${isSel ? 'border-primary bg-primary/5 ring-1 ring-primary/30' : 'border-outline-variant/20 bg-surface-container hover:border-primary/40'}`}>
+                          {isSel && <span className="material-symbols-outlined absolute top-1.5 right-1.5 text-primary text-lg">check_circle</span>}
+                          <div className={`w-9 h-9 md:w-11 md:h-11 rounded-xl flex items-center justify-center mb-1.5 md:mb-2 transition-colors ${isSel ? 'cyber-gradient text-on-primary' : 'bg-surface-container-high text-primary'}`}>
+                            <span className="material-symbols-outlined text-lg md:text-xl">{tpl.icon}</span>
                           </div>
                           <div className="font-bold text-on-surface text-sm leading-tight">{tpl.title}</div>
                           <div className="text-[11px] text-on-surface-variant mt-0.5">{tpl.agents.length} 位助手</div>
@@ -1083,16 +1085,17 @@ function TeamCreateModal({ token, onCreated, onCancel }: { token: string | null;
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-2 pt-5 mt-1 border-t border-outline-variant/15">
-                <button onClick={onCancel} className="px-5 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer">取消</button>
-                <button onClick={handleCreate} disabled={creating || (customMode ? !topic.trim() : !selected)}
-                  className="px-6 py-2.5 rounded-xl text-sm font-bold text-on-primary cyber-gradient disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center gap-2">
-                  <span className={`material-symbols-outlined text-base ${creating ? 'animate-spin' : ''}`}>{creating ? 'progress_activity' : (customMode ? 'auto_awesome' : 'group_add')}</span>
-                  {creating && customMode ? 'AI 建立中…' : customMode ? '讓 AI 建立團隊' : selected ? `建立團隊（${selected.agents.length} 位助手）` : '請先選領域或描述情境'}
-                </button>
-              </div>
             </>
           )}
+        </div>
+
+        <div className="shrink-0 flex items-center justify-end gap-2 px-5 md:px-7 py-3.5 border-t border-outline-variant/15">
+          <button onClick={onCancel} className="px-5 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer">取消</button>
+          <button onClick={handleCreate} disabled={creating || (customMode ? !topic.trim() : !selected)}
+            className="flex-1 sm:flex-none justify-center px-6 py-2.5 rounded-xl text-sm font-bold text-on-primary cyber-gradient disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center gap-2">
+            <span className={`material-symbols-outlined text-base ${creating ? 'animate-spin' : ''}`}>{creating ? 'progress_activity' : (customMode ? 'auto_awesome' : 'group_add')}</span>
+            <span className="truncate">{creating && customMode ? 'AI 建立中…' : customMode ? '讓 AI 建立團隊' : selected ? `建立團隊（${selected.agents.length} 位）` : '請先選領域或描述'}</span>
+          </button>
         </div>
       </div>
     </div>
@@ -1597,10 +1600,10 @@ function AssistantContent() {
                 {t('assistant.description' as any)}
               </p>
               {memoryCount > 0 && (
-                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-tertiary/10 border border-tertiary/20 rounded-full text-sm text-tertiary">
-                  <span className="material-symbols-outlined text-base">psychology</span>
+                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-tertiary/10 border border-tertiary/20 rounded-xl text-sm text-tertiary max-w-full">
+                  <span className="material-symbols-outlined text-base shrink-0">psychology</span>
                   <span className="font-medium">{t('assistant.memoryBadge' as any)}</span>
-                  <span className="text-tertiary/70">
+                  <span className="text-tertiary/70 whitespace-nowrap">
                     {workLogCount > 0
                       ? t('assistant.memoryPrefs' as any, { prefs: memoryCount - workLogCount, logs: workLogCount })
                       : t('assistant.memoryItems' as any, { count: memoryCount })}
@@ -1670,32 +1673,34 @@ function AssistantContent() {
               const collapsed = collapsedTeams.has(team.id);
               return (
                 <section key={team.id} className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-4 md:p-5">
-                  <div className="flex items-center gap-3 mb-4">
-                    <button onClick={() => toggleTeam(team.id)} className="group flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+                    <button onClick={() => toggleTeam(team.id)} className="group flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer w-full">
                       <div className="w-11 h-11 rounded-xl cyber-gradient flex items-center justify-center shrink-0">
                         <span className="material-symbols-outlined text-on-primary text-xl">{team.icon || 'groups'}</span>
                       </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/15 px-1.5 py-0.5 rounded shrink-0">團隊</span>
-                          <h3 className="font-headline font-bold text-on-surface text-lg truncate group-hover:text-primary transition-colors">{team.title}</h3>
+                          <h3 className="font-headline font-bold text-on-surface text-base md:text-lg truncate group-hover:text-primary transition-colors">{team.title}</h3>
                           <span className="text-xs text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full shrink-0">{members.length} 位</span>
                         </div>
-                        {team.topic && <p className="text-xs text-on-surface-variant truncate">議題：{team.topic}</p>}
+                        {team.topic && <p className="text-xs text-on-surface-variant truncate mt-0.5">議題：{team.topic}</p>}
                       </div>
-                      <span className="material-symbols-outlined text-on-surface-variant ml-1 transition-transform" style={{ transform: collapsed ? 'rotate(-90deg)' : 'none' }}>expand_more</span>
+                      <span className="material-symbols-outlined text-on-surface-variant ml-1 transition-transform shrink-0" style={{ transform: collapsed ? 'rotate(-90deg)' : 'none' }}>expand_more</span>
                     </button>
-                    <Link href={`/team/${team.id}`} className="flex items-center gap-1.5 px-3.5 h-9 rounded-lg text-sm font-bold text-on-primary cyber-gradient hover:brightness-110 active:scale-95 transition-all cursor-pointer shrink-0 no-underline" title="跑團隊協作分析">
-                      <span className="material-symbols-outlined text-[18px]">bolt</span>
-                      <span className="hidden sm:inline">跑團隊分析</span>
-                    </Link>
-                    <button onClick={() => setAddMemberTeam(team)} title="新增助手到團隊"
-                      className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0">
-                      <span className="material-symbols-outlined text-[18px]">person_add</span>
-                    </button>
-                    <button onClick={() => setTeamDeleteTarget(team)} className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer shrink-0" title="刪除團隊">
-                      <span className="material-symbols-outlined text-[18px]">delete</span>
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Link href={`/team/${team.id}`} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 h-9 rounded-lg text-sm font-bold text-on-primary cyber-gradient hover:brightness-110 active:scale-95 transition-all cursor-pointer no-underline" title="跑團隊協作分析">
+                        <span className="material-symbols-outlined text-[18px]">bolt</span>
+                        跑團隊分析
+                      </Link>
+                      <button onClick={() => setAddMemberTeam(team)} title="新增助手到團隊"
+                        className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0">
+                        <span className="material-symbols-outlined text-[18px]">person_add</span>
+                      </button>
+                      <button onClick={() => setTeamDeleteTarget(team)} className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer shrink-0" title="刪除團隊">
+                        <span className="material-symbols-outlined text-[18px]">delete</span>
+                      </button>
+                    </div>
                   </div>
                   {!collapsed && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">
