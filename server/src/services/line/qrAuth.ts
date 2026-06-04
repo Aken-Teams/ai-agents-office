@@ -118,8 +118,11 @@ export async function mintBindQrCode(userId: string): Promise<QrMintResult> {
  * Returns null if the code is not a (valid) bind token.
  */
 export async function consumeBindToken(code: string): Promise<string | null> {
+  // expires_at is stored in UTC (mysqlNow uses toISOString), so it must be
+  // compared against UTC_TIMESTAMP() — NOT NOW(), which returns DB-local time.
+  // With a +8 DB timezone, NOW() made every token look 8h expired on arrival.
   const row = await dbGet<{ user_id: string }>(
-    'SELECT user_id FROM line_link_tokens WHERE code = ? AND used = 0 AND expires_at > NOW()',
+    'SELECT user_id FROM line_link_tokens WHERE code = ? AND used = 0 AND expires_at > UTC_TIMESTAMP()',
     code,
   );
   if (!row) return null;

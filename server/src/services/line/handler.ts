@@ -27,7 +27,7 @@ import { config } from '../../config.js';
 import { getLineUser, touchLineUser, type LineUserRow } from './userMapping.js';
 import { getOrCreateLineConversation } from './conversationRouter.js';
 import { checkLineRateLimit } from './rateLimit.js';
-import { parseCommand, handleHelp, handleLink, handleNew, handleQuota, handleListFiles, handleWebLink, handleUnlinkedGreeting, handleTeams, handleSetTeam, handleSolo } from './commands.js';
+import { parseCommand, handleHelp, handleLink, handleNew, handleQuota, handleListFiles, handleWebLink, handleUnlinkedGreeting, handleTeams, handleSetTeam, handleSolo, handleNewTeam } from './commands.js';
 import { runTeam } from '../teamRun.js';
 import { pushMessage, startLoadingIndicator, fetchMessageContent } from './client.js';
 import { scanUploadedFile, isAllowedExtension } from '../uploadScanner.js';
@@ -120,6 +120,7 @@ export async function processIncomingEvent(event: IncomingEvent): Promise<void> 
     if (cmd.kind === 'quota') { await handleQuota(lineUser); return; }
     if (cmd.kind === 'teams') { await handleTeams(lineUser); return; }
     if (cmd.kind === 'solo')  { await handleSolo(lineUser); return; }
+    if (cmd.kind === 'newteam') { await handleNewTeam(lineUser, cmd.args); return; }
 
     await runConversation(lineUser, event.text);
   } catch (err) {

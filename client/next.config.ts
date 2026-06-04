@@ -32,6 +32,13 @@ const nextConfig: NextConfig = {
           source: '/api/:path*',
           destination: `${apiUrl}/api/:path*`,
         },
+        // LINE (and future) webhooks live on the Express backend. Proxy them so
+        // a single public domain (this Next.js app) serves both the web UI and
+        // the webhook — LINE posts to <public>/webhook/line.
+        {
+          source: '/webhook/:path*',
+          destination: `${apiUrl}/webhook/:path*`,
+        },
       ],
     };
   },

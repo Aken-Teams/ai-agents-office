@@ -14,9 +14,10 @@ import { getOrCreateLineConversation } from './conversationRouter.js';
 import { pushMessage, getUserProfile, type LineTextMessage } from './client.js';
 import { createOrReuseFileShare } from './fileShare.js';
 import { buildFileListFlex, buildUsageFlex, buildTeamPickerFlex, type FileForFlex, type TeamForFlex } from './flex.js';
+import { createCustomTeam } from '../teamBuilder.js';
 
 export interface ParsedCommand {
-  kind: 'link' | 'new' | 'help' | 'quota' | 'teams' | 'solo' | 'none';
+  kind: 'link' | 'new' | 'help' | 'quota' | 'teams' | 'solo' | 'newteam' | 'none';
   args: string;
 }
 
@@ -34,6 +35,8 @@ export function parseCommand(text: string): ParsedCommand {
     case 'team':  return { kind: 'teams', args: rest.trim() };
     case 'teams': return { kind: 'teams', args: rest.trim() };
     case 'solo':  return { kind: 'solo',  args: rest.trim() };
+    case 'newteam':    return { kind: 'newteam', args: rest.trim() };
+    case 'createteam': return { kind: 'newteam', args: rest.trim() };
     default:      return { kind: 'none',  args: trimmed };
   }
 }
@@ -48,6 +51,7 @@ const HELP_TEXT = [
   '• 回答跨對話的問題',
   '',
   '可用指令：',
+  '• /newteam <描述> — 用 AI 幫你建立一個團隊',
   '• /teams — 選擇用哪個團隊協作回答',
   '• /solo — 回到單一助手（預設）',
   '• /new — 開始新的對話',
@@ -78,13 +82,56 @@ export async function handleTeams(lineUser: LineUserRow): Promise<void> {
   if (rows.length === 0) {
     await pushMessage(lineUser.line_user_id, [{
       type: 'text',
-      text: '你還沒有任何團隊。請先到網頁的「AI 助手」建立一個團隊，再回來用 /teams 切換。',
+      text: '你還沒有任何團隊。\n\n直接用 AI 幫你建一個：\n輸入「/newteam 你的需求」\n例如：/newteam 每天幫我分析台股盤勢與我持股的風險\n\n或到網頁的「AI 助手」建立。',
     }]);
     return;
   }
 
   const teams: TeamForFlex[] = rows.map(r => ({ id: r.id, title: r.title, topic: r.topic, memberCount: r.member_count }));
   await pushMessage(lineUser.line_user_id, [buildTeamPickerFlex(teams, lineUser.active_team_id)]);
+}
+
+/**
+ * AI-build a team from a free-form scenario typed in LINE (`/newteam <描述>`),
+ * then switch the user into it so the next message runs the team. Reuses the
+ * same DeepSeek team designer as the web "AI 自訂團隊".
+ */
+export async function handleNewTeam(lineUser: LineUserRow, scenario: string): Promise<void> {
+  const topic = scenario.trim();
+  if (!topic) {
+    await pushMessage(lineUser.line_user_id, [{
+      type: 'text',
+      text: '請描述你的需求，我就用 AI 幫你組一個團隊。\n例如：\n/newteam 每天幫我分析台股盤勢與我持股的風險\n/newteam 幫我規劃一場 100 人的產品發表會',
+    }]);
+    return;
+  }
+
+  await pushMessage(lineUser.line_user_id, [{
+    type: 'text',
+    text: '🛠 正在用 AI 幫你組建團隊，請稍候約 10～20 秒…',
+  }]);
+
+  let result;
+  try {
+    result = await createCustomTeam(lineUser.internal_user_id, topic);
+  } catch (err) {
+    console.error('[LINE commands] createCustomTeam failed:', err);
+    result = null;
+  }
+
+  if (!result) {
+    await pushMessage(lineUser.line_user_id, [{
+      type: 'text',
+      text: '⚠️ 團隊建立失敗（AI 服務未設定或暫時無回應），請稍後重試，或到網頁用範本建立。',
+    }]);
+    return;
+  }
+
+  await setLineActiveTeam(lineUser.line_user_id, result.teamId);
+  await pushMessage(lineUser.line_user_id, [{
+    type: 'text',
+    text: `✅ 已建立團隊「${result.title}」（${result.memberCount} 位成員）並切換到它。\n\n直接傳訊息問問題，整個團隊會協作分析、再給你一份統整結論。\n\n/teams 可切換團隊、/solo 回到單一助手。`,
+  }]);
 }
 
 /**

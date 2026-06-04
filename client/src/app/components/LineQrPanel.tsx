@@ -97,26 +97,53 @@ export function LineQrPanel({ title, caption, hint = '請用手機的 LINE 掃�
   }, [linked, loading, error, markLinked]);
 
   return (
-    <section className="flex flex-col items-center gap-5 w-full" aria-labelledby="qr-hero-title">
-      {/* Eyebrow caption — matches onboarding's primary eyebrow. */}
-      <p className="text-xs font-bold uppercase tracking-widest text-primary">{caption}</p>
+    <section
+      className="flex flex-col md:flex-row md:items-center justify-center gap-6 md:gap-9 w-full"
+      aria-labelledby="qr-hero-title"
+    >
+      {/* Left column — copy, hint, bind code. Centered on mobile, left on desktop. */}
+      <div className="flex flex-col items-center md:items-start text-center md:text-left gap-3 md:max-w-xs">
+        <p className="text-xs font-bold uppercase tracking-widest text-primary">{caption}</p>
+        <h1 id="qr-hero-title" className="font-headline text-2xl md:text-3xl font-black text-on-surface tracking-tight">
+          {title}
+        </h1>
 
-      {/* Hero heading — app headline font. */}
-      <h1 id="qr-hero-title" className="font-headline text-3xl md:text-4xl font-black text-on-surface tracking-tight text-center">
-        {title}
-      </h1>
+        {!linked && (
+          <>
+            <div className="space-y-1.5 mt-1">
+              <p className="text-sm text-on-surface-variant">{hint}</p>
+              <p className="text-xs text-on-surface-variant/70">掃描後在 LINE 點「傳送」即可自動完成綁定</p>
+            </div>
 
-      <div aria-hidden className="w-16 h-px bg-outline-variant/40" />
+            {data?.code && (
+              <div className="flex flex-col items-center md:items-start gap-2 mt-1">
+                <div className="flex items-center gap-3">
+                  <span className="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold">綁定碼</span>
+                  <span className="text-sm font-mono text-on-surface tracking-[0.18em]">{data.code}</span>
+                </div>
+                {data.lineUrl && (
+                  <a href={data.lineUrl} className="text-xs font-bold text-primary hover:underline">
+                    手機請點此開啟 LINE（桌機請改用掃描）
+                  </a>
+                )}
+              </div>
+            )}
+          </>
+        )}
 
-      {/* Canvas — QR, spinner, error, or linked-success state. */}
-      <div className="relative w-[260px] h-[260px] bg-white rounded-2xl border border-outline-variant/20 shadow-sm flex items-center justify-center">
+        {linked && linkedName && (
+          <p className="text-sm text-on-surface-variant mt-1">{linkedName}</p>
+        )}
+      </div>
+
+      {/* Right column — QR / spinner / error / linked-success canvas. */}
+      <div className="relative w-[220px] h-[220px] shrink-0 mx-auto md:mx-0 bg-white rounded-2xl border border-outline-variant/20 shadow-sm flex items-center justify-center">
         {linked ? (
           <div className="text-center px-6 space-y-3">
             <div className="mx-auto w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
               <span className="material-symbols-outlined text-primary text-3xl">check_circle</span>
             </div>
             <p className="text-base font-headline font-bold text-on-surface">已成功綁定 LINE</p>
-            {linkedName && <p className="text-xs text-on-surface-variant">{linkedName}</p>}
           </div>
         ) : loading ? (
           <span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span>
@@ -135,32 +162,6 @@ export function LineQrPanel({ title, caption, hint = '請用手機的 LINE 掃�
           <img src={data.qrDataUrl} alt="LINE 綁定 QR Code" className="w-[86%] h-[86%] object-contain" />
         ) : null}
       </div>
-
-      {/* Hint + steps — hidden once linked. */}
-      {!linked && (
-        <div className="text-center space-y-1.5">
-          <p className="text-sm text-on-surface-variant">{hint}</p>
-          <p className="text-xs text-on-surface-variant/70">掃描後在 LINE 點「傳送」即可自動完成綁定</p>
-        </div>
-      )}
-
-      {/* Bind-code receipt — easy to copy / open. */}
-      {!linked && data?.code && (
-        <div className="flex flex-col items-center gap-2">
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold">綁定碼</span>
-            <span className="text-sm font-mono text-on-surface tracking-[0.18em]">{data.code}</span>
-          </div>
-          {data.lineUrl && (
-            <a
-              href={data.lineUrl}
-              className="text-xs font-bold text-primary hover:underline"
-            >
-              手機請點此開啟 LINE（桌機請改用掃描）
-            </a>
-          )}
-        </div>
-      )}
     </section>
   );
 }
