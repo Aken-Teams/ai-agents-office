@@ -329,10 +329,10 @@ function DashboardContent() {
       {/* LINE Bind Modal */}
       {showLineModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowLineModal(false)}>
-          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8 relative" onClick={e => e.stopPropagation()}>
+          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-6 md:p-8 relative" onClick={e => e.stopPropagation()}>
             <button
               onClick={() => setShowLineModal(false)}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer z-10"
               aria-label="關閉"
             >
               <span className="material-symbols-outlined text-xl">close</span>

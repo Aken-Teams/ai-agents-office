@@ -22,6 +22,7 @@ interface QrResponse {
   code?: string;
   lineUrl?: string;
   qrDataUrl?: string;
+  addFriendUrl?: string;
 }
 
 interface Props {
@@ -100,38 +101,51 @@ export function LineQrPanel({ title, caption, hint = '請用手機的 LINE 掃�
   }, [linked, loading, error, markLinked]);
 
   return (
+    <div className="@container w-full">
     <section
-      className="flex flex-col md:flex-row md:items-center justify-center gap-6 md:gap-9 w-full"
+      className="flex flex-col @xl:flex-row @xl:items-center justify-center gap-6 @xl:gap-9 w-full"
       aria-labelledby="qr-hero-title"
     >
-      {/* Left column — copy, hint, bind code. Centered on mobile, left on desktop. */}
-      <div className="flex flex-col items-center md:items-start text-center md:text-left gap-3 md:max-w-xs">
-        <p className="text-xs font-bold uppercase tracking-widest text-primary">{caption}</p>
-        <h1 id="qr-hero-title" className="font-headline text-2xl md:text-3xl font-black text-on-surface tracking-tight">
-          {title}
-        </h1>
+      {/* Left column — copy + step list. Centered when narrow, left when wide. */}
+      <div className="flex flex-col items-center @xl:items-start text-center @xl:text-left gap-4 w-full @xl:max-w-sm">
+        <div className="@xl:self-start">
+          <p className="text-xs font-bold uppercase tracking-widest text-primary mb-1">{caption}</p>
+          <h1 id="qr-hero-title" className="font-headline text-2xl @xl:text-3xl font-black text-on-surface tracking-tight">
+            {title}
+          </h1>
+        </div>
 
         {!linked && (
-          <>
-            <div className="space-y-1.5 mt-1">
-              <p className="text-sm text-on-surface-variant">{hint}</p>
-              <p className="text-xs text-on-surface-variant/70">掃描後在 LINE 點「傳送」即可自動完成綁定</p>
-            </div>
-
-            {data?.code && (
-              <div className="flex flex-col items-center md:items-start gap-2 mt-1">
-                <div className="flex items-center gap-3">
-                  <span className="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold">綁定碼</span>
-                  <span className="text-sm font-mono text-on-surface tracking-[0.18em]">{data.code}</span>
-                </div>
-                {data.lineUrl && (
-                  <a href={data.lineUrl} className="text-xs font-bold text-primary hover:underline">
-                    手機請點此開啟 LINE（桌機請改用掃描）
+          <div className="w-full space-y-3 text-left">
+            {/* Step 1 — add friend */}
+            <div className="flex items-start gap-2.5">
+              <span className="shrink-0 w-5 h-5 mt-0.5 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center">1</span>
+              <div className="flex-1">
+                <p className="text-sm text-on-surface leading-relaxed">還不是好友？先加入機器人</p>
+                {data?.addFriendUrl && (
+                  <a href={data.addFriendUrl} target="_blank" rel="noopener noreferrer"
+                    className="mt-1.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold text-white bg-[#06C755] hover:brightness-95 transition-all no-underline">
+                    <span className="material-symbols-outlined text-[16px]">person_add</span>加入好友
                   </a>
                 )}
               </div>
+            </div>
+            {/* Step 2 — scan & bind */}
+            <div className="flex items-start gap-2.5">
+              <span className="shrink-0 w-5 h-5 mt-0.5 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center">2</span>
+              <p className="flex-1 text-sm text-on-surface leading-relaxed">用手機 LINE 掃描右方 QR，點「傳送」即完成綁定</p>
+            </div>
+
+            {data?.code && (
+              <div className="flex items-center gap-2 pt-2.5 mt-1 border-t border-outline-variant/10">
+                <span className="text-[11px] uppercase tracking-wider text-on-surface-variant/70 font-bold">綁定碼</span>
+                <span className="text-sm font-mono text-on-surface tracking-[0.18em]">{data.code}</span>
+                {data.lineUrl && (
+                  <a href={data.lineUrl} className="ml-auto text-xs font-bold text-primary hover:underline">手機開啟</a>
+                )}
+              </div>
             )}
-          </>
+          </div>
         )}
 
         {linked && linkedName && (
@@ -140,7 +154,7 @@ export function LineQrPanel({ title, caption, hint = '請用手機的 LINE 掃�
       </div>
 
       {/* Right column — QR / spinner / error / linked-success canvas. */}
-      <div className="relative w-[220px] h-[220px] shrink-0 mx-auto md:mx-0 bg-white rounded-2xl border border-outline-variant/20 shadow-sm flex items-center justify-center">
+      <div className="relative w-[220px] h-[220px] shrink-0 mx-auto @xl:mx-0 bg-white rounded-2xl border border-outline-variant/20 shadow-sm flex items-center justify-center">
         {linked ? (
           <div className="text-center px-6 space-y-3">
             <div className="mx-auto w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
@@ -166,5 +180,6 @@ export function LineQrPanel({ title, caption, hint = '請用手機的 LINE 掃�
         ) : null}
       </div>
     </section>
+    </div>
   );
 }

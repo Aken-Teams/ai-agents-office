@@ -543,6 +543,15 @@ function ChatContent() {
   // Document mode (split view for file-generation tasks)
   const docMode = useDocumentMode(conversationId);
   const docBlocks = useDocumentBlocks(token);
+
+  // Auto-collapse the left sidebar in document/slides edit mode for more room;
+  // restore the prior state when leaving the mode (or the page).
+  useEffect(() => {
+    if (typeof window === 'undefined' || docMode.viewMode !== 'document') return;
+    const prior = localStorage.getItem('sidebar-collapsed') === '1';
+    window.dispatchEvent(new CustomEvent('sidebar-toggle', { detail: true }));
+    return () => { window.dispatchEvent(new CustomEvent('sidebar-toggle', { detail: prior })); };
+  }, [docMode.viewMode]);
   const [docRebuilding, setDocRebuilding] = useState(false);
   const [docRegenBlockId, setDocRegenBlockId] = useState<string | null>(null);
   const [docRegenContext, setDocRegenContext] = useState<string>('');

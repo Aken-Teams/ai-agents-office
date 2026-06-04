@@ -80,6 +80,18 @@ export interface QrMintResult {
   code: string;
   lineUrl: string;
   qrDataUrl: string;
+  addFriendUrl: string;
+}
+
+/**
+ * The bot's "add friend" deep link. New users should add the bot first so the
+ * bind deep link's pre-filled `/link` message reliably goes through.
+ *   https://line.me/R/ti/p/<basicId>
+ */
+export function buildAddFriendUrl(): string {
+  const basicId = config.line.botBasicId || '';
+  if (!basicId) throw new Error('LINE_BOT_BASIC_ID not configured');
+  return `https://line.me/R/ti/p/${encodeURIComponent(basicId)}`;
 }
 
 /**
@@ -109,7 +121,7 @@ export async function mintBindQrCode(userId: string): Promise<QrMintResult> {
     errorCorrectionLevel: 'M',
     color: { dark: '#1F1B16', light: '#FCFAF7' },
   });
-  return { code, lineUrl, qrDataUrl };
+  return { code, lineUrl, qrDataUrl, addFriendUrl: buildAddFriendUrl() };
 }
 
 /**

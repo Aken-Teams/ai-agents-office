@@ -233,6 +233,17 @@ export default function Navbar() {
     window.dispatchEvent(new CustomEvent('sidebar-toggle', { detail: collapsed }));
   }, [collapsed]);
 
+  // Let other views drive the sidebar (e.g. document edit mode auto-collapses
+  // it for more room). Only update when the value actually changes.
+  useEffect(() => {
+    const onToggle = (e: Event) => {
+      const next = (e as CustomEvent).detail as boolean;
+      setCollapsed(prev => (prev === next ? prev : next));
+    };
+    window.addEventListener('sidebar-toggle', onToggle);
+    return () => window.removeEventListener('sidebar-toggle', onToggle);
+  }, []);
+
   if (!user) return null;
 
   async function handleCreate(skillId: string, templatePrompt?: string) {
