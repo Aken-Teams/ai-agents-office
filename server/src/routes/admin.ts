@@ -11,6 +11,7 @@ import { getUserUsageLimitUsd, setUserUsageLimitUsd, getUserDisplayCost, getEffe
 import { getRolePermissions, setRolePermissions, type RolePermissions } from '../services/rolePermissions.js';
 import { getLineSettings, setLineSetting, type LineSettings } from '../services/lineSettings.js';
 import { getMessageQuotaStatus } from '../services/line/client.js';
+import { deleteAndBlockLineUser, unblockLineUser } from '../services/line/userMapping.js';
 
 const router = Router();
 router.use(adminMiddleware);
@@ -1977,6 +1978,29 @@ router.get('/line/users', async (_req: Request, res: Response) => {
   });
 
   res.json({ users, count: users.length });
+});
+
+// DELETE /api/admin/line/users/:lineUserId — remove a LINE user's binding and
+// blocklist the account so it can no longer chat or re-bind.
+router.delete('/line/users/:lineUserId', async (req: Request, res: Response) => {
+  const lineUserId = String(req.params.lineUserId);
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 255) : null;
+  await deleteAndBlockLineUser(lineUserId, req.user?.userId ?? null, reason);
+  res.json({ success: true });
+});
+
+// GET /api/admin/line/blocklist — accounts blocked from using the bot.
+router.get('/line/blocklist', async (_req: Request, res: Response) => {
+  const rows = await dbAll<{ line_user_id: string; reason: string | null; created_at: string }>(
+    'SELECT line_user_id, reason, created_at FROM line_blocklist ORDER BY created_at DESC',
+  );
+  res.json({ blocked: rows.map(r => ({ lineUserId: r.line_user_id, reason: r.reason, createdAt: r.created_at })) });
+});
+
+// DELETE /api/admin/line/blocklist/:lineUserId — lift a block (re-bindable).
+router.delete('/line/blocklist/:lineUserId', async (req: Request, res: Response) => {
+  await unblockLineUser(String(req.params.lineUserId));
+  res.json({ success: true });
 });
 
 // GET /api/admin/line/message-quota — LINE Official Account monthly push quota.

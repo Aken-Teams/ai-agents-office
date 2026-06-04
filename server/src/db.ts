@@ -569,6 +569,17 @@ export async function initializeDatabase(): Promise<void> {
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    // Blocked LINE accounts. An admin "deletes" a LINE user → their binding is
+    // removed AND they land here, so they can neither chat nor re-bind.
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS line_blocklist (
+        line_user_id  VARCHAR(64) PRIMARY KEY,
+        reason        VARCHAR(255) DEFAULT NULL,
+        blocked_by    VARCHAR(36) DEFAULT NULL,
+        created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
     // ─── end LINE Bot integration tables ─────────────────────────
 
     // ─── Agent Teams (議題 → 團隊) ───────────────────────────────

@@ -38,6 +38,26 @@ export async function setLinePendingSched(lineUserId: string, value: string | nu
   await dbRun('UPDATE line_users SET pending_sched = ? WHERE line_user_id = ?', value, lineUserId);
 }
 
+/** True if this LINE account has been blocked by an admin. */
+export async function isLineBlocked(lineUserId: string): Promise<boolean> {
+  const row = await dbGet<{ line_user_id: string }>('SELECT line_user_id FROM line_blocklist WHERE line_user_id = ?', lineUserId);
+  return !!row;
+}
+
+/**
+ * Admin "delete LINE user": remove the binding AND blocklist the account so it
+ * can neither chat nor re-bind. Idempotent.
+ */
+export async function deleteAndBlockLineUser(lineUserId: string, blockedBy: string | null, reason: string | null): Promise<void> {
+  await dbRun('INSERT IGNORE INTO line_blocklist (line_user_id, reason, blocked_by) VALUES (?, ?, ?)', lineUserId, reason, blockedBy);
+  await dbRun('DELETE FROM line_users WHERE line_user_id = ?', lineUserId);
+}
+
+/** Lift a block so the account can bind/chat again. */
+export async function unblockLineUser(lineUserId: string): Promise<void> {
+  await dbRun('DELETE FROM line_blocklist WHERE line_user_id = ?', lineUserId);
+}
+
 /**
  * Switch which "brain" handles this LINE user's messages: a team id routes
  * through that team's collaboration; null returns to the single rolling
@@ -55,7 +75,7 @@ export async function setLineActiveTeam(lineUserId: string, teamId: string | nul
  * map to friendly LINE replies.
  */
 export class LinkError extends Error {
-  code: 'already_linked' | 'invalid_code' | 'user_already_bound';
+  code: 'already_linked' | 'invalid_code' | 'user_already_bound' | 'blocked';
   constructor(code: LinkError['code'], message: string) {
     super(message);
     this.code = code;
@@ -73,6 +93,10 @@ export async function linkLineUser(opts: {
   inviteCode: string; // the bind token from the QR / `/link <token>`
   displayName: string | null;
 }): Promise<LineUserRow> {
+  if (await isLineBlocked(opts.lineUserId)) {
+    throw new LinkError('blocked', '此 LINE 帳號已被管理員停用，無法綁定');
+  }
+
   const existing = await getLineUser(opts.lineUserId);
   if (existing) {
     throw new LinkError('already_linked', 'LINE 帳號已綁定');

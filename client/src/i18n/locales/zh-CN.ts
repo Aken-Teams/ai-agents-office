@@ -670,6 +670,7 @@ const zhCN = {
   'admin.sidebar.inviteCodes': '邀请码管理',
   'admin.sidebar.orgChart': '组织图',
   'admin.sidebar.analytics': '使用分析',
+  'admin.sidebar.line': 'LINE 管理',
   'admin.sidebar.poweredBy': 'Powered by 智合科技',
   'admin.analytics.title': '使用分析报表',
   'admin.analytics.period7d': '近 7 天',

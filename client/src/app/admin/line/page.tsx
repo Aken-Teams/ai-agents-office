@@ -67,6 +67,10 @@ export default function AdminLinePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<{ lineUserId: string; reason: string | null; createdAt: string }[]>([]);
+  const [delTarget, setDelTarget] = useState<LineUser | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const loadSettings = useCallback(() => {
     if (!token) return;
@@ -102,7 +106,39 @@ export default function AdminLinePage() {
       .catch(() => setQuota({ error: '讀取失敗' }));
   }, [token]);
 
-  useEffect(() => { loadSettings(); loadUsers(); loadQuota(); }, [loadSettings, loadUsers, loadQuota]);
+  const loadBlocklist = useCallback(() => {
+    if (!token) return;
+    fetch('/api/admin/line/blocklist', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then((data: { blocked: { lineUserId: string; reason: string | null; createdAt: string }[] }) => setBlocked(data.blocked || []))
+      .catch(() => {});
+  }, [token]);
+
+  useEffect(() => { loadSettings(); loadUsers(); loadQuota(); loadBlocklist(); }, [loadSettings, loadUsers, loadQuota, loadBlocklist]);
+
+  async function doDeleteUser() {
+    if (!token || !delTarget || busy || isReadonly) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/line/users/${encodeURIComponent(delTarget.lineUserId)}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) { setDelTarget(null); loadUsers(); loadBlocklist(); }
+      else setError('刪除失敗');
+    } catch { setError('刪除失敗（網路錯誤）'); }
+    finally { setBusy(false); }
+  }
+
+  async function doUnblock(lineUserId: string) {
+    if (!token || busy || isReadonly) return;
+    setBusy(true);
+    try {
+      await fetch(`/api/admin/line/blocklist/${encodeURIComponent(lineUserId)}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      loadBlocklist();
+    } finally { setBusy(false); }
+  }
 
   async function saveSettings() {
     if (!token || saving || isReadonly) return;
@@ -144,8 +180,13 @@ export default function AdminLinePage() {
       <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
         <div className="flex items-center gap-2 md:gap-4">
           <span className="text-base md:text-lg font-black text-on-surface font-headline shrink-0">LINE Bot</span>
-          <span className="text-xs md:text-sm text-on-surface-variant font-mono truncate">設定與額度</span>
+          <span className="text-xs md:text-sm text-on-surface-variant font-mono truncate">使用者與額度</span>
         </div>
+        <button onClick={() => setSettingsOpen(true)} title="運行設定與連線資訊"
+          className="flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-bold text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors cursor-pointer">
+          <span className="material-symbols-outlined text-[20px]">settings</span>
+          <span className="hidden md:inline">運行設定</span>
+        </button>
       </header>
 
       <div className="p-4 md:p-8 flex-1 space-y-4 md:space-y-6">
@@ -193,72 +234,6 @@ export default function AdminLinePage() {
           )}
         </div>
 
-        {/* Bot status (read-only) */}
-        <div className="bg-surface-container rounded-lg p-4 md:p-6">
-          <div className="flex items-center gap-3 mb-3 md:mb-4">
-            <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-xl md:text-2xl text-success">smart_toy</span>
-            </div>
-            <div>
-              <h3 className="text-sm md:text-base font-headline font-bold text-on-surface">機器人狀態</h3>
-              <p className="text-xs text-on-surface-variant">下列為環境變數設定(唯讀),需更改請改 .env 後重啟服務。</p>
-            </div>
-            <span className={`ml-auto px-3 py-1 rounded-full text-xs font-bold ${status?.enabled ? 'bg-success/15 text-success' : 'bg-error/15 text-error'}`}>
-              {status?.enabled ? '已啟用' : '已停用'}
-            </span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-xs md:text-sm">
-            <StatusRow label="金鑰設定" value={status?.channelConfigured ? '已設定' : '未設定'} ok={status?.channelConfigured} />
-            <StatusRow label="Channel ID" value={status?.channelId || '—'} />
-            <StatusRow label="Bot ID" value={status?.botBasicId || '—'} />
-            <StatusRow label="LIFF ID" value={status?.liffId || '—'} />
-            <StatusRow label="Webhook URL" value={status?.webhookUrl || '—'} mono />
-            <StatusRow label="對外網址" value={status?.publicApiBase || '—'} mono />
-          </div>
-        </div>
-
-        {/* Editable settings */}
-        <div className="bg-surface-container rounded-lg p-4 md:p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="material-symbols-outlined text-xl text-primary">tune</span>
-            <h3 className="text-sm md:text-base font-headline font-bold text-on-surface">運行設定</h3>
-            <span className="text-xs text-on-surface-variant">(儲存後即時生效,不需重啟)</span>
-            {saved && (
-              <span className="ml-auto flex items-center gap-1 text-xs md:text-sm text-success font-bold">
-                <span className="material-symbols-outlined text-sm">check_circle</span>已儲存
-              </span>
-            )}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
-            {FIELDS.map(f => (
-              <div key={f.key}>
-                <label className="text-xs md:text-sm text-on-surface font-medium block mb-1">{f.label}</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number" min={f.min} max={f.max} step={f.step}
-                    value={form[f.key]}
-                    disabled={isReadonly}
-                    onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
-                    className="w-28 md:w-36 px-3 py-2 bg-surface-container-highest text-on-surface text-sm rounded border border-outline-variant/20 focus:border-primary focus:outline-none font-mono disabled:opacity-50"
-                  />
-                  <span className="text-xs text-on-surface-variant">{f.unit}</span>
-                </div>
-                <p className="text-[11px] md:text-xs text-on-surface-variant/70 mt-1 leading-relaxed">{f.hint}</p>
-              </div>
-            ))}
-          </div>
-          {!isReadonly && (
-            <div className="mt-5">
-              <button
-                onClick={saveSettings}
-                disabled={saving}
-                className="px-5 py-2.5 bg-primary text-on-primary text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50"
-              >
-                {saving ? '儲存中…' : '儲存'}
-              </button>
-            </div>
-          )}
-        </div>
 
         {/* LINE users quota table */}
         <div className="bg-surface-container rounded-lg p-4 md:p-6">
@@ -286,6 +261,7 @@ export default function AdminLinePage() {
                     <th className="py-2 px-3 font-medium text-right">剩餘</th>
                     <th className="py-2 px-3 font-medium w-32">用量</th>
                     <th className="py-2 px-3 font-medium">最後訊息</th>
+                    {!isReadonly && <th className="py-2 px-3 font-medium text-right">操作</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -310,6 +286,14 @@ export default function AdminLinePage() {
                         </div>
                       </td>
                       <td className="py-2.5 px-3 text-on-surface-variant whitespace-nowrap">{fmtDate(u.lastMessageAt)}</td>
+                      {!isReadonly && (
+                        <td className="py-2.5 px-3 text-right">
+                          <button onClick={() => setDelTarget(u)} title="刪除並封鎖此 LINE 用戶"
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer">
+                            <span className="material-symbols-outlined text-[18px]">person_remove</span>
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -317,16 +301,140 @@ export default function AdminLinePage() {
             </div>
           )}
         </div>
+
+        {/* Blocklist */}
+        {blocked.length > 0 && (
+          <div className="bg-surface-container rounded-2xl border border-outline-variant/15 p-5 md:p-6 mt-6">
+            <h2 className="font-headline font-bold text-on-surface mb-1 flex items-center gap-2">
+              <span className="material-symbols-outlined text-error text-[20px]">block</span>
+              已封鎖的 LINE 帳號（{blocked.length}）
+            </h2>
+            <p className="text-xs text-on-surface-variant mb-4">這些帳號無法傳訊息給機器人，也無法重新綁定。解除封鎖後即可再次綁定使用。</p>
+            <div className="space-y-2">
+              {blocked.map(b => (
+                <div key={b.lineUserId} className="flex items-center gap-3 p-3 rounded-xl border border-outline-variant/10 bg-surface-container-high/40">
+                  <span className="material-symbols-outlined text-error/70 shrink-0">block</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-mono text-xs text-on-surface truncate">{b.lineUserId}</div>
+                    <div className="text-[11px] text-on-surface-variant">封鎖於 {fmtDate(b.createdAt)}{b.reason ? ` · ${b.reason}` : ''}</div>
+                  </div>
+                  {!isReadonly && (
+                    <button onClick={() => doUnblock(b.lineUserId)} disabled={busy}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold text-primary border border-primary/30 hover:bg-primary/10 transition-colors cursor-pointer disabled:opacity-40">
+                      解除封鎖
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Settings modal — runtime settings (DB) + connection info (.env) */}
+      {settingsOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setSettingsOpen(false)}>
+          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 bg-surface-container-lowest/95 backdrop-blur flex items-center gap-2 px-5 py-4 border-b border-outline-variant/10 z-10">
+              <span className="material-symbols-outlined text-primary">tune</span>
+              <h3 className="text-base font-headline font-bold text-on-surface">LINE 運行設定</h3>
+              <span className={`ml-auto px-2.5 py-1 rounded-full text-xs font-bold ${status?.enabled ? 'bg-success/15 text-success' : 'bg-error/15 text-error'}`}>
+                {status?.enabled ? '已啟用' : '已停用'}
+              </span>
+              <button onClick={() => setSettingsOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="p-5 md:p-6">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant/70 mb-2">運行設定 · 即時生效</p>
+              <div className="rounded-xl border border-outline-variant/15 divide-y divide-outline-variant/10 overflow-hidden">
+                {FIELDS.map(f => (
+                  <div key={f.key} className="flex items-center gap-4 px-4 py-3.5">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-on-surface">{f.label}</div>
+                      <div className="text-xs text-on-surface-variant/70 mt-0.5 leading-relaxed">{f.hint}</div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <input
+                        type="number" min={f.min} max={f.max} step={f.step}
+                        value={form[f.key]}
+                        disabled={isReadonly}
+                        onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                        className="w-20 px-2.5 py-1.5 bg-surface-container-highest text-on-surface text-sm text-right rounded-lg border border-outline-variant/20 focus:border-primary focus:outline-none font-mono disabled:opacity-50"
+                      />
+                      <span className="text-xs text-on-surface-variant w-10">{f.unit}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {!isReadonly && (
+                <div className="mt-4 flex items-center gap-3">
+                  <button onClick={saveSettings} disabled={saving}
+                    className="px-5 py-2.5 bg-primary text-on-primary text-sm font-bold rounded-lg hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50">
+                    {saving ? '儲存中…' : '儲存設定'}
+                  </button>
+                  {saved && (
+                    <span className="flex items-center gap-1 text-sm text-success font-bold">
+                      <span className="material-symbols-outlined text-sm">check_circle</span>已儲存
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant/70 mt-7 mb-2">連線資訊 · 來自 .env（唯讀）</p>
+              <div className="rounded-xl border border-outline-variant/15 px-4 py-1">
+                <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-8">
+                  <CopyField label="金鑰設定" value={status?.channelConfigured ? '已設定' : '未設定'} ok={status?.channelConfigured} copyable={false} />
+                  <CopyField label="Channel ID" value={status?.channelId || '—'} />
+                  <CopyField label="Bot ID" value={status?.botBasicId || '—'} />
+                  <CopyField label="LIFF ID" value={status?.liffId || '—'} />
+                  <div className="md:col-span-2"><CopyField label="Webhook URL" value={status?.webhookUrl || '—'} /></div>
+                  <div className="md:col-span-2"><CopyField label="對外網址" value={status?.publicApiBase || '—'} /></div>
+                </div>
+              </div>
+              <p className="text-[11px] text-on-surface-variant/60 mt-2">需更改連線資訊請改 .env 後重啟服務。</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {delTarget && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => !busy && setDelTarget(null)}>
+          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-headline font-bold text-on-surface mb-2">刪除並封鎖 LINE 用戶</h3>
+            <p className="text-sm text-on-surface-variant mb-1">確定要刪除「{delTarget.displayName || delTarget.email}」的 LINE 綁定嗎？</p>
+            <p className="text-xs text-on-surface-variant mb-5">刪除後，此 LINE 帳號將<strong className="text-error">無法再與機器人對話，也無法重新綁定</strong>，直到你在下方「已封鎖」清單解除。網頁帳號本身不受影響。</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDelTarget(null)} disabled={busy} className="px-4 py-2 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high cursor-pointer disabled:opacity-40">取消</button>
+              <button onClick={doDeleteUser} disabled={busy} className="px-5 py-2 rounded-xl text-sm font-bold text-on-error bg-error hover:bg-error/90 cursor-pointer disabled:opacity-40 flex items-center gap-2">
+                {busy && <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>}
+                刪除並封鎖
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
 
-function StatusRow({ label, value, ok, mono }: { label: string; value: string; ok?: boolean; mono?: boolean }) {
+function CopyField({ label, value, ok, copyable = true }: { label: string; value: string; ok?: boolean; copyable?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const canCopy = copyable && !!value && value !== '—';
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
+  };
   return (
-    <div className="flex items-center justify-between gap-3 py-1 border-b border-outline-variant/8">
-      <span className="text-on-surface-variant shrink-0">{label}</span>
-      <span className={`truncate text-right ${mono ? 'font-mono text-xs' : ''} ${ok === true ? 'text-success' : ok === false ? 'text-error' : 'text-on-surface'}`}>{value}</span>
+    <div className="group flex items-center gap-3 py-2 border-b border-outline-variant/8 last:border-b-0">
+      <span className="text-[11px] text-on-surface-variant shrink-0 w-24">{label}</span>
+      <span className={`flex-1 min-w-0 truncate font-mono text-xs ${ok === true ? 'text-success' : ok === false ? 'text-error' : 'text-on-surface'}`}>{value}</span>
+      {canCopy && (
+        <button onClick={copy} title="複製" className="shrink-0 text-on-surface-variant/0 group-hover:text-on-surface-variant hover:!text-primary transition-colors cursor-pointer">
+          <span className="material-symbols-outlined text-[16px]">{copied ? 'check' : 'content_copy'}</span>
+        </button>
+      )}
     </div>
   );
 }

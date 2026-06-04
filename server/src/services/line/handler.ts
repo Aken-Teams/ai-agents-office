@@ -24,7 +24,7 @@ import { extractMemoryAndSummary } from '../memoryExtractor.js';
 import { getSandboxPath } from '../sandbox.js';
 import { getExistingFilePaths, registerNewFiles } from '../fileManager.js';
 import { config } from '../../config.js';
-import { getLineUser, touchLineUser, setLinePendingSched, type LineUserRow } from './userMapping.js';
+import { getLineUser, touchLineUser, setLinePendingSched, isLineBlocked, type LineUserRow } from './userMapping.js';
 import { getOrCreateLineConversation } from './conversationRouter.js';
 import { checkLineRateLimit } from './rateLimit.js';
 import { parseCommand, handleHelp, handleLink, handleQuota, handleListFiles, handleWebLink, handleUnlinkedGreeting, handleTeams, handleSetTeam, handleSolo, handleNewTeam, handleSchedule, handleDelTeam, handleDelSchedule, handleDelTeamPrompt, handleDelTeamConfirm, handleSchedNew, handleSchedTeam, handleSchedSet, createScheduleFromPending } from './commands.js';
@@ -71,6 +71,9 @@ export type IncomingEvent = IncomingTextEvent | IncomingNonTextEvent | IncomingP
 export async function processIncomingEvent(event: IncomingEvent): Promise<void> {
   const { lineUserId } = event;
   try {
+    // Blocked accounts (deleted by an admin) get no response at all.
+    if (await isLineBlocked(lineUserId)) return;
+
     if (!checkLineRateLimit(lineUserId)) {
       await pushMessage(lineUserId, [{
         type: 'text',

@@ -659,6 +659,7 @@ const en = {
   'admin.sidebar.inviteCodes': 'Invite Codes',
   'admin.sidebar.orgChart': 'Org Chart',
   'admin.sidebar.analytics': 'Usage Analytics',
+  'admin.sidebar.line': 'LINE Management',
   'admin.sidebar.poweredBy': 'Powered by Zhaoi Tech',
   'admin.analytics.title': 'Usage Analytics',
   'admin.analytics.period7d': 'Last 7 Days',
