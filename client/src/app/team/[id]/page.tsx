@@ -423,20 +423,30 @@ function TeamRunContent() {
                     </button>
                   )}
                 </div>
-                {/* Body — only when there's something to show. Pending members
-                    stay compact (header only) so mobile isn't a wall of blanks. */}
+                {/* Body — pending members stay compact (header only). On mobile
+                    we show a short preview + "查看完整分析"; desktop keeps the
+                    scrollable card so the 4-column grid stays uniform. */}
                 {(m.text || m.text2 || m.status !== 'pending') && (
-                  <div className="p-3 text-xs text-on-surface-variant leading-relaxed md:max-h-72 md:overflow-y-auto min-h-[56px]">
-                    {m.text
-                      ? <TeamMarkdown>{m.text}</TeamMarkdown>
-                      : <span className="text-outline italic">分析中…</span>}
-                    {m.text2 && (
-                      <div className="mt-3 rounded-lg bg-tertiary/5 border border-tertiary/15 p-2.5">
-                        <div className="flex items-center gap-1 text-[11px] font-bold text-tertiary mb-1.5">
-                          <span className="material-symbols-outlined text-[13px]">forum</span>回應其他成員
+                  <div className="relative">
+                    <div className="p-3 text-xs text-on-surface-variant leading-relaxed max-h-40 overflow-hidden md:max-h-72 md:overflow-y-auto min-h-[56px]">
+                      {m.text
+                        ? <TeamMarkdown>{m.text}</TeamMarkdown>
+                        : <span className="text-outline italic">分析中…</span>}
+                      {m.text2 && (
+                        <div className="mt-3 rounded-lg bg-tertiary/5 border border-tertiary/15 p-2.5">
+                          <div className="flex items-center gap-1 text-[11px] font-bold text-tertiary mb-1.5">
+                            <span className="material-symbols-outlined text-[13px]">forum</span>回應其他成員
+                          </div>
+                          <TeamMarkdown>{m.text2}</TeamMarkdown>
                         </div>
-                        <TeamMarkdown>{m.text2}</TeamMarkdown>
-                      </div>
+                      )}
+                    </div>
+                    {m.text && (
+                      <button onClick={() => setExpanded({ title: m.name, icon: m.icon || 'smart_toy', text: m.text + (m.text2 ? `\n\n---\n\n**回應其他成員**\n\n${m.text2}` : '') })}
+                        className="md:hidden relative w-full flex items-center justify-center gap-1 py-2 text-xs font-bold text-primary border-t border-outline-variant/10 bg-surface-container cursor-pointer">
+                        <span className="pointer-events-none absolute -top-7 inset-x-0 h-7 bg-gradient-to-t from-surface-container to-transparent" />
+                        查看完整分析<span className="material-symbols-outlined text-[15px]">open_in_full</span>
+                      </button>
                     )}
                   </div>
                 )}
