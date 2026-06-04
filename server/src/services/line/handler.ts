@@ -27,7 +27,7 @@ import { config } from '../../config.js';
 import { getLineUser, touchLineUser, type LineUserRow } from './userMapping.js';
 import { getOrCreateLineConversation } from './conversationRouter.js';
 import { checkLineRateLimit } from './rateLimit.js';
-import { parseCommand, handleHelp, handleLink, handleNew, handleQuota, handleListFiles, handleWebLink, handleUnlinkedGreeting, handleTeams, handleSetTeam, handleSolo, handleNewTeam } from './commands.js';
+import { parseCommand, handleHelp, handleLink, handleQuota, handleListFiles, handleWebLink, handleUnlinkedGreeting, handleTeams, handleSetTeam, handleSolo, handleNewTeam } from './commands.js';
 import { runTeam } from '../teamRun.js';
 import { pushMessage, startLoadingIndicator, fetchMessageContent } from './client.js';
 import { scanUploadedFile, isAllowedExtension } from '../uploadScanner.js';
@@ -116,11 +116,11 @@ export async function processIncomingEvent(event: IncomingEvent): Promise<void> 
 
     // Linked users — quota first, then dispatch.
     if (cmd.kind === 'help')  { await handleHelp(lineUserId); return; }
-    if (cmd.kind === 'new')   { await handleNew(lineUser); return; }
     if (cmd.kind === 'quota') { await handleQuota(lineUser); return; }
     if (cmd.kind === 'teams') { await handleTeams(lineUser); return; }
     if (cmd.kind === 'solo')  { await handleSolo(lineUser); return; }
     if (cmd.kind === 'newteam') { await handleNewTeam(lineUser, cmd.args); return; }
+    if (cmd.kind === 'files') { await handleListFiles(lineUser); return; }
 
     await runConversation(lineUser, event.text);
   } catch (err) {
@@ -145,9 +145,6 @@ async function dispatchPostback(lineUser: LineUserRow, data: string): Promise<vo
   const action = params.get('action') ?? '';
 
   switch (action) {
-    case 'new_conv':
-      await handleNew(lineUser);
-      return;
     case 'list_files':
       await handleListFiles(lineUser);
       return;
@@ -487,6 +484,10 @@ async function runTeamForLine(
 
   const finalText = (result.result && result.result.trim()) || '（團隊未產生結論，請再試一次）';
 
+  // Render any chart fences in the synthesis to PNG images (no conversation —
+  // stored per-user). Same treatment the single-assistant path gives charts.
+  const chartImages = await renderChartsForLine(userId, null, finalText);
+
   // Mint a public share token for the run so the user can open the full,
   // chart-rich report on the web. Mirrors the scheduler's share-link approach.
   let shareUrl = '';
@@ -499,10 +500,13 @@ async function runTeamForLine(
     console.error('[LINE handler] team share mint failed:', err);
   }
 
-  // LINE budget is 5 messages: leave one for the web-report link when present.
-  const textBudget = shareUrl ? 4 : 5;
-  const messages: LineMessage[] = splitForLine(finalText).slice(0, textBudget);
-  if (shareUrl) {
+  // LINE budget is 5 messages, shared between text chunks, chart images, and
+  // the web-report link. Prioritise text, then charts, then the link.
+  const linkCount = shareUrl ? 1 : 0;
+  const textBudget = Math.max(1, 5 - chartImages.length - linkCount);
+  const textMessages = splitForLine(finalText).slice(0, textBudget);
+  const messages: LineMessage[] = [...textMessages, ...chartImages.slice(0, 5 - textMessages.length - linkCount)];
+  if (shareUrl && messages.length < 5) {
     messages.push({
       type: 'text',
       text: `🔗 在網頁看完整報告（含圖表）：\n${shareUrl}`,
@@ -522,15 +526,18 @@ async function runTeamForLine(
  */
 async function renderChartsForLine(
   userId: string,
-  conversationId: string,
+  conversationId: string | null,
   rawText: string,
 ): Promise<LineMessage[]> {
   const { charts } = extractChartBlocks(rawText);
   const renderable = charts.filter(c => (c.kind === 'chart' || c.kind === 'echart') && c.spec).slice(0, 4);
   if (renderable.length === 0) return [];
 
-  const sandboxPath = getSandboxPath(userId, conversationId);
-  const chartsDir = path.join(sandboxPath, '__charts');
+  // Team runs have no conversation — store their charts in a per-user dir and
+  // leave generated_files.conversation_id NULL (the column is nullable).
+  const chartsDir = conversationId
+    ? path.join(getSandboxPath(userId, conversationId), '__charts')
+    : path.join(config.workspaceRoot, userId, '__team_charts');
   fs.mkdirSync(chartsDir, { recursive: true });
 
   const messages: LineMessage[] = [];

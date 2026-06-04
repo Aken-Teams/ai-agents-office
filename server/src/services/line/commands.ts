@@ -10,14 +10,13 @@ import { config } from '../../config.js';
 import { dbGet, dbAll } from '../../db.js';
 import { checkUserUsageLimit } from '../usageLimit.js';
 import { linkLineUser, LinkError, getLineUser, setLineActiveTeam, type LineUserRow } from './userMapping.js';
-import { getOrCreateLineConversation } from './conversationRouter.js';
 import { pushMessage, getUserProfile, type LineTextMessage } from './client.js';
 import { createOrReuseFileShare } from './fileShare.js';
-import { buildFileListFlex, buildUsageFlex, buildTeamPickerFlex, type FileForFlex, type TeamForFlex } from './flex.js';
+import { buildFileListFlex, buildUsageFlex, buildTeamPickerFlex, buildHelpFlex, type FileForFlex, type TeamForFlex } from './flex.js';
 import { createCustomTeam } from '../teamBuilder.js';
 
 export interface ParsedCommand {
-  kind: 'link' | 'new' | 'help' | 'quota' | 'teams' | 'solo' | 'newteam' | 'none';
+  kind: 'link' | 'help' | 'quota' | 'teams' | 'solo' | 'newteam' | 'files' | 'none';
   args: string;
 }
 
@@ -29,7 +28,6 @@ export function parseCommand(text: string): ParsedCommand {
   const [, verb, rest] = m;
   switch (verb.toLowerCase()) {
     case 'link':  return { kind: 'link',  args: rest.trim() };
-    case 'new':   return { kind: 'new',   args: rest.trim() };
     case 'help':  return { kind: 'help',  args: rest.trim() };
     case 'quota': return { kind: 'quota', args: rest.trim() };
     case 'team':  return { kind: 'teams', args: rest.trim() };
@@ -37,31 +35,14 @@ export function parseCommand(text: string): ParsedCommand {
     case 'solo':  return { kind: 'solo',  args: rest.trim() };
     case 'newteam':    return { kind: 'newteam', args: rest.trim() };
     case 'createteam': return { kind: 'newteam', args: rest.trim() };
+    case 'files': return { kind: 'files', args: rest.trim() };
+    case 'file':  return { kind: 'files', args: rest.trim() };
     default:      return { kind: 'none',  args: trimmed };
   }
 }
 
-const HELP_TEXT = [
-  '✨ 您好，這是 AI Agents Office 助理',
-  '',
-  '直接傳訊息即可開始對話。',
-  '我會記住您先前的對話脈絡，並能協助：',
-  '• 撰寫文件、簡報、報表',
-  '• 整理研究與分析資料',
-  '• 回答跨對話的問題',
-  '',
-  '可用指令：',
-  '• /newteam <描述> — 用 AI 幫你建立一個團隊',
-  '• /teams — 選擇用哪個團隊協作回答',
-  '• /solo — 回到單一助手（預設）',
-  '• /new — 開始新的對話',
-  '• /quota — 查看本月用量',
-  '• /help — 顯示這則說明',
-  '• /link <綁定碼> — 綁定網頁帳號（請從網頁產生 QR）',
-].join('\n');
-
 export async function handleHelp(lineUserId: string): Promise<void> {
-  await pushMessage(lineUserId, [{ type: 'text', text: HELP_TEXT }]);
+  await pushMessage(lineUserId, [buildHelpFlex()]);
 }
 
 /**
@@ -211,15 +192,7 @@ export async function handleLink(lineUserId: string, args: string): Promise<void
   // polling and will flip to "已綁定" on its own.
   await pushMessage(lineUserId, [{
     type: 'text',
-    text: '✅ 綁定成功！您的 LINE 已連結到您的帳號，現在可以直接在這裡傳訊息使用 AI 助理。',
-  }]);
-}
-
-export async function handleNew(lineUser: LineUserRow): Promise<void> {
-  await getOrCreateLineConversation(lineUser, { forceNew: true });
-  await pushMessage(lineUser.line_user_id, [{
-    type: 'text',
-    text: '🆕 已開啟新的對話。先前的脈絡會收進記憶供日後參考。',
+    text: '✅ 綁定成功！您的 LINE 已連結到您的帳號。\n\n直接傳訊息就能開始用，例如「幫我分析…」「幫我做一份 PPT」。\n輸入 /help 可看完整教學、/newteam 可請 AI 幫你建專家團隊。',
   }]);
 }
 

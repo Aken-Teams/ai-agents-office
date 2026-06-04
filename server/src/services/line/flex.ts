@@ -200,6 +200,86 @@ function buildFileButtons(f: FileForFlex): Record<string, unknown>[] {
 }
 
 /* ============================================================
+   Help / tutorial
+   ============================================================ */
+
+function helpEyebrow(text: string): Record<string, unknown> {
+  return { type: 'text', text, size: 'xxs', color: PALETTE.caption };
+}
+function helpTitle(text: string): Record<string, unknown> {
+  return { type: 'text', text, size: 'lg', weight: 'bold', color: PALETTE.ink, margin: 'sm' };
+}
+/** A sample line ("「幫我做一份 PPT」") rendered as a soft chip. */
+function helpSample(text: string): Record<string, unknown> {
+  return {
+    type: 'box', layout: 'vertical', margin: 'sm', paddingAll: '8px', backgroundColor: PALETTE.track, cornerRadius: '6px',
+    contents: [{ type: 'text', text, size: 'sm', color: PALETTE.ink, wrap: true }],
+  };
+}
+/** A command row: mono-ish command on top, caption description below. */
+function helpCmd(cmd: string, desc: string): Record<string, unknown> {
+  return {
+    type: 'box', layout: 'vertical', margin: 'md', spacing: 'none',
+    contents: [
+      { type: 'text', text: cmd, size: 'sm', weight: 'bold', color: PALETTE.ink, wrap: true },
+      { type: 'text', text: desc, size: 'xs', color: PALETTE.caption, wrap: true },
+    ],
+  };
+}
+function helpBubble(contents: Record<string, unknown>[]): Record<string, unknown> {
+  return {
+    type: 'bubble', size: 'mega',
+    body: { type: 'box', layout: 'vertical', backgroundColor: PALETTE.background, paddingAll: '20px', contents },
+  };
+}
+
+/** A swipeable 3-card tutorial for /help. */
+export function buildHelpFlex(): LineFlexMessage {
+  const card1 = helpBubble([
+    helpEyebrow('GETTING STARTED'),
+    helpTitle('直接打字就能用'),
+    { type: 'text', text: '把想做的事直接傳給我，例如：', size: 'xs', color: PALETTE.caption, wrap: true, margin: 'md' },
+    helpSample('幫我分析台積電最近的營運'),
+    helpSample('幫我做一份產品簡報 PPT'),
+    helpSample('把上面結論整理成 Word'),
+    { type: 'separator', margin: 'lg', color: PALETTE.divider },
+    { type: 'text', text: '完成的檔案會直接傳給你，並記住對話脈絡可接續追問。', size: 'xs', color: PALETTE.caption, wrap: true, margin: 'md' },
+  ]);
+
+  const card2 = helpBubble([
+    helpEyebrow('TWO MODES'),
+    helpTitle('兩種模式'),
+    { type: 'box', layout: 'vertical', margin: 'md', paddingAll: '10px', backgroundColor: PALETTE.track, cornerRadius: '8px', contents: [
+      { type: 'text', text: '① 單一助手（預設）', size: 'sm', weight: 'bold', color: PALETTE.ink },
+      { type: 'text', text: '快、省、有記憶，適合日常問答與產檔。', size: 'xs', color: PALETTE.caption, wrap: true, margin: 'sm' },
+    ] },
+    { type: 'box', layout: 'vertical', margin: 'md', paddingAll: '10px', backgroundColor: PALETTE.track, cornerRadius: '8px', contents: [
+      { type: 'text', text: '② 團隊協作', size: 'sm', weight: 'bold', color: PALETTE.ink },
+      { type: 'text', text: '多位 AI 專家一起分析再給統整結論，適合需要多角度的深入題目（較花時間與用量），附網頁完整報告連結。', size: 'xs', color: PALETTE.caption, wrap: true, margin: 'sm' },
+    ] },
+    { type: 'text', text: '用 /newteam 或 /teams 切換到團隊；/solo 回單一助手。', size: 'xs', color: PALETTE.caption, wrap: true, margin: 'lg' },
+  ]);
+
+  const card3 = helpBubble([
+    helpEyebrow('COMMANDS'),
+    helpTitle('指令速查'),
+    helpCmd('/newteam <描述>', '用 AI 幫你建一個團隊並切換'),
+    helpCmd('/teams', '列出你的團隊，點按鈕切換'),
+    helpCmd('/solo', '切回單一助手'),
+    helpCmd('/files', '列出我幫你產生過的檔案'),
+    helpCmd('/quota', '查本月用量與額度'),
+    helpCmd('/help', '再看這份教學'),
+    helpCmd('/link <碼>', '綁定網頁帳號（通常掃 QR 自動完成）'),
+  ]);
+
+  return {
+    type: 'flex',
+    altText: '使用教學：直接打字就能用，/newteam 建團隊、/teams 切換、/files 看檔案',
+    contents: { type: 'carousel', contents: [card1, card2, card3] },
+  };
+}
+
+/* ============================================================
    Team picker
    ============================================================ */
 

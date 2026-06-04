@@ -72,6 +72,12 @@ export function stripMarkdown(text: string): string {
 
   s = s.replace(/`([^`\n]+)`/g, '$1');
 
+  // LINE has no highlight (==mark==). Flatten any bold inside the highlight,
+  // then wrap the phrase in 〔〕 so it still reads as the key point without the
+  // raw == markers leaking through. Done before bold so we don't double-bracket.
+  s = s.replace(/==\s*(.+?)\s*==/g, (_m, inner: string) =>
+    `〔${inner.replace(/\*\*([^*\n]+?)\*\*/g, '$1').replace(/__([^_\n]+?)__/g, '$1')}〕`);
+
   // LINE has no bold / italic — substitute Chinese brackets so emphasized
   // text still reads as visually distinct rather than blending into the
   // surrounding plain text.
