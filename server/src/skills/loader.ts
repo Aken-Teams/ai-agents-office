@@ -192,7 +192,18 @@ export function buildRouterPrompt(routerSkill: SkillDefinition, userLocale: stri
     '',
   ].join('\n');
 
-  return getLanguageInstruction(userLocale) + '\n' + IDENTITY_RULES + '\n' + routerSkill.systemPrompt + teamSection;
+  const liveInfoRule = [
+    '',
+    '## 即時／最新資訊處理（務必嚴格遵守）',
+    '- 你（Router）本身沒有上網能力，也沒有即時資料，你的知識有時效性。',
+    '- 只要使用者要的是「最新／最近／即時／現在」的資訊——例如新聞時事、股價、匯率、財報數字、賽事、天氣、任何會隨時間變動的事實——你**絕對不可以憑記憶直接回答**（會給出過時或捏造的內容）。',
+    '- 這類需求**必須委派給 research 技能**（它會用網路搜尋查證並附上來源網址）。委派時把使用者的主題明確寫清楚。',
+    '- 只有「不需要即時資料」的一般問答、寫作、改寫、整理、規劃、解釋概念，才可以由你直接回答。',
+    '- 直接回答時，若引用了具體事實或數據，也要誠實標示是否為即時查證；不要假裝有查到最新資料。',
+    '',
+  ].join('\n');
+
+  return getLanguageInstruction(userLocale) + '\n' + IDENTITY_RULES + '\n' + routerSkill.systemPrompt + teamSection + liveInfoRule;
 }
 
 /**

@@ -285,12 +285,22 @@ export class Orchestrator {
           .map((r, i) => `### Task ${i + 1} Result:\n${truncateResultForRouter(r)}`)
           .join('\n\n');
 
-        let instruction = 'Please summarize the results for the user. If more tasks are needed, dispatch them. Otherwise, provide a final response.\n\nIMPORTANT: If the results contain fenced code blocks (```chart, ```mermaid, ```mindmap, ```map), you MUST include them VERBATIM in your response — do NOT describe them in text, do NOT omit them, do NOT paraphrase them. These code blocks render as interactive visualizations for the user.';
+        // Per-task truncation can cut off the "資料來源" list (it sits at the end
+        // of research output). Pull every URL from the FULL results so the Router
+        // can rebuild a complete sources section even after truncation.
+        const urls = Array.from(new Set(
+          taskResults.flatMap(r => (r.match(/https?:\/\/[^\s)\]>"'，。、；）】}]+/g) || []).map(u => u.replace(/[.,;:、，。）]+$/, ''))),
+        ));
+        const sourcesBlock = urls.length
+          ? `\n\n【任務查到的資料來源網址（若你的回覆有引用這些資料，務必整合到回覆最後的「資料來源」段落，去重列出）】\n${urls.map(u => `- ${u}`).join('\n')}`
+          : '';
+
+        let instruction = 'Please summarize the results for the user. If more tasks are needed, dispatch them. Otherwise, provide a final response.\n\nIMPORTANT: If the results contain fenced code blocks (```chart, ```mermaid, ```mindmap, ```map), you MUST include them VERBATIM in your response — do NOT describe them in text, do NOT omit them, do NOT paraphrase them. These code blocks render as interactive visualizations for the user.\n\n資料來源：若上面結果是經由網路搜尋查證得到的（含資料來源網址），你的最終回覆**必須**在結尾加上「資料來源」段落，逐條列出實際引用的網址（去重）。不要捏造來源，也不要省略真實查到的來源。';
         if (hasFailures) {
           instruction = 'Some tasks failed or were skipped. Summarize what succeeded and what failed for the user. Do NOT retry failed tasks — just report the status clearly. Provide a final response.';
         }
 
-        currentMessage = `Here are the results from the tasks you dispatched:\n\n${resultsSummary}\n\n${instruction}`;
+        currentMessage = `Here are the results from the tasks you dispatched:\n\n${resultsSummary}${sourcesBlock}\n\n${instruction}`;
       } else {
         break;
       }
