@@ -342,6 +342,7 @@ export function buildTeamPickerFlex(teams: TeamForFlex[], activeTeamId: string |
         type: 'box',
         layout: 'vertical',
         paddingAll: '12px',
+        spacing: 'sm',
         backgroundColor: PALETTE.background,
         contents: [
           {
@@ -354,6 +355,17 @@ export function buildTeamPickerFlex(teams: TeamForFlex[], activeTeamId: string |
               label: activeTeamId ? '回到單一助手' : '✓ 單一助手（目前）',
               data: 'action=solo',
               displayText: '回到單一助手',
+            },
+          },
+          {
+            type: 'button',
+            style: 'secondary',
+            height: 'sm',
+            action: {
+              type: 'postback',
+              label: '🗑 刪除團隊',
+              data: 'action=delteam',
+              displayText: '刪除團隊',
             },
           },
         ],

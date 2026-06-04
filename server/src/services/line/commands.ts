@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { config } from '../../config.js';
 import { dbGet, dbAll, dbRun } from '../../db.js';
 import { checkUserUsageLimit } from '../usageLimit.js';
-import { linkLineUser, LinkError, getLineUser, setLineActiveTeam, type LineUserRow } from './userMapping.js';
+import { linkLineUser, LinkError, getLineUser, setLineActiveTeam, setLinePendingSched, type LineUserRow } from './userMapping.js';
 import { pushMessage, getUserProfile, type LineTextMessage } from './client.js';
 import { createOrReuseFileShare } from './fileShare.js';
 import { buildFileListFlex, buildUsageFlex, buildTeamPickerFlex, buildHelpFlex, buildScheduleListFlex, buildTeamDeleteFlex, buildConfirmTeamDeleteFlex, buildSchedTeamPickerFlex, buildSchedTimeFlex, type FileForFlex, type TeamForFlex, type ScheduleForFlex } from './flex.js';
@@ -312,30 +312,59 @@ export async function handleSchedTeam(lineUser: LineUserRow, teamId: string): Pr
   await pushMessage(lineUser.line_user_id, [buildSchedTimeFlex(team.id, team.title)]);
 }
 
-/** Button flow step 3: create a daily schedule at the chosen time. Question
- *  defaults to the team's original topic so no typing is needed. */
+/** Button flow step 3: time chosen → ask what to analyse (free text). The
+ *  team + time are stashed in pending_sched; the next message is the topic. */
 export async function handleSchedSet(lineUser: LineUserRow, teamId: string, hhmm: string): Promise<void> {
   const m = /^(\d{2})(\d{2})$/.exec(hhmm);
   if (!m) { await pushMessage(lineUser.line_user_id, [{ type: 'text', text: '時間格式錯誤，請用 /schedule 重新開始。' }]); return; }
   const hour = Math.max(0, Math.min(23, Number(m[1])));
   const minute = Math.max(0, Math.min(59, Number(m[2])));
 
-  const team = await dbGet<{ id: string; title: string; topic: string | null }>('SELECT id, title, topic FROM agent_teams WHERE id = ? AND user_id = ?', teamId, lineUser.internal_user_id);
+  const team = await dbGet<{ id: string; title: string }>('SELECT id, title FROM agent_teams WHERE id = ? AND user_id = ?', teamId, lineUser.internal_user_id);
   if (!team) { await pushMessage(lineUser.line_user_id, [{ type: 'text', text: '找不到這個團隊，可能已被刪除。' }]); return; }
-  const userRow = await dbGet<{ email: string }>('SELECT email FROM users WHERE id = ?', lineUser.internal_user_id);
-  if (!userRow?.email) { await pushMessage(lineUser.line_user_id, [{ type: 'text', text: '找不到你的帳號 email，無法寄送排程報告，請聯繫管理員。' }]); return; }
 
-  const question = team.topic?.trim() || DAILY_UPDATE_QUESTION;
-  const next = computeNextRun('daily', hour, minute, null);
-  const id = uuidv4();
+  await setLinePendingSched(lineUser.line_user_id, JSON.stringify({ teamId: team.id, hour, minute, ts: Date.now() }));
+  await pushMessage(lineUser.line_user_id, [{
+    type: 'text',
+    text: `好，最後一步！\n團隊「${team.title}」每天 ${pad2(hour)}:${pad2(minute)} 要分析什麼？\n\n直接打字輸入議題，例如：「今天的台股盤勢與我持股的風險」。\n（想用團隊原本的主題就回覆「預設」。）`,
+  }]);
+}
+
+/**
+ * The user typed the analysis topic for a pending schedule (set by
+ * handleSchedSet). Creates the daily schedule. Returns false (without acting)
+ * if the pending state is missing or older than 30 min, so the caller can treat
+ * the message as a normal question instead.
+ */
+export async function createScheduleFromPending(lineUser: LineUserRow, topicText: string): Promise<boolean> {
+  if (!lineUser.pending_sched) return false;
+  let pend: { teamId?: string; hour?: number; minute?: number; ts?: number };
+  try { pend = JSON.parse(lineUser.pending_sched); } catch { await setLinePendingSched(lineUser.line_user_id, null); return false; }
+  if (!pend.teamId || pend.hour == null || pend.minute == null || !pend.ts || Date.now() - pend.ts > 30 * 60 * 1000) {
+    await setLinePendingSched(lineUser.line_user_id, null);
+    return false;
+  }
+
+  const team = await dbGet<{ id: string; title: string; topic: string | null }>('SELECT id, title, topic FROM agent_teams WHERE id = ? AND user_id = ?', pend.teamId, lineUser.internal_user_id);
+  const userRow = await dbGet<{ email: string }>('SELECT email FROM users WHERE id = ?', lineUser.internal_user_id);
+  await setLinePendingSched(lineUser.line_user_id, null);
+  if (!team) { await pushMessage(lineUser.line_user_id, [{ type: 'text', text: '找不到該團隊，排程已取消，請重新設定。' }]); return true; }
+  if (!userRow?.email) { await pushMessage(lineUser.line_user_id, [{ type: 'text', text: '找不到你的帳號 email，無法寄送排程報告，請聯繫管理員。' }]); return true; }
+
+  const raw = topicText.trim();
+  const usePreset = /^(預設|preset|default|主題)$/i.test(raw) || !raw;
+  const question = usePreset ? (team.topic?.trim() || DAILY_UPDATE_QUESTION) : raw;
+
+  const next = computeNextRun('daily', pend.hour, pend.minute, null);
   await dbRun(
     'INSERT INTO team_schedules (id, team_id, user_id, name, question, frequency, hour, minute, day_of_week, email, next_run_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    id, team.id, lineUser.internal_user_id, `${team.title} 每日更新`, question, 'daily', hour, minute, null, userRow.email, mysqlDateTime(next),
+    uuidv4(), team.id, lineUser.internal_user_id, `${team.title} 每日更新`, question, 'daily', pend.hour, pend.minute, null, userRow.email, mysqlDateTime(next),
   );
   await pushMessage(lineUser.line_user_id, [{
     type: 'text',
-    text: `✅ 已設定：團隊「${team.title}」每天 ${pad2(hour)}:${pad2(minute)} 自動分析\n議題：${question}\n結果會寄到 ${userRow.email} 並推送到這裡。\n下次執行：${next.toLocaleString()}\n\n用 /schedule 可查看或刪除。`,
+    text: `✅ 已設定：團隊「${team.title}」每天 ${pad2(pend.hour)}:${pad2(pend.minute)} 自動分析\n議題：${question}\n結果會寄到 ${userRow.email} 並推送到這裡。\n下次執行：${next.toLocaleString()}\n\n用 /schedule 可查看或刪除。`,
   }]);
+  return true;
 }
 
 /** Show the team list with delete buttons (`/delteam`). */

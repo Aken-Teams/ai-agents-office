@@ -20,16 +20,22 @@ export interface LineUserRow {
   linked_via: string;
   current_conv_id: string | null;
   active_team_id: string | null;
+  pending_sched: string | null;
   last_message_at: string;
   created_at: string;
 }
 
 export async function getLineUser(lineUserId: string): Promise<LineUserRow | null> {
   const row = await dbGet<LineUserRow>(
-    'SELECT line_user_id, internal_user_id, display_name, linked_via, current_conv_id, active_team_id, last_message_at, created_at FROM line_users WHERE line_user_id = ?',
+    'SELECT line_user_id, internal_user_id, display_name, linked_via, current_conv_id, active_team_id, pending_sched, last_message_at, created_at FROM line_users WHERE line_user_id = ?',
     lineUserId,
   );
   return row ?? null;
+}
+
+/** Store (or clear) the pending multi-step state JSON for this LINE user. */
+export async function setLinePendingSched(lineUserId: string, value: string | null): Promise<void> {
+  await dbRun('UPDATE line_users SET pending_sched = ? WHERE line_user_id = ?', value, lineUserId);
 }
 
 /**

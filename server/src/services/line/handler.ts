@@ -24,10 +24,10 @@ import { extractMemoryAndSummary } from '../memoryExtractor.js';
 import { getSandboxPath } from '../sandbox.js';
 import { getExistingFilePaths, registerNewFiles } from '../fileManager.js';
 import { config } from '../../config.js';
-import { getLineUser, touchLineUser, type LineUserRow } from './userMapping.js';
+import { getLineUser, touchLineUser, setLinePendingSched, type LineUserRow } from './userMapping.js';
 import { getOrCreateLineConversation } from './conversationRouter.js';
 import { checkLineRateLimit } from './rateLimit.js';
-import { parseCommand, handleHelp, handleLink, handleQuota, handleListFiles, handleWebLink, handleUnlinkedGreeting, handleTeams, handleSetTeam, handleSolo, handleNewTeam, handleSchedule, handleDelTeam, handleDelSchedule, handleDelTeamPrompt, handleDelTeamConfirm, handleSchedNew, handleSchedTeam, handleSchedSet } from './commands.js';
+import { parseCommand, handleHelp, handleLink, handleQuota, handleListFiles, handleWebLink, handleUnlinkedGreeting, handleTeams, handleSetTeam, handleSolo, handleNewTeam, handleSchedule, handleDelTeam, handleDelSchedule, handleDelTeamPrompt, handleDelTeamConfirm, handleSchedNew, handleSchedTeam, handleSchedSet, createScheduleFromPending } from './commands.js';
 import { runTeam } from '../teamRun.js';
 import { pushMessage, startLoadingIndicator, fetchMessageContent } from './client.js';
 import { scanUploadedFile, isAllowedExtension } from '../uploadScanner.js';
@@ -114,6 +114,17 @@ export async function processIncomingEvent(event: IncomingEvent): Promise<void> 
       return;
     }
 
+    // Mid-wizard: the schedule flow is waiting for the analysis topic. A plain
+    // message IS the topic; any slash command cancels the wizard and proceeds.
+    if (lineUser.pending_sched) {
+      if (cmd.kind === 'none') {
+        if (await createScheduleFromPending(lineUser, event.text)) return;
+        // expired / invalid — fall through and treat as a normal message
+      } else {
+        await setLinePendingSched(lineUserId, null);
+      }
+    }
+
     // Linked users — quota first, then dispatch.
     if (cmd.kind === 'help')  { await handleHelp(lineUserId); return; }
     if (cmd.kind === 'quota') { await handleQuota(lineUser); return; }
@@ -183,6 +194,9 @@ async function dispatchPostback(lineUser: LineUserRow, data: string): Promise<vo
       return;
     case 'sched_set':
       await handleSchedSet(lineUser, params.get('team') ?? '', params.get('t') ?? '');
+      return;
+    case 'delteam':
+      await handleDelTeam(lineUser);
       return;
     case 'del_team':
       await handleDelTeamPrompt(lineUser, params.get('team') ?? '');

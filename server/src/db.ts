@@ -520,6 +520,11 @@ export async function initializeDatabase(): Promise<void> {
     try {
       await conn.query('ALTER TABLE line_users ADD COLUMN active_team_id VARCHAR(36) DEFAULT NULL AFTER current_conv_id');
     } catch { /* column already exists */ }
+    // Pending multi-step state (JSON), e.g. the schedule wizard waiting for the
+    // user to type the analysis topic after picking a team + time.
+    try {
+      await conn.query('ALTER TABLE line_users ADD COLUMN pending_sched VARCHAR(512) DEFAULT NULL');
+    } catch { /* column already exists */ }
 
     // Token-based public file download (mirrors conversation_shares pattern).
     // Used to push LINE-friendly download URLs without requiring auth.
