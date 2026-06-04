@@ -13,6 +13,7 @@ import { checkUserUsageLimit } from '../usageLimit.js';
 import { linkLineUser, LinkError, getLineUser, setLineActiveTeam, setLinePendingSched, type LineUserRow } from './userMapping.js';
 import { pushMessage, getUserProfile, type LineTextMessage } from './client.js';
 import { createOrReuseFileShare } from './fileShare.js';
+import { peekBindToken, markBindTokenConflict } from './qrAuth.js';
 import { buildFileListFlex, buildUsageFlex, buildTeamPickerFlex, buildHelpFlex, buildScheduleListFlex, buildTeamDeleteFlex, buildConfirmTeamDeleteFlex, buildSchedTeamPickerFlex, buildSchedTimeFlex, type FileForFlex, type TeamForFlex, type ScheduleForFlex } from './flex.js';
 import { createCustomTeam } from '../teamBuilder.js';
 import { computeNextRun, mysqlDateTime } from '../teamScheduler.js';
@@ -155,10 +156,20 @@ export async function handleSolo(lineUser: LineUserRow): Promise<void> {
 export async function handleLink(lineUserId: string, args: string): Promise<void> {
   const inviteCode = args.split(/\s+/)[0] || '';
 
-  // Already-linked → just confirm. No web-login link: the account was bound
-  // from an already-logged-in web session, so there's nothing to log into.
+  // One LINE ↔ one account. If this LINE is already bound, a scan carrying a
+  // bind code for a DIFFERENT account is a conflict → fail clearly (and flag the
+  // token so the other account's web QR page shows the failure too).
   const existing = await getLineUser(lineUserId);
   if (existing) {
+    const target = inviteCode ? await peekBindToken(inviteCode) : null;
+    if (target && target !== existing.internal_user_id) {
+      await markBindTokenConflict(inviteCode);
+      await pushMessage(lineUserId, [{
+        type: 'text',
+        text: '❌ 綁定失敗：此 LINE 已綁定其他帳號。\n\n一個 LINE 只能綁定一個帳號。若要改綁，請先到原帳號的網頁解除綁定後再試。',
+      }]);
+      return;
+    }
     await pushMessage(lineUserId, [{
       type: 'text',
       text: '✅ 您的 LINE 已綁定帳號，直接傳訊息即可開始對話。',

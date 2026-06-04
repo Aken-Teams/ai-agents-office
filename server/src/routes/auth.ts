@@ -1064,7 +1064,14 @@ router.get('/line-link-status', authMiddleware, async (req: Request, res: Respon
     'SELECT display_name FROM line_users WHERE internal_user_id = ?',
     req.user!.userId,
   );
-  res.json({ linked: !!bound, displayName: bound?.display_name ?? null });
+  if (bound) { res.json({ linked: true, displayName: bound.display_name ?? null }); return; }
+  // Not bound yet — surface a conflict if the most recent QR was scanned by a
+  // LINE that's already bound to another account.
+  const latest = await dbGet<{ result: string | null }>(
+    'SELECT result FROM line_link_tokens WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
+    req.user!.userId,
+  );
+  res.json({ linked: false, displayName: null, conflict: latest?.result === 'conflict' });
 });
 
 export default router;

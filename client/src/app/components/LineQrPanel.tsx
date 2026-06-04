@@ -90,6 +90,9 @@ export function LineQrPanel({ title, caption, hint = '請用手機的 LINE 掃�
         if (json.linked) {
           clearInterval(id);
           markLinked(json.displayName ?? null);
+        } else if (json.conflict) {
+          clearInterval(id);
+          setError('此 LINE 已綁定其他帳號，無法綁定。\n請改用其他 LINE，或先到原帳號解除綁定後再試。');
         }
       } catch { /* transient — keep polling */ }
     }, 3000);
@@ -150,7 +153,7 @@ export function LineQrPanel({ title, caption, hint = '請用手機的 LINE 掃�
         ) : error ? (
           <div className="text-center px-5 space-y-3">
             <span className="material-symbols-outlined text-error text-3xl">error</span>
-            <p className="text-xs text-on-surface-variant">{error}</p>
+            <p className="text-xs text-on-surface-variant whitespace-pre-line leading-relaxed">{error}</p>
             <button
               onClick={fetchQr}
               className="text-xs font-bold text-primary hover:underline cursor-pointer"

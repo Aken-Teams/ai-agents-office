@@ -117,6 +117,23 @@ export async function mintBindQrCode(userId: string): Promise<QrMintResult> {
  * unused, not expired). Marks it used atomically so it can't be replayed.
  * Returns null if the code is not a (valid) bind token.
  */
+/**
+ * Look up a bind token's target user WITHOUT consuming it. Used to detect a
+ * conflict (a LINE already bound to a different account scanning a new QR).
+ */
+export async function peekBindToken(code: string): Promise<string | null> {
+  const row = await dbGet<{ user_id: string }>(
+    'SELECT user_id FROM line_link_tokens WHERE code = ? AND used = 0 AND expires_at > UTC_TIMESTAMP()',
+    code,
+  );
+  return row?.user_id ?? null;
+}
+
+/** Mark a token as a failed bind attempt so the web QR page can show it. */
+export async function markBindTokenConflict(code: string): Promise<void> {
+  await dbRun("UPDATE line_link_tokens SET used = 1, result = 'conflict' WHERE code = ?", code);
+}
+
 export async function consumeBindToken(code: string): Promise<string | null> {
   // expires_at is stored in UTC (mysqlNow uses toISOString), so it must be
   // compared against UTC_TIMESTAMP() — NOT NOW(), which returns DB-local time.

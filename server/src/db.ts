@@ -569,12 +569,18 @@ export async function initializeDatabase(): Promise<void> {
         user_id     VARCHAR(36) NOT NULL,
         expires_at  DATETIME NOT NULL,
         used        TINYINT NOT NULL DEFAULT 0,
+        result      VARCHAR(20) DEFAULT NULL,
         created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_line_link_user (user_id),
         INDEX idx_line_link_expires (expires_at),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+    // Existing tokens — add the result column (NULL=pending, 'conflict'=the
+    // scanning LINE was already bound to a different account).
+    try {
+      await conn.query('ALTER TABLE line_link_tokens ADD COLUMN result VARCHAR(20) DEFAULT NULL');
+    } catch { /* column already exists */ }
 
     // Blocked LINE accounts. An admin "deletes" a LINE user → their binding is
     // removed AND they land here, so they can neither chat nor re-bind.
