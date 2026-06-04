@@ -32,7 +32,7 @@ import { runTeam } from '../teamRun.js';
 import { pushMessage, startLoadingIndicator, fetchMessageContent } from './client.js';
 import { scanUploadedFile, isAllowedExtension } from '../uploadScanner.js';
 import { splitForLine, extractChartBlocks } from './formatter.js';
-import { buildGeneratedFilesFlex, type FileForFlex } from './flex.js';
+import { buildGeneratedFilesFlex, buildTeamReportFlex, type FileForFlex } from './flex.js';
 import type { LineMessage } from './client.js';
 import { createOrReuseFileShare } from './fileShare.js';
 import { renderChartToPng } from './chartRenderer.js';
@@ -451,11 +451,12 @@ async function runConversation(lineUser: LineUserRow, message: string): Promise<
       const shares = await Promise.all(
         newFiles.map(async (f): Promise<FileForFlex | null> => {
           try {
-            const { url } = await createOrReuseFileShare({ fileId: f.id, userId });
+            const { url, token } = await createOrReuseFileShare({ fileId: f.id, userId });
             return {
               filename: f.filename,
               fileType: f.file_type,
               url,
+              token,
               createdAt: f.created_at,
               sizeBytes: f.file_size ?? null,
             };
@@ -557,10 +558,7 @@ async function runTeamForLine(
   const textMessages = splitForLine(finalText).slice(0, textBudget);
   const messages: LineMessage[] = [...textMessages, ...chartImages.slice(0, 5 - textMessages.length - linkCount)];
   if (shareUrl && messages.length < 5) {
-    messages.push({
-      type: 'text',
-      text: `🔗 在網頁看完整報告（含圖表）：\n${shareUrl}`,
-    });
+    messages.push(buildTeamReportFlex(shareUrl, `${team.title}・完整報告`));
   }
   await pushMessage(lineUserId, messages.slice(0, 5));
 }

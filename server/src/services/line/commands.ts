@@ -461,7 +461,7 @@ export async function handleListFiles(lineUser: LineUserRow): Promise<void> {
   const items: FileForFlex[] = [];
   for (const f of rows) {
     try {
-      const { url } = await createOrReuseFileShare({
+      const { url, token } = await createOrReuseFileShare({
         fileId: f.id,
         userId: lineUser.internal_user_id,
       });
@@ -469,6 +469,7 @@ export async function handleListFiles(lineUser: LineUserRow): Promise<void> {
         filename: f.filename,
         fileType: f.file_type,
         url,
+        token,
         createdAt: f.created_at,
         sizeBytes: f.file_size,
       });

@@ -43,6 +43,7 @@ export interface FileForFlex {
   filename: string;
   fileType: string;
   url: string;
+  token?: string;
   createdAt?: Date | string | null;
   sizeBytes?: number | null;
 }
@@ -189,13 +190,16 @@ function uriButton(label: string, uri: string, primary: boolean): Record<string,
  *  • other         → 下載
  */
 function buildFileButtons(f: FileForFlex): Record<string, unknown>[] {
+  const downloadBtn = uriButton('下載', downloadUrl(f.url), false);
+  // Primary: open the branded share page (a clean, forwardable URL that previews
+  // the file — Office viewer / PDF / image — and offers download).
+  if (f.token) {
+    return [uriButton('開啟報告', `${WEB_BASE}/share/file/${f.token}`, true), downloadBtn];
+  }
+  // Fallback when no token is available — per-type direct viewer.
   const ext = (f.fileType || extFromFilename(f.filename)).toLowerCase();
-  if (ext === 'pdf' || IMAGE_EXTS.has(ext)) {
-    return [uriButton('觀看', f.url, true), uriButton('下載', downloadUrl(f.url), false)];
-  }
-  if (OFFICE_EXTS.has(ext)) {
-    return [uriButton('線上預覽', officeViewerUrl(f.url), true), uriButton('下載', f.url, false)];
-  }
+  if (ext === 'pdf' || IMAGE_EXTS.has(ext)) return [uriButton('觀看', f.url, true), downloadBtn];
+  if (OFFICE_EXTS.has(ext)) return [uriButton('線上預覽', officeViewerUrl(f.url), true), downloadBtn];
   return [uriButton('下載', f.url, true)];
 }
 
@@ -273,10 +277,54 @@ export function buildHelpFlex(): LineFlexMessage {
     helpCmd('/quota', '查本月用量與額度'),
   ]);
 
+  const card4 = helpBubble([
+    helpEyebrow('MENU BUTTONS'),
+    helpTitle('下方選單怎麼用'),
+    { type: 'text', text: '不想打指令？點聊天室下方的圖文選單：', size: 'xs', color: PALETTE.caption, wrap: true, margin: 'md' },
+    helpCmd('團隊協作', '打開團隊選單，切換或查看你的團隊'),
+    helpCmd('單一助手', '切回單一助手模式'),
+    helpCmd('我的檔案', '列出我幫你產生過的檔案'),
+    helpCmd('本月用量', '查看本月用量與剩餘額度'),
+    helpCmd('使用教學', '再打開這份教學'),
+    helpCmd('排程', '新增 / 查看 / 刪除定時排程'),
+  ]);
+
   return {
     type: 'flex',
     altText: '使用教學：直接打字就能用，/newteam 建團隊、/teams 切換、/files 看檔案',
-    contents: { type: 'carousel', contents: [card1, card2, card3] },
+    contents: { type: 'carousel', contents: [card1, card2, card3, card4] },
+  };
+}
+
+/* ============================================================
+   Team report link
+   ============================================================ */
+
+/** A card linking to the full team-collaboration report (with charts) on the web. */
+export function buildTeamReportFlex(shareUrl: string, title?: string): LineFlexMessage {
+  return {
+    type: 'flex',
+    altText: `團隊協作報告：${title || ''}`.trim(),
+    contents: {
+      type: 'bubble', size: 'kilo',
+      body: {
+        type: 'box', layout: 'vertical', backgroundColor: PALETTE.background, paddingAll: '20px',
+        contents: [
+          { type: 'text', text: '📊 TEAM REPORT', size: 'xxs', color: PALETTE.caption },
+          { type: 'text', text: title || '團隊協作報告', size: 'lg', weight: 'bold', color: PALETTE.ink, wrap: true, margin: 'sm' },
+          { type: 'separator', margin: 'md', color: PALETTE.divider },
+          { type: 'text', text: '完整統整、各成員觀點與圖表都在網頁版報告。', size: 'xs', color: PALETTE.caption, wrap: true, margin: 'md' },
+        ],
+      },
+      footer: {
+        type: 'box', layout: 'vertical', paddingAll: '12px', backgroundColor: PALETTE.background,
+        contents: [
+          { type: 'button', style: 'primary', color: PALETTE.accent, height: 'sm',
+            action: { type: 'uri', label: '查看完整報告', uri: shareUrl } },
+        ],
+      },
+      styles: { footer: { separator: true, separatorColor: PALETTE.divider } },
+    },
   };
 }
 

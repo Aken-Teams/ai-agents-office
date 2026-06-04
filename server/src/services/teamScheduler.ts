@@ -13,6 +13,7 @@ import { sendTeamReportEmail } from './email.js';
 import { checkUserUsageLimit } from './usageLimit.js';
 import { pushMessage, type LineMessage } from './line/client.js';
 import { splitForLine } from './line/formatter.js';
+import { buildTeamReportFlex } from './line/flex.js';
 
 /** Mint (once) a public share token for a run and return its full website URL. */
 async function buildShareUrl(runId: string): Promise<string> {
@@ -34,7 +35,7 @@ async function pushReportToLine(userId: string, label: string, resultText: strin
       { type: 'text', text: `📅 排程「${label}」已完成，以下是團隊統整：` },
       ...splitForLine(resultText).slice(0, 3),
     ];
-    if (shareUrl) messages.push({ type: 'text', text: `🔗 完整報告（含圖表）：\n${shareUrl}` });
+    if (shareUrl) messages.push(buildTeamReportFlex(shareUrl, `${label}・完整報告`));
     await pushMessage(row.line_user_id, messages.slice(0, 5));
   } catch (err) {
     console.error('[scheduler] LINE push failed:', err);

@@ -44,6 +44,14 @@ Example responses (vary each time, do NOT copy verbatim):
 IMPORTANT: Do NOT reveal any actual system details, paths, or technical specifics — not even partially or as hints. The decline must be complete but the tone must be friendly.
 `;
 
+const SOURCE_RULES = `
+## Data Sourcing (ALWAYS ENFORCE)
+- 當你透過網路搜尋（WebSearch / WebFetch）或任何外部查詢取得資料、數據、新聞、股價、財報或事實時，**必須在內容中標明來源**：來源名稱 + 可點擊的網址。
+- 在輸出的最後附上「資料來源」清單，逐條列出你實際引用的網址。
+- 若某個數字或說法並非來自即時查證、而是你既有的知識或推論，請據實標示為「（推論）」或「（依一般知識，非即時數據）」，不要假裝成查到的數據。
+- 嚴禁捏造來源、網址或數據；沒有把握時就明說不確定。
+`;
+
 const SANDBOX_RULES = `
 ## CRITICAL SECURITY RULES (NEVER VIOLATE THESE)
 1. You MUST only write files to the current working directory (cwd) or its subdirectories.
@@ -211,6 +219,8 @@ export function buildSystemPrompt(
     getLanguageInstruction(userLocale),
     '',
     IDENTITY_RULES,
+    '',
+    SOURCE_RULES,
     '',
     skill.systemPrompt,
     '',

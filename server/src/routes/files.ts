@@ -86,6 +86,20 @@ router.get('/share/:token', async (req: Request, res: Response) => {
   fs.createReadStream(filePath).pipe(res);
 });
 
+// GET /api/files/share/:token/info — PUBLIC metadata for the share page (name,
+// type, size). Doesn't count as a download; the raw file route enforces the cap.
+router.get('/share/:token/info', async (req: Request, res: Response) => {
+  const token = String(req.params.token);
+  const row = await dbGet<{ filename: string; file_type: string; file_size: number | null }>(
+    `SELECT gf.filename, gf.file_type, gf.file_size
+     FROM file_shares fs JOIN generated_files gf ON gf.id = fs.file_id
+     WHERE fs.token = ? AND fs.expires_at > NOW() LIMIT 1`,
+    token,
+  );
+  if (!row) { res.status(404).json({ error: '連結已失效或不存在' }); return; }
+  res.json({ filename: row.filename, fileType: (row.file_type || '').toLowerCase(), fileSize: row.file_size });
+});
+
 router.use(authMiddleware);
 
 // GET /api/files — returns only the LATEST version of each file
