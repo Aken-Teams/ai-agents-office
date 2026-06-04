@@ -180,11 +180,11 @@ export default function AdminLinePage() {
         {/* LINE monthly push-message quota (from LINE API) */}
         <div className="bg-surface-container rounded-lg p-4 md:p-6">
           <div className="flex items-center gap-2 mb-3 md:mb-4">
-            <span className="material-symbols-outlined text-xl text-primary">campaign</span>
-            <h3 className="text-sm md:text-base font-headline font-bold text-on-surface">本月推播訊息額度</h3>
-            <span className="text-xs text-on-surface-variant">(LINE 官方帳號；回覆訊息不計入)</span>
-            <button onClick={loadQuota} className="ml-auto text-xs text-on-surface-variant hover:text-primary flex items-center gap-1 cursor-pointer">
-              <span className="material-symbols-outlined text-sm">refresh</span>重新整理
+            <span className="material-symbols-outlined text-xl text-primary shrink-0">campaign</span>
+            <h3 className="text-sm md:text-base font-headline font-bold text-on-surface shrink-0">本月推播訊息額度</h3>
+            <span className="hidden lg:inline text-xs text-on-surface-variant truncate">(LINE 官方帳號；回覆訊息不計入)</span>
+            <button onClick={loadQuota} className="ml-auto shrink-0 text-xs text-on-surface-variant hover:text-primary flex items-center gap-1 cursor-pointer whitespace-nowrap">
+              <span className="material-symbols-outlined text-sm">refresh</span><span className="hidden sm:inline">重新整理</span>
             </button>
           </div>
           {!quota ? (
@@ -221,11 +221,11 @@ export default function AdminLinePage() {
         {/* LINE users quota table */}
         <div className="bg-surface-container rounded-lg p-4 md:p-6">
           <div className="flex items-center gap-2 mb-4">
-            <span className="material-symbols-outlined text-xl text-tertiary">account_balance_wallet</span>
-            <h3 className="text-sm md:text-base font-headline font-bold text-on-surface">LINE 使用者額度</h3>
-            <span className="text-xs text-on-surface-variant">({users.length} 位)</span>
-            <button onClick={loadUsers} className="ml-auto text-xs text-on-surface-variant hover:text-primary flex items-center gap-1 cursor-pointer">
-              <span className="material-symbols-outlined text-sm">refresh</span>重新整理
+            <span className="material-symbols-outlined text-xl text-tertiary shrink-0">account_balance_wallet</span>
+            <h3 className="text-sm md:text-base font-headline font-bold text-on-surface shrink-0">LINE 使用者額度</h3>
+            <span className="text-xs text-on-surface-variant shrink-0">({users.length} 位)</span>
+            <button onClick={loadUsers} className="ml-auto shrink-0 text-xs text-on-surface-variant hover:text-primary flex items-center gap-1 cursor-pointer whitespace-nowrap">
+              <span className="material-symbols-outlined text-sm">refresh</span><span className="hidden sm:inline">重新整理</span>
             </button>
           </div>
 
@@ -234,7 +234,40 @@ export default function AdminLinePage() {
           ) : users.length === 0 ? (
             <p className="text-sm text-on-surface-variant py-6 text-center">目前沒有已綁定的 LINE 使用者。</p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mobile: stacked cards */}
+            <div className="md:hidden space-y-2">
+              {users.map(u => (
+                <div key={u.lineUserId} className={`p-3 rounded-xl border border-outline-variant/10 bg-surface-container-high/30 ${u.disabled ? 'opacity-55' : ''}`}>
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium text-on-surface text-sm truncate">{u.displayName || u.email}</span>
+                        {u.disabled && <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-error/10 text-error">已停用</span>}
+                      </div>
+                      <div className="text-[11px] text-on-surface-variant/70 truncate">{u.email}</div>
+                    </div>
+                    {!isReadonly && (
+                      u.disabled
+                        ? <button onClick={() => setDisabled(u, false)} disabled={busy} className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold text-primary border border-primary/30 hover:bg-primary/10 cursor-pointer disabled:opacity-40">啟用</button>
+                        : <button onClick={() => setDisableTarget(u)} disabled={busy} className="shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-bold text-error border border-error/40 bg-error/5 hover:bg-error/10 cursor-pointer disabled:opacity-40">停用</button>
+                    )}
+                  </div>
+                  <div className="mt-2.5 flex items-center gap-2">
+                    <div className="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                      <div className={`h-full ${barColor(u)}`} style={{ width: `${Math.min(u.pctUsed, 100)}%` }} />
+                    </div>
+                    <span className={`text-[11px] tabular-nums shrink-0 ${u.exceeded ? 'text-error font-bold' : 'text-on-surface-variant'}`}>{u.pctUsed}%</span>
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between text-[11px] text-on-surface-variant">
+                    <span>已用 <span className="font-mono text-on-surface">{money(u.cost)}</span> / {money(u.limit)}</span>
+                    <span className={u.exceeded ? 'text-error font-medium' : ''}>剩餘 {money(u.remaining)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Desktop: full table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-xs md:text-sm">
                 <thead>
                   <tr className="text-on-surface-variant border-b border-outline-variant/15 text-left">
@@ -281,7 +314,7 @@ export default function AdminLinePage() {
                             </button>
                           ) : (
                             <button onClick={() => setDisableTarget(u)} disabled={busy} title="停用此 LINE 用戶"
-                              className="px-3 py-1.5 rounded-lg text-xs font-bold text-on-surface-variant border border-outline-variant/30 hover:text-error hover:border-error/40 transition-colors cursor-pointer disabled:opacity-40">
+                              className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-error border border-error/40 bg-error/5 hover:bg-error/10 transition-colors cursor-pointer disabled:opacity-40">
                               停用
                             </button>
                           )}
@@ -292,14 +325,15 @@ export default function AdminLinePage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
       </div>
 
       {/* Settings modal — runtime settings (DB) + connection info (.env) */}
       {settingsOpen && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setSettingsOpen(false)}>
-          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 md:p-4" onClick={() => setSettingsOpen(false)}>
+          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] md:max-h-[88vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="sticky top-0 bg-surface-container-lowest/95 backdrop-blur flex items-center gap-2 px-5 py-4 border-b border-outline-variant/10 z-10">
               <span className="material-symbols-outlined text-primary">tune</span>
               <h3 className="text-base font-headline font-bold text-on-surface">LINE 運行設定</h3>
