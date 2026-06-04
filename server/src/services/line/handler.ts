@@ -24,7 +24,7 @@ import { extractMemoryAndSummary } from '../memoryExtractor.js';
 import { getSandboxPath } from '../sandbox.js';
 import { getExistingFilePaths, registerNewFiles } from '../fileManager.js';
 import { config } from '../../config.js';
-import { getLineUser, touchLineUser, setLinePendingSched, isLineBlocked, type LineUserRow } from './userMapping.js';
+import { getLineUser, touchLineUser, setLinePendingSched, type LineUserRow } from './userMapping.js';
 import { getOrCreateLineConversation } from './conversationRouter.js';
 import { checkLineRateLimit } from './rateLimit.js';
 import { parseCommand, handleHelp, handleLink, handleQuota, handleListFiles, handleWebLink, handleUnlinkedGreeting, handleTeams, handleSetTeam, handleSolo, handleNewTeam, handleSchedule, handleDelTeam, handleDelSchedule, handleDelTeamPrompt, handleDelTeamConfirm, handleSchedNew, handleSchedTeam, handleSchedSet, createScheduleFromPending } from './commands.js';
@@ -71,13 +71,21 @@ export type IncomingEvent = IncomingTextEvent | IncomingNonTextEvent | IncomingP
 export async function processIncomingEvent(event: IncomingEvent): Promise<void> {
   const { lineUserId } = event;
   try {
-    // Blocked accounts (deleted by an admin) get no response at all.
-    if (await isLineBlocked(lineUserId)) return;
-
     if (!checkLineRateLimit(lineUserId)) {
       await pushMessage(lineUserId, [{
         type: 'text',
         text: `⏳ 訊息頻率過快，每分鐘上限 ${config.line.maxMsgPerMin} 則，請稍候。`,
+      }]);
+      return;
+    }
+
+    // Suspended by an admin — keep the binding but deny access with a clear
+    // message (rather than silently ignoring).
+    const suspended = await getLineUser(lineUserId);
+    if (suspended?.disabled) {
+      await pushMessage(lineUserId, [{
+        type: 'text',
+        text: '⚠️ 您的帳號已被停用，目前沒有使用權限，無法對話。如有疑問請聯繫管理員。',
       }]);
       return;
     }

@@ -11,7 +11,7 @@ import { getUserUsageLimitUsd, setUserUsageLimitUsd, getUserDisplayCost, getEffe
 import { getRolePermissions, setRolePermissions, type RolePermissions } from '../services/rolePermissions.js';
 import { getLineSettings, setLineSetting, type LineSettings } from '../services/lineSettings.js';
 import { getMessageQuotaStatus } from '../services/line/client.js';
-import { deleteAndBlockLineUser, unblockLineUser } from '../services/line/userMapping.js';
+import { setLineUserDisabled } from '../services/line/userMapping.js';
 
 const router = Router();
 router.use(adminMiddleware);
@@ -1934,9 +1934,9 @@ router.get('/line/users', async (_req: Request, res: Response) => {
     line_user_id: string; display_name: string | null; linked_via: string | null;
     last_message_at: string | null; user_id: string; email: string; status: string;
     quota_override: number | null; quota_group_id: string | null; group_limit: number | null;
-    in_tok: number; out_tok: number;
+    in_tok: number; out_tok: number; disabled: number;
   }>(
-    `SELECT lu.line_user_id, lu.display_name, lu.linked_via, lu.last_message_at,
+    `SELECT lu.line_user_id, lu.display_name, lu.linked_via, lu.last_message_at, lu.disabled,
             u.id AS user_id, u.email, u.status, u.quota_override, u.quota_group_id,
             qg.limit_usd AS group_limit,
             COALESCE(tu.in_tok, 0) AS in_tok, COALESCE(tu.out_tok, 0) AS out_tok
@@ -1968,6 +1968,7 @@ router.get('/line/users', async (_req: Request, res: Response) => {
       status: r.status,
       linkedVia: r.linked_via,
       lastMessageAt: r.last_message_at,
+      disabled: !!r.disabled,
       cost: Math.round(cost * 100) / 100,
       limit: Math.round(limit * 100) / 100,
       remaining: Math.round((limit - cost) * 100) / 100,
@@ -1980,26 +1981,17 @@ router.get('/line/users', async (_req: Request, res: Response) => {
   res.json({ users, count: users.length });
 });
 
-// DELETE /api/admin/line/users/:lineUserId — remove a LINE user's binding and
-// blocklist the account so it can no longer chat or re-bind.
-router.delete('/line/users/:lineUserId', async (req: Request, res: Response) => {
-  const lineUserId = String(req.params.lineUserId);
-  const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 255) : null;
-  await deleteAndBlockLineUser(lineUserId, req.user?.userId ?? null, reason);
+// POST /api/admin/line/users/:lineUserId/disable — suspend a LINE user. The
+// binding is kept; they can't chat until re-enabled.
+router.post('/line/users/:lineUserId/disable', async (req: Request, res: Response) => {
+  await setLineUserDisabled(String(req.params.lineUserId), true);
   res.json({ success: true });
 });
 
-// GET /api/admin/line/blocklist — accounts blocked from using the bot.
-router.get('/line/blocklist', async (_req: Request, res: Response) => {
-  const rows = await dbAll<{ line_user_id: string; reason: string | null; created_at: string }>(
-    'SELECT line_user_id, reason, created_at FROM line_blocklist ORDER BY created_at DESC',
-  );
-  res.json({ blocked: rows.map(r => ({ lineUserId: r.line_user_id, reason: r.reason, createdAt: r.created_at })) });
-});
-
-// DELETE /api/admin/line/blocklist/:lineUserId — lift a block (re-bindable).
-router.delete('/line/blocklist/:lineUserId', async (req: Request, res: Response) => {
-  await unblockLineUser(String(req.params.lineUserId));
+// POST /api/admin/line/users/:lineUserId/enable — restore a suspended user to
+// their original access.
+router.post('/line/users/:lineUserId/enable', async (req: Request, res: Response) => {
+  await setLineUserDisabled(String(req.params.lineUserId), false);
   res.json({ success: true });
 });
 

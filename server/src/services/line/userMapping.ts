@@ -21,13 +21,14 @@ export interface LineUserRow {
   current_conv_id: string | null;
   active_team_id: string | null;
   pending_sched: string | null;
+  disabled: number;
   last_message_at: string;
   created_at: string;
 }
 
 export async function getLineUser(lineUserId: string): Promise<LineUserRow | null> {
   const row = await dbGet<LineUserRow>(
-    'SELECT line_user_id, internal_user_id, display_name, linked_via, current_conv_id, active_team_id, pending_sched, last_message_at, created_at FROM line_users WHERE line_user_id = ?',
+    'SELECT line_user_id, internal_user_id, display_name, linked_via, current_conv_id, active_team_id, pending_sched, disabled, last_message_at, created_at FROM line_users WHERE line_user_id = ?',
     lineUserId,
   );
   return row ?? null;
@@ -38,24 +39,13 @@ export async function setLinePendingSched(lineUserId: string, value: string | nu
   await dbRun('UPDATE line_users SET pending_sched = ? WHERE line_user_id = ?', value, lineUserId);
 }
 
-/** True if this LINE account has been blocked by an admin. */
-export async function isLineBlocked(lineUserId: string): Promise<boolean> {
-  const row = await dbGet<{ line_user_id: string }>('SELECT line_user_id FROM line_blocklist WHERE line_user_id = ?', lineUserId);
-  return !!row;
-}
-
 /**
- * Admin "delete LINE user": remove the binding AND blocklist the account so it
- * can neither chat nor re-bind. Idempotent.
+ * Admin "suspend / restore" a LINE user. The binding is kept intact — a
+ * disabled user simply can't chat until re-enabled, then returns to exactly the
+ * state (account, team, history) they had before.
  */
-export async function deleteAndBlockLineUser(lineUserId: string, blockedBy: string | null, reason: string | null): Promise<void> {
-  await dbRun('INSERT IGNORE INTO line_blocklist (line_user_id, reason, blocked_by) VALUES (?, ?, ?)', lineUserId, reason, blockedBy);
-  await dbRun('DELETE FROM line_users WHERE line_user_id = ?', lineUserId);
-}
-
-/** Lift a block so the account can bind/chat again. */
-export async function unblockLineUser(lineUserId: string): Promise<void> {
-  await dbRun('DELETE FROM line_blocklist WHERE line_user_id = ?', lineUserId);
+export async function setLineUserDisabled(lineUserId: string, disabled: boolean): Promise<void> {
+  await dbRun('UPDATE line_users SET disabled = ? WHERE line_user_id = ?', disabled ? 1 : 0, lineUserId);
 }
 
 /**
@@ -93,10 +83,6 @@ export async function linkLineUser(opts: {
   inviteCode: string; // the bind token from the QR / `/link <token>`
   displayName: string | null;
 }): Promise<LineUserRow> {
-  if (await isLineBlocked(opts.lineUserId)) {
-    throw new LinkError('blocked', '此 LINE 帳號已被管理員停用，無法綁定');
-  }
-
   const existing = await getLineUser(opts.lineUserId);
   if (existing) {
     throw new LinkError('already_linked', 'LINE 帳號已綁定');

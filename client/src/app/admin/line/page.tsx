@@ -42,6 +42,7 @@ interface LineUser {
   pctUsed: number;
   exceeded: boolean;
   limitSource: 'personal' | 'group' | 'global';
+  disabled: boolean;
 }
 
 // Editable settings: key, label, hint, range, unit.
@@ -67,8 +68,7 @@ export default function AdminLinePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [blocked, setBlocked] = useState<{ lineUserId: string; reason: string | null; createdAt: string }[]>([]);
-  const [delTarget, setDelTarget] = useState<LineUser | null>(null);
+  const [disableTarget, setDisableTarget] = useState<LineUser | null>(null);
   const [busy, setBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -106,38 +106,21 @@ export default function AdminLinePage() {
       .catch(() => setQuota({ error: '讀取失敗' }));
   }, [token]);
 
-  const loadBlocklist = useCallback(() => {
-    if (!token) return;
-    fetch('/api/admin/line/blocklist', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then((data: { blocked: { lineUserId: string; reason: string | null; createdAt: string }[] }) => setBlocked(data.blocked || []))
-      .catch(() => {});
-  }, [token]);
+  useEffect(() => { loadSettings(); loadUsers(); loadQuota(); }, [loadSettings, loadUsers, loadQuota]);
 
-  useEffect(() => { loadSettings(); loadUsers(); loadQuota(); loadBlocklist(); }, [loadSettings, loadUsers, loadQuota, loadBlocklist]);
-
-  async function doDeleteUser() {
-    if (!token || !delTarget || busy || isReadonly) return;
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/admin/line/users/${encodeURIComponent(delTarget.lineUserId)}`, {
-        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) { setDelTarget(null); loadUsers(); loadBlocklist(); }
-      else setError('刪除失敗');
-    } catch { setError('刪除失敗（網路錯誤）'); }
-    finally { setBusy(false); }
-  }
-
-  async function doUnblock(lineUserId: string) {
+  // Suspend (with confirm) or restore a LINE user. Restoring returns them to
+  // their original access; the binding is never deleted.
+  async function setDisabled(u: LineUser, disabled: boolean) {
     if (!token || busy || isReadonly) return;
     setBusy(true);
     try {
-      await fetch(`/api/admin/line/blocklist/${encodeURIComponent(lineUserId)}`, {
-        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(`/api/admin/line/users/${encodeURIComponent(u.lineUserId)}/${disabled ? 'disable' : 'enable'}`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` },
       });
-      loadBlocklist();
-    } finally { setBusy(false); }
+      if (res.ok) { setDisableTarget(null); loadUsers(); }
+      else setError(disabled ? '停用失敗' : '啟用失敗');
+    } catch { setError('操作失敗（網路錯誤）'); }
+    finally { setBusy(false); }
   }
 
   async function saveSettings() {
@@ -266,9 +249,12 @@ export default function AdminLinePage() {
                 </thead>
                 <tbody>
                   {users.map(u => (
-                    <tr key={u.lineUserId} className="border-b border-outline-variant/8 hover:bg-surface-container-high/40">
+                    <tr key={u.lineUserId} className={`border-b border-outline-variant/8 hover:bg-surface-container-high/40 ${u.disabled ? 'opacity-55' : ''}`}>
                       <td className="py-2.5 pr-3">
-                        <div className="font-medium text-on-surface truncate max-w-[180px]">{u.displayName || u.email}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-medium text-on-surface truncate max-w-[150px]">{u.displayName || u.email}</span>
+                          {u.disabled && <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-error/10 text-error">已停用</span>}
+                        </div>
                         <div className="text-[11px] text-on-surface-variant/70 truncate max-w-[180px]">{u.email}</div>
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono text-on-surface">{money(u.cost)}</td>
@@ -288,10 +274,17 @@ export default function AdminLinePage() {
                       <td className="py-2.5 px-3 text-on-surface-variant whitespace-nowrap">{fmtDate(u.lastMessageAt)}</td>
                       {!isReadonly && (
                         <td className="py-2.5 px-3 text-right">
-                          <button onClick={() => setDelTarget(u)} title="刪除並封鎖此 LINE 用戶"
-                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer">
-                            <span className="material-symbols-outlined text-[18px]">person_remove</span>
-                          </button>
+                          {u.disabled ? (
+                            <button onClick={() => setDisabled(u, false)} disabled={busy} title="恢復使用權限"
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold text-primary border border-primary/30 hover:bg-primary/10 transition-colors cursor-pointer disabled:opacity-40">
+                              啟用
+                            </button>
+                          ) : (
+                            <button onClick={() => setDisableTarget(u)} disabled={busy} title="停用此 LINE 用戶"
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold text-on-surface-variant border border-outline-variant/30 hover:text-error hover:border-error/40 transition-colors cursor-pointer disabled:opacity-40">
+                              停用
+                            </button>
+                          )}
                         </td>
                       )}
                     </tr>
@@ -301,34 +294,6 @@ export default function AdminLinePage() {
             </div>
           )}
         </div>
-
-        {/* Blocklist */}
-        {blocked.length > 0 && (
-          <div className="bg-surface-container rounded-2xl border border-outline-variant/15 p-5 md:p-6 mt-6">
-            <h2 className="font-headline font-bold text-on-surface mb-1 flex items-center gap-2">
-              <span className="material-symbols-outlined text-error text-[20px]">block</span>
-              已封鎖的 LINE 帳號（{blocked.length}）
-            </h2>
-            <p className="text-xs text-on-surface-variant mb-4">這些帳號無法傳訊息給機器人，也無法重新綁定。解除封鎖後即可再次綁定使用。</p>
-            <div className="space-y-2">
-              {blocked.map(b => (
-                <div key={b.lineUserId} className="flex items-center gap-3 p-3 rounded-xl border border-outline-variant/10 bg-surface-container-high/40">
-                  <span className="material-symbols-outlined text-error/70 shrink-0">block</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-mono text-xs text-on-surface truncate">{b.lineUserId}</div>
-                    <div className="text-[11px] text-on-surface-variant">封鎖於 {fmtDate(b.createdAt)}{b.reason ? ` · ${b.reason}` : ''}</div>
-                  </div>
-                  {!isReadonly && (
-                    <button onClick={() => doUnblock(b.lineUserId)} disabled={busy}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold text-primary border border-primary/30 hover:bg-primary/10 transition-colors cursor-pointer disabled:opacity-40">
-                      解除封鎖
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Settings modal — runtime settings (DB) + connection info (.env) */}
@@ -399,18 +364,18 @@ export default function AdminLinePage() {
         </div>
       )}
 
-      {/* Delete confirm */}
-      {delTarget && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => !busy && setDelTarget(null)}>
+      {/* Disable confirm */}
+      {disableTarget && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => !busy && setDisableTarget(null)}>
           <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-headline font-bold text-on-surface mb-2">刪除並封鎖 LINE 用戶</h3>
-            <p className="text-sm text-on-surface-variant mb-1">確定要刪除「{delTarget.displayName || delTarget.email}」的 LINE 綁定嗎？</p>
-            <p className="text-xs text-on-surface-variant mb-5">刪除後，此 LINE 帳號將<strong className="text-error">無法再與機器人對話，也無法重新綁定</strong>，直到你在下方「已封鎖」清單解除。網頁帳號本身不受影響。</p>
+            <h3 className="text-lg font-headline font-bold text-on-surface mb-2">停用 LINE 用戶</h3>
+            <p className="text-sm text-on-surface-variant mb-1">確定要停用「{disableTarget.displayName || disableTarget.email}」嗎？</p>
+            <p className="text-xs text-on-surface-variant mb-5">停用後，此 LINE 帳號傳訊息時會收到「沒有使用權限」的提示，<strong className="text-on-surface">無法對話</strong>。綁定與資料都會保留，<strong className="text-primary">隨時可在此處重新「啟用」</strong>恢復原本權限。</p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setDelTarget(null)} disabled={busy} className="px-4 py-2 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high cursor-pointer disabled:opacity-40">取消</button>
-              <button onClick={doDeleteUser} disabled={busy} className="px-5 py-2 rounded-xl text-sm font-bold text-on-error bg-error hover:bg-error/90 cursor-pointer disabled:opacity-40 flex items-center gap-2">
+              <button onClick={() => setDisableTarget(null)} disabled={busy} className="px-4 py-2 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high cursor-pointer disabled:opacity-40">取消</button>
+              <button onClick={() => setDisabled(disableTarget, true)} disabled={busy} className="px-5 py-2 rounded-xl text-sm font-bold text-on-error bg-error hover:bg-error/90 cursor-pointer disabled:opacity-40 flex items-center gap-2">
                 {busy && <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>}
-                刪除並封鎖
+                停用
               </button>
             </div>
           </div>

@@ -509,6 +509,7 @@ export async function initializeDatabase(): Promise<void> {
         linked_via        VARCHAR(20) NOT NULL DEFAULT 'invite_code',
         current_conv_id   VARCHAR(36),
         active_team_id    VARCHAR(36) DEFAULT NULL,
+        disabled          TINYINT(1) NOT NULL DEFAULT 0,
         last_message_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_line_internal (internal_user_id),
@@ -524,6 +525,11 @@ export async function initializeDatabase(): Promise<void> {
     // user to type the analysis topic after picking a team + time.
     try {
       await conn.query('ALTER TABLE line_users ADD COLUMN pending_sched VARCHAR(512) DEFAULT NULL');
+    } catch { /* column already exists */ }
+    // Admin can suspend a LINE user (keeps the binding; they just can't chat
+    // until re-enabled). Replaces the older delete+blocklist approach.
+    try {
+      await conn.query('ALTER TABLE line_users ADD COLUMN disabled TINYINT(1) NOT NULL DEFAULT 0');
     } catch { /* column already exists */ }
 
     // Token-based public file download (mirrors conversation_shares pattern).
