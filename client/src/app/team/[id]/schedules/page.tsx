@@ -143,7 +143,7 @@ function SchedulesContent() {
 
       <main className={`${sidebarMargin} md:pt-10 pb-16 px-4 md:px-10 transition-all duration-300`}>
         {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
+        <div className="mt-4 md:mt-0 mb-6 flex items-center gap-3">
           <Link href={`/team/${teamId}`} className="w-9 h-9 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer shrink-0">
             <span className="material-symbols-outlined">arrow_back</span>
           </Link>

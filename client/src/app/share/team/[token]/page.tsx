@@ -52,8 +52,8 @@ export default function TeamSharePage() {
   return (
     <div className="min-h-screen bg-surface-container-lowest">
       {expanded && (
-        <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setExpanded(null)}>
-          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-3xl max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 md:p-4" onClick={() => setExpanded(null)}>
+          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] md:max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 p-4 border-b border-outline-variant/10 shrink-0">
               <div className="w-9 h-9 rounded-lg cyber-gradient flex items-center justify-center shrink-0">
                 <span className="material-symbols-outlined text-on-primary text-lg">{expanded.icon}</span>
@@ -63,7 +63,7 @@ export default function TeamSharePage() {
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            <div className="p-6 overflow-y-auto text-sm text-on-surface leading-relaxed">
+            <div className="p-4 md:p-6 overflow-y-auto text-sm text-on-surface leading-relaxed">
               <TeamMarkdown>{expanded.text}</TeamMarkdown>
             </div>
           </div>
@@ -102,7 +102,7 @@ export default function TeamSharePage() {
                   <span className="material-symbols-outlined text-[14px]">open_in_full</span>
                 </button>
               </div>
-              <div className="p-3 text-xs text-on-surface-variant leading-relaxed max-h-80 overflow-y-auto">
+              <div className="p-3 text-xs text-on-surface-variant leading-relaxed md:max-h-80 md:overflow-y-auto">
                 <TeamMarkdown>{m.text}</TeamMarkdown>
                 {m.text2 && (
                   <div className="mt-3 rounded-lg bg-tertiary/5 border border-tertiary/15 p-2.5">
