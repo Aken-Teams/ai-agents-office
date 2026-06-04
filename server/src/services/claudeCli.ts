@@ -116,6 +116,7 @@ export interface ClaudeCliOptions {
   sandboxSubdir?: string;              // Subdirectory within sandbox (e.g. _agents/research)
   useApiKey?: boolean;                 // Internal: force API key auth (set by retry logic)
   model?: string;                      // Override default model (e.g. 'claude-haiku-4-5-20251001' for fast edits)
+  maxTurns?: number;                   // Cap tool-loop turns (e.g. bounded WebSearch for team members)
 }
 
 interface ClaudeResult {
@@ -285,8 +286,11 @@ export function spawnClaude(
   }
   args.push('--disallowedTools', disallowedTools.join(','));
 
-  // Router: limit to 1 turn (no tool loops, just analyze and delegate)
-  if (options.role === 'router') {
+  // Turn cap: an explicit maxTurns wins (e.g. bounded WebSearch for team
+  // members); otherwise routers are limited to a single analyze-and-delegate turn.
+  if (typeof options.maxTurns === 'number' && options.maxTurns > 0) {
+    args.push('--max-turns', String(options.maxTurns));
+  } else if (options.role === 'router') {
     args.push('--max-turns', '1');
   }
 

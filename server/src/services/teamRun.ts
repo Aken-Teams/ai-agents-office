@@ -28,7 +28,7 @@ interface MemberRow { id: string; title: string; icon: string | null; skill_id: 
 const MEMBER_TRUNCATE = 1500;      // chars of each member output fed to the coordinator
 const SHARED_MEMORY_MAX = 2000;    // chars of rolling team memory kept across runs
 const MEMBER_CONCURRENCY = 5;      // parallel Claude processes (covers the ≤5 team cap)
-const MEMBER_TIMEOUT_MS = 150_000;
+const MEMBER_TIMEOUT_MS = 240_000; // round-1 members may web-search → allow more time
 const SYNTH_TIMEOUT_MS = 180_000;
 
 /**
@@ -36,8 +36,9 @@ const SYNTH_TIMEOUT_MS = 180_000;
  * deliberately a little generous.
  */
 export function estimateRunTokens(memberCount: number): { inputTokens: number; outputTokens: number } {
-  // Round 1 (independent) + Round 2 (discussion, larger input — sees peers) + synthesis.
-  const r1In = 900, r1Out = 1200;
+  // Round 1 (independent, with web search — search results inflate input) +
+  // Round 2 (discussion, sees peers) + synthesis.
+  const r1In = 5000, r1Out = 1500;
   const r2In = 2800, r2Out = 1000;
   const synthIn = 700 + memberCount * 500, synthOut = 1500;
   return {
@@ -62,7 +63,10 @@ ${role}${mem}
 請針對使用者提出的議題，從你的專業角度提出分析與觀點：聚焦、具體、有明確結論。
 直接輸出純文字分析即可，不需要產生檔案、不需要客套開場白。
 
-【資料來源原則】若你引用了具體數據、新聞、報價或財報數字，務必標明來源或出處；若只是依你的專業知識推論、未經即時查證，請明確說明「以下為推論，非即時查證數據」。嚴禁捏造數據或來源。
+【上網查證與資料來源】你可以使用網路搜尋工具（WebSearch / WebFetch）查詢最新的數據、新聞、股價、財報等資訊。請主動查證關鍵事實與數字，不要只憑記憶。
+- 凡是查到的數據或說法，務必在內容中標明來源，並在最後附上「資料來源」清單（逐條列出實際引用的網址）。
+- 查不到或無法即時驗證的部分，請據實標示為「（推論／非即時數據）」。
+- 嚴禁捏造數據、來源或網址。為控制時間，搜尋以「關鍵幾項」為主，不需要窮盡。
 
 排版重點：粗體（**）請節制，只標少數真正的關鍵詞，不要整句或大量加粗；把「最重要的 1–2 個結論或數字」用 ==重點== 高亮標示，讓讀者一眼抓到重點。`;
 }
@@ -93,21 +97,26 @@ function runOneClaude(
   systemPrompt: string,
   timeoutMs: number,
   onText: (chunk: string) => void,
+  webSearch = false,
 ): Promise<{ text: string; inputTokens: number; outputTokens: number; model: string }> {
   return new Promise(resolve => {
     let text = '';
     let inputTokens = 0, outputTokens = 0, model = '';
     let finished = false;
 
-    // role:'router' → no tools + single turn. Perfect for cheap, predictable,
-    // file-free reasoning. We override the sandbox to keep team work isolated.
+    // Default: role:'router' → no tools + single turn (cheap, predictable,
+    // file-free reasoning). When webSearch is on (round-1 member analysis), allow
+    // ONLY WebSearch/WebFetch with a bounded turn cap so members can look things
+    // up + cite real sources without unbounded tool loops or file generation.
     const { emitter, abort } = spawnClaude(message, systemPrompt, {
       userId,
       conversationId,
       sessionId: uuidv4(),
       isResume: false,
-      role: 'router',
       sandboxSubdir,
+      ...(webSearch
+        ? { customAllowedTools: ['WebSearch', 'WebFetch'], maxTurns: 6 }
+        : { role: 'router' as const }),
     });
 
     const finish = () => {
@@ -183,6 +192,7 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
       const r = await runOneClaude(
         userId, member.id, `_team/${member.id}`, question, sys, MEMBER_TIMEOUT_MS,
         chunk => writer({ type: 'member_stream', data: { memberId: member.id, content: chunk } }),
+        true, // round-1 members may search the web + cite real sources
       );
       const ok = !!r.text.trim();
       writer({
