@@ -266,10 +266,11 @@ export function buildHelpFlex(): LineFlexMessage {
     helpCmd('/newteam <描述>', '用 AI 幫你建一個團隊並切換'),
     helpCmd('/teams', '列出你的團隊，點按鈕切換'),
     helpCmd('/solo', '切回單一助手'),
+    helpCmd('/schedule 09:00 議題', '設定團隊每天定時自動分析並寄報告'),
+    helpCmd('/schedule', '查看 / 刪除你的排程'),
+    helpCmd('/delteam', '刪除團隊'),
     helpCmd('/files', '列出我幫你產生過的檔案'),
     helpCmd('/quota', '查本月用量與額度'),
-    helpCmd('/help', '再看這份教學'),
-    helpCmd('/link <碼>', '綁定網頁帳號（通常掃 QR 自動完成）'),
   ]);
 
   return {
@@ -358,6 +359,157 @@ export function buildTeamPickerFlex(teams: TeamForFlex[], activeTeamId: string |
         ],
       },
       styles: { footer: { separator: true, separatorColor: PALETTE.divider } },
+    },
+  };
+}
+
+/* ============================================================
+   Schedules
+   ============================================================ */
+
+export interface ScheduleForFlex {
+  id: string;
+  teamTitle: string;
+  summary: string;   // schedule name or question
+  when: string;      // e.g. "每天 09:00"
+  email: string;
+  enabled: boolean;
+}
+
+/** A bubble listing the user's team schedules, each with a delete button. */
+export function buildScheduleListFlex(items: ScheduleForFlex[]): LineFlexMessage {
+  const rows = items.slice(0, MAX_CAROUSEL).map(s => ({
+    type: 'box', layout: 'horizontal', margin: 'md', spacing: 'sm',
+    contents: [
+      { type: 'box', layout: 'vertical', flex: 1, contents: [
+        { type: 'text', text: s.summary, size: 'sm', weight: 'bold', color: PALETTE.ink, wrap: true },
+        { type: 'text', text: `${s.teamTitle}　${s.when}${s.enabled ? '' : '（已停用）'}`, size: 'xs', color: PALETTE.caption, wrap: true },
+        { type: 'text', text: s.email, size: 'xxs', color: PALETTE.caption, wrap: true },
+      ] },
+      { type: 'button', style: 'secondary', height: 'sm', gravity: 'center',
+        action: { type: 'postback', label: '刪除', data: `action=del_schedule&sid=${encodeURIComponent(s.id)}`, displayText: '刪除排程' } },
+    ],
+  } as Record<string, unknown>));
+
+  return {
+    type: 'flex',
+    altText: `你的排程（${items.length} 個）`,
+    contents: {
+      type: 'bubble', size: 'mega',
+      body: { type: 'box', layout: 'vertical', backgroundColor: PALETTE.background, paddingAll: '20px', contents: [
+        { type: 'text', text: 'SCHEDULES', size: 'xxs', color: PALETTE.caption },
+        { type: 'text', text: '我的排程', size: 'lg', weight: 'bold', color: PALETTE.ink, margin: 'sm' },
+        { type: 'separator', margin: 'lg', color: PALETTE.divider },
+        ...(rows.length ? rows : [{ type: 'text', text: '目前沒有排程。', size: 'sm', color: PALETTE.caption, margin: 'md' }]),
+      ] },
+      footer: { type: 'box', layout: 'vertical', paddingAll: '12px', backgroundColor: PALETTE.background, contents: [
+        { type: 'button', style: 'primary', color: PALETTE.accent, height: 'sm',
+          action: { type: 'postback', label: '＋ 新增排程', data: 'action=sched_new', displayText: '新增排程' } },
+      ] },
+      styles: { footer: { separator: true, separatorColor: PALETTE.divider } },
+    },
+  };
+}
+
+/** Step 1 of button-driven schedule creation: pick which team to schedule. */
+export function buildSchedTeamPickerFlex(teams: TeamForFlex[]): LineFlexMessage {
+  const rows = teams.slice(0, MAX_CAROUSEL).map(tm => ({
+    type: 'button', style: 'secondary', height: 'sm', margin: 'sm',
+    action: { type: 'postback', label: tm.title.slice(0, 40), data: `action=sched_team&team=${encodeURIComponent(tm.id)}`, displayText: `排程：${tm.title}` },
+  } as Record<string, unknown>));
+  return {
+    type: 'flex',
+    altText: '新增排程：選擇團隊',
+    contents: {
+      type: 'bubble', size: 'mega',
+      body: { type: 'box', layout: 'vertical', backgroundColor: PALETTE.background, paddingAll: '20px', contents: [
+        { type: 'text', text: 'NEW SCHEDULE · 1/2', size: 'xxs', color: PALETTE.caption },
+        { type: 'text', text: '要排程哪個團隊？', size: 'lg', weight: 'bold', color: PALETTE.ink, margin: 'sm' },
+        { type: 'text', text: '系統會用這個團隊原本的主題當每日分析議題。', size: 'xs', color: PALETTE.caption, wrap: true, margin: 'sm' },
+        { type: 'separator', margin: 'lg', color: PALETTE.divider },
+        ...(rows.length ? rows : [{ type: 'text', text: '你還沒有任何團隊，請先用 /newteam 建立。', size: 'sm', color: PALETTE.caption, wrap: true, margin: 'md' }]),
+      ] },
+    },
+  };
+}
+
+const SCHED_TIMES: Array<[number, number, string]> = [
+  [8, 0, '08:00'], [9, 0, '09:00'], [12, 0, '12:00'], [13, 0, '13:00'],
+  [18, 0, '18:00'], [20, 0, '20:00'], [21, 0, '21:00'], [22, 0, '22:00'],
+];
+
+/** Step 2: pick a time. Each button creates a daily schedule for the team. */
+export function buildSchedTimeFlex(teamId: string, teamTitle: string): LineFlexMessage {
+  const pairs: Array<[number, number, string]>[] = [];
+  for (let i = 0; i < SCHED_TIMES.length; i += 2) pairs.push(SCHED_TIMES.slice(i, i + 2));
+  const rows = pairs.map(pair => ({
+    type: 'box', layout: 'horizontal', spacing: 'sm', margin: 'sm',
+    contents: pair.map(([h, m, label]) => ({
+      type: 'button', style: 'secondary', height: 'sm', flex: 1,
+      action: { type: 'postback', label, data: `action=sched_set&team=${encodeURIComponent(teamId)}&t=${pad2(h)}${pad2(m)}`, displayText: `每天 ${label} 自動分析` },
+    })),
+  } as Record<string, unknown>));
+  return {
+    type: 'flex',
+    altText: '新增排程：選擇時間',
+    contents: {
+      type: 'bubble', size: 'mega',
+      body: { type: 'box', layout: 'vertical', backgroundColor: PALETTE.background, paddingAll: '20px', contents: [
+        { type: 'text', text: 'NEW SCHEDULE · 2/2', size: 'xxs', color: PALETTE.caption },
+        { type: 'text', text: '每天幾點自動分析？', size: 'lg', weight: 'bold', color: PALETTE.ink, margin: 'sm' },
+        { type: 'text', text: `團隊：${teamTitle}`, size: 'xs', color: PALETTE.caption, wrap: true, margin: 'sm' },
+        { type: 'separator', margin: 'lg', color: PALETTE.divider },
+        ...rows,
+        { type: 'text', text: '想要其他時間或自訂議題？輸入：/schedule 07:30 你的議題', size: 'xxs', color: PALETTE.caption, wrap: true, margin: 'lg' },
+      ] },
+    },
+  };
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/* ============================================================
+   Team delete
+   ============================================================ */
+
+/** A bubble listing teams, each with a delete button (asks to confirm). */
+export function buildTeamDeleteFlex(teams: TeamForFlex[]): LineFlexMessage {
+  const rows = teams.slice(0, MAX_CAROUSEL).map(tm => ({
+    type: 'button', style: 'secondary', height: 'sm', margin: 'sm',
+    action: { type: 'postback', label: `🗑 ${tm.title}`.slice(0, 40), data: `action=del_team&team=${encodeURIComponent(tm.id)}`, displayText: `刪除團隊：${tm.title}` },
+  } as Record<string, unknown>));
+
+  return {
+    type: 'flex',
+    altText: '刪除團隊',
+    contents: {
+      type: 'bubble', size: 'mega',
+      body: { type: 'box', layout: 'vertical', backgroundColor: PALETTE.background, paddingAll: '20px', contents: [
+        { type: 'text', text: 'DELETE TEAM', size: 'xxs', color: PALETTE.caption },
+        { type: 'text', text: '刪除團隊', size: 'lg', weight: 'bold', color: PALETTE.ink, margin: 'sm' },
+        { type: 'text', text: '選一個要刪除的團隊（會再跟你確認一次）：', size: 'xs', color: PALETTE.caption, wrap: true, margin: 'sm' },
+        { type: 'separator', margin: 'lg', color: PALETTE.divider },
+        ...(rows.length ? rows : [{ type: 'text', text: '你還沒有任何團隊。', size: 'sm', color: PALETTE.caption, margin: 'md' }]),
+      ] },
+    },
+  };
+}
+
+/** A confirm bubble before actually deleting a team. */
+export function buildConfirmTeamDeleteFlex(teamId: string, teamTitle: string): LineFlexMessage {
+  return {
+    type: 'flex',
+    altText: `確定刪除團隊「${teamTitle}」？`,
+    contents: {
+      type: 'bubble', size: 'kilo',
+      body: { type: 'box', layout: 'vertical', backgroundColor: PALETTE.background, paddingAll: '20px', contents: [
+        { type: 'text', text: `確定刪除團隊「${teamTitle}」？`, size: 'md', weight: 'bold', color: PALETTE.ink, wrap: true },
+        { type: 'text', text: '團隊與其中的成員助手都會被移除（已產生的協作報告會保留）。此動作無法復原。', size: 'xs', color: PALETTE.caption, wrap: true, margin: 'md' },
+      ] },
+      footer: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '12px', backgroundColor: PALETTE.background, contents: [
+        { type: 'button', style: 'primary', color: PALETTE.warn, height: 'sm',
+          action: { type: 'postback', label: '確定刪除', data: `action=del_team_confirm&team=${encodeURIComponent(teamId)}`, displayText: '確定刪除團隊' } },
+      ] },
     },
   };
 }

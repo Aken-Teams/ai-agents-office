@@ -27,7 +27,7 @@ import { config } from '../../config.js';
 import { getLineUser, touchLineUser, type LineUserRow } from './userMapping.js';
 import { getOrCreateLineConversation } from './conversationRouter.js';
 import { checkLineRateLimit } from './rateLimit.js';
-import { parseCommand, handleHelp, handleLink, handleQuota, handleListFiles, handleWebLink, handleUnlinkedGreeting, handleTeams, handleSetTeam, handleSolo, handleNewTeam } from './commands.js';
+import { parseCommand, handleHelp, handleLink, handleQuota, handleListFiles, handleWebLink, handleUnlinkedGreeting, handleTeams, handleSetTeam, handleSolo, handleNewTeam, handleSchedule, handleDelTeam, handleDelSchedule, handleDelTeamPrompt, handleDelTeamConfirm, handleSchedNew, handleSchedTeam, handleSchedSet } from './commands.js';
 import { runTeam } from '../teamRun.js';
 import { pushMessage, startLoadingIndicator, fetchMessageContent } from './client.js';
 import { scanUploadedFile, isAllowedExtension } from '../uploadScanner.js';
@@ -121,6 +121,8 @@ export async function processIncomingEvent(event: IncomingEvent): Promise<void> 
     if (cmd.kind === 'solo')  { await handleSolo(lineUser); return; }
     if (cmd.kind === 'newteam') { await handleNewTeam(lineUser, cmd.args); return; }
     if (cmd.kind === 'files') { await handleListFiles(lineUser); return; }
+    if (cmd.kind === 'schedule') { await handleSchedule(lineUser, cmd.args); return; }
+    if (cmd.kind === 'delteam') { await handleDelTeam(lineUser); return; }
 
     await runConversation(lineUser, event.text);
   } catch (err) {
@@ -169,6 +171,29 @@ async function dispatchPostback(lineUser: LineUserRow, data: string): Promise<vo
     }
     case 'solo':
       await handleSolo(lineUser);
+      return;
+    case 'schedule':
+      await handleSchedule(lineUser, '');
+      return;
+    case 'sched_new':
+      await handleSchedNew(lineUser);
+      return;
+    case 'sched_team':
+      await handleSchedTeam(lineUser, params.get('team') ?? '');
+      return;
+    case 'sched_set':
+      await handleSchedSet(lineUser, params.get('team') ?? '', params.get('t') ?? '');
+      return;
+    case 'del_team':
+      await handleDelTeamPrompt(lineUser, params.get('team') ?? '');
+      return;
+    case 'del_team_confirm': {
+      const fresh = await getLineUser(lineUser.line_user_id);
+      await handleDelTeamConfirm(fresh ?? lineUser, params.get('team') ?? '');
+      return;
+    }
+    case 'del_schedule':
+      await handleDelSchedule(lineUser, params.get('sid') ?? '');
       return;
     default:
       await pushMessage(lineUser.line_user_id, [{

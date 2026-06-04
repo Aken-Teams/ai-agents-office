@@ -11,6 +11,8 @@ import { config } from '../config.js';
 import { runTeam } from './teamRun.js';
 import { sendTeamReportEmail } from './email.js';
 import { checkUserUsageLimit } from './usageLimit.js';
+import { pushMessage, type LineMessage } from './line/client.js';
+import { splitForLine } from './line/formatter.js';
 
 /** Mint (once) a public share token for a run and return its full website URL. */
 async function buildShareUrl(runId: string): Promise<string> {
@@ -18,6 +20,25 @@ async function buildShareUrl(runId: string): Promise<string> {
   await dbRun('UPDATE team_runs SET share_token = ? WHERE id = ? AND share_token IS NULL', token, runId);
   const row = await dbGet<{ share_token: string | null }>('SELECT share_token FROM team_runs WHERE id = ?', runId);
   return `${config.publicWebUrl}/share/team/${row?.share_token || token}`;
+}
+
+/**
+ * If the schedule's owner has a bound LINE account, also push the report to LINE
+ * (not just email). Best-effort — failures are logged and swallowed.
+ */
+async function pushReportToLine(userId: string, label: string, resultText: string, shareUrl: string): Promise<void> {
+  try {
+    const row = await dbGet<{ line_user_id: string }>('SELECT line_user_id FROM line_users WHERE internal_user_id = ?', userId);
+    if (!row?.line_user_id) return;
+    const messages: LineMessage[] = [
+      { type: 'text', text: `📅 排程「${label}」已完成，以下是團隊統整：` },
+      ...splitForLine(resultText).slice(0, 3),
+    ];
+    if (shareUrl) messages.push({ type: 'text', text: `🔗 完整報告（含圖表）：\n${shareUrl}` });
+    await pushMessage(row.line_user_id, messages.slice(0, 5));
+  } catch (err) {
+    console.error('[scheduler] LINE push failed:', err);
+  }
 }
 
 export interface ScheduleSpec {
@@ -73,6 +94,7 @@ async function processSchedule(s: ScheduleRow): Promise<void> {
   const shareUrl = await buildShareUrl(result.runId);
   const ok = await sendTeamReportEmail(s.email, team.title, s.question, result.result, s.name, shareUrl);
   await dbRun('UPDATE team_runs SET emailed = ? WHERE id = ?', ok ? 1 : 0, result.runId);
+  await pushReportToLine(s.user_id, s.name || s.question, result.result, shareUrl);
   console.log(`[scheduler] ran team "${team.title}" → email ${ok ? 'sent' : 'FAILED'} to ${s.email}`);
 }
 
@@ -103,6 +125,7 @@ export async function runScheduleNow(scheduleId: string, userId: string): Promis
   const shareUrl = await buildShareUrl(result.runId);
   const ok = await sendTeamReportEmail(s.email, team.title, s.question, result.result, s.name, shareUrl);
   await dbRun('UPDATE team_runs SET emailed = ? WHERE id = ?', ok ? 1 : 0, result.runId);
+  await pushReportToLine(userId, s.name || s.question, result.result, shareUrl);
   await dbRun('UPDATE team_schedules SET last_run_at = NOW() WHERE id = ?', s.id);
   console.log(`[scheduler] manual test "${team.title}" → email ${ok ? 'sent' : 'FAILED'} to ${s.email}`);
   return ok;
