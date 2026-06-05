@@ -11,7 +11,7 @@ import { config } from '../../config.js';
 import { dbGet, dbAll, dbRun } from '../../db.js';
 import { checkUserUsageLimit } from '../usageLimit.js';
 import { linkLineUser, LinkError, getLineUser, setLineActiveTeam, setLinePendingSched, type LineUserRow } from './userMapping.js';
-import { pushMessage, getUserProfile, type LineTextMessage } from './client.js';
+import { pushMessage, getUserProfile, type LineTextMessage, type QuickReply } from './client.js';
 import { createOrReuseFileShare } from './fileShare.js';
 import { peekBindToken, markBindTokenConflict } from './qrAuth.js';
 import { buildFileListFlex, buildUsageFlex, buildTeamPickerFlex, buildHelpFlex, buildScheduleListFlex, buildTeamDeleteFlex, buildConfirmTeamDeleteFlex, buildSchedTeamPickerFlex, buildSchedTimeFlex, type FileForFlex, type TeamForFlex, type ScheduleForFlex } from './flex.js';
@@ -70,10 +70,9 @@ export async function handleTeams(lineUser: LineUserRow): Promise<void> {
   );
 
   if (rows.length === 0) {
-    await pushMessage(lineUser.line_user_id, [{
-      type: 'text',
-      text: '你還沒有任何團隊。\n\n直接用 AI 幫你建一個：\n輸入「/newteam 你的需求」\n例如：/newteam 每天幫我分析台股盤勢與我持股的風險\n\n或到網頁的「AI 助手」建立。',
-    }]);
+    // No teams yet — drop straight into the guided creation flow instead of
+    // telling the user to type a command.
+    await startNewTeamFlow(lineUser);
     return;
   }
 
@@ -81,21 +80,61 @@ export async function handleTeams(lineUser: LineUserRow): Promise<void> {
   await pushMessage(lineUser.line_user_id, [buildTeamPickerFlex(teams, lineUser.active_team_id)]);
 }
 
-/**
- * AI-build a team from a free-form scenario typed in LINE (`/newteam <描述>`),
- * then switch the user into it so the next message runs the team. Reuses the
- * same DeepSeek team designer as the web "AI 自訂團隊".
- */
-export async function handleNewTeam(lineUser: LineUserRow, scenario: string): Promise<void> {
-  const topic = scenario.trim();
-  if (!topic) {
-    await pushMessage(lineUser.line_user_id, [{
-      type: 'text',
-      text: '請描述你的需求，我就用 AI 幫你組一個團隊。\n例如：\n/newteam 每天幫我分析台股盤勢與我持股的風險\n/newteam 幫我規劃一場 100 人的產品發表會',
-    }]);
-    return;
-  }
+/** Example team needs, shown as one-tap Quick Reply chips. Tapping a chip
+ *  sends the scenario as a normal message, which the armed new-team wizard
+ *  (pending state) then turns into a team — no command typing required. */
+function newTeamQuickReply(): QuickReply {
+  const examples: Array<[string, string]> = [
+    ['📈 台股盤勢分析', '每小時幫我分析台股盤勢與我持股的風險'],
+    ['🎤 活動企劃', '幫我規劃一場 100 人的產品發表會'],
+    ['🔍 市場/競品研究', '幫我持續追蹤競品動態與市場趨勢'],
+    ['✍️ 內容行銷', '幫我每週產出社群與部落格的內容企劃'],
+    ['💡 創業點子評估', '幫我評估一個新創點子的市場與風險'],
+  ];
+  return {
+    items: examples.map(([label, text]) => ({
+      type: 'action',
+      action: { type: 'message', label, text },
+    })),
+  };
+}
 
+/** Next-step chips shown after a team is created, so follow-up actions are
+ *  taps rather than remembered commands. */
+function afterTeamQuickReply(): QuickReply {
+  return {
+    items: [
+      { type: 'action', action: { type: 'postback', label: '🔀 切換團隊', data: 'action=teams', displayText: '切換團隊' } },
+      { type: 'action', action: { type: 'postback', label: '⏰ 設定排程', data: 'action=schedule', displayText: '設定排程' } },
+      { type: 'action', action: { type: 'postback', label: '🤖 回單一助手', data: 'action=solo', displayText: '回到單一助手' } },
+    ],
+  };
+}
+
+/**
+ * Start the guided team-creation flow. Instead of telling the user to type
+ * `/newteam <描述>` (which they routinely re-type as a prefix and get wrong),
+ * we *arm* a pending state and ask them to simply describe what they want —
+ * their next plain message becomes the team. Quick-reply chips offer one-tap
+ * examples. The pending state is shared with the schedule wizard via the
+ * `pending_sched` column, discriminated by `kind`.
+ */
+export async function startNewTeamFlow(lineUser: LineUserRow): Promise<void> {
+  await setLinePendingSched(lineUser.line_user_id, JSON.stringify({ kind: 'newteam', ts: Date.now() }));
+  await pushMessage(lineUser.line_user_id, [{
+    type: 'text',
+    text: '想要哪一種 AI 團隊？\n\n直接打字描述你的需求就好（不用輸入任何指令），我就會幫你組一個專屬團隊。例如：「每小時幫我分析台股 (2481) 盤勢與風險」。\n\n也可以直接點下方範例 👇',
+    quickReply: newTeamQuickReply(),
+  }]);
+}
+
+/**
+ * AI-build a team from a free-form scenario, switch the user into it, and
+ * surface follow-up actions as chips. Shared by the typed `/newteam <描述>`
+ * path and the pending-wizard path. Reuses the same team designer as the web
+ * "AI 自訂團隊".
+ */
+async function buildTeamFromTopic(lineUser: LineUserRow, topic: string): Promise<void> {
   await pushMessage(lineUser.line_user_id, [{
     type: 'text',
     text: '🛠 正在用 AI 幫你組建團隊，請稍候約 10～20 秒…',
@@ -113,6 +152,7 @@ export async function handleNewTeam(lineUser: LineUserRow, scenario: string): Pr
     await pushMessage(lineUser.line_user_id, [{
       type: 'text',
       text: '⚠️ 團隊建立失敗（AI 服務未設定或暫時無回應），請稍後重試，或到網頁用範本建立。',
+      quickReply: { items: [{ type: 'action', action: { type: 'postback', label: '🔁 重試建立', data: 'action=new_team', displayText: '重新建立團隊' } }] },
     }]);
     return;
   }
@@ -120,8 +160,54 @@ export async function handleNewTeam(lineUser: LineUserRow, scenario: string): Pr
   await setLineActiveTeam(lineUser.line_user_id, result.teamId);
   await pushMessage(lineUser.line_user_id, [{
     type: 'text',
-    text: `✅ 已建立團隊「${result.title}」（${result.memberCount} 位成員）並切換到它。\n\n直接傳訊息問問題，整個團隊會協作分析、再給你一份統整結論。\n\n/teams 可切換團隊、/solo 回到單一助手。`,
+    text: `✅ 已建立團隊「${result.title}」（${result.memberCount} 位成員）並切換到它。\n\n直接傳訊息問問題，整個團隊就會協作分析、再給你一份統整結論。`,
+    quickReply: afterTeamQuickReply(),
   }]);
+}
+
+/**
+ * Entry from `/newteam`. With a scenario, build straight away (power-user
+ * path). Without one, start the guided, button-driven flow.
+ */
+export async function handleNewTeam(lineUser: LineUserRow, scenario: string): Promise<void> {
+  const topic = scenario.trim();
+  if (!topic) {
+    await startNewTeamFlow(lineUser);
+    return;
+  }
+  // A typed scenario supersedes any half-started wizard.
+  await setLinePendingSched(lineUser.line_user_id, null);
+  await buildTeamFromTopic(lineUser, topic);
+}
+
+/**
+ * The user is mid-way through the guided team-creation flow and just sent the
+ * scenario as a plain message. Build the team from it. Returns false (without
+ * acting) if there's no armed new-team pending state or it has expired (30 min),
+ * so the caller can treat the message as a normal question instead.
+ */
+export async function createTeamFromPending(lineUser: LineUserRow, text: string): Promise<boolean> {
+  if (!lineUser.pending_sched) return false;
+  let pend: { kind?: string; ts?: number };
+  try {
+    pend = JSON.parse(lineUser.pending_sched);
+  } catch {
+    return false; // not valid JSON — leave it for the schedule path to clear
+  }
+  if (pend.kind !== 'newteam') return false; // a different wizard owns the slot
+  if (!pend.ts || Date.now() - pend.ts > 30 * 60 * 1000) {
+    await setLinePendingSched(lineUser.line_user_id, null);
+    return false; // expired — fall through to a normal message
+  }
+
+  await setLinePendingSched(lineUser.line_user_id, null);
+  const topic = text.trim();
+  if (!topic) {
+    await startNewTeamFlow(lineUser); // empty — re-prompt with examples
+    return true;
+  }
+  await buildTeamFromTopic(lineUser, topic);
+  return true;
 }
 
 /**
@@ -140,7 +226,8 @@ export async function handleSetTeam(lineUser: LineUserRow, teamId: string): Prom
   await setLineActiveTeam(lineUser.line_user_id, team.id);
   await pushMessage(lineUser.line_user_id, [{
     type: 'text',
-    text: `✅ 已切換到團隊「${team.title}」。\n接下來你問的問題會由整個團隊協作分析、再給你一份統整結論（較花時間與用量）。\n隨時可用 /solo 回到單一助手。`,
+    text: `✅ 已切換到團隊「${team.title}」。\n接下來你問的問題會由整個團隊協作分析、再給你一份統整結論（較花時間與用量）。\n隨時可從下方選單切回單一助手。`,
+    quickReply: afterTeamQuickReply(),
   }]);
 }
 
@@ -149,7 +236,7 @@ export async function handleSolo(lineUser: LineUserRow): Promise<void> {
   await setLineActiveTeam(lineUser.line_user_id, null);
   await pushMessage(lineUser.line_user_id, [{
     type: 'text',
-    text: '✅ 已回到單一助手模式。直接傳訊息即可對話。需要團隊協作時用 /teams 切換。',
+    text: '✅ 已回到單一助手模式。直接傳訊息即可對話。需要團隊協作時，點下方選單的「團隊協作」即可。',
   }]);
 }
 
@@ -307,7 +394,11 @@ const DAILY_UPDATE_QUESTION = '請針對本團隊負責的主題，提供今天�
 export async function handleSchedNew(lineUser: LineUserRow): Promise<void> {
   const rows = await dbAll<{ id: string; title: string }>('SELECT id, title FROM agent_teams WHERE user_id = ? ORDER BY created_at DESC', lineUser.internal_user_id);
   if (rows.length === 0) {
-    await pushMessage(lineUser.line_user_id, [{ type: 'text', text: '你還沒有任何團隊。請先用 /newteam 描述需求建立一個團隊，再來排程。' }]);
+    await pushMessage(lineUser.line_user_id, [{
+      type: 'text',
+      text: '排程需要先有一個團隊。先建立一個，之後就能排定每天自動分析並寄到你的信箱。',
+      quickReply: { items: [{ type: 'action', action: { type: 'postback', label: '✨ 建立團隊', data: 'action=new_team', displayText: '建立團隊' } }] },
+    }]);
     return;
   }
   await pushMessage(lineUser.line_user_id, [buildSchedTeamPickerFlex(rows.map(r => ({ id: r.id, title: r.title })))]);

@@ -27,7 +27,7 @@ import { config } from '../../config.js';
 import { getLineUser, touchLineUser, setLinePendingSched, type LineUserRow } from './userMapping.js';
 import { getOrCreateLineConversation } from './conversationRouter.js';
 import { checkLineRateLimit } from './rateLimit.js';
-import { parseCommand, handleHelp, handleLink, handleQuota, handleListFiles, handleWebLink, handleUnlinkedGreeting, handleTeams, handleSetTeam, handleSolo, handleNewTeam, handleSchedule, handleDelTeam, handleDelSchedule, handleDelTeamPrompt, handleDelTeamConfirm, handleSchedNew, handleSchedTeam, handleSchedSet, createScheduleFromPending } from './commands.js';
+import { parseCommand, handleHelp, handleLink, handleQuota, handleListFiles, handleWebLink, handleUnlinkedGreeting, handleTeams, handleSetTeam, handleSolo, handleNewTeam, handleSchedule, handleDelTeam, handleDelSchedule, handleDelTeamPrompt, handleDelTeamConfirm, handleSchedNew, handleSchedTeam, handleSchedSet, createScheduleFromPending, createTeamFromPending, startNewTeamFlow } from './commands.js';
 import { runTeam } from '../teamRun.js';
 import { pushMessage, startLoadingIndicator, fetchMessageContent } from './client.js';
 import { scanUploadedFile, isAllowedExtension } from '../uploadScanner.js';
@@ -36,6 +36,7 @@ import { buildGeneratedFilesFlex, buildTeamReportFlex, type FileForFlex } from '
 import type { LineMessage } from './client.js';
 import { createOrReuseFileShare } from './fileShare.js';
 import { renderChartToPng } from './chartRenderer.js';
+import { startProgressNotifier } from './progress.js';
 import type { SSEEvent } from '../../types.js';
 
 export interface IncomingTextEvent {
@@ -125,11 +126,19 @@ export async function processIncomingEvent(event: IncomingEvent): Promise<void> 
       return;
     }
 
-    // Mid-wizard: the schedule flow is waiting for the analysis topic. A plain
-    // message IS the topic; any slash command cancels the wizard and proceeds.
+    // Mid-wizard: a guided flow is waiting for the user's next plain message —
+    // either a team description (kind=newteam) or a schedule topic. The pending
+    // slot is shared (pending_sched column) and discriminated by `kind`. Any
+    // slash command cancels the wizard and proceeds as a command.
     if (lineUser.pending_sched) {
       if (cmd.kind === 'none') {
-        if (await createScheduleFromPending(lineUser, event.text)) return;
+        let pendKind = '';
+        try { pendKind = (JSON.parse(lineUser.pending_sched) as { kind?: string }).kind ?? ''; } catch { /* legacy schedule payload has no kind */ }
+        if (pendKind === 'newteam') {
+          if (await createTeamFromPending(lineUser, event.text)) return;
+        } else if (await createScheduleFromPending(lineUser, event.text)) {
+          return;
+        }
         // expired / invalid — fall through and treat as a normal message
       } else {
         await setLinePendingSched(lineUserId, null);
@@ -183,6 +192,9 @@ async function dispatchPostback(lineUser: LineUserRow, data: string): Promise<vo
       return;
     case 'teams':
       await handleTeams(lineUser);
+      return;
+    case 'new_team':
+      await startNewTeamFlow(lineUser);
       return;
     case 'set_team': {
       const teamId = params.get('team') ?? '';
@@ -386,12 +398,20 @@ async function runConversation(lineUser: LineUserRow, message: string): Promise<
   // Start the "typing…" indicator best-effort — ignored if it fails.
   startLoadingIndicator(lineUserId, 30).catch(() => {});
 
+  // Progress hints: the typing animation alone is easy to miss, so a notifier
+  // pushes short, content-aware "working on it" messages for slow runs. Fast
+  // replies finish before it fires anything, so they stay clean.
+  const progress = startProgressNotifier(lineUserId);
+
   // Custom SSE sink: keep only the deltas we care about for LINE.
   let assistantText = '';
   const sseSink = (event: SSEEvent) => {
     if (event.type === 'text' && typeof event.data === 'string') {
       assistantText += event.data;
     }
+    // Feed every event to the progress notifier so it can tailor the copy
+    // (e.g. "正在製作 PowerPoint 簡報") and time its nudges.
+    progress.onEvent(event);
     // file_generated events will be surfaced as share URLs in Phase D.
   };
 
@@ -419,7 +439,14 @@ async function runConversation(lineUser: LineUserRow, message: string): Promise<
     '',            // referenceContext — vector RAG not used in this build
   );
 
-  const result = await orchestrator.run(message);
+  let result;
+  try {
+    result = await orchestrator.run(message);
+  } finally {
+    // Always stop progress hints once the run ends (success or throw), so no
+    // stray "still working" message fires after we've replied or errored out.
+    progress.stop();
+  }
 
   if (result.assistantText) {
     await dbRun(

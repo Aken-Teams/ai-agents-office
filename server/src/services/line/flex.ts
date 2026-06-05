@@ -395,8 +395,19 @@ export function buildTeamPickerFlex(teams: TeamForFlex[], activeTeamId: string |
         contents: [
           {
             type: 'button',
-            style: activeTeamId ? 'secondary' : 'primary',
-            ...(activeTeamId ? {} : { color: PALETTE.accent }),
+            style: 'primary',
+            color: PALETTE.accent,
+            height: 'sm',
+            action: {
+              type: 'postback',
+              label: '＋ 建立新團隊',
+              data: 'action=new_team',
+              displayText: '建立新團隊',
+            },
+          },
+          {
+            type: 'button',
+            style: 'secondary',
             height: 'sm',
             action: {
               type: 'postback',

@@ -11,15 +11,46 @@ import { config } from '../../config.js';
 
 const BASE_URL = 'https://api.line.me/v2/bot';
 
+/**
+ * Quick Reply — buttons that appear just above the keyboard and disappear
+ * once tapped. Far less error-prone than asking users to type slash commands:
+ *  - a `message` action sends preset text as if the user typed it (one-tap),
+ *  - a `postback` action fires a webhook event (optionally pre-filling the
+ *    keyboard via `inputOption: 'openKeyboard'` + `fillInText` so the user can
+ *    edit a template before sending).
+ * Reference: https://developers.line.biz/en/docs/messaging-api/using-quick-reply/
+ */
+export interface QuickReplyAction {
+  type: 'message' | 'postback';
+  label: string;            // shown on the chip (max 20 chars)
+  text?: string;            // message action: sent as the user's message
+  data?: string;            // postback action: webhook payload
+  displayText?: string;     // postback action: echoed into the chat
+  inputOption?: 'openRichMenu' | 'openKeyboard' | 'openVoice';
+  fillInText?: string;      // with openKeyboard: pre-fills (editable) input
+}
+
+export interface QuickReplyItem {
+  type: 'action';
+  action: QuickReplyAction;
+  imageUrl?: string;
+}
+
+export interface QuickReply {
+  items: QuickReplyItem[];  // max 13
+}
+
 export interface LineTextMessage {
   type: 'text';
   text: string;
+  quickReply?: QuickReply;
 }
 
 export interface LineEmojiMessage {
   type: 'text';
   text: string;
   emojis?: Array<{ index: number; productId: string; emojiId: string }>;
+  quickReply?: QuickReply;
 }
 
 /**
