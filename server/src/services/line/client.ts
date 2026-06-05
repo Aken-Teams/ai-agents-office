@@ -62,6 +62,7 @@ export interface LineFlexMessage {
   type: 'flex';
   altText: string;
   contents: Record<string, unknown>;
+  quickReply?: QuickReply;
 }
 
 /**
@@ -73,6 +74,7 @@ export interface LineImageMessage {
   type: 'image';
   originalContentUrl: string;
   previewImageUrl: string;
+  quickReply?: QuickReply;
 }
 
 export type LineMessage = LineTextMessage | LineEmojiMessage | LineFlexMessage | LineImageMessage;

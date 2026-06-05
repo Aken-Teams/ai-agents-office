@@ -17,6 +17,7 @@ import { spawnClaude } from './claudeCli.js';
 import { truncateResultForRouter } from './taskParser.js';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { recordTokenUsage } from './tokenTracker.js';
+import { getUserPersonaContext } from './personalization.js';
 import type { SSEEvent } from '../types.js';
 
 export interface TeamRunEvent { type: string; data?: unknown }
@@ -52,13 +53,13 @@ export function estimateCostUsd(inputTokens: number, outputTokens: number): numb
   return Math.round(((inputTokens / 1_000_000) * 3 + (outputTokens / 1_000_000) * 15) * 10 * 100) / 100;
 }
 
-function buildMemberSystemPrompt(member: MemberRow, sharedMemory: string): string {
+function buildMemberSystemPrompt(member: MemberRow, sharedMemory: string, persona = ''): string {
   const role = (member.system_prompt || `你是「${member.title}」。`).trim();
   const mem = sharedMemory.trim()
     ? `\n\n【團隊先前的共識與記憶】\n${sharedMemory.trim()}\n（可參考，但以本次議題為主）`
     : '';
   return `你是一個 AI 團隊的成員之一，名稱是「${member.title}」。
-${role}${mem}
+${role}${mem}${persona}
 
 請針對使用者提出的議題，從你的專業角度提出分析與觀點：聚焦、具體、有明確結論。
 直接輸出純文字分析即可，不需要產生檔案、不需要客套開場白。
@@ -152,8 +153,8 @@ export interface TeamRunResult { runId: string; result: string; inputTokens: num
  * the final synthesis + token totals. Never throws for member-level failures
  * (a failed member just contributes empty findings).
  */
-export async function runTeam(opts: { userId: string; teamId: string; question: string; writer: TeamRunWriter; scheduleId?: string }): Promise<TeamRunResult> {
-  const { userId, teamId, question, writer, scheduleId } = opts;
+export async function runTeam(opts: { userId: string; teamId: string; question: string; writer: TeamRunWriter; scheduleId?: string; personalized?: boolean }): Promise<TeamRunResult> {
+  const { userId, teamId, question, writer, scheduleId, personalized } = opts;
 
   const team = await dbGet<TeamRow>('SELECT id, user_id, title, topic, shared_memory FROM agent_teams WHERE id = ? AND user_id = ?', teamId, userId);
   if (!team) throw new Error('Team not found');
@@ -182,13 +183,18 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
 
   const sharedMemory = team.shared_memory || '';
 
+  // Personalization (L1): for proactive/scheduled runs, fold in who the user
+  // is and what they care about so the analysis is *for them*, not generic.
+  // Opt-in (scheduler passes personalized:true) to keep interactive runs lean.
+  const persona = personalized ? await getUserPersonaContext(userId) : '';
+
   // ── Fan out to members (batched for a concurrency cap) ──────────────────
   const results: MemberResult[] = [];
   for (let i = 0; i < members.length; i += MEMBER_CONCURRENCY) {
     const batch = members.slice(i, i + MEMBER_CONCURRENCY);
     const batchResults = await Promise.all(batch.map(async member => {
       writer({ type: 'member_status', data: { memberId: member.id, status: 'running' } });
-      const sys = buildMemberSystemPrompt(member, sharedMemory);
+      const sys = buildMemberSystemPrompt(member, sharedMemory, persona);
       const r = await runOneClaude(
         userId, member.id, `_team/${member.id}`, question, sys, MEMBER_TIMEOUT_MS,
         chunk => writer({ type: 'member_stream', data: { memberId: member.id, content: chunk } }),
@@ -251,11 +257,16 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
     ? `\n\n【團隊成員實際查到的資料來源網址（請整合、去重後放進最終報告的「資料來源」段落）】\n${allUrls.map(u => `- ${u}`).join('\n')}`
     : '';
 
+  const personaSynth = persona
+    ? `${persona}
+請讓最終結論貼合這位使用者：建議要針對他的情境與在意的重點，並在報告最後用「## 給你的下一步」附上 1–2 個適合他的後續行動或可追問的問題。`
+    : '';
+
   const synthSystem = `你是一個 AI 團隊的協調者。團隊成員已各自針對議題提出分析，你的任務是整合成一份對使用者有用的最終結論：
 - 點出各方的共識、分歧與最關鍵的洞察
 - 給出明確、可行動的建議
 - 不要逐字複述每位成員，要融會貫通
-- 繁體中文、避免冗詞
+- 繁體中文、避免冗詞${personaSynth}
 - 資料來源（重要）：團隊成員實際查證過的來源網址已附在輸入末端。你**必須**在報告最後加上一個「## 資料來源」段落，把這些網址去重後逐條列出（可加一句說明各來源對應的重點）。內文引用具體數據時也盡量標註來源。若某些判斷只是推論、非即時查證，請在內文標示「（推論）」。嚴禁捏造來源或數字
 
 請用 Markdown 格式輸出，讓結論清楚易讀：
