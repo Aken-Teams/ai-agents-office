@@ -25,18 +25,25 @@ export default function ScheduleCreateModal({
   const [time, setTime] = useState('09:00');
   const [email, setEmail] = useState(defaultEmail);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const headers = (): HeadersInit => (token ? { Authorization: `Bearer ${token}` } : {});
 
   const add = async () => {
     if (!question.trim() || !email.trim() || saving) return;
     const [h, m] = time.split(':').map(Number);
     setSaving(true);
+    setError(null);
     try {
       const res = await fetch(`/api/teams/${teamId}/schedules`, {
         method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), question: question.trim(), frequency, hour: h, minute: m, dayOfWeek, email: email.trim() }),
       });
-      if (res.ok) { onCreated?.(); onClose(); }
+      if (res.ok) { onCreated?.(); onClose(); return; }
+      // Surface the server's reason instead of leaving the modal silently stuck.
+      const msg = await res.json().catch(() => null);
+      setError(msg?.error || `建立失敗（伺服器回應 ${res.status}）`);
+    } catch {
+      setError('無法連線到伺服器，請稍後再試。');
     } finally { setSaving(false); }
   };
 
@@ -75,6 +82,13 @@ export default function ScheduleCreateModal({
         <label className="block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">收件 Email</label>
         <input value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"
           className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-3 py-2.5 text-sm text-on-surface focus:outline-none focus:border-primary mb-5" />
+
+        {error && (
+          <div className="flex items-start gap-2 mb-3 px-3 py-2.5 rounded-xl bg-error-container/60 text-on-error-container text-sm">
+            <span className="material-symbols-outlined text-base leading-5">error</span>
+            <span>{error}</span>
+          </div>
+        )}
 
         <div className="flex items-center justify-end gap-2 pt-4 border-t border-outline-variant/15">
           <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer">取消</button>

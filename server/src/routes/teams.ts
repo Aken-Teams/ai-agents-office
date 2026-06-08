@@ -315,12 +315,17 @@ router.post('/:id/schedules', async (req: Request, res: Response) => {
   const schedName = name?.trim() ? name.trim().slice(0, 255) : null;
 
   const id = uuidv4();
-  await dbRun(
-    'INSERT INTO team_schedules (id, team_id, user_id, name, question, frequency, hour, minute, day_of_week, email, next_run_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    id, req.params.id, userId, schedName, question.trim(), freq, h, m, dow, email.trim(), mysqlDateTime(next),
-  );
-  const schedule = await dbGet('SELECT * FROM team_schedules WHERE id = ?', id);
-  res.status(201).json({ schedule });
+  try {
+    await dbRun(
+      'INSERT INTO team_schedules (id, team_id, user_id, name, question, frequency, hour, minute, day_of_week, email, next_run_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      id, req.params.id, userId, schedName, question.trim(), freq, h, m, dow, email.trim(), mysqlDateTime(next),
+    );
+    const schedule = await dbGet('SELECT * FROM team_schedules WHERE id = ?', id);
+    res.status(201).json({ schedule });
+  } catch (err) {
+    console.error('[teams] create schedule failed:', err);
+    res.status(500).json({ error: '建立排程時發生錯誤，請稍後再試。' });
+  }
 });
 
 // PATCH /api/teams/:id/schedules/:sid — enable/disable (re-enabling recomputes next run).

@@ -196,7 +196,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('greeting_shown_for');
     setToken(null);
     setUser(null);
-  }, []);
+    // Send the user back to the login screen — otherwise the current page stays
+    // mounted with the navbar gone (it returns null once user is null), leaving
+    // them stranded on a deep page like /team/[id]/schedules after logging out.
+    router.replace('/login');
+  }, [router]);
 
   const updateUser = useCallback((partial: Partial<User>) => {
     setUser(prev => prev ? { ...prev, ...partial } : prev);
