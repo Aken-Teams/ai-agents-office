@@ -89,6 +89,9 @@ function DashboardContent() {
   const [quotaHasPending, setQuotaHasPending] = useState(false);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [showLineModal, setShowLineModal] = useState(false);
+  // True when the LINE modal was auto-opened as the post-login gate, so closing
+  // it should hand off to the greeting (vs. a manual open from a dashboard button).
+  const [lineGateActive, setLineGateActive] = useState(false);
   const [quotaReason, setQuotaReason] = useState('');
   const [quotaSubmitting, setQuotaSubmitting] = useState(false);
 
@@ -98,17 +101,56 @@ function DashboardContent() {
     }
   }, [user, isLoading, router]);
 
-  // Show greeting popup once per login (skip if muted today)
+  // After login: optionally gate the greeting behind a one-time LINE bind prompt
+  // for users who haven't linked yet. Binding lives here rather than in the
+  // onboarding wizard, where adding the LINE friend mid-flow jumped out of the
+  // app and could fail before login finished. Shows at most once per login; once
+  // the account is bound (or LINE is unavailable) it goes straight to greeting.
   useEffect(() => {
     if (!token || !user) return;
+    // First-login users land here briefly before AuthProvider redirects them to
+    // /onboarding. Don't fire the LINE prompt / greeting during that flash —
+    // they'll fire properly when onboarding completes and routes back here.
+    if (user.onboardingRequired || user.termsRequired) return;
     const today = new Date().toISOString().slice(0, 10);
     if (localStorage.getItem(`greeting_muted_${user.id}`) === today) return;
     const loginId = localStorage.getItem('greeting_login_id');
     if (!loginId) return;
     if (localStorage.getItem('greeting_shown_for') === loginId) return;
-    const timer = setTimeout(() => setShowGreeting(true), 600);
-    return () => clearTimeout(timer);
-  }, [token, user]);
+
+    let cancelled = false;
+    (async () => {
+      let gateLine = false;
+      if (localStorage.getItem('line_prompt_shown_for') !== loginId) {
+        try {
+          const res = await fetch('/api/auth/line-link-status', { headers: { Authorization: `Bearer ${token}` } });
+          if (res.ok) {
+            const s = await res.json();
+            gateLine = !!s.available && !s.linked;
+          }
+        } catch { /* network hiccup — just fall through to the greeting */ }
+      }
+      if (cancelled) return;
+      if (gateLine) {
+        localStorage.setItem('line_prompt_shown_for', loginId);
+        setLineGateActive(true);
+        setShowLineModal(true);
+      } else {
+        setTimeout(() => { if (!cancelled && !lineGateActive) setShowGreeting(true); }, 600);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [token, user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Closing the post-login LINE prompt hands off to the greeting (only when it
+  // was the auto gate — a manual open from a dashboard button leaves it false).
+  const closeLineModal = () => {
+    setShowLineModal(false);
+    if (lineGateActive) {
+      setLineGateActive(false);
+      setTimeout(() => setShowGreeting(true), 250);
+    }
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -328,10 +370,10 @@ function DashboardContent() {
 
       {/* LINE Bind Modal */}
       {showLineModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowLineModal(false)}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={closeLineModal}>
           <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-6 md:p-8 relative" onClick={e => e.stopPropagation()}>
             <button
-              onClick={() => setShowLineModal(false)}
+              onClick={closeLineModal}
               className="absolute top-4 right-4 w-8 h-8 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer z-10"
               aria-label="關閉"
             >

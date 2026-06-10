@@ -13,6 +13,10 @@ interface User {
   theme?: 'dark' | 'light';
   oauthProvider?: string | null;
   hasPassword?: boolean;
+  // Present on the /me payload — lets gated pages (e.g. the dashboard) hold off
+  // first-login popups until onboarding/terms are done and the redirect lands.
+  onboardingRequired?: boolean;
+  termsRequired?: boolean;
 }
 
 interface Permissions {

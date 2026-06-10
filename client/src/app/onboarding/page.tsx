@@ -5,10 +5,9 @@ import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
-import { LineQrPanel } from '../components/LineQrPanel';
 import { I18nProvider, useTranslation } from '../../i18n';
 
-type StepType = 'terms' | 'welcome' | 'company' | 'line' | 'features';
+type StepType = 'terms' | 'welcome' | 'company' | 'features';
 
 const FEATURES = [
   { key: 'ppt',    icon: 'slideshow',       color: 'text-amber-500',   bg: 'bg-amber-500/10',   border: 'border-amber-500/20' },
@@ -59,13 +58,12 @@ function OnboardingContent() {
   const [company, setCompany] = useState('');
   const [companyError, setCompanyError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [lineLinked, setLineLinked] = useState(false);
 
   // Dynamic steps
   const steps = useMemo<StepType[]>(() => {
     const s: StepType[] = [];
     if (needsTerms) s.push('terms');
-    if (needsOnboarding) s.push('welcome', 'company', 'line', 'features');
+    if (needsOnboarding) s.push('welcome', 'company', 'features');
     return s;
   }, [needsTerms, needsOnboarding]);
 
@@ -147,6 +145,11 @@ function OnboardingContent() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ company: company.trim() }),
       });
+      // First entry into the app — force a fresh greeting trigger so the welcome
+      // greeting (and the post-login LINE bind prompt) fire on the dashboard,
+      // even if a stale login id from a prior session is still in localStorage.
+      localStorage.setItem('greeting_login_id', String(Date.now()));
+      localStorage.removeItem('greeting_shown_for');
       router.replace('/dashboard');
     } finally {
       setSubmitting(false);
@@ -337,45 +340,6 @@ function OnboardingContent() {
                   className="flex-[2] py-3 rounded-xl font-bold text-on-primary bg-primary hover:brightness-110 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {t('onboarding.step2.next')}
-                  <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* === LINE Bind Step === */}
-          {currentStepType === 'line' && (
-            <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-              <p className="text-xs font-bold uppercase tracking-widest text-primary mb-2">
-                {step + 1} / {steps.length}
-              </p>
-              <h1 className="font-headline text-2xl md:text-3xl font-black text-on-surface mb-3">
-                綁定 LINE 機器人
-              </h1>
-              <p className="text-on-surface-variant text-sm leading-relaxed mb-6">
-                掃描下方 QR Code 加入 LINE 好友，即可在 LINE 上直接使用 AI 助理，與您的網頁帳號共用額度與記憶。此步驟可略過，稍後也能在儀表板綁定。
-              </p>
-
-              <div className="flex justify-center mb-7 rounded-2xl border border-outline-variant/20 bg-surface-container-high px-6 md:px-8 py-8">
-                <LineQrPanel
-                  title="綁定 LINE"
-                  caption="連結你的帳號"
-                  onLinked={() => setLineLinked(true)}
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setStep(s => s - 1)}
-                  className="flex-1 py-3 rounded-xl font-bold text-on-surface-variant bg-surface-container-high hover:bg-surface-variant/50 transition-colors cursor-pointer"
-                >
-                  {t('onboarding.step2.back')}
-                </button>
-                <button
-                  onClick={() => setStep(s => s + 1)}
-                  className="flex-[2] py-3 rounded-xl font-bold text-on-primary bg-primary hover:brightness-110 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {lineLinked ? '已綁定，下一步' : '下一步'}
                   <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                 </button>
               </div>

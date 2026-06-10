@@ -1060,18 +1060,22 @@ router.get('/line-bind-qr', authMiddleware, async (req: Request, res: Response) 
  * when they send the `/link` message inside LINE).
  */
 router.get('/line-link-status', authMiddleware, async (req: Request, res: Response) => {
+  // `available` mirrors the bind-qr gate so the client can decide whether to
+  // surface LINE binding at all (e.g. the post-login prompt) without a second
+  // round-trip or a side-effecting QR mint.
+  const available = config.line.enabled && !!config.line.botBasicId;
   const bound = await dbGet<{ display_name: string | null }>(
     'SELECT display_name FROM line_users WHERE internal_user_id = ?',
     req.user!.userId,
   );
-  if (bound) { res.json({ linked: true, displayName: bound.display_name ?? null }); return; }
+  if (bound) { res.json({ available, linked: true, displayName: bound.display_name ?? null }); return; }
   // Not bound yet — surface a conflict if the most recent QR was scanned by a
   // LINE that's already bound to another account.
   const latest = await dbGet<{ result: string | null }>(
     'SELECT result FROM line_link_tokens WHERE user_id = ? ORDER BY created_at DESC LIMIT 1',
     req.user!.userId,
   );
-  res.json({ linked: false, displayName: null, conflict: latest?.result === 'conflict' });
+  res.json({ available, linked: false, displayName: null, conflict: latest?.result === 'conflict' });
 });
 
 export default router;
