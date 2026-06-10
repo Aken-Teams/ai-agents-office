@@ -8,6 +8,7 @@ import type { DocumentBlocksRecord, DocumentBlock, GeneratedFile } from '../type
 export type RegenEvent =
   | { type: 'started' }
   | { type: 'ai_text'; data: string }
+  | { type: 'answer'; data: string }
   | { type: 'block_updated'; data: { block: DocumentBlock; blocks: DocumentBlock[] } }
   | { type: 'patching' }
   | { type: 'rebuilding' }
@@ -33,6 +34,7 @@ export async function regenerateBlock(
   userId: string,
   instruction: string,
   emit?: (event: RegenEvent) => void,
+  answerOnly = false,
 ): Promise<{ updatedBlock: DocumentBlock; newFile: GeneratedFile | null } | null> {
   const send = emit || (() => {});
 
@@ -68,6 +70,59 @@ export async function regenerateBlock(
       return `  #${i + 1} [${b.type}] ${t}${marker}`;
     })
     .join('\n');
+
+  // ── Answer-only (Q&A) mode ──────────────────────────────────────────────
+  // The user asked a QUESTION about this block (not an edit). Answer it in
+  // plain language and DO NOT touch the file, DB, or block data. This keeps
+  // questions safe — routing them through full file generation could otherwise
+  // regenerate and shrink the whole document.
+  if (answerOnly) {
+    const docKind = isDocx ? '文件' : isXlsx ? '試算表' : '簡報';
+    const qaSystem =
+      `你是「${docKind}」編輯助理。使用者正在檢視其中一個${blockLabel === 'SLIDE' ? '頁面' : '區塊'}並向你提問。\n` +
+      `請用繁體中文、簡潔友善地回答:目前這個區塊有什麼內容,以及可以怎麼調整。\n` +
+      `你只是在「回答問題」——請勿輸出 JSON,也不要宣稱已經修改任何內容(你並沒有修改)。\n` +
+      `若使用者其實是想修改,請告訴他可以直接說出想改成什麼,你就會幫他改。`;
+    const qaUser = [
+      `${docKind}大綱:`,
+      surroundingSummary,
+      '',
+      `使用者正在看的區塊資料:`,
+      '```json',
+      JSON.stringify(targetBlock.data, null, 2),
+      '```',
+      '',
+      `使用者的提問: ${instruction}`,
+    ].join('\n');
+
+    send({ type: 'started' });
+    return new Promise((resolve) => {
+      let answerText = '';
+      let qaResolved = false;
+      const qa = spawnClaude(qaUser, qaSystem, {
+        userId,
+        conversationId: blockRecord.conversation_id,
+        role: 'router',
+        sandboxSubdir: '_agents/_block-editor',
+        model: 'claude-sonnet-4-6',
+      });
+      qa.emitter.on('event', (event: any) => {
+        if (qaResolved) return;
+        if (event.type === 'text') {
+          answerText += event.data;
+          send({ type: 'ai_text', data: event.data });
+        } else if (event.type === 'error') {
+          qaResolved = true;
+          send({ type: 'error', data: String(event.data) });
+          resolve(null);
+        } else if (event.type === 'done') {
+          qaResolved = true;
+          send({ type: 'answer', data: answerText });
+          resolve(null); // No block/file change — nothing to return.
+        }
+      });
+    });
+  }
 
   // Build a focused prompt — different for DOCX vs XLSX vs PPTX
   const systemPrompt = isDocx

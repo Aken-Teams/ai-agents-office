@@ -942,7 +942,7 @@ function ChatContent() {
     if (isDocEditMode && docMode.selectedBlockId) {
       // Heuristic: is this a question/inquiry, or an edit request?
       const isQuestion = /[?？]/.test(userMessage.trim()) ||
-        /(?:什麼|是什麼|嗎|呢|是否|能不能|有沒有|怎麼|如何|為什麼|為何|哪個|哪些|誰|幾|看到|看看|描述|解釋|告訴|說明)/.test(userMessage);
+        /(?:什麼|甚麼|是什麼|是甚麼|嗎|呢|是否|能不能|可不可以|有沒有|怎麼|如何|為什麼|為何|哪個|哪些|誰|幾|看到|看看|描述|解釋|告訴|說明|內容是|寫了|寫什麼|寫甚麼)/.test(userMessage);
       const hasEditIntent = /(?:改|修改|換|更新|調整|變|設定|加入|加上|刪|移除|增加|替換|修正|優化|重做|改成|換成|變成|新增|把.*改|把.*換|把.*變|將.*改|將.*換)/.test(userMessage);
 
       // Edit request (or not a question) → fast single-block regeneration
@@ -985,7 +985,38 @@ function ChatContent() {
         });
         return; // Skip normal generate flow
       }
-      // Question (no edit intent) → falls through to normal chat with DOC_CONTEXT below
+
+      // Question (no edit intent) → answer about THIS block only, WITHOUT touching
+      // the file. Routing to /api/generate would re-run the file-gen agent and
+      // could regenerate/shrink the whole document — so we use a read-only Q&A.
+      {
+        const blockId = docMode.selectedBlockId;
+        const elementHint = docSelectedElement ? `[目標元素: ${docSelectedElement}] ` : '';
+        const shapesHint = docSlideShapes.length > 0
+          ? `[投影片元素: ${docSlideShapes.map(s => `${s.name}(${s.type})`).join(', ')}] `
+          : '';
+        const instruction = `${shapesHint}${elementHint}${userMessage}`;
+        let acc = '';
+        setStreamText('');
+        try {
+          await docBlocks.askBlock(docMode.documentFileId!, blockId, instruction, (delta) => {
+            acc += delta;
+            setStreamText(acc);
+          });
+        } catch {
+          acc = acc || `⚠️ ${t('chat.error.unknown')}`;
+        }
+        setMessages(prev => [...prev, {
+          id: `ans-${Date.now()}`,
+          conversation_id: conversationId,
+          role: 'assistant',
+          content: acc || '（沒有內容）',
+          created_at: new Date().toISOString(),
+        }]);
+        setStreamText('');
+        setStreaming(false);
+        return; // Skip normal generate flow — questions never regenerate the file
+      }
     }
 
     // Document mode context: send as separate field (not embedded in message text)

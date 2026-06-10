@@ -391,7 +391,7 @@ router.post('/:fileId/regenerate/:blockId', async (req: Request, res: Response) 
   const userId = req.user!.userId;
   const fileId = req.params.fileId as string;
   const blockId = req.params.blockId as string;
-  const { instruction } = req.body as { instruction: string };
+  const { instruction, answerOnly } = req.body as { instruction: string; answerOnly?: boolean };
 
   if (!instruction) {
     res.status(400).json({ error: 'instruction is required' });
@@ -405,8 +405,9 @@ router.post('/:fileId/regenerate/:blockId', async (req: Request, res: Response) 
     return;
   }
 
+  // Answer-only (Q&A) never mutates the block — skip the "regenerating" marker.
   // Mark block as regenerating in DB immediately
-  try {
+  if (!answerOnly) try {
     const blockRecord = await dbGet<DocumentBlocksRecord>(
       'SELECT * FROM document_blocks WHERE file_id = ? AND user_id = ?',
       fileId, userId,
@@ -444,9 +445,11 @@ router.post('/:fileId/regenerate/:blockId', async (req: Request, res: Response) 
       try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* closed */ }
     };
 
-    regenerateBlock(fileId, blockId, userId, instruction, emit)
+    regenerateBlock(fileId, blockId, userId, instruction, emit, answerOnly)
       .then(result => {
-        if (result) {
+        if (answerOnly) {
+          console.log(`[Blocks] Answer-only response complete for block ${blockId}`);
+        } else if (result) {
           console.log(`[Blocks] Regeneration complete for block ${blockId}`);
         } else {
           console.error(`[Blocks] Regeneration returned null for block ${blockId}`);
@@ -467,7 +470,7 @@ router.post('/:fileId/regenerate/:blockId', async (req: Request, res: Response) 
   // Non-SSE fallback: respond immediately, run in background
   res.json({ success: true, started: true });
 
-  regenerateBlock(fileId, blockId, userId, instruction)
+  regenerateBlock(fileId, blockId, userId, instruction, undefined, answerOnly)
     .then(result => {
       if (result) {
         console.log(`[Blocks] Regeneration complete for block ${blockId}`);

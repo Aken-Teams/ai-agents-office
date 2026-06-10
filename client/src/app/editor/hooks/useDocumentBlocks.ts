@@ -46,6 +46,7 @@ interface UseDocumentBlocksReturn {
   patchField: (fileId: string, blockId: string, key: string, value: unknown) => Promise<{ success: boolean; file?: any }>;
   /** AI regenerate a single block (streams SSE events via onEvent callback) */
   regenerate: (fileId: string, blockId: string, instruction: string, onEvent?: (event: { type: string; data?: any }) => void) => Promise<{ success: boolean; block?: DocumentBlock; file?: any }>;
+  askBlock: (fileId: string, blockId: string, instruction: string, onText?: (delta: string) => void) => Promise<string>;
   /** Set blocks locally (e.g. from SSE) */
   setBlocksFromSSE: (data: { fileId: string; blocks: DocumentBlock[] }) => void;
 }
@@ -327,6 +328,48 @@ export function useDocumentBlocks(token: string | null): UseDocumentBlocksReturn
     }
   }, [token, headers]);
 
+  // Ask a question about a block WITHOUT modifying it (read-only Q&A).
+  // Streams the answer text via onText; never changes blocks/file/status.
+  const askBlock = useCallback(async (
+    fileId: string,
+    blockId: string,
+    instruction: string,
+    onText?: (delta: string) => void,
+  ): Promise<string> => {
+    if (!token) return '';
+    const res = await fetch(`${SSE_BASE}/api/blocks/${fileId}/regenerate/${blockId}`, {
+      method: 'POST',
+      headers: { ...headers(), Accept: 'text/event-stream' },
+      body: JSON.stringify({ instruction, answerOnly: true }),
+    });
+    if (!res.ok) throw new Error(`Ask failed: ${res.status}`);
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error('No response body');
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let answer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const event = JSON.parse(line.slice(6));
+          if (event.type === 'ai_text' && event.data) { answer += event.data; onText?.(event.data); }
+          else if (event.type === 'answer' && typeof event.data === 'string') { answer = event.data; }
+          else if (event.type === 'error') throw new Error(event.data || 'Ask failed');
+        } catch (e: any) {
+          if (e?.message === 'Ask failed' || e?.message?.startsWith('Ask')) throw e;
+          // ignore partial-JSON parse errors
+        }
+      }
+    }
+    return answer;
+  }, [token, headers]);
+
   const setBlocksFromSSE = useCallback((data: { fileId: string; blocks: DocumentBlock[] }) => {
     setBlocks(data.blocks);
   }, []);
@@ -345,6 +388,7 @@ export function useDocumentBlocks(token: string | null): UseDocumentBlocksReturn
     rebuild,
     patchField,
     regenerate,
+    askBlock,
     setBlocksFromSSE,
   };
 }
