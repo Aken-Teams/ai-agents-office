@@ -192,9 +192,11 @@ export function LineQrPanel({ title, caption, hint = '請用手機的 LINE 掃�
         ) : loading ? (
           <span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span>
         ) : error ? (
-          <div className="text-center px-5 space-y-3">
+          <div className="w-full px-4 flex flex-col items-center gap-2.5">
             <span className="material-symbols-outlined text-error text-3xl">error</span>
-            <p className="text-xs text-on-surface-variant whitespace-pre-line leading-relaxed">{error}</p>
+            {/* Left-aligned so the multi-line reason wraps cleanly instead of
+                rendering as ragged centered lines in the narrow box. */}
+            <p className="self-stretch text-left text-[11px] text-on-surface-variant whitespace-pre-line leading-relaxed">{error}</p>
             <button
               onClick={fetchQr}
               className="text-xs font-bold text-primary hover:underline cursor-pointer"
