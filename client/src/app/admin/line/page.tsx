@@ -69,6 +69,7 @@ export default function AdminLinePage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [disableTarget, setDisableTarget] = useState<LineUser | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<LineUser | null>(null);
   const [busy, setBusy] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -119,6 +120,21 @@ export default function AdminLinePage() {
       });
       if (res.ok) { setDisableTarget(null); loadUsers(); }
       else setError(disabled ? '停用失敗' : '啟用失敗');
+    } catch { setError('操作失敗（網路錯誤）'); }
+    finally { setBusy(false); }
+  }
+
+  // Fully unbind (delete) a LINE account from its internal user. Unlike disable,
+  // this removes the binding so the LINE can be re-bound to another account.
+  async function unbindUser(u: LineUser) {
+    if (!token || busy || isReadonly) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/line/users/${encodeURIComponent(u.lineUserId)}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) { setDeleteTarget(null); loadUsers(); }
+      else setError('解除綁定失敗');
     } catch { setError('操作失敗（網路錯誤）'); }
     finally { setBusy(false); }
   }
@@ -248,9 +264,15 @@ export default function AdminLinePage() {
                       <div className="text-[11px] text-on-surface-variant/70 truncate">{u.email}</div>
                     </div>
                     {!isReadonly && (
-                      u.disabled
-                        ? <button onClick={() => setDisabled(u, false)} disabled={busy} className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold text-primary border border-primary/30 hover:bg-primary/10 cursor-pointer disabled:opacity-40">啟用</button>
-                        : <button onClick={() => setDisableTarget(u)} disabled={busy} className="shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-bold text-error border border-error/40 bg-error/5 hover:bg-error/10 cursor-pointer disabled:opacity-40">停用</button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {u.disabled
+                          ? <button onClick={() => setDisabled(u, false)} disabled={busy} className="px-3 py-1.5 rounded-lg text-xs font-bold text-primary border border-primary/30 hover:bg-primary/10 cursor-pointer disabled:opacity-40">啟用</button>
+                          : <button onClick={() => setDisableTarget(u)} disabled={busy} className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-error border border-error/40 bg-error/5 hover:bg-error/10 cursor-pointer disabled:opacity-40">停用</button>}
+                        <button onClick={() => setDeleteTarget(u)} disabled={busy} title="解除綁定（刪除）"
+                          className="w-8 h-8 flex items-center justify-center rounded-lg text-error border border-error/40 bg-error/5 hover:bg-error/10 cursor-pointer disabled:opacity-40">
+                          <span className="material-symbols-outlined text-[18px]">link_off</span>
+                        </button>
+                      </div>
                     )}
                   </div>
                   <div className="mt-2.5 flex items-center gap-2">
@@ -307,17 +329,23 @@ export default function AdminLinePage() {
                       <td className="py-2.5 px-3 text-on-surface-variant whitespace-nowrap">{fmtDate(u.lastMessageAt)}</td>
                       {!isReadonly && (
                         <td className="py-2.5 px-3 text-right">
-                          {u.disabled ? (
-                            <button onClick={() => setDisabled(u, false)} disabled={busy} title="恢復使用權限"
-                              className="px-3 py-1.5 rounded-lg text-xs font-bold text-primary border border-primary/30 hover:bg-primary/10 transition-colors cursor-pointer disabled:opacity-40">
-                              啟用
+                          <div className="flex items-center justify-end gap-1.5">
+                            {u.disabled ? (
+                              <button onClick={() => setDisabled(u, false)} disabled={busy} title="恢復使用權限"
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold text-primary border border-primary/30 hover:bg-primary/10 transition-colors cursor-pointer disabled:opacity-40">
+                                啟用
+                              </button>
+                            ) : (
+                              <button onClick={() => setDisableTarget(u)} disabled={busy} title="停用此 LINE 用戶"
+                                className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-error border border-error/40 bg-error/5 hover:bg-error/10 transition-colors cursor-pointer disabled:opacity-40">
+                                停用
+                              </button>
+                            )}
+                            <button onClick={() => setDeleteTarget(u)} disabled={busy} title="解除綁定（刪除）"
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold text-error border border-error/40 bg-error/5 hover:bg-error/10 transition-colors cursor-pointer disabled:opacity-40">
+                              解除綁定
                             </button>
-                          ) : (
-                            <button onClick={() => setDisableTarget(u)} disabled={busy} title="停用此 LINE 用戶"
-                              className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-error border border-error/40 bg-error/5 hover:bg-error/10 transition-colors cursor-pointer disabled:opacity-40">
-                              停用
-                            </button>
-                          )}
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -410,6 +438,24 @@ export default function AdminLinePage() {
               <button onClick={() => setDisabled(disableTarget, true)} disabled={busy} className="px-5 py-2 rounded-xl text-sm font-bold text-on-error bg-error hover:bg-error/90 cursor-pointer disabled:opacity-40 flex items-center gap-2">
                 {busy && <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>}
                 停用
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unbind (delete) confirm */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => !busy && setDeleteTarget(null)}>
+          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-headline font-bold text-on-surface mb-2">解除 LINE 綁定</h3>
+            <p className="text-sm text-on-surface-variant mb-1">確定要解除「{deleteTarget.displayName || deleteTarget.email}」的 LINE 綁定嗎？</p>
+            <p className="text-xs text-on-surface-variant mb-5">這支 LINE 與此帳號的連結會被<strong className="text-error">永久移除</strong>，之後可重新綁定到其他帳號。<strong className="text-on-surface">使用者帳號本身與既有對話、檔案不受影響</strong>，但要再用 LINE 需重新掃碼綁定。</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleteTarget(null)} disabled={busy} className="px-4 py-2 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high cursor-pointer disabled:opacity-40">取消</button>
+              <button onClick={() => unbindUser(deleteTarget)} disabled={busy} className="px-5 py-2 rounded-xl text-sm font-bold text-on-error bg-error hover:bg-error/90 cursor-pointer disabled:opacity-40 flex items-center gap-2">
+                {busy && <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>}
+                解除綁定
               </button>
             </div>
           </div>

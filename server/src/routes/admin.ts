@@ -1995,6 +1995,23 @@ router.post('/line/users/:lineUserId/enable', async (req: Request, res: Response
   res.json({ success: true });
 });
 
+// DELETE /api/admin/line/users/:lineUserId — fully unbind a LINE account from
+// its internal user (vs. /disable, which keeps the binding). Removes only the
+// binding row + the user's stale bind tokens so this LINE can be re-bound to
+// another account. The internal user account and its data are left untouched
+// (the line_users → users cascade only fires when the user itself is deleted).
+router.delete('/line/users/:lineUserId', async (req: Request, res: Response) => {
+  const lineUserId = String(req.params.lineUserId);
+  const row = await dbGet<{ internal_user_id: string }>(
+    'SELECT internal_user_id FROM line_users WHERE line_user_id = ?', lineUserId,
+  );
+  if (!row) { res.status(404).json({ error: 'LINE 綁定不存在' }); return; }
+  await dbRun('DELETE FROM line_users WHERE line_user_id = ?', lineUserId);
+  // Clear the unbound user's bind tokens so a fresh QR binds cleanly.
+  await dbRun('DELETE FROM line_link_tokens WHERE user_id = ?', row.internal_user_id);
+  res.json({ success: true });
+});
+
 // GET /api/admin/line/message-quota — LINE Official Account monthly push quota.
 // Live call to the LINE API; returns { error } (200) when it can't be fetched
 // (e.g. no access token) so the UI can degrade gracefully.
