@@ -33,6 +33,11 @@ interface FileItem {
   created_at: string;
 }
 
+// LINE features are hidden in pro-panjit for now (may be opened later). Mirrors
+// the NEXT_PUBLIC_DEPLOY_MODE convention used in Navbar/login.
+const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
+const isPanjit = deployMode === 'pro-panjit';
+
 const DOC_TYPES = [
   { id: 'pptx-gen', labelKey: 'nav.docTypes.pptx.label' as const, descKey: 'nav.docTypes.pptx.desc' as const, icon: 'present_to_all', colorClass: 'text-warning' },
   { id: 'docx-gen', labelKey: 'nav.docTypes.docx.label' as const, descKey: 'nav.docTypes.docx.desc' as const, icon: 'description', colorClass: 'text-tertiary' },
@@ -121,7 +126,7 @@ function DashboardContent() {
     let cancelled = false;
     (async () => {
       let gateLine = false;
-      if (localStorage.getItem('line_prompt_shown_for') !== loginId) {
+      if (!isPanjit && localStorage.getItem('line_prompt_shown_for') !== loginId) {
         try {
           const res = await fetch('/api/auth/line-link-status', { headers: { Authorization: `Bearer ${token}` } });
           if (res.ok) {
@@ -369,7 +374,7 @@ function DashboardContent() {
       )}
 
       {/* LINE Bind Modal */}
-      {showLineModal && (
+      {!isPanjit && showLineModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={closeLineModal}>
           <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-2xl mx-4 p-6 md:p-8 relative" onClick={e => e.stopPropagation()}>
             <button
@@ -394,13 +399,15 @@ function DashboardContent() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowLineModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#06C755]/10 text-[#06C755] hover:bg-[#06C755]/20 transition-colors cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[18px]">qr_code_2</span>
-              <span className="text-sm font-bold">綁定 LINE</span>
-            </button>
+            {!isPanjit && (
+              <button
+                onClick={() => setShowLineModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#06C755]/10 text-[#06C755] hover:bg-[#06C755]/20 transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[18px]">qr_code_2</span>
+                <span className="text-sm font-bold">綁定 LINE</span>
+              </button>
+            )}
             <div className="flex items-center gap-1.5 px-3 py-1 bg-primary/10 rounded-full">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="text-sm text-primary font-bold tracking-widest uppercase">{t('dashboard.statusRunning')}</span>
@@ -447,6 +454,7 @@ function DashboardContent() {
           )}
 
           {/* LINE bind card */}
+          {!isPanjit && (
           <button
             onClick={() => setShowLineModal(true)}
             className="flex items-center gap-3 w-full px-4 py-3.5 bg-surface-container rounded-2xl active:bg-surface-container-high transition-colors cursor-pointer"
@@ -460,6 +468,7 @@ function DashboardContent() {
             </div>
             <span className="material-symbols-outlined text-on-surface-variant ml-auto">chevron_right</span>
           </button>
+          )}
 
           {/* Template Wizard button */}
           <button

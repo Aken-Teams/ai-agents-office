@@ -35,7 +35,8 @@ const NAV_GROUPS = [
       { href: '/admin/skills', permKey: 'skills', labelKey: 'admin.sidebar.skills' as const, icon: 'hub' },
       { href: '/admin/tokens', permKey: 'tokens', labelKey: 'admin.sidebar.tokens' as const, icon: 'payments' },
       { href: '/admin/analytics', permKey: 'analytics', labelKey: 'admin.sidebar.analytics' as const, icon: 'bar_chart' },
-      { href: '/admin/line', permKey: 'line', labelKey: 'admin.sidebar.line' as const, icon: 'chat' },
+      // LINE management is hidden in pro-panjit for now (feature not yet opened there).
+      ...(deployMode !== 'pro-panjit' ? [{ href: '/admin/line', permKey: 'line', labelKey: 'admin.sidebar.line' as const, icon: 'chat' }] : []),
     ],
   },
   {
