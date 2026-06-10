@@ -143,7 +143,7 @@ export function LineQrPanel({ title, caption, hint = '請用手機的 LINE 掃�
         </div>
 
         {!linked && (
-          <div className="w-full space-y-3 text-left">
+          <div className="w-full max-w-xs mx-auto @md:max-w-none @md:mx-0 space-y-3 text-left">
             {/* Step 1 — add friend */}
             <div className="flex items-start gap-2.5">
               <span className="shrink-0 w-5 h-5 mt-0.5 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center">1</span>
@@ -181,7 +181,7 @@ export function LineQrPanel({ title, caption, hint = '請用手機的 LINE 掃�
       </div>
 
       {/* Right column — QR / spinner / error / linked-success canvas. */}
-      <div className="relative w-[220px] h-[220px] shrink-0 mx-auto @md:mx-0 bg-white rounded-2xl border border-outline-variant/20 shadow-sm flex items-center justify-center">
+      <div className="relative w-[180px] h-[180px] @md:w-[220px] @md:h-[220px] shrink-0 mx-auto @md:mx-0 bg-white rounded-2xl border border-outline-variant/20 shadow-sm flex items-center justify-center">
         {linked ? (
           <div className="text-center px-6 space-y-3">
             <div className="mx-auto w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
