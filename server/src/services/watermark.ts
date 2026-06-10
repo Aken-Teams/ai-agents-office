@@ -3,17 +3,50 @@ import path from 'path';
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 import JSZip from 'jszip';
 import { config } from '../config.js';
+import { dbGet, dbRun } from '../db.js';
 
 /**
  * Unified watermark config — matches the web preview tiled style.
- * Two-line text, -30° rotation, ~15% opacity, gray, repeating grid.
+ * Single configurable text line, -30° rotation, ~15% opacity, gray, repeating grid.
  */
-const WM_TEXT_LINE1 = 'CONFIDENTIAL';
-const WM_TEXT_LINE2 = '機密文件 · 測試版';
-const WM_OFFICE_TEXT = `CONFIDENTIAL\n機密文件 · 測試版`;
 const WM_ROTATION_DEG = -30;
 const WM_COLOR_HEX = 'B0B0B0';
 const WM_OPACITY = 0.15; // 15%
+
+export const DEFAULT_WM_TEXT = 'CONFIDENTIAL · 機密文件';
+
+export interface WatermarkSettings { enabled: boolean; text: string; }
+
+/**
+ * Watermark on/off + text, stored in system_settings under the 'watermark' key.
+ * Until an admin saves an explicit value, falls back to the legacy `Version=Beta`
+ * env gate (config.isBeta) so existing behaviour is preserved.
+ */
+export async function getWatermarkSettings(): Promise<WatermarkSettings> {
+  const row = await dbGet<{ value: string }>("SELECT value FROM system_settings WHERE `key` = 'watermark'");
+  if (!row) return { enabled: config.isBeta, text: DEFAULT_WM_TEXT };
+  try {
+    const v = JSON.parse(row.value);
+    const text = typeof v.text === 'string' && v.text.trim() ? v.text : DEFAULT_WM_TEXT;
+    return { enabled: !!v.enabled, text };
+  } catch {
+    return { enabled: config.isBeta, text: DEFAULT_WM_TEXT };
+  }
+}
+
+export async function setWatermarkSettings(s: WatermarkSettings): Promise<void> {
+  const text = s.text && s.text.trim() ? s.text.trim().slice(0, 120) : DEFAULT_WM_TEXT;
+  await dbRun(
+    "REPLACE INTO system_settings (`key`, value) VALUES (?, ?)",
+    'watermark', JSON.stringify({ enabled: !!s.enabled, text }),
+  );
+}
+
+/** Escape text for safe use inside XML element/attribute content. */
+function xmlEscape(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
 
 /* ============================================================
    Public API
@@ -25,26 +58,26 @@ const WM_OPACITY = 0.15; // 15%
  * For unsupported types, returns null (caller should serve original).
  */
 export async function applyWatermark(filePath: string): Promise<Buffer | null> {
-  // Official version: skip watermarking entirely
-  if (!config.isBeta) return null;
+  const { enabled, text } = await getWatermarkSettings();
+  if (!enabled) return null;
 
   const ext = path.extname(filePath).slice(1).toLowerCase();
 
   switch (ext) {
     case 'pdf':
-      return watermarkPdf(filePath);
+      return watermarkPdf(filePath, text);
     case 'docx':
     case 'doc':
-      return watermarkDocx(filePath);
+      return watermarkDocx(filePath, text);
     case 'pptx':
     case 'ppt':
-      return watermarkPptx(filePath);
+      return watermarkPptx(filePath, text);
     case 'xlsx':
     case 'xls':
-      return watermarkXlsx(filePath);
+      return watermarkXlsx(filePath, text);
     case 'html':
     case 'htm':
-      return watermarkHtml(filePath);
+      return watermarkHtml(filePath, text);
     default:
       return null;
   }
@@ -54,13 +87,14 @@ export async function applyWatermark(filePath: string): Promise<Buffer | null> {
    PDF — pdf-lib: tiled diagonal text on every page
    StandardFonts only support Latin chars, so we use English text.
    ============================================================ */
-async function watermarkPdf(filePath: string): Promise<Buffer> {
+async function watermarkPdf(filePath: string, text: string): Promise<Buffer> {
   const existing = fs.readFileSync(filePath);
   const pdfDoc = await PDFDocument.load(existing);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-  // StandardFonts only support Latin — use English-only for PDF
-  const pdfText = 'CONFIDENTIAL · Test Version';
+  // StandardFonts only support Latin — strip non-ASCII (CJK can't be drawn by
+  // Helvetica); fall back to a safe label if nothing printable remains.
+  const pdfText = text.replace(/[^\x20-\x7E]/g, '').trim() || 'CONFIDENTIAL';
 
   const pages = pdfDoc.getPages();
   for (const page of pages) {
@@ -96,7 +130,7 @@ async function watermarkPdf(filePath: string): Promise<Buffer> {
    DOCX — inject VML watermark shapes into header XML
    Tiled pattern: 5 rows × 2 columns = 10 watermarks per page
    ============================================================ */
-async function watermarkDocx(filePath: string): Promise<Buffer> {
+async function watermarkDocx(filePath: string, text: string): Promise<Buffer> {
   const data = fs.readFileSync(filePath);
   const zip = await JSZip.loadAsync(data);
 
@@ -135,7 +169,7 @@ async function watermarkDocx(filePath: string): Promise<Buffer> {
           style="position:absolute;margin-left:${marginLeft};margin-top:${marginTop};width:${size};height:60pt;rotation:${vmlRotation};z-index:-251657216;mso-position-horizontal-relative:margin;mso-position-vertical-relative:margin"
           o:allowincell="f" fillcolor="#${WM_COLOR_HEX}" stroked="f">
           <v:fill opacity=".15"/>
-          <v:textpath style="font-family:&quot;Arial&quot;;font-size:1pt" string="CONFIDENTIAL &#xB7; 機密文件 &#xB7; 測試版"/>
+          <v:textpath style="font-family:&quot;Arial&quot;;font-size:1pt" string="${xmlEscape(text)}"/>
         </v:shape>
       </w:pict>
     </w:r>`;
@@ -218,7 +252,7 @@ async function watermarkDocx(filePath: string): Promise<Buffer> {
 /* ============================================================
    PPTX — add tiled semi-transparent text shapes to each slide
    ============================================================ */
-async function watermarkPptx(filePath: string): Promise<Buffer> {
+async function watermarkPptx(filePath: string, text: string): Promise<Buffer> {
   const data = fs.readFileSync(filePath);
   const zip = await JSZip.loadAsync(data);
 
@@ -267,23 +301,12 @@ async function watermarkPptx(filePath: string): Promise<Buffer> {
           <a:p>
             <a:pPr algn="ctr"/>
             <a:r>
-              <a:rPr lang="en-US" sz="${p.sz}" dirty="0">
+              <a:rPr lang="zh-TW" sz="${p.sz}" dirty="0">
                 <a:solidFill><a:srgbClr val="${WM_COLOR_HEX}"><a:alpha val="${alphaVal}"/></a:srgbClr></a:solidFill>
                 <a:latin typeface="Arial"/>
                 <a:ea typeface="Microsoft JhengHei"/>
               </a:rPr>
-              <a:t>${WM_TEXT_LINE1}</a:t>
-            </a:r>
-          </a:p>
-          <a:p>
-            <a:pPr algn="ctr"/>
-            <a:r>
-              <a:rPr lang="zh-TW" sz="${Math.round(p.sz * 0.7)}" dirty="0">
-                <a:solidFill><a:srgbClr val="${WM_COLOR_HEX}"><a:alpha val="${alphaVal}"/></a:srgbClr></a:solidFill>
-                <a:latin typeface="Arial"/>
-                <a:ea typeface="Microsoft JhengHei"/>
-              </a:rPr>
-              <a:t>${WM_TEXT_LINE2}</a:t>
+              <a:t>${xmlEscape(text)}</a:t>
             </a:r>
           </a:p>
         </p:txBody>
@@ -300,7 +323,7 @@ async function watermarkPptx(filePath: string): Promise<Buffer> {
 /* ============================================================
    XLSX — add DrawingML tiled watermark shapes on each sheet
    ============================================================ */
-async function watermarkXlsx(filePath: string): Promise<Buffer> {
+async function watermarkXlsx(filePath: string, text: string): Promise<Buffer> {
   const data = fs.readFileSync(filePath);
   const zip = await JSZip.loadAsync(data);
 
@@ -357,23 +380,12 @@ async function watermarkXlsx(filePath: string): Promise<Buffer> {
         <a:p>
           <a:pPr algn="ctr"/>
           <a:r>
-            <a:rPr lang="en-US" sz="${a.sz}">
+            <a:rPr lang="zh-TW" sz="${a.sz}">
               <a:solidFill><a:srgbClr val="${WM_COLOR_HEX}"><a:alpha val="${alphaVal}"/></a:srgbClr></a:solidFill>
               <a:latin typeface="Arial"/>
               <a:ea typeface="Microsoft JhengHei"/>
             </a:rPr>
-            <a:t>${WM_TEXT_LINE1}</a:t>
-          </a:r>
-        </a:p>
-        <a:p>
-          <a:pPr algn="ctr"/>
-          <a:r>
-            <a:rPr lang="zh-TW" sz="${Math.round(a.sz * 0.7)}">
-              <a:solidFill><a:srgbClr val="${WM_COLOR_HEX}"><a:alpha val="${alphaVal}"/></a:srgbClr></a:solidFill>
-              <a:latin typeface="Arial"/>
-              <a:ea typeface="Microsoft JhengHei"/>
-            </a:rPr>
-            <a:t>${WM_TEXT_LINE2}</a:t>
+            <a:t>${xmlEscape(text)}</a:t>
           </a:r>
         </a:p>
       </xdr:txBody>
@@ -427,11 +439,16 @@ ${anchorXml}
 /* ============================================================
    HTML — inject CSS watermark overlay before </body>
    ============================================================ */
-async function watermarkHtml(filePath: string): Promise<Buffer | null> {
+async function watermarkHtml(filePath: string, text: string): Promise<Buffer | null> {
   const html = fs.readFileSync(filePath, 'utf-8');
 
   // Skip if already has a watermark (e.g. slides-gen embeds its own)
   if (html.includes('watermark-overlay')) return null;
+
+  // Build the tiled SVG from the configured text (CJK falls back to a system
+  // sans font in the browser). The whole SVG is percent-encoded for the data URI.
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='480' height='320'><g transform='rotate(-30 240 160)'><text x='240' y='160' dominant-baseline='middle' text-anchor='middle' font-family='Arial,sans-serif' font-size='18' font-weight='700' fill='rgba(0,0,0,0.05)'>${xmlEscape(text)}</text></g></svg>`;
+  const dataUri = `data:image/svg+xml,${encodeURIComponent(svg)}`;
 
   const wmCss = `
 <style data-watermark>
@@ -439,7 +456,7 @@ async function watermarkHtml(filePath: string): Promise<Buffer | null> {
   position: fixed; inset: 0; z-index: 999999;
   pointer-events: none; user-select: none;
   overflow: hidden;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='320'%3E%3Cg transform='rotate(-30 240 160)'%3E%3Ctext x='240' y='145' dominant-baseline='middle' text-anchor='middle' font-family='Arial,sans-serif' font-size='20' font-weight='700' fill='rgba(0,0,0,0.045)'%3ECONFIDENTIAL%3C/text%3E%3Ctext x='240' y='172' dominant-baseline='middle' text-anchor='middle' font-family='Arial,sans-serif' font-size='14' font-weight='500' fill='rgba(0,0,0,0.04)'%3E%E6%A9%9F%E5%AF%86%E6%96%87%E4%BB%B6 %C2%B7 %E6%B8%AC%E8%A9%A6%E7%89%88%3C/text%3E%3C/g%3E%3C/svg%3E");
+  background-image: url("${dataUri}");
   background-repeat: repeat;
   background-size: 480px 320px;
 }

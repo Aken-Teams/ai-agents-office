@@ -6,7 +6,7 @@ import { dbGet, dbAll, dbRun } from '../db.js';
 import { adminMiddleware } from '../middleware/adminAuth.js';
 import { loadSkills } from '../skills/loader.js';
 import { config } from '../config.js';
-import { applyWatermark } from '../services/watermark.js';
+import { applyWatermark, getWatermarkSettings, setWatermarkSettings } from '../services/watermark.js';
 import { getUserUsageLimitUsd, setUserUsageLimitUsd, getUserDisplayCost, getEffectiveUserLimit, getStorageQuotaGb, setStorageQuotaGb, getUploadQuotaMb, setUploadQuotaMb } from '../services/usageLimit.js';
 import { getRolePermissions, setRolePermissions, type RolePermissions } from '../services/rolePermissions.js';
 import { getLineSettings, setLineSetting, type LineSettings } from '../services/lineSettings.js';
@@ -911,6 +911,7 @@ router.get('/settings', async (_req: Request, res: Response) => {
     usageLimitUsd: await getUserUsageLimitUsd(),
     storageQuotaGb: await getStorageQuotaGb(),
     uploadQuotaMb: await getUploadQuotaMb(),
+    watermark: await getWatermarkSettings(),
   });
 });
 
@@ -934,6 +935,13 @@ router.patch('/settings', async (req: Request, res: Response) => {
     await setUploadQuotaMb(uploadQuotaMb);
     changes.push(`uploadQuotaMb: ${old} → ${uploadQuotaMb}`);
   }
+  const { watermark } = req.body as { watermark?: { enabled?: boolean; text?: string } };
+  if (watermark && typeof watermark === 'object') {
+    const enabled = !!watermark.enabled;
+    const text = typeof watermark.text === 'string' ? watermark.text : '';
+    await setWatermarkSettings({ enabled, text });
+    changes.push(`watermark: enabled=${enabled}, text="${text}"`);
+  }
 
   if (changes.length === 0) {
     res.status(400).json({ error: 'No valid settings to update' });
@@ -952,6 +960,7 @@ router.patch('/settings', async (req: Request, res: Response) => {
     usageLimitUsd: await getUserUsageLimitUsd(),
     storageQuotaGb: await getStorageQuotaGb(),
     uploadQuotaMb: await getUploadQuotaMb(),
+    watermark: await getWatermarkSettings(),
   });
 });
 
