@@ -356,7 +356,7 @@ function OnboardingContent() {
                 掃描下方 QR Code 加入 LINE 好友，即可在 LINE 上直接使用 AI 助理，與您的網頁帳號共用額度與記憶。此步驟可略過，稍後也能在儀表板綁定。
               </p>
 
-              <div className="flex justify-center mb-7 rounded-2xl border border-outline-variant/20 bg-surface-container-high py-8">
+              <div className="flex justify-center mb-7 rounded-2xl border border-outline-variant/20 bg-surface-container-high px-6 md:px-8 py-8">
                 <LineQrPanel
                   title="綁定 LINE"
                   caption="連結你的帳號"

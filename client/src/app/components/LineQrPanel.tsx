@@ -46,6 +46,9 @@ export function LineQrPanel({ title, caption, hint = '請用手機的 LINE 掃�
   const [linked, setLinked] = useState(false);
   const [linkedName, setLinkedName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // LINE binding not configured on this deployment — a normal state, not a
+  // failure, so we show a calm "skip this step" hint instead of a red error.
+  const [unavailable, setUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
   const onLinkedRef = useRef(onLinked);
   onLinkedRef.current = onLinked;
@@ -58,10 +61,14 @@ export function LineQrPanel({ title, caption, hint = '請用手機的 LINE 掃�
 
   const fetchQr = useCallback(async () => {
     setError(null);
+    setUnavailable(false);
     setLoading(true);
     try {
       const res = await fetch('/api/auth/line-bind-qr', { headers: authHeaders() });
       if (!res.ok) {
+        // 404 = the server has LINE binding turned off / unconfigured. Treat it
+        // as "feature unavailable" rather than an error the user should retry.
+        if (res.status === 404) { setUnavailable(true); return; }
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `HTTP ${res.status}`);
       }
@@ -82,7 +89,7 @@ export function LineQrPanel({ title, caption, hint = '請用手機的 LINE 掃�
 
   // Poll for completion while the QR is on screen and not yet linked.
   useEffect(() => {
-    if (linked || loading || error) return;
+    if (linked || loading || error || unavailable) return;
     const id = setInterval(async () => {
       try {
         const res = await fetch('/api/auth/line-link-status', { headers: authHeaders() });
@@ -100,17 +107,37 @@ export function LineQrPanel({ title, caption, hint = '請用手機的 LINE 掃�
     return () => clearInterval(id);
   }, [linked, loading, error, markLinked]);
 
+  // LINE binding turned off / unconfigured: a single centered block, so the
+  // box never looks lopsided the way the two-column QR layout does when the
+  // left copy collapses to one short line.
+  if (unavailable) {
+    return (
+      <div className="w-full flex flex-col items-center text-center gap-4 py-2">
+        <div className="w-16 h-16 rounded-2xl bg-surface-container-high flex items-center justify-center">
+          <span className="material-symbols-outlined text-on-surface-variant/50 text-3xl">link_off</span>
+        </div>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-primary mb-1">{caption}</p>
+          <h1 className="font-headline text-2xl font-black text-on-surface tracking-tight">{title}</h1>
+        </div>
+        <p className="text-sm text-on-surface-variant leading-relaxed max-w-sm">
+          LINE 綁定目前尚未開放，您可以直接略過此步驟，稍後在儀表板再綁定。
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="@container w-full">
     <section
-      className="flex flex-col @xl:flex-row @xl:items-center justify-center gap-6 @xl:gap-9 w-full"
+      className="flex flex-col @md:flex-row @md:items-center justify-center gap-6 @md:gap-9 w-full"
       aria-labelledby="qr-hero-title"
     >
       {/* Left column — copy + step list. Centered when narrow, left when wide. */}
-      <div className="flex flex-col items-center @xl:items-start text-center @xl:text-left gap-4 w-full @xl:max-w-sm">
-        <div className="@xl:self-start">
+      <div className="flex flex-col items-center @md:items-start text-center @md:text-left gap-4 w-full @md:max-w-sm">
+        <div className="@md:self-start">
           <p className="text-xs font-bold uppercase tracking-widest text-primary mb-1">{caption}</p>
-          <h1 id="qr-hero-title" className="font-headline text-2xl @xl:text-3xl font-black text-on-surface tracking-tight">
+          <h1 id="qr-hero-title" className="font-headline text-2xl @md:text-3xl font-black text-on-surface tracking-tight">
             {title}
           </h1>
         </div>
@@ -154,7 +181,7 @@ export function LineQrPanel({ title, caption, hint = '請用手機的 LINE 掃�
       </div>
 
       {/* Right column — QR / spinner / error / linked-success canvas. */}
-      <div className="relative w-[220px] h-[220px] shrink-0 mx-auto @xl:mx-0 bg-white rounded-2xl border border-outline-variant/20 shadow-sm flex items-center justify-center">
+      <div className="relative w-[220px] h-[220px] shrink-0 mx-auto @md:mx-0 bg-white rounded-2xl border border-outline-variant/20 shadow-sm flex items-center justify-center">
         {linked ? (
           <div className="text-center px-6 space-y-3">
             <div className="mx-auto w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
