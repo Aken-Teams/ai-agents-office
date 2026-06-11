@@ -191,6 +191,20 @@ const DISALLOWED_TOOLS = [
   'Bash(cat */.claude:*)',
   'Bash(head .claude:*)',
   'Bash(tail .claude:*)',
+  // Block inline-eval runtimes — generators run `node <script>.ts`, never inline
+  // eval, so blocking -e/-p/--eval stops the trivial `node -e "fs.readFileSync(...)"`
+  // file-exfiltration one-liner without affecting legitimate generator runs.
+  'Bash(node -e:*)',
+  'Bash(node -p:*)',
+  'Bash(node --eval:*)',
+  'Bash(node --print:*)',
+  'Bash(python -c:*)',
+  'Bash(python3 -c:*)',
+  'Bash(perl -e:*)',
+  'Bash(ruby -e:*)',
+  // Plug case/format holes in the drive-letter cat/type blocks above
+  'Bash(cat /d:*)', 'Bash(cat /c:*)', 'Bash(type d\\:*)',
+  'Bash(more:*)', 'Bash(Get-Content:*)', 'Bash(gc:*)',
 ];
 
 // Router agents: NO tools — they only analyze requests and output [TASK] blocks.

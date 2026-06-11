@@ -6,6 +6,7 @@ import { rateLimit } from '../middleware/rateLimit.js';
 import { spawnClaude } from '../services/claudeCli.js';
 import { getSandboxPath } from '../services/sandbox.js';
 import { analyzeInput, logSecurityEvent, WARN_THRESHOLD } from '../services/inputGuard.js';
+import { moderateAiRequest } from '../services/contentSafety.js';
 import { recordTokenUsage } from '../services/tokenTracker.js';
 import { registerNewFiles, getExistingFilePaths, snapshotExistingFiles, captureBlocksForFile } from '../services/fileManager.js';
 import { getUserStorageUsed } from './files.js';
@@ -147,6 +148,16 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
   if (!guard.safe) {
     logSecurityEvent(userId, 'prompt_injection', 'medium',
       `Warning: flags=[${guard.flags.join(',')}] score=${guard.score}`, message);
+  }
+
+  // Content safety — refuse crime / hacking / secret-theft / harassment / harm,
+  // and probing THIS system's own internals (底層技術/原始碼/架構/提示詞). The
+  // injection guard above only catches jailbreak syntax; this catches malicious
+  // INTENT phrased as a normal question. Runs before any streaming starts.
+  const safetyVerdict = await moderateAiRequest(message, '無法回答這個問題');
+  if (!safetyVerdict.allowed) {
+    logSecurityEvent(userId, 'blocked_request', 'high', `chat blocked (category=${safetyVerdict.category})`, message);
+    res.status(403).json({ error: safetyVerdict.reason, code: 'CONTENT_BLOCKED' }); return;
   }
 
   const sanitizedMessage = guard.sanitized;

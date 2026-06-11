@@ -8,6 +8,8 @@ import { rebuildFile, patchFileField } from '../services/fileRebuilder.js';
 import { regenerateBlock } from '../services/blockRegenerator.js';
 import { agentRebuild } from '../services/agentRebuilder.js';
 import { captureBlocksForFile } from '../services/fileManager.js';
+import { moderateAiRequest } from '../services/contentSafety.js';
+import { logSecurityEvent } from '../services/inputGuard.js';
 import type { DocumentBlocksRecord, DocumentBlock, GeneratedFile } from '../types.js';
 
 const router = Router();
@@ -334,6 +336,16 @@ router.post('/:fileId/rebuild', async (req: Request, res: Response) => {
   // keeping every slide's content. Empty → plain rebuild with the existing style.
   const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction.trim().slice(0, 500) : '';
 
+  // Content safety on the user's free-text style/edit instruction (this route
+  // previously had no guard at all). Skip when empty (plain rebuild).
+  if (instruction) {
+    const v = await moderateAiRequest(instruction, '無法處理這個編輯需求');
+    if (!v.allowed) {
+      logSecurityEvent(userId, 'blocked_request', 'high', `block-rebuild blocked (category=${v.category})`, instruction);
+      res.status(403).json({ error: v.reason }); return;
+    }
+  }
+
   // Only PPTX uses the heavy (and sometimes flaky) agent rebuild. DOCX/XLSX
   // re-render deterministically via the shared generator — fast and reliable.
   const blockRec = await dbGet<{ doc_type: string }>(
@@ -436,6 +448,15 @@ router.post('/:fileId/regenerate/:blockId', async (req: Request, res: Response) 
 
   if (!instruction) {
     res.status(400).json({ error: 'instruction is required' });
+    return;
+  }
+
+  // Content safety — the block edit / Q&A instruction is user free-text reaching
+  // an LLM with no prior guard. Refuse crime / system-internals probing / etc.
+  const safety = await moderateAiRequest(instruction, answerOnly ? '無法回答這個問題' : '無法處理這個編輯需求');
+  if (!safety.allowed) {
+    logSecurityEvent(userId, 'blocked_request', 'high', `block-regen blocked (category=${safety.category})`, instruction);
+    res.status(403).json({ error: safety.reason });
     return;
   }
 

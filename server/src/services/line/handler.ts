@@ -18,7 +18,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { dbRun, dbAll, dbGet } from '../../db.js';
 import { Orchestrator } from '../orchestrator.js';
 import { analyzeInput, logSecurityEvent } from '../inputGuard.js';
-import { moderateTeamTopic } from '../contentSafety.js';
+import { moderateTeamTopic, moderateAiRequest } from '../contentSafety.js';
 import { checkUserUsageLimit } from '../usageLimit.js';
 import { recordTokenUsage } from '../tokenTracker.js';
 import { extractMemoryAndSummary } from '../memoryExtractor.js';
@@ -359,6 +359,15 @@ async function runConversation(lineUser: LineUserRow, message: string): Promise<
       type: 'text',
       text: '⚠️ 訊息內容被安全檢查阻擋，請改用其他敘述方式。',
     }]);
+    return;
+  }
+
+  // Content safety — refuse crime / hacking / secret-theft / harassment / harm /
+  // probing this system's own internals (same gate as web chat + team flows).
+  const safety = await moderateAiRequest(message, '無法回答這個問題');
+  if (!safety.allowed) {
+    logSecurityEvent(userId, 'blocked_request', 'high', `LINE chat blocked (category=${safety.category})`, message);
+    await pushMessage(lineUserId, [{ type: 'text', text: `🚫 ${safety.reason}` }]);
     return;
   }
 

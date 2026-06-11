@@ -31,7 +31,7 @@ export interface ModerationResult {
  * `lead` is the full opening clause, e.g. '無法回答這個問題'.
  */
 export function teamRefusalMessage(lead = '無法處理這個請求'): string {
-  return `${lead}。你描述的內容涉及不被允許的內容（例如犯罪、入侵或破壞系統、竊取機密、謾罵騷擾、危害本系統與其他使用者的安全，或探詢、揭露本系統的底層技術、原始碼與設計等智慧財產）。請改用合法、正當的目的重新描述。`;
+  return `${lead}。你的請求包含本系統不允許的內容，請改用合法、正當的目的重新描述。`;
 }
 
 /* ============================================================
@@ -118,6 +118,9 @@ async function classifyWithLlm(topic: string): Promise<ModerationResult | null> 
         temperature: 0,
         max_tokens: 60,
       }),
+      // Bound the wait so a slow/hung DeepSeek never stalls a chat turn — on
+      // timeout we fail open (the local blocklist has already screened blatant cases).
+      signal: AbortSignal.timeout(8000),
     });
     if (!dsRes.ok) { console.error('[contentSafety] classify DeepSeek error:', await dsRes.text()); return null; }
     const data = await dsRes.json() as { choices: Array<{ message: { content: string } }> };
@@ -154,3 +157,10 @@ export async function moderateTeamTopic(topic: string, refusalLead?: string): Pr
 
   return { allowed: true };
 }
+
+/**
+ * General content-safety gate for ANY surface where user free-text reaches an
+ * AI/LLM (web chat, LINE solo chat, document editing, …) — same engine as the
+ * team flows. Alias kept distinct so call sites read clearly.
+ */
+export const moderateAiRequest = moderateTeamTopic;
