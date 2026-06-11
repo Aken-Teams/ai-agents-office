@@ -1029,7 +1029,7 @@ export default function EmailAgentWidget() {
                                 <span className="material-symbols-outlined text-[11px] text-on-surface-variant/60">attach_file</span>
                               )}
                               {n.category && (
-                                <span className="text-[10px] text-on-surface-variant/60 bg-surface-container-highest px-1.5 py-0.5 rounded-full">
+                                <span className="text-[10px] text-on-surface-variant/60 bg-surface-container-highest px-1.5 py-0.5 rounded-full truncate max-w-[120px] shrink-0" title={n.category}>
                                   {n.category}
                                 </span>
                               )}

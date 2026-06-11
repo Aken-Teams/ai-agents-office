@@ -385,6 +385,17 @@ async function generateLayer1Summary(userId: string, emails: OutlookMessage[]): 
   );
   const memoryBlock = buildEmailAgentMemoryContext(memories);
 
+  // The user's own address — to tell whether they're a direct recipient (To) or
+  // just CC'd. CC-only mail is usually FYI, so we let the AI deprioritise it.
+  const userRow = await dbGet<{ email: string }>('SELECT email FROM users WHERE id = ?', userId);
+  const myEmail = (userRow?.email || '').toLowerCase();
+  const ccOnlyTag = (e: OutlookMessage): string => {
+    if (!myEmail) return '';
+    const inTo = (e.to || []).some(r => r.address?.toLowerCase() === myEmail);
+    const inCc = (e.cc || []).some(r => r.address?.toLowerCase() === myEmail);
+    return inCc && !inTo ? '\n[收件身分: 副本 CC（非主要收件者）]' : '';
+  };
+
   // Process in batches of 5 using keyed tags (A-E) for reliable mapping
   const BATCH_SIZE = 5;
   const TAGS = 'ABCDEFGHIJ';
@@ -398,7 +409,7 @@ async function generateLayer1Summary(userId: string, emails: OutlookMessage[]): 
     // Each email gets a unique letter tag
     const emailList = batch.map((e, i) => `--- 信件 ${TAGS[i]} ---
 Subject: ${e.subject}
-From: ${e.from.name} <${e.from.address}>
+From: ${e.from.name} <${e.from.address}>${ccOnlyTag(e)}
 Preview: ${(e.preview || '').substring(0, 300)}`).join('\n\n');
 
     const overviewInstruction = isLastBatch
@@ -413,6 +424,10 @@ Preview: ${(e.preview || '').substring(0, 300)}`).join('\n\n');
 - 高：VIP、合約、緊急期限、資安警告、客戶投訴
 - 中：會議邀請、專案更新、需要行動的請求
 - 低：電子報、自動通知、僅供參考
+
+收件身分規則：標記「[收件身分: 副本 CC（非主要收件者）]」的信件，代表使用者只是被副本、不是主要收件者，通常屬於知會性質。**除非內容極重要（資安警告、合約、緊急期限、客訴等），否則優先級至少降一級（高→中、中→低）**，讓「今日重點」聚焦在使用者為主要收件者的信件。
+
+category 規則：用 2-6 個字的「短標籤」分類即可（例如「需行動」「會議邀請」「通知」「資安」「請款」「電子報」），**不要寫成一整句話、不要加括號補充**。
 ${memoryBlock}
 
 信件列表：
