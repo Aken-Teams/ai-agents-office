@@ -2548,20 +2548,34 @@ function ChatContent() {
             selectedBlockId={docMode.selectedBlockId}
             onSelectBlock={docMode.setSelectedBlockId}
             onClose={() => docMode.exitDocumentMode()}
-            onRebuild={async () => {
+            onRebuild={async (instruction?: string) => {
               if (!docMode.documentFileId) return;
               setDocRebuilding(true);
               setDocRegenPhase('rebuilding');
+              setDocRegenInstruction(instruction ? `套用新風格：${instruction}` : '重新產生整份簡報…');
               const result = await docBlocks.rebuild(docMode.documentFileId, (event) => {
-                // Stream agent progress
-                if (event.type === 'agent_tool') {
+                // Surface live agent activity so the wait isn't a blank spinner.
+                if (event.type === 'agent_tool' && typeof event.data === 'string') {
                   setDocRegenPhase('rebuilding');
+                  setDocRegenInstruction(event.data.slice(0, 60));
+                } else if (event.type === 'agent_text' && typeof event.data === 'string' && event.data.trim()) {
+                  setDocRegenInstruction(event.data.replace(/\s+/g, ' ').trim().slice(-60));
                 }
-              });
+              }, instruction);
               setDocRebuilding(false);
               setDocRegenPhase('');
+              setDocRegenInstruction('');
               if (result.success && result.file) {
                 setFiles(prev => prev.map(f => f.id === docMode.documentFileId ? { ...f, ...(result.file as any) } : f));
+              } else {
+                // Make failure visible — a silent no-op reads as "nothing changed".
+                setMessages(prev => [...prev, {
+                  id: `rebuild-err-${Date.now()}`,
+                  conversation_id: conversationId,
+                  role: 'assistant',
+                  content: '⚠️ 重新產生失敗（可能逾時或服務忙碌，未扣用量）。原檔未變動。請稍後再按一次「重建」；若持續失敗，建議改用單一區塊的就地修改（文字／顏色／圖表）。',
+                  created_at: new Date().toISOString(),
+                }]);
               }
             }}
             onRegenerate={(blockId, elementContext) => {

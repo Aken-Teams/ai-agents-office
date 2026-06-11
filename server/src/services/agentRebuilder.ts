@@ -32,6 +32,7 @@ export async function agentRebuild(
   fileId: string,
   userId: string,
   emit?: (event: AgentRebuildEvent) => void,
+  instruction?: string,
 ): Promise<{ file: GeneratedFile; blocks: DocumentBlock[] } | null> {
   const send = emit || (() => {});
 
@@ -119,6 +120,12 @@ export async function agentRebuild(
     '5. 內容頁保持專業一致的風格',
     '6. 如果投影片資料有指定顏色樣式欄位（backgroundColor、accentColor 等），務必使用這些顏色',
     '7. 產生 output.pptx 和更新的 slides.json',
+    ...(instruction ? [
+      '',
+      '## 整份風格調整要求（最優先）',
+      `使用者希望調整整份簡報的風格：${instruction}`,
+      '請在**完全保留所有文字內容、數據、頁數與結構**的前提下，把**所有投影片**統一改成這個新風格（配色、視覺元素、字體調性一致），讓整份簡報風格協調一致。只改外觀，不改文字內容。',
+    ] : []),
     '',
     '請開始作業。',
   ].join('\n');
@@ -275,6 +282,7 @@ export async function agentRebuildSlide(
   docMeta: Record<string, unknown>,
   allBlocks: DocumentBlock[],
   emit?: (event: AgentRebuildEvent) => void,
+  instruction?: string,
 ): Promise<GeneratedFile | null> {
   const send = emit || (() => {});
 
@@ -341,6 +349,12 @@ export async function agentRebuildSlide(
     '8. 如果資料有指定顏色欄位（backgroundColor、accentColor 等），**務必使用這些顏色作為整頁配色**',
     '9. 輸出檔名為 slide-output.pptx（僅 1 頁）',
     '10. 不需要產生 slides.json',
+    ...(instruction ? [
+      '',
+      '## 使用者的具體要求（最優先）',
+      instruction,
+      '請依此要求調整這一頁。若是排版／版面問題（跑版、重疊、對齊、間距），務必**重新排版**，讓所有元素對齊整齊、彼此不重疊、不超出邊界。',
+    ] : []),
     '',
     '請開始作業。',
   ].join('\n');

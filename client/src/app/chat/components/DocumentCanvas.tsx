@@ -33,7 +33,7 @@ interface DocumentCanvasProps {
   selectedBlockId: string | null;
   onSelectBlock: (id: string | null) => void;
   onClose: () => void;
-  onRebuild: () => void;
+  onRebuild: (instruction?: string) => void;
   onRegenerate: (blockId: string, elementContext?: string) => void;
   /** Update a single block field (for inline editing) */
   onUpdateBlock?: (blockId: string, key: string, value: unknown) => void;
@@ -325,6 +325,7 @@ export default function DocumentCanvas({
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
   const [hoveredShapeName, setHoveredShapeName] = useState<string | null>(null);
   const [showRebuildConfirm, setShowRebuildConfirm] = useState(false);
+  const [rebuildStyle, setRebuildStyle] = useState('');
   const [docPageCount, setDocPageCount] = useState(0);
   const [docPageTexts, setDocPageTexts] = useState<string[]>([]);
   const [selectedCell, setSelectedCell] = useState<CellRef | null>(null);
@@ -570,10 +571,20 @@ export default function DocumentCanvas({
           </div>
           <h3 className="font-bold text-base text-on-surface mb-1.5">重新產生文件</h3>
           <p className="text-sm text-on-surface-variant text-center leading-relaxed">
-            AI 將根據目前的區塊資料重新設計並產生簡報，品質與左側對話相同。此過程約需 1-3 分鐘。
+            AI 會保留所有內容，重新設計並產生整份簡報（全頁風格一致）。此過程約需 1-3 分鐘。
           </p>
         </div>
-        <div className="flex gap-2 px-6 pb-6 pt-2">
+        <div className="px-6 pb-1">
+          <label className="block text-xs font-medium text-on-surface-variant mb-1.5">想順便換風格？（選填）</label>
+          <input
+            type="text"
+            value={rebuildStyle}
+            onChange={e => setRebuildStyle(e.target.value)}
+            placeholder="例如：改成深色科技風 / 粉色簡約風"
+            className="w-full bg-surface-container-high border border-outline-variant/20 rounded-lg px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
+          />
+        </div>
+        <div className="flex gap-2 px-6 pb-6 pt-3">
           <button
             onClick={() => setShowRebuildConfirm(false)}
             className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-on-surface-variant bg-surface-container-high hover:bg-surface-container-highest transition-colors cursor-pointer"
@@ -581,10 +592,10 @@ export default function DocumentCanvas({
             取消
           </button>
           <button
-            onClick={() => { setShowRebuildConfirm(false); onRebuild(); }}
+            onClick={() => { setShowRebuildConfirm(false); onRebuild(rebuildStyle.trim() || undefined); setRebuildStyle(''); }}
             className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-on-primary bg-primary hover:bg-primary-hover transition-colors cursor-pointer"
           >
-            確定重建
+            {rebuildStyle.trim() ? '重建並換風格' : '確定重建'}
           </button>
         </div>
       </div>

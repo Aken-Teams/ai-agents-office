@@ -330,6 +330,9 @@ router.post('/:fileId/patch', async (req: Request, res: Response) => {
 router.post('/:fileId/rebuild', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const fileId = req.params.fileId as string;
+  // Optional whole-deck style request: re-render all slides in a new look while
+  // keeping every slide's content. Empty → plain rebuild with the existing style.
+  const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction.trim().slice(0, 500) : '';
 
   const acceptsSSE = req.headers.accept?.includes('text/event-stream');
 
@@ -350,7 +353,7 @@ router.post('/:fileId/rebuild', async (req: Request, res: Response) => {
       try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* closed */ }
     };
 
-    agentRebuild(fileId, userId, emit)
+    agentRebuild(fileId, userId, emit, instruction || undefined)
       .then(result => {
         if (!result) {
           emit({ type: 'error', data: 'Agent rebuild failed' });

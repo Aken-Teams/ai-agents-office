@@ -41,7 +41,7 @@ interface UseDocumentBlocksReturn {
   /** Add a new block */
   addBlock: (fileId: string, type: string, data: Record<string, unknown>, insertAfter?: string) => Promise<DocumentBlock | null>;
   /** Rebuild file using agent (SSE streaming). onEvent streams progress. */
-  rebuild: (fileId: string, onEvent?: (event: { type: string; data?: any }) => void) => Promise<{ success: boolean; file?: any; blocks?: DocumentBlock[] }>;
+  rebuild: (fileId: string, onEvent?: (event: { type: string; data?: any }) => void, instruction?: string) => Promise<{ success: boolean; file?: any; blocks?: DocumentBlock[] }>;
   /** Patch a single field in-place (preserves formatting) */
   patchField: (fileId: string, blockId: string, key: string, value: unknown) => Promise<{ success: boolean; file?: any }>;
   /** AI regenerate a single block (streams SSE events via onEvent callback) */
@@ -178,13 +178,15 @@ export function useDocumentBlocks(token: string | null): UseDocumentBlocksReturn
   const rebuild = useCallback(async (
     fileId: string,
     onEvent?: (event: { type: string; data?: any }) => void,
+    instruction?: string,
   ): Promise<{ success: boolean; file?: any; blocks?: DocumentBlock[] }> => {
     if (!token) return { success: false };
     setError(null);
     try {
       const res = await fetch(`${SSE_BASE}/api/blocks/${fileId}/rebuild`, {
         method: 'POST',
-        headers: { ...headers(), Accept: 'text/event-stream' },
+        headers: { ...headers(), Accept: 'text/event-stream', 'Content-Type': 'application/json' },
+        body: JSON.stringify(instruction ? { instruction } : {}),
       });
       if (!res.ok) throw new Error(`Rebuild failed: ${res.status}`);
 

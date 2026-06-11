@@ -198,7 +198,9 @@ export async function regenerateBlock(
       conversationId: blockRecord.conversation_id,
       role: 'router', // No tools needed, just text generation
       sandboxSubdir: '_agents/_block-editor',
-      model: 'claude-sonnet-4-6', // Balanced: good quality + reasonable speed for single-block edits
+      // Opus follows edit instructions (chart kind/colors/legend, exact JSON
+      // shape) more reliably than Sonnet for these single-block edits.
+      model: 'claude-opus-4-8',
     });
 
     let resolved = false;
@@ -266,8 +268,12 @@ export async function regenerateBlock(
           // If AI returned identical data, the file may be out of sync from a previous
           // failed patch. Force-sync by passing empty oldData so all patchable fields
           // are treated as "changed" and applied to the file.
+          // Layout/redesign requests can't be expressed as block data, so an
+          // in-place patch can't help — route them straight to a single-slide
+          // re-render that re-lays-out just this page (with the user's request).
+          const layoutIntent = /排版|版面|佈局|布局|重新設計|重新排版|跑版|對齊|間距|重疊|位置|擺放|layout/i.test(cleanInstruction);
           const patchOld = dataChanged ? oldData : {};
-          const patched = await patchBlockInPlace(
+          const patched = layoutIntent ? false : await patchBlockInPlace(
             fileId, userId, targetBlock.order, patchOld, updatedData, blockRecord.doc_type,
           );
 
@@ -284,6 +290,7 @@ export async function regenerateBlock(
                     if (ev.type === 'agent_text') send({ type: 'agent_text', data: ev.data });
                     else if (ev.type === 'agent_tool') send({ type: 'agent_tool', data: ev.data });
                   },
+                  layoutIntent ? cleanInstruction : undefined,
                 );
                 if (newFile) {
                   console.log(`[BlockRegenerator] Agent single-slide rebuild successful: slide ${targetBlock.order + 1}`);
@@ -459,6 +466,7 @@ function buildPptxRegenPrompt(
     '- Set a `colors` array of 6-digit hex strings (no "#") on that chart, e.g. "colors": ["2B6CB0"].',
     '- For a single colour, give one hex. For 彩虹/多色/繽紛 (rainbow / multi-colour), give one distinct hex PER category (same count as labels), e.g. ["E8478A","F59E0B","FBBF24","34D399","3B82F6"].',
     '- Keep `kind`, `labels`, and `values` unchanged when only the colour is changing.',
+    'When the user asks to add/remove a chart legend (圖例/圖示): set `showLegend` to true or false on that chart. (Pie/doughnut charts show a legend by default.)',
     '',
     '## SLIDE TYPE PATTERNS',
     '- title/title_slide: title + subtitle + description. Creative, visually impactful.',

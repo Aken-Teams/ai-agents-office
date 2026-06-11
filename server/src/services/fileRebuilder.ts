@@ -365,16 +365,21 @@ function normKind(k: string): string {
 }
 
 /**
- * Render ONE chart with pptxgenjs and return just its `<c:plotArea>` XML. Used
- * to swap a chart's TYPE in place: we drop this fresh plot area (correct type,
- * axes, and new-data caches) into the existing chart part, leaving the chart's
- * title/legend/frame/embedding untouched.
+ * Render ONE chart with pptxgenjs and return its `<c:plotArea>` + `<c:legend>`
+ * XML. Used to re-render a chart in place on a type/colour/legend change: we drop
+ * the fresh plot area + legend into the existing chart part, leaving the chart's
+ * title/frame/embedding untouched. Pie/doughnut get a legend + % labels by
+ * default so the slices are readable.
  */
-async function genChartPlotArea(kind: string, labels: string[], values: number[], colors: string[]): Promise<string | null> {
+async function genChart(
+  kind: string, labels: string[], values: number[], colors: string[], showLegend?: boolean,
+): Promise<{ plotArea: string; legend: string } | null> {
   const map: Record<string, string> = {
     bar: 'bar', column: 'bar', line: 'line', area: 'area', pie: 'pie', donut: 'doughnut', doughnut: 'doughnut',
   };
   const k = map[String(kind).toLowerCase()] || 'bar';
+  const circular = k === 'pie' || k === 'doughnut';
+  const legendOn = showLegend === undefined ? circular : showLegend;
   const pptx = new PptxGenJS();
   const ctype = (pptx as any).ChartType[k] || (pptx as any).ChartType.bar;
   const slide = pptx.addSlide();
@@ -383,6 +388,12 @@ async function genChartPlotArea(kind: string, labels: string[], values: number[]
     chartColors: colors.length ? colors : ['2B6CB0', 'E84855', '38A169', 'D69E2E', '805AD5', 'DD6B20'],
     barDir: 'col',
     holeSize: k === 'doughnut' ? 55 : undefined,
+    showLegend: legendOn,
+    legendPos: 'r',
+    legendFontSize: 9,
+    showPercent: circular,           // % labels on pie/doughnut slices
+    dataLabelColor: circular ? 'FFFFFF' : undefined,
+    dataLabelFontSize: 9,
   } as any);
   const buf = await (pptx as any).write({ outputType: 'nodebuffer' }) as Buffer;
   const z = await JSZip.loadAsync(buf);
@@ -390,7 +401,9 @@ async function genChartPlotArea(kind: string, labels: string[], values: number[]
   if (!cf) return null;
   const cx = await z.file(cf)!.async('text');
   const pa = cx.match(/<c:plotArea>[\s\S]*<\/c:plotArea>/);
-  return pa ? pa[0] : null;
+  if (!pa) return null;
+  const lg = cx.match(/<c:legend>[\s\S]*?<\/c:legend>/);
+  return { plotArea: pa[0], legend: lg ? lg[0] : '' };
 }
 
 /** Pull the series/slice colors out of a chart part so a type swap keeps them.
@@ -768,6 +781,7 @@ interface ChartCacheData {
   slices?: { label: string; value: number }[];
   bars?: { label: string; value: number }[];
   colors?: string[];
+  showLegend?: boolean;
 }
 
 const xmlEsc = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -826,19 +840,34 @@ async function patchSlideChartData(zip: JSZip, slideFile: string, _slideIndex: n
     const newColors = (nc.colors || []).map(c => String(c).replace('#', '').toUpperCase()).filter(c => /^[0-9A-F]{6}$/.test(c));
     const kindChanged = !!newKind && !!curKind && newKind !== curKind;
     const colorsChanged = newColors.length > 0 && JSON.stringify(newColors) !== JSON.stringify(curColors);
+    const targetKind = kindChanged ? newKind : curKind;
+    const circular = targetKind === 'pie' || targetKind === 'doughnut';
+    const curHasLegend = /<c:legend>/.test(cx);
+    // Pie/doughnut need a legend (slices = categories); bar/line put categories
+    // on the axis, so a single-series legend is just a useless "Series" box —
+    // default it OFF for those (unless the user explicitly asked for one).
+    const wantLegend = nc.showLegend !== undefined ? !!nc.showLegend : circular;
+    const legendChanged = wantLegend !== curHasLegend;
 
-    if ((kindChanged || colorsChanged) && labels.length && values.length) {
-      // TYPE and/or COLOR change — re-render just this chart's plot area (correct
-      // type, axes, new data + colors), keeping the title/legend/frame intact.
+    if ((kindChanged || colorsChanged || legendChanged) && labels.length && values.length) {
+      // TYPE / COLOUR / LEGEND change — re-render this chart's plot area (+ legend),
+      // keeping the title/frame/embedding intact.
       const colors = newColors.length ? newColors : curColors;
-      const plot = await genChartPlotArea(kindChanged ? newKind : curKind, labels, values, colors);
-      if (plot) {
-        cx = cx.replace(/<c:plotArea>[\s\S]*<\/c:plotArea>/, plot);
+      const gen = await genChart(targetKind, labels, values, colors, wantLegend);
+      if (gen) {
+        cx = cx.replace(/<c:plotArea>[\s\S]*<\/c:plotArea>/, gen.plotArea);
+        if (curHasLegend) {
+          cx = gen.legend
+            ? cx.replace(/<c:legend>[\s\S]*?<\/c:legend>/, gen.legend)
+            : cx.replace(/<c:legend>[\s\S]*?<\/c:legend>/, '');
+        } else if (gen.legend) {
+          cx = cx.replace('</c:plotArea>', `</c:plotArea>${gen.legend}`);
+        }
         zip.file(partPath, cx);
         patched = true;
         continue;
       }
-      // If plot-area generation failed, fall through to a data-only patch.
+      // If generation failed, fall through to a data-only patch.
     }
 
     // DATA-ONLY — rewrite the cached labels/values, keep the original styling.
