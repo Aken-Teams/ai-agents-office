@@ -620,10 +620,30 @@ function AdLoginForm({ onAdminMode }: { onAdminMode?: () => void }) {
 
   return (
     <>
-      <div className="mb-8 md:mb-10">
+      <div className="mb-6 md:mb-7">
         <h3 className="font-headline text-2xl font-bold mb-1.5">員工登入</h3>
         <p className="text-on-surface-variant text-sm">使用 AD 工號登入系統</p>
       </div>
+
+      {/* Deployment notice — pro-panjit only. Data-purge deadline + domain move. */}
+      {isPanjit && (
+        <div className="mb-6 rounded-lg border border-amber-500/20 bg-amber-500/[0.07] px-3.5 py-3">
+          <div className="flex items-center gap-1.5 mb-2">
+            <span className="material-symbols-outlined text-amber-600 text-[17px]">campaign</span>
+            <span className="font-label text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">系統公告</span>
+          </div>
+          <ul className="space-y-1.5 text-[13px] leading-relaxed text-on-surface-variant">
+            <li className="flex gap-1.5">
+              <span className="text-amber-600/70 shrink-0">•</span>
+              <span><span className="font-semibold text-on-surface">7/1</span> 將清除舊資料，請儘速完成<span className="font-semibold text-on-surface">註冊與帳號綁定</span>，以免資料遺失。</span>
+            </li>
+            <li className="flex gap-1.5">
+              <span className="text-amber-600/70 shrink-0">•</span>
+              <span>本服務後續將轉移至新網域 <span className="font-semibold text-on-surface">panjit-jv.com</span>。</span>
+            </li>
+          </ul>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {error && (
