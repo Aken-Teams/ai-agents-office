@@ -622,19 +622,23 @@ export default function DocumentCanvas({
           </div>
           <h3 className="font-bold text-base text-on-surface mb-1.5">重新產生文件</h3>
           <p className="text-sm text-on-surface-variant text-center leading-relaxed">
-            AI 會保留所有內容，重新設計並產生整份簡報（全頁風格一致）。此過程約需 1-3 分鐘。
+            {docType === 'pptx'
+              ? 'AI 會保留所有內容，重新設計並產生整份簡報（全頁風格一致）。此過程約需 1-3 分鐘。'
+              : '會保留所有內容，以原本的格式重新產生整份文件（修正排版／同步最新編輯）。通常數秒內完成。'}
           </p>
         </div>
-        <div className="px-6 pb-1">
-          <label className="block text-xs font-medium text-on-surface-variant mb-1.5">想順便換風格？（選填）</label>
-          <input
-            type="text"
-            value={rebuildStyle}
-            onChange={e => setRebuildStyle(e.target.value)}
-            placeholder="例如：改成深色科技風 / 粉色簡約風"
-            className="w-full bg-surface-container-high border border-outline-variant/20 rounded-lg px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
-          />
-        </div>
+        {docType === 'pptx' && (
+          <div className="px-6 pb-1">
+            <label className="block text-xs font-medium text-on-surface-variant mb-1.5">想順便換風格？（選填）</label>
+            <input
+              type="text"
+              value={rebuildStyle}
+              onChange={e => setRebuildStyle(e.target.value)}
+              placeholder="例如：改成深色科技風 / 粉色簡約風"
+              className="w-full bg-surface-container-high border border-outline-variant/20 rounded-lg px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
+            />
+          </div>
+        )}
         <div className="flex gap-2 px-6 pb-6 pt-3">
           <button
             onClick={() => setShowRebuildConfirm(false)}

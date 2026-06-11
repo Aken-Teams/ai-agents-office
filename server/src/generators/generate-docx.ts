@@ -6,7 +6,7 @@
  * Supports "style" field: "formal" | "modern" | "academic" | "compact"
  */
 
-import { Document, Packer, Paragraph, HeadingLevel, TextRun, AlignmentType, BorderStyle, ShadingType } from 'docx';
+import { Document, Packer, Paragraph, HeadingLevel, TextRun, AlignmentType, BorderStyle, ShadingType, Table, TableRow, TableCell, WidthType, Header, Footer, PageNumber } from 'docx';
 import fs from 'fs';
 
 // ── Style Presets ──────────────────────────────────────────────
@@ -65,11 +65,27 @@ const STYLES: Record<string, StylePreset> = {
 const DEFAULT_STYLE = STYLES['modern'];
 
 // ── Types ──────────────────────────────────────────────────────
+// Accepts BOTH the editor's block schema (type/title/content/items/headers/rows)
+// and the older {heading, paragraphs, bullets} shape.
 interface Section {
+  type?: string;
   heading?: string;
+  title?: string;
   level?: number;
+  content?: string;
   paragraphs?: string[];
   bullets?: string[];
+  items?: string[];
+  points?: string[];
+  headers?: string[];
+  rows?: string[][];
+}
+
+/** Infer heading level from a numbered title: "1." → 1, "1.2" → 2, "1.2.3" → 3. */
+function levelFromTitle(title: string, fallback = 1): number {
+  const m = (title || '').match(/^\s*(\d+(?:\.\d+)*)/);
+  if (m) return Math.min(m[1].split('.').filter(Boolean).length, 3);
+  return fallback;
 }
 
 interface DocxInput {
@@ -83,7 +99,7 @@ async function generateDocx(inputPath: string, outputPath: string) {
   const input: DocxInput = JSON.parse(fs.readFileSync(inputPath, 'utf-8'));
   const s = STYLES[input.style || ''] || DEFAULT_STYLE;
 
-  const children: Paragraph[] = [];
+  const children: (Paragraph | Table)[] = [];
 
   // Title
   children.push(new Paragraph({
@@ -93,53 +109,110 @@ async function generateDocx(inputPath: string, outputPath: string) {
     spacing: { after: s.paragraphAfter * 2 },
   }));
 
-  // Sections
-  for (const section of input.sections) {
-    if (section.heading) {
-      const headingLevel = section.level === 2 ? HeadingLevel.HEADING_2 :
-                           section.level === 3 ? HeadingLevel.HEADING_3 :
-                           HeadingLevel.HEADING_1;
-      const headingParagraph: ConstructorParameters<typeof Paragraph>[0] = {
-        children: [new TextRun({ text: section.heading, bold: true, size: s.headingSize, font: s.font, color: s.headingColor })],
-        heading: headingLevel,
-        spacing: { before: s.sectionBefore, after: s.paragraphAfter },
-      };
-      // Accent left border for modern style
-      if (s.accentBorder) {
-        (headingParagraph as any).border = {
-          left: { style: BorderStyle.SINGLE, size: 12, color: s.accentColor, space: 8 },
-        };
-        (headingParagraph as any).shading = { type: ShadingType.CLEAR, fill: 'F0F4F8' };
-        (headingParagraph as any).indent = { left: 120 };
-      }
-      children.push(new Paragraph(headingParagraph));
+  const addHeading = (text: string, level: number, pageBreakBefore = false) => {
+    const headingLevel = level >= 3 ? HeadingLevel.HEADING_3 : level === 2 ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_1;
+    const p: ConstructorParameters<typeof Paragraph>[0] = {
+      children: [new TextRun({ text, bold: true, size: s.headingSize, font: s.font, color: s.headingColor })],
+      heading: headingLevel,
+      spacing: { before: s.sectionBefore, after: s.paragraphAfter },
+      ...(pageBreakBefore ? { pageBreakBefore: true } : {}),
+    };
+    if (s.accentBorder) {
+      (p as any).border = { left: { style: BorderStyle.SINGLE, size: 12, color: s.accentColor, space: 8 } };
+      (p as any).shading = { type: ShadingType.CLEAR, fill: 'F0F4F8' };
+      (p as any).indent = { left: 120 };
     }
+    children.push(new Paragraph(p));
+  };
+  const addParas = (text: string) => {
+    for (const para of String(text).split(/\n+/).map(t => t.trim()).filter(Boolean)) {
+      children.push(new Paragraph({
+        children: [new TextRun({ text: para, size: s.bodySize, font: s.font, color: s.bodyColor })],
+        spacing: { after: s.paragraphAfter, line: s.lineSpacing },
+      }));
+    }
+  };
+  const addBullets = (arr: string[]) => {
+    for (const b of arr) {
+      const text = typeof b === 'string' ? b : String((b as any)?.text ?? '');
+      if (!text) continue;
+      children.push(new Paragraph({
+        children: [new TextRun({ text, size: s.bodySize, font: s.font, color: s.bodyColor })],
+        bullet: { level: 0 },
+        spacing: { after: s.paragraphAfter / 2, line: s.lineSpacing },
+        indent: { left: s.bulletIndent },
+      }));
+    }
+  };
+  const addTable = (headers: string[], rows: string[][]) => {
+    const cell = (txt: string, header: boolean) => new TableCell({
+      shading: header ? { type: ShadingType.CLEAR, fill: s.accentColor } : undefined,
+      margins: { top: 60, bottom: 60, left: 100, right: 100 },
+      children: [new Paragraph({ children: [new TextRun({ text: String(txt ?? ''), bold: header, size: s.bodySize, font: s.font, color: header ? 'FFFFFF' : s.bodyColor })] })],
+    });
+    const tableRows: TableRow[] = [];
+    if (headers?.length) tableRows.push(new TableRow({ tableHeader: true, children: headers.map(h => cell(h, true)) }));
+    for (const r of rows || []) tableRows.push(new TableRow({ children: (Array.isArray(r) ? r : [r]).map(c => cell(c as string, false)) }));
+    if (tableRows.length) {
+      children.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: tableRows }));
+      children.push(new Paragraph({ children: [], spacing: { after: s.paragraphAfter } }));
+    }
+  };
 
-    if (section.paragraphs) {
-      for (const para of section.paragraphs) {
-        children.push(new Paragraph({
-          children: [new TextRun({ text: para, size: s.bodySize, font: s.font, color: s.bodyColor })],
-          spacing: { after: s.paragraphAfter, line: s.lineSpacing },
-        }));
-      }
-    }
+  // Sections — support BOTH the editor block schema and the legacy shape.
+  // The first block is treated as the cover; real content starts on a new page.
+  const coverIsTable = String(input.sections[0]?.type || '').toLowerCase() === 'table';
+  let coverBreakDone = !coverIsTable; // only force a break when there's a cover block
+  for (let i = 0; i < input.sections.length; i++) {
+    const sec = input.sections[i];
+    const headingText = sec.heading || sec.title || '';
+    const kind = String(sec.type || '').toLowerCase();
+    // First real section after the cover → start it on a fresh page.
+    const breakBefore = !coverBreakDone && i > 0;
+    if (breakBefore) coverBreakDone = true;
 
-    if (section.bullets) {
-      for (const bullet of section.bullets) {
-        children.push(new Paragraph({
-          children: [new TextRun({ text: bullet, size: s.bodySize, font: s.font, color: s.bodyColor })],
-          bullet: { level: 0 },
-          spacing: { after: s.paragraphAfter / 2, line: s.lineSpacing },
-          indent: { left: s.bulletIndent },
-        }));
-      }
+    if (kind === 'table' || (sec.headers && sec.rows)) {
+      if (headingText) addHeading(headingText, levelFromTitle(headingText, 2), breakBefore);
+      addTable(sec.headers || [], sec.rows || []);
+      continue;
     }
+    if (headingText) addHeading(headingText, sec.level || levelFromTitle(headingText, kind === 'paragraph' ? 2 : 1), breakBefore);
+    if (sec.content) addParas(sec.content);
+    if (sec.paragraphs) for (const p of sec.paragraphs) addParas(p);
+    const listItems = sec.items || sec.bullets || sec.points;
+    if (listItems?.length) addBullets(listItems);
   }
+
+  // Header: document title (right-aligned, muted). Footer: 第 X 頁 / 共 Y 頁.
+  const header = new Header({
+    children: [new Paragraph({
+      alignment: AlignmentType.RIGHT,
+      border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC', space: 2 } },
+      children: [new TextRun({ text: input.title, size: 16, color: '888888', font: s.font })],
+    })],
+  });
+  const footer = new Footer({
+    children: [new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [
+        new TextRun({ text: '第 ', size: 16, color: '888888', font: s.font }),
+        new TextRun({ children: [PageNumber.CURRENT], size: 16, color: '888888', font: s.font }),
+        new TextRun({ text: ' 頁 / 共 ', size: 16, color: '888888', font: s.font }),
+        new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 16, color: '888888', font: s.font }),
+        new TextRun({ text: ' 頁', size: 16, color: '888888', font: s.font }),
+      ],
+    })],
+  });
 
   const doc = new Document({
     creator: input.author || 'AI Agents Office',
     title: input.title,
-    sections: [{ children }],
+    sections: [{
+      properties: { page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
+      headers: { default: header },
+      footers: { default: footer },
+      children,
+    }],
   });
 
   const buffer = await Packer.toBuffer(doc);

@@ -334,6 +334,13 @@ router.post('/:fileId/rebuild', async (req: Request, res: Response) => {
   // keeping every slide's content. Empty → plain rebuild with the existing style.
   const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction.trim().slice(0, 500) : '';
 
+  // Only PPTX uses the heavy (and sometimes flaky) agent rebuild. DOCX/XLSX
+  // re-render deterministically via the shared generator — fast and reliable.
+  const blockRec = await dbGet<{ doc_type: string }>(
+    'SELECT doc_type FROM document_blocks WHERE file_id = ? AND user_id = ?', fileId, userId,
+  );
+  const docType = blockRec?.doc_type || 'pptx';
+
   const acceptsSSE = req.headers.accept?.includes('text/event-stream');
 
   if (acceptsSSE) {
@@ -353,14 +360,24 @@ router.post('/:fileId/rebuild', async (req: Request, res: Response) => {
       try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* closed */ }
     };
 
-    agentRebuild(fileId, userId, emit, instruction || undefined)
+    const rebuildRun: Promise<unknown> = docType === 'pptx'
+      ? agentRebuild(fileId, userId, emit, instruction || undefined)
+      : (async () => {
+          // DOCX/XLSX: deterministic re-render via the shared generator (now
+          // schema-aligned with the editor blocks, incl. tables/lists/content).
+          emit({ type: 'started' });
+          const f = await rebuildFile(fileId, userId);
+          if (f) { emit({ type: 'file_ready', data: { file: f } }); emit({ type: 'done', data: { file: f } }); }
+          return f;
+        })();
+    rebuildRun
       .then(result => {
         if (!result) {
-          emit({ type: 'error', data: 'Agent rebuild failed' });
+          emit({ type: 'error', data: 'Rebuild failed' });
         }
       })
       .catch(err => {
-        console.error('[Blocks] Agent rebuild error:', err);
+        console.error('[Blocks] Rebuild error:', err);
         emit({ type: 'error', data: String(err) });
       })
       .finally(() => {
