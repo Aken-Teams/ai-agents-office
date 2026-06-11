@@ -104,20 +104,45 @@ interface StatItem {
 }
 
 interface ColumnItem {
-  heading: string;
-  bullets: string[];
+  heading?: string;
+  title?: string;       // agent uses `title` for column/pane headings
+  bullets?: string[];
+  chart?: ChartItem;    // a column/pane may hold a chart instead of bullets
+}
+
+interface KpiItem {
+  value: string;
+  label: string;
+  unit?: string;
+  color?: string;
+}
+
+interface ChartItem {
+  kind?: string;   // bar | line | area | pie | donut (agent uses `kind`)
+  type?: string;   // some data uses `type` instead — accept both
+  title?: string;
+  labels?: string[];
+  values?: number[];
+  slices?: { label: string; value: number; color?: string }[];
+  bars?: { label: string; value: number; color?: string }[];
+  colors?: string[];
 }
 
 interface SlideData {
-  type: 'title' | 'content' | 'two-column' | 'three-column' | 'section' | 'stats' | 'quote' | 'image';
+  // Kept as a free string: the agent emits many type variants (and underscore
+  // vs hyphen spellings). We normalize before switching.
+  type: string;
   title?: string;
   subtitle?: string;
   bullets?: string[];
   text?: string;
-  left?: { heading: string; bullets: string[] };
-  right?: { heading: string; bullets: string[] };
+  left?: ColumnItem;
+  right?: ColumnItem;
   columns?: ColumnItem[];
   stats?: StatItem[];
+  kpis?: KpiItem[];        // agent's stats slides use `kpis`
+  charts?: ChartItem[];    // 0–2 charts under a stats slide
+  chart?: ChartItem;       // standalone chart slide
   quote?: string;
   author?: string;
   role?: string;
@@ -180,14 +205,17 @@ function sanitizeSlide(slide: SlideData): SlideData {
   if (s.bullets && s.bullets.length > LIMITS.bullets) {
     s.bullets = s.bullets.slice(0, LIMITS.bullets);
   }
-  if (s.left && s.left.bullets.length > LIMITS.bulletsCompact) {
+  if (s.left?.bullets && s.left.bullets.length > LIMITS.bulletsCompact) {
     s.left = { ...s.left, bullets: s.left.bullets.slice(0, LIMITS.bulletsCompact) };
   }
-  if (s.right && s.right.bullets.length > LIMITS.bulletsCompact) {
+  if (s.right?.bullets && s.right.bullets.length > LIMITS.bulletsCompact) {
     s.right = { ...s.right, bullets: s.right.bullets.slice(0, LIMITS.bulletsCompact) };
   }
   if (s.stats && s.stats.length > LIMITS.stats) {
     s.stats = s.stats.slice(0, LIMITS.stats);
+  }
+  if (s.kpis && s.kpis.length > LIMITS.stats) {
+    s.kpis = s.kpis.slice(0, LIMITS.stats);
   }
   if (s.columns && s.columns.length > LIMITS.columns) {
     s.columns = s.columns.slice(0, LIMITS.columns);
@@ -239,7 +267,46 @@ async function generatePptx(inputPath: string, outputPath: string) {
       });
     };
 
-    switch (slideData.type) {
+    // ── Helper: deterministic native chart (pptxgenjs addChart) ──
+    // Renders bar/line/area/pie/donut from {kind|type, labels, values} (or
+    // slices/bars). This is what makes chart edits reliable — the type is
+    // honored exactly, no AI re-invention.
+    const CHART_TYPE_MAP: Record<string, string> = {
+      bar: pptx.ChartType.bar, column: pptx.ChartType.bar,
+      line: pptx.ChartType.line, area: pptx.ChartType.area,
+      pie: pptx.ChartType.pie, donut: pptx.ChartType.doughnut, doughnut: pptx.ChartType.doughnut,
+    };
+    const renderChart = (chart: ChartItem, box: { x: number; y: number; w: number; h: number }) => {
+      const kind = String(chart.kind || chart.type || 'bar').toLowerCase();
+      const ctype = CHART_TYPE_MAP[kind] || pptx.ChartType.bar;
+      const items = chart.slices || chart.bars;
+      const labels = chart.labels || items?.map(i => i.label) || [];
+      const values = chart.values || items?.map(i => i.value) || [];
+      if (!labels.length || !values.length) return;
+      const circular = ctype === pptx.ChartType.pie || ctype === pptx.ChartType.doughnut;
+      const palette = (chart.colors && chart.colors.length ? chart.colors : STAT_COLORS).map(c => c.replace('#', ''));
+      slide.addChart(ctype as any, [{ name: chart.title || 'Series', labels, values }], {
+        x: box.x, y: box.y, w: box.w, h: box.h,
+        chartColors: palette,
+        showTitle: !!chart.title, title: chart.title || '', titleFontSize: 11, titleColor: s.headingColor,
+        showLegend: circular, legendPos: 'r', legendFontSize: 9, legendColor: s.bodyColor,
+        showValue: false,
+        showPercent: circular,
+        dataLabelColor: circular ? 'FFFFFF' : s.bodyColor, dataLabelFontSize: 9,
+        catAxisLabelColor: s.bodyColor, catAxisLabelFontSize: 9,
+        valAxisLabelColor: s.bodyColor, valAxisLabelFontSize: 9,
+        valGridLine: { style: 'none' },
+        barDir: 'col',
+        holeSize: kind === 'donut' || kind === 'doughnut' ? 55 : undefined,
+        chartColorsOpacity: 95,
+      } as any);
+    };
+
+    // Normalize type: agent emits underscore variants (two_column) and many
+    // spellings; map to the canonical hyphen form the switch uses.
+    const ntype = String(slideData.type || 'content').replace(/_/g, '-');
+
+    switch (ntype) {
       // ═══════════════════════════════════════════════════════
       // TITLE SLIDE — dark bg, centered, decorative lines
       // ═══════════════════════════════════════════════════════
@@ -322,80 +389,71 @@ async function generatePptx(inputPath: string, outputPath: string) {
           });
         }
 
-        // Stat cards
-        const stats = slideData.stats || [];
-        const cardCount = stats.length || 1;
+        // KPI cards — agent slides use `kpis`; older data used `stats`.
+        const kpis = (slideData.kpis || slideData.stats || []) as KpiItem[];
+        const hasCharts = !!(slideData.charts && slideData.charts.length);
+        const cardCount = kpis.length || 1;
         const cardGap = 0.2;
         const totalCardWidth = 8.6; // inches usable
         const cardW = (totalCardWidth - cardGap * (cardCount - 1)) / cardCount;
         const cardY = 1.5;
-        const cardH = 1.7;
+        // Compact cards when charts share the slide so nothing overflows.
+        const cardH = hasCharts ? 1.2 : 1.7;
 
-        for (let ci = 0; ci < stats.length; ci++) {
-          const stat = stats[ci];
+        for (let ci = 0; ci < kpis.length; ci++) {
+          const stat = kpis[ci];
           const cardX = 0.7 + ci * (cardW + cardGap);
           const color = stat.color?.replace('#', '') || STAT_COLORS[ci % STAT_COLORS.length];
 
-          // Card background (white)
           slide.addShape(pptx.ShapeType.rect, {
             x: cardX, y: cardY, w: cardW, h: cardH,
             fill: { color: 'FFFFFF' },
             shadow: { type: 'outer', blur: 6, offset: 2, color: '000000', opacity: 0.1 },
             rectRadius: 0.05,
           });
-          // Colored top border
           slide.addShape(pptx.ShapeType.rect, {
-            x: cardX, y: cardY, w: cardW, h: 0.06,
-            fill: { color },
-            rectRadius: 0.05,
+            x: cardX, y: cardY, w: cardW, h: 0.06, fill: { color }, rectRadius: 0.05,
           });
-          // Value (big number)
           slide.addText(stat.value, {
-            x: cardX, y: cardY + 0.2, w: cardW, h: 0.65,
-            fontSize: 36, bold: true, align: 'center',
-            color, fontFace: s.fontFace,
+            x: cardX, y: cardY + 0.16, w: cardW, h: hasCharts ? 0.5 : 0.65,
+            fontSize: hasCharts ? 26 : 36, bold: true, align: 'center', color, fontFace: s.fontFace,
           });
-          // Unit (small text under number)
           if (stat.unit) {
             slide.addText(stat.unit, {
-              x: cardX, y: cardY + 0.8, w: cardW, h: 0.3,
-              fontSize: 12, align: 'center',
-              color: '999999', fontFace: s.fontFace,
+              x: cardX, y: cardY + (hasCharts ? 0.6 : 0.8), w: cardW, h: 0.3,
+              fontSize: 12, align: 'center', color: '999999', fontFace: s.fontFace,
             });
           }
-          // Label
           slide.addText(stat.label, {
-            x: cardX, y: cardY + (stat.unit ? 1.1 : 0.9), w: cardW, h: 0.4,
-            fontSize: 13, bold: true, align: 'center',
-            color: s.bodyColor, fontFace: s.fontFace,
+            x: cardX, y: cardY + (hasCharts ? (stat.unit ? 0.88 : 0.7) : (stat.unit ? 1.1 : 0.9)), w: cardW, h: 0.4,
+            fontSize: hasCharts ? 11 : 13, bold: true, align: 'center', color: s.bodyColor, fontFace: s.fontFace,
           });
         }
 
-        // Optional bullet summary below stats
-        if (slideData.bullets && slideData.bullets.length > 0) {
+        // Charts (0–2) below the KPI cards — deterministic, honors each chart's kind.
+        if (hasCharts) {
+          const charts = slideData.charts!.slice(0, 2);
+          const chartsY = cardY + cardH + 0.3;
+          const chartH = Math.max(1.6, 4.95 - chartsY); // keep above the footer
+          const cgap = 0.4;
+          const chartW = charts.length > 1 ? (totalCardWidth - cgap) / 2 : totalCardWidth;
+          charts.forEach((c, i) => renderChart(c, { x: 0.7 + i * (chartW + cgap), y: chartsY, w: chartW, h: chartH }));
+        } else if (slideData.bullets && slideData.bullets.length > 0) {
           const bulletY = cardY + cardH + 0.35;
-          // Summary card background
           slide.addShape(pptx.ShapeType.rect, {
             x: 0.7, y: bulletY, w: totalCardWidth, h: 2.6,
             fill: { color: 'FFFFFF' },
             shadow: { type: 'outer', blur: 4, offset: 1, color: '000000', opacity: 0.08 },
             rectRadius: 0.05,
           });
-          // Bullets
           slide.addText(
             slideData.bullets.map(b => ({
               text: b,
-              options: {
-                bullet: { type: 'bullet' as const, style: '●' },
-                breakLine: true,
-                color: s.bodyColor,
-              },
+              options: { bullet: { type: 'bullet' as const, style: '●' }, breakLine: true, color: s.bodyColor },
             })),
             {
               x: 0.9, y: bulletY + 0.15, w: totalCardWidth - 0.4, h: 2.3,
-              fontSize: 14, color: s.bodyColor,
-              fontFace: s.fontFace, lineSpacingMultiple: 1.6,
-              autoFit: true,
+              fontSize: 14, color: s.bodyColor, fontFace: s.fontFace, lineSpacingMultiple: 1.6, autoFit: true,
             }
           );
         }
@@ -476,50 +534,34 @@ async function generatePptx(inputPath: string, outputPath: string) {
             fill: { color: s.accentColor },
           });
         }
-        // Left column panel
-        if (slideData.left) {
+        // Column pane renderer: heading + (chart OR bullets). xPct is the panel
+        // left edge in %; chartBox is the inch-based area for a chart.
+        const renderPane = (pane: ColumnItem, xPct: string, headXPct: string, chartBox: { x: number; y: number; w: number; h: number }) => {
           slide.addShape(pptx.ShapeType.rect, {
-            x: '4%', y: '18%', w: '44%', h: '67%',
-            fill: { color: s.accentColor2 },
-            rectRadius: 0.08,
+            x: xPct as any, y: '18%', w: '44%', h: '67%', fill: { color: s.accentColor2 }, rectRadius: 0.08,
           });
-          slide.addText(slideData.left.heading, {
-            x: '6%', y: '20%', w: '40%', h: '7%',
-            fontSize: 20, bold: true, color: s.headingColor,
-            fontFace: s.fontFace,
-          });
-          slide.addText(
-            slideData.left.bullets.map(b => ({ text: b, options: { bullet: true, breakLine: true } })),
-            {
-              x: '6%', y: '28%', w: '40%', h: '55%',
-              fontSize: s.bodyFontSize, color: s.bodyColor,
-              fontFace: s.fontFace, lineSpacingMultiple: 1.4,
-              autoFit: true,
-            }
-          );
-        }
-        // Right column panel
-        if (slideData.right) {
-          slide.addShape(pptx.ShapeType.rect, {
-            x: '52%', y: '18%', w: '44%', h: '67%',
-            fill: { color: s.accentColor2 },
-            rectRadius: 0.08,
-          });
-          slide.addText(slideData.right.heading, {
-            x: '54%', y: '20%', w: '40%', h: '7%',
-            fontSize: 20, bold: true, color: s.headingColor,
-            fontFace: s.fontFace,
-          });
-          slide.addText(
-            slideData.right.bullets.map(b => ({ text: b, options: { bullet: true, breakLine: true } })),
-            {
-              x: '54%', y: '28%', w: '40%', h: '55%',
-              fontSize: s.bodyFontSize, color: s.bodyColor,
-              fontFace: s.fontFace, lineSpacingMultiple: 1.4,
-              autoFit: true,
-            }
-          );
-        }
+          const head = pane.heading || pane.title || '';
+          if (head) {
+            slide.addText(head, {
+              x: headXPct as any, y: '20%', w: '40%', h: '7%',
+              fontSize: 20, bold: true, color: s.headingColor, fontFace: s.fontFace,
+            });
+          }
+          if (pane.chart) {
+            renderChart(pane.chart, chartBox);
+          } else if (pane.bullets) {
+            slide.addText(
+              pane.bullets.map(b => ({ text: b, options: { bullet: true, breakLine: true } })),
+              {
+                x: headXPct as any, y: '28%', w: '40%', h: '55%',
+                fontSize: s.bodyFontSize, color: s.bodyColor, fontFace: s.fontFace,
+                lineSpacingMultiple: 1.4, autoFit: true,
+              }
+            );
+          }
+        };
+        if (slideData.left) renderPane(slideData.left, '4%', '6%', { x: 0.55, y: 1.75, w: 4.0, h: 2.8 });
+        if (slideData.right) renderPane(slideData.right, '52%', '54%', { x: 5.35, y: 1.75, w: 4.0, h: 2.8 });
         addFooter();
         break;
       }
@@ -564,21 +606,26 @@ async function generatePptx(inputPath: string, outputPath: string) {
             rectRadius: 0.08,
           });
           // Column heading
-          slide.addText(col.heading, {
-            x: colX + 0.2, y: 1.65, w: colW - 0.4, h: 0.4,
-            fontSize: 17, bold: true, color: s.headingColor,
-            fontFace: s.fontFace,
-          });
-          // Column bullets
-          slide.addText(
-            col.bullets.slice(0, 5).map(b => ({ text: b, options: { bullet: true, breakLine: true } })),
-            {
-              x: colX + 0.2, y: 2.2, w: colW - 0.4, h: 3.3,
-              fontSize: 14, color: s.bodyColor,
-              fontFace: s.fontFace, lineSpacingMultiple: 1.4,
-              autoFit: true,
-            }
-          );
+          const colHead = col.heading || col.title || '';
+          if (colHead) {
+            slide.addText(colHead, {
+              x: colX + 0.2, y: 1.65, w: colW - 0.4, h: 0.4,
+              fontSize: 17, bold: true, color: s.headingColor, fontFace: s.fontFace,
+            });
+          }
+          // Column content: chart or bullets
+          if (col.chart) {
+            renderChart(col.chart, { x: colX + 0.15, y: 2.2, w: colW - 0.3, h: 3.0 });
+          } else if (col.bullets) {
+            slide.addText(
+              col.bullets.slice(0, 5).map(b => ({ text: b, options: { bullet: true, breakLine: true } })),
+              {
+                x: colX + 0.2, y: 2.2, w: colW - 0.4, h: 3.3,
+                fontSize: 14, color: s.bodyColor, fontFace: s.fontFace,
+                lineSpacingMultiple: 1.4, autoFit: true,
+              }
+            );
+          }
         }
         addFooter();
         break;
@@ -618,6 +665,51 @@ async function generatePptx(inputPath: string, outputPath: string) {
             x: '15%', y: '68%', w: '70%', h: '14%',
             fontSize: 16, align: 'center',
             color: s.bodyColor, fontFace: s.fontFace,
+          });
+        }
+        addFooter();
+        break;
+      }
+
+      // ═══════════════════════════════════════════════════════
+      // CHART SLIDE — title + one full-width chart
+      // ═══════════════════════════════════════════════════════
+      case 'chart': {
+        slide.background = { color: s.bg };
+        addTopBar();
+        if (slideData.title) {
+          slide.addText(slideData.title, {
+            x: '5%', y: 0.4, w: '90%', h: 0.6,
+            fontSize: s.headingFontSize, bold: true, color: s.headingColor, fontFace: s.fontFace,
+          });
+        }
+        const chart = slideData.chart || (slideData.charts && slideData.charts[0]);
+        if (chart) renderChart(chart, { x: 0.7, y: 1.5, w: 8.6, h: 3.4 });
+        addFooter();
+        break;
+      }
+
+      // ═══════════════════════════════════════════════════════
+      // FALLBACK — unknown type: render title + bullets/text so it's never blank
+      // ═══════════════════════════════════════════════════════
+      default: {
+        slide.background = { color: s.bg };
+        addTopBar();
+        if (slideData.title) {
+          slide.addText(slideData.title, {
+            x: '5%', y: 0.4, w: '90%', h: 0.6,
+            fontSize: s.headingFontSize, bold: true, color: s.headingColor, fontFace: s.fontFace,
+          });
+        }
+        if (slideData.bullets && slideData.bullets.length) {
+          slide.addText(
+            slideData.bullets.map(b => ({ text: b, options: { bullet: { type: 'bullet' as const, style: '●' }, breakLine: true } })),
+            { x: '6%', y: 1.4, w: '88%', h: 3.6, fontSize: s.bodyFontSize, color: s.bodyColor, fontFace: s.fontFace, lineSpacingMultiple: 1.5, autoFit: true },
+          );
+        } else if (slideData.text) {
+          slide.addText(slideData.text, {
+            x: '6%', y: 1.4, w: '88%', h: 3.6,
+            fontSize: s.bodyFontSize, color: s.bodyColor, fontFace: s.fontFace, lineSpacingMultiple: 1.5,
           });
         }
         addFooter();

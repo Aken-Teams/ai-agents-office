@@ -3,7 +3,11 @@ import fs from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import JSZip from 'jszip';
+import PptxGenJSModule from 'pptxgenjs';
 import { dbGet, dbRun } from '../db.js';
+
+// pptxgenjs may double-wrap the default export (ESM/CJS interop)
+const PptxGenJS = (PptxGenJSModule as unknown as { default?: typeof PptxGenJSModule }).default || PptxGenJSModule;
 import { config } from '../config.js';
 import type { DocumentBlocksRecord, DocumentBlock, GeneratedFile } from '../types.js';
 
@@ -336,13 +340,112 @@ function cleanup(dir: string) {
 // ---------------------------------------------------------------------------
 
 /** Fields that can be patched in-place via XML manipulation (text only).
- *  Color/style fields are NOT patchable — they require a full rebuild so the
- *  generator can apply comprehensive theme overrides (accent bars, cards, etc.). */
+ *  Charts and color fields are handled specially (see patchBlockInPlace):
+ *  chart DATA + single-element colors patch in place; a chart TYPE change or a
+ *  whole-slide redesign still falls back to a full rebuild. */
 const PATCHABLE_FIELDS = new Set([
   'title', 'subtitle', 'quote', 'attribution', 'description', 'content',
   'bullets', 'points',
   'heading', // DOCX section heading
+  // Colors — patched in place by swapping the old hex for the new one in the
+  // slide XML (preserves the bespoke design; no full rebuild needed).
+  'backgroundColor', 'textColor', 'titleColor', 'subtitleColor', 'accentColor', 'accentColor2',
 ]);
+
+const COLOR_FIELDS = new Set([
+  'backgroundColor', 'textColor', 'titleColor', 'subtitleColor', 'accentColor', 'accentColor2',
+]);
+
+/** Normalize chart-kind spellings so comparisons are stable. */
+function normKind(k: string): string {
+  const x = String(k || '').toLowerCase();
+  if (x === 'donut' || x === 'doughnut') return 'doughnut';
+  if (x === 'column') return 'bar';
+  return x;
+}
+
+/**
+ * Render ONE chart with pptxgenjs and return just its `<c:plotArea>` XML. Used
+ * to swap a chart's TYPE in place: we drop this fresh plot area (correct type,
+ * axes, and new-data caches) into the existing chart part, leaving the chart's
+ * title/legend/frame/embedding untouched.
+ */
+async function genChartPlotArea(kind: string, labels: string[], values: number[], colors: string[]): Promise<string | null> {
+  const map: Record<string, string> = {
+    bar: 'bar', column: 'bar', line: 'line', area: 'area', pie: 'pie', donut: 'doughnut', doughnut: 'doughnut',
+  };
+  const k = map[String(kind).toLowerCase()] || 'bar';
+  const pptx = new PptxGenJS();
+  const ctype = (pptx as any).ChartType[k] || (pptx as any).ChartType.bar;
+  const slide = pptx.addSlide();
+  slide.addChart(ctype, [{ name: 'Series', labels, values }], {
+    x: 1, y: 1, w: 6, h: 4,
+    chartColors: colors.length ? colors : ['2B6CB0', 'E84855', '38A169', 'D69E2E', '805AD5', 'DD6B20'],
+    barDir: 'col',
+    holeSize: k === 'doughnut' ? 55 : undefined,
+  } as any);
+  const buf = await (pptx as any).write({ outputType: 'nodebuffer' }) as Buffer;
+  const z = await JSZip.loadAsync(buf);
+  const cf = Object.keys(z.files).filter(p => /ppt\/charts\/chart\d+\.xml$/.test(p)).sort()[0];
+  if (!cf) return null;
+  const cx = await z.file(cf)!.async('text');
+  const pa = cx.match(/<c:plotArea>[\s\S]*<\/c:plotArea>/);
+  return pa ? pa[0] : null;
+}
+
+/** Pull the series/slice colors out of a chart part so a type swap keeps them.
+ *  Skips near-white fills (plot/label backgrounds) that aren't real data colors. */
+function extractChartColors(chartXml: string): string[] {
+  const plot = (chartXml.match(/<c:plotArea>[\s\S]*<\/c:plotArea>/) || [''])[0];
+  const seen = new Set<string>();
+  for (const m of plot.matchAll(/<a:srgbClr val="([0-9A-Fa-f]{6})"/g)) {
+    const c = m[1].toUpperCase();
+    const r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
+    if (r > 235 && g > 235 && b > 235) continue; // near-white background, not a data colour
+    seen.add(c);
+  }
+  return [...seen];
+}
+
+/** A column/pane object minus its chart (for comparing the non-chart parts). */
+function stripChart(o: unknown): unknown {
+  if (!o || typeof o !== 'object') return o;
+  const { chart, ...rest } = o as Record<string, unknown>;
+  void chart;
+  return rest;
+}
+
+/** True if the ONLY difference between old/new is a nested chart (so we can
+ *  patch it in place instead of rebuilding the whole slide). Handles a single
+ *  pane (left/right) or a columns[] array. */
+function isChartOnlyChange(oldVal: unknown, newVal: unknown): boolean {
+  if (Array.isArray(oldVal) && Array.isArray(newVal)) {
+    if (oldVal.length !== newVal.length) return false;
+    let chartDiff = false;
+    for (let i = 0; i < oldVal.length; i++) {
+      if (JSON.stringify(stripChart(oldVal[i])) !== JSON.stringify(stripChart(newVal[i]))) return false;
+      if (JSON.stringify((oldVal[i] as any)?.chart) !== JSON.stringify((newVal[i] as any)?.chart)) chartDiff = true;
+    }
+    return chartDiff;
+  }
+  if (oldVal && newVal && typeof oldVal === 'object' && typeof newVal === 'object') {
+    return JSON.stringify(stripChart(oldVal)) === JSON.stringify(stripChart(newVal))
+      && JSON.stringify((oldVal as any).chart) !== JSON.stringify((newVal as any).chart);
+  }
+  return false;
+}
+
+/** All charts on a slide in PowerPoint's graphic-frame order: top-level `charts`,
+ *  else panes (left→right) / columns, else a single `chart`. */
+function collectSlideCharts(d: any): unknown[] {
+  if (Array.isArray(d?.charts)) return d.charts;
+  const out: unknown[] = [];
+  if (d?.left?.chart) out.push(d.left.chart);
+  if (d?.right?.chart) out.push(d.right.chart);
+  if (Array.isArray(d?.columns)) for (const c of d.columns) if (c?.chart) out.push(c.chart);
+  if (!out.length && d?.chart) out.push(d.chart);
+  return out;
+}
 
 /**
  * Patch a single block's changed fields directly in the PPTX/DOCX file.
@@ -375,15 +478,32 @@ export async function patchBlockInPlace(
   // Find changed patchable fields
   const changedFields: { key: string; oldVal: unknown; newVal: unknown }[] = [];
   const nonPatchableChanges: string[] = [];
+  let chartChanged = false;
   for (const key of Object.keys(newData)) {
     const oldVal = oldData[key];
     const newVal = newData[key];
     if (JSON.stringify(oldVal) === JSON.stringify(newVal)) continue;
-    if (PATCHABLE_FIELDS.has(key)) {
+    if (key === 'charts' || key === 'chart') {
+      // Chart DATA and TYPE both patch in place (data → cache rewrite; type →
+      // re-render just that chart's plot area).
+      if (docType === 'pptx') chartChanged = true;
+      else nonPatchableChanges.push(key);
+    } else if (key === 'left' || key === 'right' || key === 'columns') {
+      // A column/pane changed: patch in place ONLY if the sole difference is a
+      // nested chart (data/type). Any text/structure change there → rebuild.
+      if (docType === 'pptx' && isChartOnlyChange(oldVal, newVal)) chartChanged = true;
+      else nonPatchableChanges.push(key);
+    } else if (PATCHABLE_FIELDS.has(key)) {
       changedFields.push({ key, oldVal, newVal });
     } else {
       nonPatchableChanges.push(key);
     }
+  }
+  // One chart patch for the whole slide, in graphic-frame order (covers top-level
+  // charts and charts nested in columns/panes). Index alignment is guaranteed by
+  // collecting them in the same order PowerPoint lays them out.
+  if (chartChanged) {
+    changedFields.push({ key: 'charts', oldVal: null, newVal: collectSlideCharts(newData) });
   }
 
   // If ANY non-patchable fields changed (colors, charts, layout), force full rebuild.
@@ -612,10 +732,25 @@ async function patchPptxField(
         }
       }
     }
+  } else if (COLOR_FIELDS.has(fieldKey)) {
+    // Swap the old hex for the new one throughout this slide's XML. Targeted:
+    // only that exact colour changes; the rest of the bespoke design is kept.
+    const oldHex = String(oldValue || '').replace('#', '').toUpperCase();
+    const newHex = String(newValue || '').replace('#', '').toUpperCase();
+    if (/^[0-9A-F]{6}$/.test(oldHex) && /^[0-9A-F]{6}$/.test(newHex) && oldHex !== newHex && new RegExp(oldHex, 'i').test(xml)) {
+      xml = xml.replace(new RegExp(oldHex, 'gi'), newHex);
+      modified = true;
+      console.log(`[FileRebuilder] patchPptxField: color ${fieldKey} ${oldHex}→${newHex}`);
+    }
+  } else if (fieldKey === 'charts' || fieldKey === 'chart') {
+    // Chart DATA edit (labels/values) — patch the chart parts' cached data so
+    // the existing chart object updates without touching the rest of the slide.
+    const newCharts = fieldKey === 'chart'
+      ? (newValue ? [newValue] : [])
+      : (Array.isArray(newValue) ? newValue : []);
+    const ok = await patchSlideChartData(zip, slideFile, slideIndex, newCharts as ChartCacheData[]);
+    if (ok) modified = true;
   }
-  // Note: color/style fields (backgroundColor, textColor, accentColor, etc.)
-  // are no longer patchable in-place — they trigger a full rebuild via the
-  // generator script, which applies comprehensive theme overrides.
 
   if (modified) {
     zip.file(slideFile, xml);
@@ -624,6 +759,95 @@ async function patchPptxField(
   }
 
   return true; // DB was updated even if XML patch didn't match
+}
+
+// ── Chart data in-place patching ──────────────────────────────────────────
+interface ChartCacheData {
+  kind?: string; type?: string;
+  labels?: string[]; values?: number[];
+  slices?: { label: string; value: number }[];
+  bars?: { label: string; value: number }[];
+  colors?: string[];
+}
+
+const xmlEsc = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** Rewrite the first numeric cache (`<c:numCache>`) with new values. */
+function setNumCache(xml: string, values: number[]): string {
+  return xml.replace(/<c:numCache>([\s\S]*?)<\/c:numCache>/, (_m, inner) => {
+    const fmt = (inner.match(/<c:formatCode>[\s\S]*?<\/c:formatCode>/) || [''])[0];
+    const pts = values.map((v, i) => `<c:pt idx="${i}"><c:v>${v}</c:v></c:pt>`).join('');
+    return `<c:numCache>${fmt}<c:ptCount val="${values.length}"/>${pts}</c:numCache>`;
+  });
+}
+
+/** Rewrite the category cache (str or multi-level) with new labels. */
+function setCatCache(xml: string, labels: string[]): string {
+  const pts = labels.map((l, i) => `<c:pt idx="${i}"><c:v>${xmlEsc(l)}</c:v></c:pt>`).join('');
+  if (/<c:multiLvlStrCache>/.test(xml)) {
+    return xml.replace(/<c:multiLvlStrCache>[\s\S]*?<\/c:multiLvlStrCache>/,
+      `<c:multiLvlStrCache><c:ptCount val="${labels.length}"/><c:lvl>${pts}</c:lvl></c:multiLvlStrCache>`);
+  }
+  if (/<c:strCache>/.test(xml)) {
+    return xml.replace(/<c:strCache>[\s\S]*?<\/c:strCache>/,
+      `<c:strCache><c:ptCount val="${labels.length}"/>${pts}</c:strCache>`);
+  }
+  return xml;
+}
+
+/** Patch each chart on a slide (matched in document order) with new labels/values. */
+async function patchSlideChartData(zip: JSZip, slideFile: string, _slideIndex: number, newCharts: ChartCacheData[]): Promise<boolean> {
+  if (!newCharts.length) return false;
+  const slideXml = await zip.file(slideFile)?.async('text') || '';
+  const rIds = [...slideXml.matchAll(/<c:chart[^>]*r:id="(rId\d+)"/g)].map(m => m[1]);
+  if (!rIds.length) return false;
+  const relsPath = `ppt/slides/_rels/${path.basename(slideFile)}.rels`;
+  const relsXml = await zip.file(relsPath)?.async('text') || '';
+  let patched = false;
+  for (let i = 0; i < rIds.length && i < newCharts.length; i++) {
+    const nc = newCharts[i];
+    if (!nc) continue;
+    const tgt = (relsXml.match(new RegExp(`Id="${rIds[i]}"[^>]*Target="([^"]+)"`)) || [])[1];
+    if (!tgt) continue;
+    // Target may be absolute ("/ppt/charts/chartN.xml") or relative ("../charts/chartN.xml").
+    const partPath = tgt.startsWith('/') ? tgt.slice(1) : 'ppt/' + tgt.replace(/^\.\.\//, '');
+    const cf = zip.file(partPath);
+    if (!cf) continue;
+    let cx = await cf.async('text');
+    const items = nc.slices || nc.bars;
+    const values = nc.values || items?.map(x => x.value) || [];
+    const labels = nc.labels || items?.map(x => x.label) || [];
+
+    // Detect the chart's CURRENT type + colors from its XML and compare to the request.
+    const curType = (cx.match(/<c:(barChart|lineChart|pieChart|doughnutChart|areaChart)/) || [])[1];
+    const curKind = curType ? normKind(curType.replace('Chart', '')) : '';
+    const newKind = normKind(String(nc.kind || nc.type || ''));
+    const curColors = extractChartColors(cx);
+    const newColors = (nc.colors || []).map(c => String(c).replace('#', '').toUpperCase()).filter(c => /^[0-9A-F]{6}$/.test(c));
+    const kindChanged = !!newKind && !!curKind && newKind !== curKind;
+    const colorsChanged = newColors.length > 0 && JSON.stringify(newColors) !== JSON.stringify(curColors);
+
+    if ((kindChanged || colorsChanged) && labels.length && values.length) {
+      // TYPE and/or COLOR change — re-render just this chart's plot area (correct
+      // type, axes, new data + colors), keeping the title/legend/frame intact.
+      const colors = newColors.length ? newColors : curColors;
+      const plot = await genChartPlotArea(kindChanged ? newKind : curKind, labels, values, colors);
+      if (plot) {
+        cx = cx.replace(/<c:plotArea>[\s\S]*<\/c:plotArea>/, plot);
+        zip.file(partPath, cx);
+        patched = true;
+        continue;
+      }
+      // If plot-area generation failed, fall through to a data-only patch.
+    }
+
+    // DATA-ONLY — rewrite the cached labels/values, keep the original styling.
+    if (values.length) cx = setNumCache(cx, values);
+    if (labels.length) cx = setCatCache(cx, labels);
+    zip.file(partPath, cx);
+    patched = true;
+  }
+  return patched;
 }
 
 /**
