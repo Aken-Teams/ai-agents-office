@@ -434,6 +434,9 @@ interface SlidesInput {
   author?: string;
   date?: string;
   style?: string;
+  /** Set true when the USER explicitly picked the theme (editor rebuild picker),
+   *  to honor `style` even under the editorial house-style lock. */
+  styleOverride?: boolean;
   slides: SlideData[];
 }
 
@@ -2045,11 +2048,13 @@ ${s.extra || ''}
 
 function generateHtml(input: SlidesInput): string {
   // House style: every deck uses the clean "editorial" look by default for a
-  // consistent brand. The agent's per-deck style choice is only honored when
+  // consistent brand. The AGENT's per-deck style choice is only honored when
   // style variety is explicitly enabled (SLIDES_ALLOW_STYLE_VARIETY=true), so a
   // technical topic no longer silently flips the deck to a dark theme.
+  // EXCEPTION: when the USER explicitly picks a theme (styleOverride=true, set by
+  // the editor's rebuild theme picker), honor it regardless of the house lock.
   const allowVariety = process.env.SLIDES_ALLOW_STYLE_VARIETY === 'true';
-  const requestedStyle = allowVariety ? (input.style || '') : 'editorial';
+  const requestedStyle = (input.styleOverride || allowVariety) ? (input.style || '') : 'editorial';
   const s = STYLES[requestedStyle] || DEFAULT_STYLE;
 
   // Reset CDN flags

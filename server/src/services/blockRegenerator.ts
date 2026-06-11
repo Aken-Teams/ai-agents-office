@@ -165,12 +165,13 @@ export async function regenerateBlock(
     cleanInstruction = cleanInstruction.slice(cellRefMatch[0].length);
   }
 
-  // ── PPTX: full-agent edit (same flow as the left-side chat) ──────────────
-  // Resume the conversation's pptx-gen session, have it edit its own original
-  // build script and re-run → the WHOLE deck is regenerated changing ONLY this
+  // ── PPTX only: full-agent edit (same flow as the left-side chat) ─────────
+  // Resume the pptx-gen worker session, have it edit its own original build
+  // script and re-run → the WHOLE deck is regenerated changing ONLY this
   // page/element, so style/layout/chart sizing stay consistent with the rest.
-  // (DOCX/XLSX keep the fast JSON-patch path below.)
-  if (!isDocx && !isXlsx) {
+  // NOTE: 'slides' (HTML online PPT) and 'pdf'/'docx'/'xlsx' keep the original
+  // JSON-patch / deterministic-rebuild path below — agentEditDeck is pptx-only.
+  if (blockRecord.doc_type === 'pptx') {
     const slideNo = pageIndex + 1;
     const slideTitle = (targetBlock.data as any).title
       || (targetBlock.data as any).heading
@@ -308,7 +309,7 @@ export async function regenerateBlock(
           // Immediately emit block_updated so frontend can show new content
           send({ type: 'block_updated', data: { block: targetBlock, blocks } });
 
-          // ── DOCX / XLSX only (PPTX returned early via agentEditDeck) ──
+          // ── Non-pptx (docx / xlsx / slides / pdf) — pptx returned early ──
           // Patch file in-place (fast: just XML manipulation, no generator script).
           send({ type: 'patching' });
           // If AI returned identical data, force-sync by passing empty oldData so

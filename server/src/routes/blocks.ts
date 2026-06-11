@@ -382,19 +382,22 @@ router.post('/:fileId/rebuild', async (req: Request, res: Response) => {
     const rebuildRun: Promise<unknown> = docType === 'pptx'
       ? agentEditDeck(fileId, userId, pptxRebuildInstruction, emit)
       : (async () => {
-          // DOCX/XLSX: deterministic re-render via the shared generator (now
+          // DOCX/XLSX/SLIDES: deterministic re-render via the shared generator (now
           // schema-aligned with the editor blocks, incl. tables/lists/content).
           emit({ type: 'started' });
-          // "美編/換風格" for Word = pick a document style preset (also recolors
-          // table headers/headings). The frontend sends a style key as instruction.
+          // "美編/換風格" = pick a style/theme preset. The frontend sends a style
+          // key as instruction; generate-slides.ts / docx generator read meta.style.
           const STYLE_KEYS = ['formal', 'modern', 'academic', 'compact'];
+          // generate-slides.ts themes (doc_type='slides').
+          const SLIDES_STYLES = ['editorial', 'minimal', 'dark', 'gradient', 'neon', 'corporate', 'creative', 'elegant', 'tech'];
           const styleLabelMap: Record<string, string> = {
             專業: 'formal', 端莊: 'formal', 正式: 'formal', 現代: 'modern', 簡約: 'modern',
             學術: 'academic', 精簡: 'compact', 緊湊: 'compact',
           };
           let styleKey = '';
           const instr = instruction.trim().toLowerCase();
-          if (STYLE_KEYS.includes(instr)) styleKey = instr;
+          if (docType === 'slides' && SLIDES_STYLES.includes(instr)) styleKey = instr;
+          else if (STYLE_KEYS.includes(instr)) styleKey = instr;
           else for (const [zh, key] of Object.entries(styleLabelMap)) { if (instruction.includes(zh)) { styleKey = key; break; } }
           if (styleKey) {
             const rec = await dbGet<{ id: string; doc_meta: string | null }>(
@@ -403,6 +406,9 @@ router.post('/:fileId/rebuild', async (req: Request, res: Response) => {
             if (rec) {
               const m = rec.doc_meta ? JSON.parse(rec.doc_meta) : {};
               m.style = styleKey;
+              // Mark as a USER-explicit theme choice so generate-slides honors it
+              // even under the editorial house-style lock (slides only; harmless for docx).
+              if (docType === 'slides') m.styleOverride = true;
               await dbRun('UPDATE document_blocks SET doc_meta = ? WHERE id = ?', JSON.stringify(m), rec.id);
             }
           }

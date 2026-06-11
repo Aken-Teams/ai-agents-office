@@ -661,6 +661,33 @@ export default function DocumentCanvas({
             </div>
           </div>
         )}
+        {docType === 'slides' && (
+          <div className="px-6 pb-1">
+            <label className="block text-sm font-medium text-on-surface-variant mb-2">想換個佈景主題？（選填）</label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'editorial', label: '編輯風（奶油＋磚紅）' },
+                { key: 'minimal', label: '極簡（白）' },
+                { key: 'dark', label: '深色科技' },
+                { key: 'gradient', label: '漸層（紫藍）' },
+                { key: 'neon', label: '霓虹' },
+                { key: 'corporate', label: '企業藍' },
+                { key: 'creative', label: '創意粉' },
+                { key: 'elegant', label: '優雅棕' },
+                { key: 'tech', label: '技術黑' },
+              ].map(c => (
+                <button
+                  key={c.key}
+                  type="button"
+                  onClick={() => setRebuildStyle(prev => prev === c.key ? '' : c.key)}
+                  className={`px-3.5 py-2 rounded-full text-sm border transition-colors cursor-pointer ${rebuildStyle === c.key ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-outline-variant/30 text-on-surface-variant hover:border-primary/40'}`}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex gap-2 px-6 pb-6 pt-3">
           <button
             onClick={() => setShowRebuildConfirm(false)}
