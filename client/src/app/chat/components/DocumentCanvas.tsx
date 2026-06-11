@@ -381,12 +381,18 @@ export default function DocumentCanvas({
   const prevRebuilding = useRef(false);
   const prevRegenInstruction = useRef('');
   useEffect(() => {
-    // Trigger on transition from rebuilding→done or regen→done
-    if (prevRebuilding.current && !rebuilding && fileId) {
+    // On transition rebuild→done or regen→done: refresh the preview AND re-fetch
+    // shapes, then drop the stale element selection (its old position no longer
+    // matches the re-laid-out slide, which is what made the highlight "jump").
+    const justFinished =
+      (prevRebuilding.current && !rebuilding) || (prevRegenInstruction.current && !regenInstruction);
+    if (justFinished && fileId) {
       loadPreview();
-    }
-    if (prevRegenInstruction.current && !regenInstruction && fileId) {
-      loadPreview();
+      loadShapes();
+      setSelectedShapeId(null);
+      setSelectedElement(null);
+      setHoveredShapeName(null);
+      onElementSelect?.(null);
     }
     prevRebuilding.current = rebuilding;
     prevRegenInstruction.current = regenInstruction || '';
@@ -397,29 +403,32 @@ export default function DocumentCanvas({
     return () => { if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch PPTX shape data for overlay (only for PDF-based slides, not HTML)
+  // Fetch PPTX shape rects for the selection overlay. Re-run after any edit so
+  // the overlay matches the NEW layout instead of stale (pre-edit) coordinates.
+  const loadShapes = useCallback(async () => {
+    if (!token || !fileId || layoutType !== 'slides') return;
+    try {
+      const res = await fetch(`${SSE_BASE}/api/files/${fileId}/shapes`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const map: Record<number, ShapeRect[]> = {};
+      for (const slide of data.slides || []) {
+        map[slide.slideIndex] = slide.shapes;
+      }
+      setSlideShapes(map);
+    } catch {
+      // Shapes are optional — silently fail
+    }
+  }, [token, fileId, layoutType]);
+
   const hasBlocks = blocks.length > 0;
   useEffect(() => {
     if (!token || !fileId || layoutType !== 'slides' || !hasBlocks) return;
-    // Reset shapes when switching files
-    setSlideShapes({});
-    (async () => {
-      try {
-        const res = await fetch(`${SSE_BASE}/api/files/${fileId}/shapes`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        const map: Record<number, ShapeRect[]> = {};
-        for (const slide of data.slides || []) {
-          map[slide.slideIndex] = slide.shapes;
-        }
-        setSlideShapes(map);
-      } catch {
-        // Shapes are optional — silently fail
-      }
-    })();
-  }, [token, fileId, layoutType, hasBlocks]);
+    setSlideShapes({}); // reset when switching files
+    loadShapes();
+  }, [token, fileId, layoutType, hasBlocks, loadShapes]);
 
   // Reset shape selection when switching slides
   useEffect(() => {
