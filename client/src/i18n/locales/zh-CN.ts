@@ -1270,6 +1270,8 @@ const zhCN = {
   'editor.noBlocksHint': '通过对话生成文档后，区块将自动出现',
   'editor.rebuild': '重建文件',
   'editor.openEditor': '在编辑器中打开',
+  'editor.editButton': '编辑',
+  'editor.editHint': '想调整内容吗？点这里进入编辑模式，可逐段修改。',
   'editor.regenerate.title': 'AI 区块重生成',
   'editor.regenerate.hint': '描述你想要修改的内容，AI 将只重生成这个区块',
   'editor.regenerate.placeholder': '例如：把标题改成更吸引人的、加入更多数据...',

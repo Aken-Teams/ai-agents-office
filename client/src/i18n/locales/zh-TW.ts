@@ -1277,6 +1277,8 @@ const zhTW = {
   'editor.noBlocksHint': '透過對話產生文件後，區塊將自動出現',
   'editor.rebuild': '重建檔案',
   'editor.openEditor': '在編輯器中開啟',
+  'editor.editButton': '編輯',
+  'editor.editHint': '想調整內容嗎？點這裡進入編輯模式，可逐段修改。',
   'editor.regenerate.title': 'AI 區塊重生成',
   'editor.regenerate.hint': '描述你想要修改的內容，AI 將只重生成這個區塊',
   'editor.regenerate.placeholder': '例如：把標題改成更吸引人的、加入更多數據...',

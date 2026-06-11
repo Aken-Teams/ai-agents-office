@@ -544,6 +544,19 @@ function ChatContent() {
   const docMode = useDocumentMode(conversationId);
   const docBlocks = useDocumentBlocks(token);
 
+  // One-time coachmark nudging users toward edit mode (low discoverability of the
+  // inline edit button). Shown once per browser, then remembered in localStorage.
+  const [showEditHint, setShowEditHint] = useState(false);
+  useEffect(() => {
+    if (typeof window !== 'undefined' && localStorage.getItem('aio_edit_hint_seen') !== '1') {
+      setShowEditHint(true);
+    }
+  }, []);
+  const dismissEditHint = useCallback(() => {
+    setShowEditHint(false);
+    try { localStorage.setItem('aio_edit_hint_seen', '1'); } catch { /* ignore */ }
+  }, []);
+
   // Auto-collapse the left sidebar in document/slides edit mode for more room;
   // restore the prior state when leaving the mode (or the page).
   useEffect(() => {
@@ -2031,16 +2044,39 @@ function ChatContent() {
                             <span className="material-symbols-outlined text-base md:text-lg">fullscreen</span>
                           </button>
                         )}
-                        <button
-                          onClick={() => {
-                            docMode.manualToggle(file.id, file.file_type);
-                            docBlocks.fetchBlocks(file.id);
-                          }}
-                          className="p-1.5 md:p-2 rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-primary md:hover:text-primary transition-colors cursor-pointer"
-                          title={t('editor.openEditor' as any)}
-                        >
-                          <span className="material-symbols-outlined text-base md:text-lg">edit_note</span>
-                        </button>
+                        {FILE_TYPE_TO_LAYOUT[file.file_type] && (
+                          <div className="relative">
+                            <button
+                              onClick={() => {
+                                dismissEditHint();
+                                docMode.manualToggle(file.id, file.file_type);
+                                docBlocks.fetchBlocks(file.id);
+                              }}
+                              className="flex items-center gap-1 pl-1.5 pr-2 md:pl-2 md:pr-2.5 py-1.5 rounded-lg text-xs md:text-sm font-bold bg-primary/10 text-primary active:bg-primary/20 md:hover:bg-primary/20 transition-colors cursor-pointer"
+                              title={t('editor.openEditor' as any)}
+                            >
+                              <span className="material-symbols-outlined text-base md:text-lg">edit_note</span>
+                              <span>{t('editor.editButton' as any)}</span>
+                            </button>
+                            {/* One-time coachmark — only on the newest editable file */}
+                            {showEditHint && file.id === latestFiles.find(f => FILE_TYPE_TO_LAYOUT[f.file_type])?.id && (
+                              <div className="absolute right-0 top-full mt-2 z-50 w-56 md:w-64 bg-primary text-on-primary rounded-lg shadow-xl p-3 animate-in">
+                                <div className="absolute -top-1.5 right-5 w-3 h-3 bg-primary rotate-45" />
+                                <div className="flex items-start gap-2">
+                                  <span className="material-symbols-outlined text-base shrink-0">tips_and_updates</span>
+                                  <p className="text-xs leading-relaxed flex-1">{t('editor.editHint' as any)}</p>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); dismissEditHint(); }}
+                                    className="shrink-0 -mt-0.5 -mr-1 p-0.5 rounded hover:bg-white/20 cursor-pointer"
+                                    aria-label="close"
+                                  >
+                                    <span className="material-symbols-outlined text-sm">close</span>
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         <button
                           onClick={() => handleDownload(file.id, file.filename)}
                           className="p-1.5 md:p-2 rounded-lg active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-primary md:hover:text-primary transition-colors cursor-pointer"
@@ -2669,13 +2705,15 @@ function ChatContent() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              dismissEditHint();
                               docMode.manualToggle(file.id, file.file_type);
                               docBlocks.fetchBlocks(file.id);
                             }}
-                            className="p-1 rounded hover:bg-primary/10 text-outline hover:text-primary transition-colors cursor-pointer"
+                            className="flex items-center gap-0.5 pl-1 pr-1.5 py-0.5 rounded text-[11px] font-bold bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer"
                             title={t('editor.openEditor' as any)}
                           >
-                            <span className="material-symbols-outlined text-base">edit_note</span>
+                            <span className="material-symbols-outlined text-sm">edit_note</span>
+                            <span>{t('editor.editButton' as any)}</span>
                           </button>
                         ) : null}
                         {/* Sidebar version dropdown — absolute overlay */}

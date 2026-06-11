@@ -1250,6 +1250,8 @@ const en = {
   'editor.noBlocksHint': 'Blocks will appear after generating a document via chat',
   'editor.rebuild': 'Rebuild',
   'editor.openEditor': 'Open in Editor',
+  'editor.editButton': 'Edit',
+  'editor.editHint': 'Want to tweak it? Click here to edit it section by section.',
   'editor.regenerate.title': 'AI Block Regeneration',
   'editor.regenerate.hint': 'Describe what you want to change — AI will regenerate only this block',
   'editor.regenerate.placeholder': 'e.g. Make the title more catchy, add more data...',
