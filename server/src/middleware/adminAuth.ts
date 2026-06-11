@@ -45,7 +45,7 @@ export function adminMiddleware(req: Request, res: Response, next: NextFunction)
   const token = authHeader.substring(7);
 
   try {
-    const payload = jwt.verify(token, config.jwtSecret) as AuthPayload;
+    const payload = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] }) as AuthPayload;
 
     // Always fetch the latest role from DB (JWT role may be stale after admin changes)
     dbGet<{ role: string | null }>('SELECT role FROM users WHERE id = ?', payload.userId)

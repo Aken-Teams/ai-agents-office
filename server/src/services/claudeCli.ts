@@ -339,8 +339,12 @@ export function spawnClaude(
 
     const modeLabel = useApiKey ? '(API Key fallback)' : '(account)';
     console.log(`[Claude CLI] Spawning ${logRole}/${logSkill} ${modeLabel} for conversation ${options.conversationId} (cwd: ${sandboxPath})`);
-    console.log(`[Claude CLI]   allowedTools: ${allowedTools.join(',')}`);
-    console.log(`[Claude CLI]   args: ${args.join(' ')}`);
+    // Verbose tool/arg dump (which may contain prompt fragments) only in
+    // development; production logs stay terse to avoid data exposure if shipped.
+    if (config.nodeEnv !== 'production') {
+      console.log(`[Claude CLI]   allowedTools: ${allowedTools.join(',')}`);
+      console.log(`[Claude CLI]   args: ${args.join(' ')}`);
+    }
 
     let proc: ChildProcess;
     try {

@@ -12,6 +12,7 @@
  */
 
 import QRCode from 'qrcode';
+import crypto from 'crypto';
 import { dbGet, dbRun } from '../../db.js';
 import { config } from '../../config.js';
 
@@ -60,8 +61,10 @@ function mysqlNow(offsetMs = 0): string {
  */
 async function mintBindToken(userId: string): Promise<string> {
   for (let attempt = 0; attempt < 5; attempt++) {
+    // Cryptographically-secure token (crypto.randomInt, not Math.random) since
+    // it grants LINE-account ↔ internal-user binding. Same 8-char format.
     let code = '';
-    for (let i = 0; i < 8; i++) code += ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+    for (let i = 0; i < 8; i++) code += ALPHABET[crypto.randomInt(ALPHABET.length)];
     try {
       await dbRun(
         'INSERT INTO line_link_tokens (code, user_id, expires_at) VALUES (?, ?, ?)',

@@ -92,15 +92,17 @@ router.get('/view/:token', async (req: Request, res: Response) => {
     share.conversation_id
   );
 
-  const user = await dbGet<{ display_name: string | null; email: string }>(
-    'SELECT display_name, email FROM users WHERE id = ?',
+  // Only expose the display name on the PUBLIC payload — never the owner's email
+  // (PII leak to anyone holding the link). Fall back to a generic label.
+  const user = await dbGet<{ display_name: string | null }>(
+    'SELECT display_name FROM users WHERE id = ?',
     share.user_id
   );
 
   res.json({
     conversation,
     messages,
-    sharedBy: user?.display_name || user?.email || 'Unknown',
+    sharedBy: user?.display_name || '使用者',
   });
 });
 

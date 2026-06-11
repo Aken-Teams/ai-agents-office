@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
-import { config } from './config.js';
+import helmet from 'helmet';
+import { config, validateConfig } from './config.js';
 import { initializeDatabase } from './db.js';
 import authRoutes from './routes/auth.js';
 import conversationRoutes from './routes/conversations.js';
@@ -26,6 +27,9 @@ import { startLineWorker, stopQueueSystem } from './services/queue.js';
 import { runLineJob } from './workers/lineMessageWorker.js';
 
 async function main() {
+  // Fail-fast on insecure security config (default JWT secret in production, etc.)
+  validateConfig();
+
   // Initialize database
   await initializeDatabase();
   console.log('Database initialized');
@@ -38,6 +42,21 @@ async function main() {
   startTeamScheduler();
 
   const app = express();
+
+  // Only trust X-Forwarded-* when explicitly behind a trusted proxy (otherwise
+  // req.ip would be client-spoofable). Default off → no change to existing setups.
+  if (config.trustProxy) app.set('trust proxy', 1);
+
+  // Security headers (nosniff, HSTS, referrer-policy, hide x-powered-by). CSP and
+  // frame/cross-origin policies are intentionally relaxed here because this API
+  // serves files/JSON that the separate-origin frontend must fetch and iframe
+  // (e.g. document previews) — a strict policy would break those existing flows.
+  app.use(helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginEmbedderPolicy: false,
+    frameguard: false,
+  }));
 
   // Middleware
   const corsOrigins = process.env.CORS_ORIGINS
@@ -81,6 +100,18 @@ async function main() {
   app.use('/api/blocks', blockRoutes);
   app.use('/api/teams', teamRoutes);
   app.use('/api/public', publicShareRoutes);
+
+  // Global error handler — keeps internal error detail (stack traces, paths, SQL)
+  // out of client responses. Logs full detail server-side; returns a generic
+  // message unless running in development. Placed AFTER all routes.
+  app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error(`[Unhandled] ${req.method} ${req.path}:`, err);
+    if (res.headersSent) { next(err); return; }
+    res.status(500).json({
+      error: '伺服器發生錯誤，請稍後再試。',
+      ...(config.nodeEnv !== 'production' ? { detail: err.message } : {}),
+    });
+  });
 
   // Start the LINE BullMQ worker only when the bot is enabled, so disabling
   // LINE_BOT_ENABLED in .env produces no Redis traffic and no idle worker.

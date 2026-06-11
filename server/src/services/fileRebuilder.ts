@@ -91,7 +91,12 @@ export async function rebuildFile(fileId: string, userId: string): Promise<Gener
   const sandboxPath = path.join(config.workspaceRoot, userId, conversation_id);
   const inputJsonPath = path.join(sandboxPath, 'input.json');
   const ext = DOC_TYPE_EXT[doc_type];
-  const outputFilename = originalFile.filename.replace(/\.[^.]+$/, `.${ext}`);
+  // Sanitize the (AI-chosen) filename before it's interpolated into the exec
+  // command string below — strip shell-dangerous characters, keeping letters,
+  // digits, CJK, spaces and safe punctuation. The user-facing DB filename is
+  // unchanged; this only affects the sandbox temp output name.
+  const safeBase = originalFile.filename.replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-9 ._()\-一-鿿]/g, '_').slice(0, 120) || 'output';
+  const outputFilename = `${safeBase}.${ext}`;
   // Generator writes to sandbox root; we'll copy to the original file_path afterwards
   const outputPath = path.join(sandboxPath, outputFilename);
   // The DB file_path may point to a subdirectory (e.g. _agents/pptx-gen/)

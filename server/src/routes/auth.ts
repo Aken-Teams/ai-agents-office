@@ -76,7 +76,8 @@ function clearLoginFailures(email: string): void { loginFailures.delete(email); 
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function isValidEmail(email: string): boolean { return EMAIL_REGEX.test(email) && email.length <= 255; }
-function generateVerificationCode(): string { return String(Math.floor(100000 + Math.random() * 900000)); }
+// Cryptographically-secure 6-digit code (crypto.randomInt, not Math.random).
+function generateVerificationCode(): string { return String(crypto.randomInt(100000, 1000000)); }
 
 /* ============================================================
    GET /api/auth/invite-code-required

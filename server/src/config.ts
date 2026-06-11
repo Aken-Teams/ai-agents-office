@@ -98,4 +98,36 @@ export const config = {
   // Storage quota (per user, in bytes)
   storageQuotaBytes: parseFloat(process.env.STORAGE_QUOTA_GB || '2') * 1024 * 1024 * 1024,
   storageWarningThreshold: 0.9, // warn at 90%
+
+  // Trust the X-Forwarded-* headers (only enable when genuinely behind a trusted
+  // reverse proxy — otherwise req.ip becomes spoofable). Off by default so
+  // existing single-node deployments are unaffected.
+  trustProxy: process.env.TRUST_PROXY === 'true',
 } as const;
+
+const DEFAULT_JWT_SECRET = 'dev-secret-change-in-production';
+
+/**
+ * Validate security-critical config at startup. A weak/default JWT secret lets
+ * anyone forge admin tokens, so in production we refuse to start. In
+ * development we only warn loudly — existing local/dev usage is NOT affected.
+ */
+export function validateConfig(): void {
+  const isProd = config.nodeEnv === 'production';
+  const usingDefaultSecret = !process.env.JWT_SECRET || config.jwtSecret === DEFAULT_JWT_SECRET;
+
+  if (usingDefaultSecret) {
+    const msg = 'JWT_SECRET is unset or using the public default — tokens can be forged.';
+    if (isProd) {
+      throw new Error(`[FATAL] ${msg} Set a strong JWT_SECRET (≥32 random chars) before starting in production.`);
+    }
+    console.warn('\x1b[33m%s\x1b[0m', `[SECURITY WARNING] ${msg} This is acceptable only in local development.`);
+  } else if (config.jwtSecret.length < 32) {
+    console.warn('\x1b[33m%s\x1b[0m', '[SECURITY WARNING] JWT_SECRET is shorter than 32 characters; use a longer random value.');
+  }
+
+  // In production, refuse to start with an empty DB password (silent fail-open risk).
+  if (isProd && !config.mysqlPassword) {
+    throw new Error('[FATAL] MYSQL_PASSWORD is empty in production. Set a database password.');
+  }
+}

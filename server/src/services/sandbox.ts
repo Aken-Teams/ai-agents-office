@@ -79,7 +79,9 @@ export function getUserWorkspacePath(userId: string): string {
 export function validateFilePath(userId: string, filePath: string): boolean {
   const userRoot = path.resolve(config.workspaceRoot, userId);
   const resolved = path.resolve(filePath);
-  return resolved.startsWith(userRoot);
+  // Require an exact match or a path UNDER userRoot + separator, so a sibling
+  // like `{userRoot}-evil` can't satisfy a bare prefix check.
+  return resolved === userRoot || resolved.startsWith(userRoot + path.sep);
 }
 
 /**

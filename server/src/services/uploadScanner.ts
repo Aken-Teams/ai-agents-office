@@ -183,6 +183,54 @@ function checkOfficeMacros(filePath: string, ext: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Scan: ZIP decompression bomb (Office files are ZIP containers). Reads the ZIP
+// central directory (no decompression, fully sync, no extra deps) and sums the
+// declared uncompressed sizes. Rejects pathological files whose total expansion
+// or compression ratio is implausibly large. Thresholds are well above any
+// legitimate Office document so there are effectively no false positives.
+// ---------------------------------------------------------------------------
+const ZIP_MAX_UNCOMPRESSED = 600 * 1024 * 1024; // 600 MB total expanded
+const ZIP_MAX_RATIO = 200;                       // uncompressed : on-disk
+
+function checkZipBomb(filePath: string, ext: string): string | null {
+  if (!['.xlsx', '.docx', '.pptx', '.zip'].includes(ext)) return null;
+  try {
+    const buf = fs.readFileSync(filePath);
+    // Locate End Of Central Directory (sig 0x06054b50), scanning back from EOF
+    // (the trailing comment is at most 64 KB).
+    let eocd = -1;
+    for (let i = buf.length - 22; i >= 0 && i >= buf.length - 22 - 65536; i--) {
+      if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+    }
+    if (eocd < 0) return null; // not a parseable local zip; other checks apply
+    const cdCount = buf.readUInt16LE(eocd + 10);
+    const cdOffset = buf.readUInt32LE(eocd + 16);
+    // ZIP64 sentinel — sizes live in an extra field we don't parse here. Treat
+    // an Office/zip upload using ZIP64 as suspicious rather than guessing.
+    if (cdOffset === 0xFFFFFFFF) return 'zip_bomb_suspected';
+
+    let total = 0, p = cdOffset;
+    for (let n = 0; n < cdCount && p + 46 <= buf.length; n++) {
+      if (buf.readUInt32LE(p) !== 0x02014b50) break; // central dir header sig
+      const uncomp = buf.readUInt32LE(p + 24);
+      if (uncomp === 0xFFFFFFFF) return 'zip_bomb_suspected'; // ZIP64 entry
+      total += uncomp;
+      const nameLen = buf.readUInt16LE(p + 28);
+      const extraLen = buf.readUInt16LE(p + 30);
+      const commentLen = buf.readUInt16LE(p + 32);
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+    const ratio = buf.length > 0 ? total / buf.length : 0;
+    if (total > ZIP_MAX_UNCOMPRESSED || ratio > ZIP_MAX_RATIO) {
+      return 'zip_bomb_suspected';
+    }
+  } catch {
+    // Unreadable/odd structure — leave to the other checks.
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Scan: PDF JavaScript
 // ---------------------------------------------------------------------------
 
@@ -429,6 +477,7 @@ function checkTextContent(filePath: string, ext: string): { flag: string; detail
 // Flags that trigger immediate rejection
 const REJECT_FLAGS = new Set([
   'disallowed_extension',
+  'zip_bomb_suspected',
   'office_macro_detected',
   'pdf_script_detected',
   'svg_script_detected',
@@ -481,6 +530,13 @@ export function scanUploadedFile(
   if (macroResult) {
     flags.push(macroResult);
     details.push('偵測到 Office 巨集 (macro)');
+  }
+
+  // 5b. ZIP decompression-bomb check (Office/zip containers)
+  const zipBomb = checkZipBomb(filePath, ext);
+  if (zipBomb) {
+    flags.push(zipBomb);
+    details.push('偵測到可疑的壓縮炸彈（解壓後體積異常龐大）');
   }
 
   // 6. PDF script check
