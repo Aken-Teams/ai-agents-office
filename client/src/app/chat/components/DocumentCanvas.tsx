@@ -639,6 +639,28 @@ export default function DocumentCanvas({
             />
           </div>
         )}
+        {docType === 'docx' && (
+          <div className="px-6 pb-1">
+            <label className="block text-sm font-medium text-on-surface-variant mb-2">想換個風格（含表格配色）？（選填）</label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'modern', label: '現代簡約（藍）' },
+                { key: 'formal', label: '專業端莊（深藍）' },
+                { key: 'academic', label: '學術（黑白）' },
+                { key: 'compact', label: '精簡（灰）' },
+              ].map(c => (
+                <button
+                  key={c.key}
+                  type="button"
+                  onClick={() => setRebuildStyle(prev => prev === c.key ? '' : c.key)}
+                  className={`px-3.5 py-2 rounded-full text-sm border transition-colors cursor-pointer ${rebuildStyle === c.key ? 'border-primary bg-primary/10 text-primary font-medium' : 'border-outline-variant/30 text-on-surface-variant hover:border-primary/40'}`}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex gap-2 px-6 pb-6 pt-3">
           <button
             onClick={() => setShowRebuildConfirm(false)}

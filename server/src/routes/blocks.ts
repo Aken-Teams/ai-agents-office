@@ -366,6 +366,27 @@ router.post('/:fileId/rebuild', async (req: Request, res: Response) => {
           // DOCX/XLSX: deterministic re-render via the shared generator (now
           // schema-aligned with the editor blocks, incl. tables/lists/content).
           emit({ type: 'started' });
+          // "美編/換風格" for Word = pick a document style preset (also recolors
+          // table headers/headings). The frontend sends a style key as instruction.
+          const STYLE_KEYS = ['formal', 'modern', 'academic', 'compact'];
+          const styleLabelMap: Record<string, string> = {
+            專業: 'formal', 端莊: 'formal', 正式: 'formal', 現代: 'modern', 簡約: 'modern',
+            學術: 'academic', 精簡: 'compact', 緊湊: 'compact',
+          };
+          let styleKey = '';
+          const instr = instruction.trim().toLowerCase();
+          if (STYLE_KEYS.includes(instr)) styleKey = instr;
+          else for (const [zh, key] of Object.entries(styleLabelMap)) { if (instruction.includes(zh)) { styleKey = key; break; } }
+          if (styleKey) {
+            const rec = await dbGet<{ id: string; doc_meta: string | null }>(
+              'SELECT id, doc_meta FROM document_blocks WHERE file_id = ? AND user_id = ?', fileId, userId,
+            );
+            if (rec) {
+              const m = rec.doc_meta ? JSON.parse(rec.doc_meta) : {};
+              m.style = styleKey;
+              await dbRun('UPDATE document_blocks SET doc_meta = ? WHERE id = ?', JSON.stringify(m), rec.id);
+            }
+          }
           const f = await rebuildFile(fileId, userId);
           if (f) { emit({ type: 'file_ready', data: { file: f } }); emit({ type: 'done', data: { file: f } }); }
           return f;
