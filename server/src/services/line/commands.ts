@@ -138,7 +138,7 @@ export async function startNewTeamFlow(lineUser: LineUserRow): Promise<void> {
  */
 async function buildTeamFromTopic(lineUser: LineUserRow, topic: string): Promise<void> {
   // Content safety — refuse crime / hacking / secret-theft / harassment / harm.
-  const verdict = await moderateTeamTopic(topic);
+  const verdict = await moderateTeamTopic(topic, '無法建立這個團隊');
   if (!verdict.allowed) {
     logSecurityEvent(lineUser.internal_user_id, 'blocked_request', 'high', `LINE team-build blocked (category=${verdict.category})`, topic);
     await pushMessage(lineUser.line_user_id, [{ type: 'text', text: `🚫 ${verdict.reason}` }]);
@@ -380,7 +380,7 @@ export async function handleSchedule(lineUser: LineUserRow, args: string): Promi
     return;
   }
 
-  const verdict = await moderateTeamTopic(question);
+  const verdict = await moderateTeamTopic(question, '無法建立這個排程');
   if (!verdict.allowed) {
     logSecurityEvent(lineUser.internal_user_id, 'blocked_request', 'high', `LINE team-schedule blocked (category=${verdict.category})`, question);
     await pushMessage(lineUser.line_user_id, [{ type: 'text', text: `🚫 ${verdict.reason}` }]);
@@ -476,7 +476,7 @@ export async function createScheduleFromPending(lineUser: LineUserRow, topicText
 
   // Vet a user-typed question (preset = team topic, already vetted at creation).
   if (!usePreset) {
-    const verdict = await moderateTeamTopic(question);
+    const verdict = await moderateTeamTopic(question, '無法建立這個排程');
     if (!verdict.allowed) {
       logSecurityEvent(lineUser.internal_user_id, 'blocked_request', 'high', `LINE team-schedule blocked (category=${verdict.category})`, question);
       await pushMessage(lineUser.line_user_id, [{ type: 'text', text: `🚫 ${verdict.reason}` }]);

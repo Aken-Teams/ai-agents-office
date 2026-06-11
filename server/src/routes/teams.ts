@@ -124,7 +124,7 @@ router.post('/', async (req: Request, res: Response) => {
   // stealing secrets, harassment, or harming other users. Runs whenever the user
   // supplied a free-form scenario (custom build, or template + topic tuning).
   if (cleanTopic) {
-    const verdict = await moderateTeamTopic(cleanTopic);
+    const verdict = await moderateTeamTopic(cleanTopic, '無法建立這個團隊');
     if (!verdict.allowed) {
       logSecurityEvent(userId, 'blocked_request', 'high', `team-build blocked (category=${verdict.category})`, cleanTopic);
       res.status(403).json({ error: verdict.reason });
@@ -261,7 +261,7 @@ router.post('/:id/run', async (req: Request, res: Response) => {
   // …plus content safety: refuse crime / hacking / secret-theft / harassment /
   // harming the system or other users (the same gate as team creation). Runs
   // before the SSE stream starts so a plain JSON error can still be returned.
-  const verdict = await moderateTeamTopic(message.trim());
+  const verdict = await moderateTeamTopic(message.trim(), '無法回答這個問題');
   if (!verdict.allowed) {
     logSecurityEvent(userId, 'blocked_request', 'high', `team-run blocked (category=${verdict.category})`, message);
     res.status(403).json({ error: verdict.reason });
@@ -331,7 +331,7 @@ router.post('/:id/schedules', async (req: Request, res: Response) => {
 
   // Content safety — vet the scheduled question up front so every future run is
   // pre-approved (the scheduler runs it headless, with no chance to refuse).
-  const verdict = await moderateTeamTopic(question.trim());
+  const verdict = await moderateTeamTopic(question.trim(), '無法建立這個排程');
   if (!verdict.allowed) {
     logSecurityEvent(userId, 'blocked_request', 'high', `team-schedule blocked (category=${verdict.category})`, question);
     res.status(403).json({ error: verdict.reason });

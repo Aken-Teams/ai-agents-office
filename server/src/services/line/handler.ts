@@ -545,7 +545,7 @@ async function runTeamForLine(
 
   // Content safety — same gate as team creation: refuse crime / hacking /
   // secret-theft / harassment / harming the system or other users.
-  const verdict = await moderateTeamTopic(message);
+  const verdict = await moderateTeamTopic(message, '無法回答這個問題');
   if (!verdict.allowed) {
     logSecurityEvent(userId, 'blocked_request', 'high', `LINE team-run blocked (category=${verdict.category})`, message);
     await pushMessage(lineUserId, [{ type: 'text', text: `🚫 ${verdict.reason}` }]);
