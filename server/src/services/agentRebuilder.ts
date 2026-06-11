@@ -7,6 +7,7 @@ import { spawnClaude } from './claudeCli.js';
 import { getSkill, buildSystemPrompt } from '../skills/loader.js';
 import { getSandboxPath } from './sandbox.js';
 import { config } from '../config.js';
+import { snapshotExistingFiles } from './fileManager.js';
 import type { DocumentBlocksRecord, DocumentBlock, GeneratedFile } from '../types.js';
 
 export type AgentRebuildEvent =
@@ -505,4 +506,243 @@ function invalidateCache(
       } catch {}
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Unified deck edit — same flow as the left-side chat
+// ---------------------------------------------------------------------------
+
+/**
+ * Edit a PPTX by RESUMING the conversation's pptx-gen agent session and asking
+ * it to modify its own original build script (e.g. build-deck.cjs) and re-run —
+ * exactly what the left-side chat does. The worker regenerates the WHOLE deck,
+ * changing only what the instruction asks for, so style/layout/chart sizing stay
+ * consistent with the rest of the presentation.
+ *
+ * This replaces the old isolated "generate just 1 slide and splice" approach,
+ * which produced off-style, single-page results because it spawned a FRESH agent
+ * in a different working dir with no access to the original generation script.
+ *
+ * Used by BOTH single-page/single-block edits and the whole-deck rebuild — the
+ * only difference is the `instruction` (scoped to one page vs. the whole deck).
+ *
+ * The output file is overwritten in place (same fileId, same path); blocks are
+ * re-captured from the agent's updated slides.json so the editor refreshes.
+ */
+export async function agentEditDeck(
+  fileId: string,
+  userId: string,
+  instruction: string,
+  emit?: (event: AgentRebuildEvent) => void,
+): Promise<{ file: GeneratedFile; blocks: DocumentBlock[] } | null> {
+  const send = emit || (() => {});
+
+  const fileRecord = await dbGet<GeneratedFile>(
+    'SELECT * FROM generated_files WHERE id = ? AND user_id = ?', fileId, userId,
+  );
+  if (!fileRecord) { send({ type: 'error', data: 'File not found' }); return null; }
+
+  const blockRecord = await dbGet<DocumentBlocksRecord>(
+    'SELECT * FROM document_blocks WHERE file_id = ? AND user_id = ?', fileId, userId,
+  );
+  if (!blockRecord) { send({ type: 'error', data: 'Block record not found' }); return null; }
+  if (blockRecord.doc_type !== 'pptx') {
+    send({ type: 'error', data: `agentEditDeck only supports pptx (got ${blockRecord.doc_type})` });
+    return null;
+  }
+
+  const conversationId = blockRecord.conversation_id;
+
+  // The pptx-gen worker runs in its OWN agent dir (where its build script +
+  // slides.json live) and resumes its OWN persistent session — exactly how the
+  // orchestrator re-dispatches a follow-up edit. Resuming that session is what
+  // lets the worker re-read and modify its original build script instead of
+  // improvising a fresh, off-style one.
+  const sandboxPath = getSandboxPath(userId, conversationId);
+  const agentDir = path.join(sandboxPath, '_agents', 'pptx-gen');
+  fs.mkdirSync(agentDir, { recursive: true });
+  const originalFilePath = path.join(config.workspaceRoot, fileRecord.file_path);
+
+  const skill = getSkill('pptx-gen');
+  if (!skill) { send({ type: 'error', data: 'pptx-gen skill not found' }); return null; }
+  const systemPrompt = buildSystemPrompt(skill, config.generatorsDir);
+
+  // Get-or-create the pptx-gen worker's persistent session (agent_sessions),
+  // mirroring Orchestrator.getOrCreateAgentSession.
+  let agentSession = await dbGet<{ session_uuid: string; initialized: number }>(
+    'SELECT session_uuid, initialized FROM agent_sessions WHERE conversation_id = ? AND skill_id = ?',
+    conversationId, 'pptx-gen',
+  );
+  if (!agentSession) {
+    const fresh = uuidv4();
+    await dbRun(
+      'INSERT INTO agent_sessions (id, conversation_id, skill_id, session_uuid) VALUES (?, ?, ?, ?)',
+      uuidv4(), conversationId, 'pptx-gen', fresh,
+    );
+    agentSession = { session_uuid: fresh, initialized: 0 };
+  }
+
+  // Snapshot the current file for version history before we overwrite it.
+  // We deliberately keep the SAME fileId (no registerNewFiles fork).
+  await snapshotExistingFiles(userId, conversationId);
+
+  const message = [
+    instruction,
+    '',
+    '## 執行方式（務必遵守）',
+    `- 你之前已經在這個工作目錄產生過這份簡報「${fileRecord.filename}」。請**讀取並修改你先前用來產生它的 pptxgenjs 腳本**（例如 build-deck.cjs / generate.cjs 等；若真的找不到，就讀現有的 slides.json 重建一支等效腳本）。`,
+    `- 改完後**重新執行腳本**，覆蓋產生「同一個檔名」的簡報:\`${fileRecord.filename}\`（不要改檔名、不要新增別的 .pptx）。`,
+    '- **只變更指令要求的部分**,其餘所有頁面的文字、數據、版面、配色一律保持完全不變。',
+    '- 同步更新同目錄的 `slides.json`，讓編輯器能反映這次變更。',
+    '- 完成後簡短回報即可,不需冗長說明。',
+  ].join('\n');
+
+  send({ type: 'started' });
+
+  return new Promise((resolve) => {
+    let resolved = false;
+    let hasRetried = false;
+
+    const run = (sessionId: string, isResume: boolean) => {
+      const { emitter, abort } = spawnClaude(message, systemPrompt, {
+        userId,
+        conversationId,
+        sessionId,
+        isResume,
+        role: 'worker',
+        skillId: 'pptx-gen',
+        sandboxSubdir: '_agents/pptx-gen',
+        customAllowedTools: skill.allowedTools,
+        customDisallowedTools: skill.disallowedTools,
+      });
+
+      const timeout = setTimeout(() => {
+        if (resolved) return;
+        console.warn('[AgentEditDeck] Agent timed out after 5 minutes');
+        abort();
+        resolved = true;
+        send({ type: 'error', data: 'Deck edit timed out' });
+        resolve(null);
+      }, 300_000);
+
+      emitter.on('event', async (event: any) => {
+        if (resolved) return;
+
+        if (event.type === 'text') {
+          send({ type: 'agent_text', data: event.data });
+        } else if (event.type === 'tool_activity') {
+          send({ type: 'agent_tool', data: event.data });
+        } else if (event.type === 'session_id') {
+          const sid = event.data as string;
+          if (sid) dbRun(
+            'UPDATE agent_sessions SET session_uuid = ?, initialized = 1 WHERE conversation_id = ? AND skill_id = ?',
+            sid, conversationId, 'pptx-gen',
+          ).catch(() => {});
+        } else if (event.type === 'error') {
+          // Resume can fail if the session is stale/busy — retry once with a
+          // fresh session (the build script is still on disk, so the worker can
+          // still read + modify it from the instruction alone).
+          const errStr = String(event.data || '');
+          if (isResume && !hasRetried && /Session|exit|code 1/.test(errStr)) {
+            hasRetried = true;
+            clearTimeout(timeout);
+            console.log('[AgentEditDeck] Resume failed, retrying with fresh session');
+            const fresh = uuidv4();
+            await dbRun(
+              'UPDATE agent_sessions SET session_uuid = ?, initialized = 0 WHERE conversation_id = ? AND skill_id = ?',
+              fresh, conversationId, 'pptx-gen',
+            ).catch(() => {});
+            run(fresh, false);
+            return;
+          }
+          clearTimeout(timeout);
+          resolved = true;
+          send({ type: 'error', data: errStr });
+          resolve(null);
+        } else if (event.type === 'done') {
+          clearTimeout(timeout);
+          try {
+            // The worker wrote the edited deck in its agent dir → copy it onto the
+            // registered file path (conversation root), keeping the SAME fileId.
+            const pptxFiles = fs.readdirSync(agentDir)
+              .filter(f => f.endsWith('.pptx') && !f.includes('.v'))
+              .sort((a, b) => {
+                if (a === fileRecord.filename) return -1;
+                if (b === fileRecord.filename) return 1;
+                if (a === 'output.pptx') return -1;
+                if (b === 'output.pptx') return 1;
+                return fs.statSync(path.join(agentDir, b)).mtimeMs - fs.statSync(path.join(agentDir, a)).mtimeMs;
+              });
+            if (pptxFiles.length === 0) throw new Error('Agent did not produce a PPTX file');
+
+            const generatedPptx = path.join(agentDir, pptxFiles[0]);
+            // The registered file_path often IS the agent-dir file itself (the
+            // worker writes the deck straight into its cwd). Only copy when the
+            // registered path is somewhere else (e.g. conversation root).
+            if (path.resolve(generatedPptx) !== path.resolve(originalFilePath)) {
+              fs.mkdirSync(path.dirname(originalFilePath), { recursive: true });
+              fs.copyFileSync(generatedPptx, originalFilePath);
+              console.log(`[AgentEditDeck] Copied ${pptxFiles[0]} → ${fileRecord.file_path}`);
+            } else {
+              console.log(`[AgentEditDeck] Edited deck in place at ${fileRecord.file_path}`);
+            }
+
+            const newSize = fs.statSync(originalFilePath).size;
+            await dbRun(
+              'UPDATE generated_files SET file_size = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?',
+              newSize, fileId,
+            );
+            invalidateCache(originalFilePath, fileRecord, sandboxPath);
+
+            // Re-capture blocks from the agent's updated slides.json, UPDATING the
+            // SAME document_blocks row. (captureBlocksForFile INSERTs a new row,
+            // which would duplicate blocks for this unchanged fileId.) Preserve
+            // existing block ids by index so the editor's selection stays stable.
+            const existingBlocks: DocumentBlock[] = JSON.parse(blockRecord.blocks);
+            let blocks = existingBlocks;
+            const slidesJsonPath = path.join(agentDir, 'slides.json');
+            if (fs.existsSync(slidesJsonPath)) {
+              try {
+                const raw = JSON.parse(fs.readFileSync(slidesJsonPath, 'utf-8'));
+                const slidesArr = raw.slides || raw.sections || raw.sheets || [];
+                if (Array.isArray(slidesArr) && slidesArr.length > 0) {
+                  blocks = slidesArr.map((slide: any, i: number) => ({
+                    id: existingBlocks[i]?.id || uuidv4(),
+                    type: slide.type || 'content',
+                    order: i,
+                    data: slide,
+                    status: 'idle',
+                  }));
+                  const newMeta = { ...raw };
+                  delete newMeta.slides; delete newMeta.sections; delete newMeta.sheets;
+                  await dbRun(
+                    'UPDATE document_blocks SET blocks = ?, doc_meta = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                    JSON.stringify(blocks), JSON.stringify(newMeta), blockRecord.id,
+                  );
+                }
+              } catch (e) {
+                console.warn('[AgentEditDeck] Failed to parse updated slides.json:', e);
+              }
+            }
+
+            const updatedFile = await dbGet<GeneratedFile>('SELECT * FROM generated_files WHERE id = ?', fileId);
+            if (!updatedFile) throw new Error('File record vanished');
+
+            send({ type: 'file_ready', data: { file: updatedFile } });
+            send({ type: 'blocks_updated', data: { blocks } });
+            send({ type: 'done', data: { file: updatedFile, blocks } });
+            resolved = true;
+            resolve({ file: updatedFile, blocks });
+          } catch (err: any) {
+            console.error('[AgentEditDeck] Post-agent processing failed:', err);
+            resolved = true;
+            send({ type: 'error', data: err.message || 'Post-processing failed' });
+            resolve(null);
+          }
+        }
+      });
+    };
+
+    run(agentSession.session_uuid, agentSession.initialized === 1);
+  });
 }

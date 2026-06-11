@@ -6,7 +6,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
 import { rebuildFile, patchFileField } from '../services/fileRebuilder.js';
 import { regenerateBlock } from '../services/blockRegenerator.js';
-import { agentRebuild } from '../services/agentRebuilder.js';
+import { agentEditDeck } from '../services/agentRebuilder.js';
 import { captureBlocksForFile } from '../services/fileManager.js';
 import { moderateAiRequest } from '../services/contentSafety.js';
 import { logSecurityEvent } from '../services/inputGuard.js';
@@ -372,8 +372,15 @@ router.post('/:fileId/rebuild', async (req: Request, res: Response) => {
       try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* closed */ }
     };
 
+    // PPTX rebuild goes through the SAME full-agent flow as single-page edits and
+    // the left-side chat: resume the session, edit the original build script,
+    // re-run → whole deck regenerated with only the requested visual change.
+    const pptxRebuildInstruction = instruction
+      ? `請將整份簡報重新美化，並套用以下調整:${instruction}。保留所有頁面的文字內容、數據與結構完全不變,只調整視覺設計(版面、配色、元素)。`
+      : '請重新美化整份簡報的視覺設計(讓版面更精緻、配色更協調、元素更專業),所有頁面的文字內容與數據完全保持不變。';
+
     const rebuildRun: Promise<unknown> = docType === 'pptx'
-      ? agentRebuild(fileId, userId, emit, instruction || undefined)
+      ? agentEditDeck(fileId, userId, pptxRebuildInstruction, emit)
       : (async () => {
           // DOCX/XLSX: deterministic re-render via the shared generator (now
           // schema-aligned with the editor blocks, incl. tables/lists/content).

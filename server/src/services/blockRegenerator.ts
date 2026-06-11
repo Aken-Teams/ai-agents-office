@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbRun } from '../db.js';
 import { spawnClaude } from './claudeCli.js';
 import { patchBlockInPlace, rebuildFile } from './fileRebuilder.js';
-import { agentRebuildSlide } from './agentRebuilder.js';
+import { agentEditDeck } from './agentRebuilder.js';
 import type { DocumentBlocksRecord, DocumentBlock, GeneratedFile } from '../types.js';
 
 export type RegenEvent =
@@ -165,6 +165,51 @@ export async function regenerateBlock(
     cleanInstruction = cleanInstruction.slice(cellRefMatch[0].length);
   }
 
+  // ── PPTX: full-agent edit (same flow as the left-side chat) ──────────────
+  // Resume the conversation's pptx-gen session, have it edit its own original
+  // build script and re-run → the WHOLE deck is regenerated changing ONLY this
+  // page/element, so style/layout/chart sizing stay consistent with the rest.
+  // (DOCX/XLSX keep the fast JSON-patch path below.)
+  if (!isDocx && !isXlsx) {
+    const slideNo = pageIndex + 1;
+    const slideTitle = (targetBlock.data as any).title
+      || (targetBlock.data as any).heading
+      || (targetBlock.data as any).quote
+      || `第 ${slideNo} 頁`;
+    const elementClause = targetElement ? `，特別是其中的「${targetElement}」這個部分` : '';
+    const scopedInstruction = [
+      `請修改這份簡報的「第 ${slideNo} 頁」(標題:「${slideTitle}」)${elementClause}:`,
+      cleanInstruction,
+    ].join('\n');
+
+    send({ type: 'started' });
+    const result = await agentEditDeck(fileId, userId, scopedInstruction, (ev) => {
+      // Map deck-edit events onto the block-editor's RegenEvent stream.
+      // Swallow started/file_ready/blocks_updated/done — we emit our own below.
+      if (ev.type === 'agent_text') send({ type: 'agent_text', data: ev.data });
+      else if (ev.type === 'agent_tool') send({ type: 'agent_tool', data: ev.data });
+      else if (ev.type === 'error') send({ type: 'error', data: ev.data });
+    });
+
+    if (!result) {
+      // agentEditDeck already emitted an error; reset block status.
+      targetBlock.status = 'idle';
+      await dbRun(
+        'UPDATE document_blocks SET blocks = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        JSON.stringify(blocks), blockRecord.id,
+      ).catch(() => {});
+      return null;
+    }
+
+    const updatedBlocks = result.blocks;
+    const updatedTarget = updatedBlocks.find(b => b.id === blockId)
+      || updatedBlocks[pageIndex]
+      || targetBlock;
+    send({ type: 'block_updated', data: { block: updatedTarget, blocks: updatedBlocks } });
+    send({ type: 'done', data: { block: updatedTarget, blocks: updatedBlocks } });
+    return { updatedBlock: updatedTarget, newFile: result.file };
+  }
+
   const dataLabel = isDocx ? 'Current section data' : isXlsx ? 'Current sheet data' : 'Current slide data';
   const returnLabel = isDocx ? 'Return the updated section JSON only.' : isXlsx ? 'Return the updated sheet JSON only.' : 'Return the updated slide JSON only.';
 
@@ -263,17 +308,13 @@ export async function regenerateBlock(
           // Immediately emit block_updated so frontend can show new content
           send({ type: 'block_updated', data: { block: targetBlock, blocks } });
 
-          // Patch file in-place (fast: just XML manipulation, no generator script)
+          // ── DOCX / XLSX only (PPTX returned early via agentEditDeck) ──
+          // Patch file in-place (fast: just XML manipulation, no generator script).
           send({ type: 'patching' });
-          // If AI returned identical data, the file may be out of sync from a previous
-          // failed patch. Force-sync by passing empty oldData so all patchable fields
-          // are treated as "changed" and applied to the file.
-          // Layout/redesign requests can't be expressed as block data, so an
-          // in-place patch can't help — route them straight to a single-slide
-          // re-render that re-lays-out just this page (with the user's request).
-          const layoutIntent = /排版|版面|佈局|布局|重新設計|重新排版|跑版|對齊|間距|重疊|位置|擺放|layout/i.test(cleanInstruction);
+          // If AI returned identical data, force-sync by passing empty oldData so
+          // all patchable fields are treated as "changed" and applied to the file.
           const patchOld = dataChanged ? oldData : {};
-          const patched = layoutIntent ? false : await patchBlockInPlace(
+          const patched = await patchBlockInPlace(
             fileId, userId, targetBlock.order, patchOld, updatedData, blockRecord.doc_type,
           );
 
@@ -282,29 +323,12 @@ export async function regenerateBlock(
             console.log(`[BlockRegenerator] In-place patch not supported for ${blockRecord.doc_type}, triggering rebuild...`);
             send({ type: 'rebuilding' });
             try {
-              if (blockRecord.doc_type === 'pptx') {
-                // PPTX: agent single-slide rebuild (high visual quality via pptx-gen worker)
-                newFile = await agentRebuildSlide(
-                  fileId, userId, targetBlock.order, updatedData, meta, blocks,
-                  (ev) => {
-                    if (ev.type === 'agent_text') send({ type: 'agent_text', data: ev.data });
-                    else if (ev.type === 'agent_tool') send({ type: 'agent_tool', data: ev.data });
-                  },
-                  layoutIntent ? cleanInstruction : undefined,
-                );
-                if (newFile) {
-                  console.log(`[BlockRegenerator] Agent single-slide rebuild successful: slide ${targetBlock.order + 1}`);
-                } else {
-                  console.warn(`[BlockRegenerator] Agent single-slide rebuild returned null — block data updated in DB only.`);
-                }
+              // Shared generator rebuild (sufficient quality for text documents)
+              newFile = await rebuildFile(fileId, userId);
+              if (newFile) {
+                console.log(`[BlockRegenerator] Full rebuild successful for ${blockRecord.doc_type}`);
               } else {
-                // DOCX/others: shared generator rebuild (sufficient quality for text documents)
-                newFile = await rebuildFile(fileId, userId);
-                if (newFile) {
-                  console.log(`[BlockRegenerator] Full rebuild successful for ${blockRecord.doc_type}`);
-                } else {
-                  console.warn(`[BlockRegenerator] Full rebuild returned null — block data updated in DB only.`);
-                }
+                console.warn(`[BlockRegenerator] Full rebuild returned null — block data updated in DB only.`);
               }
             } catch (rebuildErr) {
               console.error(`[BlockRegenerator] Rebuild failed:`, rebuildErr);
