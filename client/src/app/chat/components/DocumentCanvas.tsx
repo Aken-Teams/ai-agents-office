@@ -57,10 +57,43 @@ interface DocumentCanvasProps {
 }
 
 /** Find the best matching PDF page for a block, avoiding TOC false matches */
+/** Normalize text for matching: drop whitespace AND punctuation so full-width vs
+ *  half-width brackets/colons, spacing, and numbering differences don't break the
+ *  match between the block heading and the rendered preview text. */
+function normMatch(s: string): string {
+  return (s || '').toLowerCase()
+    .replace(/[\s　]+/g, '')
+    .replace(/[（）()【】［］\[\]「」『』《》〈〉{}:：，,。.、；;·・•\-—–_~～!！?？'"'""`]/g, '');
+}
+
+/** Progressively looser variants of a heading to match against the preview.
+ *  The block label often has extra parts the rendered heading line lacks
+ *  (e.g. block "1.2 目標用戶（Persona）" vs PDF heading "1.2 目標用戶"). */
+function headingCandidates(heading: string): string[] {
+  const out: string[] = [];
+  const push = (s: string) => { const v = s.trim(); if (v && !out.includes(v) && normMatch(v).length >= 2) out.push(v); };
+  push(heading);
+  const noTrailParen = heading.replace(/[（(][^（）()]*[）)]\s*$/, '');   // drop trailing "（…）"
+  push(noTrailParen);
+  push(heading.replace(/^[\d.\s、]+/, ''));                              // drop leading number
+  push(noTrailParen.replace(/^[\d.\s、]+/, ''));                          // drop both
+  return out;
+}
+
 function findBestPage(heading: string, content: string, blockIndex: number, totalBlocks: number, pageTexts: string[]): number {
+  const normPages = pageTexts.map(normMatch);
+  const pagesContaining = (needle: string): number[] => {
+    const n = normMatch(needle);
+    if (n.length < 2) return [];
+    return normPages.map((t, pi) => t.includes(n) ? pi : -1).filter(pi => pi >= 0);
+  };
   if (heading) {
-    const norm = heading.replace(/\s+/g, '');
-    const matches = pageTexts.map((t, pi) => t.replace(/\s+/g, '').includes(norm) ? pi : -1).filter(pi => pi >= 0);
+    // Try progressively looser heading variants until one matches a page.
+    let matches: number[] = [];
+    for (const cand of headingCandidates(heading)) {
+      matches = pagesContaining(cand);
+      if (matches.length) break;
+    }
     if (matches.length === 1) return matches[0];
     if (matches.length > 1) {
       // Multiple matches (e.g. heading appears in TOC + actual section) — pick closest to proportional estimate
@@ -69,9 +102,9 @@ function findBestPage(heading: string, content: string, blockIndex: number, tota
     }
   }
   if (content) {
-    const snippet = content.slice(0, 40).replace(/\s+/g, '');
+    const snippet = normMatch(content.slice(0, 40));
     if (snippet.length >= 6) {
-      const idx = pageTexts.findIndex(t => t.replace(/\s+/g, '').includes(snippet));
+      const idx = normPages.findIndex(t => t.includes(snippet));
       if (idx >= 0) return idx;
     }
   }
@@ -80,19 +113,28 @@ function findBestPage(heading: string, content: string, blockIndex: number, tota
 
 /** Find text position on a page — returns topFrac (0-1, 0=top) or null */
 function findTextOnPage(items: Array<{ str: string; topFrac: number }>, search: string, afterFrac = 0): number | null {
-  const norm = search.replace(/\s+/g, '');
+  const norm = normMatch(search);
   if (!norm || norm.length < 2) return null;
   // Direct item match
   for (const item of items) {
     if (item.topFrac < afterFrac) continue;
-    if (item.str.replace(/\s+/g, '').includes(norm)) return item.topFrac;
+    if (normMatch(item.str).includes(norm)) return item.topFrac;
   }
   // Running concatenation match (for text split across items)
   let running = '';
   for (const item of items) {
     running += item.str;
     if (item.topFrac < afterFrac) continue;
-    if (running.replace(/\s+/g, '').includes(norm)) return item.topFrac;
+    if (normMatch(running).includes(norm)) return item.topFrac;
+  }
+  return null;
+}
+
+/** Locate a heading on a page, trying progressively looser variants. */
+function findHeadingFrac(items: Array<{ str: string; topFrac: number }>, heading: string, afterFrac = 0): number | null {
+  for (const cand of headingCandidates(heading)) {
+    const f = findTextOnPage(items, cand, afterFrac);
+    if (f != null) return f;
   }
   return null;
 }
@@ -225,12 +267,12 @@ function DocPdfPages({ pdfUrl, previewKey, onPageCount, onPageTexts, highlightIn
     }
 
     // Section-level highlight: from heading to next heading
-    const topFrac = findTextOnPage(items, heading);
+    const topFrac = findHeadingFrac(items, heading);
     if (topFrac == null) return null;
     const topPct = Math.max(0, topFrac * 100 - 0.5);
     let bottomPct = 100;
     if (nextHeading) {
-      const nextFrac = findTextOnPage(items, nextHeading);
+      const nextFrac = findHeadingFrac(items, nextHeading, topFrac + 0.01);
       if (nextFrac != null && nextFrac * 100 > topPct + 3) {
         bottomPct = nextFrac * 100 - 0.5;
       }
