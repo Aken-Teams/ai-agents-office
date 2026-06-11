@@ -156,18 +156,53 @@ Tables should include:
 - Progress bars where applicable
 - Hover row highlighting
 
-### Rule 6: Responsive Design
+### Rule 6: Responsive Design (MANDATORY — the page MUST work on phones)
 
-Always include responsive breakpoints:
+The page WILL be viewed on phones, tablets and desktops. A fixed-width layout that overflows or stays desktop-sized on mobile is a **FAILURE**. You MUST satisfy ALL of the following — this is not optional:
+
+**1. Viewport** — required in `<head>`:
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1">
+```
+
+**2. Fluid auto-wrapping grids (the key rule).** NEVER hard-code a fixed number of columns at fixed widths. Use `auto-fit` + `minmax` so cards reflow automatically on ANY screen — this alone fixes most mobile breakage:
 ```css
-@media (max-width: 900px) {
-  .chart-grid { grid-template-columns: 1fr; }
-}
-@media (max-width: 600px) {
-  .kpi-row { grid-template-columns: 1fr 1fr; }
-  .header { padding: 16px; }
+.kpi-row, .card-grid, .chart-grid, .feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: clamp(12px, 2vw, 24px);
 }
 ```
+
+**3. No fixed pixel widths on layout containers.** The page wrapper uses `width: 100%; max-width: 1200px; margin: 0 auto;`. Inner blocks use %, `fr`, flex or `max-width` — NEVER `width: 1000px`.
+
+**4. Every flex row wraps:** any `display:flex` row of cards/items MUST include `flex-wrap: wrap;`.
+
+**5. Fluid typography & spacing** with `clamp()` so nothing is huge on mobile:
+```css
+.hero-title { font-size: clamp(28px, 5vw, 56px); }
+.section, .header { padding: clamp(16px, 4vw, 48px); }
+```
+
+**6. Tables scroll, never break:** wrap every table in `<div style="overflow-x:auto">`.
+
+**7. Media/charts fluid:** `img, canvas, svg { max-width: 100%; }`; re-init ECharts on `resize`.
+
+**8. Prevent horizontal scroll:** `html, body { overflow-x: hidden; }` and ensure no element is wider than the viewport.
+
+**9. Explicit breakpoints** to fine-tune side-by-side blocks (in ADDITION to the auto-fit grids):
+```css
+@media (max-width: 900px) { /* tablet: tighten padding, 2-col grids */ }
+@media (max-width: 600px) { /* mobile: stack all side-by-side blocks to 1 column, shrink fonts/padding */ }
+```
+
+**RWD self-check before you finish (verify mentally at 375px width):**
+- [ ] viewport meta present
+- [ ] page container is `max-width`, not a fixed pixel width
+- [ ] every multi-column grid uses `auto-fit`/`minmax` (or collapses to 1 column on mobile)
+- [ ] all flex rows have `flex-wrap: wrap`
+- [ ] fonts/padding use `clamp()` or have mobile overrides
+- [ ] no element forces horizontal scrolling on a phone
 
 ### Rule 7: Typography
 

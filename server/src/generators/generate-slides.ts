@@ -265,9 +265,70 @@ const STYLES: Record<string, StylePreset> = {
     quoteMarkColor: 'rgba(88,166,255,0.15)',
     sectionBgColors: ['#1a1e24', '#1e2228', '#16191f', '#1c2026', '#181c22', '#1a1e24'],
   },
+  // Clean, high-identity editorial style (warm cream + single terracotta accent,
+  // bold CJK headlines, white rounded cards) — the new default. Modelled on a
+  // modern social-carousel / infographic aesthetic for maximum clarity.
+  'editorial': {
+    bg: '#FAF4ED',
+    titleColor: '#2D2A32',
+    subtitleColor: '#8A8490',
+    headingColor: '#2D2A32',
+    bodyColor: '#6E6A72',
+    accentColor: '#C96B43',
+    accentColor2: '#E0936A',
+    codeBg: '#FBF3EB',
+    codeColor: '#9A4A28',
+    fontFamily: '"Noto Sans TC", "Inter", "Segoe UI", sans-serif',
+    headingFontFamily: '"Noto Sans TC", "Inter", "Segoe UI", sans-serif',
+    transition: 'fade',
+    googleFontsUrl: 'https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Inter:wght@400;600;700;800&display=swap',
+    cardBg: '#FFFFFF',
+    cardBorder: '#F1E8DD',
+    decorations: false,
+    decorationColors: ['#E0936A', '#F1E1D2'],
+    isDark: false,
+    chartColors: ['#C96B43', '#E0936A', '#D9B382', '#8C5A3C', '#B98C6A'],
+    iconColor: '#C96B43',
+    timelineColor: '#C96B43',
+    statsCardBg: '#FFFFFF',
+    quoteMarkColor: 'rgba(201,107,67,0.15)',
+    sectionBgColors: ['#FAF4ED', '#F6ECE0', '#FBF2E9', '#F4EEE4', '#FAF0E8', '#F7EFE6'],
+    extra: `
+      /* ===== Editorial theme component refinements ===== */
+      .reveal .slide-title, .reveal .hero-title { font-weight: 900 !important; letter-spacing: -0.01em !important; line-height: 1.18 !important; }
+      .reveal .accent-line { height: 4px !important; width: 60px !important; border-radius: 999px !important; box-shadow: none !important; background: #C96B43 !important; }
+      /* eyebrow / tagline -> accent pill */
+      .reveal .tagline, .reveal .hero-tagline {
+        display: inline-block !important; background: rgba(201,107,67,0.10) !important; color: #C96B43 !important;
+        font-weight: 700 !important; padding: 0.4em 1.1em !important; border-radius: 999px !important; border: none !important;
+      }
+      /* white rounded cards with soft warm shadow */
+      .reveal .glass-card {
+        background: #FFFFFF !important; border: 1px solid #F1E8DD !important; border-radius: 22px !important;
+        box-shadow: 0 12px 32px rgba(160,120,80,0.12), 0 2px 8px rgba(0,0,0,0.03) !important; backdrop-filter: none !important;
+      }
+      /* card titles & key figures in accent */
+      .reveal .icon-card-title, .reveal .section-heading { color: #C96B43 !important; font-weight: 800 !important; }
+      .reveal .stats-value { color: #C96B43 !important; font-weight: 900 !important; }
+      /* icon discs -> accent-tinted circle */
+      .reveal .icon-card-icon, .reveal .stats-icon, .reveal .bullet-card-icon {
+        background: rgba(201,107,67,0.10) !important; color: #C96B43 !important; border-radius: 999px !important;
+      }
+      /* numbered steps -> solid accent circle, white number */
+      .reveal .process-step-circle, .reveal .process-num, .reveal .tl-num, .reveal .tl-dot {
+        background: #C96B43 !important; color: #FFFFFF !important; border: none !important;
+        box-shadow: 0 6px 14px rgba(201,107,67,0.28) !important;
+      }
+      .reveal .process-connector, .reveal .tl-line { background: #EBD9CB !important; }
+      /* comfortable muted body copy */
+      .reveal .body-text, .reveal .icon-card-desc, .reveal .process-step-desc, .reveal .bullet-card-text {
+        color: #6E6A72 !important; line-height: 1.7 !important;
+      }
+    `,
+  },
 };
 
-const DEFAULT_STYLE = STYLES['minimal'];
+const DEFAULT_STYLE = STYLES['editorial'];
 
 // ── Types ──────────────────────────────────────────────────────
 
@@ -1983,7 +2044,13 @@ ${s.extra || ''}
 // ── HTML Generator ─────────────────────────────────────────────
 
 function generateHtml(input: SlidesInput): string {
-  const s = STYLES[input.style || ''] || DEFAULT_STYLE;
+  // House style: every deck uses the clean "editorial" look by default for a
+  // consistent brand. The agent's per-deck style choice is only honored when
+  // style variety is explicitly enabled (SLIDES_ALLOW_STYLE_VARIETY=true), so a
+  // technical topic no longer silently flips the deck to a dark theme.
+  const allowVariety = process.env.SLIDES_ALLOW_STYLE_VARIETY === 'true';
+  const requestedStyle = allowVariety ? (input.style || '') : 'editorial';
+  const s = STYLES[requestedStyle] || DEFAULT_STYLE;
 
   // Reset CDN flags
   echartsUsed = false;

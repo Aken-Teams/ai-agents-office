@@ -257,7 +257,7 @@ const zhTW = {
   'dashboard.samples.xlsx': '建立銷售數據分析表',
   'dashboard.samples.xlsx.template': '幫我建立一份銷售數據分析 Excel 報表，包含以下工作表：\n\n【Sheet 1 - 月度銷售總覽】\n- 欄位：月份、營收、成本、毛利、毛利率、訂單數、客單價\n- 產生 12 個月的模擬數據（2025/01 ~ 2025/12）\n- 加入合計列與平均值\n\n【Sheet 2 - 產品分類分析】\n- 欄位：產品類別、銷售額、佔比、同期比較、成長率\n- 至少 5 個產品類別\n\n【Sheet 3 - 區域業績排行】\n- 欄位：區域、業務員、目標額、實際額、達成率\n- 依達成率排序\n\n請加入適當的格式設定（數字格式、粗體標題、顏色區分）',
   'dashboard.samples.slides': '製作互動網頁簡報',
-  'dashboard.samples.slides.template': '幫我製作一份互動式網頁簡報（HTML），主題是「2026 AI Agent 技術趨勢」，包含以下投影片：\n1. 封面：標題 + 副標題 + 日期\n2. 目錄概覽\n3. AI Agent 定義與核心概念\n4. 主流框架比較（LangGraph、CrewAI、AutoGen）\n5. 企業導入案例分析\n6. 多代理協作架構設計\n7. 安全性與治理挑戰\n8. 未來展望與預測\n9. Q&A\n\n要求：使用深色科技風格，每頁重點使用動畫效果逐步顯示',
+  'dashboard.samples.slides.template': '幫我製作一份互動式網頁簡報（HTML），主題是「2026 AI Agent 技術趨勢」，包含以下投影片：\n1. 封面：標題 + 副標題 + 日期\n2. 目錄概覽\n3. AI Agent 定義與核心概念\n4. 主流框架比較（LangGraph、CrewAI、AutoGen）\n5. 企業導入案例分析\n6. 多代理協作架構設計\n7. 安全性與治理挑戰\n8. 未來展望與預測\n9. Q&A\n\n要求：風格簡潔清楚、版面乾淨俐落，每頁重點使用動畫效果逐步顯示',
   'dashboard.samples.research': '研究 AI 產業最新趨勢',
   'dashboard.samples.research.template': '請幫我研究 2026 年 AI 產業最新趨勢，並整理成一份完整的研究報告，涵蓋以下面向：\n\n1. 全球 AI 市場規模與投資趨勢\n2. 大型語言模型（LLM）技術突破與新進展\n3. AI Agent 生態系發展現況\n4. 企業 AI 導入率與 ROI 分析\n5. AI 對各產業的影響（製造、金融、醫療、教育）\n6. AI 監管法規最新動態（歐盟 AI Act、美國行政令）\n7. 台灣 AI 產業政策與機會\n8. 值得關注的 AI 新創公司\n\n請提供具體數據與來源，使用繁體中文撰寫',
   'dashboard.samples.pdf': '產生 PDF 商業報告',

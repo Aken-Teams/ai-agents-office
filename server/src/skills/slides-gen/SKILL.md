@@ -404,10 +404,13 @@ SLIDESEOF
 node --import tsx generate-slides.ts slides.json output.html
 ```
 
-## Available Styles (8 Themes)
+## Available Styles (9 Themes)
+
+**`"editorial"` is the DEFAULT** — a clean, high-clarity look: warm-cream background + a single terracotta accent, bold headlines, and white rounded cards (modern social-carousel / infographic feel). Use it unless the user explicitly asks for a different mood (dark / tech / luxury / playful).
 
 | Style | Background | Fonts | Best For |
 |-------|-----------|-------|----------|
+| `"editorial"` ⭐ | Warm cream | Noto Sans TC + Inter | **DEFAULT** — clear, modern, marketing, social, general use |
 | `"minimal"` | White | System sans-serif | Clean reports, academic |
 | `"dark"` | #1a1a2e | Space Grotesk | Tech talks, dev conferences |
 | `"gradient"` | Blue→Purple | Poppins | Startups, product launches |
@@ -418,13 +421,14 @@ node --import tsx generate-slides.ts slides.json output.html
 | `"tech"` | GitHub dark | JetBrains Mono + Inter | Engineering, DevOps |
 
 **Selection guide:**
-- "professional" / "business" → `corporate`
+- **No preference / general / 簡報 / "clean" / "modern" / "clear" → `editorial` (DEFAULT)**
+- "professional" / "business" → `corporate` or `editorial`
 - "dark" / "tech" / "科技" → `dark` or `tech`
-- "modern" / "colorful" → `gradient` or `creative`
+- "colorful" / "startup" → `gradient`
 - "elegant" / "luxury" → `elegant`
 - "creative" / "fun" → `creative` or `neon`
-- "clean" / "simple" → `minimal`
-- No preference → `corporate`
+
+**To match this clean style, write content with discipline:** short punchy titles, ONE key idea per slide, concise body text (the theme's clarity depends on NOT cramming). Put the slide's single most important phrase/number where it stands out.
 
 ---
 
