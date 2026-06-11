@@ -19,6 +19,10 @@ import ScheduleCreateModal from '../../../components/ScheduleCreateModal';
 
 const DOW = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
 
+// Scheduling is hidden in pro-panjit for now (pending AD-email integration).
+const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
+const isPanjit = deployMode === 'pro-panjit';
+
 interface Schedule { id: string; name: string | null; question: string; frequency: 'daily' | 'weekly'; hour: number; minute: number; day_of_week: number | null; email: string; enabled: number; next_run_at: string; last_run_at: string | null }
 interface RunRow { id: string; question: string; status: string; created_at: string; input_tokens: number; output_tokens: number; share_token: string | null; schedule_id: string | null; emailed: number | null }
 interface TeamInfo { id: string; title: string; icon: string | null }
@@ -31,6 +35,11 @@ function SchedulesContent() {
   const params = useParams();
   const teamId = String(params.id);
   const sidebarMargin = useSidebarMargin();
+
+  // Scheduling hidden in pro-panjit — bounce direct navigation back to the team.
+  useEffect(() => {
+    if (isPanjit) router.replace(`/team/${teamId}`);
+  }, [router, teamId]);
 
   const [team, setTeam] = useState<TeamInfo | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -110,6 +119,8 @@ function SchedulesContent() {
   const monthLabel = `${cursor.y} 年 ${cursor.m + 1} 月`;
   const shiftMonth = (delta: number) => setCursor(c => { const d = new Date(c.y, c.m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() }; });
   const schedName = (id: string | null) => schedules.find(s => s.id === id)?.name || null;
+
+  if (isPanjit) return null; // redirecting away (scheduling hidden in pro-panjit)
 
   if (!team) {
     return (

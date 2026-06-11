@@ -2560,13 +2560,14 @@ function ChatContent() {
                 document.addEventListener('mouseup', onUp);
               }}
             />
-            {/* Collapse / expand toggle */}
+            {/* Collapse / expand toggle — always visible, brightens on hover */}
             <button
               onClick={() => { setDocChatCollapsed(prev => !prev); if (docChatCollapsed) setDocChatWidth(w => w < 15 ? 33 : w); }}
-              className="absolute top-1/2 -translate-y-1/2 -left-2.5 w-5 h-8 bg-surface-container border border-outline-variant/20 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 hover:!opacity-100 transition-opacity cursor-pointer shadow-sm"
+              className="absolute top-1/2 -translate-y-1/2 -left-3.5 w-7 h-12 bg-surface-container-high border border-outline-variant/40 rounded-full flex items-center justify-center text-on-surface-variant opacity-90 hover:opacity-100 hover:bg-primary hover:text-on-primary hover:border-primary transition-all cursor-pointer shadow-md z-20"
               title={docChatCollapsed ? '展開對話' : '收合對話'}
+              aria-label={docChatCollapsed ? '展開對話' : '收合對話'}
             >
-              <span className="material-symbols-outlined text-xs text-on-surface-variant">
+              <span className="material-symbols-outlined text-lg leading-none">
                 {docChatCollapsed ? 'chevron_right' : 'chevron_left'}
               </span>
             </button>

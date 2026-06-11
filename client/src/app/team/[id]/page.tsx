@@ -17,6 +17,10 @@ import TeamMarkdown from '../../components/TeamMarkdown';
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
+// Scheduling is hidden in pro-panjit for now (pending AD-email integration).
+const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
+const isPanjit = deployMode === 'pro-panjit';
+
 interface Agent { id: string; title: string; icon: string | null; skill_id: string | null }
 interface TeamInfo { id: string; title: string; topic: string | null; icon: string | null }
 interface Estimate { memberCount: number; inputTokens: number; outputTokens: number; costUsd: number }
@@ -345,11 +349,13 @@ function TeamRunContent() {
               已協作 {total.count} 次 · 累計 {(total.inputTokens + total.outputTokens).toLocaleString()} tokens · ${total.costUsd}
             </span>
           )}
-          <Link href={`/team/${teamId}/schedules`} title="排程管理"
-            className="shrink-0 flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-bold border border-outline-variant/30 text-on-surface hover:border-primary/50 hover:text-primary transition-colors cursor-pointer no-underline">
-            <span className="material-symbols-outlined text-[18px]">schedule</span>
-            <span className="hidden md:inline">排程</span>
-          </Link>
+          {!isPanjit && (
+            <Link href={`/team/${teamId}/schedules`} title="排程管理"
+              className="shrink-0 flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-bold border border-outline-variant/30 text-on-surface hover:border-primary/50 hover:text-primary transition-colors cursor-pointer no-underline">
+              <span className="material-symbols-outlined text-[18px]">schedule</span>
+              <span className="hidden md:inline">排程</span>
+            </Link>
+          )}
         </div>
 
         {/* Question input */}

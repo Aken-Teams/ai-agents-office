@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from '../components/AuthProvider';
 import UploadAlertModal, { type UploadAlertItem } from '../components/UploadAlertModal';
 import { LineQrPanel } from '../components/LineQrPanel';
 import GreetingPopup from '../components/GreetingPopup';
+import FeatureSpotlightModal, { hasSeenSpotlight } from '../components/FeatureSpotlightModal';
 import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
@@ -91,6 +92,7 @@ function DashboardContent() {
   const mobileFileRef = useRef<HTMLInputElement>(null);
   const sidebarMargin = useSidebarMargin();
   const [showGreeting, setShowGreeting] = useState(false);
+  const [showSpotlight, setShowSpotlight] = useState(false);
   const [quotaHasPending, setQuotaHasPending] = useState(false);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [showLineModal, setShowLineModal] = useState(false);
@@ -296,6 +298,16 @@ function DashboardContent() {
     }
   }
 
+  // Feature spotlight ("what's new") — show once per user, AFTER the greeting
+  // popup has closed so the two never overlap. (Must stay above the early return
+  // below to keep hook order stable.)
+  useEffect(() => {
+    if (!user || showGreeting || showSpotlight) return;
+    if (hasSeenSpotlight()) return;
+    const t = setTimeout(() => setShowSpotlight(true), 500);
+    return () => clearTimeout(t);
+  }, [user, showGreeting, showSpotlight]);
+
   const costExceeded = usage && usageLimit != null && (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10) >= usageLimit;
 
   if (isLoading || !user) return null;
@@ -317,6 +329,9 @@ function DashboardContent() {
           onClose={() => setShowGreeting(false)}
         />
       )}
+
+      {/* Feature spotlight — "what's new" modal (once per user, after greeting) */}
+      {showSpotlight && <FeatureSpotlightModal onClose={() => setShowSpotlight(false)} />}
 
       {/* Quota Request Modal */}
       {showQuotaModal && (
