@@ -22,7 +22,9 @@ const SKILL_TIMEOUT: Record<string, number> = {
   'pptx-gen': 600_000,  // 10 min — write code + run node to generate PPT
   'docx-gen': 480_000,  // 8 min — write code + run node to generate Word
   'xlsx-gen': 300_000,  // 5 min — write code + run node to generate Excel
-  'pdf-gen':  300_000,  // 5 min — write code + run node to generate PDF
+  'pdf-gen':  480_000,  // 8 min — match docx; the generator itself is <1s, the
+                        // budget is for the agent's research + content writing
+                        // (5 min was the shortest of all generators → frequent timeouts)
   'slides-gen': 480_000,  // 8 min — generate HTML slides
   'webapp-gen': 480_000,  // 8 min — generate HTML dashboard page
   'data-analyst': 600_000, // 10 min — data analysis + charts/visualizations

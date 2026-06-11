@@ -76,10 +76,18 @@ All styles include:
 - Custom page margins per style
 - Automatic CJK font support (Chinese, Japanese, Korean)
 
-## Custom Generation
-For complex requirements (graphics, tables, forms), write custom Node.js code using `pdfkit`:
+## Performance & Scope — avoid timeouts (IMPORTANT)
+
+**Prefer the pre-built `generate-pdf.ts` generator. It is fast (well under a second even for long CJK reports) and handles styling, tables, headers/footers and page numbers for you via the `"style"` presets.** Generation rarely times out *in the generator* — timeouts happen when the agent spends too long hand-crafting things the generator already does, or attempting things PDF is not meant for.
+
+**DO NOT draw charts or data visualizations in PDF.** PDF is for text + structured tables. Hand-writing custom `pdfkit` code to draw bar/line/pie charts is slow, fragile, and the #1 cause of timeouts here.
+- For numeric data → use the built-in `"table"` section type, or summarize as key figures in text.
+- If the user genuinely needs **charts / visualizations**, recommend the **slides-gen** (web presentation) or **webapp-gen** (interactive page) skills, which render real charts — or deliver the data as a table in the PDF.
+
+**Keep it lean:** use the `"style"` presets (don't reimplement TOC / headers / footers / banners by hand), keep content focused, and finish promptly. Only write a small amount of custom `pdfkit` code for a genuinely special layout the JSON schema can't express — never for charts.
 
 ```javascript
+// Custom pdfkit is a last resort for special static layouts ONLY (NOT charts):
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 const doc = new PDFDocument();
