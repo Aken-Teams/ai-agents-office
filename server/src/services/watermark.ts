@@ -1,9 +1,25 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import JSZip from 'jszip';
 import { config } from '../config.js';
 import { dbGet, dbRun } from '../db.js';
+
+// CJK font so PDF watermarks can render Traditional Chinese (the pdf-lib
+// StandardFonts are Latin-only). Static OTF embeds real CFF outlines when
+// subset — a variable .ttf does NOT subset reliably in pdf-lib (metrics only).
+const __dirname_ = path.dirname(fileURLToPath(import.meta.url));
+const CJK_FONT_PATH = path.join(__dirname_, '../../assets/fonts/NotoSansTC-Regular.otf');
+let cjkFontBytes: Buffer | null | undefined; // undefined = not loaded, null = unavailable
+function loadCjkFont(): Buffer | null {
+  if (cjkFontBytes === undefined) {
+    try { cjkFontBytes = fs.readFileSync(CJK_FONT_PATH); }
+    catch { cjkFontBytes = null; console.warn('[Watermark] CJK font not found, PDF watermark falls back to Latin'); }
+  }
+  return cjkFontBytes;
+}
 
 /**
  * Unified watermark config — matches the web preview tiled style.
@@ -85,16 +101,32 @@ export async function applyWatermark(filePath: string): Promise<Buffer | null> {
 
 /* ============================================================
    PDF — pdf-lib: tiled diagonal text on every page
-   StandardFonts only support Latin chars, so we use English text.
+   Embeds a CJK font so the configured text (incl. Chinese) renders as-is;
+   falls back to Latin-only Helvetica if the font asset is unavailable.
    ============================================================ */
 async function watermarkPdf(filePath: string, text: string): Promise<Buffer> {
   const existing = fs.readFileSync(filePath);
   const pdfDoc = await PDFDocument.load(existing);
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-  // StandardFonts only support Latin — strip non-ASCII (CJK can't be drawn by
-  // Helvetica); fall back to a safe label if nothing printable remains.
-  const pdfText = text.replace(/[^\x20-\x7E]/g, '').trim() || 'CONFIDENTIAL';
+  // Prefer the bundled CJK font (subset-embedded) so Chinese watermark text
+  // shows correctly. If it can't be loaded/embedded, drop to Helvetica and
+  // strip non-ASCII (Helvetica can't draw CJK).
+  const fontBytes = loadCjkFont();
+  let font;
+  let pdfText = text;
+  if (fontBytes) {
+    try {
+      pdfDoc.registerFontkit(fontkit);
+      font = await pdfDoc.embedFont(fontBytes, { subset: true });
+    } catch (err) {
+      console.warn('[Watermark] CJK font embed failed, using Helvetica:', err);
+      font = undefined;
+    }
+  }
+  if (!font) {
+    font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    pdfText = text.replace(/[^\x20-\x7E]/g, '').trim() || 'CONFIDENTIAL';
+  }
 
   const pages = pdfDoc.getPages();
   for (const page of pages) {

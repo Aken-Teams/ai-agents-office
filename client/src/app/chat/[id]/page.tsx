@@ -436,7 +436,7 @@ function FileThumbnail({ file, token, onClick }: { file: GeneratedFile; token: s
     let url: string | null = null;
     const endpoint = file.file_type === 'html'
       ? `${SSE_BASE}/api/files/${file.id}/download`
-      : `${SSE_BASE}/api/files/${file.id}/preview`;
+      : `${SSE_BASE}/api/files/${file.id}/preview?editing=1`;
     fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => {
         if (!r.ok) throw new Error(`preview ${r.status}`);
@@ -1428,7 +1428,7 @@ function ChatContent() {
   async function openPreview(file: GeneratedFile) {
     try {
       // Use /preview for all types — it converts Office files to PDF/HTML
-      const res = await fetch(`${SSE_BASE}/api/files/${file.id}/preview`, {
+      const res = await fetch(`${SSE_BASE}/api/files/${file.id}/preview?editing=1`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error('Preview fetch failed');

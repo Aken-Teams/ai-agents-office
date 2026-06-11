@@ -386,7 +386,7 @@ export default function DocumentCanvas({
     setPreviewLoading(true);
     try {
       // Add cache-buster to prevent browser/HTTP caching of stale preview
-      const res = await fetch(`${SSE_BASE}/api/files/${fileId}/preview?t=${Date.now()}`, {
+      const res = await fetch(`${SSE_BASE}/api/files/${fileId}/preview?editing=1&t=${Date.now()}`, {
         headers: { Authorization: `Bearer ${token}` },
         cache: 'no-store',
       });

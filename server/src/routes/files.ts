@@ -5,7 +5,7 @@ import { dbGet, dbAll } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { getFileDownloadPath, deleteFile, getFileVersions, extractPptxShapes } from '../services/fileManager.js';
 import { convertOfficeFile } from '../services/filePreview.js';
-import { applyWatermark } from '../services/watermark.js';
+import { applyWatermark, getWatermarkSettings } from '../services/watermark.js';
 import { config } from '../config.js';
 import { getStorageQuotaGb } from '../services/usageLimit.js';
 import { findValidShare, bumpDownloadCount } from '../services/line/fileShare.js';
@@ -102,6 +102,18 @@ router.get('/share/:token/info', async (req: Request, res: Response) => {
 
 router.use(authMiddleware);
 
+// GET /api/files/watermark-config — the watermark on/off + text, so the preview
+// viewer can render it as a frontend overlay. Authed (any logged-in user); the
+// admin-only PATCH lives in routes/admin.ts.
+router.get('/watermark-config', async (_req: Request, res: Response) => {
+  try {
+    const { enabled, text } = await getWatermarkSettings();
+    res.json({ enabled, text });
+  } catch {
+    res.json({ enabled: false, text: '' });
+  }
+});
+
 // GET /api/files — returns only the LATEST version of each file
 router.get('/', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
@@ -167,17 +179,8 @@ router.get('/:id/preview', async (req: Request, res: Response) => {
   const ext = path.extname(filePath).slice(1).toLowerCase();
   const mime = MIME_MAP[ext];
   if (mime) {
-    if (ext === 'pdf' || ext === 'html' || ext === 'htm') {
-      try {
-        const watermarked = await applyWatermark(filePath);
-        if (watermarked) {
-          res.setHeader('Content-Type', mime);
-          res.setHeader('Content-Disposition', 'inline');
-          res.setHeader('Content-Length', watermarked.length);
-          res.end(watermarked); return;
-        }
-      } catch (err) { console.warn('[Preview] Watermark failed, serving original:', err); }
-    }
+    // Previews are served clean; the watermark is a frontend overlay over the
+    // viewer (see /watermark-config). Downloads/shares embed a real watermark.
     const stat = fs.statSync(filePath);
     res.setHeader('Content-Type', mime);
     res.setHeader('Content-Disposition', 'inline');
@@ -188,6 +191,11 @@ router.get('/:id/preview', async (req: Request, res: Response) => {
 
   if (OFFICE_EXTENSIONS.has(ext)) {
     try {
+      // Serve the clean converted preview (PDF via LibreOffice, or HTML fallback).
+      // The watermark is drawn as a frontend overlay over the preview viewer (see
+      // /api/files/watermark-config + files/page.tsx) — reliable across every
+      // preview type and renders CJK natively. Downloads/shares still embed a
+      // real watermark into the delivered file.
       const result = await convertOfficeFile(filePath, ext);
       res.setHeader('Content-Type', result.mime);
       res.setHeader('Content-Disposition', 'inline');

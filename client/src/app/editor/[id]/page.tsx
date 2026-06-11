@@ -161,7 +161,7 @@ function EditorContent() {
     try {
       const endpoint = file.file_type === 'html'
         ? `${SSE_BASE}/api/files/${fileId}/download`
-        : `${SSE_BASE}/api/files/${fileId}/preview`;
+        : `${SSE_BASE}/api/files/${fileId}/preview?editing=1`;
       const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error('preview failed');
       const blob = await res.blob();

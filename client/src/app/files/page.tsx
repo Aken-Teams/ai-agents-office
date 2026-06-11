@@ -125,13 +125,12 @@ function DeleteConfirmModal({
    Preview Modal
    ============================================================ */
 function PreviewModal({
-  file: initialFile, token, onClose, onDownload, isBeta = true,
+  file: initialFile, token, onClose, onDownload,
 }: {
   file: FileItem;
   token: string;
   onClose: () => void;
   onDownload: (id: string, name: string) => void;
-  isBeta?: boolean;
 }) {
   const { t, locale } = useTranslation();
   const [currentFile, setCurrentFile] = useState(initialFile);
@@ -143,6 +142,8 @@ function PreviewModal({
   const [versions, setVersions] = useState<FileItem[]>([]);
   const [versionOpen, setVersionOpen] = useState(false);
   const [infoExpanded, setInfoExpanded] = useState(false);
+  // Watermark overlay config (admin-set: on/off + text). Drawn over the viewer.
+  const [watermark, setWatermark] = useState<{ enabled: boolean; text: string } | null>(null);
   const config = FILE_TYPE_CONFIG[file.file_type] || { icon: 'attach_file', color: '#8f9097', bgColor: 'rgba(143,144,151,0.1)' };
   const isText = TEXT_TYPES.has(file.file_type);
   const isImage = IMAGE_TYPES.has(file.file_type);
@@ -229,6 +230,14 @@ function PreviewModal({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  // Fetch the admin watermark config (on/off + text) for the overlay.
+  useEffect(() => {
+    fetch('/api/files/watermark-config', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setWatermark(d))
+      .catch(() => setWatermark(null));
+  }, [token]);
 
   function formatSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
@@ -327,13 +336,15 @@ function PreviewModal({
             ) : null}
           </div>
 
-          {/* Watermark overlay — only in Beta mode */}
-          {isBeta && (
+          {/* Watermark overlay — driven by the admin watermark setting (on/off +
+              text). Tiled diagonally over the preview viewer; CJK renders via the
+              browser font. pointer-events-none so it never blocks scroll/clicks. */}
+          {watermark?.enabled && (watermark.text?.trim()) && (
             <div className="absolute inset-0 pointer-events-none overflow-hidden z-30 select-none" aria-hidden>
               <div className="absolute inset-[-50%] flex flex-wrap gap-24 rotate-[-30deg]">
-                {Array.from({ length: 40 }).map((_, i) => (
-                  <span key={i} className="text-3xl font-headline font-bold tracking-[0.3em] uppercase whitespace-nowrap" style={{ color: 'rgba(128,128,128,0.18)' }}>
-                    {t('files.watermark' as any)}
+                {Array.from({ length: 48 }).map((_, i) => (
+                  <span key={i} className="text-3xl font-headline font-bold tracking-[0.2em] whitespace-nowrap" style={{ color: 'rgba(128,128,128,0.18)' }}>
+                    {watermark.text}
                   </span>
                 ))}
               </div>
@@ -583,7 +594,6 @@ function FilesContent() {
   const [conversations, setConversations] = useState<ConversationInfo[]>([]);
   const [deleteUploadTarget, setDeleteUploadTarget] = useState<UploadItem | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [isBeta, setIsBeta] = useState(true);
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
@@ -595,10 +605,6 @@ function FilesContent() {
     const timer = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(timer);
   }, [toast]);
-
-  useEffect(() => {
-    fetch('/api/health').then(r => r.json()).then(d => setIsBeta(d.isBeta ?? true)).catch(() => {});
-  }, []);
 
   const fetchStorage = useCallback(() => {
     if (!token) return;
@@ -740,7 +746,6 @@ function FilesContent() {
           token={token}
           onClose={() => setPreviewFile(null)}
           onDownload={handleDownload}
-          isBeta={isBeta}
         />
       )}
 
