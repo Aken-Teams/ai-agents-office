@@ -18,6 +18,7 @@ import { TEAM_TEMPLATES, getTeamTemplate, type TeamAgentTemplate } from '../data
 import { runTeam, estimateRunTokens, estimateCostUsd } from '../services/teamRun.js';
 import { checkUserUsageLimit } from '../services/usageLimit.js';
 import { analyzeInput, logSecurityEvent } from '../services/inputGuard.js';
+import { moderateTeamTopic } from '../services/contentSafety.js';
 import { computeNextRun, mysqlDateTime, runScheduleNow } from '../services/teamScheduler.js';
 import { generateTeamSpec, insertTeamWithAgents, type GeneratedAgent } from '../services/teamBuilder.js';
 import type { Conversation } from '../types.js';
@@ -118,6 +119,18 @@ router.post('/', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const { templateId, topic, aiTune, custom } = req.body as { templateId?: string; topic?: string; aiTune?: boolean; custom?: boolean };
   const cleanTopic = typeof topic === 'string' ? topic.trim() : '';
+
+  // Content safety — refuse scenarios about crime, hacking/breaking this system,
+  // stealing secrets, harassment, or harming other users. Runs whenever the user
+  // supplied a free-form scenario (custom build, or template + topic tuning).
+  if (cleanTopic) {
+    const verdict = await moderateTeamTopic(cleanTopic);
+    if (!verdict.allowed) {
+      logSecurityEvent(userId, 'blocked_request', 'high', `team-build blocked (category=${verdict.category})`, cleanTopic);
+      res.status(403).json({ error: verdict.reason });
+      return;
+    }
+  }
 
   let teamTitle: string, teamIcon: string, templateKey: string, aiTuned = false;
   let agents: GeneratedAgent[];
@@ -238,11 +251,20 @@ router.post('/:id/run', async (req: Request, res: Response) => {
   const team = await dbGet<{ id: string }>('SELECT id FROM agent_teams WHERE id = ? AND user_id = ?', req.params.id, userId);
   if (!team) { res.status(404).json({ error: 'Team not found' }); return; }
 
-  // Input safety — reuse the same guard as the chat flow.
+  // Input safety — prompt-injection guard (same as the chat flow)…
   const guard = analyzeInput(message);
   if (guard.blocked) {
     logSecurityEvent(userId, 'prompt_injection', 'high', `team-run blocked (score=${guard.score})`, message);
     res.status(400).json({ error: '訊息內容被安全檢查阻擋' });
+    return;
+  }
+  // …plus content safety: refuse crime / hacking / secret-theft / harassment /
+  // harming the system or other users (the same gate as team creation). Runs
+  // before the SSE stream starts so a plain JSON error can still be returned.
+  const verdict = await moderateTeamTopic(message.trim());
+  if (!verdict.allowed) {
+    logSecurityEvent(userId, 'blocked_request', 'high', `team-run blocked (category=${verdict.category})`, message);
+    res.status(403).json({ error: verdict.reason });
     return;
   }
 
@@ -306,6 +328,15 @@ router.post('/:id/schedules', async (req: Request, res: Response) => {
   };
   if (!question?.trim()) { res.status(400).json({ error: '請填入要分析的議題' }); return; }
   if (!email?.trim()) { res.status(400).json({ error: '請填入收件 email' }); return; }
+
+  // Content safety — vet the scheduled question up front so every future run is
+  // pre-approved (the scheduler runs it headless, with no chance to refuse).
+  const verdict = await moderateTeamTopic(question.trim());
+  if (!verdict.allowed) {
+    logSecurityEvent(userId, 'blocked_request', 'high', `team-schedule blocked (category=${verdict.category})`, question);
+    res.status(403).json({ error: verdict.reason });
+    return;
+  }
 
   const freq = frequency === 'weekly' ? 'weekly' : 'daily';
   const h = Math.max(0, Math.min(23, Number(hour) || 0));

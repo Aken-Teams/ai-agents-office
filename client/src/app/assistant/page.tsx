@@ -969,6 +969,7 @@ function TeamCreateModal({ token, onCreated, onCancel }: { token: string | null;
   const [aiTune, setAiTune] = useState(false);
   const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/teams/templates', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
@@ -984,13 +985,19 @@ function TeamCreateModal({ token, onCreated, onCancel }: { token: string | null;
       ? { custom: true, topic: topic.trim() }
       : { templateId: selected!.id, topic: topic.trim() || undefined, aiTune };
     setCreating(true);
+    setError(null);
     try {
       const res = await fetch('/api/teams', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(body),
       });
-      if (res.ok) { onCreated(); onCancel(); }
+      if (res.ok) { onCreated(); onCancel(); return; }
+      // Surface server errors (e.g. content-safety refusal on a 403).
+      const data = await res.json().catch(() => null);
+      setError(data?.error || '建立失敗，請稍後再試。');
+    } catch {
+      setError('連線發生問題，請稍後再試。');
     } finally { setCreating(false); }
   };
 
@@ -1088,6 +1095,13 @@ function TeamCreateModal({ token, onCreated, onCancel }: { token: string | null;
             </>
           )}
         </div>
+
+        {error && (
+          <div className="shrink-0 mx-5 md:mx-7 mb-1 flex items-start gap-2 rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">
+            <span className="material-symbols-outlined text-base shrink-0 mt-0.5">block</span>
+            <span className="leading-relaxed">{error}</span>
+          </div>
+        )}
 
         <div className="shrink-0 flex items-center justify-end gap-2 px-5 md:px-7 py-3.5 border-t border-outline-variant/15">
           <button onClick={onCancel} className="px-5 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer">取消</button>

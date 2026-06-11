@@ -18,6 +18,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { dbRun, dbAll, dbGet } from '../../db.js';
 import { Orchestrator } from '../orchestrator.js';
 import { analyzeInput, logSecurityEvent } from '../inputGuard.js';
+import { moderateTeamTopic } from '../contentSafety.js';
 import { checkUserUsageLimit } from '../usageLimit.js';
 import { recordTokenUsage } from '../tokenTracker.js';
 import { extractMemoryAndSummary } from '../memoryExtractor.js';
@@ -541,6 +542,15 @@ async function runTeamForLine(
 ): Promise<void> {
   const userId = lineUser.internal_user_id;
   const lineUserId = lineUser.line_user_id;
+
+  // Content safety — same gate as team creation: refuse crime / hacking /
+  // secret-theft / harassment / harming the system or other users.
+  const verdict = await moderateTeamTopic(message);
+  if (!verdict.allowed) {
+    logSecurityEvent(userId, 'blocked_request', 'high', `LINE team-run blocked (category=${verdict.category})`, message);
+    await pushMessage(lineUserId, [{ type: 'text', text: `🚫 ${verdict.reason}` }]);
+    return;
+  }
 
   await pushMessage(lineUserId, [{
     type: 'text',

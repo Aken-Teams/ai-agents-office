@@ -16,6 +16,8 @@ import { createOrReuseFileShare } from './fileShare.js';
 import { peekBindToken, markBindTokenConflict } from './qrAuth.js';
 import { buildFileListFlex, buildUsageFlex, buildTeamPickerFlex, buildHelpFlex, buildScheduleListFlex, buildTeamDeleteFlex, buildConfirmTeamDeleteFlex, buildSchedTeamPickerFlex, buildSchedTimeFlex, type FileForFlex, type TeamForFlex, type ScheduleForFlex } from './flex.js';
 import { createCustomTeam } from '../teamBuilder.js';
+import { moderateTeamTopic } from '../contentSafety.js';
+import { logSecurityEvent } from '../inputGuard.js';
 import { computeNextRun, mysqlDateTime } from '../teamScheduler.js';
 
 const DOW = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
@@ -135,6 +137,14 @@ export async function startNewTeamFlow(lineUser: LineUserRow): Promise<void> {
  * "AI 自訂團隊".
  */
 async function buildTeamFromTopic(lineUser: LineUserRow, topic: string): Promise<void> {
+  // Content safety — refuse crime / hacking / secret-theft / harassment / harm.
+  const verdict = await moderateTeamTopic(topic);
+  if (!verdict.allowed) {
+    logSecurityEvent(lineUser.internal_user_id, 'blocked_request', 'high', `LINE team-build blocked (category=${verdict.category})`, topic);
+    await pushMessage(lineUser.line_user_id, [{ type: 'text', text: `🚫 ${verdict.reason}` }]);
+    return;
+  }
+
   await pushMessage(lineUser.line_user_id, [{
     type: 'text',
     text: '🛠 正在用 AI 幫你組建團隊，請稍候約 10～20 秒…',
@@ -370,6 +380,13 @@ export async function handleSchedule(lineUser: LineUserRow, args: string): Promi
     return;
   }
 
+  const verdict = await moderateTeamTopic(question);
+  if (!verdict.allowed) {
+    logSecurityEvent(lineUser.internal_user_id, 'blocked_request', 'high', `LINE team-schedule blocked (category=${verdict.category})`, question);
+    await pushMessage(lineUser.line_user_id, [{ type: 'text', text: `🚫 ${verdict.reason}` }]);
+    return;
+  }
+
   const next = computeNextRun('daily', hour, minute, null);
   const id = uuidv4();
   await dbRun(
@@ -456,6 +473,16 @@ export async function createScheduleFromPending(lineUser: LineUserRow, topicText
   const raw = topicText.trim();
   const usePreset = /^(預設|preset|default|主題)$/i.test(raw) || !raw;
   const question = usePreset ? (team.topic?.trim() || DAILY_UPDATE_QUESTION) : raw;
+
+  // Vet a user-typed question (preset = team topic, already vetted at creation).
+  if (!usePreset) {
+    const verdict = await moderateTeamTopic(question);
+    if (!verdict.allowed) {
+      logSecurityEvent(lineUser.internal_user_id, 'blocked_request', 'high', `LINE team-schedule blocked (category=${verdict.category})`, question);
+      await pushMessage(lineUser.line_user_id, [{ type: 'text', text: `🚫 ${verdict.reason}` }]);
+      return true;
+    }
+  }
 
   const next = computeNextRun('daily', pend.hour, pend.minute, null);
   await dbRun(
