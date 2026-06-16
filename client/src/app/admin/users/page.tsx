@@ -385,8 +385,9 @@ export default function AdminUsers() {
               inputMode="decimal"
               placeholder={t('admin.users.detail.quotaPlaceholder' as any)}
               value={quotaInput}
+              disabled={!canEdit}
               onChange={e => { if (/^\d*\.?\d{0,2}$/.test(e.target.value) || e.target.value === '') setQuotaInput(e.target.value); }}
-              className="flex-1 bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-1.5 px-2.5 text-xs font-mono rounded placeholder:text-outline min-w-0 [appearance:textfield]"
+              className="flex-1 bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-1.5 px-2.5 text-xs font-mono rounded placeholder:text-outline min-w-0 [appearance:textfield] disabled:opacity-50 disabled:cursor-not-allowed"
             />
             {canEdit && (
               <button

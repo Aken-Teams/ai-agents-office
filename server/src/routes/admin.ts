@@ -1858,6 +1858,107 @@ router.get('/org/domains', (_req: Request, res: Response) => {
   res.json({ domains: AD_DOMAINS });
 });
 
+// ---- AD member picker + provisioning (pro-panjit) ----
+
+interface AdRawNode { name?: string; type?: string; members?: Array<{ username?: string; displayName?: string }>; children?: AdRawNode[]; }
+type AdSysRow = { id: string; ad_username: string | null; status: string; quota_override: number | null; group_limit: number | null };
+
+// Walk the AD org tree and annotate each member with its system account (if any)
+// and effective quota limit, preserving the OU/department hierarchy.
+function annotateAdTree(node: AdRawNode | undefined, sysByUser: Map<string, AdSysRow>, globalDefault: number): unknown {
+  if (!node) return { name: '', type: 'ou', members: [], children: [] };
+  const members = (node.members || []).map(m => {
+    const uname = m.username || '';
+    const sys = sysByUser.get(uname.toLowerCase());
+    const effectiveLimit = sys
+      ? (sys.quota_override != null ? sys.quota_override : (sys.group_limit != null ? sys.group_limit : globalDefault))
+      : globalDefault;
+    return { username: uname, displayName: m.displayName || uname, inSystem: !!sys, userId: sys?.id || null, status: sys?.status || null, effectiveLimit };
+  });
+  return {
+    name: node.name || '',
+    type: node.type || 'ou',
+    members,
+    children: (node.children || []).map(c => annotateAdTree(c, sysByUser, globalDefault)),
+  };
+}
+
+// GET /api/admin/ad/members?domain=PANJIT
+// Returns the AD organization TREE for a company (OU/department hierarchy), each
+// member annotated with its system account (if any) and effective quota —
+// used by the "assign to group" picker.
+router.get('/ad/members', async (req: Request, res: Response) => {
+  if (config.deployMode !== 'pro-panjit') return res.status(403).json({ error: 'Not available in this deployment mode' });
+  const adUrl = process.env.AD_URL, adApi = process.env.AD_API;
+  if (!adUrl || !adApi) return res.status(500).json({ error: 'AD integration not configured' });
+  const domain = (req.query.domain as string || 'PANJIT').toUpperCase();
+  if (!AD_DOMAINS.includes(domain)) return res.status(400).json({ error: `Invalid domain. Allowed: ${AD_DOMAINS.join(', ')}` });
+  try {
+    const upstream = await fetch(`${adUrl}/ldap/api/v1/organizations/tree?domain=${domain}`, { headers: { 'X-API-Key': adApi } });
+    if (!upstream.ok) return res.status(upstream.status).json({ error: 'AD API error' });
+    const data = await upstream.json() as { tree?: AdRawNode };
+
+    const sysRows = await dbAll<AdSysRow>(
+      `SELECT u.id, u.ad_username, u.status, u.quota_override, qg.limit_usd AS group_limit
+       FROM users u LEFT JOIN quota_groups qg ON qg.id = u.quota_group_id
+       WHERE u.ad_domain = ? AND u.auth_provider = 'ad'`, domain
+    );
+    const sysByUser = new Map<string, AdSysRow>();
+    for (const r of sysRows) if (r.ad_username) sysByUser.set(r.ad_username.toLowerCase(), r);
+    const globalDefault = await getUserUsageLimitUsd();
+
+    res.json({ domain, tree: annotateAdTree(data.tree, sysByUser, globalDefault), globalDefault });
+  } catch (err) {
+    console.error('[AD members] fetch error:', err);
+    res.status(500).json({ error: 'Failed to fetch AD members' });
+  }
+});
+
+// POST /api/admin/users/provision-ad  { username, domain, displayName? }
+// Admin-side provisioning: create a system account for an AD person WITHOUT a
+// password (auth_provider='ad'); they connect on their next AD login. Idempotent.
+router.post('/users/provision-ad', async (req: Request, res: Response) => {
+  if (config.deployMode !== 'pro-panjit') return res.status(403).json({ error: 'Not available in this deployment mode' });
+  const username = String(req.body.username || '').trim();
+  const domain = String(req.body.domain || '').trim().toUpperCase();
+  let displayName = String(req.body.displayName || '').trim();
+  if (!username || !AD_DOMAINS.includes(domain)) return res.status(400).json({ error: 'username 與有效 domain 為必填' });
+
+  const existing = await dbGet<{ id: string; email: string; display_name: string | null }>(
+    'SELECT id, email, display_name FROM users WHERE ad_username = ? AND ad_domain = ?', username, domain
+  );
+  if (existing) return res.json({ id: existing.id, email: existing.email, displayName: existing.display_name, alreadyExists: true });
+
+  // Look up the AD mail (and name) so the account uses the real address.
+  let mail: string | null = null;
+  if (config.adApiKey) {
+    try {
+      const det = await fetch(`${config.adApiUrl}/users/${encodeURIComponent(username)}?domain=${encodeURIComponent(domain)}`,
+        { headers: { 'X-API-Key': config.adApiKey }, signal: AbortSignal.timeout(8000) });
+      if (det.ok) { const d = await det.json() as { mail?: string; displayName?: string }; mail = d.mail || null; if (!displayName) displayName = d.displayName || ''; }
+    } catch { /* fall back to synthetic email */ }
+  }
+  const email = mail ? mail.toLowerCase().trim() : `${username.toLowerCase()}@${domain.toLowerCase()}.panjit.local`;
+  displayName = (displayName || username).trim();
+
+  const conflict = await dbGet<{ id: string; ad_username: string | null }>('SELECT id, ad_username FROM users WHERE email = ?', email);
+  if (conflict) {
+    if (conflict.ad_username) return res.json({ id: conflict.id, email, displayName, alreadyExists: true });
+    return res.status(409).json({ error: `信箱 ${email} 已有非 AD 帳號使用，無法自動建立` });
+  }
+
+  const id = uuidv4();
+  await dbRun(
+    'INSERT INTO users (id, email, password_hash, display_name, role, status, auth_provider, ad_username, ad_domain, onboarding_completed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    id, email, 'AD_NO_PASSWORD', displayName, 'user', 'active', 'ad', username, domain, 1
+  );
+  try {
+    await dbRun('INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+      uuidv4(), req.user!.userId, 'provision_ad_user', 'user', id, JSON.stringify({ ad_username: username, ad_domain: domain, email }));
+  } catch { /* audit is best-effort */ }
+  res.status(201).json({ id, email, displayName, created: true });
+});
+
 // ==================== Permissions ====================
 
 // GET /api/admin/permissions — get role permissions config

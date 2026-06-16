@@ -1,0 +1,72 @@
+{
+  "when": "2026-06-12",
+  "pass": 13,
+  "total": 13,
+  "ev": [
+    {
+      "name": "兩個一般帳號可登入並取得權杖",
+      "pass": true,
+      "detail": "A=true B=true"
+    },
+    {
+      "name": "[控制] B 可讀自己的對話",
+      "pass": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "A 無法讀取 B 的對話(讀隔離)",
+      "pass": true,
+      "detail": "HTTP 404"
+    },
+    {
+      "name": "A 無法改名 B 的對話(寫隔離)",
+      "pass": true,
+      "detail": "HTTP 404"
+    },
+    {
+      "name": "B 的對話標題未被竄改",
+      "pass": true,
+      "detail": "title=BOB-SECRET-CONVO"
+    },
+    {
+      "name": "A 無法刪除 B 的對話",
+      "pass": true,
+      "detail": "HTTP 404"
+    },
+    {
+      "name": "A 無法把生成任務注入 B 的對話",
+      "pass": true,
+      "detail": "HTTP 404"
+    },
+    {
+      "name": "A 無法下載 B 的檔案(同一 ID:B 可、A 不可)",
+      "pass": true,
+      "detail": "B=200 A=404"
+    },
+    {
+      "name": "A 無法預覽 B 的檔案",
+      "pass": true,
+      "detail": "HTTP 404"
+    },
+    {
+      "name": "A 的檔案清單不含 B 的檔案",
+      "pass": true,
+      "detail": "乾淨,不含 B"
+    },
+    {
+      "name": "一般使用者打 admin 路由被拒(RBAC)",
+      "pass": true,
+      "detail": "HTTP 403"
+    },
+    {
+      "name": "未帶權杖被拒",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "name": "偽造權杖被拒",
+      "pass": true,
+      "detail": "HTTP 401"
+    }
+  ]
+}

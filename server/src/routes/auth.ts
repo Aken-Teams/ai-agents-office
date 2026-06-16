@@ -47,7 +47,9 @@ const loginFailures = new Map<string, { count: number; lockedUntil: number }>();
 setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of loginFailures) {
-    if (now > entry.lockedUntil && entry.count === 0) loginFailures.delete(key);
+    // Prune any entry whose rolling window has elapsed (works for both
+    // in-progress counters and expired lockouts), keeping the map bounded.
+    if (now > entry.lockedUntil) loginFailures.delete(key);
   }
 }, 10 * 60_000);
 
@@ -58,17 +60,21 @@ function checkLoginLockout(email: string): { locked: boolean; remainingMs: numbe
   const entry = loginFailures.get(email);
   if (!entry) return { locked: false, remainingMs: 0 };
   const now = Date.now();
-  if (entry.count >= MAX_LOGIN_FAILURES && now < entry.lockedUntil) {
-    return { locked: true, remainingMs: entry.lockedUntil - now };
-  }
-  if (now >= entry.lockedUntil) loginFailures.delete(email);
+  // Window elapsed → reset the counter (also clears any expired lockout).
+  if (now >= entry.lockedUntil) { loginFailures.delete(email); return { locked: false, remainingMs: 0 }; }
+  // Within the window and at/over the threshold → locked.
+  if (entry.count >= MAX_LOGIN_FAILURES) return { locked: true, remainingMs: entry.lockedUntil - now };
+  // Within the window but under threshold → keep counting (must NOT delete here,
+  // otherwise the counter resets every attempt and lockout never engages).
   return { locked: false, remainingMs: 0 };
 }
 
 function recordLoginFailure(email: string): void {
   const entry = loginFailures.get(email) || { count: 0, lockedUntil: 0 };
   entry.count++;
-  if (entry.count >= MAX_LOGIN_FAILURES) entry.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
+  // Stamp/extend a rolling window on every failure so counts persist between
+  // attempts, expire after inactivity, and trip the lockout once at threshold.
+  entry.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
   loginFailures.set(email, entry);
 }
 

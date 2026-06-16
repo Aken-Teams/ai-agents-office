@@ -1,0 +1,61 @@
+{
+  "pass": 11,
+  "total": 11,
+  "ev": [
+    {
+      "name": "安全標頭 X-Content-Type-Options:nosniff",
+      "pass": true,
+      "detail": "nosniff"
+    },
+    {
+      "name": "安全標頭 HSTS",
+      "pass": true,
+      "detail": "max-age=31536000; includeSubDomains"
+    },
+    {
+      "name": "安全標頭 Referrer-Policy",
+      "pass": true,
+      "detail": "no-referrer"
+    },
+    {
+      "name": "隱藏技術棧(無 X-Powered-By)",
+      "pass": true,
+      "detail": "absent"
+    },
+    {
+      "name": "未授權存取被拒(401)",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "name": "偽造權杖被拒(401)",
+      "pass": true,
+      "detail": "HTTP 401"
+    },
+    {
+      "name": "production 錯誤不洩漏內部細節",
+      "pass": true,
+      "detail": "HTTP 500 {\"error\":\"伺服器發生錯誤，請稍後再試。\"}"
+    },
+    {
+      "name": "過大本體被拒(>1MB)",
+      "pass": true,
+      "detail": "HTTP 500"
+    },
+    {
+      "name": "CORS 不反射未授權來源",
+      "pass": true,
+      "detail": "ACAO=none"
+    },
+    {
+      "name": "帳號層級鎖定(連續失敗→423)",
+      "pass": true,
+      "detail": "statuses=401,401,401,401,401,423,423,423,429,429,429,429"
+    },
+    {
+      "name": "來源端限流(逾量→429)",
+      "pass": true,
+      "detail": "statuses=401,401,401,401,401,423,423,423,429,429,429,429"
+    }
+  ]
+}

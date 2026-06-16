@@ -31,6 +31,88 @@ interface UserOption {
   quota_group_name: string | null;
 }
 
+const DEPLOY_MODE = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
+const IS_PANJIT = DEPLOY_MODE === 'pro-panjit';
+const AD_DOMAIN_LIST: { code: string; label: string }[] = [
+  { code: 'PANJIT', label: '台灣 PANJIT' },
+  { code: 'PYNMAX', label: '環茂' },
+  { code: 'WXPJ', label: '無錫強茂' },
+  { code: 'PJWS', label: '強茂深圳' },
+  { code: 'GDPJ', label: '蘇州群鑫' },
+  { code: 'PJXZ', label: '強茂徐州' },
+  { code: 'PJSD', label: '山東強茂' },
+];
+
+interface AdTreeMember {
+  username: string;
+  displayName: string;
+  inSystem: boolean;
+  userId: string | null;
+  status: string | null;
+  effectiveLimit: number;
+}
+interface AdTreeNodeT {
+  name: string;
+  type: string;
+  members: AdTreeMember[];
+  children: AdTreeNodeT[];
+}
+type AdPick = { username: string; domain: string; displayName: string; userId: string | null };
+
+/** Does this node (or any descendant) match the search query? */
+function adNodeMatches(node: AdTreeNodeT, lq: string): boolean {
+  if (!lq) return true;
+  if ((node.name || '').toLowerCase().includes(lq)) return true;
+  if (node.members.some(m => m.displayName.toLowerCase().includes(lq) || m.username.toLowerCase().includes(lq))) return true;
+  return node.children.some(c => adNodeMatches(c, lq));
+}
+
+/** Recursive org-tree row with selectable members + their quota. */
+function AdTreeRow({ node, depth, query, domain, selected, onToggle }: {
+  node: AdTreeNodeT; depth: number; query: string; domain: string;
+  selected: Map<string, AdPick>; onToggle: (key: string, pick: AdPick) => void;
+}) {
+  const [open, setOpen] = useState(depth < 1);
+  useEffect(() => { if (query) setOpen(true); }, [query]);
+  const lq = query.toLowerCase();
+  if (query && !adNodeMatches(node, lq)) return null;
+  const hasChildren = node.children.length > 0;
+  const showMembers = node.members.filter(m => !query || m.displayName.toLowerCase().includes(lq) || m.username.toLowerCase().includes(lq));
+  return (
+    <div>
+      <div
+        className="flex items-center gap-1.5 px-2 py-1.5 hover:bg-surface-container/50 transition-colors cursor-pointer select-none rounded"
+        style={{ paddingLeft: `${depth * 14 + 4}px` }}
+        onClick={() => setOpen(v => !v)}
+      >
+        <span className={`material-symbols-outlined text-[15px] text-on-surface-variant/50 transition-transform shrink-0 ${open ? 'rotate-90' : ''} ${!hasChildren && node.members.length === 0 ? 'opacity-0' : ''}`}>chevron_right</span>
+        <span className={`material-symbols-outlined text-[16px] shrink-0 ${node.type === 'organization' ? 'text-primary' : 'text-tertiary/80'}`}>{node.type === 'organization' ? 'corporate_fare' : 'folder'}</span>
+        <span className="flex-1 text-xs font-bold text-on-surface truncate min-w-0">{node.name}</span>
+      </div>
+      {open && showMembers.map(m => {
+        const key = `${domain}:${m.username}`;
+        const checked = selected.has(key);
+        return (
+          <label key={m.username} className={`flex items-center gap-2.5 py-1.5 pr-2 rounded cursor-pointer transition-colors ${checked ? 'bg-primary/8' : 'hover:bg-surface-container/40'}`} style={{ paddingLeft: `${(depth + 1) * 14 + 8}px` }}>
+            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 ${checked ? 'bg-primary border-primary' : 'border-outline-variant/30 bg-surface-container-highest'}`}>
+              {checked && <span className="material-symbols-outlined text-on-primary text-[12px]">check</span>}
+            </div>
+            <input type="checkbox" checked={checked} onChange={() => onToggle(key, { username: m.username, domain, displayName: m.displayName, userId: m.userId })} className="sr-only" />
+            <span className="material-symbols-outlined text-[14px] text-on-surface-variant/40 shrink-0">person</span>
+            <span className="text-sm text-on-surface flex-1 min-w-0 truncate">{m.displayName}</span>
+            <span className="text-xs font-mono text-on-surface-variant/50 shrink-0 hidden sm:inline">{m.username}</span>
+            <span className="text-xs font-mono text-on-surface shrink-0 w-9 text-right">${m.effectiveLimit}</span>
+            <span className={`text-[10px] shrink-0 w-10 text-right ${m.inSystem ? 'text-on-surface-variant/50' : 'text-tertiary'}`}>{m.inSystem ? '已加入' : '未加入'}</span>
+          </label>
+        );
+      })}
+      {open && node.children.map((c, i) => (
+        <AdTreeRow key={i} node={c} depth={depth + 1} query={query} domain={domain} selected={selected} onToggle={onToggle} />
+      ))}
+    </div>
+  );
+}
+
 function calcCost(input: number, output: number): number {
   return ((input / 1_000_000 * 3) + (output / 1_000_000 * 15)) * 10;
 }
@@ -70,6 +152,14 @@ function QuotaGroupsContent() {
   const [assignSearch, setAssignSearch] = useState('');
   const [assignSelected, setAssignSelected] = useState<Set<string>>(new Set());
   const [assigning, setAssigning] = useState(false);
+
+  // AD picker (pro-panjit): pick people straight from the directory, with their
+  // current quota shown, and provision them into the system on confirm.
+  const [adDomain, setAdDomain] = useState(AD_DOMAIN_LIST[0].code);
+  const [adTree, setAdTree] = useState<AdTreeNodeT | null>(null);
+  const [adLoading, setAdLoading] = useState(false);
+  const [adSelected, setAdSelected] = useState<Map<string, AdPick>>(new Map());
+  const [adDomainOpen, setAdDomainOpen] = useState(false);
 
   const fetchGroups = useCallback(() => {
     if (!token) return;
@@ -151,21 +241,84 @@ function QuotaGroupsContent() {
     }
   }
 
-  async function openAssignModal(groupId: string) {
+  function openAssignModal(_groupId: string) {
     if (!token) return;
     setShowAssign(true);
     setAssignSearch('');
     setAssignSelected(new Set());
-    const res = await fetch('/api/admin/users?limit=9999', { headers: { Authorization: `Bearer ${token}` } });
-    const data = await res.json();
-    setAllUsers(data.users.map((u: any) => ({
-      id: u.id, email: u.email, display_name: u.display_name,
-      quota_group_id: u.quota_group_id, quota_group_name: u.quota_group_name,
-    })));
+    setAllUsers([]);
+    setAdSelected(new Map());
+    setAdDomain(AD_DOMAIN_LIST[0].code);
+    setAdTree(null);
+    setAdDomainOpen(false);
   }
 
+  // Load users for the assign modal via SERVER-SIDE search, so members beyond
+  // the first page are still found. (The /users endpoint caps limit at 100, so
+  // a client-side filter over a single page silently misses older accounts.)
+  useEffect(() => {
+    if (IS_PANJIT || !showAssign || !token) return; // pro-panjit uses the AD picker below
+    const q = assignSearch.trim();
+    const ctrl = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const url = `/api/admin/users?limit=100${q ? `&search=${encodeURIComponent(q)}` : ''}`;
+        const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: ctrl.signal });
+        const data = await res.json();
+        setAllUsers((data.users || []).map((u: any) => ({
+          id: u.id, email: u.email, display_name: u.display_name,
+          quota_group_id: u.quota_group_id, quota_group_name: u.quota_group_name,
+        })));
+      } catch { /* aborted / failed */ }
+    }, q ? 250 : 0);
+    return () => { clearTimeout(timer); ctrl.abort(); };
+  }, [showAssign, assignSearch, token]);
+
+  // pro-panjit: load AD directory members for the selected company (with their
+  // current system quota). Search is client-side over the loaded company list.
+  useEffect(() => {
+    if (!IS_PANJIT || !showAssign || !token) return;
+    setAdLoading(true);
+    fetch(`/api/admin/ad/members?domain=${adDomain}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setAdTree(d.tree || null))
+      .catch(() => setAdTree(null))
+      .finally(() => setAdLoading(false));
+  }, [showAssign, adDomain, token]);
+
   async function handleAssign() {
-    if (!token || !expandedId || assigning || assignSelected.size === 0) return;
+    if (!token || !expandedId || assigning) return;
+
+    // pro-panjit: provision AD-only picks into the system first, then assign.
+    if (IS_PANJIT) {
+      if (adSelected.size === 0) return;
+      setAssigning(true);
+      try {
+        const ids: string[] = [];
+        for (const m of adSelected.values()) {
+          if (m.userId) { ids.push(m.userId); continue; }
+          const res = await fetch('/api/admin/users/provision-ad', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: m.username, domain: m.domain, displayName: m.displayName }),
+          });
+          if (res.ok) { const d = await res.json().catch(() => null); if (d?.id) ids.push(d.id); }
+        }
+        if (ids.length) {
+          await fetch(`/api/admin/quota-groups/${expandedId}/assign`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userIds: ids }),
+          });
+        }
+        setShowAssign(false);
+        fetchGroups();
+        fetchMembers(expandedId);
+      } finally { setAssigning(false); }
+      return;
+    }
+
+    if (assignSelected.size === 0) return;
     setAssigning(true);
     try {
       await fetch(`/api/admin/quota-groups/${expandedId}/assign`, {
@@ -190,11 +343,9 @@ function QuotaGroupsContent() {
     fetchMembers(expandedId);
   }
 
-  const assignFiltered = allUsers.filter(u => {
-    if (!assignSearch.trim()) return true;
-    const q = assignSearch.trim().toLowerCase();
-    return u.email.toLowerCase().includes(q) || (u.display_name || '').toLowerCase().includes(q);
-  });
+  // The server already filters by `assignSearch` (see the effect above), so the
+  // list reflects whole-table search results — no client-side filtering needed.
+  const assignFiltered = allUsers;
 
   return (
     <>
@@ -479,7 +630,7 @@ function QuotaGroupsContent() {
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={() => setShowAssign(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div
-            className="relative bg-surface-container rounded-t-2xl md:rounded-2xl p-5 md:p-6 border border-outline-variant/20 shadow-2xl w-full md:max-w-lg max-h-[80vh] flex flex-col"
+            className="relative bg-surface-container rounded-t-2xl md:rounded-2xl p-5 md:p-6 border border-outline-variant/20 shadow-2xl w-full md:max-w-2xl md:h-[78vh] max-h-[90vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             <h3 className="text-base font-headline font-bold text-on-surface mb-4">{t('admin.quotaGroups.assignModal.title' as any)}</h3>
@@ -493,8 +644,76 @@ function QuotaGroupsContent() {
                 className="w-full bg-surface-container-highest border border-outline-variant/20 rounded-lg pl-9 pr-3 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:ring-1 focus:ring-primary/30 focus:border-primary/40 outline-none"
               />
             </div>
+            {IS_PANJIT && (
+              <div className="relative mb-3">
+                <button
+                  type="button"
+                  onClick={() => setAdDomainOpen(v => !v)}
+                  className="w-full flex items-center justify-between gap-2 bg-surface-container-highest border border-outline-variant/20 rounded-lg px-3 py-2.5 text-sm text-on-surface hover:border-primary/40 transition-colors cursor-pointer"
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    <span className="material-symbols-outlined text-[18px] text-primary shrink-0">corporate_fare</span>
+                    <span className="font-medium truncate">{AD_DOMAIN_LIST.find(d => d.code === adDomain)?.label}</span>
+                    <span className="text-xs text-on-surface-variant/50 font-mono shrink-0">{adDomain}</span>
+                  </span>
+                  <span className={`material-symbols-outlined text-[20px] text-on-surface-variant/60 transition-transform shrink-0 ${adDomainOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                </button>
+                {adDomainOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setAdDomainOpen(false)} />
+                    <div className="absolute left-0 right-0 mt-1.5 z-20 bg-surface-container-high border border-outline-variant/20 rounded-xl shadow-2xl py-1.5 max-h-72 overflow-y-auto">
+                      {AD_DOMAIN_LIST.map(({ code, label }) => {
+                        const active = adDomain === code;
+                        return (
+                          <button
+                            key={code}
+                            type="button"
+                            onClick={() => { setAdDomain(code); setAdDomainOpen(false); }}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-left transition-colors ${active ? 'bg-primary/10 text-primary' : 'text-on-surface hover:bg-surface-container-highest'}`}
+                          >
+                            <span className={`material-symbols-outlined text-[18px] shrink-0 ${active ? 'text-primary' : 'text-on-surface-variant/50'}`}>{active ? 'check_circle' : 'corporate_fare'}</span>
+                            <span className="flex-1 font-medium truncate">{label}</span>
+                            <span className="text-xs font-mono text-on-surface-variant/50 shrink-0">{code}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto min-h-0 -mx-1 px-1">
-              {assignFiltered.length === 0 ? (
+              {IS_PANJIT ? (
+                adLoading ? (
+                  <div className="flex items-center justify-center py-10 gap-2 text-on-surface-variant text-sm">
+                    <span className="material-symbols-outlined animate-spin text-primary">refresh</span>載入 {adDomain} 組織...
+                  </div>
+                ) : !adTree ? (
+                  <div className="flex flex-col items-center justify-center py-10">
+                    <span className="material-symbols-outlined text-3xl text-on-surface-variant/30 mb-2">person_off</span>
+                    <p className="text-sm text-on-surface-variant">{t('admin.quotaGroups.assignModal.noUsers' as any)}</p>
+                  </div>
+                ) : (assignSearch.trim() && !adNodeMatches(adTree, assignSearch.trim().toLowerCase())) ? (
+                  <div className="flex flex-col items-center justify-center py-10">
+                    <span className="material-symbols-outlined text-3xl text-on-surface-variant/30 mb-2">search_off</span>
+                    <p className="text-sm text-on-surface-variant">找不到符合「{assignSearch}」的人員</p>
+                  </div>
+                ) : (
+                  <AdTreeRow
+                    node={adTree}
+                    depth={0}
+                    query={assignSearch.trim()}
+                    domain={adDomain}
+                    selected={adSelected}
+                    onToggle={(key, pick) => setAdSelected(prev => {
+                      const next = new Map(prev);
+                      if (next.has(key)) next.delete(key); else next.set(key, pick);
+                      return next;
+                    })}
+                  />
+                )
+              ) : (
+              assignFiltered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-10">
                   <span className="material-symbols-outlined text-3xl text-on-surface-variant/30 mb-2">person_off</span>
                   <p className="text-sm text-on-surface-variant">{t('admin.quotaGroups.assignModal.noUsers' as any)}</p>
@@ -558,11 +777,11 @@ function QuotaGroupsContent() {
                     );
                   })}
                 </div>
-              )}
+              ))}
             </div>
             <div className="flex items-center justify-between mt-4 pt-3 border-t border-outline-variant/10">
               <span className="text-xs text-on-surface-variant">
-                {t('admin.quotaGroups.assignModal.selected' as any, { count: assignSelected.size })}
+                {t('admin.quotaGroups.assignModal.selected' as any, { count: IS_PANJIT ? adSelected.size : assignSelected.size })}
               </span>
               <div className="flex gap-2">
                 <button
@@ -573,7 +792,7 @@ function QuotaGroupsContent() {
                 </button>
                 <button
                   onClick={handleAssign}
-                  disabled={assigning || assignSelected.size === 0}
+                  disabled={assigning || (IS_PANJIT ? adSelected.size === 0 : assignSelected.size === 0)}
                   className="px-5 py-2 cyber-gradient text-on-primary rounded-lg text-sm font-bold cursor-pointer hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {assigning ? '...' : t('admin.quotaGroups.assignModal.confirm' as any)}
