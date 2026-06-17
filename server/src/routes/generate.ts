@@ -13,6 +13,8 @@ import { getUserStorageUsed } from './files.js';
 import { getSkill, buildSystemPrompt, buildMemoryContext, buildCrossAssistantContext, loadSkills, getRouterSkill } from '../skills/loader.js';
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from '../services/uploadContext.js';
 import { Orchestrator } from '../services/orchestrator.js';
+import { enforceDataFidelity } from '../services/dataFidelityGuard.js';
+import type { DocumentBlock } from '../types.js';
 import { extractMemoryAndSummary } from '../services/memoryExtractor.js';
 import { config } from '../config.js';
 import { checkUserUsageLimit, getStorageQuotaGb } from '../services/usageLimit.js';
@@ -287,19 +289,27 @@ async function handleOrchestrated(
     const sandboxPath = getSandboxPath(userId, conversationId);
     const newFiles = await registerNewFiles(userId, conversationId, sandboxPath, existingFiles);
     if (newFiles.length > 0) {
-      sseWriter({
-        type: 'file_generated',
-        data: newFiles.map(f => ({ id: f.id, filename: f.filename, file_path: f.file_path, file_type: f.file_type, file_size: f.file_size, version: f.version })),
-      });
-      // Capture block structure — await to ensure blocks_ready arrives before done
+      // Capture block structure first (no emit yet) so we can verify before showing.
       const captureResults = await Promise.allSettled(
         newFiles.map(f => captureBlocksForFile(f, userId, conversationId, sandboxPath))
       );
+      const blocksByFile = new Map<string, DocumentBlock[]>();
       for (let i = 0; i < newFiles.length; i++) {
         const r = captureResults[i];
-        if (r.status === 'fulfilled' && r.value) {
-          sseWriter({ type: 'blocks_ready', data: { fileId: newFiles[i].id, blocks: r.value } });
-        }
+        if (r.status === 'fulfilled' && r.value) blocksByFile.set(newFiles[i].id, r.value);
+      }
+      // Data-fidelity gate: verify against the uploaded source + auto-correct any
+      // fabricated data BEFORE the user sees the file. Returns instantly when the
+      // conversation has no uploaded source to verify against.
+      const rebuilt = await enforceDataFidelity(newFiles, blocksByFile, userId, conversationId, sseWriter);
+      const finalFiles = newFiles.map(f => rebuilt.get(f.id) || f);
+      sseWriter({
+        type: 'file_generated',
+        data: finalFiles.map(f => ({ id: f.id, filename: f.filename, file_path: f.file_path, file_type: f.file_type, file_size: f.file_size, version: f.version })),
+      });
+      for (const f of finalFiles) {
+        const blocks = blocksByFile.get(f.id);
+        if (blocks) sseWriter({ type: 'blocks_ready', data: { fileId: f.id, blocks } });
       }
     }
   } catch (err) {
@@ -475,19 +485,24 @@ async function handleDirect(
           const sandboxPath = getSandboxPath(userId, conversationId);
           const newFiles = await registerNewFiles(userId, conversationId, sandboxPath, existingFiles);
           if (newFiles.length > 0) {
-            sseWrite({
-              type: 'file_generated',
-              data: newFiles.map(f => ({ id: f.id, filename: f.filename, file_path: f.file_path, file_type: f.file_type, file_size: f.file_size, version: f.version })),
-            });
-            // Capture block structure — await to ensure blocks_ready arrives before done
+            // Capture blocks first (no emit yet), verify + auto-correct, then show.
             const captureResults = await Promise.allSettled(
               newFiles.map(f => captureBlocksForFile(f, userId, conversationId, sandboxPath))
             );
+            const blocksByFile = new Map<string, DocumentBlock[]>();
             for (let i = 0; i < newFiles.length; i++) {
               const r = captureResults[i];
-              if (r.status === 'fulfilled' && r.value) {
-                sseWrite({ type: 'blocks_ready', data: { fileId: newFiles[i].id, blocks: r.value } });
-              }
+              if (r.status === 'fulfilled' && r.value) blocksByFile.set(newFiles[i].id, r.value);
+            }
+            const rebuilt = await enforceDataFidelity(newFiles, blocksByFile, userId, conversationId, sseWrite);
+            const finalFiles = newFiles.map(f => rebuilt.get(f.id) || f);
+            sseWrite({
+              type: 'file_generated',
+              data: finalFiles.map(f => ({ id: f.id, filename: f.filename, file_path: f.file_path, file_type: f.file_type, file_size: f.file_size, version: f.version })),
+            });
+            for (const f of finalFiles) {
+              const blocks = blocksByFile.get(f.id);
+              if (blocks) sseWrite({ type: 'blocks_ready', data: { fileId: f.id, blocks } });
             }
           }
 

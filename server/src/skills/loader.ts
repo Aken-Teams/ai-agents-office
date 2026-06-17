@@ -52,6 +52,16 @@ const SOURCE_RULES = `
 - 嚴禁捏造來源、網址或數據；沒有把握時就明說不確定。
 `;
 
+const DATA_FIDELITY_RULES = `
+## 資料忠實鐵則（最高優先，凌駕所有版面/設計/美觀要求，絕不可違反）
+當你的任務牽涉到使用者上傳的檔案，或上游 agent（如資料分析師）提供的資料時：
+1. **只能使用來源資料中實際存在的內容**。客戶名、公司名、人名、產品名、數字、金額、百分比、日期——一律必須能在來源資料中「直接找到」，或由來源數字「明確計算得出」（如合計、YoY、佔比、差額）。
+2. **嚴禁為了填滿版面、表格列數、卡片數量、或讓圖表「看起來完整」而捏造或補入資料。** 若版型需要 10 列、但來源只有 6 筆真實資料，就**只放 6 筆**（寧缺勿造），其餘留白或標「資料未提供」。**絕對不可以拿你既有知識中的任何知名公司（例如台積電、鴻海、群創、友達、Sony、聯發科、BOSCH 等）或自行編造的數字來湊數**，即使標記為「範例」也不行。
+3. 任何「不在來源、也無法由來源推算」的名稱或數值，一律不得出現在最終文件中。需要佐證但來源沒有時，明確寫「資料未提供」或留空，不要編造。
+4. 完成生成後，**逐項自我稽核**：輸出中的每一個客戶名/公司名/數字，是否都能對應回來源資料？對不到的必須刪除或改成「資料未提供」，不可保留。
+5. 寧可內容少、版面樸素，也不可有一個來源外的假資料。資料真實性永遠優先於視覺完整度。
+`;
+
 const SANDBOX_RULES = `
 ## CRITICAL SECURITY RULES (NEVER VIOLATE THESE)
 1. You MUST only write files to the current working directory (cwd) or its subdirectories.
@@ -203,7 +213,16 @@ export function buildRouterPrompt(routerSkill: SkillDefinition, userLocale: stri
     '',
   ].join('\n');
 
-  return getLanguageInstruction(userLocale) + '\n' + IDENTITY_RULES + '\n' + routerSkill.systemPrompt + teamSection + liveInfoRule;
+  const dataHandoffRule = [
+    '',
+    '## 資料完整傳遞（多 agent 協作，務必遵守）',
+    '- 當任務涉及使用者上傳的資料/檔案分析，且後續要由文件生成 agent（pptx-gen/docx-gen/xlsx-gen 等）產出時，**優先用 [PIPELINE] 把「資料分析」與「文件生成」串成同一條 pipeline**（分析結果會以完整檔案傳給下一棒）。',
+    '- **你（Router）看到的任務結果可能只是節錄摘要，不是完整資料。** 因此派發文件生成任務時，**絕對不要自己把資料逐筆抄進任務描述**（你可能只看到部分，會害下游缺資料而編造）。',
+    '- 改為在任務描述中明確指示生成 agent：「**請讀取你工作目錄中的來源資料檔（previous_step.md 或使用者上傳檔），所有數字與名稱一律以該檔為準；資料不足就標「資料未提供」，不可自行補充或編造**」。',
+    '',
+  ].join('\n');
+
+  return getLanguageInstruction(userLocale) + '\n' + IDENTITY_RULES + '\n' + routerSkill.systemPrompt + teamSection + liveInfoRule + dataHandoffRule;
 }
 
 /**
@@ -232,6 +251,8 @@ export function buildSystemPrompt(
     IDENTITY_RULES,
     '',
     SOURCE_RULES,
+    '',
+    DATA_FIDELITY_RULES,
     '',
     skill.systemPrompt,
     '',

@@ -7,7 +7,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc && node scripts/copy-assets.mjs",
     "start": "node dist/index.js",
-    "init-db": "tsx scripts/init-db.mjs"
+    "init-db": "tsx scripts/init-db.mjs",
+    "audit-fidelity": "tsx scripts/audit-fidelity.mts"
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",

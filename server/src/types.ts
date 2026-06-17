@@ -74,7 +74,9 @@ export interface SSEEvent {
     | 'pipeline_started' | 'pipeline_completed'
     | 'agent_status' | 'agent_stream' | 'router_plan'
     // Block editor events
-    | 'blocks_ready' | 'skill_started';
+    | 'blocks_ready' | 'skill_started'
+    // Data-fidelity verification (Phase C)
+    | 'fidelity_check';
   data: unknown;
 }
 

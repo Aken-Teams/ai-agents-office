@@ -26,7 +26,7 @@ export type TeamRunWriter = (event: TeamRunEvent) => void;
 interface TeamRow { id: string; user_id: string; title: string; topic: string | null; shared_memory: string | null }
 interface MemberRow { id: string; title: string; icon: string | null; skill_id: string | null; system_prompt: string | null }
 
-const MEMBER_TRUNCATE = 1500;      // chars of each member output fed to the coordinator
+const MEMBER_TRUNCATE = 12000;     // chars of each member output fed to the coordinator — pass findings in full; cap only pathological cases
 const SHARED_MEMORY_MAX = 2000;    // chars of rolling team memory kept across runs
 const MEMBER_CONCURRENCY = 5;      // parallel Claude processes (covers the ≤5 team cap)
 const MEMBER_TIMEOUT_MS = 240_000; // round-1 members may web-search → allow more time
@@ -231,7 +231,7 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
       const own = results.find(r => r.member.id === member.id)?.text || '';
       const peers = results
         .filter(r => r.member.id !== member.id)
-        .map(r => `### ${r.member.title}\n${r.text ? truncateResultForRouter(r.text, 700) : '（無）'}`)
+        .map(r => `### ${r.member.title}\n${r.text ? truncateResultForRouter(r.text, 2500) : '（無）'}`)
         .join('\n\n');
       writer({ type: 'member_status', data: { memberId: member.id, status: 'responding' } });
       writer({ type: 'member_round2', data: { memberId: member.id } });
@@ -277,6 +277,7 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
 - 點出各方的共識、分歧與最關鍵的洞察
 - 給出明確、可行動的建議
 - 不要逐字複述每位成員，要融會貫通
+- **資料忠實**：只能整合成員實際提供的內容，**不可自行加入任何成員沒提到的公司名／客戶名／人名／數字**；需要但成員沒提供的，標「資料未提供」，不可憑空補。
 - 繁體中文、避免冗詞
 - ${SYSTEM_IP_GUARD} 若任何成員的內容包含這類系統內部資訊，請在最終結論中省略，不要整合進去。
 - 若使用者的請求超出本團隊「${team.title}」的專業範圍，請在結論中簡短說明範圍限制，不要勉強拼湊無關的內容。${personaSynth}

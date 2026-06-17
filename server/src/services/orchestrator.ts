@@ -1,4 +1,5 @@
 import path from 'path';
+import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { EventEmitter } from 'events';
 import { dbGet, dbAll, dbRun } from '../db.js';
@@ -11,6 +12,11 @@ import { config } from '../config.js';
 import type { SSEEvent, ParsedTask, ParsedPipeline, TaskExecution } from '../types.js';
 
 const MAX_ORCHESTRATION_DEPTH = 3;
+
+// Skills that PRODUCE structured data — their full output must reach consumers intact.
+const DATA_PRODUCER_SKILLS = new Set(['data-analyst', 'rag-analyst']);
+// Skills that CONSUME data to generate documents — must read the full data file.
+const DOC_CONSUMER_SKILLS = new Set(['pptx-gen', 'docx-gen', 'xlsx-gen', 'pdf-gen', 'slides-gen']);
 const ORCHESTRATION_TIMEOUT_MS = 900_000; // 15 minutes total orchestration limit
 
 // Per-skill timeout (ms) — text-only agents are fast, generators need more time
@@ -60,6 +66,9 @@ export class Orchestrator {
   private aborted = false;
   private activeAbortFns: Array<() => void> = [];
   private tasks: TaskExecution[] = [];
+  // Most recent data-producing agent's FULL output, handed to doc-gen agents as a
+  // file so cross-round data tasks aren't starved by context truncation (B-2).
+  private lastDataOutput: string | null = null;
   private uploadIds: string[];
   private userLocale: string;
   private referenceContext: string;
@@ -120,7 +129,7 @@ export class Orchestrator {
     if (prevMsgs.length > 0) {
       const lines = prevMsgs.map(m => {
         const role = m.role === 'user' ? 'User' : 'Assistant';
-        const content = m.content.length > 2000 ? m.content.substring(0, 2000) + '... (truncated)' : m.content;
+        const content = m.content.length > 4000 ? m.content.substring(0, 4000) + '... (truncated — 大量資料請改用「上傳檔案」，貼在對話中的長內容可能被截斷)' : m.content;
         return `[${role}]: ${content}`;
       });
       chatHistoryBlock =
@@ -346,10 +355,13 @@ export class Orchestrator {
         continue;
       }
 
-      // Prepend previous task's output as context
+      // Hand the FULL previous output to the next agent via a file (so no data is
+      // lost to truncation); only a short summary goes inline. Truncating an
+      // analyst's dataset into the next agent's context made it fabricate the
+      // missing rows — this prevents that. See attachPreviousStepData.
       const enrichedTask = { ...task };
       if (previousOutput) {
-        enrichedTask.description = `${task.description}\n\n## Context from previous step:\n${truncateResultForRouter(previousOutput)}`;
+        enrichedTask.description = this.attachPreviousStepData(task.skillId, task.description, previousOutput);
       }
 
       const result = await this.executeTask(enrichedTask, pipelineId);
@@ -363,6 +375,27 @@ export class Orchestrator {
     }
 
     return results;
+  }
+
+  /**
+   * Hand the FULL previous-step output to the next agent via a file in its
+   * working directory (read in full, no truncation), with only a short summary
+   * inline. Critical for data fidelity: truncating a dataset between agents
+   * starves the downstream agent, which then fabricates the missing rows.
+   */
+  private attachPreviousStepData(skillId: string, description: string, previousOutput: string): string {
+    try {
+      const agentCwd = path.join(getSandboxPath(this.userId, this.conversationId), '_agents', skillId);
+      fs.mkdirSync(agentCwd, { recursive: true });
+      const fileName = 'previous_step.md';
+      fs.writeFileSync(path.join(agentCwd, fileName), previousOutput, 'utf-8');
+      const summary = truncateResultForRouter(previousOutput, 1200);
+      return `${description}\n\n## 上一步的完整輸出（重要）\n上一個 agent 的**完整**結果已存於檔案 \`${fileName}\`（就在你的工作目錄）。\n**你必須先用 Read 工具讀取 \`${fileName}\` 取得完整資料**；所有客戶名／公司名／數字／資料一律以該檔為準，**不可超出該檔內容，也不可自行補充或編造**任何來源外的名稱或數值。若該檔的資料筆數少於版面所需，寧可少放（標「資料未提供」），也不可湊數。\n\n以下僅為節錄摘要（可能不完整，完整內容務必讀檔）：\n${summary}`;
+    } catch (e) {
+      // Never block the pipeline — fall back to the (truncated) inline context.
+      console.warn('[Orchestrator] attachPreviousStepData failed, falling back to inline context:', e);
+      return `${description}\n\n## Context from previous step:\n${truncateResultForRouter(previousOutput)}`;
+    }
   }
 
   /**
@@ -411,6 +444,12 @@ export class Orchestrator {
       return `Error: ${error}`;
     }
 
+    // B-2: ensure doc-gen agents receive the latest analyst data IN FULL (via a
+    // file), even when the analyst ran in a separate Router round (not a pipeline).
+    if (DOC_CONSUMER_SKILLS.has(task.skillId) && this.lastDataOutput && !task.description.includes('previous_step.md')) {
+      task.description = this.attachPreviousStepData(task.skillId, task.description, this.lastDataOutput);
+    }
+
     // Inject email data when worker task mentions email keywords
     {
       const { messageNeedsEmail: needsEmail, getEmailContextForPrompt: getEmailCtx } = await import('./emailContext.js');
@@ -455,6 +494,12 @@ export class Orchestrator {
       execution.status = 'completed';
       execution.result = result.text;
       execution.tokenUsage = { inputTokens: result.inputTokens, outputTokens: result.outputTokens };
+
+      // Remember the latest data-producing output so the next doc-gen agent gets
+      // it in full (B-2). Only data producers — not doc-gen's own output.
+      if (DATA_PRODUCER_SKILLS.has(task.skillId) && result.text) {
+        this.lastDataOutput = result.text;
+      }
 
       await this.updateTaskInDb(taskId, 'completed', result.text.substring(0, 2000), result.inputTokens, result.outputTokens);
 
