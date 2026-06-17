@@ -115,6 +115,35 @@ export function sanitizeUserInput(input: string): string {
  * Scan sandbox directory for newly generated files.
  * Returns list of files found.
  */
+// Intermediate / working artifacts that agents & generators create but are NOT
+// user deliverables. Registering them clutters the file list and confuses users
+// about which file to use. Never surface these.
+const INTERMEDIATE_FILES = new Set([
+  'previous_step.md',                              // orchestrator's data hand-off to the next agent
+  'extracted_embedded.xlsx', 'extracted_embedded.csv',  // data pulled out of an uploaded file for analysis
+  'slides.json', 'input.json', 'data.json',        // generator inputs
+]);
+
+// Analysis-only skills produce TEXT passed to the next agent, never a deliverable
+// FILE. So any file written inside their working dir is intermediate scratch.
+const ANALYSIS_AGENT_DIRS = ['data-analyst', 'rag-analyst', 'research', 'planner', 'reviewer', 'router'];
+
+function isIntermediateArtifact(name: string, fullPath: string): boolean {
+  const lower = name.toLowerCase();
+  if (INTERMEDIATE_FILES.has(lower)) return true;
+  // Images extracted from an uploaded file (image1.png, media_2.jpeg, …)
+  if (/^(image|media|img)[-_]?\d+\.\w+$/i.test(name)) return true;
+  // Slide thumbnail PNGs (slide-06.png, slide_3.png) — previews, not deliverables
+  if (/^slide[-_]?\d+\.\w+$/i.test(name)) return true;
+  // Analyst scratch: analysis.md / analysis_result.md / sales_analysis.json … (any
+  // name containing "analysis" with a text/data extension)
+  if (/analysis.*\.(md|json|txt|csv)$/i.test(lower)) return true;
+  // Anything written inside an analysis-only agent's working dir is intermediate.
+  const norm = fullPath.replace(/\\/g, '/');
+  if (ANALYSIS_AGENT_DIRS.some(s => norm.includes(`/_agents/${s}/`))) return true;
+  return false;
+}
+
 export function scanSandboxFiles(sandboxPath: string): Array<{
   filename: string;
   filePath: string;
@@ -146,6 +175,7 @@ export function scanSandboxFiles(sandboxPath: string): Array<{
       } else if (entry.isFile()) {
         // Skip internal/intermediate files
         if (entry.name === 'CLAUDE.md') continue;
+        if (isIntermediateArtifact(entry.name, fullPath)) continue;
         const ext = path.extname(entry.name).toLowerCase();
         // Skip versioned backup files (e.g., report.v1.docx, chart.v2.html)
         const baseName = entry.name.slice(0, -ext.length);

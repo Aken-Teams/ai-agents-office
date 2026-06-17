@@ -39,13 +39,13 @@ export default function SlideShapeOverlay({ shapes, selectedId, onHover, onSelec
 
   return (
     <div className="absolute inset-0 pointer-events-none">
-      {shapes.map((shape) => {
+      {shapes.map((shape, i) => {
         const isHovered = hoveredId === shape.id;
         const isSelected = selectedId === shape.id;
 
         return (
           <div
-            key={shape.id}
+            key={`${shape.id}-${i}`}
             className="absolute pointer-events-auto cursor-pointer transition-all duration-150"
             style={{
               left: `${shape.x}%`,

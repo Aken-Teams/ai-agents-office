@@ -287,7 +287,13 @@ async function handleOrchestrated(
     });
 
     const sandboxPath = getSandboxPath(userId, conversationId);
-    const newFiles = await registerNewFiles(userId, conversationId, sandboxPath, existingFiles);
+    // Only surface deliverables of the type(s) the dispatched generators produce —
+    // intermediate scratch (analysis .md, .json, extracted images…) still exists on
+    // disk for the agents, it just isn't shown to the user.
+    const expectedTypes = new Set(
+      (result.tasks || []).map(t => getSkill(t.skillId)?.fileType).filter((ft): ft is string => !!ft)
+    );
+    const newFiles = await registerNewFiles(userId, conversationId, sandboxPath, existingFiles, expectedTypes.size ? expectedTypes : undefined);
     if (newFiles.length > 0) {
       // Capture block structure first (no emit yet) so we can verify before showing.
       const captureResults = await Promise.allSettled(
@@ -483,7 +489,9 @@ async function handleDirect(
           }
 
           const sandboxPath = getSandboxPath(userId, conversationId);
-          const newFiles = await registerNewFiles(userId, conversationId, sandboxPath, existingFiles);
+          const ft = skill?.fileType;
+          const expectedTypes = ft ? new Set([ft]) : undefined;
+          const newFiles = await registerNewFiles(userId, conversationId, sandboxPath, existingFiles, expectedTypes);
           if (newFiles.length > 0) {
             // Capture blocks first (no emit yet), verify + auto-correct, then show.
             const captureResults = await Promise.allSettled(

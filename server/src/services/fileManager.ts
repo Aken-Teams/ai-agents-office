@@ -15,12 +15,22 @@ export async function registerNewFiles(
   userId: string,
   conversationId: string,
   sandboxPath: string,
-  existingFilePaths: Set<string>
+  existingFilePaths: Set<string>,
+  // Whitelist of deliverable file types the user actually requested (the output
+  // types of the generator skills that ran this turn). When provided, ONLY files
+  // of these types are registered — so scratch of any other type (analysis .md,
+  // .json, extracted .png, an unwanted .pdf…) is dropped regardless of its name.
+  expectedTypes?: Set<string>,
 ): Promise<GeneratedFile[]> {
   const scannedFiles = scanSandboxFiles(sandboxPath);
   const newFiles: GeneratedFile[] = [];
+  const useWhitelist = !!expectedTypes && expectedTypes.size > 0;
 
   for (const file of scannedFiles) {
+    // Only keep deliverables of the requested type(s). Type-based, not name-based,
+    // so however the agent names its scratch files it won't slip through.
+    if (useWhitelist && !expectedTypes!.has(file.fileType)) continue;
+
     const fullPath = path.join(config.workspaceRoot, file.filePath);
 
     // Security: verify file is within user's workspace

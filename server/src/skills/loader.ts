@@ -62,6 +62,13 @@ const DATA_FIDELITY_RULES = `
 5. 寧可內容少、版面樸素，也不可有一個來源外的假資料。資料真實性永遠優先於視覺完整度。
 `;
 
+const FILE_OUTPUT_RULES = `
+## 檔案輸出規範（避免產生多餘檔案讓使用者混淆，務必遵守）
+- **只交付一個乾淨的成品檔**。分析/生成過程的中間檔（如 previous_step.md、extracted_*、image1.png、output.pptx、slides.json、data.json 等）是工作檔，**不是交付物**，不要把它們當成果回報給使用者。
+- **修改既有文件時，沿用「原本的檔名」直接覆蓋**（系統會自動保留歷史版本）。**絕對不要**在檔名加上 -v2／-v3／-最終版／-修正版 等另存成一堆新檔，否則使用者會分不清該用哪一個、甚至下載或編輯到錯的檔。
+- **只產出使用者要求的那一種格式**：使用者要 PPT 就只做 .pptx，不要順手再輸出 .pdf／.md／.docx 等其他格式（除非使用者明確說要多種格式）。
+`;
+
 const SANDBOX_RULES = `
 ## CRITICAL SECURITY RULES (NEVER VIOLATE THESE)
 1. You MUST only write files to the current working directory (cwd) or its subdirectories.
@@ -220,6 +227,9 @@ export function buildRouterPrompt(routerSkill: SkillDefinition, userLocale: stri
     '- **你（Router）看到的任務結果可能只是節錄摘要，不是完整資料。** 因此派發文件生成任務時，**絕對不要自己把資料逐筆抄進任務描述**（你可能只看到部分，會害下游缺資料而編造）。',
     '- 改為在任務描述中明確指示生成 agent：「**請讀取你工作目錄中的來源資料檔（previous_step.md 或使用者上傳檔），所有數字與名稱一律以該檔為準；資料不足就標「資料未提供」，不可自行補充或編造**」。',
     '',
+    '## 只產生使用者要的那一種格式（避免檔案混淆）',
+    '- 使用者要 PPT 就**只委派 `pptx-gen`**；要 Word 就只 `docx-gen`；要 Excel 就只 `xlsx-gen`。**不要同時委派多個格式 generator**（例如又做 pdf 又做 word），除非使用者明確說「順便給我 PDF」之類要多種格式。一次只交付一種檔案，使用者才不會搞混該用哪個。',
+    '',
   ].join('\n');
 
   return getLanguageInstruction(userLocale) + '\n' + IDENTITY_RULES + '\n' + routerSkill.systemPrompt + teamSection + liveInfoRule + dataHandoffRule;
@@ -253,6 +263,8 @@ export function buildSystemPrompt(
     SOURCE_RULES,
     '',
     DATA_FIDELITY_RULES,
+    '',
+    FILE_OUTPUT_RULES,
     '',
     skill.systemPrompt,
     '',
