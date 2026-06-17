@@ -49,6 +49,15 @@ function TeamRunContent() {
   const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [question, setQuestion] = useState('');
   const [running, setRunning] = useState(false);
+  // File-based analysis: attach files → team analyses them; default no web (file-only).
+  const [attachedFiles, setAttachedFiles] = useState<{ id: string; name: string }[]>([]);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [allowWeb, setAllowWeb] = useState(true);   // no file → web on; file → defaults off (effect below)
+  const [showWebWarn, setShowWebWarn] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const hasFiles = attachedFiles.length > 0;
+  // Default the web toggle off the moment a file is attached (file-only), back on when removed.
+  useEffect(() => { setAllowWeb(!hasFiles); }, [hasFiles]);
   const [members, setMembers] = useState<Record<string, MemberStream>>({});
   const [memberOrder, setMemberOrder] = useState<string[]>([]);
   const [synthesis, setSynthesis] = useState('');
@@ -138,6 +147,25 @@ function TeamRunContent() {
     });
   }, []);
 
+  const handleAttach = useCallback(async (fileList: FileList | null) => {
+    if (!fileList || !fileList.length || !token) return;
+    setUploadingFile(true);
+    try {
+      const formData = new FormData();
+      for (const f of Array.from(fileList)) formData.append('files', f);
+      const resp = await fetch('/api/uploads', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData });
+      const data = await resp.json();
+      if (resp.ok) {
+        const ok = (data.uploads || [])
+          .filter((u: any) => u.scanStatus !== 'rejected')
+          .map((u: any) => ({ id: u.id, name: u.originalName }));
+        setAttachedFiles(prev => [...prev, ...ok]);
+      }
+    } catch { /* ignore */ } finally {
+      setUploadingFile(false);
+    }
+  }, [token]);
+
   const handleRun = useCallback(async () => {
     if (!question.trim() || running || !token) return;
     resetRun();
@@ -148,7 +176,11 @@ function TeamRunContent() {
       const res = await fetch(`${SSE_BASE}/api/teams/${teamId}/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ message: question.trim() }),
+        body: JSON.stringify({
+          message: question.trim(),
+          ...(attachedFiles.length ? { uploadIds: attachedFiles.map(f => f.id) } : {}),
+          allowWeb,
+        }),
         signal: controller.signal,
       });
       if (!res.ok || !res.body) {
@@ -178,7 +210,7 @@ function TeamRunContent() {
       setSynthRunning(false);
       loadHistory();
     }
-  }, [question, running, token, teamId, authHeaders, resetRun, loadHistory]);
+  }, [question, running, token, teamId, authHeaders, resetRun, loadHistory, attachedFiles, allowWeb]);
 
   function handleEvent(ev: { type: string; data?: any }) {
     const d = ev.data || {};
@@ -360,7 +392,51 @@ function TeamRunContent() {
 
         {/* Question input */}
         <div className="mb-6">
-          <div className="flex items-end gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={e => { handleAttach(e.target.files); e.target.value = ''; }}
+          />
+          {showWebWarn && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowWebWarn(false)}>
+              <div className="bg-surface rounded-2xl shadow-xl max-w-sm w-full p-5" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="material-symbols-outlined text-primary">public</span>
+                  <h3 className="font-semibold text-on-surface">開啟上網查找？</h3>
+                </div>
+                <p className="text-sm text-on-surface-variant leading-relaxed mb-4">
+                  開啟後，團隊除了分析你上傳的檔案，也會<span className="text-error font-semibold">連上網路查資料</span>。網路查到的資料會標明來源、並與你的檔案資料分開呈現，不會混進你的檔案數字。
+                  <br /><br />
+                  若你的檔案屬於<span className="text-error font-semibold">機密／內部資料</span>，建議維持「只看檔案」，<span className="text-error font-semibold">避免資料外傳</span>。
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setShowWebWarn(false)} className="px-4 py-2 rounded-full text-sm text-on-surface-variant hover:bg-surface-container transition-colors">取消</button>
+                  <button onClick={() => { setAllowWeb(true); setShowWebWarn(false); }} className="px-4 py-2 rounded-full text-sm bg-primary text-on-primary font-medium hover:bg-primary/90 transition-colors">確定開啟</button>
+                </div>
+              </div>
+            </div>
+          )}
+          {(attachedFiles.length > 0 || uploadingFile) && (
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              {attachedFiles.map(f => (
+                <span key={f.id} className="inline-flex items-center gap-1.5 bg-surface-container-high rounded-lg pl-2 pr-1 py-1 text-xs text-on-surface">
+                  <span className="material-symbols-outlined text-[15px] text-primary">description</span>
+                  <span className="truncate max-w-[180px]">{f.name}</span>
+                  <button onClick={() => setAttachedFiles(prev => prev.filter(x => x.id !== f.id))} className="text-on-surface-variant hover:bg-surface-container-highest rounded p-0.5" title="移除">
+                    <span className="material-symbols-outlined text-[14px]">close</span>
+                  </button>
+                </span>
+              ))}
+              {uploadingFile && (
+                <span className="text-xs text-on-surface-variant inline-flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>上傳中…
+                </span>
+              )}
+            </div>
+          )}
+          <div className="relative bg-surface-container rounded-2xl ring-1 ring-transparent focus-within:ring-primary/30 transition-shadow">
             <textarea
               value={question}
               onChange={e => setQuestion(e.target.value)}
@@ -368,15 +444,34 @@ function TeamRunContent() {
               disabled={running}
               placeholder="輸入要這個團隊一起分析的議題或問題…"
               rows={3}
-              className="flex-1 bg-surface-container border-none focus:ring-1 focus:ring-primary/30 rounded-2xl py-3 px-4 text-sm text-on-surface placeholder:text-outline resize-none min-h-[88px] max-h-[200px] leading-snug"
+              className="w-full bg-transparent border-none outline-none focus:ring-0 resize-none py-3 px-4 pb-12 text-sm text-on-surface placeholder:text-outline min-h-[104px] max-h-[220px] leading-snug"
             />
+            {/* Toolbar inside the box (bottom) — pb-12 on the textarea keeps typed text clear of it */}
+            <div className="absolute left-2 bottom-2 flex items-center gap-0.5">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={running || uploadingFile}
+                title="附加檔案讓團隊依據檔案分析"
+                className="w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <span className="material-symbols-outlined text-[20px]">attach_file</span>
+              </button>
+              <button
+                onClick={() => { if (!allowWeb && hasFiles) setShowWebWarn(true); else setAllowWeb(v => !v); }}
+                disabled={running}
+                title={allowWeb ? '上網查找：開啟（按一下關閉）' : '上網查找：關閉（按一下開啟）'}
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors disabled:opacity-40 ${allowWeb ? 'bg-primary/15 text-primary' : 'text-on-surface-variant hover:bg-surface-container-high'}`}
+              >
+                <span className="material-symbols-outlined text-[20px]">{allowWeb ? 'public' : 'public_off'}</span>
+              </button>
+            </div>
             <button
               onClick={handleRun}
               disabled={running || !question.trim()}
               title="跑團隊分析（⌘ / Ctrl + Enter）"
-              className="shrink-0 w-11 h-11 cyber-gradient rounded-full flex items-center justify-center text-on-primary disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
+              className="absolute right-2 bottom-2 w-9 h-9 cyber-gradient rounded-full flex items-center justify-center text-on-primary disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
             >
-              <span className={`material-symbols-outlined text-[22px] ${running ? 'animate-spin' : ''}`}>{running ? 'progress_activity' : 'play_arrow'}</span>
+              <span className={`material-symbols-outlined text-[20px] ${running ? 'animate-spin' : ''}`}>{running ? 'progress_activity' : 'play_arrow'}</span>
             </button>
           </div>
           <div className="flex items-center gap-1.5 mt-2 px-1 text-xs text-on-surface-variant">

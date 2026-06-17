@@ -242,7 +242,7 @@ router.delete('/:id/runs/:runId', async (req: Request, res: Response) => {
 // POST /api/teams/:id/run — run a team collaboration. Streams progress as SSE.
 router.post('/:id/run', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { message } = req.body as { message?: string };
+  const { message, uploadIds, allowWeb } = req.body as { message?: string; uploadIds?: string[]; allowWeb?: boolean };
   if (!message || typeof message !== 'string' || !message.trim()) {
     res.status(400).json({ error: 'message is required' });
     return;
@@ -294,7 +294,11 @@ router.post('/:id/run', async (req: Request, res: Response) => {
   };
 
   try {
-    await runTeam({ userId, teamId: String(req.params.id), question: message.trim(), writer });
+    await runTeam({
+      userId, teamId: String(req.params.id), question: message.trim(), writer,
+      uploadIds: Array.isArray(uploadIds) ? uploadIds : [],
+      allowWeb: typeof allowWeb === 'boolean' ? allowWeb : undefined,
+    });
   } catch (err) {
     console.error('[teams] run failed:', err);
     writer({ type: 'error', data: { error: err instanceof Error ? err.message : String(err) } });
