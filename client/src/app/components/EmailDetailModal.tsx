@@ -51,7 +51,7 @@ interface EmailDetailModalProps {
   email: EmailNotification;
   analysisMd: Record<string, React.ComponentType<any>>;
   onClose: () => void;
-  onRequestAnalysis: (emailId: string) => void;
+  onRequestAnalysis: (emailId: string, opts?: { withAttachments?: boolean; force?: boolean }) => void;
   onChatAboutEmail: (subject: string, from: string) => void;
 }
 
@@ -104,6 +104,96 @@ function attIcon(contentType: string): string {
   if (contentType.includes('pdf')) return 'picture_as_pdf';
   if (contentType.includes('sheet') || contentType.includes('excel')) return 'table_chart';
   return 'description';
+}
+
+// ── Structured AI-analysis rendering ───────────────────────────────
+// Split the analysis into its named sections (摘要 / 行動建議 / 資安標記 /
+// 緊急程度 / 建議回覆) so each renders as its own card instead of one long
+// wall of text. Falls back to a plain render if the expected structure is absent.
+function parseAnalysisSections(md: string): { key: string; body: string }[] {
+  const text = md.replace(/\n?\[RISK:(?:NONE|HIGH)]\s*$/i, '').trim();
+  const headerRe = /(?:^|\n)[ \t]*(?:#{1,4}[ \t]*)?(?:\d+\.[ \t]*)?\*{0,2}[ \t]*(摘要|行動建議|資安標記|緊急程度|建議回[覆復])\*{0,2}[ \t]*[：:]?[ \t]*/g;
+  const marks: { key: string; headStart: number; bodyStart: number }[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = headerRe.exec(text)) !== null) {
+    marks.push({ key: m[1].replace('建議回復', '建議回覆'), headStart: m.index, bodyStart: headerRe.lastIndex });
+  }
+  if (marks.length < 2) return []; // not a recognisable multi-section structure
+  const out: { key: string; body: string }[] = [];
+  for (let i = 0; i < marks.length; i++) {
+    const end = i + 1 < marks.length ? marks[i + 1].headStart : text.length;
+    out.push({ key: marks[i].key, body: text.slice(marks[i].bodyStart, end).trim() });
+  }
+  return out;
+}
+
+const SECTION_ICON: Record<string, string> = {
+  '摘要': 'description', '行動建議': 'checklist', '資安標記': 'shield',
+  '緊急程度': 'priority_high', '建議回覆': 'reply',
+};
+
+// Render **bold** key points as a yellow highlighter so they stand out.
+function YellowStrong({ children, ...props }: any) {
+  return <strong className="font-semibold text-on-surface bg-warning/25 rounded px-1 box-decoration-clone" {...props}>{children}</strong>;
+}
+
+function urgencyBadge(body: string): { label: string; cls: string } | null {
+  const lv = (body.split('\n')[0].match(/[高中低]/) || [])[0];
+  if (lv === '高') return { label: '高', cls: 'bg-error/15 text-error' };
+  if (lv === '中') return { label: '中', cls: 'bg-warning/15 text-warning' };
+  if (lv === '低') return { label: '低', cls: 'bg-success/15 text-success' };
+  return null;
+}
+
+function AnalysisView({ analysis, analysisMd, security }: { analysis: string; analysisMd: any; security: SecurityFlags }) {
+  const sections = parseAnalysisSections(analysis);
+  const bodyMd = { ...analysisMd, strong: YellowStrong };
+  if (sections.length === 0) {
+    return (
+      <div className="text-sm text-on-surface-variant leading-relaxed">
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={bodyMd}>
+          {analysis.replace(/\n?\[RISK:(?:NONE|HIGH)]\s*$/, '')}
+        </ReactMarkdown>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2.5">
+      {sections.map((s, i) => {
+        const icon = SECTION_ICON[s.key] || 'article';
+        let headerCls = 'bg-primary/8';
+        let iconCls = 'text-primary';
+        let badge: any = null;
+        if (s.key === '資安標記') {
+          if (security.hasRisk) {
+            headerCls = 'bg-error/10'; iconCls = 'text-error';
+            badge = <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-error/15 text-error">⚠ 注意風險</span>;
+          } else {
+            headerCls = 'bg-success/10'; iconCls = 'text-success';
+            badge = <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-success/15 text-success">✓ 無風險</span>;
+          }
+        } else if (s.key === '緊急程度') {
+          headerCls = 'bg-warning/10'; iconCls = 'text-warning';
+          const u = urgencyBadge(s.body);
+          if (u) badge = <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${u.cls}`}>{u.label}</span>;
+        } else if (s.key === '建議回覆') {
+          headerCls = 'bg-secondary/8'; iconCls = 'text-secondary';
+        }
+        return (
+          <div key={i} className="rounded-xl border border-outline-variant/15 overflow-hidden bg-surface-container-low/30">
+            <div className={`flex items-center gap-2 px-3 py-2 border-b border-outline-variant/10 ${headerCls}`}>
+              <span className={`material-symbols-outlined text-base shrink-0 ${iconCls}`}>{icon}</span>
+              <span className="font-semibold text-sm text-on-surface">{s.key}</span>
+              {badge && <span className="ml-auto shrink-0">{badge}</span>}
+            </div>
+            <div className="px-3 py-2.5 text-sm text-on-surface-variant leading-relaxed">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={bodyMd}>{s.body}</ReactMarkdown>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function EmailDetailModal({
@@ -342,6 +432,15 @@ export default function EmailDetailModal({
                 </button>
               ))}
             </div>
+            {/* Deep-read the attachment contents (text + images via vision) */}
+            <button
+              onClick={() => onRequestAnalysis(email.emailId, { withAttachments: true, force: true })}
+              disabled={email.analyzing}
+              className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 hover:bg-primary/20 active:bg-primary/20 text-primary text-[12px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>find_in_page</span>
+              {email.analyzing ? '分析中…' : '深入分析附件內容'}
+            </button>
           </div>
         )}
 
@@ -407,8 +506,18 @@ export default function EmailDetailModal({
             <div className="flex items-center gap-2 px-4 py-3 border-b border-outline-variant/10 shrink-0 bg-surface-container-high/30">
               <span className="material-symbols-outlined text-primary text-lg">auto_awesome</span>
               <span className="text-sm font-semibold text-on-surface">AI 深度分析</span>
-              {email.analysis && (
-                <span className="ml-auto text-[10px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">已完成</span>
+              {email.analysis && !email.analyzing && (
+                <div className="ml-auto flex items-center gap-1.5">
+                  <span className="text-[10px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">已完成</span>
+                  <button
+                    onClick={() => onRequestAnalysis(email.emailId, { withAttachments: email.hasAttachments, force: true })}
+                    className="flex items-center gap-1 text-[11px] font-medium text-on-surface-variant hover:text-primary px-1.5 py-0.5 rounded-full hover:bg-primary/10 transition-colors"
+                    title={email.hasAttachments ? '重新分析（含讀取附件）' : '重新分析'}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 14 }}>refresh</span>
+                    重新分析
+                  </button>
+                </div>
               )}
             </div>
             <div
@@ -422,11 +531,7 @@ export default function EmailDetailModal({
                   <span className="text-xs text-on-surface-variant/50">分析完成後會自動顯示</span>
                 </div>
               ) : email.analysis ? (
-                <div className="text-sm text-on-surface-variant leading-relaxed">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} components={analysisMd}>
-                    {email.analysis.replace(/\n?\[RISK:(?:NONE|HIGH)]\s*$/, '')}
-                  </ReactMarkdown>
-                </div>
+                <AnalysisView analysis={email.analysis} analysisMd={analysisMd} security={security} />
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 gap-4">
                   <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
@@ -437,7 +542,7 @@ export default function EmailDetailModal({
                     <p className="text-xs text-on-surface-variant/60">AI 會分析信件內容、判斷風險、提供行動建議</p>
                   </div>
                   <button
-                    onClick={() => onRequestAnalysis(email.emailId)}
+                    onClick={() => onRequestAnalysis(email.emailId, { withAttachments: email.hasAttachments })}
                     className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-on-primary text-sm font-medium hover:bg-primary/90 active:bg-primary/90 transition-colors"
                   >
                     <span className="material-symbols-outlined text-lg">auto_awesome</span>
@@ -460,7 +565,7 @@ export default function EmailDetailModal({
           </button>
           {!email.analysis && !email.analyzing && (
             <button
-              onClick={() => onRequestAnalysis(email.emailId)}
+              onClick={() => onRequestAnalysis(email.emailId, { withAttachments: email.hasAttachments })}
               className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 rounded-full bg-surface-container hover:bg-surface-container-highest active:bg-surface-container-highest text-[13px] md:text-sm font-medium text-primary transition-colors"
             >
               <span className="material-symbols-outlined text-lg">auto_awesome</span>

@@ -33,6 +33,15 @@ interface ChatMessage {
 
 type TabId = 'mail' | 'chat';
 
+const FOLDER_OPTIONS = [
+  { v: 'Inbox', l: '收件匣', icon: 'inbox' },
+  { v: 'SentItems', l: '寄件備份', icon: 'send' },
+  { v: 'Drafts', l: '草稿', icon: 'draft' },
+  { v: 'JunkEmail', l: '垃圾郵件', icon: 'report' },
+  { v: 'DeletedItems', l: '刪除的郵件', icon: 'delete' },
+  { v: 'Outbox', l: '寄件匣', icon: 'outbox' },
+];
+
 // --- Notification sound ---
 // Key: reuse the SAME Audio element that was first played during a user gesture.
 // Chrome ties autoplay permission to the element instance, so creating new Audio()
@@ -103,9 +112,23 @@ export default function EmailAgentWidget() {
   const [connected, setConnected] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('mail');
   const [notifications, setNotifications] = useState<EmailNotification[]>([]);
+  // ── Mailbox search (信件 tab) — real server-side search via /api/outlook/messages ──
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchFiltersOpen, setSearchFiltersOpen] = useState(false);
+  const [folderOpen, setFolderOpen] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [searchFolder, setSearchFolder] = useState('Inbox');
+  const [searchStart, setSearchStart] = useState('');
+  const [searchEnd, setSearchEnd] = useState('');
+  const [searchSender, setSearchSender] = useState('');
+  const [searchResults, setSearchResults] = useState<EmailNotification[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchTotal, setSearchTotal] = useState(0);
   const [overview, setOverview] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
+  // The email currently pinned as chat context (set by "聊聊這封信").
+  const [chatFocus, setChatFocus] = useState<{ id: string; subject: string } | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [streamText, setStreamText] = useState('');
   const [totalUnread, setTotalUnread] = useState(0);
@@ -297,7 +320,10 @@ export default function EmailAgentWidget() {
         headers: { Authorization: `Bearer ${token}` },
         signal,
       });
-      if (!res.ok || !res.body) return;
+      // A non-OK / bodyless response is usually transient (proxy hiccup, token
+      // refresh, server restart). Throw so we fall through to the reconnect
+      // path instead of giving up forever.
+      if (!res.ok || !res.body) throw new Error(`SSE connect failed: ${res.status}`);
 
       setConnected(true);
       setError(null);
@@ -413,6 +439,9 @@ export default function EmailAgentWidget() {
             n.emailId === emailId ? { ...n, analysis, analyzing: false } : n
           );
         });
+        setSearchResults(prev => prev.map(n =>
+          n.emailId === emailId ? { ...n, analysis, analyzing: false } : n
+        ));
         break;
       }
       case 'ai_response_delta': {
@@ -578,12 +607,12 @@ export default function EmailAgentWidget() {
       await fetch(`${SSE_BASE}/api/email-agent/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ message: msg.trim(), emailContext }),
+        body: JSON.stringify({ message: msg.trim(), emailContext, focusEmailId: chatFocus?.id }),
       });
     } catch {
       setStreaming(false);
     }
-  }, [streaming, notifications]);
+  }, [streaming, notifications, chatFocus]);
 
   const sendMessage = useCallback(async () => {
     const msg = chatInput.trim();
@@ -598,19 +627,36 @@ export default function EmailAgentWidget() {
     sendMessageDirect(message);
   }, [sendMessageDirect]);
 
-  const requestAnalysis = async (emailId: string) => {
+  // Keep the input box height in sync with its content — including when the value
+  // is set programmatically (canned prompts / "聊聊這封信" prefill), where the
+  // textarea's onChange never fires and it would otherwise stay one clipped line.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+  }, [chatInput]);
+
+  const requestAnalysis = async (emailId: string, withAttachments = false, force = false) => {
     const token = localStorage.getItem('token');
     if (!token) return;
     setNotifications(prev => prev.map(n =>
       n.emailId === emailId ? { ...n, analyzing: true } : n
     ));
+    setSearchResults(prev => prev.map(n =>
+      n.emailId === emailId ? { ...n, analyzing: true } : n
+    ));
     try {
       await fetch(`${SSE_BASE}/api/email-agent/analyze/${encodeURIComponent(emailId)}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ withAttachments, force }),
       });
     } catch {
       setNotifications(prev => prev.map(n =>
+        n.emailId === emailId ? { ...n, analyzing: false } : n
+      ));
+      setSearchResults(prev => prev.map(n =>
         n.emailId === emailId ? { ...n, analyzing: false } : n
       ));
     }
@@ -683,6 +729,86 @@ export default function EmailAgentWidget() {
       setLoadingMore(false);
     }
   };
+
+  const runSearch = useCallback(async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    setSearching(true);
+    setSearchActive(true);
+    try {
+      const params = new URLSearchParams({ folder: searchFolder, limit: '100', order: 'desc' });
+      if (searchKeyword.trim()) params.set('q', searchKeyword.trim());
+      if (searchStart) params.set('start_date', searchStart);
+      if (searchEnd) params.set('end_date', searchEnd);
+      const res = await fetch(`${SSE_BASE}/api/outlook/messages?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('search failed');
+      const data = await res.json();
+      let msgs = (data.messages || []) as any[];
+      // Sender filter is client-side (the API's `q` only matches subject).
+      if (searchSender.trim()) {
+        const s = searchSender.trim().toLowerCase();
+        msgs = msgs.filter(m =>
+          (m.from?.name || '').toLowerCase().includes(s) ||
+          (m.from?.address || '').toLowerCase().includes(s)
+        );
+      }
+      let mapped: EmailNotification[] = msgs.map(m => ({
+        emailId: m.id,
+        subject: m.subject || '(無主旨)',
+        from: m.from || { name: '', address: '' },
+        receivedAt: m.received_at,
+        isRead: m.is_read ?? true,
+        hasAttachments: m.has_attachments ?? false,
+        summary: m.subject || '',
+        priority: '中' as const,
+        category: '',
+      }));
+      // Enrich with any cached summaries/analyses we already have.
+      try {
+        const cacheRes = await fetch(`${SSE_BASE}/api/email-agent/cache-lookup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ emailIds: mapped.map(o => o.emailId) }),
+        });
+        if (cacheRes.ok) {
+          const cd = await cacheRes.json();
+          const cache = cd.cache || {};
+          mapped = mapped.map(o => {
+            const c = cache[o.emailId];
+            if (!c) return o;
+            return {
+              ...o,
+              ...(c.summary ? { summary: c.summary } : {}),
+              ...(c.priority && ['高', '中', '低'].includes(c.priority) ? { priority: c.priority as '高' | '中' | '低' } : {}),
+              ...(c.category ? { category: c.category } : {}),
+              ...(c.analysis ? { analysis: c.analysis } : {}),
+            };
+          });
+        }
+      } catch { /* cache enrich is optional */ }
+      setSearchResults(mapped);
+      setSearchTotal(data.total ?? mapped.length);
+    } catch {
+      setSearchResults([]);
+      setSearchTotal(0);
+    } finally {
+      setSearching(false);
+    }
+  }, [searchKeyword, searchFolder, searchStart, searchEnd, searchSender]);
+
+  const clearSearch = useCallback(() => {
+    setSearchActive(false);
+    setSearchResults([]);
+    setSearchKeyword('');
+    setSearchSender('');
+    setSearchStart('');
+    setSearchEnd('');
+    setSearchFolder('Inbox');
+    setSearchTotal(0);
+    setSearchFiltersOpen(false);
+  }, []);
 
   if (!mounted) return null;
 
@@ -977,8 +1103,111 @@ export default function EmailAgentWidget() {
             {/* ─── Mail Tab ─── */}
             {activeTab === 'mail' && (
               <div className="px-3 pt-3 pb-2">
+                {/* Search bar */}
+                <div className="mb-3">
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex-1 flex items-center gap-1.5 bg-surface-container rounded-full px-3.5 py-2 min-w-0 ring-2 ring-outline-variant/15 focus-within:ring-primary/50 transition-shadow">
+                      <span className="material-symbols-outlined text-on-surface-variant/50 text-base shrink-0">search</span>
+                      <input
+                        value={searchKeyword}
+                        onChange={e => setSearchKeyword(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') runSearch(); }}
+                        placeholder="搜尋主旨關鍵字…"
+                        className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/40 outline-none focus:outline-none focus:ring-0 border-0 min-w-0"
+                      />
+                      {searchKeyword && (
+                        <button onClick={() => setSearchKeyword('')} className="shrink-0 text-on-surface-variant/50 hover:text-on-surface">
+                          <span className="material-symbols-outlined text-base">close</span>
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setSearchFiltersOpen(v => !v)}
+                      className={`shrink-0 w-9 h-9 flex items-center justify-center rounded-full transition-colors ${searchFiltersOpen || searchFolder !== 'Inbox' || searchStart || searchEnd || searchSender ? 'bg-primary/15 text-primary' : 'bg-surface-container text-on-surface-variant'}`}
+                      title="進階篩選"
+                    >
+                      <span className="material-symbols-outlined text-lg">tune</span>
+                    </button>
+                    <button
+                      onClick={runSearch}
+                      disabled={searching}
+                      className="shrink-0 h-9 px-3.5 flex items-center justify-center rounded-full bg-primary text-on-primary text-sm font-medium disabled:opacity-50"
+                    >
+                      {searching ? <span className="material-symbols-outlined text-base animate-spin">progress_activity</span> : '搜尋'}
+                    </button>
+                  </div>
+
+                  {searchFiltersOpen && (
+                    <div className="mt-2 p-3 rounded-xl bg-surface-container/60 border border-outline-variant/10 space-y-2.5">
+                      {/* Folder — custom dropdown */}
+                      <div className="flex items-center gap-2">
+                        <label className="text-[11px] text-on-surface-variant w-11 shrink-0">資料夾</label>
+                        <div className="relative flex-1">
+                          <button
+                            type="button"
+                            onClick={() => setFolderOpen(v => !v)}
+                            className="w-full flex items-center gap-2 bg-surface-container-high rounded-lg px-2.5 py-2 text-[13px] text-on-surface ring-2 ring-outline-variant/15 hover:ring-outline-variant/30 focus:outline-none focus:ring-primary/50 transition-shadow"
+                          >
+                            <span className="material-symbols-outlined text-base text-primary shrink-0">{FOLDER_OPTIONS.find(f => f.v === searchFolder)?.icon}</span>
+                            <span className="flex-1 text-left">{FOLDER_OPTIONS.find(f => f.v === searchFolder)?.l}</span>
+                            <span className={`material-symbols-outlined text-base text-on-surface-variant/60 transition-transform ${folderOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                          </button>
+                          {folderOpen && (
+                            <>
+                              <div className="fixed inset-0 z-40" onClick={() => setFolderOpen(false)} />
+                              <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-surface-container-high rounded-xl shadow-xl border border-outline-variant/15 py-1 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                                {FOLDER_OPTIONS.map(f => (
+                                  <button
+                                    key={f.v}
+                                    type="button"
+                                    onClick={() => { setSearchFolder(f.v); setFolderOpen(false); }}
+                                    className={`w-full flex items-center gap-2 px-3 py-2 text-[13px] text-left transition-colors ${searchFolder === f.v ? 'bg-primary/10 text-primary font-medium' : 'text-on-surface hover:bg-surface-container-highest'}`}
+                                  >
+                                    <span className="material-symbols-outlined text-base shrink-0">{f.icon}</span>
+                                    <span className="flex-1">{f.l}</span>
+                                    {searchFolder === f.v && <span className="material-symbols-outlined text-base shrink-0">check</span>}
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {/* Sender */}
+                      <div className="flex items-center gap-2">
+                        <label className="text-[11px] text-on-surface-variant w-11 shrink-0">寄件者</label>
+                        <input
+                          value={searchSender}
+                          onChange={e => setSearchSender(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') runSearch(); }}
+                          placeholder="姓名或 email"
+                          className="flex-1 bg-surface-container-high rounded-lg px-2.5 py-2 text-[13px] text-on-surface placeholder:text-on-surface-variant/40 border-0 outline-none focus:outline-none ring-2 ring-outline-variant/15 focus:ring-primary/50 transition-shadow min-w-0"
+                        />
+                      </div>
+                      {/* Date range */}
+                      <div className="flex items-center gap-2">
+                        <label className="text-[11px] text-on-surface-variant w-11 shrink-0">日期</label>
+                        <input type="date" value={searchStart} onChange={e => setSearchStart(e.target.value)} className="flex-1 bg-surface-container-high rounded-lg px-2.5 py-2 text-[13px] text-on-surface border-0 outline-none focus:outline-none ring-2 ring-outline-variant/15 focus:ring-primary/50 transition-shadow min-w-0" />
+                        <span className="text-on-surface-variant/40 text-xs shrink-0">→</span>
+                        <input type="date" value={searchEnd} onChange={e => setSearchEnd(e.target.value)} className="flex-1 bg-surface-container-high rounded-lg px-2.5 py-2 text-[13px] text-on-surface border-0 outline-none focus:outline-none ring-2 ring-outline-variant/15 focus:ring-primary/50 transition-shadow min-w-0" />
+                      </div>
+                      <p className="text-[10px] text-on-surface-variant/50 leading-relaxed pt-0.5">關鍵字只比對主旨（不含內文）；寄件者為結果內過濾；日期與資料夾為伺服器端查詢。</p>
+                    </div>
+                  )}
+
+                  {searchActive && (
+                    <div className="mt-2 flex items-center gap-2 text-[12px] text-on-surface-variant">
+                      <span className="material-symbols-outlined text-sm text-primary">search</span>
+                      <span>搜尋結果：{searchResults.length} 封{searchTotal > searchResults.length ? `（共 ${searchTotal}，顯示前 ${searchResults.length}）` : ''}</span>
+                      <button onClick={clearSearch} className="ml-auto flex items-center gap-1 text-primary hover:underline">
+                        <span className="material-symbols-outlined text-sm">close</span>返回收件匣
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 {/* AI Overview Banner */}
-                {overview && (
+                {!searchActive && overview && (
                   <div className="mb-3 bg-primary/5 border border-primary/10 rounded-xl p-3 flex gap-2.5">
                     <span className="material-symbols-outlined text-primary text-lg mt-0.5 shrink-0">auto_awesome</span>
                     <p className="text-sm text-on-surface leading-relaxed flex-1">{overview}</p>
@@ -986,7 +1215,7 @@ export default function EmailAgentWidget() {
                 )}
 
                 {/* Priority Summary Chips */}
-                {notifications.length > 0 && highPriorityCount > 0 && (
+                {!searchActive && notifications.length > 0 && highPriorityCount > 0 && (
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-xs font-medium text-error bg-error/10 px-2.5 py-1 rounded-full flex items-center gap-1">
                       <span className="material-symbols-outlined text-xs">priority_high</span>
@@ -996,9 +1225,9 @@ export default function EmailAgentWidget() {
                 )}
 
                 {/* Email Cards */}
-                {notifications.length > 0 ? (
+                {(searchActive ? searchResults : notifications).length > 0 ? (
                   <div className="space-y-1.5">
-                    {notifications.map(n => (
+                    {(searchActive ? searchResults : notifications).map(n => (
                       <div
                         key={n.emailId}
                         className={`rounded-xl bg-surface-container ${
@@ -1035,6 +1264,19 @@ export default function EmailAgentWidget() {
                               )}
                               {/* Action icons — inline with metadata */}
                               <span className="flex-1" />
+                              {n.hasAttachments && !n.analyzing && (
+                                <div className="relative group/tip">
+                                  <button
+                                    onClick={() => requestAnalysis(n.emailId, true)}
+                                    className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-primary/10 active:bg-primary/10 transition-colors"
+                                  >
+                                    <span className="material-symbols-outlined text-on-surface-variant/50" style={{ fontSize: 15 }}>find_in_page</span>
+                                  </button>
+                                  <span className="pointer-events-none absolute right-0 bottom-full mb-1 px-2 py-0.5 rounded-md bg-inverse-surface text-inverse-on-surface text-[10px] font-medium whitespace-nowrap opacity-0 scale-95 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:scale-100 shadow-lg z-50">
+                                    深入讀附件並分析
+                                  </span>
+                                </div>
+                              )}
                               <div className="relative group/tip">
                                 <button
                                   onClick={() => setDetailEmail(n.emailId)}
@@ -1080,7 +1322,7 @@ export default function EmailAgentWidget() {
                         </div>
                       </div>
                     ))}
-                    {hasMore && (
+                    {!searchActive && hasMore && (
                       <button
                         onClick={loadMoreEmails}
                         disabled={loadingMore}
@@ -1099,6 +1341,10 @@ export default function EmailAgentWidget() {
                         )}
                       </button>
                     )}
+                  </div>
+                ) : searchActive ? (
+                  <div className="py-12 text-center text-sm text-on-surface-variant/60">
+                    {searching ? '搜尋中…' : '找不到符合條件的信件'}
                   </div>
                 ) : !error ? (
                   initialLoading ? (
@@ -1245,6 +1491,19 @@ export default function EmailAgentWidget() {
             )}
 
             <div className="p-3 pt-2">
+              {chatFocus && (
+                <div className="flex items-center gap-1.5 mb-2 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[11px] font-medium w-fit max-w-full">
+                  <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14 }}>mail</span>
+                  <span className="truncate">討論中：{chatFocus.subject}</span>
+                  <button
+                    onClick={() => setChatFocus(null)}
+                    className="shrink-0 hover:bg-primary/20 rounded-full p-0.5 -mr-1"
+                    title="取消鎖定這封信"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 13 }}>close</span>
+                  </button>
+                </div>
+              )}
               <div className="flex items-end gap-2">
                 <textarea
                   ref={textareaRef}
@@ -1253,7 +1512,7 @@ export default function EmailAgentWidget() {
                     setChatInput(e.target.value);
                     const el = e.target;
                     el.style.height = 'auto';
-                    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+                    el.style.height = Math.min(el.scrollHeight, 200) + 'px';
                   }}
                   onKeyDown={e => {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1265,7 +1524,7 @@ export default function EmailAgentWidget() {
                   placeholder={t('emailAgent.placeholder' as any) || '問我任何信件相關問題...'}
                   disabled={streaming || !connected}
                   rows={1}
-                  className="flex-1 bg-surface-container rounded-xl px-3.5 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/40 outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50 transition-shadow resize-none leading-relaxed overflow-hidden"
+                  className="flex-1 bg-surface-container rounded-xl px-3.5 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/40 outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50 transition-shadow resize-none leading-relaxed overflow-y-auto"
                 />
                 <button
                   onClick={sendMessage}
@@ -1284,20 +1543,32 @@ export default function EmailAgentWidget() {
 
       {/* Email Detail Modal */}
       {detailEmail && (() => {
-        const currentEmail = notifications.find(n => n.emailId === detailEmail);
+        const currentEmail = notifications.find(n => n.emailId === detailEmail)
+          || searchResults.find(n => n.emailId === detailEmail);
         if (!currentEmail) return null;
         return (
           <EmailDetailModal
             email={currentEmail}
             analysisMd={analysisMd}
             onClose={() => setDetailEmail(null)}
-            onRequestAnalysis={(emailId) => { requestAnalysis(emailId); }}
+            onRequestAnalysis={(emailId, opts) => { requestAnalysis(emailId, opts?.withAttachments, opts?.force); }}
             onChatAboutEmail={(subject, from) => {
               setDetailEmail(null);
               setExpanded(true);
               setActiveTab('chat');
-              const msg = `關於「${subject}」（來自 ${from}）這封信，`;
+              // Pin this email as the chat focus so the backend loads its FULL body
+              // + analysis into context (otherwise the AI only has the 1-line summary
+              // and replies "I can't see the content").
+              setChatFocus({ id: currentEmail.emailId, subject });
+              // Prefill a COMPLETE question (not a dangling lead-in) so sending it
+              // as-is still gives the AI something to answer. The user can edit it
+              // first if they want to ask something more specific.
+              const msg = `請幫我看「${subject}」這封信（來自 ${from}）：重點摘要、有沒有需要注意或待辦的地方，以及建議怎麼處理？`;
               setChatInput(msg);
+              setTimeout(() => {
+                const el = textareaRef.current;
+                if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+              }, 50);
             }}
           />
         );

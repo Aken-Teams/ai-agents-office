@@ -170,9 +170,19 @@ export async function fetchFolders(mailToken: string): Promise<OutlookFolder[]> 
 /**
  * Fetch messages from a folder.
  */
-export async function fetchMessages(mailToken: string, folder: string = 'Inbox', limit: number = 20, offset: number = 0): Promise<{ messages: OutlookMessage[]; total: number }> {
+export async function fetchMessages(
+  mailToken: string,
+  folder: string = 'Inbox',
+  limit: number = 20,
+  offset: number = 0,
+  opts?: { q?: string; startDate?: string; endDate?: string },
+): Promise<{ messages: OutlookMessage[]; total: number }> {
   const params = new URLSearchParams({ folder, limit: String(limit), order: 'desc' });
   if (offset > 0) params.set('offset', String(offset));
+  // Server-side filters (EWS-side, fast). q matches subject only.
+  if (opts?.q) params.set('q', opts.q);
+  if (opts?.startDate) params.set('start_date', opts.startDate);
+  if (opts?.endDate) params.set('end_date', opts.endDate);
   const res = await fetch(`${OUTLOOK_BASE}/messages?${params}`, {
     headers: { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${mailToken}` },
   });

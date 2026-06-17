@@ -49,7 +49,10 @@ router.get('/messages', async (req: Request, res: Response) => {
   const folder = (req.query.folder as string) || 'Inbox';
   const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
   const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
-  const { messages, total } = await fetchMessages(token, folder, limit, offset);
+  const q = (req.query.q as string || '').trim() || undefined;
+  const startDate = (req.query.start_date as string || '').trim() || undefined;
+  const endDate = (req.query.end_date as string || '').trim() || undefined;
+  const { messages, total } = await fetchMessages(token, folder, limit, offset, { q, startDate, endDate });
   res.json({ messages, folder, limit, offset, total });
 });
 

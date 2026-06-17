@@ -90,6 +90,8 @@ function DashboardContent() {
   const [uploadAlerts, setUploadAlerts] = useState<UploadAlertItem[]>([]);
   const smartFileRef = useRef<HTMLInputElement>(null);
   const mobileFileRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounter = useRef(0);
   const sidebarMargin = useSidebarMargin();
   const [showGreeting, setShowGreeting] = useState(false);
   const [showSpotlight, setShowSpotlight] = useState(false);
@@ -708,7 +710,21 @@ function DashboardContent() {
                   ))}
                 </div>
               )}
-              <div className="relative bg-surface-container rounded-xl border border-outline-variant/20 focus-within:border-primary/40 transition-all">
+              <div
+                className={`relative bg-surface-container rounded-xl border transition-all ${
+                  isDragging ? 'border-primary border-dashed bg-primary/5' : 'border-outline-variant/20 focus-within:border-primary/40'
+                }`}
+                onDragEnter={e => { e.preventDefault(); e.stopPropagation(); dragCounter.current++; setIsDragging(true); }}
+                onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                onDragLeave={e => { e.preventDefault(); e.stopPropagation(); dragCounter.current--; if (dragCounter.current <= 0) { dragCounter.current = 0; setIsDragging(false); } }}
+                onDrop={e => { e.preventDefault(); e.stopPropagation(); dragCounter.current = 0; setIsDragging(false); if (!creating && e.dataTransfer.files.length > 0) handleSmartFileAttach(e.dataTransfer.files); }}
+              >
+                {isDragging && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 rounded-xl bg-primary/5 text-primary pointer-events-none">
+                    <span className="material-symbols-outlined text-xl">upload_file</span>
+                    <span className="text-sm font-medium">放開以上傳檔案</span>
+                  </div>
+                )}
                 <input
                   ref={smartFileRef}
                   type="file"
