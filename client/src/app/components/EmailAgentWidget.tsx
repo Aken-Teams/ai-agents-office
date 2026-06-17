@@ -121,6 +121,8 @@ export default function EmailAgentWidget() {
   const [searchStart, setSearchStart] = useState('');
   const [searchEnd, setSearchEnd] = useState('');
   const [searchSender, setSearchSender] = useState('');
+  const [senderSuggestions, setSenderSuggestions] = useState<{ username: string; displayName: string }[]>([]);
+  const [senderOpen, setSenderOpen] = useState(false);
   const [searchResults, setSearchResults] = useState<EmailNotification[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchTotal, setSearchTotal] = useState(0);
@@ -808,7 +810,28 @@ export default function EmailAgentWidget() {
     setSearchFolder('Inbox');
     setSearchTotal(0);
     setSearchFiltersOpen(false);
+    setSenderSuggestions([]);
+    setSenderOpen(false);
   }, []);
+
+  // Debounced AD directory typeahead for the "sender" field (pro-panjit).
+  useEffect(() => {
+    const q = searchSender.trim();
+    if (q.length < 1) { setSenderSuggestions([]); return; }
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`${SSE_BASE}/api/email-agent/ad-people?q=${encodeURIComponent(q)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        setSenderSuggestions(Array.isArray(data.people) ? data.people : []);
+      } catch { /* ignore */ }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [searchSender]);
 
   if (!mounted) return null;
 
@@ -1173,16 +1196,40 @@ export default function EmailAgentWidget() {
                           )}
                         </div>
                       </div>
-                      {/* Sender */}
+                      {/* Sender — AD directory typeahead */}
                       <div className="flex items-center gap-2">
                         <label className="text-[11px] text-on-surface-variant w-11 shrink-0">寄件者</label>
-                        <input
-                          value={searchSender}
-                          onChange={e => setSearchSender(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') runSearch(); }}
-                          placeholder="姓名或 email"
-                          className="flex-1 bg-surface-container-high rounded-lg px-2.5 py-2 text-[13px] text-on-surface placeholder:text-on-surface-variant/40 border-0 outline-none focus:outline-none ring-2 ring-outline-variant/15 focus:ring-primary/50 transition-shadow min-w-0"
-                        />
+                        <div className="relative flex-1 min-w-0">
+                          <input
+                            value={searchSender}
+                            onChange={e => { setSearchSender(e.target.value); setSenderOpen(true); }}
+                            onFocus={() => { if (senderSuggestions.length) setSenderOpen(true); }}
+                            onKeyDown={e => { if (e.key === 'Enter') { setSenderOpen(false); runSearch(); } }}
+                            placeholder="輸入姓名查 AD，或直接打 email"
+                            className="w-full bg-surface-container-high rounded-lg px-2.5 py-2 text-[13px] text-on-surface placeholder:text-on-surface-variant/40 border-0 outline-none focus:outline-none ring-2 ring-outline-variant/15 focus:ring-primary/50 transition-shadow"
+                          />
+                          {senderOpen && senderSuggestions.length > 0 && (
+                            <>
+                              <div className="fixed inset-0 z-40" onClick={() => setSenderOpen(false)} />
+                              <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-surface-container-high rounded-xl shadow-xl border border-outline-variant/15 py-1 max-h-56 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+                                {senderSuggestions.map(p => (
+                                  <button
+                                    key={p.username || p.displayName}
+                                    type="button"
+                                    onClick={() => { setSearchSender(p.displayName); setSenderOpen(false); }}
+                                    className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-surface-container-highest transition-colors"
+                                  >
+                                    <span className="material-symbols-outlined text-base text-primary shrink-0">person</span>
+                                    <span className="flex-1 min-w-0">
+                                      <span className="block text-[13px] text-on-surface truncate">{p.displayName}</span>
+                                      {p.username && <span className="block text-[11px] text-on-surface-variant/60 truncate">{p.username}</span>}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </div>
                       </div>
                       {/* Date range */}
                       <div className="flex items-center gap-2">

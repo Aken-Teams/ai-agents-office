@@ -380,4 +380,66 @@ async function spawnChatClaude(userId: string, prompt: string): Promise<string |
   }
 }
 
+// ─── GET /api/email-agent/ad-people?q= — AD directory typeahead (pro-panjit) ───
+// Lets the mailbox-search "sender" field autocomplete real people from the
+// company AD directory. The AD org tree exposes username + displayName only (no
+// email), so we return names; the sender filter matches against from.name.
+interface AdDirPerson { username: string; displayName: string }
+const adDirCache = new Map<string, { at: number; people: AdDirPerson[] }>();
+const AD_DIR_TTL = 10 * 60_000;
+
+function flattenAdMembers(node: any, out: AdDirPerson[]): void {
+  if (!node) return;
+  for (const m of (node.members || [])) {
+    const displayName = m.displayName || m.username || '';
+    if (displayName) out.push({ username: m.username || '', displayName });
+  }
+  for (const c of (node.children || [])) flattenAdMembers(c, out);
+}
+
+async function getAdDirectory(domain: string): Promise<AdDirPerson[]> {
+  const cached = adDirCache.get(domain);
+  if (cached && Date.now() - cached.at < AD_DIR_TTL) return cached.people;
+  const adUrl = process.env.AD_URL, adApi = process.env.AD_API;
+  if (!adUrl || !adApi) return cached?.people || [];
+  try {
+    const upstream = await fetch(`${adUrl}/ldap/api/v1/organizations/tree?domain=${encodeURIComponent(domain)}`, {
+      headers: { 'X-API-Key': adApi },
+    });
+    if (!upstream.ok) return cached?.people || [];
+    const data = await upstream.json() as { tree?: unknown };
+    const people: AdDirPerson[] = [];
+    flattenAdMembers((data as any).tree, people);
+    const seen = new Set<string>();
+    const uniq = people.filter(p => {
+      const k = (p.username || p.displayName).toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    adDirCache.set(domain, { at: Date.now(), people: uniq });
+    return uniq;
+  } catch (e) {
+    console.warn('[EmailAgent] AD directory fetch failed:', e);
+    return cached?.people || [];
+  }
+}
+
+router.get('/ad-people', async (req: Request, res: Response) => {
+  if (config.deployMode !== 'pro-panjit') { res.json({ people: [] }); return; }
+  const q = String(req.query.q || '').trim().toLowerCase();
+  if (q.length < 1) { res.json({ people: [] }); return; }
+  try {
+    const userRow = await dbGet<{ ad_domain: string | null }>('SELECT ad_domain FROM users WHERE id = ?', req.user!.userId);
+    const domain = (userRow?.ad_domain || 'PANJIT').toUpperCase();
+    const dir = await getAdDirectory(domain);
+    const matches = dir
+      .filter(p => p.displayName.toLowerCase().includes(q) || p.username.toLowerCase().includes(q))
+      .slice(0, 10);
+    res.json({ people: matches, domain });
+  } catch {
+    res.json({ people: [] });
+  }
+});
+
 export default router;
