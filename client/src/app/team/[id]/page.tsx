@@ -54,7 +54,9 @@ function TeamRunContent() {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [allowWeb, setAllowWeb] = useState(true);   // no file → web on; file → defaults off (effect below)
   const [showWebWarn, setShowWebWarn] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const dragCounter = useRef(0);
   const hasFiles = attachedFiles.length > 0;
   // Default the web toggle off the moment a file is attached (file-only), back on when removed.
   useEffect(() => { setAllowWeb(!hasFiles); }, [hasFiles]);
@@ -436,7 +438,20 @@ function TeamRunContent() {
               )}
             </div>
           )}
-          <div className="relative bg-surface-container rounded-2xl ring-1 ring-transparent focus-within:ring-primary/30 transition-shadow">
+          <div
+            className={`relative bg-surface-container rounded-2xl ring-1 transition-shadow ${isDragging ? 'ring-2 ring-primary' : 'ring-transparent focus-within:ring-primary/30'}`}
+            onDragEnter={e => { e.preventDefault(); e.stopPropagation(); dragCounter.current++; setIsDragging(true); }}
+            onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+            onDragLeave={e => { e.preventDefault(); e.stopPropagation(); dragCounter.current--; if (dragCounter.current <= 0) { dragCounter.current = 0; setIsDragging(false); } }}
+            onDrop={e => { e.preventDefault(); e.stopPropagation(); dragCounter.current = 0; setIsDragging(false); if (e.dataTransfer.files.length > 0) handleAttach(e.dataTransfer.files); }}
+          >
+            {isDragging && (
+              <div className="absolute inset-0 z-10 rounded-2xl border-2 border-dashed border-primary bg-primary/5 flex items-center justify-center pointer-events-none">
+                <span className="text-sm text-primary font-medium inline-flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[18px]">upload_file</span>放開以上傳檔案
+                </span>
+              </div>
+            )}
             <textarea
               value={question}
               onChange={e => setQuestion(e.target.value)}
