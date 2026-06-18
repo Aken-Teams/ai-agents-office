@@ -834,12 +834,13 @@ export default function DocumentCanvas({
 
         {/* Brush controls bar (edit mode) */}
         {imgEditMode && (
-          <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2 border-b border-outline-variant/10 bg-primary/5 shrink-0 flex-wrap">
-            <span className="text-xs text-on-surface-variant inline-flex items-center gap-1"><span className="material-symbols-outlined text-[15px] text-primary">brush</span>塗抹要修改的區域</span>
-            <label className="text-xs text-on-surface-variant inline-flex items-center gap-1.5">筆刷
-              <input type="range" min={4} max={32} value={imgBrushSize} onChange={e => setImgBrushSize(Number(e.target.value))} className="w-16 sm:w-24 accent-primary" />
-            </label>
-            <div className="inline-flex items-center gap-1.5">
+          <div className="flex items-center gap-2.5 sm:gap-3 px-2.5 sm:px-4 py-2 border-b border-outline-variant/10 bg-primary/5 shrink-0">
+            <span className="text-xs text-on-surface-variant inline-flex items-center gap-1 shrink-0">
+              <span className="material-symbols-outlined text-[16px] text-primary">brush</span>
+              <span className="hidden sm:inline">塗抹要修改的區域</span>
+            </span>
+            <input type="range" min={4} max={32} value={imgBrushSize} onChange={e => setImgBrushSize(Number(e.target.value))} className="w-16 sm:w-24 accent-primary shrink-0" title="筆刷粗細" />
+            <div className="inline-flex items-center gap-2 shrink-0">
               {[
                 { dot: '#ff2d2d', stroke: 'rgba(255,45,45,0.5)' },
                 { dot: '#2979ff', stroke: 'rgba(41,121,255,0.5)' },
@@ -848,20 +849,22 @@ export default function DocumentCanvas({
                 <button
                   key={c.dot}
                   onClick={() => setImgBrushColor(c.stroke)}
-                  className={`w-5 h-5 rounded-full transition-transform ${imgBrushColor === c.stroke ? 'ring-2 ring-offset-1 ring-on-surface scale-110' : 'hover:scale-110'}`}
+                  className={`w-6 h-6 sm:w-5 sm:h-5 rounded-full transition-transform ${imgBrushColor === c.stroke ? 'ring-2 ring-offset-1 ring-on-surface scale-110' : 'active:scale-110'}`}
                   style={{ background: c.dot }}
                   title="筆刷顏色"
                 />
               ))}
             </div>
-            <button onClick={clearStrokes} disabled={!imgHasStrokes} className="text-xs text-on-surface-variant hover:text-on-surface disabled:opacity-40 inline-flex items-center gap-1"><span className="material-symbols-outlined text-[15px]">ink_eraser</span>清除</button>
-            <button onClick={exitImgEdit} className="ml-auto text-xs text-on-surface-variant hover:text-on-surface">取消</button>
+            <button onClick={clearStrokes} disabled={!imgHasStrokes} title="清除" className="text-xs text-on-surface-variant hover:text-on-surface disabled:opacity-40 inline-flex items-center gap-1 shrink-0">
+              <span className="material-symbols-outlined text-[17px] sm:text-[15px]">ink_eraser</span><span className="hidden sm:inline">清除</span>
+            </button>
+            <button onClick={exitImgEdit} className="ml-auto text-xs text-on-surface-variant hover:text-on-surface shrink-0">取消</button>
           </div>
         )}
         {imgEditMode && imgHasStrokes && (
-          <div className="px-2 sm:px-4 py-1.5 text-[11px] text-on-surface-variant bg-primary/[0.03] shrink-0 inline-flex items-center gap-1">
-            <span className="material-symbols-outlined text-[14px] text-primary">forum</span>
-            已圈選 —— 下方框輸入直接改，或到<span className="text-primary font-medium">左邊聊天</span>問問題／討論
+          <div className="px-2.5 sm:px-4 py-1.5 text-[11px] text-on-surface-variant bg-primary/[0.03] shrink-0 flex items-start gap-1 leading-relaxed">
+            <span className="material-symbols-outlined text-[14px] text-primary shrink-0">forum</span>
+            <span>已圈選 —— 下方輸入指令直接改，或回<span className="text-primary font-medium">聊天</span>問問題／討論</span>
           </div>
         )}
 
