@@ -8,6 +8,7 @@ import { parsePipelineBlocks, truncateResultForRouter } from './taskParser.js';
 import { getSkill, buildSystemPrompt, buildMemoryContext, buildCrossAssistantContext, getRouterSkill, buildRouterPrompt } from '../skills/loader.js';
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from './uploadContext.js';
 import { getSandboxPath } from './sandbox.js';
+import { parseInfographicDirective, renderInfographic } from './infographicService.js';
 import { config } from '../config.js';
 import type { SSEEvent, ParsedTask, ParsedPipeline, TaskExecution } from '../types.js';
 
@@ -16,7 +17,7 @@ const MAX_ORCHESTRATION_DEPTH = 3;
 // Skills that PRODUCE structured data — their full output must reach consumers intact.
 const DATA_PRODUCER_SKILLS = new Set(['data-analyst', 'rag-analyst']);
 // Skills that CONSUME data to generate documents — must read the full data file.
-const DOC_CONSUMER_SKILLS = new Set(['pptx-gen', 'docx-gen', 'xlsx-gen', 'pdf-gen', 'slides-gen']);
+const DOC_CONSUMER_SKILLS = new Set(['pptx-gen', 'docx-gen', 'xlsx-gen', 'pdf-gen', 'slides-gen', 'infographic-gen']);
 const ORCHESTRATION_TIMEOUT_MS = 900_000; // 15 minutes total orchestration limit
 
 // Per-skill timeout (ms) — text-only agents are fast, generators need more time
@@ -44,6 +45,10 @@ export interface OrchestratorResult {
   totalOutputTokens: number;
   model: string;
   tasks: TaskExecution[];
+  /** Raw Gemini cost (USD) from any infographic-gen agents in this run */
+  geminiCostUsd: number;
+  /** File types the infographic agent rendered (png/html) — for the file whitelist */
+  infographicTypes: string[];
 }
 
 type SSEWriter = (event: SSEEvent) => void;
@@ -69,6 +74,8 @@ export class Orchestrator {
   // Most recent data-producing agent's FULL output, handed to doc-gen agents as a
   // file so cross-round data tasks aren't starved by context truncation (B-2).
   private lastDataOutput: string | null = null;
+  private geminiCostUsd = 0;
+  private infographicTypes = new Set<string>();
   private uploadIds: string[];
   private userLocale: string;
   private referenceContext: string;
@@ -330,6 +337,8 @@ export class Orchestrator {
       totalOutputTokens,
       model,
       tasks: this.tasks,
+      geminiCostUsd: this.geminiCostUsd,
+      infographicTypes: [...this.infographicTypes],
     };
   }
 
@@ -499,6 +508,21 @@ export class Orchestrator {
       // it in full (B-2). Only data producers — not doc-gen's own output.
       if (DATA_PRODUCER_SKILLS.has(task.skillId) && result.text) {
         this.lastDataOutput = result.text;
+      }
+
+      // Infographic agent: render its directive via Gemini into the BASE sandbox
+      // (not the agent subdir) so the deliverable is picked up + surfaced.
+      if (task.skillId === 'infographic-gen' && result.text) {
+        const directive = parseInfographicDirective(result.text);
+        if (directive) {
+          try {
+            const rendered = await renderInfographic(directive, baseSandboxPath);
+            this.geminiCostUsd += rendered.usage.costUsd;
+            this.infographicTypes.add(rendered.fileType);
+          } catch (e) {
+            this.sseWriter({ type: 'error', data: `資訊圖表生成失敗：${(e as Error).message}` });
+          }
+        }
       }
 
       await this.updateTaskInDb(taskId, 'completed', result.text.substring(0, 2000), result.inputTokens, result.outputTokens);

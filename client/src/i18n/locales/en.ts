@@ -263,6 +263,8 @@ const en = {
   'dashboard.samples.chart': 'Chart Data Analysis',
   'dashboard.samples.chart.template': 'Please analyze the following data directly in the chat with charts (no file download needed):\n\n2025 Quarterly Revenue: Q1: $1.25M, Q2: $1.48M, Q3: $1.72M, Q4: $2.10M\n\nProduct Mix: Enterprise 45%, Personal 30%, API Services 15%, Consulting 10%\n\nPlease use a bar chart for quarterly trends, a pie chart for product mix, and analyze growth drivers with recommendations',
   'dashboard.samples.data': 'Upload & Analyze Data',
+  'dashboard.samples.infographic': 'Create Infographic',
+  'dashboard.samples.infographic.template': 'Make me a "2026 AI Industry Trends" infographic:\nFirst search the web for the latest AI industry trends and key figures, then turn them into a polished vertical infographic (good for sharing).\n\nKey content:\n1. Overall market size and annual growth rate\n2. Top 3-5 hottest AI application areas\n3. This year\'s key trends (generative AI, AI agents...)\n4. One or two representative data points or forecasts\n\nStyle: visually rich, well-designed and eye-catching — give each point an icon or illustration, clear visual hierarchy, harmonious colors and gradients, big bold key numbers, and cite the data sources at the bottom.',
   'dashboard.samples.data.template': 'Please analyze my uploaded data file, auto-detect the data structure, and produce a complete analysis report including:\n\n1. Dataset Overview (columns, rows, data types)\n2. Key Statistical Summary (mean, median, distribution)\n3. Trend Analysis & Outlier Detection\n4. Data Visualizations (at least 3 charts)\n5. Insights & Recommendations\n\nPlease show the analysis with inline charts directly in the chat',
 
   // Templates

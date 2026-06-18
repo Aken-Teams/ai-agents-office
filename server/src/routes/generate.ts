@@ -286,6 +286,16 @@ async function handleOrchestrated(
       });
     }
 
+    // Fold any infographic Gemini cost into the conversation usage (equivalent
+    // output tokens at the $15/M display rate), same as the direct path.
+    if (result.geminiCostUsd > 0) {
+      const geminiTokens = Math.round((result.geminiCostUsd * 1_000_000) / 15);
+      if (geminiTokens > 0) {
+        await recordTokenUsage({ userId, conversationId, inputTokens: 0, outputTokens: geminiTokens, model: 'gemini-3-pro-image' });
+        result.totalOutputTokens += geminiTokens;
+      }
+    }
+
     sseWriter({
       type: 'usage',
       data: { inputTokens: result.totalInputTokens, outputTokens: result.totalOutputTokens, model: result.model },
@@ -298,6 +308,8 @@ async function handleOrchestrated(
     const expectedTypes = new Set(
       (result.tasks || []).map(t => getSkill(t.skillId)?.fileType).filter((ft): ft is string => !!ft)
     );
+    // Infographic agent renders png/html via Gemini — whitelist the actual type.
+    for (const it of result.infographicTypes) expectedTypes.add(it);
     const newFiles = await registerNewFiles(userId, conversationId, sandboxPath, existingFiles, expectedTypes.size ? expectedTypes : undefined);
     if (newFiles.length > 0) {
       // Capture block structure first (no emit yet) so we can verify before showing.

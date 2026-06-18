@@ -44,9 +44,10 @@ export function parseInfographicDirective(text: string): InfographicDirective | 
     return null;
   }
   if (!obj || typeof obj.prompt !== 'string' || !obj.prompt.trim()) return null;
-  // Default to image: the skill produces a real Gemini-drawn PNG unless the
-  // user explicitly asked for an editable HTML version.
-  const mode = obj.mode === 'html' ? 'html' : 'image';
+  // Force a real Gemini-drawn PNG. HTML output is opt-in only (env), because the
+  // agent otherwise keeps choosing HTML for data charts when the user wants an image.
+  const allowHtml = process.env.INFOGRAPHIC_ALLOW_HTML === 'true';
+  const mode = (allowHtml && obj.mode === 'html') ? 'html' : 'image';
   return {
     mode,
     filename: typeof obj.filename === 'string' ? obj.filename : undefined,
@@ -83,6 +84,18 @@ function safeBase(name: string | undefined, fallback: string): string {
   return base || fallback;
 }
 
+// Art-direction appended to every fresh infographic so the output looks like a
+// polished, visually rich poster — not a plain text layout.
+const RICH_INFOGRAPHIC_STYLE = `【資訊圖表美術指導（務必遵守，做出像專業設計師、視覺豐富又吸睛的成品）】
+- 整體當成一張可直接發布的精緻資訊圖表海報：視覺豐富、有設計感、有「哇」的吸引力，絕對不要單調或像純文字條列。
+- 每個區塊／重點都搭配合適的圖示(icon)、小插畫或視覺符號，幫助理解又增加吸引力。
+- 清楚的視覺層次：主標題醒目（可加裝飾、徽章感），分區有小標題，最關鍵的數字放到最大、最搶眼。
+- 各區塊用「不一樣」的版式呈現（數字卡、長條/圓餅/折線圖、流程、時間軸、圖示清單、對比區…），避免每塊長得一樣。
+- 用線條、箭頭、色塊、編號、分隔帶串連各區塊，形成順暢的由上而下閱讀動線。
+- 配色協調有質感：選一個主題色系，搭 1～2 個強調色與漸層，背景與裝飾元素營造主題氛圍（科技、商務、可愛…依主題）。
+- 排版精緻、留白得當、對齊整齊；直向長圖，適合手機與社群分享。
+- 所有文字與數字務必清楚、正確，中文不可寫錯字；資料來源放在圖的底部小字。`;
+
 /**
  * Render an infographic directive into `outDir`. Throws if Gemini is disabled or
  * the API call fails (caller surfaces the error to the user).
@@ -99,7 +112,9 @@ export async function renderInfographic(directive: InfographicDirective, outDir:
       const existing = findExistingPng(outDir, directive.filename);
       if (existing) baseImage = { base64: fs.readFileSync(existing).toString('base64'), mimeType: 'image/png' };
     }
-    const { base64, usage } = await generateImage({ prompt: directive.prompt, image: baseImage });
+    // Fresh generation gets the rich art-direction layer; edits keep the look.
+    const prompt = baseImage ? directive.prompt : `${directive.prompt}\n\n${RICH_INFOGRAPHIC_STYLE}`;
+    const { base64, usage } = await generateImage({ prompt, image: baseImage });
     const file = path.join(outDir, `${safeBase(directive.filename, 'infographic')}.png`);
     fs.writeFileSync(file, Buffer.from(base64, 'base64'));
     return { filePath: file, fileType: 'png', usage };
