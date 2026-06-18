@@ -17,6 +17,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import sharp from 'sharp';
 import { generateInfographicHtml, generateImage, isGeminiEnabled, type GeminiUsage } from './geminiApi.js';
 
 export interface InfographicDirective {
@@ -108,4 +109,26 @@ export async function renderInfographic(directive: InfographicDirective, outDir:
   const file = path.join(outDir, `${safeBase(directive.filename, 'infographic')}.html`);
   fs.writeFileSync(file, html, 'utf-8');
   return { filePath: file, fileType: 'html', usage };
+}
+
+const REGION_EDIT_RULE = '\n\n（最重要）我已用半透明的筆刷在圖上塗抹標記出要修改的區域。只修改這些被筆刷塗到的區域，標記範圍以外的所有內容——文字、圖示、配色、版面——都必須完全保持原樣、一個像素都不要動。完成後請把那些半透明筆刷標記本身全部移除乾淨，不要殘留在圖上。';
+
+/** Composite a brush mask (base64 PNG, may have a data: prefix) onto an image, returning the marked PNG buffer. */
+export async function compositeRegionMask(originalAbsPath: string, maskBase64: string): Promise<Buffer> {
+  const original = fs.readFileSync(originalAbsPath);
+  const meta = await sharp(original).metadata();
+  const maskBuf = Buffer.from(maskBase64.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+  const maskResized = await sharp(maskBuf).resize(meta.width, meta.height, { fit: 'fill' }).png().toBuffer();
+  return sharp(original).composite([{ input: maskResized, top: 0, left: 0 }]).png().toBuffer();
+}
+
+/** Edit only the brush-marked region of `markedImage` per `instruction`; writes the result to `outAbsPath`. */
+export async function regionEditToFile(markedImage: Buffer, instruction: string, outAbsPath: string): Promise<{ usage: GeminiUsage }> {
+  if (!isGeminiEnabled()) throw new Error('圖片編輯功能尚未設定（缺少 GEMINI_API_KEY）');
+  const { base64, usage } = await generateImage({
+    image: { base64: markedImage.toString('base64'), mimeType: 'image/png' },
+    prompt: `${instruction.trim()}${REGION_EDIT_RULE}`,
+  });
+  fs.writeFileSync(outAbsPath, Buffer.from(base64, 'base64'));
+  return { usage };
 }

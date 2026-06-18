@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
-import sharp from 'sharp';
 import { dbGet, dbAll } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { getFileDownloadPath, deleteFile, getFileVersions, extractPptxShapes, registerNewFiles, snapshotExistingFiles, getExistingFilePaths } from '../services/fileManager.js';
@@ -9,7 +8,8 @@ import { convertOfficeFile } from '../services/filePreview.js';
 import { applyWatermark, getWatermarkSettings } from '../services/watermark.js';
 import { config } from '../config.js';
 import { getSandboxPath } from '../services/sandbox.js';
-import { generateImage, isGeminiEnabled } from '../services/geminiApi.js';
+import { isGeminiEnabled } from '../services/geminiApi.js';
+import { compositeRegionMask, regionEditToFile } from '../services/infographicService.js';
 import { recordTokenUsage } from '../services/tokenTracker.js';
 import { getStorageQuotaGb } from '../services/usageLimit.js';
 import { findValidShare, bumpDownloadCount } from '../services/line/fileShare.js';
@@ -250,32 +250,23 @@ router.post('/:id/region-edit', async (req: Request, res: Response) => {
 
   try {
     // Composite the brush mask onto the original (resized to match exactly).
-    const original = fs.readFileSync(fullPath);
-    const meta = await sharp(original).metadata();
-    const maskBuf = Buffer.from(mask.replace(/^data:image\/\w+;base64,/, ''), 'base64');
-    const maskResized = await sharp(maskBuf).resize(meta.width, meta.height, { fit: 'fill' }).png().toBuffer();
-    const marked = await sharp(original).composite([{ input: maskResized, top: 0, left: 0 }]).png().toBuffer();
-
-    const result = await generateImage({
-      image: { base64: marked.toString('base64'), mimeType: 'image/png' },
-      prompt: `${instruction.trim()}\n\n（最重要）我已用半透明的筆刷在圖上塗抹標記出要修改的區域。只修改這些被筆刷塗到的區域，標記範圍以外的所有內容——文字、圖示、配色、版面——都必須完全保持原樣、一個像素都不要動。完成後請把那些半透明筆刷標記本身全部移除乾淨，不要殘留在圖上。`,
-    });
+    const marked = await compositeRegionMask(fullPath, mask);
 
     // Save as a new version using the same machinery as the generate flow.
     const existingFiles = await getExistingFilePaths(conversationId);
     await snapshotExistingFiles(userId, conversationId);
-    fs.writeFileSync(fullPath, Buffer.from(result.base64, 'base64'));
+    const { usage } = await regionEditToFile(marked, instruction, fullPath);
     const sandboxPath = getSandboxPath(userId, conversationId);
     const newFiles = await registerNewFiles(userId, conversationId, sandboxPath, existingFiles, new Set([ext]));
     const newFile = newFiles.find(f => f.file_path === file.file_path) || newFiles[0];
 
     // Fold the Gemini cost into usage (equivalent tokens at the $15/M output rate).
-    const geminiTokens = Math.round((result.usage.costUsd * 1_000_000) / 15);
+    const geminiTokens = Math.round((usage.costUsd * 1_000_000) / 15);
     if (geminiTokens > 0) {
-      await recordTokenUsage({ userId, conversationId, inputTokens: 0, outputTokens: geminiTokens, model: result.usage.model });
+      await recordTokenUsage({ userId, conversationId, inputTokens: 0, outputTokens: geminiTokens, model: usage.model });
     }
 
-    res.json({ file: newFile, costUsd: result.usage.costUsd });
+    res.json({ file: newFile, costUsd: usage.costUsd });
   } catch (err) {
     console.error('[RegionEdit] failed:', err);
     res.status(500).json({ error: `局部編輯失敗：${(err as Error).message}` });

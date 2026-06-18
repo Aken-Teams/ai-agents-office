@@ -55,6 +55,8 @@ interface DocumentCanvasProps {
   onMobileSwitchToChat?: () => void;
   /** Image region-edit produced a new version — points the viewer at it */
   onFileReplaced?: (newFileId: string) => void;
+  /** Brushed region changed — auto-attaches it to the left chat (null = cleared) */
+  onRegionChange?: (maskDataUrl: string | null) => void;
   t: (key: any, params?: Record<string, string | number>) => string;
 }
 
@@ -359,6 +361,7 @@ export default function DocumentCanvas({
   onShapesAvailable,
   onMobileSwitchToChat,
   onFileReplaced,
+  onRegionChange,
 }: DocumentCanvasProps) {
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [previewType, setPreviewType] = useState<'html' | 'pdf' | 'other'>('html');
@@ -463,7 +466,13 @@ export default function DocumentCanvas({
     const cv = drawCanvasRef.current;
     if (cv) cv.getContext('2d')?.clearRect(0, 0, cv.width, cv.height);
     setImgHasStrokes(false);
-  }, []);
+    onRegionChange?.(null);
+  }, [onRegionChange]);
+
+  // Push the current brush mask to the left chat so it auto-attaches (no button).
+  const emitRegion = useCallback(() => {
+    if (drawCanvasRef.current) onRegionChange?.(drawCanvasRef.current.toDataURL('image/png'));
+  }, [onRegionChange]);
 
   const exitImgEdit = useCallback(() => {
     setImgEditMode(false);
@@ -849,6 +858,12 @@ export default function DocumentCanvas({
             <button onClick={exitImgEdit} className="ml-auto text-xs text-on-surface-variant hover:text-on-surface">取消</button>
           </div>
         )}
+        {imgEditMode && imgHasStrokes && (
+          <div className="px-2 sm:px-4 py-1.5 text-[11px] text-on-surface-variant bg-primary/[0.03] shrink-0 inline-flex items-center gap-1">
+            <span className="material-symbols-outlined text-[14px] text-primary">forum</span>
+            已圈選 —— 下方框輸入直接改，或到<span className="text-primary font-medium">左邊聊天</span>問問題／討論
+          </div>
+        )}
 
         {/* Image body — top-aligned so tall infographics aren't clipped at the top */}
         <div className="flex-1 overflow-auto px-3 sm:px-6 pt-5 sm:pt-8 pb-5 sm:pb-8 flex items-start justify-center bg-surface-container-low">
@@ -863,8 +878,8 @@ export default function DocumentCanvas({
                   style={{ background: 'transparent' }}
                   onPointerDown={e => { (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId); drawingRef.current = true; syncCanvasSize(); drawAt(e, true); }}
                   onPointerMove={e => { if (drawingRef.current) drawAt(e, false); }}
-                  onPointerUp={() => { drawingRef.current = false; }}
-                  onPointerLeave={() => { drawingRef.current = false; }}
+                  onPointerUp={() => { drawingRef.current = false; emitRegion(); }}
+                  onPointerLeave={() => { if (drawingRef.current) { drawingRef.current = false; emitRegion(); } }}
                 />
               )}
               {imgEditing && (

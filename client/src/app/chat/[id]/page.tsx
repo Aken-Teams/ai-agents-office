@@ -526,6 +526,8 @@ function ChatContent() {
   const [previewFile, setPreviewFile] = useState<GeneratedFile | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [totalUsage, setTotalUsage] = useState<{ inputTokens: number; outputTokens: number } | null>(null);
+  // Infographic brush region brought over from the image viewer for chat Q&A/edit
+  const [pendingRegion, setPendingRegion] = useState<{ mask: string; fileId: string } | null>(null);
   const [versionDropdown, setVersionDropdown] = useState<string | null>(null); // file ID whose dropdown is open
   const [versionCache, setVersionCache] = useState<Record<string, GeneratedFile[]>>({});
   const [mobileFilesOpen, setMobileFilesOpen] = useState(false);
@@ -921,6 +923,8 @@ function ChatContent() {
       ? `\n\n📎 ${currentAttached.map(f => f.originalName).join(', ')}`
       : '';
     if (!directMessage) setInput('');
+    const region = pendingRegion;
+    if (region) setPendingRegion(null);
     const refsTag = selectedRefs.length > 0
       ? '\n\n[refs:' + JSON.stringify(selectedRefs.map(r => ({ id: r.id, title: r.title }))) + ']'
       : '';
@@ -1074,6 +1078,7 @@ function ChatContent() {
           ...(skillId && { skillId }),
           ...(currentUploadIds.length > 0 && { uploadIds: currentUploadIds }),
           ...(selectedRefs.length > 0 && { referencedConvIds: selectedRefs.map(r => r.id) }),
+          ...(region && { regionMask: region.mask, regionFileId: region.fileId }),
         }),
         signal: controller.signal,
       });
@@ -1295,7 +1300,7 @@ function ChatContent() {
       // Reload sidebar uploads — dashboard uploads now linked to this conversation
       reloadConversationUploads();
     }
-  }, [input, streaming, token, conversationId, skillId, attachedFiles, pendingTemplate, t, reloadConversationUploads]);
+  }, [input, streaming, token, conversationId, skillId, attachedFiles, pendingTemplate, pendingRegion, t, reloadConversationUploads]);
 
   // Load pending template from sessionStorage (set by Navbar modal)
   useEffect(() => {
@@ -2243,9 +2248,18 @@ function ChatContent() {
                   <span className="text-sm font-medium">{t('chat.input.dropHint' as any) || '放開以上傳檔案'}</span>
                 </div>
               )}
-              {/* Attached files chips + reference chips */}
-              {(attachedFiles.length > 0 || selectedRefs.length > 0) && (
+              {/* Attached files chips + reference chips + brushed region chip */}
+              {(attachedFiles.length > 0 || selectedRefs.length > 0 || pendingRegion) && (
                 <div className="flex flex-wrap gap-1.5 md:gap-2 px-1.5 md:px-2 pt-1.5 md:pt-2 pb-0.5 md:pb-1">
+                  {pendingRegion && (
+                    <div className="flex items-center gap-1 md:gap-1.5 px-2 md:px-2.5 py-0.5 md:py-1 rounded text-xs md:text-sm border bg-primary/10 border-primary/20 text-primary">
+                      <span className="material-symbols-outlined text-[14px] md:text-[15px]">brush</span>
+                      已圈選區域
+                      <button onClick={() => setPendingRegion(null)} className="hover:bg-primary/20 rounded p-0.5 -mr-1" title="移除圈選">
+                        <span className="material-symbols-outlined text-[13px]">close</span>
+                      </button>
+                    </div>
+                  )}
                   {attachedFiles.map(file => (
                     <div
                       key={file.id}
@@ -2598,6 +2612,13 @@ function ChatContent() {
               docMode.setDocumentFileId(newId);
               fetch(`/api/files?conversationId=${conversationId}`, { headers: { Authorization: `Bearer ${token}` } })
                 .then(r => r.json()).then((f: GeneratedFile[]) => setFiles(f)).catch(() => {});
+              // Region-edit recorded its Gemini cost server-side — refresh the
+              // conversation total so the displayed cost reflects it.
+              fetchUsage();
+            }}
+            onRegionChange={(mask: string | null) => {
+              if (mask && docMode.documentFileId) setPendingRegion({ mask, fileId: docMode.documentFileId });
+              else setPendingRegion(null);
             }}
             onRebuild={async (instruction?: string) => {
               if (!docMode.documentFileId) return;

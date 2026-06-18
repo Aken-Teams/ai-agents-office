@@ -14,7 +14,9 @@ import { getSkill, buildSystemPrompt, buildMemoryContext, buildCrossAssistantCon
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from '../services/uploadContext.js';
 import { Orchestrator } from '../services/orchestrator.js';
 import { enforceDataFidelity } from '../services/dataFidelityGuard.js';
-import { parseInfographicDirective, renderInfographic } from '../services/infographicService.js';
+import path from 'path';
+import fs from 'fs';
+import { parseInfographicDirective, renderInfographic, compositeRegionMask, regionEditToFile } from '../services/infographicService.js';
 import type { DocumentBlock } from '../types.js';
 import { extractMemoryAndSummary } from '../services/memoryExtractor.js';
 import { config } from '../config.js';
@@ -121,7 +123,7 @@ async function buildChatHistory(conversationId: string): Promise<string> {
 router.post('/:conversationId', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const conversationId = req.params.conversationId as string;
-  const { message, docContext, skillId, uploadIds, referencedConvIds: rawRefIds } = req.body;
+  const { message, docContext, skillId, uploadIds, referencedConvIds: rawRefIds, regionMask, regionFileId } = req.body;
   const referencedConvIds: string[] = Array.isArray(rawRefIds)
     ? rawRefIds.filter((id: unknown) => typeof id === 'string').slice(0, 3)
     : [];
@@ -230,7 +232,9 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
   if (useOrchestrator) {
     await handleOrchestrated(req, res, userId, conversationId, aiMessage, validUploadIds, userLocale, conversation.category || 'document', refContext, conversation.system_prompt || '');
   } else {
-    await handleDirect(req, res, userId, conversationId, conversation, aiMessage, skillId, validUploadIds, userLocale, refContext);
+    await handleDirect(req, res, userId, conversationId, conversation, aiMessage, skillId, validUploadIds, userLocale, refContext,
+      typeof regionMask === 'string' ? regionMask : undefined,
+      typeof regionFileId === 'string' ? regionFileId : undefined);
   }
 });
 
@@ -340,10 +344,35 @@ async function handleDirect(
   userId: string, conversationId: string, conversation: Conversation,
   sanitizedMessage: string, skillId?: string, uploadIds: string[] = [],
   userLocale: string = 'zh-TW', refContext: string = '',
+  regionMask?: string, regionFileId?: string,
 ) {
   const effectiveSkillId = skillId || conversation.skill_id || 'pptx-gen';
   const skill = getSkill(effectiveSkillId);
   if (!skill) { res.status(400).json({ error: `Unknown skill: ${effectiveSkillId}` }); return; }
+
+  // Infographic region context: the user brushed an area on the image and is
+  // asking about it or asking to change it. Composite the mark onto the image so
+  // Claude can SEE the region (vision); keep the marked image + target path for a
+  // possible region edit in the done handler.
+  let regionMarked: Buffer | null = null;
+  let regionTargetPath: string | null = null;
+  if (effectiveSkillId === 'infographic-gen' && regionMask && regionFileId) {
+    try {
+      const rf = await dbGet<{ file_path: string }>(
+        'SELECT file_path FROM generated_files WHERE id = ? AND user_id = ? ORDER BY version DESC LIMIT 1',
+        regionFileId, userId,
+      );
+      if (rf) {
+        const abs = path.join(config.workspaceRoot, rf.file_path);
+        if (fs.existsSync(abs)) {
+          regionMarked = await compositeRegionMask(abs, regionMask);
+          regionTargetPath = abs;
+        }
+      }
+    } catch (e) {
+      console.error('[Generate] region mask composite failed:', e);
+    }
+  }
 
   const sandboxPath = getSandboxPath(userId, conversationId);
   const uploadContext = effectiveSkillId === 'rag-analyst'
@@ -423,10 +452,20 @@ async function handleDirect(
       if (history) systemPrompt = baseSystemPrompt + history;
     }
 
-    const { emitter, abort } = spawnClaude(finalMessage, systemPrompt, {
+    // Region context: attach the marked image so Claude can SEE the brushed area
+    // (vision) and answer questions about it or decide on an edit.
+    const regionImages = regionMarked
+      ? [{ media_type: 'image/png', data: regionMarked.toString('base64') }]
+      : undefined;
+    const regionMsg = regionMarked
+      ? `${finalMessage}\n\n【附圖說明】使用者在目前這張資訊圖表上用半透明筆刷塗抹標記了一個區域（已附在訊息圖片中）。請看著那個被標記的區域回答：\n- 如果使用者是「詢問」（例如這是什麼、這裡寫什麼），就直接用文字回答，不要輸出任何指令區塊。\n- 如果使用者是要「修改」那個區域，就照常輸出 gemini-infographic 指令區塊（mode 用 image、edit 設 true，filename 沿用原檔名），prompt 描述要改成什麼即可（系統會只改標記區、其他不動）。`
+      : finalMessage;
+
+    const { emitter, abort } = spawnClaude(regionMsg, systemPrompt, {
       userId, conversationId, sessionId: sid, isResume, skillId: effectiveSkillId,
       customAllowedTools: skill?.allowedTools,
       customDisallowedTools: skill?.disallowedTools,
+      ...(regionImages ? { images: regionImages } : {}),
     });
 
     activeGenerations.set(conversationId, abort);
@@ -497,20 +536,31 @@ async function handleDirect(
           let extraExpectedType: string | undefined;
           if (effectiveSkillId === 'infographic-gen' && assistantText) {
             const directive = parseInfographicDirective(assistantText);
+            // With a region attached: a directive means "edit the brushed area";
+            // no directive means it was a question (Claude already answered in text).
             if (directive) {
               try {
-                const rendered = await renderInfographic(directive, sandboxPath);
-                extraExpectedType = rendered.fileType;
-                console.log(`[Infographic] 以 Gemini 生成 ${rendered.fileType}（約 $${rendered.usage.costUsd.toFixed(4)}）`);
+                let usage;
+                if (regionMarked && regionTargetPath) {
+                  const r = await regionEditToFile(regionMarked, directive.prompt || sanitizedMessage, regionTargetPath);
+                  usage = r.usage;
+                  extraExpectedType = path.extname(regionTargetPath).slice(1).toLowerCase();
+                  console.log(`[Infographic] 局部編輯（聊天圈選）約 $${usage.costUsd.toFixed(4)}`);
+                } else {
+                  const rendered = await renderInfographic(directive, sandboxPath);
+                  usage = rendered.usage;
+                  extraExpectedType = rendered.fileType;
+                  console.log(`[Infographic] 以 Gemini 生成 ${rendered.fileType}（約 $${usage.costUsd.toFixed(4)}）`);
+                }
 
                 // Fold the Gemini cost into the conversation's usage by converting
                 // it to equivalent output tokens at the display's output rate ($15/M),
                 // so every cost view reproduces (gemini cost × markup) without a
                 // schema change. Recorded as a separate row + pushed to the live UI.
                 const GEMINI_OUTPUT_RATE = 15;
-                const geminiTokens = Math.round((rendered.usage.costUsd * 1_000_000) / GEMINI_OUTPUT_RATE);
+                const geminiTokens = Math.round((usage.costUsd * 1_000_000) / GEMINI_OUTPUT_RATE);
                 if (geminiTokens > 0) {
-                  await recordTokenUsage({ userId, conversationId, inputTokens: 0, outputTokens: geminiTokens, model: rendered.usage.model });
+                  await recordTokenUsage({ userId, conversationId, inputTokens: 0, outputTokens: geminiTokens, model: usage.model });
                   totalOutputTokens += geminiTokens;
                   sseWrite({ type: 'usage', data: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens, model } });
                 }
