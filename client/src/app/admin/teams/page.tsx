@@ -106,7 +106,7 @@ export default function AdminTeamsPage() {
 
               {/* Tab content */}
               {runTab === 'report' ? (
-                <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-4 md:p-6 text-sm text-on-surface-variant leading-relaxed">
+                <div className="bg-surface-container-lowest border border-outline-variant/30 rounded-xl p-3 md:p-6 text-sm text-on-surface-variant leading-relaxed">
                   <TeamMarkdown>{run.result}</TeamMarkdown>
                 </div>
               ) : (
@@ -117,15 +117,15 @@ export default function AdminTeamsPage() {
                       <div key={m.memberId} className="border border-outline-variant/30 rounded-xl overflow-hidden bg-surface-container-lowest">
                         <button onClick={() => setOpenMember(open ? null : m.memberId)} className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-surface-container/40 transition-colors">
                           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-[18px] text-primary">{m.icon || 'person'}</span></div>
-                          <span className="text-sm font-semibold text-on-surface flex-1">{m.name}</span>
-                          <span className={`material-symbols-outlined text-[18px] text-on-surface-variant transition-transform ${open ? 'rotate-180' : ''}`}>expand_more</span>
+                          <span className="text-sm font-semibold text-on-surface flex-1 min-w-0 truncate">{m.name}</span>
+                          <span className={`material-symbols-outlined text-[18px] text-on-surface-variant transition-transform shrink-0 ${open ? 'rotate-180' : ''}`}>expand_more</span>
                         </button>
                         {open && (
-                          <div className="px-4 pb-4 pt-3 text-sm text-on-surface-variant max-w-none border-t border-outline-variant/10">
+                          <div className="px-3 md:px-4 pb-4 pt-3 text-sm text-on-surface-variant max-w-none border-t border-outline-variant/10">
                             <p className="text-[11px] font-semibold text-on-surface-variant/70 uppercase tracking-wide mb-2 flex items-center gap-1.5"><span className="material-symbols-outlined text-[14px]">person</span>第一輪分析</p>
                             <TeamMarkdown>{m.text || '（無分析）'}</TeamMarkdown>
                             {m.text2 && (
-                              <div className="mt-4 rounded-xl bg-primary/[0.04] border border-primary/15 p-4">
+                              <div className="mt-4 rounded-xl bg-primary/[0.04] border border-primary/15 p-3 md:p-4">
                                 <p className="text-[11px] font-semibold text-primary uppercase tracking-wide mb-2 flex items-center gap-1.5"><span className="material-symbols-outlined text-[14px]">forum</span>討論回合</p>
                                 <TeamMarkdown>{m.text2}</TeamMarkdown>
                               </div>
@@ -159,26 +159,30 @@ export default function AdminTeamsPage() {
             <div className="space-y-5">
               {/* Title + description + owner + stats */}
               <div className="flex flex-col md:flex-row md:items-start gap-3">
-                <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-primary text-[24px]">{team.team.icon || 'groups'}</span>
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-primary text-[24px]">{team.team.icon || 'groups'}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-lg font-bold text-on-surface">{team.team.title}</h2>
+                    {team.team.topic && <p className="text-sm text-on-surface-variant mt-0.5 leading-relaxed">{team.team.topic}</p>}
+                    <p className="text-xs text-on-surface-variant/70 mt-1.5 flex items-center gap-1.5 min-w-0">
+                      <span className="material-symbols-outlined text-[14px] shrink-0">person</span>
+                      <span className="truncate">{team.team.user_display_name} · {team.team.user_email}</span>
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <h2 className="text-lg font-bold text-on-surface">{team.team.title}</h2>
-                  {team.team.topic && <p className="text-sm text-on-surface-variant mt-0.5 leading-relaxed">{team.team.topic}</p>}
-                  <p className="text-xs text-on-surface-variant/70 mt-1.5 flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[14px]">person</span>{team.team.user_display_name} · {team.team.user_email}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2 md:justify-end shrink-0">
+                <div className="grid grid-cols-3 gap-2 md:flex md:flex-wrap md:justify-end shrink-0">
                   {[
                     { icon: 'group', label: '成員', value: team.members.length },
                     { icon: 'forum', label: '協作次數', value: team.runs.length },
                     { icon: 'toll', label: 'Tokens', value: fmtTokens(team.runs.reduce((a, r) => a + (r.input_tokens || 0) + (r.output_tokens || 0), 0)) },
                   ].map(s => (
-                    <span key={s.label} className="inline-flex items-center gap-1.5 bg-surface-container rounded-lg px-3 py-1.5 text-xs">
-                      <span className="material-symbols-outlined text-[15px] text-primary">{s.icon}</span>
-                      <span className="text-on-surface-variant">{s.label}</span>
-                      <span className="font-semibold text-on-surface">{s.value}</span>
+                    <span key={s.label} className="flex md:inline-flex flex-col md:flex-row items-center md:gap-1.5 bg-surface-container rounded-lg px-2 md:px-3 py-2 md:py-1.5 text-xs text-center">
+                      <span className="inline-flex items-center gap-1 text-on-surface-variant">
+                        <span className="material-symbols-outlined text-[15px] text-primary">{s.icon}</span>{s.label}
+                      </span>
+                      <span className="font-semibold text-on-surface mt-0.5 md:mt-0">{s.value}</span>
                     </span>
                   ))}
                 </div>
@@ -263,8 +267,8 @@ export default function AdminTeamsPage() {
             className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 rounded py-2.5 pl-10 pr-4 text-sm text-on-surface placeholder:text-outline font-body" />
         </div>
 
-        {/* Table */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Table (desktop) */}
+        <div className="hidden md:block flex-1 overflow-y-auto">
           {loading ? (
             <div className="py-16 text-center text-on-surface-variant">載入中…</div>
           ) : teams.length === 0 ? (
@@ -301,6 +305,35 @@ export default function AdminTeamsPage() {
               </tbody>
             </table>
           )}
+        </div>
+
+        {/* Card list (mobile) */}
+        <div className="md:hidden flex-1 overflow-y-auto -mx-4 px-4 space-y-2">
+          {loading ? (
+            <div className="py-16 text-center text-on-surface-variant">載入中…</div>
+          ) : teams.length === 0 ? (
+            <div className="py-16 text-center text-on-surface-variant">目前沒有團隊協作</div>
+          ) : teams.map(t => (
+            <div key={t.id} onClick={() => openTeam(t.id)}
+              className="bg-surface-container rounded-lg p-3 active:bg-surface-container-high transition-colors cursor-pointer">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-primary text-[20px]">{t.icon || 'groups'}</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-on-surface truncate">{t.title}</p>
+                  <p className="text-xs text-on-surface-variant truncate">{t.user_display_name || t.user_email}</p>
+                </div>
+                <span className="material-symbols-outlined text-on-surface-variant/50 text-[18px] shrink-0">chevron_right</span>
+              </div>
+              <div className="flex items-center gap-3 mt-2 ml-[52px] text-[11px] text-on-surface-variant">
+                <span className="inline-flex items-center gap-1"><span className="material-symbols-outlined text-[13px]">group</span>{t.member_count}</span>
+                <span className="inline-flex items-center gap-1"><span className="material-symbols-outlined text-[13px]">forum</span>{t.run_count || 0}</span>
+                <span className="font-mono">{t.total_tokens ? fmtTokens(t.total_tokens) : '—'}</span>
+                <span className="ml-auto font-mono">{fmtDate(t.last_run_at)}</span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </>

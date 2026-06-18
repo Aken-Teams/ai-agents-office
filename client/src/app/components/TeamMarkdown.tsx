@@ -28,7 +28,7 @@ const components: Record<string, any> = {
   li: ({ children }: any) => <li className="leading-relaxed">{children}</li>,
   strong: ({ children }: any) => <strong className="font-bold text-on-surface">{children}</strong>,
   em: ({ children }: any) => <em className="italic">{children}</em>,
-  mark: ({ children }: any) => <mark className="bg-amber-300/40 text-on-surface rounded px-1 py-0.5 font-medium">{children}</mark>,
+  mark: ({ children }: any) => <mark className="bg-amber-300/40 text-on-surface rounded px-1 font-medium [box-decoration-break:clone] [-webkit-box-decoration-break:clone]">{children}</mark>,
   hr: () => <hr className="my-3 border-outline-variant/15" />,
   blockquote: ({ children }: any) => <blockquote className="border-l-2 border-primary/30 pl-3 my-2 text-on-surface-variant">{children}</blockquote>,
   a: ({ children, href }: any) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{children}</a>,
@@ -40,7 +40,7 @@ const components: Record<string, any> = {
     if (className === 'language-mermaid') return <ChatMermaid code={text} />;
     if (className === 'language-mindmap') return <ChatMindmap code={text} />;
     if (className === 'language-map') return <ChatMap rawJson={text} />;
-    return <code className="px-1 py-0.5 rounded bg-surface-container-high text-[0.9em] font-mono">{children}</code>;
+    return <code className="px-1 py-0.5 rounded bg-surface-container-high text-[0.9em] font-mono break-words">{children}</code>;
   },
   table: ({ children }: any) => <div className="overflow-x-auto my-2 rounded-lg border border-outline-variant/20"><table className="w-full text-xs border-collapse">{children}</table></div>,
   thead: ({ children }: any) => <thead className="bg-surface-container-high">{children}</thead>,
@@ -50,8 +50,10 @@ const components: Record<string, any> = {
 
 export default function TeamMarkdown({ children }: { children: string }) {
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly, remarkFlexibleMarkers]} components={components}>
-      {children}
-    </ReactMarkdown>
+    <div className="break-words [overflow-wrap:anywhere]">
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly, remarkFlexibleMarkers]} components={components}>
+        {children}
+      </ReactMarkdown>
+    </div>
   );
 }
