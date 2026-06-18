@@ -91,6 +91,14 @@ const SKILL_TEMPLATES: Record<string, Array<{ id: string; icon: string; labelKey
     { id: 'education', icon: 'school', labelKey: 'templates.slides.education' as any, descKey: 'templates.slides.education.desc' as any, promptKey: 'templates.slides.education.prompt' as any },
     { id: 'creative', icon: 'palette', labelKey: 'templates.slides.creative' as any, descKey: 'templates.slides.creative.desc' as any, promptKey: 'templates.slides.creative.prompt' as any },
   ],
+  'infographic-gen': [
+    { id: 'clean', icon: 'draw', labelKey: 'templates.infographic.clean' as any, descKey: 'templates.infographic.clean.desc' as any, promptKey: 'templates.infographic.clean.prompt' as any },
+    { id: 'cute', icon: 'emoji_emotions', labelKey: 'templates.infographic.cute' as any, descKey: 'templates.infographic.cute.desc' as any, promptKey: 'templates.infographic.cute.prompt' as any },
+    { id: 'tech', icon: 'bolt', labelKey: 'templates.infographic.tech' as any, descKey: 'templates.infographic.tech.desc' as any, promptKey: 'templates.infographic.tech.prompt' as any },
+    { id: 'business', icon: 'business_center', labelKey: 'templates.infographic.business' as any, descKey: 'templates.infographic.business.desc' as any, promptKey: 'templates.infographic.business.prompt' as any },
+    { id: 'magazine', icon: 'menu_book', labelKey: 'templates.infographic.magazine' as any, descKey: 'templates.infographic.magazine.desc' as any, promptKey: 'templates.infographic.magazine.prompt' as any },
+    { id: 'minimal', icon: 'filter_none', labelKey: 'templates.infographic.minimal' as any, descKey: 'templates.infographic.minimal.desc' as any, promptKey: 'templates.infographic.minimal.prompt' as any },
+  ],
   'webapp-gen': [
     { id: 'dashboard', icon: 'dashboard', labelKey: 'templates.webapp.dashboard' as any, descKey: 'templates.webapp.dashboard.desc' as any, promptKey: 'templates.webapp.dashboard.prompt' as any },
     { id: 'analysis', icon: 'analytics', labelKey: 'templates.webapp.analysis' as any, descKey: 'templates.webapp.analysis.desc' as any, promptKey: 'templates.webapp.analysis.prompt' as any },
@@ -128,6 +136,13 @@ const TEMPLATE_PREVIEW: Record<string, { bg: string; accent: string; text: strin
   'slides-gen:project': { bg: 'linear-gradient(135deg, #667eea, #764ba2)', accent: '#a78bfa', text: '#ffffff', card: 'rgba(255,255,255,0.15)' },
   'slides-gen:education': { bg: '#ffffff', accent: '#6366f1', text: '#1f2937', card: '#eef2ff' },
   'slides-gen:creative': { bg: '#fff7ed', accent: '#f97316', text: '#431407', card: '#ffedd5' },
+  // Infographic (style-based)
+  'infographic-gen:clean': { bg: '#f7f9fc', accent: '#60a5fa', text: '#334155', card: '#eef2fb' },
+  'infographic-gen:cute': { bg: '#fff7ed', accent: '#fb923c', text: '#7c2d12', card: '#ffedd5' },
+  'infographic-gen:tech': { bg: '#0a1428', accent: '#22d3ee', text: '#e2e8f0', card: '#13243f' },
+  'infographic-gen:business': { bg: '#ffffff', accent: '#2563eb', text: '#1e3a5f', card: '#eff6ff' },
+  'infographic-gen:magazine': { bg: '#fffbeb', accent: '#dc2626', text: '#1f2937', card: '#fef3c7' },
+  'infographic-gen:minimal': { bg: '#ffffff', accent: '#475569', text: '#0f172a', card: '#f1f5f9' },
   // Webapp
   'webapp-gen:dashboard': { bg: '#ffffff', accent: '#2563eb', text: '#1e293b', card: '#f0f7ff' },
   'webapp-gen:analysis': { bg: '#f8fafc', accent: '#0891b2', text: '#164e63', card: '#ecfeff' },

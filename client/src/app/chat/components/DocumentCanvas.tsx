@@ -380,7 +380,7 @@ export default function DocumentCanvas({
   const [selectedRange, setSelectedRange] = useState<CellRange | null>(null);
   // Image region-edit (brush) state
   const [imgEditMode, setImgEditMode] = useState(false);
-  const [imgBrushSize, setImgBrushSize] = useState(18);
+  const [imgBrushSize, setImgBrushSize] = useState(11);
   const [imgBrushColor, setImgBrushColor] = useState('rgba(255,45,45,0.5)');
   const [imgInstruction, setImgInstruction] = useState('');
   const [imgEditing, setImgEditing] = useState(false);
@@ -837,7 +837,7 @@ export default function DocumentCanvas({
           <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2 border-b border-outline-variant/10 bg-primary/5 shrink-0 flex-wrap">
             <span className="text-xs text-on-surface-variant inline-flex items-center gap-1"><span className="material-symbols-outlined text-[15px] text-primary">brush</span>塗抹要修改的區域</span>
             <label className="text-xs text-on-surface-variant inline-flex items-center gap-1.5">筆刷
-              <input type="range" min={6} max={36} value={imgBrushSize} onChange={e => setImgBrushSize(Number(e.target.value))} className="w-16 sm:w-24 accent-primary" />
+              <input type="range" min={4} max={32} value={imgBrushSize} onChange={e => setImgBrushSize(Number(e.target.value))} className="w-16 sm:w-24 accent-primary" />
             </label>
             <div className="inline-flex items-center gap-1.5">
               {[

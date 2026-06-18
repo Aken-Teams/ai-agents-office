@@ -368,6 +368,26 @@ const zhTW = {
   'templates.webapp.report.desc': '專案總結、季度回顧、成果展示',
   'templates.webapp.report.prompt': '總結報告風格：結構化報告頁面，包含摘要區塊、里程碑時間軸、KPI 達成率、圖表分析、下一步行動項目。適合專案結案、季度回顧、年度報告。',
 
+  // Infographic templates (style-based)
+  'templates.infographic.clean': '清新插畫',
+  'templates.infographic.clean.desc': '淺底粉彩、扁平插畫，專業又親和',
+  'templates.infographic.clean.prompt': '幫我做一張資訊圖表，主題：（請改成你的主題，例如：智慧客服導入流程）。\n\n風格：清新專業插畫風——淺色／白色乾淨背景，各區塊用柔和粉彩色塊（淺藍、薰衣草紫、薄荷綠、蜜桃橘）分色、圓角卡片；每個概念搭配精緻的扁平線條插畫圖示，畫風專業又帶點親和、明亮現代；分區標題用對應色粗體字，區塊間用箭頭串成清楚流程。',
+  'templates.infographic.cute': '可愛手繪',
+  'templates.infographic.cute.desc': '奶油色系、圓潤角色，溫馨療癒',
+  'templates.infographic.cute.prompt': '幫我做一張資訊圖表，主題：（請改成你的主題，例如：咖啡製作流程）。\n\n風格：可愛手繪插畫風——柔和奶油色系背景、圓潤造型、手繪感的可愛角色與小圖示（帶笑臉、表情），溫馨療癒、童趣但乾淨；標題俏皮、配色粉嫩協調，整體像精緻的可愛 infographic。',
+  'templates.infographic.tech': '科技未來',
+  'templates.infographic.tech.desc': '深色霓虹、漸層光暈，炫酷前衛',
+  'templates.infographic.tech.prompt': '幫我做一張資訊圖表，主題：（請改成你的主題，例如：2026 AI 產業趨勢）。\n\n風格：科技未來感——深色（深藍／黑）背景、霓虹光暈與漸層、電路與幾何裝飾、發光的線條與圖示；數字用大而醒目的螢光色，整體炫酷、前衛、有濃濃科技氛圍。',
+  'templates.infographic.business': '專業商務',
+  'templates.infographic.business.desc': '白底藍灰、俐落圖表，值得信賴',
+  'templates.infographic.business.prompt': '幫我做一張資訊圖表，主題：（請改成你的主題，例如：年度營運回顧）。\n\n風格：專業商務風——乾淨白底、藍灰主色搭一個強調色、俐落的圖表（長條／圓餅／折線）與簡潔圖示，排版整齊、留白得當、有值得信賴的企業質感，適合報告與簡報。',
+  'templates.infographic.magazine': '雜誌編輯',
+  'templates.infographic.magazine.desc': '大膽排版、字級對比，時尚有型',
+  'templates.infographic.magazine.prompt': '幫我做一張資訊圖表，主題：（請改成你的主題，例如：城市旅遊指南）。\n\n風格：雜誌編輯風——大膽的標題排版、強烈的字級對比、精緻的版面網格與分隔線，搭配高質感配色與少量插畫，像時尚雜誌的內頁，有設計感又好讀。',
+  'templates.infographic.minimal': '極簡質感',
+  'templates.infographic.minimal.desc': '大量留白、單色強調，安靜優雅',
+  'templates.infographic.minimal.prompt': '幫我做一張資訊圖表，主題：（請改成你的主題，例如：一週高效工作法）。\n\n風格：極簡質感風——大量留白、單色或低彩度搭一個強調色、細線圖示、精準對齊，少即是多；安靜、優雅、聚焦在最重要的幾個數字與重點。',
+
   // Chat
   'chat.tool.generatePptx': '生成簡報檔案',
   'chat.tool.generateDocx': '生成文件檔案',

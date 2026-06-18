@@ -364,6 +364,26 @@ const zhCN = {
   'templates.webapp.report.desc': '项目总结、季度回顾、成果展示',
   'templates.webapp.report.prompt': '总结报告风格：结构化报告页面，包含摘要区块、里程碑时间轴、KPI 达成率、图表分析、下一步行动项目。适合项目结案、季度回顾、年度报告。',
 
+  // Infographic templates (style-based)
+  'templates.infographic.clean': '清新插画',
+  'templates.infographic.clean.desc': '浅底粉彩、扁平插画，专业又亲和',
+  'templates.infographic.clean.prompt': '帮我做一张信息图表，主题：（请改成你的主题，例如：智能客服导入流程）。\n\n风格：清新专业插画风——浅色／白色干净背景，各区块用柔和粉彩色块（浅蓝、薰衣草紫、薄荷绿、蜜桃橘）分色、圆角卡片；每个概念搭配精致的扁平线条插画图标，画风专业又带点亲和、明亮现代；分区标题用对应色粗体字，区块间用箭头串成清楚流程。',
+  'templates.infographic.cute': '可爱手绘',
+  'templates.infographic.cute.desc': '奶油色系、圆润角色，温馨疗愈',
+  'templates.infographic.cute.prompt': '帮我做一张信息图表，主题：（请改成你的主题，例如：咖啡制作流程）。\n\n风格：可爱手绘插画风——柔和奶油色系背景、圆润造型、手绘感的可爱角色与小图标（带笑脸、表情），温馨疗愈、童趣但干净；标题俏皮、配色粉嫩协调，整体像精致的可爱 infographic。',
+  'templates.infographic.tech': '科技未来',
+  'templates.infographic.tech.desc': '深色霓虹、渐变光晕，炫酷前卫',
+  'templates.infographic.tech.prompt': '帮我做一张信息图表，主题：（请改成你的主题，例如：2026 AI 产业趋势）。\n\n风格：科技未来感——深色（深蓝／黑）背景、霓虹光晕与渐变、电路与几何装饰、发光的线条与图标；数字用大而醒目的荧光色，整体炫酷、前卫、有浓浓科技氛围。',
+  'templates.infographic.business': '专业商务',
+  'templates.infographic.business.desc': '白底蓝灰、俐落图表，值得信赖',
+  'templates.infographic.business.prompt': '帮我做一张信息图表，主题：（请改成你的主题，例如：年度运营回顾）。\n\n风格：专业商务风——干净白底、蓝灰主色搭一个强调色、俐落的图表（条形／饼图／折线）与简洁图标，排版整齐、留白得当、有值得信赖的企业质感，适合报告与演示。',
+  'templates.infographic.magazine': '杂志编辑',
+  'templates.infographic.magazine.desc': '大胆排版、字级对比，时尚有型',
+  'templates.infographic.magazine.prompt': '帮我做一张信息图表，主题：（请改成你的主题，例如：城市旅游指南）。\n\n风格：杂志编辑风——大胆的标题排版、强烈的字级对比、精致的版面网格与分隔线，搭配高质感配色与少量插画，像时尚杂志的内页，有设计感又好读。',
+  'templates.infographic.minimal': '极简质感',
+  'templates.infographic.minimal.desc': '大量留白、单色强调，安静优雅',
+  'templates.infographic.minimal.prompt': '帮我做一张信息图表，主题：（请改成你的主题，例如：一周高效工作法）。\n\n风格：极简质感风——大量留白、单色或低彩度搭一个强调色、细线图标、精准对齐，少即是多；安静、优雅、聚焦在最重要的几个数字与重点。',
+
   // Chat
   'chat.tool.generatePptx': '生成演示文稿',
   'chat.tool.generateDocx': '生成文档',
