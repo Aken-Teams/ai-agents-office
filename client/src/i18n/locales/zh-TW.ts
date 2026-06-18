@@ -660,6 +660,7 @@ const zhTW = {
   'admin.sidebar.permissions': '權限管理',
   'admin.sidebar.security': '安全審計',
   'admin.sidebar.conversations': '對話管理',
+  'admin.sidebar.teams': '團隊協作',
   'admin.sidebar.announcements': '公告管理',
   'admin.sidebar.settings': '系統設定',
   'admin.sidebar.roleLabel': '系統管理員',

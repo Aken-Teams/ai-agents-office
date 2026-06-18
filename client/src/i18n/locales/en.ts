@@ -645,6 +645,7 @@ const en = {
   'admin.sidebar.permissions': 'Permissions',
   'admin.sidebar.security': 'Security Audit',
   'admin.sidebar.conversations': 'Conversations',
+  'admin.sidebar.teams': 'AI Teams',
   'admin.sidebar.announcements': 'Announcements',
   'admin.sidebar.settings': 'System Settings',
   'admin.sidebar.roleLabel': 'System Admin',

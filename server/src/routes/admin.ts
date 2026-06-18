@@ -1044,7 +1044,9 @@ router.get('/conversations', async (req: Request, res: Response) => {
   const search = req.query.search as string || '';
   const userId = req.query.userId as string || '';
 
-  let whereClause = 'WHERE 1=1';
+  // Hide team-member sub-conversations (they show as 0-message noise); team
+  // collaborations are surfaced via the dedicated /teams endpoint instead.
+  let whereClause = 'WHERE c.team_id IS NULL';
   const params: any[] = [];
 
   if (search) {
@@ -1096,6 +1098,91 @@ router.get('/conversations', async (req: Request, res: Response) => {
     page,
     limit,
     totalPages: Math.ceil((countRow?.total ?? 0) / limit),
+  });
+});
+
+// GET /api/admin/teams — list AI team collaborations with aggregates
+router.get('/teams', async (req: Request, res: Response) => {
+  const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+  const offset = (page - 1) * limit;
+  const search = (req.query.search as string || '').trim();
+
+  let where = 'WHERE 1=1';
+  const params: any[] = [];
+  if (search) {
+    where += ' AND (t.title LIKE ? OR t.topic LIKE ? OR u.email LIKE ? OR u.display_name LIKE ?)';
+    const p = `%${search}%`;
+    params.push(p, p, p, p);
+  }
+
+  const countRow = await dbGet<{ total: number }>(
+    `SELECT COUNT(*) as total FROM agent_teams t LEFT JOIN users u ON u.id = t.user_id ${where}`,
+    ...params,
+  );
+
+  const rows = await dbAll(`
+    SELECT
+      t.id, t.title, t.topic, t.icon, t.created_at,
+      u.email AS user_email, u.display_name AS user_display_name,
+      (SELECT COUNT(*) FROM conversations c WHERE c.team_id = t.id AND c.status != 'deleted') AS member_count,
+      (SELECT COUNT(*) FROM team_runs r WHERE r.team_id = t.id) AS run_count,
+      (SELECT COALESCE(SUM(r.input_tokens + r.output_tokens), 0) FROM team_runs r WHERE r.team_id = t.id) AS total_tokens,
+      (SELECT MAX(r.created_at) FROM team_runs r WHERE r.team_id = t.id) AS last_run_at
+    FROM agent_teams t
+    LEFT JOIN users u ON u.id = t.user_id
+    ${where}
+    ORDER BY (last_run_at IS NULL), last_run_at DESC, t.created_at DESC
+    LIMIT ? OFFSET ?
+  `, ...params, limit, offset);
+
+  res.json({
+    teams: rows,
+    total: countRow?.total ?? 0,
+    page,
+    limit,
+    totalPages: Math.ceil((countRow?.total ?? 0) / limit),
+  });
+});
+
+// GET /api/admin/teams/:id — team detail: members + collaboration runs
+router.get('/teams/:id', async (req: Request, res: Response) => {
+  const teamId = req.params.id;
+  const team = await dbGet<any>(`
+    SELECT t.id, t.title, t.topic, t.icon, t.created_at,
+           u.email AS user_email, u.display_name AS user_display_name
+    FROM agent_teams t LEFT JOIN users u ON u.id = t.user_id WHERE t.id = ?`, teamId);
+  if (!team) { res.status(404).json({ error: 'Team not found' }); return; }
+
+  const members = await dbAll(
+    `SELECT id, title, skill_id, icon, system_prompt FROM conversations WHERE team_id = ? AND status != 'deleted' ORDER BY created_at ASC`,
+    teamId,
+  );
+  const runs = await dbAll(`
+    SELECT id, question, status, input_tokens, output_tokens, created_at,
+           LEFT(result, 400) AS result_preview, share_token
+    FROM team_runs WHERE team_id = ? ORDER BY created_at DESC LIMIT 100`, teamId);
+
+  res.json({ team, members, runs });
+});
+
+// GET /api/admin/teams/:id/runs/:runId — full run: question, each member's answer, final report
+router.get('/teams/:id/runs/:runId', async (req: Request, res: Response) => {
+  const run = await dbGet<any>(
+    `SELECT id, question, result, member_outputs, input_tokens, output_tokens, status, created_at
+     FROM team_runs WHERE id = ? AND team_id = ?`, req.params.runId, req.params.id);
+  if (!run) { res.status(404).json({ error: 'Run not found' }); return; }
+  let members: any[] = [];
+  try { members = JSON.parse(run.member_outputs || '[]'); } catch { /* tolerate bad JSON */ }
+  res.json({
+    id: run.id,
+    question: run.question,
+    result: run.result || '',
+    members,                                 // [{ memberId, name, icon, text (round1), text2 (discussion) }]
+    input_tokens: run.input_tokens,
+    output_tokens: run.output_tokens,
+    status: run.status,
+    created_at: run.created_at,
   });
 });
 

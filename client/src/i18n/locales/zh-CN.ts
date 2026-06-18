@@ -656,6 +656,7 @@ const zhCN = {
   'admin.sidebar.permissions': '权限管理',
   'admin.sidebar.security': '安全审计',
   'admin.sidebar.conversations': '对话管理',
+  'admin.sidebar.teams': '团队协作',
   'admin.sidebar.announcements': '公告管理',
   'admin.sidebar.settings': '系统设置',
   'admin.sidebar.roleLabel': '系统管理员',
