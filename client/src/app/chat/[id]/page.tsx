@@ -2594,6 +2594,11 @@ function ChatContent() {
             selectedBlockId={docMode.selectedBlockId}
             onSelectBlock={docMode.setSelectedBlockId}
             onClose={() => docMode.exitDocumentMode()}
+            onFileReplaced={(newId: string) => {
+              docMode.setDocumentFileId(newId);
+              fetch(`/api/files?conversationId=${conversationId}`, { headers: { Authorization: `Bearer ${token}` } })
+                .then(r => r.json()).then((f: GeneratedFile[]) => setFiles(f)).catch(() => {});
+            }}
             onRebuild={async (instruction?: string) => {
               if (!docMode.documentFileId) return;
               setDocRebuilding(true);

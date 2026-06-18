@@ -53,6 +53,8 @@ interface DocumentCanvasProps {
   onShapesAvailable?: (shapes: Array<{ name: string; type: string }>) => void;
   /** Mobile: switch to chat view */
   onMobileSwitchToChat?: () => void;
+  /** Image region-edit produced a new version — points the viewer at it */
+  onFileReplaced?: (newFileId: string) => void;
   t: (key: any, params?: Record<string, string | number>) => string;
 }
 
@@ -356,6 +358,7 @@ export default function DocumentCanvas({
   onElementSelect,
   onShapesAvailable,
   onMobileSwitchToChat,
+  onFileReplaced,
 }: DocumentCanvasProps) {
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [previewType, setPreviewType] = useState<'html' | 'pdf' | 'other'>('html');
@@ -372,6 +375,16 @@ export default function DocumentCanvas({
   const [docPageTexts, setDocPageTexts] = useState<string[]>([]);
   const [selectedCell, setSelectedCell] = useState<CellRef | null>(null);
   const [selectedRange, setSelectedRange] = useState<CellRange | null>(null);
+  // Image region-edit (brush) state
+  const [imgEditMode, setImgEditMode] = useState(false);
+  const [imgBrushSize, setImgBrushSize] = useState(18);
+  const [imgBrushColor, setImgBrushColor] = useState('rgba(255,45,45,0.5)');
+  const [imgInstruction, setImgInstruction] = useState('');
+  const [imgEditing, setImgEditing] = useState(false);
+  const [imgHasStrokes, setImgHasStrokes] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const drawCanvasRef = useRef<HTMLCanvasElement>(null);
+  const drawingRef = useRef(false);
   const previewKeyRef = useRef(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const visibleCount = useStaggerReveal(blocks.length);
@@ -408,10 +421,86 @@ export default function DocumentCanvas({
     }
   }, [token, fileId, previewBlobUrl]);
 
+  // ── Image region-edit (brush) ──────────────────────────────────────────
+  // Size the draw canvas to exactly overlay the displayed image.
+  const syncCanvasSize = useCallback(() => {
+    const img = imgRef.current, cv = drawCanvasRef.current;
+    if (!img || !cv) return;
+    if (cv.width !== img.clientWidth || cv.height !== img.clientHeight) {
+      cv.width = img.clientWidth;
+      cv.height = img.clientHeight;
+    }
+  }, []);
+
+  const drawAt = useCallback((e: React.PointerEvent<HTMLCanvasElement>, start: boolean) => {
+    const cv = drawCanvasRef.current;
+    if (!cv) return;
+    const ctx = cv.getContext('2d');
+    if (!ctx) return;
+    const rect = cv.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (cv.width / rect.width);
+    const y = (e.clientY - rect.top) * (cv.height / rect.height);
+    ctx.strokeStyle = imgBrushColor;
+    ctx.fillStyle = imgBrushColor;
+    ctx.lineWidth = imgBrushSize;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (start) {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.arc(x, y, imgBrushSize / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+    if (!imgHasStrokes) setImgHasStrokes(true);
+  }, [imgBrushSize, imgBrushColor, imgHasStrokes]);
+
+  const clearStrokes = useCallback(() => {
+    const cv = drawCanvasRef.current;
+    if (cv) cv.getContext('2d')?.clearRect(0, 0, cv.width, cv.height);
+    setImgHasStrokes(false);
+  }, []);
+
+  const exitImgEdit = useCallback(() => {
+    setImgEditMode(false);
+    setImgInstruction('');
+    clearStrokes();
+  }, [clearStrokes]);
+
+  const applyRegionEdit = useCallback(async () => {
+    if (!token || !fileId || !drawCanvasRef.current || !imgInstruction.trim() || !imgHasStrokes) return;
+    setImgEditing(true);
+    try {
+      const mask = drawCanvasRef.current.toDataURL('image/png');
+      const res = await fetch(`${SSE_BASE}/api/files/${fileId}/region-edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ mask, instruction: imgInstruction.trim() }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || '局部編輯失敗');
+      }
+      const data = await res.json();
+      exitImgEdit();
+      if (data.file?.id && onFileReplaced) onFileReplaced(data.file.id);
+      else loadPreview();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setImgEditing(false);
+    }
+  }, [token, fileId, imgInstruction, imgHasStrokes, exitImgEdit, onFileReplaced, loadPreview]);
+
   // Load preview when fileId is available; reset state for new file
   useEffect(() => {
     if (fileId) {
       loadPreview();
+      exitImgEdit();
       setSelectedPageIndex(0);
       setSelectedShapeId(null);
       setSelectedElement(null);
@@ -715,6 +804,12 @@ export default function DocumentCanvas({
             {title && <div className="text-xs sm:text-sm font-semibold text-on-surface truncate">{title}</div>}
             <div className="text-[10px] text-on-surface-variant uppercase tracking-wider">{docType || 'image'}</div>
           </div>
+          {previewBlobUrl && !imgEditMode && (
+            <button onClick={() => setImgEditMode(true)} className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-bold hover:bg-primary-hover transition-colors cursor-pointer" title="圈選局部修改">
+              <span className="material-symbols-outlined text-sm">brush</span>
+              <span className="hidden sm:inline">局部編輯</span>
+            </button>
+          )}
           {onMobileSwitchToChat && (
             <button onClick={onMobileSwitchToChat} className="sm:hidden p-1 rounded hover:bg-surface-container transition-colors cursor-pointer shrink-0" title="切換至對話">
               <span className="material-symbols-outlined text-on-surface-variant text-sm">chat</span>
@@ -727,11 +822,58 @@ export default function DocumentCanvas({
             <span className="material-symbols-outlined text-on-surface-variant text-lg">close</span>
           </button>
         </div>
+
+        {/* Brush controls bar (edit mode) */}
+        {imgEditMode && (
+          <div className="flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2 border-b border-outline-variant/10 bg-primary/5 shrink-0 flex-wrap">
+            <span className="text-xs text-on-surface-variant inline-flex items-center gap-1"><span className="material-symbols-outlined text-[15px] text-primary">brush</span>塗抹要修改的區域</span>
+            <label className="text-xs text-on-surface-variant inline-flex items-center gap-1.5">筆刷
+              <input type="range" min={6} max={36} value={imgBrushSize} onChange={e => setImgBrushSize(Number(e.target.value))} className="w-16 sm:w-24 accent-primary" />
+            </label>
+            <div className="inline-flex items-center gap-1.5">
+              {[
+                { dot: '#ff2d2d', stroke: 'rgba(255,45,45,0.5)' },
+                { dot: '#2979ff', stroke: 'rgba(41,121,255,0.5)' },
+                { dot: '#00b84d', stroke: 'rgba(0,184,77,0.5)' },
+              ].map(c => (
+                <button
+                  key={c.dot}
+                  onClick={() => setImgBrushColor(c.stroke)}
+                  className={`w-5 h-5 rounded-full transition-transform ${imgBrushColor === c.stroke ? 'ring-2 ring-offset-1 ring-on-surface scale-110' : 'hover:scale-110'}`}
+                  style={{ background: c.dot }}
+                  title="筆刷顏色"
+                />
+              ))}
+            </div>
+            <button onClick={clearStrokes} disabled={!imgHasStrokes} className="text-xs text-on-surface-variant hover:text-on-surface disabled:opacity-40 inline-flex items-center gap-1"><span className="material-symbols-outlined text-[15px]">ink_eraser</span>清除</button>
+            <button onClick={exitImgEdit} className="ml-auto text-xs text-on-surface-variant hover:text-on-surface">取消</button>
+          </div>
+        )}
+
         {/* Image body — top-aligned so tall infographics aren't clipped at the top */}
         <div className="flex-1 overflow-auto px-3 sm:px-6 pt-5 sm:pt-8 pb-5 sm:pb-8 flex items-start justify-center bg-surface-container-low">
           {previewBlobUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={previewBlobUrl} alt={title || 'infographic'} className="max-w-full h-auto rounded-lg shadow-md" />
+            <div className="relative inline-block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img ref={imgRef} src={previewBlobUrl} alt={title || 'infographic'} onLoad={syncCanvasSize} className="max-w-full h-auto rounded-lg shadow-md block select-none" draggable={false} />
+              {imgEditMode && (
+                <canvas
+                  ref={drawCanvasRef}
+                  className="absolute inset-0 w-full h-full rounded-lg cursor-crosshair touch-none"
+                  style={{ background: 'transparent' }}
+                  onPointerDown={e => { (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId); drawingRef.current = true; syncCanvasSize(); drawAt(e, true); }}
+                  onPointerMove={e => { if (drawingRef.current) drawAt(e, false); }}
+                  onPointerUp={() => { drawingRef.current = false; }}
+                  onPointerLeave={() => { drawingRef.current = false; }}
+                />
+              )}
+              {imgEditing && (
+                <div className="absolute inset-0 rounded-lg bg-black/40 flex flex-col items-center justify-center gap-2 text-white">
+                  <span className="material-symbols-outlined animate-spin">progress_activity</span>
+                  <span className="text-xs">AI 修改中…</span>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="flex flex-col items-center gap-2 text-on-surface-variant">
               <span className="material-symbols-outlined animate-spin">progress_activity</span>
@@ -739,6 +881,27 @@ export default function DocumentCanvas({
             </div>
           )}
         </div>
+
+        {/* Instruction input (edit mode) */}
+        {imgEditMode && (
+          <div className="flex items-center gap-2 px-2 sm:px-4 py-2.5 border-t border-outline-variant/10 bg-surface-container/30 shrink-0">
+            <input
+              value={imgInstruction}
+              onChange={e => setImgInstruction(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && imgHasStrokes && imgInstruction.trim() && !imgEditing) applyRegionEdit(); }}
+              placeholder={imgHasStrokes ? '這個區域要改成什麼？（例：把杯子改成玻璃杯）' : '先在圖上塗抹要修改的區域…'}
+              disabled={imgEditing}
+              className="flex-1 bg-surface-container-high border-none rounded-lg px-3 py-2 text-sm text-on-surface placeholder:text-outline focus:ring-1 focus:ring-primary/40 outline-none"
+            />
+            <button
+              onClick={applyRegionEdit}
+              disabled={imgEditing || !imgHasStrokes || !imgInstruction.trim()}
+              className="px-3 py-2 bg-primary text-on-primary rounded-lg text-sm font-bold hover:bg-primary-hover transition-colors disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shrink-0"
+            >
+              套用
+            </button>
+          </div>
+        )}
       </div>
     );
   }

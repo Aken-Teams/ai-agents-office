@@ -1,12 +1,16 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
+import sharp from 'sharp';
 import { dbGet, dbAll } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { getFileDownloadPath, deleteFile, getFileVersions, extractPptxShapes } from '../services/fileManager.js';
+import { getFileDownloadPath, deleteFile, getFileVersions, extractPptxShapes, registerNewFiles, snapshotExistingFiles, getExistingFilePaths } from '../services/fileManager.js';
 import { convertOfficeFile } from '../services/filePreview.js';
 import { applyWatermark, getWatermarkSettings } from '../services/watermark.js';
 import { config } from '../config.js';
+import { getSandboxPath } from '../services/sandbox.js';
+import { generateImage, isGeminiEnabled } from '../services/geminiApi.js';
+import { recordTokenUsage } from '../services/tokenTracker.js';
 import { getStorageQuotaGb } from '../services/usageLimit.js';
 import { findValidShare, bumpDownloadCount } from '../services/line/fileShare.js';
 import type { GeneratedFile } from '../types.js';
@@ -214,6 +218,68 @@ router.get('/:id/preview', async (req: Request, res: Response) => {
   }
 
   res.status(415).json({ error: 'Preview not supported for this file type', file_type: ext });
+});
+
+// POST /api/files/:id/region-edit — brush/mask region editing for infographic
+// images. Body: { mask: base64 PNG (transparent bg, red strokes over the area to
+// change, at the image's native size), instruction: string }. Composites the
+// mask onto the original, asks Gemini to edit only the marked area, and saves
+// the result as a new version of the same file.
+router.post('/:id/region-edit', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const fileId = req.params.id as string;
+  const { mask, instruction } = req.body as { mask?: string; instruction?: string };
+
+  if (!isGeminiEnabled()) { res.status(503).json({ error: '圖片編輯功能尚未設定（缺少 GEMINI_API_KEY）' }); return; }
+  if (!mask || typeof mask !== 'string') { res.status(400).json({ error: '缺少標記範圍' }); return; }
+  if (!instruction || !instruction.trim()) { res.status(400).json({ error: '請說明這個區域要改成什麼' }); return; }
+
+  const file = await dbGet<GeneratedFile>(
+    'SELECT * FROM generated_files WHERE id = ? AND user_id = ? ORDER BY version DESC LIMIT 1',
+    fileId, userId,
+  );
+  if (!file) { res.status(404).json({ error: 'File not found' }); return; }
+  const ext = path.extname(file.file_path).slice(1).toLowerCase();
+  if (!['png', 'jpg', 'jpeg', 'webp'].includes(ext)) { res.status(400).json({ error: '只支援圖片檔的局部編輯' }); return; }
+
+  const conversationId = file.conversation_id;
+  if (!conversationId) { res.status(400).json({ error: '此檔案無法局部編輯' }); return; }
+
+  const fullPath = path.join(config.workspaceRoot, file.file_path);
+  if (!fs.existsSync(fullPath)) { res.status(404).json({ error: 'File missing on disk' }); return; }
+
+  try {
+    // Composite the brush mask onto the original (resized to match exactly).
+    const original = fs.readFileSync(fullPath);
+    const meta = await sharp(original).metadata();
+    const maskBuf = Buffer.from(mask.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+    const maskResized = await sharp(maskBuf).resize(meta.width, meta.height, { fit: 'fill' }).png().toBuffer();
+    const marked = await sharp(original).composite([{ input: maskResized, top: 0, left: 0 }]).png().toBuffer();
+
+    const result = await generateImage({
+      image: { base64: marked.toString('base64'), mimeType: 'image/png' },
+      prompt: `${instruction.trim()}\n\n（最重要）我已用半透明的筆刷在圖上塗抹標記出要修改的區域。只修改這些被筆刷塗到的區域，標記範圍以外的所有內容——文字、圖示、配色、版面——都必須完全保持原樣、一個像素都不要動。完成後請把那些半透明筆刷標記本身全部移除乾淨，不要殘留在圖上。`,
+    });
+
+    // Save as a new version using the same machinery as the generate flow.
+    const existingFiles = await getExistingFilePaths(conversationId);
+    await snapshotExistingFiles(userId, conversationId);
+    fs.writeFileSync(fullPath, Buffer.from(result.base64, 'base64'));
+    const sandboxPath = getSandboxPath(userId, conversationId);
+    const newFiles = await registerNewFiles(userId, conversationId, sandboxPath, existingFiles, new Set([ext]));
+    const newFile = newFiles.find(f => f.file_path === file.file_path) || newFiles[0];
+
+    // Fold the Gemini cost into usage (equivalent tokens at the $15/M output rate).
+    const geminiTokens = Math.round((result.usage.costUsd * 1_000_000) / 15);
+    if (geminiTokens > 0) {
+      await recordTokenUsage({ userId, conversationId, inputTokens: 0, outputTokens: geminiTokens, model: result.usage.model });
+    }
+
+    res.json({ file: newFile, costUsd: result.usage.costUsd });
+  } catch (err) {
+    console.error('[RegionEdit] failed:', err);
+    res.status(500).json({ error: `局部編輯失敗：${(err as Error).message}` });
+  }
 });
 
 // GET /api/files/storage
