@@ -622,7 +622,7 @@ function ChatContent() {
       // Check if this <pre> contains a chart or mermaid code block — unwrap to avoid <pre> wrapper
       const codeEl = node?.children?.[0];
       const cls = codeEl?.properties?.className?.[0] || '';
-      if (cls === 'language-chart' || cls === 'language-echart' || cls === 'language-visual' || cls === 'language-mermaid' || cls === 'language-mindmap' || cls === 'language-map') {
+      if (cls === 'language-chart' || cls === 'language-echart' || cls === 'language-visual' || cls === 'language-mermaid' || cls === 'language-mindmap' || cls === 'language-map' || cls === 'language-gemini-infographic') {
         return <>{children}</>;
       }
       return <pre {...props}>{children}</pre>;
@@ -651,6 +651,14 @@ function ChatContent() {
       }
       if (className === 'language-map') {
         return <ChatMap rawJson={text} />;
+      }
+      // Internal infographic directive — don't show the raw JSON to the user.
+      if (className === 'language-gemini-infographic') {
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs text-on-surface-variant bg-surface-container rounded-full px-3 py-1 my-1">
+            <span className="material-symbols-outlined text-[14px] text-primary">image</span>資訊圖表
+          </span>
+        );
       }
       return <code className={className} {...props}>{children}</code>;
     },

@@ -502,6 +502,18 @@ async function handleDirect(
                 const rendered = await renderInfographic(directive, sandboxPath);
                 extraExpectedType = rendered.fileType;
                 console.log(`[Infographic] 以 Gemini 生成 ${rendered.fileType}（約 $${rendered.usage.costUsd.toFixed(4)}）`);
+
+                // Fold the Gemini cost into the conversation's usage by converting
+                // it to equivalent output tokens at the display's output rate ($15/M),
+                // so every cost view reproduces (gemini cost × markup) without a
+                // schema change. Recorded as a separate row + pushed to the live UI.
+                const GEMINI_OUTPUT_RATE = 15;
+                const geminiTokens = Math.round((rendered.usage.costUsd * 1_000_000) / GEMINI_OUTPUT_RATE);
+                if (geminiTokens > 0) {
+                  await recordTokenUsage({ userId, conversationId, inputTokens: 0, outputTokens: geminiTokens, model: rendered.usage.model });
+                  totalOutputTokens += geminiTokens;
+                  sseWrite({ type: 'usage', data: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens, model } });
+                }
               } catch (e) {
                 sseWrite({ type: 'error', data: `資訊圖表生成失敗：${(e as Error).message}` });
               }

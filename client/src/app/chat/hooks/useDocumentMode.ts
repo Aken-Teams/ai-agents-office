@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from 'react';
 import type { DocumentBlock, BlockRecord } from '../../editor/hooks/useDocumentBlocks';
 
-export type DocLayoutType = 'slides' | 'doc' | 'sheet' | 'webapp';
+export type DocLayoutType = 'slides' | 'doc' | 'sheet' | 'webapp' | 'image';
 export type ViewMode = 'chat' | 'document';
 
 export const FILE_GEN_SKILLS = new Set([
@@ -17,9 +17,8 @@ export const SKILL_TO_LAYOUT: Record<string, DocLayoutType> = {
   'pdf-gen': 'doc',
   'xlsx-gen': 'sheet',
   'webapp-gen': 'webapp',
-  // Infographic HTML is a single full-page visual — show it in the clean
-  // single-page (webapp) viewer, not the slides viewer with blocks/rebuild.
-  'infographic-gen': 'webapp',
+  // Infographic default output is a Gemini-drawn PNG — show it in the image viewer.
+  'infographic-gen': 'image',
 };
 
 export const FILE_TYPE_TO_LAYOUT: Record<string, DocLayoutType> = {
@@ -33,6 +32,11 @@ export const FILE_TYPE_TO_LAYOUT: Record<string, DocLayoutType> = {
   xlsx: 'sheet',
   xls: 'sheet',
   csv: 'sheet',
+  png: 'image',
+  jpg: 'image',
+  jpeg: 'image',
+  webp: 'image',
+  gif: 'image',
 };
 
 interface SSEEvent {

@@ -706,6 +706,43 @@ export default function DocumentCanvas({
     </div>
   );
 
+  if (layoutType === 'image') {
+    return (
+      <div className="flex-1 flex flex-col min-w-0 bg-surface">
+        {/* Toolbar */}
+        <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 border-b border-outline-variant/10 bg-surface-container/30 shrink-0">
+          <div className="flex-1 min-w-0">
+            {title && <div className="text-xs sm:text-sm font-semibold text-on-surface truncate">{title}</div>}
+            <div className="text-[10px] text-on-surface-variant uppercase tracking-wider">{docType || 'image'}</div>
+          </div>
+          {onMobileSwitchToChat && (
+            <button onClick={onMobileSwitchToChat} className="sm:hidden p-1 rounded hover:bg-surface-container transition-colors cursor-pointer shrink-0" title="切換至對話">
+              <span className="material-symbols-outlined text-on-surface-variant text-sm">chat</span>
+            </button>
+          )}
+          <button onClick={onDownload} className="p-1.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer" title={t('chat.docMode.download')}>
+            <span className="material-symbols-outlined text-on-surface-variant text-sm">download</span>
+          </button>
+          <button onClick={onClose} className="hidden sm:block p-1.5 rounded-lg hover:bg-surface-container transition-colors cursor-pointer">
+            <span className="material-symbols-outlined text-on-surface-variant text-lg">close</span>
+          </button>
+        </div>
+        {/* Image body — top-aligned so tall infographics aren't clipped at the top */}
+        <div className="flex-1 overflow-auto px-3 sm:px-6 pt-5 sm:pt-8 pb-5 sm:pb-8 flex items-start justify-center bg-surface-container-low">
+          {previewBlobUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={previewBlobUrl} alt={title || 'infographic'} className="max-w-full h-auto rounded-lg shadow-md" />
+          ) : (
+            <div className="flex flex-col items-center gap-2 text-on-surface-variant">
+              <span className="material-symbols-outlined animate-spin">progress_activity</span>
+              <span className="text-xs">{previewLoading ? '載入圖片中…' : '圖片生成中…'}</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (layoutType === 'slides') {
     return (
       <><div className="flex-1 flex flex-col min-w-0 bg-surface">

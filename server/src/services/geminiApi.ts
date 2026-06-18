@@ -27,6 +27,10 @@ const IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-3-pro-image';
 // reporting; kept here so it's one obvious place to update.
 const TEXT_IN_RATE = 0.30;
 const TEXT_OUT_RATE = 2.50;
+// Image generation is billed per image, not per text token. Flat raw cost per
+// generated image (before our display markup); override via env when the model
+// or Google's pricing changes. Default ≈ gemini-3-pro-image list price.
+const IMAGE_COST_USD = parseFloat(process.env.GEMINI_IMAGE_COST_USD || '0.134');
 
 export interface GeminiUsage { inputTokens: number; outputTokens: number; model: string; costUsd: number }
 
@@ -116,21 +120,28 @@ export async function generateInfographicHtml(opts: { prompt: string; data?: str
 }
 
 /**
- * Generate a raster image (PNG/JPEG) via the Gemini image model. Best for
- * illustrations / cover art; embedded text may be imperfect (diffusion).
+ * Generate a raster image via the Gemini image model. When `image` is supplied,
+ * the model EDITS that image per the prompt (image-to-image) instead of drawing
+ * from scratch — used to tweak an existing infographic while keeping its look.
  */
-export async function generateImage(opts: { prompt: string }): Promise<ImageResult> {
+export async function generateImage(opts: { prompt: string; image?: { base64: string; mimeType: string } }): Promise<ImageResult> {
+  const reqParts: GeminiPart[] = [];
+  if (opts.image) reqParts.push({ inlineData: { mimeType: opts.image.mimeType, data: opts.image.base64 } });
+  reqParts.push({ text: opts.prompt.trim() });
   const json = await callGemini(IMAGE_MODEL, {
-    contents: [{ role: 'user', parts: [{ text: opts.prompt.trim() }] }],
+    contents: [{ role: 'user', parts: reqParts }],
     generationConfig: { responseModalities: ['IMAGE'] },
   }, 90_000);
 
   const parts = json.candidates?.[0]?.content?.parts || [];
   const img = parts.find(p => p.inlineData?.data);
   if (!img?.inlineData) throw new Error('Gemini 未回傳圖片資料');
+  // Image is billed per image — use the flat image price, not text-token rates.
+  const usage = usageOf(IMAGE_MODEL, json);
+  usage.costUsd = IMAGE_COST_USD;
   return {
     base64: img.inlineData.data,
     mimeType: img.inlineData.mimeType || 'image/png',
-    usage: usageOf(IMAGE_MODEL, json),
+    usage,
   };
 }

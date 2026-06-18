@@ -25,6 +25,7 @@ export interface InfographicDirective {
   prompt: string;
   data?: string;
   style?: string;
+  edit?: boolean;   // image mode: edit the existing infographic instead of redrawing
 }
 
 export interface RenderedInfographic { filePath: string; fileType: 'html' | 'png'; usage: GeminiUsage }
@@ -51,7 +52,23 @@ export function parseInfographicDirective(text: string): InfographicDirective | 
     prompt: obj.prompt,
     data: typeof obj.data === 'string' ? obj.data : undefined,
     style: typeof obj.style === 'string' ? obj.style : undefined,
+    edit: obj.edit === true,
   };
+}
+
+/** Find the existing infographic PNG to edit: prefer the named file, else newest .png. */
+function findExistingPng(outDir: string, filename?: string): string | null {
+  try {
+    const named = filename ? path.join(outDir, `${safeBase(filename, 'infographic')}.png`) : null;
+    if (named && fs.existsSync(named)) return named;
+    const pngs = fs.readdirSync(outDir)
+      .filter(f => f.toLowerCase().endsWith('.png'))
+      .map(f => ({ f, t: fs.statSync(path.join(outDir, f)).mtimeMs }))
+      .sort((a, b) => b.t - a.t);
+    return pngs.length ? path.join(outDir, pngs[0].f) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Sanitize a model-suggested filename to a safe base (no path, no extension). */
@@ -74,7 +91,14 @@ export async function renderInfographic(directive: InfographicDirective, outDir:
   fs.mkdirSync(outDir, { recursive: true });
 
   if (directive.mode === 'image') {
-    const { base64, usage } = await generateImage({ prompt: directive.prompt });
+    // Edit mode: feed the existing infographic back in so Gemini tweaks it
+    // in place (keeps the look) instead of redrawing from scratch.
+    let baseImage: { base64: string; mimeType: string } | undefined;
+    if (directive.edit) {
+      const existing = findExistingPng(outDir, directive.filename);
+      if (existing) baseImage = { base64: fs.readFileSync(existing).toString('base64'), mimeType: 'image/png' };
+    }
+    const { base64, usage } = await generateImage({ prompt: directive.prompt, image: baseImage });
     const file = path.join(outDir, `${safeBase(directive.filename, 'infographic')}.png`);
     fs.writeFileSync(file, Buffer.from(base64, 'base64'));
     return { filePath: file, fileType: 'png', usage };
