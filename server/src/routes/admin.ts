@@ -502,10 +502,10 @@ router.get('/tokens/summary', async (req: Request, res: Response) => {
     ${where}
   `, ...params);
 
-  // Claude Sonnet 4 pricing: $3/M input, $15/M output (×10 billing markup)
+  // Claude Sonnet 4 pricing: $3/M input, $15/M output (×10 billing markup, ×2 in pro-out)
   const totalInput = row?.total_input ?? 0;
   const totalOutput = row?.total_output ?? 0;
-  const estimatedCost = ((totalInput / 1_000_000) * 3 + (totalOutput / 1_000_000) * 15) * 10;
+  const estimatedCost = ((totalInput / 1_000_000) * 3 + (totalOutput / 1_000_000) * 15) * config.pricingMarkup;
 
   res.json({
     totalInput,
@@ -2148,8 +2148,8 @@ router.get('/line/users', async (_req: Request, res: Response) => {
   );
 
   const users = rows.map(r => {
-    // Display cost: Claude Sonnet 4 pricing ($3/M in, $15/M out) × 10 markup.
-    const cost = ((r.in_tok / 1_000_000) * 3 + (r.out_tok / 1_000_000) * 15) * 10;
+    // Display cost: Claude Sonnet 4 pricing ($3/M in, $15/M out) × markup (×10, or ×2 in pro-out).
+    const cost = ((r.in_tok / 1_000_000) * 3 + (r.out_tok / 1_000_000) * 15) * config.pricingMarkup;
     // Effective limit: personal override > group > global default.
     const limit = r.quota_override != null ? r.quota_override
       : r.group_limit != null ? r.group_limit

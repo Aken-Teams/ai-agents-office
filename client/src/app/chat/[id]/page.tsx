@@ -14,6 +14,7 @@ import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 import { useDocumentMode, FILE_GEN_SKILLS, FILE_TYPE_TO_LAYOUT } from '../hooks/useDocumentMode';
 import { useDocumentBlocks } from '../../editor/hooks/useDocumentBlocks';
 import DocumentCanvas from '../components/DocumentCanvas';
+import { calcCostUsd } from '../../../lib/pricing';
 
 const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { ssr: false });
 const ChatEChart = dynamic(() => import('../../components/charts/ChatEChart'), { ssr: false });
@@ -1932,7 +1933,7 @@ function ChatContent() {
                     {lastUsage && !streaming && (
                       <div className="flex items-center justify-between px-3 md:px-4 py-2 border-t border-outline-variant/10 text-xs md:text-sm text-outline gap-2">
                         <span className="truncate">{t('chat.token.usage', { input: lastUsage.inputTokens.toLocaleString(), output: lastUsage.outputTokens.toLocaleString() } as any)}
-                          <span className="ml-1 md:ml-2 text-primary/70">${(((lastUsage.inputTokens / 1_000_000) * 3 + (lastUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)}</span>
+                          <span className="ml-1 md:ml-2 text-primary/70">${calcCostUsd(lastUsage.inputTokens, lastUsage.outputTokens).toFixed(4)}</span>
                         </span>
                         {lastUsage.model && (
                           <span className="px-1.5 md:px-2 py-0.5 bg-primary/10 text-primary rounded text-xs md:text-sm shrink-0">
@@ -2387,12 +2388,12 @@ function ChatContent() {
                   {totalUsage ? (
                     <>
                       <span className="text-primary">{((totalUsage.inputTokens + totalUsage.outputTokens) / 1000).toFixed(1)}k</span>
-                      <span className="text-primary/60 ml-1 hidden md:inline">(${(((totalUsage.inputTokens / 1_000_000) * 3 + (totalUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)})</span>
+                      <span className="text-primary/60 ml-1 hidden md:inline">(${calcCostUsd(totalUsage.inputTokens, totalUsage.outputTokens).toFixed(4)})</span>
                     </>
                   ) : lastUsage ? (
                     <>
                       <span className="text-primary">{((lastUsage.inputTokens + lastUsage.outputTokens) / 1000).toFixed(1)}k</span>
-                      <span className="text-primary/60 ml-1 hidden md:inline">(${(((lastUsage.inputTokens / 1_000_000) * 3 + (lastUsage.outputTokens / 1_000_000) * 15) * 10).toFixed(4)})</span>
+                      <span className="text-primary/60 ml-1 hidden md:inline">(${calcCostUsd(lastUsage.inputTokens, lastUsage.outputTokens).toFixed(4)})</span>
                     </>
                   ) : null}
                 </div>

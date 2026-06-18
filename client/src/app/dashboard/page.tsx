@@ -11,6 +11,7 @@ import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
 import HelpButton from '../components/HelpButton';
+import { calcCostUsd } from '../../lib/pricing';
 
 interface Conversation {
   id: string;
@@ -310,7 +311,7 @@ function DashboardContent() {
     return () => clearTimeout(t);
   }, [user, showGreeting, showSpotlight]);
 
-  const costExceeded = usage && usageLimit != null && (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10) >= usageLimit;
+  const costExceeded = usage && usageLimit != null && (calcCostUsd(usage.totalInput, usage.totalOutput)) >= usageLimit;
 
   if (isLoading || !user) return null;
 
@@ -352,7 +353,7 @@ function DashboardContent() {
             <div className="flex gap-4 mb-4 text-sm">
               <div className="flex-1 bg-surface-container rounded-xl p-3">
                 <div className="text-on-surface-variant text-xs">{t('quotaRequest.currentUsage' as any)}</div>
-                <div className="font-bold text-on-surface mt-0.5">${usage ? (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10).toFixed(2) : '0.00'}</div>
+                <div className="font-bold text-on-surface mt-0.5">${usage ? (calcCostUsd(usage.totalInput, usage.totalOutput)).toFixed(2) : '0.00'}</div>
               </div>
               <div className="flex-1 bg-surface-container rounded-xl p-3">
                 <div className="text-on-surface-variant text-xs">{t('quotaRequest.currentLimit' as any)}</div>
@@ -454,7 +455,7 @@ function DashboardContent() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-on-surface">{t('quotaRequest.limitReached' as any)}</p>
                 <p className="text-xs text-on-surface-variant mt-0.5">
-                  ${usage ? (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10).toFixed(2) : '0'} / ${usageLimit?.toFixed(0)}
+                  ${usage ? (calcCostUsd(usage.totalInput, usage.totalOutput)).toFixed(2) : '0'} / ${usageLimit?.toFixed(0)}
                 </p>
               </div>
               {quotaHasPending ? (
@@ -611,7 +612,7 @@ function DashboardContent() {
               <span className="text-outline-variant/40 mx-0.5">·</span>
               <span className="font-medium text-on-surface-variant text-xs">{t('dashboard.stats.costLabel' as any)}</span>
               {!isBeta && <span className="text-[10px] px-1 py-0.5 rounded bg-primary/10 text-primary font-bold uppercase tracking-wider">本月</span>}
-              <span className="font-bold text-success">${usage ? (((usage.totalInput * 3 + usage.totalOutput * 15) / 1_000_000) * 10).toFixed(2) : '0.00'}{usageLimit != null ? <span className="text-warning font-bold"> / ${usageLimit.toFixed(0)}</span> : null}</span>
+              <span className="font-bold text-success">${usage ? (calcCostUsd(usage.totalInput, usage.totalOutput)).toFixed(2) : '0.00'}{usageLimit != null ? <span className="text-warning font-bold"> / ${usageLimit.toFixed(0)}</span> : null}</span>
               {costExceeded && (
                 quotaHasPending ? (
                   <span className="ml-2 px-2 py-0.5 text-xs bg-warning/10 text-warning rounded-full font-bold">{t('quotaRequest.pending' as any)}</span>

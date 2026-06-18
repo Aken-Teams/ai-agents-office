@@ -57,6 +57,11 @@ export const config = {
   // Deploy mode: 'pro-panjit' (internal) | 'pro-out' (external, per-user quota)
   deployMode: (process.env.DEPLOY_MODE || 'pro-panjit') as 'pro-panjit' | 'pro-out',
 
+  // Billing markup applied to raw Claude Sonnet pricing ($3/M in, $15/M out) for
+  // all displayed token counts and dollar costs. pro-out (external) bills at ×2;
+  // all other deploy modes at ×10.
+  pricingMarkup: (process.env.DEPLOY_MODE || 'pro-panjit') === 'pro-out' ? 2 : 10,
+
   // AD (Active Directory) integration — pro-panjit only
   adApiUrl: process.env.AD_API_URL || 'https://apigw.panjit.com.tw/ldap/api/v1',
   adApiKey: process.env.AD_API_KEY || process.env.AD_API || '',

@@ -14,6 +14,7 @@ import { I18nProvider } from '../../../i18n';
 import Navbar from '../../components/Navbar';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 import TeamMarkdown from '../../components/TeamMarkdown';
+import { calcCostUsd } from '../../../lib/pricing';
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
@@ -52,6 +53,7 @@ function TeamRunContent() {
   // File-based analysis: attach files → team analyses them; default no web (file-only).
   const [attachedFiles, setAttachedFiles] = useState<{ id: string; name: string }[]>([]);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [imageWarn, setImageWarn] = useState<string | null>(null);
   const [allowWeb, setAllowWeb] = useState(true);   // no file → web on; file → defaults off (effect below)
   const [showWebWarn, setShowWebWarn] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -151,6 +153,13 @@ function TeamRunContent() {
 
   const handleAttach = useCallback(async (fileList: FileList | null) => {
     if (!fileList || !fileList.length || !token) return;
+    // Images over 5MB are skipped by the team's vision reader — warn up front
+    // instead of letting the upload look successful but go unanalysed.
+    const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+    const tooBig = Array.from(fileList).filter(f => f.type.startsWith('image/') && f.size > MAX_IMAGE_BYTES);
+    setImageWarn(tooBig.length
+      ? `圖片「${tooBig.map(f => f.name).join('、')}」超過 5MB，團隊將無法分析此圖片內容，請壓縮後再上傳。`
+      : null);
     setUploadingFile(true);
     try {
       const formData = new FormData();
@@ -273,7 +282,7 @@ function TeamRunContent() {
     }
     setSynthesis(run.result || '');
     setSynthRunning(false);
-    setTotals({ inputTokens: run.input_tokens, outputTokens: run.output_tokens, costUsd: Math.round(((run.input_tokens / 1e6) * 3 + (run.output_tokens / 1e6) * 15) * 10 * 100) / 100 });
+    setTotals({ inputTokens: run.input_tokens, outputTokens: run.output_tokens, costUsd: Math.round(calcCostUsd(run.input_tokens, run.output_tokens) * 100) / 100 });
     setQuestion(run.question);
     let outs: Array<{ memberId: string; name: string; icon: string | null; text: string; text2?: string }> = [];
     try { outs = JSON.parse(run.member_outputs || '[]'); } catch { /* ignore */ }
@@ -426,7 +435,7 @@ function TeamRunContent() {
                 <span key={f.id} className="inline-flex items-center gap-1.5 bg-surface-container-high rounded-lg pl-2 pr-1 py-1 text-xs text-on-surface">
                   <span className="material-symbols-outlined text-[15px] text-primary">description</span>
                   <span className="truncate max-w-[180px]">{f.name}</span>
-                  <button onClick={() => setAttachedFiles(prev => prev.filter(x => x.id !== f.id))} className="text-on-surface-variant hover:bg-surface-container-highest rounded p-0.5" title="移除">
+                  <button onClick={() => { setAttachedFiles(prev => prev.filter(x => x.id !== f.id)); setImageWarn(null); }} className="text-on-surface-variant hover:bg-surface-container-highest rounded p-0.5" title="移除">
                     <span className="material-symbols-outlined text-[14px]">close</span>
                   </button>
                 </span>
@@ -436,6 +445,12 @@ function TeamRunContent() {
                   <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>上傳中…
                 </span>
               )}
+            </div>
+          )}
+          {imageWarn && (
+            <div className="mb-2 flex items-start gap-1.5 text-xs text-error">
+              <span className="material-symbols-outlined text-[15px] shrink-0">warning</span>
+              <span className="leading-relaxed">{imageWarn}</span>
             </div>
           )}
           <div

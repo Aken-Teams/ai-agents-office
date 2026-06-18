@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
+import { PRICING_MARKUP } from '../../../lib/pricing';
 
 interface UserRow {
   id: string;
@@ -20,7 +21,7 @@ interface UserRow {
 }
 
 function calcCost(input: number, output: number): number {
-  return ((input / 1_000_000 * 3) + (output / 1_000_000 * 15)) * 10;
+  return ((input / 1_000_000 * 3) + (output / 1_000_000 * 15)) * PRICING_MARKUP;
 }
 
 function formatCost(cost: number): string {

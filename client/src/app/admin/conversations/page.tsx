@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm';
 import dynamic from 'next/dynamic';
 import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
+import { PRICING_MARKUP } from '../../../lib/pricing';
 
 const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { ssr: false });
 const ChatEChart = dynamic(() => import('../../components/charts/ChatEChart'), { ssr: false });
@@ -105,7 +106,7 @@ function formatTokens(n: number) {
 }
 
 function calcCost(input: number, output: number): number {
-  return ((input / 1_000_000 * 3) + (output / 1_000_000 * 15)) * 10;
+  return ((input / 1_000_000 * 3) + (output / 1_000_000 * 15)) * PRICING_MARKUP;
 }
 
 function formatCost(cost: number): string {

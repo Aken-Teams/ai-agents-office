@@ -117,6 +117,7 @@ export interface ClaudeCliOptions {
   useApiKey?: boolean;                 // Internal: force API key auth (set by retry logic)
   model?: string;                      // Override default model (e.g. 'claude-haiku-4-5-20251001' for fast edits)
   maxTurns?: number;                   // Cap tool-loop turns (e.g. bounded WebSearch for team members)
+  images?: { media_type: string; data: string }[];  // base64 image blocks delivered via stream-json input (vision)
 }
 
 interface ClaudeResult {
@@ -271,6 +272,13 @@ export function spawnClaude(
     args.push('--model', options.model);
   }
 
+  // Vision: when image blocks are supplied, deliver the user message as
+  // stream-json so it can carry base64 image content alongside the text.
+  const hasImages = !!(options.images && options.images.length);
+  if (hasImages) {
+    args.push('--input-format', 'stream-json');
+  }
+
   // Note: Claude CLI auto-memory is per-project (based on cwd path hash).
   // Each user/conversation/skill gets a unique sandbox path, so auto-memory is already isolated.
 
@@ -369,8 +377,23 @@ export function spawnClaude(
 
     currentProc = proc;
 
-    // Write user message to stdin
-    proc.stdin!.write(message);
+    // Write user message to stdin. With images, use a stream-json user message
+    // carrying the prompt text plus the image attachments as base64 blocks.
+    if (hasImages) {
+      const payload = JSON.stringify({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: message },
+            ...options.images!.map(im => ({ type: 'image', source: { type: 'base64', media_type: im.media_type, data: im.data } })),
+          ],
+        },
+      }) + '\n';
+      proc.stdin!.write(payload);
+    } else {
+      proc.stdin!.write(message);
+    }
     proc.stdin!.end();
 
     // Accumulated token counts (per-attempt)

@@ -39,7 +39,7 @@ export async function getUserDisplayCost(userId: string): Promise<number> {
 
   const row = await dbGet<{ total_input: number; total_output: number }>(query, ...params);
   if (!row) return 0;
-  return ((row.total_input / 1_000_000) * 3 + (row.total_output / 1_000_000) * 15) * 10;
+  return ((row.total_input / 1_000_000) * 3 + (row.total_output / 1_000_000) * 15) * config.pricingMarkup;
 }
 
 /**
