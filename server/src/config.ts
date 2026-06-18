@@ -54,6 +54,9 @@ export const config = {
   // DeepSeek
   deepseekApiKey: process.env.DEEPSEEK_API_KEY || '',
 
+  // Google Gemini — infographic HTML + raster image generation
+  geminiApiKey: process.env.GEMINI_API_KEY || '',
+
   // Deploy mode: 'pro-panjit' (internal) | 'pro-out' (external, per-user quota)
   deployMode: (process.env.DEPLOY_MODE || 'pro-panjit') as 'pro-panjit' | 'pro-out',
 

@@ -14,6 +14,7 @@ import { getSkill, buildSystemPrompt, buildMemoryContext, buildCrossAssistantCon
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from '../services/uploadContext.js';
 import { Orchestrator } from '../services/orchestrator.js';
 import { enforceDataFidelity } from '../services/dataFidelityGuard.js';
+import { parseInfographicDirective, renderInfographic } from '../services/infographicService.js';
 import type { DocumentBlock } from '../types.js';
 import { extractMemoryAndSummary } from '../services/memoryExtractor.js';
 import { config } from '../config.js';
@@ -489,8 +490,27 @@ async function handleDirect(
           }
 
           const sandboxPath = getSandboxPath(userId, conversationId);
+
+          // 資訊圖表技能：Claude 已輸出 gemini-infographic 指令區塊，這裡呼叫
+          // Gemini 實際生成（html 或 png）並寫進 sandbox，交給下方既有的檔案
+          // 註冊流程交付。Gemini 失敗不影響其他流程，只回報錯誤訊息。
+          let extraExpectedType: string | undefined;
+          if (effectiveSkillId === 'infographic-gen' && assistantText) {
+            const directive = parseInfographicDirective(assistantText);
+            if (directive) {
+              try {
+                const rendered = await renderInfographic(directive, sandboxPath);
+                extraExpectedType = rendered.fileType;
+                console.log(`[Infographic] 以 Gemini 生成 ${rendered.fileType}（約 $${rendered.usage.costUsd.toFixed(4)}）`);
+              } catch (e) {
+                sseWrite({ type: 'error', data: `資訊圖表生成失敗：${(e as Error).message}` });
+              }
+            }
+          }
+
           const ft = skill?.fileType;
-          const expectedTypes = ft ? new Set([ft]) : undefined;
+          const typeSet = [ft, extraExpectedType].filter((t): t is string => !!t);
+          const expectedTypes = typeSet.length ? new Set(typeSet) : undefined;
           const newFiles = await registerNewFiles(userId, conversationId, sandboxPath, existingFiles, expectedTypes);
           if (newFiles.length > 0) {
             // Capture blocks first (no emit yet), verify + auto-correct, then show.

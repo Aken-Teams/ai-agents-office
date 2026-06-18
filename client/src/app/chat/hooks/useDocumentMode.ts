@@ -7,7 +7,7 @@ export type DocLayoutType = 'slides' | 'doc' | 'sheet' | 'webapp';
 export type ViewMode = 'chat' | 'document';
 
 export const FILE_GEN_SKILLS = new Set([
-  'pptx-gen', 'docx-gen', 'xlsx-gen', 'pdf-gen', 'slides-gen', 'webapp-gen',
+  'pptx-gen', 'docx-gen', 'xlsx-gen', 'pdf-gen', 'slides-gen', 'webapp-gen', 'infographic-gen',
 ]);
 
 export const SKILL_TO_LAYOUT: Record<string, DocLayoutType> = {
@@ -17,6 +17,9 @@ export const SKILL_TO_LAYOUT: Record<string, DocLayoutType> = {
   'pdf-gen': 'doc',
   'xlsx-gen': 'sheet',
   'webapp-gen': 'webapp',
+  // Infographic HTML is a single full-page visual — show it in the clean
+  // single-page (webapp) viewer, not the slides viewer with blocks/rebuild.
+  'infographic-gen': 'webapp',
 };
 
 export const FILE_TYPE_TO_LAYOUT: Record<string, DocLayoutType> = {
