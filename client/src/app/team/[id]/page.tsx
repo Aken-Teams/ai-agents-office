@@ -439,7 +439,7 @@ function TeamRunContent() {
             </div>
           )}
           <div
-            className={`relative bg-surface-container rounded-2xl ring-1 transition-shadow ${isDragging ? 'ring-2 ring-primary' : 'ring-transparent focus-within:ring-primary/30'}`}
+            className={`relative flex flex-col bg-surface-container rounded-2xl ring-1 transition-shadow ${isDragging ? 'ring-2 ring-primary' : 'ring-transparent focus-within:ring-primary/30'}`}
             onDragEnter={e => { e.preventDefault(); e.stopPropagation(); dragCounter.current++; setIsDragging(true); }}
             onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
             onDragLeave={e => { e.preventDefault(); e.stopPropagation(); dragCounter.current--; if (dragCounter.current <= 0) { dragCounter.current = 0; setIsDragging(false); } }}
@@ -459,10 +459,10 @@ function TeamRunContent() {
               disabled={running}
               placeholder="輸入要這個團隊一起分析的議題或問題…"
               rows={3}
-              className="w-full bg-transparent border-none outline-none focus:ring-0 resize-none py-3 px-4 pb-12 text-sm text-on-surface placeholder:text-outline min-h-[104px] max-h-[220px] leading-snug"
+              className="w-full bg-transparent border-none outline-none focus:ring-0 resize-none pt-3 px-4 pb-2 text-sm text-on-surface placeholder:text-outline min-h-[88px] max-h-[220px] leading-snug"
             />
-            {/* Toolbar inside the box (bottom) — pb-12 on the textarea keeps typed text clear of it */}
-            <div className="absolute left-2 bottom-2 flex items-center gap-0.5">
+            {/* Toolbar row below the textarea — its own flex row so it can never cover the text */}
+            <div className="flex items-center gap-0.5 px-2.5 pt-1 pb-2.5">
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={running || uploadingFile}
@@ -479,15 +479,15 @@ function TeamRunContent() {
               >
                 <span className="material-symbols-outlined text-[20px]">{allowWeb ? 'public' : 'public_off'}</span>
               </button>
+              <button
+                onClick={handleRun}
+                disabled={running || !question.trim()}
+                title="跑團隊分析（⌘ / Ctrl + Enter）"
+                className="ml-auto w-9 h-9 cyber-gradient rounded-full flex items-center justify-center text-on-primary disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
+              >
+                <span className={`material-symbols-outlined text-[20px] ${running ? 'animate-spin' : ''}`}>{running ? 'progress_activity' : 'play_arrow'}</span>
+              </button>
             </div>
-            <button
-              onClick={handleRun}
-              disabled={running || !question.trim()}
-              title="跑團隊分析（⌘ / Ctrl + Enter）"
-              className="absolute right-2 bottom-2 w-9 h-9 cyber-gradient rounded-full flex items-center justify-center text-on-primary disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
-            >
-              <span className={`material-symbols-outlined text-[20px] ${running ? 'animate-spin' : ''}`}>{running ? 'progress_activity' : 'play_arrow'}</span>
-            </button>
           </div>
           <div className="flex items-center gap-1.5 mt-2 px-1 text-xs text-on-surface-variant">
             <span className="material-symbols-outlined text-[14px] text-primary">bolt</span>
