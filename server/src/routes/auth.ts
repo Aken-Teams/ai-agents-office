@@ -295,14 +295,20 @@ router.post('/resend-code', async (req: Request, res: Response) => {
 router.post('/login', async (req: Request, res: Response) => {
   try {
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
-    if (!checkAuthRate(ip, 'login', 10, 15 * 60_000)) {
-      res.status(429).json({ error: '登入請求過於頻繁，請 15 分鐘後再試' }); return;
-    }
 
     const { email, password } = req.body;
     if (!email || !password) { res.status(400).json({ error: '電子信箱和密碼為必填' }); return; }
 
-    const lockout = checkLoginLockout(email.toLowerCase().trim());
+    // Rate-limit per ACCOUNT (＋source IP), NOT per IP alone — otherwise many users
+    // behind one shared/NAT IP (e.g. a whole office) share a single counter and one
+    // person's logins lock out everyone. Per-account brute force is still covered by
+    // checkLoginLockout below.
+    const acct = email.toLowerCase().trim();
+    if (!checkAuthRate(`${ip}:${acct}`, 'login', 10, 15 * 60_000)) {
+      res.status(429).json({ error: '此帳號登入請求過於頻繁，請 15 分鐘後再試' }); return;
+    }
+
+    const lockout = checkLoginLockout(acct);
     if (lockout.locked) {
       const mins = Math.ceil(lockout.remainingMs / 60_000);
       res.status(423).json({ error: `帳號已被暫時鎖定，請 ${mins} 分鐘後再試` }); return;
@@ -783,13 +789,18 @@ async function fetchAdUserDetail(username: string, domain: string): Promise<Part
 router.post('/ad/login', async (req: Request, res: Response) => {
   try {
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
-    if (!checkAuthRate(ip, 'adlogin', 10, 15 * 60_000)) {
-      res.status(429).json({ error: '登入請求過於頻繁，請 15 分鐘後再試' }); return;
-    }
 
     const { username, password, domain } = req.body;
     if (!username || !password) {
       res.status(400).json({ error: '工號和密碼為必填' }); return;
+    }
+
+    // Rate-limit per AD account (＋source IP), NOT per IP alone — the whole company
+    // shares one corporate/NAT IP, so an IP-only limit lets one person's logins
+    // lock out everyone. Per-account keeps each employee's throttle independent.
+    const adKey = `${ip}:${String(username).trim().toLowerCase()}:${String(domain || '').trim().toLowerCase()}`;
+    if (!checkAuthRate(adKey, 'adlogin', 10, 15 * 60_000)) {
+      res.status(429).json({ error: '此帳號登入請求過於頻繁，請 15 分鐘後再試' }); return;
     }
 
     // Call AD API
