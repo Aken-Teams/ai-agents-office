@@ -20,19 +20,24 @@ const SKILL_META: Record<string, { icon: string; iconColor: string; bgColor: str
   'docx-gen': { icon: 'description', iconColor: 'text-tertiary', bgColor: 'bg-tertiary/10', tag: '文件生成', tagColor: 'text-primary' },
   'xlsx-gen': { icon: 'table_chart', iconColor: 'text-success', bgColor: 'bg-success/10', tag: '文件生成', tagColor: 'text-primary' },
   'pdf-gen':  { icon: 'picture_as_pdf', iconColor: 'text-error', bgColor: 'bg-error/10', tag: '文件生成', tagColor: 'text-primary' },
+  'slides-gen': { icon: 'slideshow', iconColor: 'text-secondary', bgColor: 'bg-secondary/10', tag: '文件生成', tagColor: 'text-primary' },
+  'infographic-gen': { icon: 'auto_awesome', iconColor: 'text-secondary', bgColor: 'bg-secondary/10', tag: '圖像生成', tagColor: 'text-primary' },
+  'webapp-gen': { icon: 'dashboard', iconColor: 'text-primary', bgColor: 'bg-primary/10', tag: '文件生成', tagColor: 'text-primary' },
   'router':   { icon: 'route', iconColor: 'text-primary', bgColor: 'bg-primary/10', tag: '系統核心', tagColor: 'text-tertiary' },
   'research': { icon: 'travel_explore', iconColor: 'text-tertiary', bgColor: 'bg-tertiary/10', tag: '輔助代理', tagColor: 'text-secondary' },
   'planner':  { icon: 'account_tree', iconColor: 'text-secondary', bgColor: 'bg-secondary/10', tag: '輔助代理', tagColor: 'text-secondary' },
   'reviewer': { icon: 'rate_review', iconColor: 'text-primary', bgColor: 'bg-primary/10', tag: '輔助代理', tagColor: 'text-secondary' },
 };
 
-const DEFAULT_META = { icon: 'smart_toy', iconColor: 'text-on-surface-variant', bgColor: 'bg-surface-container-highest', tag: 'Agent', tagColor: 'text-on-surface-variant' };
+const DEFAULT_META = { icon: 'smart_toy', iconColor: 'text-on-surface-variant', bgColor: 'bg-surface-container-highest', tag: '代理', tagColor: 'text-on-surface-variant' };
 
 const FILE_TYPE_LABELS: Record<string, string> = {
   pptx: 'PowerPoint (.pptx)',
   docx: 'Word (.docx)',
   xlsx: 'Excel (.xlsx)',
   pdf: 'PDF (.pdf)',
+  png: '圖片 (.png)',
+  html: 'Web (.html)',
 };
 
 const ROLE_LABELS: Record<string, string> = {

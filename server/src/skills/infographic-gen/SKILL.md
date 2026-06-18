@@ -1,7 +1,7 @@
 ---
 name: Infographic Generator
-description: Generate data-accurate infographics (HTML) and AI illustrations (image) via Gemini — for visual summaries, trend charts, concept art
-fileType: html
+description: Generate rich infographics as images (PNG) via Gemini in selectable styles — data charts, process/comparison/timeline visuals, illustrations and concept art
+fileType: png
 role: worker
 order: 7
 allowedTools:
