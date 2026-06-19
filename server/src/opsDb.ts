@@ -62,6 +62,8 @@ export async function initOpsDb(): Promise<void> {
         resolution_note  TEXT,
         resolved_by      VARCHAR(255),
         resolved_at      DATETIME,
+        deleted_at       DATETIME,
+        admin_hidden_at  DATETIME,
         created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_ops_tickets_user (user_id),
@@ -69,6 +71,20 @@ export async function initOpsDb(): Promise<void> {
         INDEX idx_ops_tickets_created (created_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    // Migration: add soft-delete columns to pre-existing tables.
+    //   deleted_at      = the ticket is gone — set by a user withdrawing their own
+    //                     report (while open) OR by an admin deleting it. Hidden from
+    //                     everyone; the row is kept in db_Ops.
+    //   admin_hidden_at = reserved for a future "hide from ops queue only" feature
+    //                     (currently unused; admin delete uses deleted_at).
+    for (const colName of ['deleted_at', 'admin_hidden_at']) {
+      const col = await opsGet<{ n: number }>(
+        "SELECT COUNT(*) AS n FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'ops_tickets' AND COLUMN_NAME = ?",
+        config.opsMysqlDb, colName,
+      );
+      if (!col || col.n === 0) await opsPool.query(`ALTER TABLE ops_tickets ADD COLUMN ${colName} DATETIME NULL`);
+    }
 
     await opsPool.query(`
       CREATE TABLE IF NOT EXISTS ops_ticket_images (

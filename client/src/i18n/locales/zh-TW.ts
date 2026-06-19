@@ -1296,6 +1296,8 @@ const zhTW = {
   'report.status.in_progress': '處理中',
   'report.status.resolved': '已解決',
   'report.status.rejected': '不予處理',
+  'report.withdraw': '撤回回報',
+  'report.withdrawConfirm': '確定要撤回這則回報嗎？撤回後將無法復原。',
   'quotaRequest.modalTitle': '申請額度調整',
   'quotaRequest.currentUsage': '目前用量',
   'quotaRequest.currentLimit': '目前額度',

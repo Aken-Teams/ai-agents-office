@@ -1289,6 +1289,8 @@ const zhCN = {
   'report.status.in_progress': '处理中',
   'report.status.resolved': '已解决',
   'report.status.rejected': '不予处理',
+  'report.withdraw': '撤回回报',
+  'report.withdrawConfirm': '确定要撤回这则回报吗？撤回后将无法恢复。',
   'quotaRequest.modalTitle': '申请额度调整',
   'quotaRequest.currentUsage': '当前用量',
   'quotaRequest.currentLimit': '当前额度',

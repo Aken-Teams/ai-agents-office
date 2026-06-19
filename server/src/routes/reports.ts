@@ -81,7 +81,7 @@ reportsRouter.post('/', async (req: Request, res: Response) => {
 
 reportsRouter.get('/', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const tickets = await opsAll<any>('SELECT * FROM ops_tickets WHERE user_id = ? ORDER BY created_at DESC LIMIT 50', userId);
+  const tickets = await opsAll<any>('SELECT * FROM ops_tickets WHERE user_id = ? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 50', userId);
   const ids = tickets.map(t => t.id);
   const images = ids.length
     ? await opsAll<OpsImage>(`SELECT id, ticket_id, role, file_path, mime_type FROM ops_ticket_images WHERE ticket_id IN (${ids.map(() => '?').join(',')})`, ...ids)
@@ -99,13 +99,23 @@ reportsRouter.get('/image/:imgId', async (req: Request, res: Response) => {
   serveOpsImage(res, img);
 });
 
+// Withdraw (soft-delete) own report — only while still untouched (open).
+reportsRouter.delete('/:id', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const tk = await opsGet<{ status: string }>('SELECT status FROM ops_tickets WHERE id = ? AND user_id = ? AND deleted_at IS NULL', req.params.id, userId);
+  if (!tk) { res.status(404).json({ error: 'Not found' }); return; }
+  if (tk.status !== 'open') { res.status(400).json({ error: '已開始處理，無法撤回' }); return; }
+  await opsRun('UPDATE ops_tickets SET deleted_at = NOW() WHERE id = ?', req.params.id);
+  res.json({ ok: true });
+});
+
 // ──────────────────── Admin router (/api/admin/reports) ───────────────────────
 export const adminReportsRouter = Router();
 adminReportsRouter.use(adminMiddleware);
 
 adminReportsRouter.get('/', async (req: Request, res: Response) => {
   const { status, q } = req.query as { status?: string; q?: string };
-  let sql = 'SELECT * FROM ops_tickets WHERE 1=1';
+  let sql = 'SELECT * FROM ops_tickets WHERE deleted_at IS NULL';
   const params: any[] = [];
   if (status && OPS_TICKET_STATUSES.includes(status as any)) { sql += ' AND status = ?'; params.push(status); }
   if (q && q.trim()) { sql += ' AND (title LIKE ? OR content LIKE ? OR user_email LIKE ?)'; const like = `%${q.trim()}%`; params.push(like, like, like); }
@@ -119,12 +129,12 @@ adminReportsRouter.get('/', async (req: Request, res: Response) => {
 });
 
 adminReportsRouter.get('/stats', async (_req: Request, res: Response) => {
-  const rows = await opsAll<{ status: string; n: number }>('SELECT status, COUNT(*) AS n FROM ops_tickets GROUP BY status');
+  const rows = await opsAll<{ status: string; n: number }>('SELECT status, COUNT(*) AS n FROM ops_tickets WHERE deleted_at IS NULL GROUP BY status');
   res.json(Object.fromEntries(rows.map(r => [r.status, r.n])));
 });
 
 adminReportsRouter.get('/:id', async (req: Request, res: Response) => {
-  const ticket = await opsGet<any>('SELECT * FROM ops_tickets WHERE id = ?', req.params.id);
+  const ticket = await opsGet<any>('SELECT * FROM ops_tickets WHERE id = ? AND deleted_at IS NULL', req.params.id);
   if (!ticket) { res.status(404).json({ error: 'Not found' }); return; }
   const images = await opsAll<OpsImage>('SELECT id, role FROM ops_ticket_images WHERE ticket_id = ? ORDER BY created_at ASC', req.params.id);
   res.json({ ...ticket, images });
@@ -163,4 +173,22 @@ adminReportsRouter.get('/image/:imgId', async (req: Request, res: Response) => {
   const img = await opsGet<OpsImage>('SELECT id, ticket_id, role, file_path, mime_type FROM ops_ticket_images WHERE id = ?', req.params.imgId);
   if (!img) { res.status(404).end(); return; }
   serveOpsImage(res, img);
+});
+
+// Clear the official reply (resolution note + resolution images) without removing
+// the ticket — lets an admin fix a mistaken reply. Status is left untouched so the
+// admin can re-set it with the status buttons.
+adminReportsRouter.delete('/:id/resolution', async (req: Request, res: Response) => {
+  const ticket = await opsGet<{ id: string }>('SELECT id FROM ops_tickets WHERE id = ?', req.params.id);
+  if (!ticket) { res.status(404).json({ error: 'Not found' }); return; }
+  await opsRun("DELETE FROM ops_ticket_images WHERE ticket_id = ? AND role = 'resolution'", req.params.id);
+  await opsRun('UPDATE ops_tickets SET resolution_note = NULL, resolved_by = NULL, resolved_at = NULL WHERE id = ?', req.params.id);
+  res.json({ ok: true });
+});
+
+// Soft-delete a whole ticket (cleanup spam/test/duplicates). It disappears from
+// both the admin queue and the reporter's "my reports"; the row is kept in db_Ops.
+adminReportsRouter.delete('/:id', async (req: Request, res: Response) => {
+  await opsRun('UPDATE ops_tickets SET deleted_at = NOW() WHERE id = ?', req.params.id);
+  res.json({ ok: true });
 });

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from '../../i18n';
 import { useAuth } from './AuthProvider';
+import ConfirmDialog from './ConfirmDialog';
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
@@ -74,6 +75,8 @@ export default function ReportModal({ open, onClose }: { open: boolean; onClose:
   const [minePage, setMinePage] = useState(1);
   const [detail, setDetail] = useState<Ticket | null>(null);
   const [detailTab, setDetailTab] = useState<'content' | 'result'>('content');
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
   const PAGE_SIZE = 10;
 
   // When opening a ticket, jump to the result tab if it's already been handled.
@@ -99,6 +102,13 @@ export default function ReportModal({ open, onClose }: { open: boolean; onClose:
     fetch(`${SSE_BASE}/api/reports`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json()).then((d) => setTickets(Array.isArray(d) ? d : [])).catch(() => {}).finally(() => setLoadingMine(false));
   }, [token]);
+
+  const withdraw = useCallback(async () => {
+    if (!detail || !token || withdrawing) return;
+    setWithdrawing(true);
+    await fetch(`${SSE_BASE}/api/reports/${detail.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+    setWithdrawing(false); setConfirmWithdraw(false); setDetail(null); loadMine();
+  }, [detail, token, withdrawing, loadMine]);
 
   useEffect(() => { if (open && tab === 'mine') loadMine(); }, [open, tab, loadMine]);
   useEffect(() => { if (!open) { setTab('new'); reset(); } }, [open, reset]);
@@ -136,6 +146,7 @@ export default function ReportModal({ open, onClose }: { open: boolean; onClose:
   if (!open) return null;
 
   return (
+    <>
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
         {/* Header + tabs */}
@@ -238,9 +249,16 @@ export default function ReportModal({ open, onClose }: { open: boolean; onClose:
           ) : detail ? (
             // Ticket detail — read-only "filled form", mirroring the input screen
             <div className="space-y-4">
-              <button onClick={() => setDetail(null)} className="flex items-center gap-1 text-sm text-on-surface-variant hover:text-on-surface cursor-pointer">
-                <span className="material-symbols-outlined text-[18px]">arrow_back</span>{t('report.backToList' as any)}
-              </button>
+              <div className="flex items-center justify-between">
+                <button onClick={() => setDetail(null)} className="flex items-center gap-1 text-sm text-on-surface-variant hover:text-on-surface cursor-pointer">
+                  <span className="material-symbols-outlined text-[18px]">arrow_back</span>{t('report.backToList' as any)}
+                </button>
+                {detail.status === 'open' && (
+                  <button onClick={() => setConfirmWithdraw(true)} className="inline-flex items-center gap-1 text-xs text-error hover:bg-error/10 rounded-lg px-2 py-1 transition-colors cursor-pointer">
+                    <span className="material-symbols-outlined text-[15px]">delete</span>{t('report.withdraw' as any)}
+                  </button>
+                )}
+              </div>
 
               {/* Status banner */}
               <div className={`flex items-center gap-3 rounded-xl p-3.5 ${STATUS_BANNER[detail.status] || 'bg-surface-container'}`}>
@@ -383,5 +401,17 @@ export default function ReportModal({ open, onClose }: { open: boolean; onClose:
         </div>
       </div>
     </div>
+    <ConfirmDialog
+      open={confirmWithdraw}
+      danger
+      busy={withdrawing}
+      title={t('report.withdraw' as any)}
+      message={t('report.withdrawConfirm' as any)}
+      confirmText={t('report.withdraw' as any)}
+      cancelText={t('common.cancel' as any)}
+      onConfirm={withdraw}
+      onCancel={() => setConfirmWithdraw(false)}
+    />
+    </>
   );
 }

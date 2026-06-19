@@ -1269,6 +1269,8 @@ const en = {
   'report.status.in_progress': 'In progress',
   'report.status.resolved': 'Resolved',
   'report.status.rejected': 'Won\'t fix',
+  'report.withdraw': 'Withdraw',
+  'report.withdrawConfirm': 'Withdraw this report? This action can\'t be undone.',
   'quotaRequest.modalTitle': 'Request Quota Increase',
   'quotaRequest.currentUsage': 'Current Usage',
   'quotaRequest.currentLimit': 'Current Limit',

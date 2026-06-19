@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
@@ -41,7 +42,8 @@ function AuthImage({ src, token, className }: { src: string; token: string | nul
 }
 
 export default function AdminReportsPage() {
-  const { token } = useAdminAuth();
+  const { token, canOperate } = useAdminAuth();
+  const canEdit = canOperate('reports');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [stats, setStats] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -49,6 +51,10 @@ export default function AdminReportsPage() {
   const [search, setSearch] = useState('');
 
   const [detail, setDetail] = useState<Ticket | null>(null);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [editStatus, setEditStatus] = useState('open');
   const [editNote, setEditNote] = useState('');
   const [pendingImgs, setPendingImgs] = useState<{ id: string; name: string }[]>([]);
@@ -116,6 +122,22 @@ export default function AdminReportsPage() {
     } catch { /* ignore */ } finally { setSaving(false); }
   }, [detail, saving, editStatus, editNote, pendingImgs, auth, openDetail, loadList, loadStats]);
 
+  const del = useCallback(async () => {
+    if (!detail || deleting) return;
+    setDeleting(true);
+    await fetch(`${SSE_BASE}/api/admin/reports/${detail.id}`, { method: 'DELETE', headers: auth() }).catch(() => {});
+    setDeleting(false); setConfirmDel(false); setDetail(null); loadList(); loadStats();
+  }, [detail, deleting, auth, loadList, loadStats]);
+
+  const clearResolution = useCallback(async () => {
+    if (!detail || clearing) return;
+    setClearing(true);
+    await fetch(`${SSE_BASE}/api/admin/reports/${detail.id}/resolution`, { method: 'DELETE', headers: auth() }).catch(() => {});
+    setClearing(false); setConfirmClear(false);
+    setEditNote('');
+    openDetail(detail.id); loadList();
+  }, [detail, clearing, auth, openDetail, loadList]);
+
   // ── Detail view ──────────────────────────────────────────────────────────
   if (detail) {
     const reportImgs = detail.images?.filter(i => i.role === 'report') || [];
@@ -128,6 +150,11 @@ export default function AdminReportsPage() {
           </button>
           <span className="text-base md:text-lg font-black text-on-surface font-headline truncate">{detail.title}</span>
           <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium shrink-0 ${STATUS_STYLE[detail.status]}`}>{STATUS_LABEL[detail.status]}</span>
+          {canEdit && (
+            <button onClick={() => setConfirmDel(true)} className="ml-auto inline-flex items-center gap-1 text-xs text-error hover:bg-error/10 rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer shrink-0">
+              <span className="material-symbols-outlined text-[16px]">delete</span>刪除
+            </button>
+          )}
         </header>
         <div className="flex-1 overflow-y-auto p-4 md:p-8">
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
@@ -161,39 +188,77 @@ export default function AdminReportsPage() {
             {/* Admin actions */}
             <div className="lg:col-span-2 space-y-4">
               <div className="rounded-xl border border-outline-variant/20 bg-surface-container/30 p-4 space-y-4 lg:sticky lg:top-0">
-                <p className="text-sm font-bold text-on-surface flex items-center gap-1.5"><span className="material-symbols-outlined text-[18px] text-primary">support_agent</span>處理</p>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant mb-1.5">狀態</label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {STATUSES.map(s => (
-                      <button key={s} onClick={() => setEditStatus(s)} className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${editStatus === s ? 'border-primary bg-primary/5 text-primary' : 'border-outline-variant/30 text-on-surface-variant hover:border-primary/40'}`}>{STATUS_LABEL[s]}</button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant mb-1.5">處理說明</label>
-                  <textarea value={editNote} onChange={e => setEditNote(e.target.value)} rows={5} placeholder="說明處理結果，會顯示給回報者…"
-                    className="w-full bg-surface-container border border-outline-variant/20 focus:border-primary focus:ring-1 focus:ring-primary/30 rounded-lg py-2 px-3 text-sm text-on-surface placeholder:text-outline outline-none resize-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-on-surface-variant mb-1.5">處理附圖（選填）</label>
-                  <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { handleUpload(e.target.files); e.target.value = ''; }} />
-                  <div className="flex flex-wrap gap-1.5">
-                    {resolutionImgs.map(im => <AuthImage key={im.id} src={`${SSE_BASE}/api/admin/reports/image/${im.id}`} token={token} className="w-14 h-14 object-cover rounded-lg border border-outline-variant/20" />)}
-                    {pendingImgs.map(im => (
-                      <span key={im.id} className="inline-flex items-center gap-1 bg-surface-container-high rounded-lg pl-2 pr-1 py-1 text-xs"><span className="material-symbols-outlined text-[14px] text-primary">image</span><span className="truncate max-w-[80px]">{im.name}</span><button onClick={() => setPendingImgs(p => p.filter(x => x.id !== im.id))}><span className="material-symbols-outlined text-[13px]">close</span></button></span>
-                    ))}
-                    <button onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-dashed border-outline-variant/40 text-xs text-on-surface-variant hover:border-primary/50 disabled:opacity-50"><span className="material-symbols-outlined text-[15px]">{uploading ? 'progress_activity' : 'add_photo_alternate'}</span>加圖片</button>
-                  </div>
-                </div>
-                <button onClick={save} disabled={saving} className="w-full py-2.5 rounded-xl text-sm font-bold text-on-primary cyber-gradient disabled:opacity-40 transition-all cursor-pointer">
-                  {saving ? '儲存中…' : savedMsg ? '已儲存 ✓' : '儲存'}
-                </button>
+                <p className="text-sm font-bold text-on-surface flex items-center gap-1.5"><span className="material-symbols-outlined text-[18px] text-primary">support_agent</span>處理{!canEdit && <span className="ml-1 text-[11px] font-normal text-on-surface-variant">（檢閱者唯讀）</span>}</p>
+                {canEdit ? (
+                  <>
+                    <div>
+                      <label className="block text-xs font-bold text-on-surface-variant mb-1.5">狀態</label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {STATUSES.map(s => (
+                          <button key={s} onClick={() => setEditStatus(s)} className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${editStatus === s ? 'border-primary bg-primary/5 text-primary' : 'border-outline-variant/30 text-on-surface-variant hover:border-primary/40'}`}>{STATUS_LABEL[s]}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-on-surface-variant mb-1.5">處理說明</label>
+                      <textarea value={editNote} onChange={e => setEditNote(e.target.value)} rows={5} placeholder="說明處理結果，會顯示給回報者…"
+                        className="w-full bg-surface-container border border-outline-variant/20 focus:border-primary focus:ring-1 focus:ring-primary/30 rounded-lg py-2 px-3 text-sm text-on-surface placeholder:text-outline outline-none resize-none" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-on-surface-variant mb-1.5">處理附圖（選填）</label>
+                      <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { handleUpload(e.target.files); e.target.value = ''; }} />
+                      <div className="flex flex-wrap gap-1.5">
+                        {resolutionImgs.map(im => <AuthImage key={im.id} src={`${SSE_BASE}/api/admin/reports/image/${im.id}`} token={token} className="w-14 h-14 object-cover rounded-lg border border-outline-variant/20" />)}
+                        {pendingImgs.map(im => (
+                          <span key={im.id} className="inline-flex items-center gap-1 bg-surface-container-high rounded-lg pl-2 pr-1 py-1 text-xs"><span className="material-symbols-outlined text-[14px] text-primary">image</span><span className="truncate max-w-[80px]">{im.name}</span><button onClick={() => setPendingImgs(p => p.filter(x => x.id !== im.id))}><span className="material-symbols-outlined text-[13px]">close</span></button></span>
+                        ))}
+                        <button onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-dashed border-outline-variant/40 text-xs text-on-surface-variant hover:border-primary/50 disabled:opacity-50"><span className="material-symbols-outlined text-[15px]">{uploading ? 'progress_activity' : 'add_photo_alternate'}</span>加圖片</button>
+                      </div>
+                    </div>
+                    <button onClick={save} disabled={saving} className="w-full py-2.5 rounded-xl text-sm font-bold text-on-primary cyber-gradient disabled:opacity-40 transition-all cursor-pointer">
+                      {saving ? '儲存中…' : savedMsg ? '已儲存 ✓' : '儲存'}
+                    </button>
+                    {(detail.resolution_note || resolutionImgs.length > 0) && (
+                      <button onClick={() => setConfirmClear(true)} className="w-full inline-flex items-center justify-center gap-1 py-1.5 text-xs text-error hover:bg-error/10 rounded-lg transition-colors cursor-pointer">
+                        <span className="material-symbols-outlined text-[15px]">backspace</span>清除官方回覆
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div><label className="block text-xs font-bold text-on-surface-variant mb-1.5">狀態</label><span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_STYLE[detail.status]}`}>{STATUS_LABEL[detail.status]}</span></div>
+                    <div>
+                      <label className="block text-xs font-bold text-on-surface-variant mb-1.5">處理說明</label>
+                      <div className="bg-surface-container border border-outline-variant/20 rounded-lg py-2 px-3 text-sm text-on-surface whitespace-pre-wrap leading-relaxed min-h-[3rem]">{detail.resolution_note || '尚未處理'}</div>
+                    </div>
+                    {resolutionImgs.length > 0 && <div className="flex flex-wrap gap-1.5">{resolutionImgs.map(im => <AuthImage key={im.id} src={`${SSE_BASE}/api/admin/reports/image/${im.id}`} token={token} className="w-14 h-14 object-cover rounded-lg border border-outline-variant/20" />)}</div>}
+                  </>
+                )}
                 {detail.resolved_by && <p className="text-[11px] text-on-surface-variant/60 text-center">處理人：{detail.resolved_by}</p>}
               </div>
             </div>
           </div>
         </div>
+        <ConfirmDialog
+          open={confirmDel}
+          danger
+          busy={deleting}
+          title="刪除回報"
+          message="確定刪除整則回報嗎？刪除後前台使用者與後台都不會再看到（資料仍保留）。"
+          confirmText="刪除"
+          onConfirm={del}
+          onCancel={() => setConfirmDel(false)}
+        />
+        <ConfirmDialog
+          open={confirmClear}
+          danger
+          busy={clearing}
+          title="清除官方回覆"
+          message="確定清除這則回報的官方回覆嗎？處理說明與附圖會被移除，但回報本身保留。"
+          confirmText="清除"
+          onConfirm={clearResolution}
+          onCancel={() => setConfirmClear(false)}
+        />
       </>
     );
   }
