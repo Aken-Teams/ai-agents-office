@@ -9,6 +9,7 @@ import { useAuth } from './AuthProvider';
 import { useTranslation } from '../../i18n';
 import type { Locale, Theme } from '../../i18n/types';
 import EmailAgentWidget from './EmailAgentWidget';
+import ReportModal from './ReportModal';
 
 const SIDEBAR_KEY = 'sidebar-collapsed';
 const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
@@ -166,6 +167,7 @@ export default function Navbar() {
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
   const [hoveredTemplate, setHoveredTemplate] = useState<string | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem(SIDEBAR_KEY) === '1';
     return false;
@@ -370,6 +372,12 @@ export default function Navbar() {
     }
   }
 
+  function closePasswordModal() {
+    setShowPasswordForm(false);
+    setPasswordError(''); setPasswordSuccess(false);
+    setCurrentPassword(''); setNewPassword(''); setConfirmPassword('');
+  }
+
   async function handleNameSave() {
     const trimmed = nameInput.trim();
     if (trimmed.length > 50) {
@@ -422,6 +430,41 @@ export default function Navbar() {
 
   return (
     <>
+      <ReportModal open={showReportModal} onClose={() => setShowReportModal(false)} />
+
+      {/* Change-password modal (replaces the old inline expand) */}
+      {showPasswordForm && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={closePasswordModal}>
+          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-headline font-bold text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-[20px]">lock</span>
+                {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
+              </h3>
+              <button onClick={closePasswordModal} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface-variant cursor-pointer">
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+            <div className="space-y-2.5">
+              {!isOAuthOnly && (
+                <input type="password" placeholder={t('userMenu.changePassword.current')} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-surface-container border border-outline-variant/20 rounded-lg text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
+              )}
+              <input type="password" placeholder={t('userMenu.changePassword.new')} value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                className="w-full px-3 py-2.5 bg-surface-container border border-outline-variant/20 rounded-lg text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
+              <input type="password" placeholder={t('userMenu.changePassword.confirm')} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                className="w-full px-3 py-2.5 bg-surface-container border border-outline-variant/20 rounded-lg text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30" />
+              {passwordError && <p className="text-xs text-error">{passwordError}</p>}
+              {passwordSuccess && <p className="text-xs text-success">{t('userMenu.changePassword.success')}</p>}
+              <button onClick={handlePasswordChange} disabled={changingPassword || (!isOAuthOnly && !currentPassword) || !newPassword || !confirmPassword}
+                className="w-full mt-1 py-2.5 rounded-xl text-sm font-bold text-on-primary cyber-gradient disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer">
+                {t('userMenu.changePassword.submit')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Top Bar */}
       <header className="md:hidden fixed top-0 left-0 right-0 h-14 bg-surface-dim border-b border-outline-variant/10 flex items-center justify-between px-4 z-50">
         <Link href="/dashboard" className="flex items-center gap-2 no-underline">
@@ -509,44 +552,16 @@ export default function Navbar() {
               <div className={`grid transition-[grid-template-rows] duration-200 ease-in-out ${mobileUserExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                 <div className="overflow-hidden">
                   <div className="border-t border-outline-variant/10">
-                    {/* Change Password */}
-                    <div className="px-5 py-2.5 border-b border-outline-variant/10">
-                      {!showPasswordForm ? (
-                        <button
-                          onClick={() => setShowPasswordForm(true)}
-                          className="flex items-center gap-2 text-sm text-on-surface-variant active:text-on-surface transition-colors w-full bg-transparent cursor-pointer py-1"
-                        >
-                          <span className="material-symbols-outlined text-sm">lock</span>
-                          {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
-                        </button>
-                      ) : (
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="text-xs font-bold text-on-surface">
-                              {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
-                            </p>
-                            <button onClick={() => { setShowPasswordForm(false); setPasswordError(''); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }} className="text-on-surface-variant active:text-on-surface cursor-pointer bg-transparent p-0">
-                              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
-                            </button>
-                          </div>
-                          {!isOAuthOnly && (
-                            <input
-                              type="password"
-                              placeholder={t('userMenu.changePassword.current')}
-                              value={currentPassword}
-                              onChange={e => setCurrentPassword(e.target.value)}
-                              className="w-full px-2.5 py-1.5 bg-surface-container-high border border-outline-variant/20 rounded text-[13px] text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
-                            />
-                          )}
-                          <input type="password" placeholder={t('userMenu.changePassword.new')} value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full px-2.5 py-1.5 bg-surface-container-high border border-outline-variant/20 rounded text-[13px] text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary" />
-                          <input type="password" placeholder={t('userMenu.changePassword.confirm')} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full px-2.5 py-1.5 bg-surface-container-high border border-outline-variant/20 rounded text-[13px] text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary" />
-                          {passwordError && <p className="text-xs text-error">{passwordError}</p>}
-                          {passwordSuccess && <p className="text-xs text-success">{t('userMenu.changePassword.success')}</p>}
-                          <button onClick={handlePasswordChange} disabled={changingPassword || (!isOAuthOnly && !currentPassword) || !newPassword || !confirmPassword} className="w-full px-3 py-1.5 bg-primary text-on-primary text-xs font-medium rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                            {t('userMenu.changePassword.submit')}
-                          </button>
-                        </div>
-                      )}
+                    {/* Account actions: Change Password + Report (side by side) */}
+                    <div className="px-3 py-2 border-b border-outline-variant/10 grid grid-cols-2 gap-2">
+                      <button onClick={() => { setShowPasswordForm(true); setShowUserMenu(false); }} className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm text-on-surface bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer">
+                        <span className="material-symbols-outlined text-[18px] text-on-surface-variant">lock</span>
+                        {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
+                      </button>
+                      <button onClick={() => { setShowReportModal(true); setShowUserMenu(false); }} className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm text-on-surface bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer">
+                        <span className="material-symbols-outlined text-[18px] text-on-surface-variant">feedback</span>
+                        {t('report.menu')}
+                      </button>
                     </div>
 
                     {/* Language */}
@@ -872,7 +887,7 @@ export default function Navbar() {
 
             {/* User Menu Popup */}
             {showUserMenu && (
-              <div className={`absolute bottom-full mb-2 bg-surface-container border border-outline-variant/10 rounded-xl shadow-2xl overflow-hidden animate-in z-[60] ${collapsed ? 'left-full ml-2 w-80' : 'left-0 w-full min-w-[300px]'}`}>
+              <div className={`absolute bottom-full mb-2 bg-surface-container border border-outline-variant/10 rounded-xl shadow-2xl overflow-y-auto max-h-[calc(100vh-5rem)] animate-in z-[60] ${collapsed ? 'left-full ml-2 w-80' : 'left-0 w-full min-w-[300px]'}`}>
                 {/* Profile Info — click name to edit inline */}
                 <div className="px-5 py-4 border-b border-outline-variant/10">
                   <div className="flex items-center gap-3 mb-3">
@@ -934,73 +949,16 @@ export default function Navbar() {
                   </div>
                 </div>
 
-                {/* Change Password */}
-                <div className="px-5 py-3 border-b border-outline-variant/10">
-                  {!showPasswordForm ? (
-                    <button
-                      onClick={() => setShowPasswordForm(true)}
-                      className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors w-full bg-transparent cursor-pointer py-1"
-                    >
-                      <span className="material-symbols-outlined text-sm">lock</span>
-                      {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
-                    </button>
-                  ) : (
-                    <div className="space-y-2">
-                      <p className="text-sm font-bold text-on-surface mb-2">
-                        {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
-                      </p>
-                      {!isOAuthOnly && (
-                        <input
-                          type="password"
-                          placeholder={t('userMenu.changePassword.current')}
-                          value={currentPassword}
-                          onChange={e => setCurrentPassword(e.target.value)}
-                          className="w-full px-3 py-2 bg-surface-container-high border border-outline-variant/20 rounded text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
-                        />
-                      )}
-                      <input
-                        type="password"
-                        placeholder={t('userMenu.changePassword.new')}
-                        value={newPassword}
-                        onChange={e => setNewPassword(e.target.value)}
-                        className="w-full px-3 py-2 bg-surface-container-high border border-outline-variant/20 rounded text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
-                      />
-                      <input
-                        type="password"
-                        placeholder={t('userMenu.changePassword.confirm')}
-                        value={confirmPassword}
-                        onChange={e => setConfirmPassword(e.target.value)}
-                        className="w-full px-3 py-2 bg-surface-container-high border border-outline-variant/20 rounded text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary"
-                      />
-                      {passwordError && (
-                        <p className="text-xs text-error">{passwordError}</p>
-                      )}
-                      {passwordSuccess && (
-                        <p className="text-xs text-success">{t('userMenu.changePassword.success')}</p>
-                      )}
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={handlePasswordChange}
-                          disabled={changingPassword || (!isOAuthOnly && !currentPassword) || !newPassword || !confirmPassword}
-                          className="flex-1 px-3 py-1.5 bg-primary text-on-primary text-xs font-medium rounded hover:bg-primary-hover transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {t('userMenu.changePassword.submit')}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowPasswordForm(false);
-                            setPasswordError('');
-                            setCurrentPassword('');
-                            setNewPassword('');
-                            setConfirmPassword('');
-                          }}
-                          className="px-3 py-1.5 bg-surface-container-high text-on-surface-variant text-xs font-medium rounded hover:bg-surface-variant transition-colors cursor-pointer border border-outline-variant/20"
-                        >
-                          {t('common.cancel')}
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                {/* Account actions: Change Password + Report (side by side) */}
+                <div className="px-3 py-2 border-b border-outline-variant/10 grid grid-cols-2 gap-2">
+                  <button onClick={() => { setShowPasswordForm(true); setShowUserMenu(false); }} className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm text-on-surface bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer">
+                    <span className="material-symbols-outlined text-[18px] text-on-surface-variant">lock</span>
+                    {isOAuthOnly ? t('userMenu.setPassword') : t('userMenu.changePassword')}
+                  </button>
+                  <button onClick={() => { setShowReportModal(true); setShowUserMenu(false); }} className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm text-on-surface bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer">
+                    <span className="material-symbols-outlined text-[18px] text-on-surface-variant">feedback</span>
+                    {t('report.menu')}
+                  </button>
                 </div>
 
                 {/* Language */}

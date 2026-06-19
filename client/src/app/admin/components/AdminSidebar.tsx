@@ -30,6 +30,7 @@ const NAV_GROUPS = [
     labelKey: 'admin.sidebar.group.operations' as const,
     icon: 'tune',
     items: [
+      { href: '/admin/reports', permKey: 'reports', labelKey: 'admin.sidebar.reports' as const, icon: 'feedback' },
       { href: '/admin/announcements', permKey: 'announcements', labelKey: 'admin.sidebar.announcements' as const, icon: 'campaign' },
       ...(deployMode === 'pro-panjit' ? [{ href: '/admin/terms', permKey: 'terms', labelKey: 'admin.sidebar.terms' as const, icon: 'gavel' }] : []),
       { href: '/admin/skills', permKey: 'skills', labelKey: 'admin.sidebar.skills' as const, icon: 'hub' },

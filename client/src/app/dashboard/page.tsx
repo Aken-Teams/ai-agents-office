@@ -106,6 +106,30 @@ function DashboardContent() {
   const [lineGateActive, setLineGateActive] = useState(false);
   const [quotaReason, setQuotaReason] = useState('');
   const [quotaSubmitting, setQuotaSubmitting] = useState(false);
+  // Smart quota reminder: pops up once per page-load when usage hits ~90%.
+  const [showQuotaReminder, setShowQuotaReminder] = useState(false);
+  const reminderShownRef = useRef(false);
+
+  // Trigger the near-limit reminder when usage data is ready and nothing else is
+  // gating the screen. Suppressed for the day if the user clicked "don't show today";
+  // skipped entirely if a quota request is already pending.
+  useEffect(() => {
+    if (reminderShownRef.current) return;
+    if (!user || !usage || usageLimit == null || usageLimit <= 0 || quotaHasPending) return;
+    if (showGreeting || showLineModal || showSpotlight || showQuotaModal) return;
+    const ratio = calcCostUsd(usage.totalInput, usage.totalOutput) / usageLimit;
+    if (ratio < 0.9) return; // only when ~10% or less remains
+    const today = new Date().toISOString().slice(0, 10);
+    if (localStorage.getItem(`quota_reminder_muted_${user.id}`) === today) return;
+    reminderShownRef.current = true;
+    setShowQuotaReminder(true);
+  }, [user, usage, usageLimit, quotaHasPending, showGreeting, showLineModal, showSpotlight, showQuotaModal]);
+
+  // "Thanks, don't show again today" — mute the reminder until tomorrow.
+  function muteQuotaReminderToday() {
+    if (user) localStorage.setItem(`quota_reminder_muted_${user.id}`, new Date().toISOString().slice(0, 10));
+    setShowQuotaReminder(false);
+  }
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -339,6 +363,45 @@ function DashboardContent() {
       {showSpotlight && <FeatureSpotlightModal onClose={() => setShowSpotlight(false)} />}
 
       {/* Quota Request Modal */}
+      {/* Smart near-limit reminder */}
+      {showQuotaReminder && usage && usageLimit != null && (() => {
+        const used = calcCostUsd(usage.totalInput, usage.totalOutput);
+        const pct = Math.max(0, Math.round((1 - used / usageLimit) * 100));
+        return (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowQuotaReminder(false)}>
+            <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-warning/15 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-warning">warning</span>
+                </div>
+                <h3 className="text-lg font-headline font-bold text-on-surface">{t('quotaReminder.title' as any)}</h3>
+              </div>
+              <p className="text-sm text-on-surface-variant leading-relaxed mb-4">
+                {t('quotaReminder.body', { used: `$${used.toFixed(2)}`, limit: `$${usageLimit.toFixed(0)}`, pct: String(pct) } as any)}
+              </p>
+              {/* Usage bar */}
+              <div className="h-2 w-full rounded-full bg-surface-container-high overflow-hidden mb-5">
+                <div className="h-full rounded-full bg-warning" style={{ width: `${Math.min(100, Math.round((used / usageLimit) * 100))}%` }} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => { setShowQuotaReminder(false); setShowQuotaModal(true); }}
+                  className="w-full py-2.5 rounded-xl text-sm font-bold text-on-primary cyber-gradient hover:opacity-90 transition-all cursor-pointer"
+                >
+                  {t('quotaReminder.apply' as any)}
+                </button>
+                <button
+                  onClick={muteQuotaReminderToday}
+                  className="w-full py-2.5 rounded-xl text-sm font-medium text-on-surface-variant bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer"
+                >
+                  {t('quotaReminder.muteToday' as any)}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {showQuotaModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowQuotaModal(false)}>
           <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>

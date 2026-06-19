@@ -35,6 +35,12 @@ export const config = {
   mysqlUser: process.env.MYSQL_USER || 'root',
   mysqlPassword: process.env.MYSQL_PASSWORD || '',
 
+  // Ops / report-system DB — separate schema on the same MySQL server, so the
+  // future centralized ops system can own this data independently.
+  opsMysqlDb: process.env.OPS_MYSQL_DB || 'db_Ops',
+  // Report ("問題回報") system toggle — on for both deploy modes by default.
+  reportSystemEnabled: (process.env.REPORT_SYSTEM_ENABLED || 'true') !== 'false',
+
   // Claude CLI
   claudeCliPath: process.env.CLAUDE_CLI_PATH || 'claude',
   // Anthropic API Key — fallback when account quota is exhausted

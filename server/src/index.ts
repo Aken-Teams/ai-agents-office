@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { config, validateConfig } from './config.js';
 import { initializeDatabase } from './db.js';
+import { initOpsDb } from './opsDb.js';
+import { reportsRouter, adminReportsRouter } from './routes/reports.js';
 import authRoutes from './routes/auth.js';
 import conversationRoutes from './routes/conversations.js';
 import generateRoutes from './routes/generate.js';
@@ -33,6 +35,9 @@ async function main() {
   // Initialize database
   await initializeDatabase();
   console.log('Database initialized');
+
+  // Initialize the independent ops DB (report / ticket system). Non-fatal.
+  if (config.reportSystemEnabled) await initOpsDb();
 
   // Load runtime LINE bot settings (rate limit, idle, file TTL, default quota).
   await loadLineSettings();
@@ -100,6 +105,8 @@ async function main() {
   app.use('/api/blocks', blockRoutes);
   app.use('/api/teams', teamRoutes);
   app.use('/api/public', publicShareRoutes);
+  app.use('/api/reports', reportsRouter);
+  app.use('/api/admin/reports', adminReportsRouter);
 
   // Global error handler — keeps internal error detail (stack traces, paths, SQL)
   // out of client responses. Logs full detail server-side; returns a generic

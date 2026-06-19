@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./node_modules/.bin/tsx /d/tmp/test-vision.ts)"
+      "Bash(./node_modules/.bin/tsx /d/tmp/test-vision.ts)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(xargs echo \"server errors:\")",
+      "Bash(xargs echo \"client errors \\(excl 2 pre-existing\\):\")"
     ]
   }
 }
