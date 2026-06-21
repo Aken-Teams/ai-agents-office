@@ -577,7 +577,8 @@ function DashboardContent() {
               { icon: 'picture_as_pdf', color: 'text-error', labelKey: 'dashboard.samples.pdf' as const, templateKey: 'dashboard.samples.pdf.template' as const },
               { icon: 'slideshow', color: 'text-secondary', labelKey: 'dashboard.samples.slides' as const, templateKey: 'dashboard.samples.slides.template' as const },
               { icon: 'bar_chart', color: 'text-primary', labelKey: 'dashboard.samples.chart' as const, templateKey: 'dashboard.samples.chart.template' as const },
-              { icon: 'auto_awesome', color: 'text-secondary', labelKey: 'dashboard.samples.infographic' as const, templateKey: 'dashboard.samples.infographic.template' as const },
+              // 暫時隱藏「資訊圖表」（客戶擔心 token 用量），要復原把這行的註解拿掉即可
+              // { icon: 'auto_awesome', color: 'text-secondary', labelKey: 'dashboard.samples.infographic' as const, templateKey: 'dashboard.samples.infographic.template' as const },
               { icon: 'travel_explore', color: 'text-on-surface-variant', labelKey: 'dashboard.samples.research' as const, templateKey: 'dashboard.samples.research.template' as const },
             ].map(sample => (
               <button
@@ -735,7 +736,8 @@ function DashboardContent() {
                 { icon: 'picture_as_pdf', color: 'text-error', bg: 'bg-error/10', labelKey: 'dashboard.samples.pdf' as const, templateKey: 'dashboard.samples.pdf.template' as const },
                 { icon: 'slideshow', color: 'text-secondary', bg: 'bg-secondary/10', labelKey: 'dashboard.samples.slides' as const, templateKey: 'dashboard.samples.slides.template' as const },
                 { icon: 'bar_chart', color: 'text-primary', bg: 'bg-primary/10', labelKey: 'dashboard.samples.chart' as const, templateKey: 'dashboard.samples.chart.template' as const },
-                { icon: 'auto_awesome', color: 'text-secondary', bg: 'bg-secondary/10', labelKey: 'dashboard.samples.infographic' as const, templateKey: 'dashboard.samples.infographic.template' as const },
+                // 暫時隱藏「資訊圖表」（客戶擔心 token 用量），要復原把這行的註解拿掉即可
+                // { icon: 'auto_awesome', color: 'text-secondary', bg: 'bg-secondary/10', labelKey: 'dashboard.samples.infographic' as const, templateKey: 'dashboard.samples.infographic.template' as const },
                 { icon: 'travel_explore', color: 'text-on-surface-variant', bg: 'bg-on-surface-variant/10', labelKey: 'dashboard.samples.research' as const, templateKey: 'dashboard.samples.research.template' as const },
               ].map(sample => (
                 <button

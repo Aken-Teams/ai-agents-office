@@ -194,8 +194,12 @@ function getLanguageInstruction(locale: string): string {
  * Build the Router Agent's system prompt.
  * Injects the list of available worker skills so the Router knows what it can delegate to.
  */
+// 暫時對 Router 隱藏的技能（客戶擔心 token 用量，先不讓 auto-detect 派發到這些）。
+// 要復原：把對應 id 從這個 set 拿掉即可。技能本身仍存在，僅不出現在 Router 可委派清單。
+const ROUTER_HIDDEN_SKILL_IDS = new Set(['infographic-gen']);
+
 export function buildRouterPrompt(routerSkill: SkillDefinition, userLocale: string = 'zh-TW'): string {
-  const workers = getWorkerSkills();
+  const workers = getWorkerSkills().filter(w => !ROUTER_HIDDEN_SKILL_IDS.has(w.id));
 
   const teamLines = workers.map(w =>
     `- **${w.id}**: ${w.name} — ${w.description}${w.fileType ? ` (generates .${w.fileType})` : ''}`

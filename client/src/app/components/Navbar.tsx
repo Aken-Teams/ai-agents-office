@@ -52,7 +52,8 @@ const DOC_TYPES = [
   { id: 'xlsx-gen', labelKey: 'nav.docTypes.xlsx.label' as const, descKey: 'nav.docTypes.xlsx.desc' as const, icon: 'table_chart', colorClass: 'text-success' },
   { id: 'pdf-gen', labelKey: 'nav.docTypes.pdf.label' as const, descKey: 'nav.docTypes.pdf.desc' as const, icon: 'picture_as_pdf', colorClass: 'text-error' },
   { id: 'slides-gen', labelKey: 'nav.docTypes.slides.label' as const, descKey: 'nav.docTypes.slides.desc' as const, icon: 'slideshow', colorClass: 'text-secondary' },
-  { id: 'infographic-gen', labelKey: 'nav.docTypes.infographic.label' as const, descKey: 'nav.docTypes.infographic.desc' as const, icon: 'auto_awesome', colorClass: 'text-secondary' },
+  // 暫時隱藏「資訊圖表」（客戶擔心 token 用量），要復原把這行的註解拿掉即可
+  // { id: 'infographic-gen', labelKey: 'nav.docTypes.infographic.label' as const, descKey: 'nav.docTypes.infographic.desc' as const, icon: 'auto_awesome', colorClass: 'text-secondary' },
   { id: 'webapp-gen', labelKey: 'nav.docTypes.webapp.label' as const, descKey: 'nav.docTypes.webapp.desc' as const, icon: 'dashboard', colorClass: 'text-primary' },
   { id: 'data-analyst', labelKey: 'nav.docTypes.dataAnalyst.label' as const, descKey: 'nav.docTypes.dataAnalyst.desc' as const, icon: 'analytics', colorClass: 'text-primary' },
   { id: 'rag-analyst', labelKey: 'nav.docTypes.ragAnalyst.label' as const, descKey: 'nav.docTypes.ragAnalyst.desc' as const, icon: 'hub', colorClass: 'text-tertiary' },
