@@ -60,6 +60,18 @@ function isQuotaLimitError(text: string): boolean {
   return false;
 }
 
+/**
+ * Detect whether a failure looks like an account-auth / OAuth-token problem
+ * (expired token, refresh race during concurrent spawns, not-logged-in, 401/403).
+ * Used mainly for clearer logging — the API-key fallback itself also fires on
+ * any no-output failure (see the close handler), since a token blip can kill
+ * the process before it writes any diagnostic to stderr.
+ */
+function isAuthError(text: string): boolean {
+  return /invalid.?api.?key|unauthorized|forbidden|401|403|authentication|oauth|token.*(expired|refresh|invalid)|credential|please run.*login|not logged in|登入|認證/i
+    .test(text) && text.length < 800;
+}
+
 // ---------------------------------------------------------------------------
 // Output sanitizer — redact system paths from AI responses before sending
 // to the user. This is the last line of defense: even if the AI ignores
@@ -454,11 +466,20 @@ export function spawnClaude(
       }
 
       // --- API Key Fallback ---
-      // If account quota hit (no output produced) and API key is available, retry transparently.
+      // The account OAuth token can expire or hit a refresh race during concurrent
+      // multi-agent spawns, killing the process with exit!=0 and little/no output.
+      // Whenever an account-auth attempt fails completely (non-zero exit, produced
+      // zero tokens) and an API key is configured, transparently retry once with the
+      // API key — it has no token-expiry/refresh failure mode. This covers quota
+      // limits, auth/token blips, and silent (empty-stderr) crashes alike.
       // Suppress error/usage/done for this failed attempt; the retry will emit them.
-      if (!useApiKey && code !== 0 && !inputTokens
-          && isQuotaLimitError(stderrBuffer) && config.anthropicApiKey) {
-        console.log(`[Claude CLI] Account quota exhausted for ${logRole}/${logSkill}, retrying with API key...`);
+      if (!useApiKey && code !== 0 && !inputTokens && config.anthropicApiKey) {
+        const reason = isQuotaLimitError(stderrBuffer)
+          ? 'account quota exhausted'
+          : isAuthError(stderrBuffer)
+            ? 'account auth/token failure'
+            : 'no-output failure (likely OAuth token refresh blip)';
+        console.log(`[Claude CLI] ${logRole}/${logSkill} ${reason}, retrying with API key...`);
         doSpawn(true);
         return;
       }
