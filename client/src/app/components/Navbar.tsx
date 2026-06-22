@@ -940,9 +940,15 @@ export default function Navbar() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${user.role === 'admin' ? 'bg-warning/20 text-warning' : user.role === 'readonly' ? 'bg-amber-500/15 text-amber-600' : 'bg-primary/10 text-primary'}`}>
-                      {user.role === 'admin' ? t('userMenu.role.admin') : user.role === 'readonly' ? t('userMenu.role.readonly' as any) : t('userMenu.role.user')}
-                    </span>
+                    {user.isDemo ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">
+                        <span className="material-symbols-outlined text-[13px]">science</span>訪客
+                      </span>
+                    ) : (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${user.role === 'admin' ? 'bg-warning/20 text-warning' : user.role === 'readonly' ? 'bg-amber-500/15 text-amber-600' : 'bg-primary/10 text-primary'}`}>
+                        {user.role === 'admin' ? t('userMenu.role.admin') : user.role === 'readonly' ? t('userMenu.role.readonly' as any) : t('userMenu.role.user')}
+                      </span>
+                    )}
                     {user.oauthProvider === 'google' && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-surface-container-high text-on-surface-variant">
                         Google

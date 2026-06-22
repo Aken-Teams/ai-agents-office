@@ -482,6 +482,20 @@ function DashboardContent() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {/* Guest demo tag (desktop) — compact, no banner */}
+            {user.isDemo && (() => {
+              const exp = user.demoExpiresAt ? new Date(user.demoExpiresAt).getTime() : 0;
+              const hrsLeft = exp ? Math.max(0, Math.ceil((exp - Date.now()) / 3600000)) : null;
+              return (
+                <span
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-sm font-bold"
+                  title={`訪客體驗帳號 · 額度上限 US$30${hrsLeft != null ? ` · 約 ${hrsLeft} 小時後到期` : ''}，逾期後將無法使用`}
+                >
+                  <span className="material-symbols-outlined text-[16px]">science</span>
+                  訪客{hrsLeft != null ? ` · ${hrsLeft}h` : ''}
+                </span>
+              );
+            })()}
             {!isPanjit && (
               <button
                 onClick={() => setShowLineModal(true)}
@@ -503,6 +517,19 @@ function DashboardContent() {
         <div className="md:hidden px-4 pt-5 pb-36 space-y-5">
           {/* Greeting */}
           <div className="px-1">
+            {user.isDemo && (() => {
+              const exp = user.demoExpiresAt ? new Date(user.demoExpiresAt).getTime() : 0;
+              const hrsLeft = exp ? Math.max(0, Math.ceil((exp - Date.now()) / 3600000)) : null;
+              return (
+                <span
+                  className="inline-flex items-center gap-1 mb-2 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold"
+                  title={`訪客體驗帳號 · 額度上限 US$30${hrsLeft != null ? ` · 約 ${hrsLeft} 小時後到期` : ''}，逾期後將無法使用`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">science</span>
+                  訪客{hrsLeft != null ? ` · ${hrsLeft}h` : ''}
+                </span>
+              );
+            })()}
             <h2 className="text-2xl font-headline font-bold text-on-surface leading-tight">
               {t('dashboard.mobile.greeting', { name: user.displayName || user.email?.split('@')[0] || '' })}
             </h2>

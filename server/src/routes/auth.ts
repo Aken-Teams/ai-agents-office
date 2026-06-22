@@ -18,6 +18,53 @@ const googleClient = config.googleClientId ? new OAuth2Client(config.googleClien
 const router = Router();
 
 /* ============================================================
+   Demo guest login (pro-out only)
+   One-time, 24h, $30 quota. No password — the user just types a name. Every
+   demo account is grouped under one "訪客 Demo" quota group so they can be found
+   and deleted as a group (manual cleanup). The JWT expires in 24h and there's no
+   password, so the account can't be used after that. Skips onboarding/terms so
+   the guest lands straight on the home page.
+   ============================================================ */
+const DEMO_GROUP_NAME = '訪客 Demo';
+const DEMO_QUOTA_USD = 30;
+
+async function getOrCreateDemoGroup(): Promise<string> {
+  const existing = await dbGet<{ id: string }>('SELECT id FROM quota_groups WHERE name = ?', DEMO_GROUP_NAME);
+  if (existing) return existing.id;
+  const id = uuidv4();
+  await dbRun(
+    'INSERT INTO quota_groups (id, name, limit_usd, description) VALUES (?, ?, ?, ?)',
+    id, DEMO_GROUP_NAME, DEMO_QUOTA_USD, '訪客一次性測試帳號（建立後 24 小時、可整組手動刪除）',
+  );
+  return id;
+}
+
+router.post('/demo', async (req: Request, res: Response) => {
+  if (config.deployMode !== 'pro-out') { res.status(403).json({ error: '此功能未開放' }); return; }
+  const rawName = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  if (!rawName) { res.status(400).json({ error: '請輸入名字' }); return; }
+  const name = rawName.slice(0, 50);
+
+  const groupId = await getOrCreateDemoGroup();
+  const id = uuidv4();
+  const email = `demo-${id.slice(0, 8)}@demo.local`;
+  // Random, unusable password — demo accounts only authenticate via this route.
+  const hash = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 12);
+
+  await dbRun(
+    `INSERT INTO users
+       (id, email, password_hash, display_name, role, status, locale, company,
+        quota_group_id, is_demo, demo_expires_at, onboarding_completed, terms_accepted_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'user', 'active', 'zh-TW', '訪客 Demo', ?, 1, DATE_ADD(NOW(), INTERVAL 24 HOUR), 1, NOW(), NOW(), NOW())`,
+    id, email, hash, name, groupId,
+  );
+
+  // 24h token — after it expires the demo account can no longer be used.
+  const token = jwt.sign({ userId: id, email, role: 'user' }, config.jwtSecret, { expiresIn: '24h' });
+  res.json({ token, user: { id, email, displayName: name, role: 'user' } });
+});
+
+/* ============================================================
    Auth Rate Limiting (stricter than general API)
    ============================================================ */
 const authAttempts = new Map<string, { count: number; resetTime: number }>();
@@ -453,7 +500,7 @@ router.post('/google', async (req: Request, res: Response) => {
    ============================================================ */
 router.get('/me', authMiddleware, async (req: Request, res: Response) => {
   const user = await dbGet<User>(
-    'SELECT id, email, password_hash, display_name, role, status, locale, theme, oauth_provider, company, onboarding_completed, terms_accepted_at, created_at FROM users WHERE id = ?',
+    'SELECT id, email, password_hash, display_name, role, status, locale, theme, oauth_provider, company, onboarding_completed, terms_accepted_at, is_demo, demo_expires_at, created_at FROM users WHERE id = ?',
     req.user!.userId
   );
   if (!user) { res.status(404).json({ error: 'User not found' }); return; }
@@ -466,6 +513,8 @@ router.get('/me', authMiddleware, async (req: Request, res: Response) => {
     hasPassword: user.password_hash !== OAUTH_NO_PASSWORD,
     createdAt: user.created_at,
     company: user.company || null,
+    isDemo: !!(user as any).is_demo,
+    demoExpiresAt: (user as any).demo_expires_at || null,
     onboardingRequired: !user.onboarding_completed && config.deployMode === 'pro-out',
     termsRequired: !(user as any).terms_accepted_at && config.deployMode === 'pro-panjit',
   });

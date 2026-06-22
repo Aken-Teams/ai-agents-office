@@ -26,11 +26,13 @@ const AD_DOMAINS = [
 /* ============================================================
    Google Button (non-panjit only)
    ============================================================ */
-function GoogleButton({ mode, onLoginSuccess, onError, onNeedsVerification }: {
+function GoogleButton({ mode, onLoginSuccess, onError, onNeedsVerification, compact }: {
   mode: 'signin' | 'signup';
   onLoginSuccess: () => void;
   onError: (msg: string) => void;
   onNeedsVerification?: (email: string) => void;
+  /** Shorter label ("Google") for side-by-side layouts. */
+  compact?: boolean;
 }) {
   const { loginWithGoogle } = useAuth();
   const { t } = useTranslation();
@@ -60,7 +62,7 @@ function GoogleButton({ mode, onLoginSuccess, onError, onNeedsVerification }: {
       type="button"
       onClick={() => googleLogin()}
       disabled={busy}
-      className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-headline font-medium text-sm py-4 rounded-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+      className="w-full flex items-center justify-center gap-2 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-headline font-medium text-sm py-3.5 rounded-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
     >
       <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
         <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
@@ -68,8 +70,99 @@ function GoogleButton({ mode, onLoginSuccess, onError, onNeedsVerification }: {
         <path d="M3.964 10.706A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.038l3.007-2.332z" fill="#FBBC05"/>
         <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.962L3.964 7.294C4.672 5.166 6.656 3.58 9 3.58z" fill="#EA4335"/>
       </svg>
-      {busy ? '...' : mode === 'signin' ? t('login.googleSignIn') : t('register.googleSignUp')}
+      {busy ? '...' : compact ? 'Google' : (mode === 'signin' ? t('login.googleSignIn') : t('register.googleSignUp'))}
     </button>
+  );
+}
+
+/* ============================================================
+   Demo guest login (pro-out only) — type a name, get a 24h $30 trial account
+   ============================================================ */
+function DemoLoginButton() {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
+
+  const start = async () => {
+    const n = name.trim();
+    if (!n) { setErr('請輸入名字'); return; }
+    setLoading(true); setErr('');
+    try {
+      const res = await fetch('/api/auth/demo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: n }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || '無法開始體驗，請稍後再試'); setLoading(false); return; }
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('greeting_login_id', String(Date.now()));
+      router.push('/dashboard');
+    } catch {
+      setErr('網路錯誤，請稍後再試'); setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => { setErr(''); setName(''); setOpen(true); }}
+        className="w-full flex items-center justify-center gap-2 bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 font-headline font-medium text-sm py-3.5 rounded-sm transition-colors cursor-pointer"
+      >
+        <span className="material-symbols-outlined text-[18px] text-primary">bolt</span>
+        訪客 Demo
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => !loading && setOpen(false)}>
+          <div className="w-full max-w-sm rounded-2xl bg-surface p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="material-symbols-outlined text-primary">bolt</span>
+              <h3 className="text-base font-bold text-on-surface">訪客體驗</h3>
+            </div>
+            <div className="text-sm text-on-surface-variant leading-relaxed mb-4 space-y-1.5">
+              <p>這是<span className="font-semibold text-on-surface">測試功能</span>，輸入名字即可立即體驗，不需註冊。</p>
+              <ul className="list-disc pl-5 text-[13px] text-on-surface-variant/90">
+                <li>使用期限：建立後 <span className="font-semibold">24 小時</span></li>
+                <li>額度上限：<span className="font-semibold">US$30</span></li>
+                <li>逾期後此帳號將無法使用</li>
+              </ul>
+            </div>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !loading) start(); }}
+              placeholder="請輸入您的名字"
+              maxLength={50}
+              autoFocus
+              className="w-full px-3.5 py-2.5 rounded-lg border border-outline-variant/40 bg-surface-container text-on-surface text-sm focus:outline-none focus:border-primary transition-colors"
+            />
+            {err && <p className="text-error text-xs mt-2">{err}</p>}
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                onClick={() => setOpen(false)}
+                disabled={loading}
+                className="px-4 py-2 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={start}
+                disabled={loading}
+                className="px-4 py-2 rounded-lg text-sm font-bold bg-primary text-on-primary hover:bg-primary-hover transition-colors cursor-pointer disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                {loading && <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>}
+                開始體驗
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -916,24 +1009,37 @@ function EmailLoginForm({ onBack }: { onBack?: () => void }) {
           </button>
         )}
       </form>
-      {googleClientId && (
-        <div className="mt-5 flex flex-col items-center gap-4">
+      {(googleClientId || !isPanjit) && (
+        <div className="mt-5 flex flex-col gap-4">
           <div className="w-full h-px bg-outline-variant/20 relative">
             <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-container-high px-4 text-xs uppercase tracking-widest text-outline">
               {t('login.orDivider')}
             </span>
           </div>
-          <GoogleButton mode="signin" onLoginSuccess={async () => {
-            const storedToken = localStorage.getItem('token');
-            if (storedToken) {
-              try {
-                const payload = JSON.parse(atob(storedToken.split('.')[1]));
-                if (payload.role === 'admin') { router.push('/admin/overview'); return; }
-              } catch { /* ignore */ }
-            }
-            router.push('/dashboard');
-          }} onError={(msg) => { setErrorType('error'); setError(msg); }}
-          onNeedsVerification={onGoogleNeedsVerification} />
+          {/* Google + Guest demo side by side (each fills its half; a single one spans full width) */}
+          <div className="flex gap-3">
+            {googleClientId && (
+              <div className="flex-1 min-w-0">
+                <GoogleButton mode="signin" compact={!isPanjit} onLoginSuccess={async () => {
+                  const storedToken = localStorage.getItem('token');
+                  if (storedToken) {
+                    try {
+                      const payload = JSON.parse(atob(storedToken.split('.')[1]));
+                      if (payload.role === 'admin') { router.push('/admin/overview'); return; }
+                    } catch { /* ignore */ }
+                  }
+                  router.push('/dashboard');
+                }} onError={(msg) => { setErrorType('error'); setError(msg); }}
+                onNeedsVerification={onGoogleNeedsVerification} />
+              </div>
+            )}
+            {/* Guest demo (pro-out only): one-time 24h trial, no signup */}
+            {!isPanjit && (
+              <div className="flex-1 min-w-0">
+                <DemoLoginButton />
+              </div>
+            )}
+          </div>
         </div>
       )}
     </>

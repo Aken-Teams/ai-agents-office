@@ -696,6 +696,15 @@ export async function initializeDatabase(): Promise<void> {
       await conn.query('ALTER TABLE users ADD COLUMN terms_accepted_at DATETIME DEFAULT NULL');
     } catch { /* column already exists */ }
 
+    // Demo accounts: one-time, time-boxed guest sessions (pro-out only). All
+    // demo users are grouped under one quota group for easy manual cleanup.
+    try {
+      await conn.query('ALTER TABLE users ADD COLUMN is_demo TINYINT(1) NOT NULL DEFAULT 0');
+    } catch { /* column already exists */ }
+    try {
+      await conn.query('ALTER TABLE users ADD COLUMN demo_expires_at DATETIME DEFAULT NULL');
+    } catch { /* column already exists */ }
+
     // Migration: add last_overview column to email_agent_state
     try {
       await conn.query('ALTER TABLE email_agent_state ADD COLUMN last_overview TEXT DEFAULT NULL');

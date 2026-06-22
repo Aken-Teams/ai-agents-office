@@ -17,6 +17,9 @@ interface User {
   // first-login popups until onboarding/terms are done and the redirect lands.
   onboardingRequired?: boolean;
   termsRequired?: boolean;
+  // Guest demo accounts (pro-out trial): one-time, 24h, $30 quota.
+  isDemo?: boolean;
+  demoExpiresAt?: string | null;
 }
 
 interface Permissions {
