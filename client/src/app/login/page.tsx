@@ -128,6 +128,7 @@ function DemoLoginButton() {
               <ul className="list-disc pl-5 text-[13px] text-on-surface-variant/90">
                 <li>使用期限：建立後 <span className="font-semibold">24 小時</span></li>
                 <li>額度上限：<span className="font-semibold">US$30</span></li>
+                <li>之後用<span className="font-semibold">相同名字</span>可回到同一帳號</li>
                 <li>逾期後此帳號將無法使用</li>
               </ul>
             </div>

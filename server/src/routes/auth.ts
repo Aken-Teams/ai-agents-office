@@ -45,6 +45,21 @@ router.post('/demo', async (req: Request, res: Response) => {
   if (!rawName) { res.status(400).json({ error: '請輸入名字' }); return; }
   const name = rawName.slice(0, 50);
 
+  // Login-or-create by name: if a non-expired demo account with the same name
+  // exists, log back into it (this is how a returning guest "logs in"). The
+  // token only lasts until the account's ORIGINAL expiry, so re-entering the
+  // name can't extend the 24h window.
+  const existing = await dbGet<{ id: string; email: string; demo_expires_at: string }>(
+    "SELECT id, email, demo_expires_at FROM users WHERE is_demo = 1 AND display_name = ? AND demo_expires_at > NOW() ORDER BY created_at DESC LIMIT 1",
+    name,
+  );
+  if (existing) {
+    const remainingSec = Math.max(60, Math.floor((new Date(existing.demo_expires_at).getTime() - Date.now()) / 1000));
+    const token = jwt.sign({ userId: existing.id, email: existing.email, role: 'user' }, config.jwtSecret, { expiresIn: remainingSec });
+    res.json({ token, user: { id: existing.id, email: existing.email, displayName: name, role: 'user' } });
+    return;
+  }
+
   const groupId = await getOrCreateDemoGroup();
   const id = uuidv4();
   const email = `demo-${id.slice(0, 8)}@demo.local`;
