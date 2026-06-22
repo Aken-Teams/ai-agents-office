@@ -51,6 +51,7 @@ export default function DocNarrator({ fileId, fileType, blocks, onSelectBlock, t
 
   const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
   const cancelRef = useRef(false);
+  const activeSentRef = useRef<HTMLSpanElement>(null);
   const segsRef = useRef<Segment[]>([]);
   const sentencesRef = useRef<string[][]>([]);
 
@@ -84,6 +85,11 @@ export default function DocNarrator({ fileId, fileType, blocks, onSelectBlock, t
 
   // Always stop speaking if the component unmounts.
   useEffect(() => () => { try { window.speechSynthesis?.cancel(); } catch { /* noop */ } }, []);
+
+  // Keep the sentence being spoken in view (the subtitle pane is small on mobile).
+  useEffect(() => {
+    activeSentRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [segIdx, sentIdx]);
 
   const stop = useCallback(() => {
     cancelRef.current = true;
@@ -216,37 +222,37 @@ export default function DocNarrator({ fileId, fileType, blocks, onSelectBlock, t
       {/* Broadcast mode — full-screen (hides the left chat); 2:1 preview | subtitles */}
       {broadcasting && (
         <div className="fixed inset-0 z-[70] flex flex-col bg-slate-100">
-          {/* Header — clean light bar */}
-          <div className="flex items-center justify-between px-5 sm:px-8 py-3 bg-white border-b border-slate-200 shadow-sm shrink-0">
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-              <span className="material-symbols-outlined text-[20px] text-amber-500">campaign</span>
-              <span>語音播報</span>
-              <span className="text-slate-300">·</span>
-              <span className="tabular-nums text-slate-500 font-normal">第 {segIdx + 1} / {segments.length} 段</span>
-              <span className="text-slate-300">·</span>
+          {/* Header — clean light bar (compact on mobile, no wrap) */}
+          <div className="flex items-center justify-between gap-2 px-4 sm:px-8 py-2.5 bg-white border-b border-slate-200 shadow-sm shrink-0">
+            <div className="flex items-center gap-2 min-w-0 text-sm font-semibold text-slate-700">
+              <span className="material-symbols-outlined text-[20px] text-amber-500 shrink-0">campaign</span>
+              <span className="hidden sm:inline">語音播報</span>
+              <span className="text-slate-300 hidden sm:inline">·</span>
+              <span className="tabular-nums text-slate-500 font-normal shrink-0">第 {segIdx + 1}/{segments.length} 段</span>
               <span
-                className={`inline-flex items-center gap-1 text-xs font-normal px-2 py-0.5 rounded-full ${voiceNatural ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-700'}`}
+                className={`inline-flex items-center gap-1 text-xs font-normal px-1.5 sm:px-2 py-0.5 rounded-full shrink-0 ${voiceNatural ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-700'}`}
                 title={voiceNatural
                   ? `自然神經語音：${voiceName}`
                   : `${voiceName || '瀏覽器預設語音'}（較機械）— 改用 Edge 瀏覽器可獲得自然語音`}
               >
                 <span className="material-symbols-outlined text-[14px]">{voiceNatural ? 'graphic_eq' : 'warning'}</span>
-                {voiceNatural ? '自然語音' : (voiceName ? '本機語音' : '預設語音')}
+                <span className="hidden sm:inline">{voiceNatural ? '自然語音' : (voiceName ? '本機語音' : '預設語音')}</span>
               </span>
             </div>
             <button
               onClick={stop}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer"
+              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors cursor-pointer shrink-0"
             >
               <span className="material-symbols-outlined text-[18px]">close</span>
-              結束
+              <span className="hidden sm:inline">結束</span>
             </button>
           </div>
 
           {/* Body: left = page preview (≈2), right = subtitles (≈1) */}
           <div className="flex-1 flex flex-col md:flex-row min-h-0">
-            {/* Preview pane — real page preview, framed on a soft dark stage */}
-            <div className="md:flex-[2] flex min-h-0 min-w-0 overflow-hidden bg-slate-800 p-3 sm:p-5">
+            {/* Preview pane — real page preview, framed on a soft dark stage.
+                Mobile 1:1 with the subtitle; desktop 2:1. */}
+            <div className="flex-1 md:flex-[2] flex min-h-0 min-w-0 overflow-hidden bg-slate-800 p-2 sm:p-5">
               <div className="flex-1 flex min-h-0 min-w-0 overflow-hidden rounded-xl shadow-2xl ring-1 ring-black/20">
                 {renderPreview ? renderPreview(segIdx) : (
                   <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">無預覽</div>
@@ -255,7 +261,7 @@ export default function DocNarrator({ fileId, fileType, blocks, onSelectBlock, t
             </div>
 
             {/* Subtitle pane — bright, teleprompter-style card */}
-            <div className="md:flex-[1] flex flex-col min-h-0 bg-white border-t md:border-t-0 md:border-l border-slate-200">
+            <div className="flex-1 md:flex-[1] flex flex-col min-h-0 bg-white border-t md:border-t-0 md:border-l border-slate-200">
               {segments[segIdx]?.label && (
                 <div className="px-6 pt-5 pb-2 shrink-0 flex items-center gap-2">
                   <span className="w-1 h-4 rounded-full bg-amber-400" />
@@ -264,10 +270,11 @@ export default function DocNarrator({ fileId, fileType, blocks, onSelectBlock, t
               )}
               {/* Subtitles — current sentence highlighted amber */}
               <div className="flex-1 overflow-y-auto px-6 py-3">
-                <p className="text-xl sm:text-2xl md:text-[1.7rem] leading-loose font-medium tracking-wide">
+                <p className="text-base leading-relaxed sm:text-2xl sm:leading-loose md:text-[1.7rem] font-medium tracking-wide">
                   {currentSentences.map((s, k) => (
                     <span
                       key={k}
+                      ref={k === sentIdx ? activeSentRef : undefined}
                       className={k === sentIdx
                         ? 'bg-amber-300/90 text-slate-900 rounded-md px-1 py-0.5 box-decoration-clone shadow-sm'
                         : 'text-slate-400'}
