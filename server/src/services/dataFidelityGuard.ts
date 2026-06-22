@@ -256,10 +256,12 @@ function buildFidelityFixInstruction(violations: FidelityViolation[]): string {
  * file. Covers pptx/docx/xlsx/pdf/html.
  *
  * - pptx → high-quality `agentRebuild` (slides.json aware).
- * - other types → when `directContext` is supplied (template-wizard single-agent
- *   flow), resume that skill's generation session and regenerate the file in
- *   place with the fabricated items removed. Without directContext (orchestrated
- *   path) non-pptx violations are flagged for observability.
+ * - other types → when `resolveCorrection` yields a context for the file, resume
+ *   that file's own generator session and regenerate it in place with the
+ *   fabricated items removed. Works for BOTH the template-wizard (direct: base
+ *   sandbox + conversation session) and orchestrated (auto: `_agents/{skillId}`
+ *   + per-skill agent_session) flows. When no context is resolved, the violation
+ *   is flagged for observability instead.
  *
  * Mutates `blocksByFile` to corrected blocks where applicable and returns a map
  * of any files that were rebuilt. Non-fatal — never throws.
@@ -270,7 +272,7 @@ export async function enforceDataFidelity(
   userId: string,
   conversationId: string,
   emit: (event: SSEEvent) => void,
-  directContext?: { skillId: string; sessionId: string },
+  resolveCorrection?: (file: GeneratedFile) => Promise<{ skillId: string; sessionId: string; sandboxSubdir?: string } | null>,
 ): Promise<Map<string, GeneratedFile>> {
   const rebuilt = new Map<string, GeneratedFile>();
   try {
@@ -303,11 +305,12 @@ export async function enforceDataFidelity(
         continue;
       }
 
-      // ── docx/xlsx/pdf/html: regenerate in place via the skill's own session ──
-      if (directContext) {
+      // ── docx/xlsx/pdf/html: regenerate in place via the file's own session ──
+      const ctx = resolveCorrection ? await resolveCorrection(file) : null;
+      if (ctx) {
         emit({ type: 'fidelity_check', data: { fileId: file.id, status: 'correcting', count: violations.length } });
         const fixed = await agentRegenerateInPlace(
-          file, userId, conversationId, directContext.skillId, directContext.sessionId, instruction,
+          file, userId, conversationId, ctx.skillId, ctx.sessionId, instruction, ctx.sandboxSubdir,
         );
         if (fixed) {
           rebuilt.set(file.id, fixed);
@@ -321,7 +324,8 @@ export async function enforceDataFidelity(
         continue;
       }
 
-      // No corrector available (orchestrated non-pptx) → flag for observability.
+      // No correction context resolved (e.g. no session / not a worker-dir file)
+      // → flag for observability instead of silently leaving it.
       emit({ type: 'fidelity_check', data: { fileId: file.id, status: 'flagged', items: violations.map(v => v.value) } });
     }
   } catch (e) {

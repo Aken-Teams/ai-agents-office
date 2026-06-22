@@ -324,7 +324,23 @@ async function handleOrchestrated(
       // Data-fidelity gate: verify against the uploaded source + auto-correct any
       // fabricated data BEFORE the user sees the file. Returns instantly when the
       // conversation has no uploaded source to verify against.
-      const rebuilt = await enforceDataFidelity(newFiles, blocksByFile, userId, conversationId, sseWriter);
+      // Auto-correct fabricated data (pptx via dedicated rebuild; docx/xlsx/pdf/
+      // html by resuming each file's own worker session in its _agents/{skillId}
+      // dir, where the file + previous_step.md live).
+      const rebuilt = await enforceDataFidelity(
+        newFiles, blocksByFile, userId, conversationId, sseWriter,
+        async (file) => {
+          const m = file.file_path.replace(/\\/g, '/').match(/_agents\/([^/]+)\//);
+          if (!m) return null;                       // not a worker-dir file → can't resume
+          const skillId = m[1];
+          const sess = await dbGet<{ session_uuid: string }>(
+            'SELECT session_uuid FROM agent_sessions WHERE conversation_id = ? AND skill_id = ?',
+            conversationId, skillId,
+          );
+          if (!sess?.session_uuid) return null;
+          return { skillId, sessionId: sess.session_uuid, sandboxSubdir: `_agents/${skillId}` };
+        },
+      );
       const finalFiles = newFiles.map(f => rebuilt.get(f.id) || f);
       sseWriter({
         type: 'file_generated',
@@ -726,7 +742,9 @@ async function handleDirect(
             const convNow = await dbGet<{ session_id: string }>('SELECT session_id FROM conversations WHERE id = ?', conversationId);
             const rebuilt = await enforceDataFidelity(
               newFiles, blocksByFile, userId, conversationId, sseWrite,
-              convNow?.session_id ? { skillId: effectiveSkillId, sessionId: convNow.session_id } : undefined,
+              // Direct mode: the card skill ran in the base sandbox on the
+              // conversation session → correct in place there.
+              async () => (convNow?.session_id ? { skillId: effectiveSkillId, sessionId: convNow.session_id } : null),
             );
             const finalFiles = newFiles.map(f => rebuilt.get(f.id) || f);
             sseWrite({
