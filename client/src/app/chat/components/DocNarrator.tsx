@@ -222,7 +222,7 @@ export default function DocNarrator({ fileId, fileType, blocks, onSelectBlock, t
               <span className="material-symbols-outlined text-[20px] text-amber-500">campaign</span>
               <span>語音播報</span>
               <span className="text-slate-300">·</span>
-              <span className="tabular-nums text-slate-500 font-normal">第 {segIdx + 1} / {segments.length} 頁</span>
+              <span className="tabular-nums text-slate-500 font-normal">第 {segIdx + 1} / {segments.length} 段</span>
               <span className="text-slate-300">·</span>
               <span
                 className={`inline-flex items-center gap-1 text-xs font-normal px-2 py-0.5 rounded-full ${voiceNatural ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-700'}`}

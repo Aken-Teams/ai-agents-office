@@ -940,7 +940,11 @@ export default function DocumentCanvas({
             // Real page preview, same components the canvas uses, navigated to the
             // current selection (selectedPageIndex is driven by onSelectBlock).
             if (previewBlobUrl && previewType === 'pdf') {
-              return <PdfPagePreview pdfUrl={previewBlobUrl} pageIndex={selectedPageIndex} onPageCount={() => { /* noop */ }} />;
+              // For docx/pdf the block→page mapping lives in docHighlight (heading
+              // matched to the real PDF page); slides are 1:1 so fall back to
+              // selectedPageIndex. This keeps the subtitle's paragraph and the
+              // shown page in sync even when blocks ≠ pages (e.g. Word).
+              return <PdfPagePreview pdfUrl={previewBlobUrl} pageIndex={docHighlight?.pageIndex ?? selectedPageIndex} onPageCount={() => { /* noop */ }} />;
             }
             if (previewBlobUrl) {
               return <iframe src={previewBlobUrl} className="flex-1 w-full border-0 bg-white" title="broadcast-preview" sandbox="allow-scripts allow-same-origin" />;
@@ -1432,7 +1436,11 @@ export default function DocumentCanvas({
             // Real page preview, same components the canvas uses, navigated to the
             // current selection (selectedPageIndex is driven by onSelectBlock).
             if (previewBlobUrl && previewType === 'pdf') {
-              return <PdfPagePreview pdfUrl={previewBlobUrl} pageIndex={selectedPageIndex} onPageCount={() => { /* noop */ }} />;
+              // For docx/pdf the block→page mapping lives in docHighlight (heading
+              // matched to the real PDF page); slides are 1:1 so fall back to
+              // selectedPageIndex. This keeps the subtitle's paragraph and the
+              // shown page in sync even when blocks ≠ pages (e.g. Word).
+              return <PdfPagePreview pdfUrl={previewBlobUrl} pageIndex={docHighlight?.pageIndex ?? selectedPageIndex} onPageCount={() => { /* noop */ }} />;
             }
             if (previewBlobUrl) {
               return <iframe src={previewBlobUrl} className="flex-1 w-full border-0 bg-white" title="broadcast-preview" sandbox="allow-scripts allow-same-origin" />;

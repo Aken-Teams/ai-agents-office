@@ -47,11 +47,12 @@ const HELP_CONTENT: Record<HelpPageId, HelpContent> = {
       { icon: 'add_circle', title: '新增助手', desc: '點擊「+」新增 AI 助手，最多 3 個，可分別用於不同領域或專案。' },
       { icon: 'psychology', title: '記憶自動累積', desc: 'AI 從對話中提取你的偏好與工作背景並記住，下次不需重複說明。' },
       { icon: 'alternate_email', title: '跨任務 @引用', desc: '輸入框旁的 @ 按鈕可引用其他助手的工作成果，讓多個助手協作。' },
+      { icon: 'groups', title: 'AI 團隊協作', desc: '把多個助手組成團隊，針對同一議題各自分析、互相討論，最後由協調者統整出一份結論，還能排程定期協作。' },
     ],
     tips: [
       '對話歷史永久保留直到你主動刪除，適合長期使用',
       '@引用讓你把 A 助手的研究成果直接傳給 B 助手製作報告',
-      '試試建立「研究助手」、「寫作助手」分工合作',
+      '組成團隊適合需要多角度觀點的複雜議題；單一助手適合一般任務',
     ],
     guideHash: 'assistant',
   },

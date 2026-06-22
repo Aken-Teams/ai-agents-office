@@ -9,11 +9,20 @@ import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 
+// Some features only exist in one deployment (e.g. LINE is pro-out only, the
+// email agent is pro-panjit only, voice broadcast is pro-out only). Sections and
+// individual steps can be tagged so the guide only shows what this build has.
+type DeployMode = 'pro-out' | 'pro-panjit';
+const DEPLOY_MODE: DeployMode = (process.env.NEXT_PUBLIC_DEPLOY_MODE as DeployMode) || 'pro-panjit';
+const inMode = (modes?: DeployMode[]) => !modes || modes.includes(DEPLOY_MODE);
+
 interface GuideStep {
   icon: string;
   title: string;
   desc: string;
   example?: string;
+  /** Limit this step to certain deployments (undefined = all). */
+  deployModes?: DeployMode[];
 }
 
 interface GuideSection {
@@ -27,9 +36,11 @@ interface GuideSection {
   intro: string;
   steps: GuideStep[];
   tips: string[];
+  /** Limit this whole section to certain deployments (undefined = all). */
+  deployModes?: DeployMode[];
 }
 
-const SECTIONS: GuideSection[] = [
+const ALL_SECTIONS: GuideSection[] = [
   {
     id: 'overview',
     icon: 'rocket_launch',
@@ -79,7 +90,7 @@ const SECTIONS: GuideSection[] = [
       {
         icon: 'present_to_all',
         title: '選擇文件類型',
-        desc: '儀表板提供 9 種功能類型：簡報、Word 文件、Excel 試算表、PDF、網頁簡報、互動網頁、數據分析、知識庫分析、網路研究。點擊卡片直接進入該功能的對話。',
+        desc: '儀表板提供多種功能類型：簡報、Word 文件、Excel 試算表、PDF、網頁簡報、互動網頁、數據分析、知識庫分析、網路研究等，點擊卡片直接進入該功能的對話。',
       },
       {
         icon: 'tune',
@@ -143,6 +154,42 @@ const SECTIONS: GuideSection[] = [
     ],
   },
   {
+    id: 'teams',
+    icon: 'groups',
+    label: 'AI 團隊',
+    color: 'text-secondary',
+    bg: 'bg-secondary/10 border-secondary/20',
+    intro: 'AI 團隊讓多個 AI 助手針對同一個議題分工協作：各自分析、互相討論，最後由協調者統整成一份完整結論。適合需要多角度觀點的複雜問題。',
+    steps: [
+      {
+        icon: 'group_add',
+        title: '建立團隊',
+        desc: '在 AI 助手頁面建立團隊：可選現成的領域範本，或直接描述你的情境，讓 AI 自動組出最適合的成員陣容。',
+        example: '描述「想評估一個新產品的市場進入策略」，AI 會組出市場、財務、風險等不同角色的助手',
+      },
+      {
+        icon: 'forum',
+        title: '提出議題協作',
+        desc: '輸入要團隊一起分析的議題，成員會先各自分析，再互相討論、回應彼此的觀點，整個過程可即時觀看。',
+      },
+      {
+        icon: 'summarize',
+        title: '協調者統整',
+        desc: '討論結束後，協調者會把所有成員的觀點整合成一份統整結論，作為你的最終參考。',
+      },
+      {
+        icon: 'schedule',
+        title: '排程定期協作',
+        desc: '可設定團隊定期（每日／每週）自動針對固定議題協作，結果直接寄到你的信箱，適合定期的市場或趨勢追蹤。',
+      },
+    ],
+    tips: [
+      '可附加檔案讓團隊依你的資料分析；也可開啟網路查資料（會標明來源、並與你的檔案資料分開）',
+      '團隊會記得先前的協作結論，可直接接續提問深入',
+      '每次協作結論都能分享成連結給他人查看',
+    ],
+  },
+  {
     id: 'chat',
     icon: 'chat',
     label: '對話操作',
@@ -180,6 +227,42 @@ const SECTIONS: GuideSection[] = [
     ],
   },
   {
+    id: 'editor',
+    icon: 'edit_document',
+    label: '文件編輯',
+    color: 'text-warning',
+    bg: 'bg-warning/10 border-warning/20',
+    intro: '生成的文件不是一次定生死。你可以用對話請 AI 重新設計、針對單一區塊微調，或整份換風格，所有修改都會自動保留版本。',
+    steps: [
+      {
+        icon: 'auto_fix',
+        title: '對話修改',
+        desc: '在對話中直接說明要改什麼，AI 會在保留其餘內容的前提下，只調整你指定的部分並重新生成，不需重頭說明。',
+        example: '「把第三頁的圖改成長條圖」→「整體配色換成藍色系」',
+      },
+      {
+        icon: 'dashboard_customize',
+        title: '區塊／頁面編輯',
+        desc: '在文件預覽中點選某個區塊或頁面，即可單獨針對它下修改指令，其餘部分維持不動，適合精準微調。',
+      },
+      {
+        icon: 'build',
+        title: '整份重建／換風格',
+        desc: '點右上角「重建」可整份重新設計或更換風格。文字內容、數據與頁數保持不變，只調整外觀與版面。',
+      },
+      {
+        icon: 'campaign',
+        title: '語音播報',
+        desc: '點右上角「播報」，系統會逐頁朗讀文件並自動翻頁、同步顯示字幕，適合過稿或簡報預演。建議用 Edge 瀏覽器開啟，可獲得更自然的語音。',
+        deployModes: ['pro-out'],
+      },
+    ],
+    tips: [
+      '每次修改都會獨立存成新版本，可在「檔案管理」回溯比較',
+      '改不滿意時，直接說「改回上一版的做法」或描述想要的方向即可',
+    ],
+  },
+  {
     id: 'files',
     icon: 'folder_open',
     label: '檔案管理',
@@ -214,6 +297,67 @@ const SECTIONS: GuideSection[] = [
       '頁面右側的儲存空間指示器顯示目前使用量，接近上限時請清理不需要的舊檔',
       '檔案名稱通常由 AI 自動命名，可在原始對話中說「把檔案命名為 xxx」來指定',
       '大型 Excel 或 PDF 檔案下載可能需要幾秒鐘，請稍候',
+    ],
+  },
+  {
+    id: 'line',
+    icon: 'forum',
+    label: 'LINE 使用',
+    color: 'text-success',
+    bg: 'bg-success/10 border-success/20',
+    deployModes: ['pro-out'],
+    intro: '綁定 LINE 後，你可以直接在 LINE 對話中使用 AI 助理，隨時隨地生成文件、查資料、分析檔案，不必打開網站。',
+    steps: [
+      {
+        icon: 'qr_code_2',
+        title: '綁定 LINE 帳號',
+        desc: '在儀表板點擊「綁定 LINE 機器人」，用手機 LINE 掃描畫面上的 QR Code 並加入官方帳號，即完成綁定。LINE 與網站帳號會連結、資料互通。',
+      },
+      {
+        icon: 'chat',
+        title: '在 LINE 直接對話',
+        desc: '綁定後，直接在 LINE 輸入需求，AI 會像在網站一樣回覆並生成文件，再把下載連結傳給你。',
+        example: '在 LINE 傳「幫我做一份這週的工作週報」',
+      },
+      {
+        icon: 'attach_file',
+        title: '傳檔分析',
+        desc: '在 LINE 直接傳送圖片、PDF、Excel 等檔案給 AI，它會讀取內容並依你的指令分析或生成。',
+      },
+    ],
+    tips: [
+      'LINE 與網站共用同一個帳號與額度，用哪一邊都計入同一份用量',
+      '生成的檔案會以連結方式傳送，點擊即可下載',
+    ],
+  },
+  {
+    id: 'email-agent',
+    icon: 'mail',
+    label: '郵件助理',
+    color: 'text-tertiary',
+    bg: 'bg-tertiary/10 border-tertiary/20',
+    deployModes: ['pro-panjit'],
+    intro: '郵件助理會自動讀取並摘要你的信箱，幫你快速掌握重要郵件與待辦，並可直接依郵件內容起草回覆或生成文件。',
+    steps: [
+      {
+        icon: 'inbox',
+        title: '開啟郵件助理',
+        desc: '點擊畫面右下角的郵件助理圖示開啟面板，首次使用會引導你授權連結公司信箱。',
+      },
+      {
+        icon: 'summarize',
+        title: '自動摘要與分類',
+        desc: '助理會自動摘要最新郵件、標示優先順序與類別，不用逐封點開就能掌握重點。',
+      },
+      {
+        icon: 'reply',
+        title: '依郵件生成內容',
+        desc: '可請助理根據某封郵件起草回覆、整理會議重點，或把郵件內容轉成簡報、報告等文件。',
+      },
+    ],
+    tips: [
+      '郵件內容僅用於當次摘要與生成，不會外洩',
+      '摘要結果會快取，相同郵件不會重複消耗 Token',
     ],
   },
   {
@@ -291,6 +435,9 @@ const SECTIONS: GuideSection[] = [
     ],
   },
 ];
+
+// Only the sections this deployment actually has.
+const SECTIONS: GuideSection[] = ALL_SECTIONS.filter(s => inMode(s.deployModes));
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -414,7 +561,7 @@ function GuideContent() {
             <div className="mb-5 md:mb-6">
               <h3 className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-3">操作步驟</h3>
               <div className="space-y-3">
-                {active.steps.map((step, i) => (
+                {active.steps.filter(s => inMode(s.deployModes)).map((step, i) => (
                   <div key={i} className="flex gap-4 bg-surface-container rounded-xl p-4">
                     <div className="flex flex-col items-center gap-1 shrink-0">
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${active.bg}`}>
