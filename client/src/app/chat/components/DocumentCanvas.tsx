@@ -6,6 +6,7 @@ import type { DocLayoutType } from '../hooks/useDocumentMode';
 import dynamic from 'next/dynamic';
 import SlideBlockPreview from '../../editor/renderers/SlideBlockPreview';
 import DocBlockPreview from '../../editor/renderers/DocBlockPreview';
+import DocNarrator from './DocNarrator';
 import SheetBlockPreview from '../../editor/renderers/SheetBlockPreview';
 import SlideElementPanel from './SlideElementPanel';
 import DocElementPanel from './DocElementPanel';
@@ -935,6 +936,19 @@ export default function DocumentCanvas({
               {docType || 'slides'} · {totalPages || blocks.length} {t('editor.blocks')}
             </div>
           </div>
+          <DocNarrator fileId={fileId} fileType={docType} blocks={blocks} onSelectBlock={onSelectBlock} token={token} renderPreview={() => {
+            // Real page preview, same components the canvas uses, navigated to the
+            // current selection (selectedPageIndex is driven by onSelectBlock).
+            if (previewBlobUrl && previewType === 'pdf') {
+              return <PdfPagePreview pdfUrl={previewBlobUrl} pageIndex={selectedPageIndex} onPageCount={() => { /* noop */ }} />;
+            }
+            if (previewBlobUrl) {
+              return <iframe src={previewBlobUrl} className="flex-1 w-full border-0 bg-white" title="broadcast-preview" sandbox="allow-scripts allow-same-origin" />;
+            }
+            return blocks[selectedPageIndex] ? (
+              <div className="flex-1 overflow-auto p-6 flex items-center justify-center">{renderBlockPreview(blocks[selectedPageIndex])}</div>
+            ) : null;
+          }} />
           <button
             onClick={() => setShowRebuildConfirm(true)}
             disabled={rebuilding || blocks.length === 0}
@@ -1414,6 +1428,19 @@ export default function DocumentCanvas({
             {docType || layoutType} · {blocks.length} {t('editor.blocks')}
           </div>
         </div>
+        <DocNarrator fileId={fileId} fileType={docType} blocks={blocks} onSelectBlock={onSelectBlock} token={token} renderPreview={() => {
+            // Real page preview, same components the canvas uses, navigated to the
+            // current selection (selectedPageIndex is driven by onSelectBlock).
+            if (previewBlobUrl && previewType === 'pdf') {
+              return <PdfPagePreview pdfUrl={previewBlobUrl} pageIndex={selectedPageIndex} onPageCount={() => { /* noop */ }} />;
+            }
+            if (previewBlobUrl) {
+              return <iframe src={previewBlobUrl} className="flex-1 w-full border-0 bg-white" title="broadcast-preview" sandbox="allow-scripts allow-same-origin" />;
+            }
+            return blocks[selectedPageIndex] ? (
+              <div className="flex-1 overflow-auto p-6 flex items-center justify-center">{renderBlockPreview(blocks[selectedPageIndex])}</div>
+            ) : null;
+          }} />
         <button
           onClick={() => setShowRebuildConfirm(true)}
           disabled={rebuilding || blocks.length === 0}

@@ -8,12 +8,67 @@ import { rebuildFile, patchFileField } from '../services/fileRebuilder.js';
 import { regenerateBlock } from '../services/blockRegenerator.js';
 import { agentEditDeck } from '../services/agentRebuilder.js';
 import { captureBlocksForFile } from '../services/fileManager.js';
+import { generateNarration } from '../services/docNarration.js';
 import { moderateAiRequest } from '../services/contentSafety.js';
 import { logSecurityEvent } from '../services/inputGuard.js';
 import type { DocumentBlocksRecord, DocumentBlock, GeneratedFile } from '../types.js';
 
 const router = Router();
 router.use(authMiddleware);
+
+// ---------------------------------------------------------------------------
+// POST /api/blocks/:fileId/narration — produce per-page broadcast script lines
+// for the document narrator (speaker button). pro-out deployments only.
+// Frontend reads each line aloud (browser TTS) while following along page-by-page.
+// ---------------------------------------------------------------------------
+const NARRATION_TYPES = new Set(['pptx', 'pdf', 'docx']);
+router.post('/:fileId/narration', async (req: Request, res: Response) => {
+  if (config.deployMode !== 'pro-out') {
+    res.status(403).json({ error: '此功能未開放' }); return;
+  }
+  const userId = req.user!.userId;
+  const { fileId } = req.params;
+
+  const file = await dbGet<GeneratedFile>(
+    'SELECT * FROM generated_files WHERE id = ? AND user_id = ?', fileId, userId
+  );
+  if (!file) { res.status(404).json({ error: '找不到檔案' }); return; }
+  if (!NARRATION_TYPES.has(file.file_type)) {
+    res.status(400).json({ error: `不支援播報此類型：${file.file_type}` }); return;
+  }
+
+  // Load (or capture) the per-page block structure — same source the editor shows.
+  let record = await dbGet<DocumentBlocksRecord>(
+    'SELECT * FROM document_blocks WHERE file_id = ? AND user_id = ?', fileId, userId
+  );
+  if (!record && file.conversation_id) {
+    const sandboxPath = path.join(config.workspaceRoot, userId, file.conversation_id);
+    try {
+      await captureBlocksForFile(file, userId, file.conversation_id, sandboxPath);
+      record = await dbGet<DocumentBlocksRecord>(
+        'SELECT * FROM document_blocks WHERE file_id = ? AND user_id = ?', fileId, userId
+      );
+    } catch { /* fall through to no-content */ }
+  }
+  if (!record) { res.status(404).json({ error: '沒有可播報的內容' }); return; }
+
+  let blocks: DocumentBlock[] = [];
+  try { blocks = JSON.parse(record.blocks); } catch { /* leave empty */ }
+  blocks = blocks.filter(Boolean).sort((a, b) => a.order - b.order).slice(0, 40); // cap long docs
+  if (!blocks.length) { res.status(404).json({ error: '沒有可播報的內容' }); return; }
+
+  const narrations = await generateNarration(blocks, record.doc_type || file.file_type);
+  if (!narrations) { res.status(502).json({ error: '播報稿產生失敗，請稍後再試' }); return; }
+
+  const segments = blocks.map((b, i) => ({
+    blockId: b.id,
+    label: (b.data as Record<string, unknown>)?.title as string
+        || (b.data as Record<string, unknown>)?.heading as string
+        || `第 ${i + 1} 頁`,
+    text: narrations[i],
+  }));
+  res.json({ segments });
+});
 
 // ---------------------------------------------------------------------------
 // GET /api/blocks/:fileId — Get block structure for a file
