@@ -464,8 +464,25 @@ function QuotaGroupsContent() {
                               <div className="flex items-center gap-2 flex-wrap">
                                 <p className="text-sm text-on-surface truncate font-medium">{m.display_name || m.email.split('@')[0]}</p>
                                 {m.quota_override != null && (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 rounded-full shrink-0">
-                                    {t('admin.quotaGroups.source.personal' as any)} ${m.quota_override}
+                                  // Named group (group/tip) so the tooltip reacts to hovering the
+                                  // badge only, not the whole row (which uses the unnamed `group`).
+                                  // Tooltip opens UPWARD because the card is overflow-hidden and a
+                                  // downward tooltip on the last member would be clipped.
+                                  <span className="relative inline-flex group/tip shrink-0">
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-orange-500/10 text-orange-400 rounded-full cursor-help">
+                                      {t('admin.quotaGroups.source.personal' as any)} ${m.quota_override}
+                                      <span className="material-symbols-outlined text-[12px] leading-none">info</span>
+                                    </span>
+                                    <span
+                                      role="tooltip"
+                                      className="pointer-events-none absolute bottom-full left-0 mb-2 z-50 w-56 opacity-0 translate-y-1 group-hover/tip:opacity-100 group-hover/tip:translate-y-0 transition-all duration-150"
+                                    >
+                                      <span className="relative block rounded-lg bg-slate-800 text-slate-100 px-3 py-2 text-[11px] leading-relaxed shadow-xl ring-1 ring-black/10">
+                                        {t('admin.quotaGroups.source.personalHint' as any)}
+                                        {/* downward caret pointing at the badge */}
+                                        <span className="absolute left-4 top-full w-2.5 h-2.5 -translate-y-1/2 rotate-45 bg-slate-800" />
+                                      </span>
+                                    </span>
                                   </span>
                                 )}
                               </div>

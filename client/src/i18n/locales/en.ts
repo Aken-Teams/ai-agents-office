@@ -741,6 +741,7 @@ const en = {
   'admin.quotaGroups.deleteConfirm': 'Delete this group?',
   'admin.quotaGroups.deleteHint': '{count} members will revert to global default quota',
   'admin.quotaGroups.source.personal': 'Personal Override',
+  'admin.quotaGroups.source.personalHint': 'This user has a personal quota override — the group limit does not apply to them. Contact an administrator to change it.',
   'admin.quotaGroups.source.group': 'Group',
   'admin.quotaGroups.source.global': 'Global Default',
   'admin.quotaGroups.assignModal.title': 'Assign Users to Group',

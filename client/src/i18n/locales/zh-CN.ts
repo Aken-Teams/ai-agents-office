@@ -752,6 +752,7 @@ const zhCN = {
   'admin.quotaGroups.deleteConfirm': '确定删除此群组？',
   'admin.quotaGroups.deleteHint': '群组内 {count} 位成员将回归全局默认额度',
   'admin.quotaGroups.source.personal': '个人覆盖',
+  'admin.quotaGroups.source.personalHint': '此用户为个人额度覆盖，群组额度对他不生效。如需调整请洽管理员。',
   'admin.quotaGroups.source.group': '群组',
   'admin.quotaGroups.source.global': '全局默认',
   'admin.quotaGroups.assignModal.title': '分配用户到群组',

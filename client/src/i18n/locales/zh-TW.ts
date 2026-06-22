@@ -756,6 +756,7 @@ const zhTW = {
   'admin.quotaGroups.deleteConfirm': '確定刪除此群組？',
   'admin.quotaGroups.deleteHint': '群組內 {count} 位成員將回歸全域預設額度',
   'admin.quotaGroups.source.personal': '個人覆寫',
+  'admin.quotaGroups.source.personalHint': '此用戶為個人額度覆寫，群組額度對他不生效。如需調整請洽管理員。',
   'admin.quotaGroups.source.group': '群組',
   'admin.quotaGroups.source.global': '全域預設',
   'admin.quotaGroups.assignModal.title': '分配用戶到群組',

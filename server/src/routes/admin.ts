@@ -1347,16 +1347,30 @@ router.get('/quota-groups', async (_req: Request, res: Response) => {
 
 // GET /api/admin/quota-groups/:id/members
 router.get('/quota-groups/:id/members', async (req: Request, res: Response) => {
+  // Usage must match the per-user "額度用量" panel (getUserDisplayCost): in
+  // official mode the quota resets monthly, so only the CURRENT calendar month
+  // counts. Summing token_usage over all time here was the cause of the group
+  // view showing a higher number ($43.45 lifetime) than the user detail
+  // ($24.11 this month). Apply the same monthly window so both agree.
+  const params: unknown[] = [];
+  let monthFilter = '';
+  if (!config.isBeta) {
+    const now = new Date();
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    monthFilter = ' AND t.created_at >= ?';
+    params.push(monthStart);
+  }
+  params.push(req.params.id);
   const members = await dbAll(`
     SELECT u.id, u.email, u.display_name, u.status, u.quota_override,
       COALESCE(SUM(t.input_tokens), 0) as total_input,
       COALESCE(SUM(t.output_tokens), 0) as total_output
     FROM users u
-    LEFT JOIN token_usage t ON t.user_id = u.id
+    LEFT JOIN token_usage t ON t.user_id = u.id${monthFilter}
     WHERE u.quota_group_id = ?
     GROUP BY u.id
     ORDER BY u.display_name ASC, u.email ASC
-  `, req.params.id);
+  `, ...params);
   res.json(members);
 });
 
@@ -2127,6 +2141,17 @@ router.patch('/line/settings', async (req: Request, res: Response) => {
 // GET /api/admin/line/users — LINE-linked users with their quota usage.
 router.get('/line/users', async (_req: Request, res: Response) => {
   const globalDefault = await getUserUsageLimitUsd();
+  // Quota usage resets monthly in official mode — only count the current calendar
+  // month so this matches getUserDisplayCost / the user detail panel (see the
+  // quota-groups members endpoint for the same fix).
+  const usageParams: unknown[] = [];
+  let monthFilter = '';
+  if (!config.isBeta) {
+    const now = new Date();
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    monthFilter = ' WHERE created_at >= ?';
+    usageParams.push(monthStart);
+  }
   const rows = await dbAll<{
     line_user_id: string; display_name: string | null; linked_via: string | null;
     last_message_at: string | null; user_id: string; email: string; status: string;
@@ -2142,9 +2167,10 @@ router.get('/line/users', async (_req: Request, res: Response) => {
      LEFT JOIN quota_groups qg ON qg.id = u.quota_group_id
      LEFT JOIN (
        SELECT user_id, SUM(input_tokens) AS in_tok, SUM(output_tokens) AS out_tok
-       FROM token_usage GROUP BY user_id
+       FROM token_usage${monthFilter} GROUP BY user_id
      ) tu ON tu.user_id = u.id
-     ORDER BY (lu.last_message_at IS NULL), lu.last_message_at DESC`
+     ORDER BY (lu.last_message_at IS NULL), lu.last_message_at DESC`,
+    ...usageParams
   );
 
   const users = rows.map(r => {
