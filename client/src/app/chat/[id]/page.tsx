@@ -1246,6 +1246,10 @@ function ChatContent() {
               const bData = event.data as { fileId: string; blocks: any[] };
               if (bData.fileId && bData.blocks) {
                 docBlocks.setBlocksFromSSE({ fileId: bData.fileId, blocks: bData.blocks });
+                // SSE only carries blocks, not the full record (docType, etc.).
+                // Load it too so toolbar features keyed on docType (e.g. the 播報
+                // button) appear immediately instead of only after a refresh.
+                docBlocks.fetchBlocks(bData.fileId);
               } else if (bData.fileId) {
                 docBlocks.fetchBlocks(bData.fileId);
               }

@@ -183,7 +183,7 @@ function getElementSearchTexts(data: Record<string, unknown>, key: string): { st
  * each page looking like a paper sheet with shadow — matching actual DOCX output.
  * Supports section highlight overlay via text position matching.
  */
-function DocPdfPages({ pdfUrl, previewKey, onPageCount, onPageTexts, highlightInfo }: {
+function DocPdfPages({ pdfUrl, previewKey, onPageCount, onPageTexts, highlightInfo, singlePageIndex }: {
   pdfUrl: string; previewKey: number;
   onPageCount?: (count: number) => void;
   onPageTexts?: (texts: string[]) => void;
@@ -191,6 +191,9 @@ function DocPdfPages({ pdfUrl, previewKey, onPageCount, onPageTexts, highlightIn
     pageIndex: number; heading: string; nextHeading?: string;
     elementSearch?: { start: string; end: string };
   } | null;
+  /** When set, render ONLY this page (used by the broadcast view to show just
+   *  the narrated paragraph's page, with its section highlighted). */
+  singlePageIndex?: number;
 }) {
   const [pageImages, setPageImages] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -293,11 +296,17 @@ function DocPdfPages({ pdfUrl, previewKey, onPageCount, onPageTexts, highlightIn
     );
   }
 
+  const shownIndices = singlePageIndex != null
+    ? (pageImages[singlePageIndex] != null ? [singlePageIndex] : [])
+    : pageImages.map((_, i) => i);
+
   return (
     <div className="py-4 px-4 space-y-4">
-      {pageImages.map((src, i) => (
-        <div key={i} id={`doc-pdf-page-${i}`} className="mx-auto bg-white shadow-md relative overflow-hidden" style={{ maxWidth: '740px' }}>
-          <img src={src} alt={`Page ${i + 1}`} className="w-full h-auto block" />
+      {shownIndices.map((i) => (
+        // Skip the scroll-anchor id in single-page mode so it doesn't collide
+        // with the main (hidden) preview's identical page ids.
+        <div key={i} {...(singlePageIndex == null ? { id: `doc-pdf-page-${i}` } : {})} className="mx-auto bg-white shadow-md relative overflow-hidden" style={{ maxWidth: '740px' }}>
+          <img src={pageImages[i]} alt={`Page ${i + 1}`} className="w-full h-auto block" />
           {highlight && highlight.pageIdx === i && (
             <div
               className="absolute left-0 right-0 pointer-events-none border-l-[3px] border-amber-300/50"
@@ -940,11 +949,26 @@ export default function DocumentCanvas({
             // Real page preview, same components the canvas uses, navigated to the
             // current selection (selectedPageIndex is driven by onSelectBlock).
             if (previewBlobUrl && previewType === 'pdf') {
-              // For docx/pdf the block→page mapping lives in docHighlight (heading
-              // matched to the real PDF page); slides are 1:1 so fall back to
-              // selectedPageIndex. This keeps the subtitle's paragraph and the
-              // shown page in sync even when blocks ≠ pages (e.g. Word).
-              return <PdfPagePreview pdfUrl={previewBlobUrl} pageIndex={docHighlight?.pageIndex ?? selectedPageIndex} onPageCount={() => { /* noop */ }} />;
+              // pptx: 1 slide = 1 page → simple single-page render.
+              // (cast: this closure is shared by the slides & doc toolbars, whose
+              //  layoutType narrows differently)
+              if ((layoutType as string) === 'slides') {
+                return <PdfPagePreview pdfUrl={previewBlobUrl} pageIndex={selectedPageIndex} onPageCount={() => { /* noop */ }} />;
+              }
+              // docx/pdf: show the narrated paragraph's page, with that section
+              // highlighted in light yellow (follows docHighlight as it advances).
+              return (
+                <div className="flex-1 overflow-auto">
+                  <DocPdfPages
+                    pdfUrl={previewBlobUrl}
+                    previewKey={previewKeyRef.current}
+                    onPageCount={setDocPageCount}
+                    onPageTexts={setDocPageTexts}
+                    highlightInfo={docHighlight}
+                    singlePageIndex={docHighlight?.pageIndex ?? selectedPageIndex}
+                  />
+                </div>
+              );
             }
             if (previewBlobUrl) {
               return <iframe src={previewBlobUrl} className="flex-1 w-full border-0 bg-white" title="broadcast-preview" sandbox="allow-scripts allow-same-origin" />;
@@ -1436,11 +1460,26 @@ export default function DocumentCanvas({
             // Real page preview, same components the canvas uses, navigated to the
             // current selection (selectedPageIndex is driven by onSelectBlock).
             if (previewBlobUrl && previewType === 'pdf') {
-              // For docx/pdf the block→page mapping lives in docHighlight (heading
-              // matched to the real PDF page); slides are 1:1 so fall back to
-              // selectedPageIndex. This keeps the subtitle's paragraph and the
-              // shown page in sync even when blocks ≠ pages (e.g. Word).
-              return <PdfPagePreview pdfUrl={previewBlobUrl} pageIndex={docHighlight?.pageIndex ?? selectedPageIndex} onPageCount={() => { /* noop */ }} />;
+              // pptx: 1 slide = 1 page → simple single-page render.
+              // (cast: this closure is shared by the slides & doc toolbars, whose
+              //  layoutType narrows differently)
+              if ((layoutType as string) === 'slides') {
+                return <PdfPagePreview pdfUrl={previewBlobUrl} pageIndex={selectedPageIndex} onPageCount={() => { /* noop */ }} />;
+              }
+              // docx/pdf: show the narrated paragraph's page, with that section
+              // highlighted in light yellow (follows docHighlight as it advances).
+              return (
+                <div className="flex-1 overflow-auto">
+                  <DocPdfPages
+                    pdfUrl={previewBlobUrl}
+                    previewKey={previewKeyRef.current}
+                    onPageCount={setDocPageCount}
+                    onPageTexts={setDocPageTexts}
+                    highlightInfo={docHighlight}
+                    singlePageIndex={docHighlight?.pageIndex ?? selectedPageIndex}
+                  />
+                </div>
+              );
             }
             if (previewBlobUrl) {
               return <iframe src={previewBlobUrl} className="flex-1 w-full border-0 bg-white" title="broadcast-preview" sandbox="allow-scripts allow-same-origin" />;
