@@ -351,6 +351,110 @@ async function handleOrchestrated(
   }
 }
 
+// Single-agent template-wizard cards that CONSUME uploaded data files and so
+// need a parse pre-step when the user attaches files. Analysts parse themselves;
+// text-only skills (research/reviewer/planner) don't read uploaded data; the
+// infographic gemini/region flow is left untouched.
+const PRE_PARSE_CONSUMER_SKILLS = new Set([
+  'pptx-gen', 'docx-gen', 'xlsx-gen', 'pdf-gen', 'slides-gen', 'webapp-gen',
+]);
+
+/**
+ * Template-wizard (single-agent) parse pre-step.
+ *
+ * When a user uploads files to a single skill card, that one agent often can't
+ * parse a binary upload (e.g. webapp-gen has no Bash) or isn't a data
+ * specialist (→ fabrication risk). This runs ONE lightweight data-analyst pass
+ * that fully extracts the upload into text, writes it to the card agent's
+ * working dir as `previous_step.md`, and returns a hand-off instruction to
+ * prepend to the card agent's message (source-of-truth, no fabrication).
+ *
+ * It mirrors the orchestrated pipeline hand-off (attachPreviousStepData) but is
+ * kept deliberately lean — no Router, no multi-round — so the wizard keeps its
+ * "single generation agent + style = fast" core. Only triggers when files are
+ * attached. Non-fatal: on failure returns ok:false and the card agent proceeds
+ * exactly as before.
+ */
+async function runUploadParsePreStep(opts: {
+  userId: string; conversationId: string; uploadIds: string[];
+  userLocale: string; baseSandboxPath: string; userMessage: string;
+  sseWrite: (e: SSEEvent) => void;
+}): Promise<{ ok: boolean; handoff: string; inputTokens: number; outputTokens: number; model: string }> {
+  const { userId, conversationId, uploadIds, userLocale, baseSandboxPath, userMessage, sseWrite } = opts;
+  const fail = { ok: false, handoff: '', inputTokens: 0, outputTokens: 0, model: '' };
+  const analyst = getSkill('data-analyst');
+  if (!analyst) return fail;
+
+  const taskId = uuidv4();
+  sseWrite({ type: 'task_dispatched', data: { taskId, skillId: 'data-analyst', description: '解析上傳檔案中…' } });
+
+  // Mirror the orchestrator: data-analyst runs in _agents/data-analyst and reads
+  // uploads from ../_uploads (paths supplied via the upload context).
+  const agentCwd = path.join(baseSandboxPath, '_agents', 'data-analyst');
+  const uploadContext = await getUserUploadsForPrompt(userId, agentCwd, {
+    uploadIds: uploadIds.length > 0 ? uploadIds : undefined,
+    conversationId,
+  });
+  const systemPrompt = buildSystemPrompt(analyst, config.generatorsDir, userLocale) + uploadContext;
+  const message = `請讀取使用者上傳的檔案，**完整**擷取其中所有資料（每一列、每一欄、所有數字與名稱），整理成結構化的 Markdown 表格／清單，直接輸出在你的回覆文字中。\n\n要求：\n- 資料必須完整，不要只給摘要、不要省略列數。\n- **不要產生任何輸出檔案**（不要寫 .docx/.pdf/.xlsx/.html）；只要把資料用文字回覆出來。\n- 若有多個工作表或多個檔案，逐一標明來源後完整列出。\n\n（使用者接下來會用這份資料製作文件，以下原始需求供你理解資料用途）：\n${userMessage}`;
+
+  return await new Promise(resolve => {
+    let text = '';
+    let inputTokens = 0, outputTokens = 0, model = '';
+    let settled = false;
+    const finish = (v: typeof fail | { ok: true; handoff: string; inputTokens: number; outputTokens: number; model: string }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(v);
+    };
+
+    const { emitter, abort } = spawnClaude(message, systemPrompt, {
+      userId, conversationId, skillId: 'data-analyst',
+      sandboxSubdir: '_agents/data-analyst',
+      sessionId: uuidv4(), isResume: false,
+      customAllowedTools: analyst.allowedTools,
+      customDisallowedTools: analyst.disallowedTools,
+    });
+    // Allow the user to cancel during the parse step too.
+    activeGenerations.set(conversationId, abort);
+
+    const timer = setTimeout(() => {
+      try { abort(); } catch { /* ignore */ }
+      sseWrite({ type: 'task_failed', data: { taskId, skillId: 'data-analyst', error: 'parse timed out' } });
+      finish(fail);
+    }, 180000);
+
+    emitter.on('event', (event: SSEEvent) => {
+      if (event.type === 'text') {
+        text += event.data as string;
+      } else if (event.type === 'tool_activity') {
+        sseWrite({ type: 'agent_stream', data: { taskId, skillId: 'data-analyst', type: 'tool_activity', content: event.data } });
+      } else if (event.type === 'usage') {
+        const u = event.data as { inputTokens: number; outputTokens: number; model: string };
+        inputTokens = u.inputTokens; outputTokens = u.outputTokens; model = u.model;
+      } else if (event.type === 'done') {
+        if (!text.trim()) {
+          sseWrite({ type: 'task_failed', data: { taskId, skillId: 'data-analyst', error: 'parse produced no data' } });
+          finish(fail);
+          return;
+        }
+        try {
+          fs.mkdirSync(baseSandboxPath, { recursive: true });
+          fs.writeFileSync(path.join(baseSandboxPath, 'previous_step.md'), text, 'utf-8');
+        } catch (e) {
+          console.warn('[PreParse] write previous_step.md failed:', e);
+          finish(fail);
+          return;
+        }
+        sseWrite({ type: 'task_completed', data: { taskId, skillId: 'data-analyst' } });
+        const handoff = `## 上傳檔案的完整資料（重要，務必先讀）\n使用者上傳檔案的完整資料已解析並存於工作目錄的 \`previous_step.md\`。\n**你必須先用 Read 工具讀取 \`previous_step.md\`**，所有數字／名稱／客戶名／公司名一律以該檔為準，**不可超出該檔內容，也不可自行補充或編造**任何來源外的名稱或數值。若資料筆數少於版面所需，寧可少放（標「資料未提供」），也不可湊數。\n\n`;
+        finish({ ok: true, handoff, inputTokens, outputTokens, model });
+      }
+    });
+  });
+}
+
 async function handleDirect(
   _req: Request, res: Response,
   userId: string, conversationId: string, conversation: Conversation,
@@ -422,7 +526,7 @@ async function handleDirect(
   const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + customRolePrompt + uploadContext + memoryContext + crossAssistantContext + refContext;
 
   // Inject email data into user message (not system prompt) so it persists on resume
-  const finalMessage = emailContext ? sanitizedMessage + emailContext : sanitizedMessage;
+  let finalMessage = emailContext ? sanitizedMessage + emailContext : sanitizedMessage;
 
   if (skillId && skillId !== conversation.skill_id) {
     await dbRun('UPDATE conversations SET skill_id = ? WHERE id = ?', skillId, conversationId);
@@ -456,6 +560,26 @@ async function handleDirect(
 
   // Notify frontend which skill is being used (for document mode detection)
   sseWrite({ type: 'skill_started', data: { skillId: effectiveSkillId } });
+
+  // ── Upload parse pre-step (template-wizard single-agent gap fill) ──
+  // The wizard runs ONE skill agent. If files are attached and that agent can't
+  // parse them itself (webapp-gen has no Bash) or isn't a data specialist, first
+  // run a lightweight data-analyst pass to extract the data into previous_step.md,
+  // then hand it to the card agent (source-of-truth, no fabrication). Only fires
+  // when files are attached this turn — the no-upload "style only" path is
+  // untouched and stays fast. The post-gen data-fidelity gate below still runs.
+  if (uploadIds.length > 0 && PRE_PARSE_CONSUMER_SKILLS.has(effectiveSkillId)) {
+    const pre = await runUploadParsePreStep({
+      userId, conversationId, uploadIds, userLocale,
+      baseSandboxPath: sandboxPath, userMessage: sanitizedMessage, sseWrite,
+    });
+    if (pre.ok) {
+      finalMessage = pre.handoff + finalMessage;
+      if (pre.inputTokens > 0 || pre.outputTokens > 0) {
+        await recordTokenUsage({ userId, conversationId, inputTokens: pre.inputTokens, outputTokens: pre.outputTokens, model: pre.model });
+      }
+    }
+  }
 
   async function startClaude(sid: string, isResume: boolean) {
     let systemPrompt = baseSystemPrompt;
@@ -596,7 +720,14 @@ async function handleDirect(
               const r = captureResults[i];
               if (r.status === 'fulfilled' && r.value) blocksByFile.set(newFiles[i].id, r.value);
             }
-            const rebuilt = await enforceDataFidelity(newFiles, blocksByFile, userId, conversationId, sseWrite);
+            // Resume the file's own generator session to auto-correct fabricated
+            // data in place (covers docx/xlsx/pdf/html; pptx uses its dedicated
+            // rebuild). Use the freshest session id (the CLI may have rotated it).
+            const convNow = await dbGet<{ session_id: string }>('SELECT session_id FROM conversations WHERE id = ?', conversationId);
+            const rebuilt = await enforceDataFidelity(
+              newFiles, blocksByFile, userId, conversationId, sseWrite,
+              convNow?.session_id ? { skillId: effectiveSkillId, sessionId: convNow.session_id } : undefined,
+            );
             const finalFiles = newFiles.map(f => rebuilt.get(f.id) || f);
             sseWrite({
               type: 'file_generated',

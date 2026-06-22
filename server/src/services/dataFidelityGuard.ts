@@ -20,7 +20,7 @@ import { extractText, getDocumentProxy } from 'unpdf';
 import { config } from '../config.js';
 import { dbAll } from '../db.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
-import { agentRebuild } from './agentRebuilder.js';
+import { agentRebuild, agentRegenerateInPlace } from './agentRebuilder.js';
 import type { DocumentBlock, GeneratedFile, SSEEvent } from '../types.js';
 
 const MAX_SOURCE_CHARS = 40000;   // cap source text fed to the checker
@@ -78,6 +78,16 @@ export async function extractFileText(filePath: string): Promise<string> {
       const pdf = await getDocumentProxy(new Uint8Array(buf));
       const { text } = await extractText(pdf, { mergePages: true });
       return Array.isArray(text) ? text.join('\n') : text;
+    }
+    if (e === 'html' || e === 'htm') {
+      // Strip styling noise but KEEP inline <script> bodies — chart data (ECharts
+      // option objects with the real numbers/names) lives inside <script>, so we
+      // only drop <style>/comments and the tag angle-brackets, never script text.
+      return buf.toString('utf8')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<!--[\s\S]*?-->/g, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ');
     }
     if (['csv', 'txt', 'md', 'json', 'tsv'].includes(e)) return buf.toString('utf8');
   } catch (err) {
@@ -180,9 +190,16 @@ function parseViolations(raw: string | null): FidelityViolation[] {
  * (names/numbers not in, and not derivable from, the source).
  */
 export async function auditFidelity(sourceText: string, blocks: DocumentBlock[]): Promise<FidelityViolation[]> {
-  if (!sourceText.trim() || !blocks.length) return [];
-  const blocksText = blocksToText(blocks);
-  if (!blocksText) return [];
+  return auditFidelityText(sourceText, blocksToText(blocks));
+}
+
+/**
+ * Core audit over the generated document's TEXT (format-agnostic). Used so we
+ * can verify ANY output type — pptx/docx/xlsx/pdf/html — by feeding the text
+ * extracted from the generated file itself, not just block JSON.
+ */
+export async function auditFidelityText(sourceText: string, generatedText: string): Promise<FidelityViolation[]> {
+  if (!sourceText.trim() || !generatedText.trim()) return [];
 
   const prompt = `你是一個嚴格、保守的資料稽核員。下面有「來源資料」（使用者上傳檔案的真實內容）和「AI 生成文件的內容」。
 
@@ -202,21 +219,50 @@ export async function auditFidelity(sourceText: string, blocks: DocumentBlock[])
 ${sourceText}
 
 【AI 生成文件的內容】
-${blocksText}`;
+${generatedText}`;
 
   return parseViolations(await runChecker(prompt));
 }
 
+/** Extract the generated document's content as text for the fidelity audit.
+ *  Reads the file itself (covers pptx/docx/xlsx/pdf/html); falls back to block
+ *  JSON when file extraction yields nothing. */
+async function generatedTextForAudit(file: GeneratedFile, blocks: DocumentBlock[] | undefined): Promise<string> {
+  const abs = path.isAbsolute(file.file_path) ? file.file_path : path.join(config.workspaceRoot, file.file_path);
+  const fromFile = await extractFileText(abs);
+  if (fromFile.trim()) return fromFile.slice(0, MAX_BLOCKS_CHARS);
+  return blocks ? blocksToText(blocks) : '';
+}
+
 // ── Enforcement: verify generated docs and auto-correct before the user sees them ──
 
-const REBUILDABLE_TYPES = new Set(['pptx']);                // agentRebuild supports pptx only
-const VERIFY_TYPES = new Set(['pptx', 'docx', 'xlsx']);
+// Verified against the source for ALL data document types the wizard produces.
+const VERIFY_TYPES = new Set(['pptx', 'docx', 'xlsx', 'pdf', 'html']);
+// pptx has a dedicated high-quality rebuild (slides.json aware); everything else
+// is corrected by resuming its own generator session and regenerating in place.
+const PPTX_REBUILD_TYPES = new Set(['pptx']);
+
+/**
+ * Build the removal instruction handed to the corrector agent.
+ */
+function buildFidelityFixInstruction(violations: FidelityViolation[]): string {
+  const list = violations.map(v => `「${v.value}」`).join('、');
+  return `【資料稽核 — 必須修正】這份文件中有以下內容**不存在於使用者上傳的來源資料**，屬於編造，請**全部移除**：${list}。\n移除後若版面因此變空，請改放來源中真實存在的資料；若沒有更多真實資料，就讓筆數變少或標「資料未提供」，**絕對不可再用其他公司名或自編數字填補**。所有內容只能來自來源資料、或由其數字計算得出（合計／成長率／佔比等可由來源算出的數字允許）。`;
+}
 
 /**
  * For data documents generated from uploaded files: verify each against the
- * source and auto-correct fabricated entities (pptx) before the user relies on
- * the file. Mutates `blocksByFile` to the corrected blocks and returns a map of
- * any files that were rebuilt (new records). Non-fatal — never throws.
+ * source and auto-correct fabricated entities BEFORE the user relies on the
+ * file. Covers pptx/docx/xlsx/pdf/html.
+ *
+ * - pptx → high-quality `agentRebuild` (slides.json aware).
+ * - other types → when `directContext` is supplied (template-wizard single-agent
+ *   flow), resume that skill's generation session and regenerate the file in
+ *   place with the fabricated items removed. Without directContext (orchestrated
+ *   path) non-pptx violations are flagged for observability.
+ *
+ * Mutates `blocksByFile` to corrected blocks where applicable and returns a map
+ * of any files that were rebuilt. Non-fatal — never throws.
  */
 export async function enforceDataFidelity(
   files: GeneratedFile[],
@@ -224,42 +270,59 @@ export async function enforceDataFidelity(
   userId: string,
   conversationId: string,
   emit: (event: SSEEvent) => void,
+  directContext?: { skillId: string; sessionId: string },
 ): Promise<Map<string, GeneratedFile>> {
   const rebuilt = new Map<string, GeneratedFile>();
   try {
-    const verifiable = files.filter(f => VERIFY_TYPES.has(f.file_type) && (blocksByFile.get(f.id)?.length ?? 0) > 0);
+    const verifiable = files.filter(f => VERIFY_TYPES.has(f.file_type));
     if (!verifiable.length) return rebuilt;
 
     const sourceText = await buildSourceText(userId, conversationId);
     if (!sourceText.trim()) return rebuilt;   // no uploaded source → nothing to verify against
 
     for (const file of verifiable) {
-      const blocks = blocksByFile.get(file.id)!;
-      const violations = await auditFidelity(sourceText, blocks);
+      const generatedText = await generatedTextForAudit(file, blocksByFile.get(file.id));
+      const violations = await auditFidelityText(sourceText, generatedText);
       if (!violations.length) continue;
 
       const names = violations.map(v => v.value).join(', ');
       console.warn(`[FidelityGuard] ${file.filename}: ${violations.length} fabricated item(s) not in source: ${names}`);
 
-      if (!REBUILDABLE_TYPES.has(file.file_type)) {
-        // No auto-rebuild path for this type yet — flag for observability; prevention
-        // is L1 (fidelity rule) + complete data hand-off.
-        emit({ type: 'fidelity_check', data: { fileId: file.id, status: 'flagged', items: violations.map(v => v.value) } });
+      const instruction = buildFidelityFixInstruction(violations);
+
+      // ── pptx: dedicated rebuild ──
+      if (PPTX_REBUILD_TYPES.has(file.file_type)) {
+        emit({ type: 'fidelity_check', data: { fileId: file.id, status: 'correcting', count: violations.length } });
+        const result = await agentRebuild(file.id, userId, undefined, instruction);
+        if (result?.blocks) {
+          blocksByFile.set(file.id, result.blocks);
+          rebuilt.set(file.id, result.file);
+          const after = await auditFidelity(sourceText, result.blocks);
+          emit({ type: 'fidelity_check', data: { fileId: file.id, status: after.length ? 'residual' : 'clean', count: after.length } });
+        }
         continue;
       }
 
-      emit({ type: 'fidelity_check', data: { fileId: file.id, status: 'correcting', count: violations.length } });
-      const list = violations.map(v => `「${v.value}」`).join('、');
-      const instruction = `【資料稽核 — 必須修正】這份文件中有以下內容**不存在於使用者上傳的來源資料**，屬於編造，請**全部移除**：${list}。\n移除後若版面因此變空，請改放來源中真實存在的資料；若沒有更多真實資料，就讓筆數變少或標「資料未提供」，**絕對不可再用其他公司名或自編數字填補**。所有內容只能來自來源資料、或由其數字計算得出。`;
-
-      const result = await agentRebuild(file.id, userId, undefined, instruction);
-      if (result?.blocks) {
-        blocksByFile.set(file.id, result.blocks);
-        rebuilt.set(file.id, result.file);
-        const after = await auditFidelity(sourceText, result.blocks);
-        emit({ type: 'fidelity_check', data: { fileId: file.id, status: after.length ? 'residual' : 'clean', count: after.length } });
-        console.log(`[FidelityGuard] ${file.filename}: ${after.length ? after.length + ' still flagged' : 'clean'} after rebuild.`);
+      // ── docx/xlsx/pdf/html: regenerate in place via the skill's own session ──
+      if (directContext) {
+        emit({ type: 'fidelity_check', data: { fileId: file.id, status: 'correcting', count: violations.length } });
+        const fixed = await agentRegenerateInPlace(
+          file, userId, conversationId, directContext.skillId, directContext.sessionId, instruction,
+        );
+        if (fixed) {
+          rebuilt.set(file.id, fixed);
+          const afterText = await generatedTextForAudit(fixed, blocksByFile.get(file.id));
+          const after = await auditFidelityText(sourceText, afterText);
+          emit({ type: 'fidelity_check', data: { fileId: file.id, status: after.length ? 'residual' : 'clean', count: after.length } });
+          console.log(`[FidelityGuard] ${file.filename}: ${after.length ? after.length + ' still flagged' : 'clean'} after regenerate.`);
+        } else {
+          emit({ type: 'fidelity_check', data: { fileId: file.id, status: 'flagged', items: violations.map(v => v.value) } });
+        }
+        continue;
       }
+
+      // No corrector available (orchestrated non-pptx) → flag for observability.
+      emit({ type: 'fidelity_check', data: { fileId: file.id, status: 'flagged', items: violations.map(v => v.value) } });
     }
   } catch (e) {
     console.warn('[FidelityGuard] enforce failed (non-fatal):', e);

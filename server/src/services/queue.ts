@@ -56,6 +56,19 @@ export interface EmbedJob {
   sourceUploadId?: string;
 }
 
+// Log Redis-down noise at most once per process so a missing/unreachable Redis
+// doesn't flood the console (and, with retryStrategy below, doesn't leak
+// reconnect timers / offline-queue memory).
+let redisErrorLogged = false;
+function logRedisErrorOnce(scope: string, msg: string): void {
+  if (redisErrorLogged) return;
+  redisErrorLogged = true;
+  console.error(
+    `[Queue] Redis unavailable (${scope}): ${msg}. Queue features (LINE) are disabled until Redis is reachable; ` +
+    `further reconnect errors are suppressed. Set REDIS_ENABLED=false to skip Redis entirely.`,
+  );
+}
+
 // BullMQ owns its own ioredis instance per Queue/Worker — that side-steps the
 // dual-version trap pnpm gets into when a top-level ioredis dep mismatches
 // the one bullmq vendors. We just pass the URL.
@@ -67,10 +80,16 @@ function connectionOptions(): ConnectionOptions {
     password: url.password || undefined,
     db: url.pathname && url.pathname.length > 1 ? Number(url.pathname.slice(1)) : 0,
     maxRetriesPerRequest: null,
+    // Give up reconnecting after a few attempts so an absent Redis can't spam
+    // the log forever or accumulate reconnect timers / buffered offline commands
+    // (the reported memory growth). Returning null stops ioredis retrying.
+    retryStrategy: (times: number) => (times > 5 ? null : Math.min(times * 500, 3000)),
+    reconnectOnError: () => false,
   };
 }
 
 export function getLineQueue(): Queue<LineMessageJob> {
+  if (!config.redisEnabled) throw new Error('Redis is disabled (REDIS_ENABLED=false) — LINE queue unavailable');
   if (!lineQueue) {
     lineQueue = new Queue<LineMessageJob>(QUEUE_NAME, { connection: connectionOptions() });
   }
@@ -96,7 +115,8 @@ export function defaultJobOptions(): JobsOptions {
  * processor is injected so the worker file stays decoupled from the
  * orchestrator chain — easier to test and to relocate later.
  */
-export function startLineWorker(processor: (job: LineMessageJob) => Promise<void>): Worker<LineMessageJob> {
+export function startLineWorker(processor: (job: LineMessageJob) => Promise<void>): Worker<LineMessageJob> | null {
+  if (!config.redisEnabled) return null;
   if (lineWorker) return lineWorker;
 
   // Worker concurrency = max parallel Claude CLI orchestrator runs.
@@ -122,14 +142,14 @@ export function startLineWorker(processor: (job: LineMessageJob) => Promise<void
     console.error(`[Queue] line:message job ${job?.id} failed:`, err.message);
   });
   lineWorker.on('error', err => {
-    console.error('[Queue] Worker error:', err.message);
+    logRedisErrorOnce('line worker', err.message);
   });
 
   // QueueEvents provides reliable completion/failure notifications across
   // processes — primed here so future code can wait on a specific job.
   lineQueueEvents = new QueueEvents(QUEUE_NAME, { connection: connectionOptions() });
   lineQueueEvents.on('error', err => {
-    console.error('[Queue] QueueEvents error:', err.message);
+    logRedisErrorOnce('line queue-events', err.message);
   });
 
   return lineWorker;
@@ -140,6 +160,7 @@ export function startLineWorker(processor: (job: LineMessageJob) => Promise<void
    ============================================================ */
 
 export function getEmbedQueue(): Queue<EmbedJob> {
+  if (!config.redisEnabled) throw new Error('Redis is disabled (REDIS_ENABLED=false) — embed queue unavailable');
   if (!embedQueue) {
     embedQueue = new Queue<EmbedJob>(EMBED_QUEUE_NAME, { connection: connectionOptions() });
   }
@@ -152,7 +173,8 @@ export function getEmbedQueue(): Queue<EmbedJob> {
  * them in parallel without competing for Claude CLI memory. Cap at 3 so we
  * stay friendly to the upstream ollama gateway.
  */
-export function startEmbedWorker(processor: (job: EmbedJob) => Promise<void>): Worker<EmbedJob> {
+export function startEmbedWorker(processor: (job: EmbedJob) => Promise<void>): Worker<EmbedJob> | null {
+  if (!config.redisEnabled) return null;
   if (embedWorker) return embedWorker;
   embedWorker = new Worker<EmbedJob>(
     EMBED_QUEUE_NAME,
@@ -169,7 +191,7 @@ export function startEmbedWorker(processor: (job: EmbedJob) => Promise<void>): W
     console.error(`[Queue] line-embed job ${job?.id} failed:`, err.message);
   });
   embedWorker.on('error', err => {
-    console.error('[Queue] Embed worker error:', err.message);
+    logRedisErrorOnce('embed worker', err.message);
   });
   return embedWorker;
 }

@@ -120,11 +120,14 @@ async function main() {
     });
   });
 
-  // Start the LINE BullMQ worker only when the bot is enabled, so disabling
-  // LINE_BOT_ENABLED in .env produces no Redis traffic and no idle worker.
-  if (config.line.enabled) {
+  // Start the LINE BullMQ worker only when the bot is enabled AND Redis is on,
+  // so disabling LINE_BOT_ENABLED or REDIS_ENABLED in .env produces no Redis
+  // traffic, no idle worker, and no reconnect error spam.
+  if (config.line.enabled && config.redisEnabled) {
     startLineWorker(runLineJob);
     console.log(`LINE worker started (chat concurrency=6, redis=${config.redisUrl})`);
+  } else if (config.line.enabled && !config.redisEnabled) {
+    console.warn('LINE is enabled but REDIS_ENABLED=false → queue not started; LINE webhooks will return 503 until Redis is enabled.');
   }
 
   // Start server

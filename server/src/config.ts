@@ -98,8 +98,11 @@ export const config = {
     liffId: process.env.LINE_LIFF_ID || '',
   },
 
-  // Redis (LINE queue + rate-limit)
+  // Redis (LINE queue + rate-limit). Set REDIS_ENABLED=false to run without Redis
+  // (e.g. local dev with no LINE): no queue is started, no connection attempts,
+  // no reconnect error spam. Defaults on; only the LINE features need it.
   redisUrl: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
+  redisEnabled: process.env.REDIS_ENABLED !== 'false',
 
   // Security
   maxMessageLength: 10_000,

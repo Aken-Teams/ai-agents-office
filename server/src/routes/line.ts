@@ -36,6 +36,11 @@ router.post('/line', async (req: Request, res: Response) => {
     res.status(404).end();
     return;
   }
+  // LINE is enabled but Redis (the job queue) is off — can't enqueue work.
+  if (!config.redisEnabled) {
+    res.status(503).end();
+    return;
+  }
 
   // Signature verification on the raw bytes we captured upstream.
   const signature = req.header('X-Line-Signature');

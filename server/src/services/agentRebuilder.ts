@@ -746,3 +746,116 @@ export async function agentEditDeck(
     run(agentSession.session_uuid, agentSession.initialized === 1);
   });
 }
+
+/**
+ * Regenerate ANY generated file IN PLACE by resuming its generator skill's
+ * session and instructing it to fix a problem (e.g. remove fabricated data),
+ * overwriting the SAME file (same id, same path).
+ *
+ * Format-agnostic — unlike agentRebuild/agentEditDeck (pptx-only, slides.json
+ * aware), this makes no assumptions about the output type. Used by the data-
+ * fidelity guard to auto-correct docx/xlsx/pdf/html in BOTH flows:
+ *  - template-wizard (direct): skill ran in the BASE sandbox on the conversation
+ *    session → call with no `sandboxSubdir` and the conversation session id.
+ *  - orchestrated (auto): worker ran in `_agents/{skillId}` on its per-skill
+ *    agent_session → pass `sandboxSubdir='_agents/{skillId}'` and that session id.
+ * In both, `previous_step.md` and the output file live in that same cwd, so the
+ * worker overwrites the file in place. Non-fatal: returns null on any failure so
+ * the caller can fall back to flagging.
+ */
+export async function agentRegenerateInPlace(
+  file: GeneratedFile,
+  userId: string,
+  conversationId: string,
+  skillId: string,
+  sessionId: string,
+  instruction: string,
+  sandboxSubdir?: string,
+): Promise<GeneratedFile | null> {
+  const skill = getSkill(skillId);
+  if (!skill || !sessionId) return null;
+  const systemPrompt = buildSystemPrompt(skill, config.generatorsDir);
+
+  const sandboxPath = getSandboxPath(userId, conversationId);
+  const originalFilePath = path.join(config.workspaceRoot, file.file_path);
+
+  // Version-snapshot before overwriting so the original is recoverable.
+  await snapshotExistingFiles(userId, conversationId);
+
+  const message = [
+    instruction,
+    '',
+    '## 執行方式（務必遵守）',
+    `- 你剛剛在這個工作目錄產生了「${file.filename}」。請**重新產生同一個檔案**（同檔名 \`${file.filename}\`，原地覆蓋），不要新增其他檔案、不要改副檔名。`,
+    '- 完整資料以工作目錄的 `previous_step.md` 為準（若存在）：請**先用 Read 讀取它**，所有名稱／數字只能來自該檔、或由其數字計算得出，不可編造。',
+    '- **只移除上面指出的編造內容**，其餘真實內容、版面、風格一律保持不變。',
+    '- 完成後簡短回報即可，不需冗長說明。',
+  ].join('\n');
+
+  return new Promise((resolve) => {
+    let resolved = false;
+    let hasRetried = false;
+
+    const run = (sid: string, isResume: boolean) => {
+      const { emitter, abort } = spawnClaude(message, systemPrompt, {
+        userId,
+        conversationId,
+        sessionId: sid,
+        isResume,
+        role: 'worker',
+        skillId,
+        ...(sandboxSubdir ? { sandboxSubdir } : {}),
+        customAllowedTools: skill.allowedTools,
+        customDisallowedTools: skill.disallowedTools,
+      });
+
+      const timeout = setTimeout(() => {
+        if (resolved) return;
+        try { abort(); } catch { /* ignore */ }
+        resolved = true;
+        console.warn('[AgentRegenerate] timed out');
+        resolve(null);
+      }, 300_000);
+
+      emitter.on('event', async (event: any) => {
+        if (resolved) return;
+
+        if (event.type === 'session_id') {
+          const sd = event.data as string;
+          if (sd) dbRun('UPDATE conversations SET session_id = ? WHERE id = ?', sd, conversationId).catch(() => {});
+        } else if (event.type === 'error') {
+          const errStr = String(event.data || '');
+          if (isResume && !hasRetried && /Session|exit|code 1/.test(errStr)) {
+            hasRetried = true;
+            clearTimeout(timeout);
+            run(uuidv4(), false);
+            return;
+          }
+          clearTimeout(timeout);
+          resolved = true;
+          resolve(null);
+        } else if (event.type === 'done') {
+          clearTimeout(timeout);
+          try {
+            if (!fs.existsSync(originalFilePath)) { resolved = true; resolve(null); return; }
+            const newSize = fs.statSync(originalFilePath).size;
+            await dbRun(
+              'UPDATE generated_files SET file_size = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?',
+              newSize, file.id,
+            );
+            invalidateCache(originalFilePath, file, sandboxPath);
+            const updated = await dbGet<GeneratedFile>('SELECT * FROM generated_files WHERE id = ?', file.id);
+            resolved = true;
+            resolve(updated || null);
+          } catch (e) {
+            console.warn('[AgentRegenerate] post-processing failed:', e);
+            resolved = true;
+            resolve(null);
+          }
+        }
+      });
+    };
+
+    run(sessionId, true);
+  });
+}

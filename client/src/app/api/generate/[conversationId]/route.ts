@@ -3,7 +3,9 @@ import { NextRequest } from 'next/server';
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
-const BACKEND = 'http://localhost:12054';
+// 127.0.0.1 (not "localhost"): Node 18+ resolves localhost to ::1 (IPv6) first,
+// but the Express backend listens on IPv4 → fetch to localhost fails. Pin IPv4.
+const BACKEND = 'http://127.0.0.1:12054';
 
 export async function GET(
   req: NextRequest,

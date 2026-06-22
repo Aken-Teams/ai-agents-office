@@ -320,6 +320,15 @@ export function spawnClaude(
   }
   args.push('--disallowedTools', disallowedTools.join(','));
 
+  // Permission mode: this is a fully-automated backend — there is no human to
+  // approve permission prompts. "dontAsk" auto-DENIES anything not covered by the
+  // allow list instead of surfacing an interactive "ask" (which, in headless mode,
+  // the model otherwise hallucinates into a fake "press Allow" dialog and leaks
+  // internal structure to the end user). Allowed tools still run; the deny list
+  // (--disallowedTools) is still enforced. Combined with EXECUTION_RULES in the
+  // system prompt, this keeps all permission handling strictly internal.
+  args.push('--permission-mode', 'dontAsk');
+
   // Turn cap: an explicit maxTurns wins (e.g. bounded WebSearch for team
   // members); otherwise routers are limited to a single analyze-and-delegate turn.
   if (typeof options.maxTurns === 'number' && options.maxTurns > 0) {
