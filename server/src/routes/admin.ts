@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
 import { dbGet, dbAll, dbRun } from '../db.js';
+import { opsGet } from '../opsDb.js';
 import { adminMiddleware } from '../middleware/adminAuth.js';
 import { loadSkills } from '../skills/loader.js';
 import { config } from '../config.js';
@@ -12,9 +13,30 @@ import { getRolePermissions, setRolePermissions, type RolePermissions } from '..
 import { getLineSettings, setLineSetting, type LineSettings } from '../services/lineSettings.js';
 import { getMessageQuotaStatus } from '../services/line/client.js';
 import { setLineUserDisabled } from '../services/line/userMapping.js';
+import { getQuotaNotifyRecipients, setQuotaNotifyRecipients, type QuotaNotifyRecipient } from '../services/quotaNotify.js';
+import { sendGatewayMail, resolveAdEmail, isGatewayMailConfigured } from '../services/gatewayMail.js';
 
 const router = Router();
 router.use(adminMiddleware);
+
+// ==================== Sidebar badge counts ====================
+// Lightweight pending-work counts for the admin sidebar red-dots.
+// reports: untouched tickets (status 'open'); quotaRequests: pending quota requests.
+router.get('/badge-counts', async (_req: Request, res: Response) => {
+  let reports = 0;
+  let quotaRequests = 0;
+  try {
+    if (config.reportSystemEnabled) {
+      const r = await opsGet<{ n: number }>("SELECT COUNT(*) AS n FROM ops_tickets WHERE deleted_at IS NULL AND status = 'open'");
+      reports = r?.n ?? 0;
+    }
+  } catch { /* ops db optional — never block the sidebar */ }
+  try {
+    const q = await dbGet<{ n: number }>("SELECT COUNT(*) AS n FROM quota_requests WHERE status = 'pending'");
+    quotaRequests = q?.n ?? 0;
+  } catch { /* ignore */ }
+  res.json({ reports, quotaRequests });
+});
 
 // ==================== Overview ====================
 
@@ -2055,6 +2077,58 @@ router.get('/ad/members', async (req: Request, res: Response) => {
     console.error('[AD members] fetch error:', err);
     res.status(500).json({ error: 'Failed to fetch AD members' });
   }
+});
+
+// ---- Quota-request email notification recipients (pro-panjit) ----
+
+// GET /api/admin/quota-notify → bound recipients + gateway status
+router.get('/quota-notify', async (_req: Request, res: Response) => {
+  if (config.deployMode !== 'pro-panjit') return res.status(403).json({ error: 'Not available in this deployment mode' });
+  const recipients = await getQuotaNotifyRecipients();
+  res.json({ recipients, mailConfigured: isGatewayMailConfigured() });
+});
+
+// PUT /api/admin/quota-notify { recipients: [{email, name?}] }
+router.put('/quota-notify', async (req: Request, res: Response) => {
+  if (config.deployMode !== 'pro-panjit') return res.status(403).json({ error: 'Not available in this deployment mode' });
+  const list = Array.isArray(req.body?.recipients) ? req.body.recipients as QuotaNotifyRecipient[] : null;
+  if (!list) return res.status(400).json({ error: 'recipients array required' });
+  if (list.length > 50) return res.status(400).json({ error: '收件者上限為 50 人' });
+  await setQuotaNotifyRecipients(list);
+  res.json({ ok: true, recipients: await getQuotaNotifyRecipients() });
+});
+
+// POST /api/admin/quota-notify/test { email? } → send a test mail (surfaces gateway errors)
+router.post('/quota-notify/test', async (req: Request, res: Response) => {
+  if (config.deployMode !== 'pro-panjit') return res.status(403).json({ error: 'Not available in this deployment mode' });
+  const explicit = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+  let to: string[];
+  if (explicit && explicit.includes('@')) {
+    to = [explicit.toLowerCase()];
+  } else {
+    to = (await getQuotaNotifyRecipients()).map(r => r.email);
+  }
+  if (!to.length) return res.status(400).json({ error: '尚未設定收件者，且未提供測試信箱' });
+  const result = await sendGatewayMail({
+    to,
+    subject: '【測試】AI Agents Office 額度申請通知',
+    body: '<div style="font-family:Microsoft JhengHei,Arial,sans-serif;font-size:14px;">這是一封測試信。若您收到此信，表示額度申請通知功能已可正常運作。</div>',
+    bodyType: 'html',
+  });
+  if (!result.ok) {
+    return res.status(502).json({ ok: false, status: result.status, detail: result.detail, sentTo: to });
+  }
+  res.json({ ok: true, sentTo: to });
+});
+
+// GET /api/admin/ad/resolve-email?username=&domain= → resolve an AD person's mailbox
+router.get('/ad/resolve-email', async (req: Request, res: Response) => {
+  if (config.deployMode !== 'pro-panjit') return res.status(403).json({ error: 'Not available in this deployment mode' });
+  const username = String(req.query.username || '').trim();
+  const domain = String(req.query.domain || '').trim().toUpperCase();
+  if (!username || !AD_DOMAINS.includes(domain)) return res.status(400).json({ error: 'username 與有效 domain 為必填' });
+  const r = await resolveAdEmail(username, domain);
+  res.json(r);
 });
 
 // POST /api/admin/users/provision-ad  { username, domain, displayName? }

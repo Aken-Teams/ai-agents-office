@@ -37,7 +37,7 @@ const DEPLOY_MODE = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
 const IS_PANJIT = DEPLOY_MODE === 'pro-panjit';
 const AD_DOMAIN_LIST: { code: string; label: string }[] = [
   { code: 'PANJIT', label: '台灣 PANJIT' },
-  { code: 'PYNMAX', label: '環茂' },
+  { code: 'PYNMAX', label: '璟茂' },
   { code: 'WXPJ', label: '無錫強茂' },
   { code: 'PJWS', label: '強茂深圳' },
   { code: 'GDPJ', label: '蘇州群鑫' },
@@ -140,6 +140,8 @@ function QuotaGroupsContent() {
 
   // Delete
   const [deleteTarget, setDeleteTarget] = useState<QuotaGroup | null>(null);
+  // Remove member (unassign) confirm
+  const [unassignTarget, setUnassignTarget] = useState<{ id: string; name: string } | null>(null);
 
   // Expanded group + members
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -244,6 +246,22 @@ function QuotaGroupsContent() {
     }
   }
 
+  // When searching, auto-expand the first matching group so its members show —
+  // this makes search-by-person intuitive (you immediately see who matched).
+  useEffect(() => {
+    const q = groupQuery.trim().toLowerCase();
+    if (!q) return;
+    const match = groups.find(g =>
+      g.name.toLowerCase().includes(q)
+      || String(g.limit_usd).includes(q)
+      || (g.member_search || '').toLowerCase().includes(q));
+    if (match && expandedId !== match.id) {
+      setExpandedId(match.id);
+      setMemberShowCount(MEMBER_PAGE_SIZE);
+      fetchMembers(match.id);
+    }
+  }, [groupQuery, groups]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function openAssignModal(_groupId: string) {
     if (!token) return;
     setShowAssign(true);
@@ -344,6 +362,7 @@ function QuotaGroupsContent() {
     });
     fetchGroups();
     fetchMembers(expandedId);
+    setUnassignTarget(null);
   }
 
   // The server already filters by `assignSearch` (see the effect above), so the
@@ -368,14 +387,14 @@ function QuotaGroupsContent() {
           <span className="hidden md:inline text-sm text-on-surface-variant font-mono truncate">{t('admin.quotaGroups.description' as any)}</span>
         </div>
         <div className="flex items-center gap-2 ml-3 shrink-0">
-          {/* Search groups (by name or $amount) — left of the create button */}
-          <div className="relative">
+          {/* Search groups (by name / $amount / member) — desktop: inline left of create */}
+          <div className="relative hidden md:block">
             <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant/50 text-lg pointer-events-none">search</span>
             <input
               value={groupQuery}
               onChange={e => setGroupQuery(e.target.value)}
               placeholder="搜尋群組、金額或人名…"
-              className="w-32 md:w-56 bg-surface-container border border-outline-variant/20 focus:border-primary rounded-xl pl-9 pr-3 py-2 md:py-2.5 text-xs md:text-sm text-on-surface transition-colors"
+              className="w-56 bg-surface-container border border-outline-variant/20 focus:border-primary rounded-xl pl-9 pr-3 py-2.5 text-sm text-on-surface transition-colors"
             />
           </div>
           {canEdit && (
@@ -391,6 +410,16 @@ function QuotaGroupsContent() {
       </header>
 
       <div className="flex-1 p-4 md:p-8 space-y-4 md:space-y-6 overflow-y-auto">
+      {/* Mobile search bar (full width) */}
+      <div className="md:hidden relative">
+        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 text-lg pointer-events-none">search</span>
+        <input
+          value={groupQuery}
+          onChange={e => setGroupQuery(e.target.value)}
+          placeholder="搜尋群組、金額或人名…"
+          className="w-full bg-surface-container border border-outline-variant/20 focus:border-primary rounded-xl pl-10 pr-3 py-2.5 text-sm text-on-surface transition-colors"
+        />
+      </div>
       {/* Groups List */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -482,8 +511,11 @@ function QuotaGroupsContent() {
                         const cost = calcCost(m.total_input, m.total_output);
                         const effectiveLimit = m.quota_override != null ? m.quota_override : g.limit_usd;
                         const pct = effectiveLimit > 0 ? Math.min(cost / effectiveLimit * 100, 100) : 0;
+                        // Highlight the member that matches the current search
+                        const gq2 = groupQuery.trim().toLowerCase();
+                        const matched = !!gq2 && `${m.display_name || ''} ${m.email}`.toLowerCase().includes(gq2);
                         return (
-                          <div key={m.id} className="flex items-start md:items-center gap-2.5 md:gap-3 px-3 md:px-5 py-3 hover:bg-surface-container/50 transition-colors group">
+                          <div key={m.id} className={`flex items-start md:items-center gap-2.5 md:gap-3 px-3 md:px-5 py-3 transition-colors group ${matched ? 'bg-amber-300/15 ring-1 ring-inset ring-amber-300/40' : 'hover:bg-surface-container/50'}`}>
                             <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0 mt-0.5 md:mt-0">
                               {(m.display_name || m.email).slice(0, 1).toUpperCase()}
                             </div>
@@ -543,7 +575,7 @@ function QuotaGroupsContent() {
                             </div>
                             {canEdit && (
                               <button
-                                onClick={() => handleUnassign([m.id])}
+                                onClick={() => setUnassignTarget({ id: m.id, name: m.display_name || m.email })}
                                 className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant/40 hover:text-error hover:bg-error/10 transition-colors cursor-pointer md:opacity-0 md:group-hover:opacity-100 shrink-0"
                               >
                                 <span className="material-symbols-outlined text-sm">close</span>
@@ -664,6 +696,39 @@ function QuotaGroupsContent() {
                 className="flex-1 py-2.5 bg-error text-on-error font-bold text-sm rounded-lg cursor-pointer hover:bg-error/80 transition-colors"
               >
                 {t('common.delete' as any)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Member Confirm Modal */}
+      {unassignTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setUnassignTarget(null)}>
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+          <div className="relative bg-surface-container rounded-2xl p-6 border border-outline-variant/20 shadow-2xl w-full max-w-sm mx-4 text-center" onClick={e => e.stopPropagation()}>
+            <div className="w-14 h-14 rounded-full bg-error/10 flex items-center justify-center mx-auto mb-4">
+              <span className="material-symbols-outlined text-error text-3xl">person_remove</span>
+            </div>
+            <h3 className="text-base font-headline font-bold text-on-surface mb-2">移除群組成員</h3>
+            <p className="text-sm text-on-surface-variant mb-1">
+              確定要將「{unassignTarget.name}」移出此群組?
+            </p>
+            <p className="text-xs text-on-surface-variant/60 mb-5">
+              移除後該用戶將改套用全域額度上限。
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setUnassignTarget(null)}
+                className="flex-1 py-2.5 bg-surface-container-highest border border-outline-variant/10 text-on-surface font-bold text-sm rounded-lg cursor-pointer hover:bg-surface-variant transition-colors"
+              >
+                {t('common.cancel' as any)}
+              </button>
+              <button
+                onClick={() => handleUnassign([unassignTarget.id])}
+                className="flex-1 py-2.5 bg-error text-on-error font-bold text-sm rounded-lg cursor-pointer hover:bg-error/80 transition-colors"
+              >
+                移除
               </button>
             </div>
           </div>

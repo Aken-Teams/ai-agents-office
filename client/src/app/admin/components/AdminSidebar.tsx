@@ -8,6 +8,7 @@ import { useTranslation } from '../../../i18n';
 
 const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
 const ADMIN_SIDEBAR_KEY = 'admin-sidebar-collapsed';
+const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 const PINNED_NAV = { href: '/admin/overview', labelKey: 'admin.sidebar.overview' as const, icon: 'dashboard' };
 
@@ -60,8 +61,10 @@ function findGroupForPath(path: string): string | null {
 export default function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout, isReadonly, hasPermission } = useAdminAuth();
+  const { user, logout, isReadonly, hasPermission, token } = useAdminAuth();
   const { t } = useTranslation();
+  // Pending-work counts for nav red-dots (reports / quota requests).
+  const [badges, setBadges] = useState<{ reports: number; quotaRequests: number }>({ reports: 0, quotaRequests: 0 });
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem(ADMIN_SIDEBAR_KEY) === '1';
     return false;
@@ -84,6 +87,43 @@ export default function AdminSidebar() {
   const toggleGroup = (id: string) => {
     setOpenGroup(prev => prev === id ? null : id);
   };
+
+  // Poll pending-work counts so red-dots appear without a manual refresh.
+  // Refetches on route change too, so a just-handled item clears quickly.
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    const load = () => {
+      fetch(`${SSE_BASE}/api/admin/badge-counts`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d && !cancelled) setBadges({ reports: d.reports || 0, quotaRequests: d.quotaRequests || 0 }); })
+        .catch(() => {});
+    };
+    load();
+    const timer = setInterval(load, 60_000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [token, pathname]);
+
+  // Map a nav item's permKey to its pending count (0 = no dot).
+  const badgeFor = (permKey?: string): number => {
+    if (permKey === 'reports') return badges.reports;
+    if (permKey === 'quota-requests') return badges.quotaRequests;
+    return 0;
+  };
+  // Total pending under a group (for the collapsed/closed group header dot).
+  const groupBadge = (group: { items: { permKey?: string }[] }): number =>
+    group.items.reduce((sum, it) => sum + badgeFor((it as any).permKey), 0);
+
+  // Red count pill (shown next to a nav label).
+  const CountPill = ({ n }: { n: number }) =>
+    n > 0 ? (
+      <span className="ml-auto min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full bg-error text-on-error text-[10px] font-bold leading-none shrink-0">
+        {n > 99 ? '99+' : n}
+      </span>
+    ) : null;
+  // Bare red dot, for collapsed icon-only buttons (overlaid on the icon).
+  const Dot = ({ show }: { show: boolean }) =>
+    show ? <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-error ring-2 ring-surface-container-lowest" /> : null;
 
   return (
     <>
@@ -166,6 +206,7 @@ export default function AdminSidebar() {
                     >
                       <span className="material-symbols-outlined text-xl">{group.icon}</span>
                       <span className="flex-1 text-left text-xs uppercase tracking-widest font-bold font-headline">{t(group.labelKey)}</span>
+                      {!isOpen && <CountPill n={groupBadge(group)} />}
                       <span className={`material-symbols-outlined text-[18px] transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
                         expand_more
                       </span>
@@ -188,6 +229,7 @@ export default function AdminSidebar() {
                         >
                           <span className="material-symbols-outlined text-xl">{link.icon}</span>
                           <span className="text-sm font-headline font-bold">{t(link.labelKey)}</span>
+                          <CountPill n={badgeFor((link as any).permKey)} />
                         </Link>
                       );
                     })}
@@ -274,13 +316,14 @@ export default function AdminSidebar() {
                   // Collapsed: icon with flyout submenu on hover
                   <div className="relative group/gh">
                     <button
-                      className={`flex items-center justify-center py-2.5 w-full bg-transparent cursor-pointer transition-all duration-200 ${
+                      className={`relative flex items-center justify-center py-2.5 w-full bg-transparent cursor-pointer transition-all duration-200 ${
                         hasActiveChild
                           ? 'text-primary'
                           : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container/50'
                       }`}
                     >
                       <span className="material-symbols-outlined text-[20px]">{group.icon}</span>
+                      <Dot show={groupBadge(group) > 0} />
                     </button>
                     {/* Flyout submenu — pl-2 creates visual gap while keeping hover area continuous */}
                     <div className="absolute left-full top-0 pl-2 opacity-0 group-hover/gh:opacity-100 pointer-events-none group-hover/gh:pointer-events-auto transition-opacity duration-200 z-[60]">
@@ -301,6 +344,7 @@ export default function AdminSidebar() {
                           >
                             <span className="material-symbols-outlined text-[18px]">{link.icon}</span>
                             <span>{t(link.labelKey)}</span>
+                            <CountPill n={badgeFor((link as any).permKey)} />
                           </Link>
                         );
                       })}
@@ -319,6 +363,7 @@ export default function AdminSidebar() {
                   >
                     <span className="material-symbols-outlined text-[20px]">{group.icon}</span>
                     <span className="flex-1 text-left text-sm font-bold">{t(group.labelKey)}</span>
+                    {!isOpen && <CountPill n={groupBadge(group)} />}
                     <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
                       expand_more
                     </span>
@@ -345,6 +390,7 @@ export default function AdminSidebar() {
                         >
                           <span className="material-symbols-outlined text-[18px]">{link.icon}</span>
                           <span className="text-sm">{t(link.labelKey)}</span>
+                          <CountPill n={badgeFor((link as any).permKey)} />
                         </Link>
                       );
                     })}

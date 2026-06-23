@@ -15,7 +15,7 @@ const isPanjit = deployMode === 'pro-panjit';
 
 const AD_DOMAINS = [
   { value: 'PANJIT', label: 'PANJIT（台灣）' },
-  { value: 'PYNMAX', label: 'PYNMAX（環茂）' },
+  { value: 'PYNMAX', label: 'PYNMAX（璟茂）' },
   { value: 'WXPJ', label: 'WXPJ（無錫強茂）' },
   { value: 'PJWS', label: 'PJWS（強茂深圳）' },
   { value: 'GDPJ', label: 'GDPJ（蘇州群鑫）' },

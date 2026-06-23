@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
+import QuotaNotifyModal from './QuotaNotifyModal';
+
+const IS_PANJIT = (process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit') === 'pro-panjit';
 
 interface QuotaRequest {
   id: string;
@@ -54,6 +57,9 @@ function QuotaRequestsContent() {
   // Deny modal
   const [denyTarget, setDenyTarget] = useState<QuotaRequest | null>(null);
   const [denyReason, setDenyReason] = useState('');
+
+  // Notification recipients settings (pro-panjit)
+  const [showNotify, setShowNotify] = useState(false);
 
   const fetchRequests = useCallback(async () => {
     if (!token) return;
@@ -150,7 +156,17 @@ function QuotaRequestsContent() {
             <p className="text-xs text-on-surface-variant hidden md:block">{t('admin.quotaRequests.description' as any)}</p>
           </div>
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex items-center gap-1.5">
+          {IS_PANJIT && canEdit && (
+            <button
+              onClick={() => setShowNotify(true)}
+              title="通知設定"
+              className="flex items-center gap-1.5 px-2.5 md:px-3 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-bold text-on-surface-variant hover:bg-surface-container transition-colors cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-lg">mark_email_unread</span>
+              <span className="hidden md:inline">通知設定</span>
+            </button>
+          )}
           {(['pending', 'all'] as const).map(tabKey => (
             <button
               key={tabKey}
@@ -375,6 +391,8 @@ function QuotaRequestsContent() {
         </div>
       )}
       </div>
+
+      {showNotify && <QuotaNotifyModal token={token} onClose={() => setShowNotify(false)} />}
     </>
   );
 }

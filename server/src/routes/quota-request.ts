@@ -3,6 +3,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { getEffectiveUserLimit, getUserDisplayCost } from '../services/usageLimit.js';
+import { notifyQuotaRequest } from '../services/quotaNotify.js';
+import { config } from '../config.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -36,6 +38,25 @@ router.post('/', async (req: Request, res: Response) => {
     'INSERT INTO quota_requests (id, user_id, current_limit, current_cost, reason) VALUES (?, ?, ?, ?, ?)',
     id, userId, currentLimit, currentCost, reason.trim()
   );
+
+  // Notify bound recipients by email (pro-panjit; best-effort, never blocks).
+  (async () => {
+    try {
+      const u = await dbGet<{ display_name: string | null; email: string }>(
+        'SELECT display_name, email FROM users WHERE id = ?', userId
+      );
+      await notifyQuotaRequest({
+        requesterName: u?.display_name || u?.email || '使用者',
+        requesterEmail: u?.email || '',
+        reason: reason.trim(),
+        currentLimit,
+        currentCost,
+        adminUrl: config.publicWebUrl,
+      });
+    } catch (e) {
+      console.warn('[quota-request] notify failed:', e);
+    }
+  })();
 
   res.json({ success: true, id, status: 'pending' });
 });

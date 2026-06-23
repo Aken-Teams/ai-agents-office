@@ -5,7 +5,7 @@ import { useAdminAuth } from '../components/AdminAuthProvider';
 
 const DOMAINS: { code: string; label: string }[] = [
   { code: 'PANJIT', label: '台灣 PANJIT' },
-  { code: 'PYNMAX', label: '環茂' },
+  { code: 'PYNMAX', label: '璟茂' },
   { code: 'WXPJ',   label: '無錫強茂' },
   { code: 'PJWS',   label: '強茂深圳' },
   { code: 'GDPJ',   label: '蘇州群鑫' },

@@ -97,7 +97,7 @@ flowchart TD
 | 公司代號 | 公司名稱 |
 |----------|----------|
 | PANJIT | PANJIT（台灣）|
-| PYNMAX | PYNMAX（環茂）|
+| PYNMAX | PYNMAX（璟茂）|
 | WXPJ | WXPJ（無錫強茂）|
 | PJWS | PJWS（強茂深圳）|
 | GDPJ | GDPJ（蘇州群鑫）|
