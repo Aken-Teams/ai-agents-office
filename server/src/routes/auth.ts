@@ -842,8 +842,12 @@ async function fetchAdUserDetail(username: string, domain: string): Promise<Part
       signal: AbortSignal.timeout(8_000),
     });
     if (!res.ok) return {};
-    const data = await res.json() as Partial<AdUser>;
-    return data;
+    // Gateway nests the record under `user` ({success, message, user:{mail,...}});
+    // tolerate a flat shape too. Reading the top level returns undefined mail,
+    // which falls back to a synthetic *.panjit.local email — the bug behind
+    // accounts like 90001@panjit.panjit.local.
+    const data = await res.json() as { user?: Partial<AdUser> } & Partial<AdUser>;
+    return data.user ?? data;
   } catch {
     return {};
   }
