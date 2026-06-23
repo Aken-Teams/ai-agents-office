@@ -19,9 +19,9 @@ const router = Router();
 
 /* ============================================================
    Demo guest login (pro-out only)
-   One-time, 24h, $30 quota. No password — the user just types a name. Every
+   One-time, 36h, $30 quota. No password — the user just types a name. Every
    demo account is grouped under one "訪客 Demo" quota group so they can be found
-   and deleted as a group (manual cleanup). The JWT expires in 24h and there's no
+   and deleted as a group (manual cleanup). The JWT expires in 36h and there's no
    password, so the account can't be used after that. Skips onboarding/terms so
    the guest lands straight on the home page.
    ============================================================ */
@@ -34,7 +34,7 @@ async function getOrCreateDemoGroup(): Promise<string> {
   const id = uuidv4();
   await dbRun(
     'INSERT INTO quota_groups (id, name, limit_usd, description) VALUES (?, ?, ?, ?)',
-    id, DEMO_GROUP_NAME, DEMO_QUOTA_USD, '訪客一次性測試帳號（建立後 24 小時、可整組手動刪除）',
+    id, DEMO_GROUP_NAME, DEMO_QUOTA_USD, '訪客一次性測試帳號（建立後 36 小時、可整組手動刪除）',
   );
   return id;
 }
@@ -48,7 +48,7 @@ router.post('/demo', async (req: Request, res: Response) => {
   // Login-or-create by name: if a non-expired demo account with the same name
   // exists, log back into it (this is how a returning guest "logs in"). The
   // token only lasts until the account's ORIGINAL expiry, so re-entering the
-  // name can't extend the 24h window.
+  // name can't extend the 36h window.
   const existing = await dbGet<{ id: string; email: string; demo_expires_at: string }>(
     "SELECT id, email, demo_expires_at FROM users WHERE is_demo = 1 AND display_name = ? AND demo_expires_at > NOW() ORDER BY created_at DESC LIMIT 1",
     name,
@@ -70,12 +70,12 @@ router.post('/demo', async (req: Request, res: Response) => {
     `INSERT INTO users
        (id, email, password_hash, display_name, role, status, locale, company,
         quota_group_id, is_demo, demo_expires_at, onboarding_completed, terms_accepted_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'user', 'active', 'zh-TW', '訪客 Demo', ?, 1, DATE_ADD(NOW(), INTERVAL 24 HOUR), 1, NOW(), NOW(), NOW())`,
+     VALUES (?, ?, ?, ?, 'user', 'active', 'zh-TW', '訪客 Demo', ?, 1, DATE_ADD(NOW(), INTERVAL 36 HOUR), 1, NOW(), NOW(), NOW())`,
     id, email, hash, name, groupId,
   );
 
-  // 24h token — after it expires the demo account can no longer be used.
-  const token = jwt.sign({ userId: id, email, role: 'user' }, config.jwtSecret, { expiresIn: '24h' });
+  // 36h token — after it expires the demo account can no longer be used.
+  const token = jwt.sign({ userId: id, email, role: 'user' }, config.jwtSecret, { expiresIn: '36h' });
   res.json({ token, user: { id, email, displayName: name, role: 'user' } });
 });
 

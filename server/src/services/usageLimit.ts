@@ -48,9 +48,12 @@ export async function getUserDisplayCost(userId: string): Promise<number> {
  * Falls back to global limit.
  */
 export async function getEffectiveUserLimit(userId: string): Promise<number> {
-  const user = await dbGet<{ quota_override: number | null; quota_group_id: string | null }>(
-    'SELECT quota_override, quota_group_id FROM users WHERE id = ?', userId
+  const user = await dbGet<{ quota_override: number | null; quota_group_id: string | null; role: string | null }>(
+    'SELECT quota_override, quota_group_id, role FROM users WHERE id = ?', userId
   );
+  // Admins are unlimited. (Infinity → never "exceeded"; serialize as null at the
+  // API boundary to mean "unlimited".)
+  if (user?.role === 'admin') return Infinity;
   // Priority: personal override > group > global
   if (user?.quota_override != null) {
     return user.quota_override;

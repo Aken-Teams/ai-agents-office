@@ -27,7 +27,8 @@ router.post('/', async (req: Request, res: Response) => {
     return;
   }
 
-  const currentLimit = await getEffectiveUserLimit(userId);
+  const rawLimit = await getEffectiveUserLimit(userId);
+  const currentLimit = Number.isFinite(rawLimit) ? rawLimit : 0; // admins are unlimited; never request
   const currentCost = await getUserDisplayCost(userId);
 
   const id = uuidv4();

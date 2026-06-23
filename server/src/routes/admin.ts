@@ -1858,7 +1858,7 @@ router.get('/quota-requests', async (req: Request, res: Response) => {
 // PATCH /api/admin/quota-requests/:id — Approve or deny a quota request
 router.patch('/quota-requests/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { action, new_limit, admin_notes } = req.body;
+  const { action, new_limit, admin_notes, group_id } = req.body;
 
   if (!action || !['approve', 'deny'].includes(action)) {
     res.status(400).json({ error: 'action must be "approve" or "deny"' });
@@ -1876,30 +1876,52 @@ router.patch('/quota-requests/:id', async (req: Request, res: Response) => {
   }
 
   if (action === 'approve') {
-    if (new_limit == null || isNaN(parseFloat(new_limit)) || parseFloat(new_limit) <= 0) {
-      res.status(400).json({ error: 'new_limit is required for approval' });
-      return;
+    // Preferred path: approve by assigning the user to a quota GROUP. This keeps
+    // approvals manageable by reviewers (who operate on groups) and clears any
+    // personal override so the group actually takes effect. A raw `new_limit`
+    // (personal override) is still accepted as an admin-only exception.
+    const group = group_id
+      ? await dbGet<{ id: string; limit_usd: number }>('SELECT id, limit_usd FROM quota_groups WHERE id = ?', group_id)
+      : null;
+    if (group_id && !group) { res.status(400).json({ error: '找不到指定的額度群組' }); return; }
+
+    if (group) {
+      await dbRun(
+        "UPDATE quota_requests SET status = 'approved', new_limit = ?, admin_notes = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?",
+        group.limit_usd, admin_notes || null, req.user!.userId, id
+      );
+      // Join the group + clear personal override (so the group, not a hidden
+      // override, drives the limit — and a reviewer can re-assign later).
+      await dbRun(
+        'UPDATE users SET quota_group_id = ?, quota_override = NULL, updated_at = NOW() WHERE id = ?',
+        group.id, request.user_id
+      );
+      await dbRun(
+        'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+        uuidv4(), req.user!.userId, 'approve_quota_request', 'quota_request', id,
+        JSON.stringify({ user_id: request.user_id, group_id: group.id, new_limit: group.limit_usd })
+      );
+    } else {
+      // Admin exception: personal override.
+      if (new_limit == null || isNaN(parseFloat(new_limit)) || parseFloat(new_limit) <= 0) {
+        res.status(400).json({ error: '核准需提供 group_id（指派群組）或正數 new_limit（個人額度）' });
+        return;
+      }
+      const limitVal = parseFloat(new_limit);
+      await dbRun(
+        "UPDATE quota_requests SET status = 'approved', new_limit = ?, admin_notes = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?",
+        limitVal, admin_notes || null, req.user!.userId, id
+      );
+      await dbRun(
+        'UPDATE users SET quota_override = ?, updated_at = NOW() WHERE id = ?',
+        limitVal, request.user_id
+      );
+      await dbRun(
+        'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+        uuidv4(), req.user!.userId, 'approve_quota_request', 'quota_request', id,
+        JSON.stringify({ user_id: request.user_id, new_limit: limitVal })
+      );
     }
-    const limitVal = parseFloat(new_limit);
-
-    // Update request
-    await dbRun(
-      "UPDATE quota_requests SET status = 'approved', new_limit = ?, admin_notes = ?, reviewed_by = ?, reviewed_at = NOW() WHERE id = ?",
-      limitVal, admin_notes || null, req.user!.userId, id
-    );
-
-    // Update user's quota_override
-    await dbRun(
-      'UPDATE users SET quota_override = ?, updated_at = NOW() WHERE id = ?',
-      limitVal, request.user_id
-    );
-
-    // Audit log
-    await dbRun(
-      'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
-      uuidv4(), req.user!.userId, 'approve_quota_request', 'quota_request', id,
-      JSON.stringify({ user_id: request.user_id, new_limit: limitVal })
-    );
   } else {
     // Deny
     await dbRun(

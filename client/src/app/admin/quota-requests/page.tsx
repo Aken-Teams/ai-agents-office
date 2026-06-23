@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
 
@@ -19,6 +19,12 @@ interface QuotaRequest {
   reviewed_at: string | null;
 }
 
+interface QuotaGroup {
+  id: string;
+  name: string;
+  limit_usd: number;
+}
+
 export default function AdminQuotaRequests() {
   return <QuotaRequestsContent />;
 }
@@ -31,11 +37,16 @@ function QuotaRequestsContent() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'pending' | 'all'>('pending');
 
-  // Approve modal
+  // Approve modal — approve by assigning the user to a quota group
   const [approveTarget, setApproveTarget] = useState<QuotaRequest | null>(null);
-  const [approveLimit, setApproveLimit] = useState('');
+  const [approveGroupId, setApproveGroupId] = useState('');
   const [approveNotes, setApproveNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [groups, setGroups] = useState<QuotaGroup[]>([]);
+  // Searchable group dropdown
+  const [groupOpen, setGroupOpen] = useState(false);
+  const [groupSearch, setGroupSearch] = useState('');
+  const groupBoxRef = useRef<HTMLDivElement>(null);
 
   // Deny modal
   const [denyTarget, setDenyTarget] = useState<QuotaRequest | null>(null);
@@ -57,20 +68,37 @@ function QuotaRequestsContent() {
 
   useEffect(() => { fetchRequests(); }, [fetchRequests]);
 
+  // Load quota groups for the approve selector
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/admin/quota-groups', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then((data: QuotaGroup[]) => setGroups((data || []).slice().sort((a, b) => a.limit_usd - b.limit_usd)))
+      .catch(() => { /* ignore */ });
+  }, [token]);
+
+  // Close the group dropdown when clicking outside it
+  useEffect(() => {
+    if (!groupOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (groupBoxRef.current && !groupBoxRef.current.contains(e.target as Node)) setGroupOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [groupOpen]);
+
   async function handleApprove() {
-    if (!token || !approveTarget || submitting) return;
-    const limitVal = parseFloat(approveLimit);
-    if (isNaN(limitVal) || limitVal <= 0) return;
+    if (!token || !approveTarget || submitting || !approveGroupId) return;
     setSubmitting(true);
     try {
       const res = await fetch(`/api/admin/quota-requests/${approveTarget.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ action: 'approve', new_limit: limitVal, admin_notes: approveNotes.trim() || undefined }),
+        body: JSON.stringify({ action: 'approve', group_id: approveGroupId, admin_notes: approveNotes.trim() || undefined }),
       });
       if (res.ok) {
         setApproveTarget(null);
-        setApproveLimit('');
+        setApproveGroupId('');
         setApproveNotes('');
         fetchRequests();
       }
@@ -181,7 +209,7 @@ function QuotaRequestsContent() {
                 {req.status === 'pending' && canEdit && (
                   <div className="flex items-center gap-2 shrink-0">
                     <button
-                      onClick={() => { setApproveTarget(req); setApproveLimit(String(Math.ceil(req.current_limit * 1.5))); }}
+                      onClick={() => { setApproveTarget(req); setApproveGroupId(''); setApproveNotes(''); setGroupOpen(false); setGroupSearch(''); }}
                       className="px-3 py-1.5 text-xs font-bold bg-success/10 text-success hover:bg-success/20 rounded-lg transition-colors cursor-pointer"
                     >
                       {t('admin.quotaRequests.approve' as any)}
@@ -210,17 +238,69 @@ function QuotaRequestsContent() {
             </p>
 
             <div className="mb-3">
-              <label className="block text-sm font-bold text-on-surface mb-1">{t('admin.quotaRequests.approveModal.newLimit' as any)}</label>
-              <div className="flex items-center gap-2">
-                <span className="text-on-surface-variant font-bold">$</span>
-                <input
-                  type="number"
-                  value={approveLimit}
-                  onChange={e => setApproveLimit(e.target.value)}
-                  className="flex-1 bg-surface-container border border-outline-variant/20 focus:border-primary rounded-lg px-3 py-2 text-sm text-on-surface"
-                  min={1}
-                />
-              </div>
+              <label className="block text-sm font-bold text-on-surface mb-2">指派額度群組</label>
+              {groups.length > 0 ? (
+                <div ref={groupBoxRef} className="relative">
+                  {(() => {
+                    const selected = groups.find(g => g.id === approveGroupId);
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => setGroupOpen(o => !o)}
+                        className="w-full flex items-center justify-between gap-2 bg-surface-container border border-outline-variant/20 hover:border-success/40 rounded-lg px-3 py-2 text-sm text-on-surface cursor-pointer transition-colors"
+                      >
+                        <span className={selected ? 'font-medium' : 'text-on-surface-variant'}>
+                          {selected ? `${selected.name}（$${selected.limit_usd}）` : '— 請選擇群組 —'}
+                        </span>
+                        <span className={`material-symbols-outlined text-on-surface-variant text-[20px] transition-transform ${groupOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                      </button>
+                    );
+                  })()}
+                  {groupOpen && (
+                    <div className="absolute z-10 mt-1 w-full bg-surface-container-lowest border border-outline-variant/20 rounded-lg shadow-xl overflow-hidden">
+                      <div className="p-2 border-b border-outline-variant/10">
+                        <input
+                          value={groupSearch}
+                          onChange={e => setGroupSearch(e.target.value)}
+                          placeholder="搜尋群組或金額…"
+                          autoFocus
+                          className="w-full bg-surface-container border border-outline-variant/20 focus:border-primary rounded-md px-2.5 py-1.5 text-sm text-on-surface"
+                        />
+                      </div>
+                      <div className="max-h-48 overflow-y-auto py-1">
+                        {(() => {
+                          const q = groupSearch.trim().toLowerCase();
+                          const filtered = q
+                            ? groups.filter(g => g.name.toLowerCase().includes(q) || String(g.limit_usd).includes(q))
+                            : groups;
+                          if (filtered.length === 0) {
+                            return <p className="px-3 py-3 text-xs text-on-surface-variant text-center">找不到符合的群組</p>;
+                          }
+                          return filtered.map(g => {
+                            const sel = approveGroupId === g.id;
+                            return (
+                              <button
+                                key={g.id}
+                                type="button"
+                                onClick={() => { setApproveGroupId(g.id); setGroupOpen(false); setGroupSearch(''); }}
+                                className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm text-left transition-colors cursor-pointer ${sel ? 'bg-success/10 text-success font-bold' : 'text-on-surface hover:bg-success/5'}`}
+                              >
+                                <span className="truncate">{g.name}</span>
+                                <span className={`shrink-0 tabular-nums ${sel ? 'text-success' : 'text-on-surface-variant'}`}>${g.limit_usd}</span>
+                              </button>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-warning bg-warning/10 rounded-lg px-3 py-2">
+                  目前沒有額度群組。請先到「額度群組」建立對應額度的群組，再回來核准。
+                </p>
+              )}
+              <p className="text-[11px] text-on-surface-variant/70 mt-1.5">核准後會將此用戶加入該群組，並清除其個人額度覆寫（讓群組生效、方便日後調整）。</p>
             </div>
 
             <div className="mb-4">
@@ -239,7 +319,7 @@ function QuotaRequestsContent() {
               </button>
               <button
                 onClick={handleApprove}
-                disabled={!approveLimit || parseFloat(approveLimit) <= 0 || submitting}
+                disabled={!approveGroupId || submitting}
                 className="flex-1 py-2.5 rounded-xl text-sm font-bold text-on-primary bg-success disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
               >
                 {t('admin.quotaRequests.approve' as any)}
