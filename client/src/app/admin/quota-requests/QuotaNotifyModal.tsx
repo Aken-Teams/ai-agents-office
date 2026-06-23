@@ -4,13 +4,6 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
-// AD 公司別中文對照（與 admin/org、quota-groups 一致）。
-const DOMAIN_LABELS: Record<string, string> = {
-  PANJIT: '台灣 PANJIT', PYNMAX: '璟茂', WXPJ: '無錫強茂',
-  PJWS: '強茂深圳', GDPJ: '蘇州群鑫', PJXZ: '強茂徐州', PJSD: '山東強茂',
-};
-const domainLabel = (code: string) => DOMAIN_LABELS[code] || code;
-
 interface Recipient { email: string; name?: string }
 interface AdMember { username: string; displayName: string; domain: string }
 
@@ -36,6 +29,17 @@ export default function QuotaNotifyModal({ token, onClose }: { token: string | n
   const [adLoading, setAdLoading] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
   const [hint, setHint] = useState('');
+  const [domainOpen, setDomainOpen] = useState(false);
+  const [domainPos, setDomainPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const domainRef = useRef<HTMLDivElement>(null);
+  const domainBtnRef = useRef<HTMLButtonElement>(null);
+
+  const openDomainMenu = () => {
+    if (domainOpen) { setDomainOpen(false); return; }
+    const r = domainBtnRef.current?.getBoundingClientRect();
+    if (r) setDomainPos({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 176) });
+    setDomainOpen(true);
+  };
 
   // Test send
   const [testing, setTesting] = useState(false);
@@ -90,6 +94,14 @@ export default function QuotaNotifyModal({ token, onClose }: { token: string | n
       })
       .catch(() => { loadAdMembers('PANJIT'); });
   }, [token, auth, loadAdMembers]);
+
+  // Close the company dropdown on outside click.
+  useEffect(() => {
+    if (!domainOpen) return;
+    const onDown = (e: MouseEvent) => { if (domainRef.current && !domainRef.current.contains(e.target as Node)) setDomainOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [domainOpen]);
 
   const has = (email: string) => recipients.some(r => r.email === email.trim().toLowerCase());
 
@@ -207,14 +219,35 @@ export default function QuotaNotifyModal({ token, onClose }: { token: string | n
             <div>
               <label className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2 block">新增通知對象</label>
               <div className="flex gap-2">
-                <select
-                  value={domain}
-                  onChange={e => { setDomain(e.target.value); loadAdMembers(e.target.value); }}
-                  className="bg-surface-container-high border border-outline-variant/20 focus:border-primary rounded-lg pl-3 pr-8 py-2 text-sm text-on-surface cursor-pointer shrink-0"
-                  title="AD 公司別"
-                >
-                  {(domains.length ? domains : ['PANJIT']).map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
+                <div className="relative shrink-0" ref={domainRef}>
+                  <button
+                    ref={domainBtnRef}
+                    type="button"
+                    onClick={openDomainMenu}
+                    className="flex items-center gap-1.5 bg-surface-container-high border border-outline-variant/20 hover:border-primary/50 rounded-lg pl-3 pr-2 py-2 text-sm text-on-surface cursor-pointer transition-colors w-[7.5rem]"
+                    title="AD 公司別"
+                  >
+                    <span className="truncate flex-1 text-left">{domain}</span>
+                    <span className={`material-symbols-outlined text-lg text-on-surface-variant/60 transition-transform ${domainOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                  </button>
+                  {domainOpen && domainPos && (
+                    <div
+                      className="fixed z-[60] max-h-64 overflow-y-auto bg-surface-container-highest border border-outline-variant/20 rounded-xl shadow-2xl py-1"
+                      style={{ top: domainPos.top, left: domainPos.left, width: domainPos.width }}
+                    >
+                      {(domains.length ? domains : ['PANJIT']).map(d => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => { setDomain(d); loadAdMembers(d); setDomainOpen(false); }}
+                          className={`w-full px-3 py-2 text-left text-sm cursor-pointer transition-colors ${d === domain ? 'text-primary bg-primary/5 font-bold' : 'text-on-surface hover:bg-surface-container'}`}
+                        >
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div className="relative flex-1">
                   <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 text-lg pointer-events-none">search</span>
                   <input

@@ -13,7 +13,7 @@ import { getRolePermissions, setRolePermissions, type RolePermissions } from '..
 import { getLineSettings, setLineSetting, type LineSettings } from '../services/lineSettings.js';
 import { getMessageQuotaStatus } from '../services/line/client.js';
 import { setLineUserDisabled } from '../services/line/userMapping.js';
-import { getQuotaNotifyRecipients, setQuotaNotifyRecipients, type QuotaNotifyRecipient } from '../services/quotaNotify.js';
+import { getQuotaNotifyRecipients, setQuotaNotifyRecipients, buildQuotaRequestEmail, type QuotaNotifyRecipient } from '../services/quotaNotify.js';
 import { sendGatewayMail, resolveAdEmail, isGatewayMailConfigured } from '../services/gatewayMail.js';
 
 const router = Router();
@@ -2109,12 +2109,18 @@ router.post('/quota-notify/test', async (req: Request, res: Response) => {
     to = (await getQuotaNotifyRecipients()).map(r => r.email);
   }
   if (!to.length) return res.status(400).json({ error: '尚未設定收件者，且未提供測試信箱' });
-  const result = await sendGatewayMail({
-    to,
-    subject: '【測試】AI Agents Office 額度申請通知',
-    body: '<div style="font-family:Microsoft JhengHei,Arial,sans-serif;font-size:14px;">這是一封測試信。若您收到此信，表示額度申請通知功能已可正常運作。</div>',
-    bodyType: 'html',
+  // Send the REAL notification template (with sample data) so the test looks
+  // exactly like an actual quota-request notification.
+  const { subject, body } = buildQuotaRequestEmail({
+    requesterName: '王小明',
+    requesterEmail: 'sample.user@panjit.com.tw',
+    reason: '近期需製作多份季度簡報與報告，目前額度即將用罄，懇請調高額度。',
+    currentLimit: 50,
+    currentCost: 47.32,
+    adminUrl: config.publicWebUrl,
+    isTest: true,
   });
+  const result = await sendGatewayMail({ to, subject, body, bodyType: 'html' });
   if (!result.ok) {
     return res.status(502).json({ ok: false, status: result.status, detail: result.detail, sentTo: to });
   }
