@@ -11,6 +11,7 @@ interface QuotaGroup {
   limit_usd: number;
   description: string | null;
   member_count: number;
+  member_search?: string | null; // members' names+emails, for search-by-person
   created_at: string;
 }
 
@@ -146,6 +147,7 @@ function QuotaGroupsContent() {
   const [membersLoading, setMembersLoading] = useState(false);
   const [memberShowCount, setMemberShowCount] = useState(10);
   const MEMBER_PAGE_SIZE = 10;
+  const [groupQuery, setGroupQuery] = useState('');
 
   // Assign modal
   const [showAssign, setShowAssign] = useState(false);
@@ -348,6 +350,15 @@ function QuotaGroupsContent() {
   // list reflects whole-table search results — no client-side filtering needed.
   const assignFiltered = allUsers;
 
+  // Filter the group list by name or $amount (search box in the header).
+  const gq = groupQuery.trim().toLowerCase();
+  const visibleGroups = gq
+    ? groups.filter(g =>
+        g.name.toLowerCase().includes(gq)
+        || String(g.limit_usd).includes(gq)
+        || (g.member_search || '').toLowerCase().includes(gq)) // search by member name/email
+    : groups;
+
   return (
     <>
       {/* Sticky Header */}
@@ -356,15 +367,27 @@ function QuotaGroupsContent() {
           <span className="text-base md:text-lg font-black text-on-surface font-headline shrink-0">{t('admin.quotaGroups.title' as any)}</span>
           <span className="hidden md:inline text-sm text-on-surface-variant font-mono truncate">{t('admin.quotaGroups.description' as any)}</span>
         </div>
-        {canEdit && (
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-1.5 ml-3 px-3 md:px-4 py-2 md:py-2.5 cyber-gradient rounded-xl text-on-primary text-xs md:text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all cursor-pointer shrink-0"
-          >
-            <span className="material-symbols-outlined text-lg">add</span>
-            <span className="hidden sm:inline">{t('admin.quotaGroups.create' as any)}</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2 ml-3 shrink-0">
+          {/* Search groups (by name or $amount) — left of the create button */}
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant/50 text-lg pointer-events-none">search</span>
+            <input
+              value={groupQuery}
+              onChange={e => setGroupQuery(e.target.value)}
+              placeholder="搜尋群組、金額或人名…"
+              className="w-32 md:w-56 bg-surface-container border border-outline-variant/20 focus:border-primary rounded-xl pl-9 pr-3 py-2 md:py-2.5 text-xs md:text-sm text-on-surface transition-colors"
+            />
+          </div>
+          {canEdit && (
+            <button
+              onClick={openCreate}
+              className="flex items-center gap-1.5 px-3 md:px-4 py-2 md:py-2.5 cyber-gradient rounded-xl text-on-primary text-xs md:text-sm font-headline font-bold hover:brightness-110 active:scale-95 transition-all cursor-pointer shrink-0"
+            >
+              <span className="material-symbols-outlined text-lg">add</span>
+              <span className="hidden sm:inline">{t('admin.quotaGroups.create' as any)}</span>
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="flex-1 p-4 md:p-8 space-y-4 md:space-y-6 overflow-y-auto">
@@ -378,9 +401,14 @@ function QuotaGroupsContent() {
           <span className="material-symbols-outlined text-4xl text-on-surface-variant/30 mb-3 block">category</span>
           <p className="text-sm text-on-surface-variant">{t('admin.quotaGroups.empty' as any)}</p>
         </div>
+      ) : visibleGroups.length === 0 ? (
+        <div className="text-center py-16 bg-surface-container rounded-xl border border-outline-variant/10">
+          <span className="material-symbols-outlined text-4xl text-on-surface-variant/30 mb-3 block">search_off</span>
+          <p className="text-sm text-on-surface-variant">找不到符合「{groupQuery}」的群組</p>
+        </div>
       ) : (
         <div className="space-y-3">
-          {groups.map(g => (
+          {visibleGroups.map(g => (
             <div key={g.id} className="bg-surface-container rounded-xl border border-outline-variant/10 overflow-hidden">
               {/* Group Card */}
               <div
@@ -408,8 +436,16 @@ function QuotaGroupsContent() {
                 <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
                   {canEdit && (<>
                     <button
+                      onClick={e => { e.stopPropagation(); openAssignModal(g.id); }}
+                      className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                      title={t('admin.quotaGroups.assign' as any)}
+                    >
+                      <span className="material-symbols-outlined text-base md:text-lg">person_add</span>
+                    </button>
+                    <button
                       onClick={e => { e.stopPropagation(); openEdit(g); }}
                       className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                      title={t('common.edit' as any)}
                     >
                       <span className="material-symbols-outlined text-base md:text-lg">edit</span>
                     </button>
@@ -429,19 +465,10 @@ function QuotaGroupsContent() {
               {/* Expanded Members */}
               {expandedId === g.id && (
                 <div className="border-t border-outline-variant/10 bg-surface-container-low/30">
-                  <div className="flex items-center justify-between px-3 md:px-5 py-3">
+                  <div className="flex items-center px-3 md:px-5 py-3">
                     <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">
                       {t('admin.quotaGroups.members' as any)}
                     </span>
-                    {canEdit && (
-                      <button
-                        onClick={() => openAssignModal(g.id)}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/10 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <span className="material-symbols-outlined text-sm">person_add</span>
-                        {t('admin.quotaGroups.assign' as any)}
-                      </button>
-                    )}
                   </div>
                   {membersLoading ? (
                     <div className="flex justify-center py-6">

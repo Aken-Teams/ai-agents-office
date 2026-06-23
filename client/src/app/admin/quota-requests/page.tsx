@@ -17,6 +17,9 @@ interface QuotaRequest {
   admin_notes: string | null;
   created_at: string;
   reviewed_at: string | null;
+  user_deleted?: boolean;
+  user_unlimited?: boolean;
+  current_limit_effective?: number | null;
 }
 
 interface QuotaGroup {
@@ -180,8 +183,11 @@ function QuotaRequestsContent() {
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-bold text-on-surface">{req.display_name || req.email}</span>
+                    <span className="font-bold text-on-surface">{req.display_name || req.email || '（已刪除用戶）'}</span>
                     {req.display_name && <span className="text-xs text-on-surface-variant">{req.email}</span>}
+                    {req.user_deleted && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-error/10 text-error">已刪除用戶</span>
+                    )}
                     <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${statusColor(req.status)}`}>
                       {t(`quotaRequest.status.${req.status}` as any)}
                     </span>
@@ -196,6 +202,11 @@ function QuotaRequestsContent() {
                     <div className="mt-2 text-xs text-on-surface-variant flex items-center gap-3">
                       {req.status === 'approved' && req.new_limit != null && (
                         <span className="text-success font-bold">{t('quotaRequest.newLimit' as any)}: ${req.new_limit.toFixed(0)}</span>
+                      )}
+                      {/* Flag when this past approval no longer matches the user's current limit */}
+                      {req.status === 'approved' && req.new_limit != null && !req.user_deleted && !req.user_unlimited
+                        && req.current_limit_effective != null && req.current_limit_effective !== req.new_limit && (
+                        <span className="text-warning">（目前生效 ${req.current_limit_effective.toFixed(0)}）</span>
                       )}
                       {req.admin_notes && (
                         <span>{t('quotaRequest.adminNotes' as any)}: {req.admin_notes}</span>

@@ -1335,8 +1335,11 @@ router.delete('/announcements/:id', async (req: Request, res: Response) => {
 
 // GET /api/admin/quota-groups
 router.get('/quota-groups', async (_req: Request, res: Response) => {
+  // member_search: a concatenation of each group's member names + emails, so the
+  // admin UI can filter groups by a person's name without loading every member.
   const groups = await dbAll(`
-    SELECT qg.*, COUNT(u.id) as member_count
+    SELECT qg.*, COUNT(u.id) as member_count,
+           GROUP_CONCAT(CONCAT_WS(' ', u.display_name, u.email) SEPARATOR ' | ') AS member_search
     FROM quota_groups qg
     LEFT JOIN users u ON u.quota_group_id = qg.id
     GROUP BY qg.id
@@ -1844,15 +1847,32 @@ router.get('/quota-requests', async (req: Request, res: Response) => {
   }
 
   const rows = await dbAll<any>(`
-    SELECT qr.*, u.email, u.display_name
+    SELECT qr.*, u.email, u.display_name, u.role AS user_role,
+           u.quota_override AS cur_override, qg.limit_usd AS cur_group_limit,
+           (u.id IS NULL) AS user_deleted
     FROM quota_requests qr
     LEFT JOIN users u ON u.id = qr.user_id
+    LEFT JOIN quota_groups qg ON qg.id = u.quota_group_id
     ${where}
     ORDER BY CASE qr.status WHEN 'pending' THEN 0 ELSE 1 END, qr.created_at DESC
     LIMIT 100
   `, ...params);
 
-  res.json(rows);
+  // Annotate each row with the requester's CURRENT effective limit so the UI can
+  // flag approvals that no longer match (history vs current state), and mark
+  // deleted/unlimited requesters.
+  const globalLimit = await getUserUsageLimitUsd();
+  const annotated = rows.map((r: any) => {
+    const userDeleted = !!r.user_deleted;
+    const userUnlimited = r.user_role === 'admin';
+    const currentLimit = userDeleted || userUnlimited
+      ? null
+      : (r.cur_override ?? r.cur_group_limit ?? globalLimit);
+    const { cur_override, cur_group_limit, user_role, ...rest } = r;
+    return { ...rest, user_deleted: userDeleted, user_unlimited: userUnlimited, current_limit_effective: currentLimit };
+  });
+
+  res.json(annotated);
 });
 
 // PATCH /api/admin/quota-requests/:id — Approve or deny a quota request
