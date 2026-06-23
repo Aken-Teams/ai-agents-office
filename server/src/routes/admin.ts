@@ -2152,7 +2152,12 @@ router.post('/users/provision-ad', async (req: Request, res: Response) => {
     try {
       const det = await fetch(`${config.adApiUrl}/users/${encodeURIComponent(username)}?domain=${encodeURIComponent(domain)}`,
         { headers: { 'X-API-Key': config.adApiKey }, signal: AbortSignal.timeout(8000) });
-      if (det.ok) { const d = await det.json() as { mail?: string; displayName?: string }; mail = d.mail || null; if (!displayName) displayName = d.displayName || ''; }
+      if (det.ok) {
+        // Gateway nests the record under `user`; tolerate a flat shape too.
+        const d = await det.json() as { user?: { mail?: string; displayName?: string }; mail?: string; displayName?: string };
+        const rec = d.user ?? d;
+        mail = rec.mail || null; if (!displayName) displayName = rec.displayName || '';
+      }
     } catch { /* fall back to synthetic email */ }
   }
   const email = mail ? mail.toLowerCase().trim() : `${username.toLowerCase()}@${domain.toLowerCase()}.panjit.local`;

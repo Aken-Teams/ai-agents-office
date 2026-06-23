@@ -77,8 +77,10 @@ export async function resolveAdEmail(username: string, domain: string): Promise<
     const det = await fetch(`${config.adApiUrl}/users/${encodeURIComponent(username)}?domain=${encodeURIComponent(domain)}`,
       { headers: { 'X-API-Key': config.adApiKey }, signal: AbortSignal.timeout(8000) });
     if (!det.ok) return { email: null, displayName: null };
-    const d = await det.json() as { mail?: string; displayName?: string };
-    return { email: d.mail ? d.mail.toLowerCase().trim() : null, displayName: d.displayName || null };
+    // Gateway nests the record under `user`; tolerate a flat shape too.
+    const d = await det.json() as { user?: { mail?: string; displayName?: string }; mail?: string; displayName?: string };
+    const rec = d.user ?? d;
+    return { email: rec.mail ? rec.mail.toLowerCase().trim() : null, displayName: rec.displayName || null };
   } catch {
     return { email: null, displayName: null };
   }
