@@ -9,6 +9,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { renderToStaticMarkup } from 'react-dom/server';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkCjkFriendly from 'remark-cjk-friendly';
+import remarkFlexibleMarkers from 'remark-flexible-markers';
 import { AuthProvider, useAuth } from '../../components/AuthProvider';
 import { I18nProvider } from '../../../i18n';
 import Navbar from '../../components/Navbar';
@@ -38,6 +43,87 @@ const STATUS_META: Record<MemberStatus, { label: string; cls: string; icon: stri
   done:       { label: '完成',   cls: 'text-success bg-success/10', icon: 'check_circle' },
   failed:     { label: '失敗',   cls: 'text-error bg-error/10', icon: 'error' },
 };
+
+// ---- Report PDF helpers (render markdown → HTML → browser print/Save-as-PDF) ----
+function escapeHtml(s: string): string {
+  return (s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] || c));
+}
+
+// Interactive chart/diagram fences can't render in a static PDF — replace with a note.
+function stripChartFences(md: string): string {
+  return (md || '').replace(/```(chart|echart|mermaid|mindmap|map)[\s\S]*?```/g, '_（互動圖表，請至系統線上檢視）_');
+}
+
+function mdToHtml(md: string): string {
+  if (!md?.trim()) return '<p style="color:#888">（無內容）</p>';
+  return renderToStaticMarkup(
+    <ReactMarkdown remarkPlugins={[remarkGfm, remarkCjkFriendly, remarkFlexibleMarkers]}>{stripChartFences(md)}</ReactMarkdown>
+  );
+}
+
+function buildReportHtml(opts: {
+  teamTitle: string;
+  question: string;
+  createdAt?: string;
+  members: { name: string; text: string; text2?: string }[];
+  synthesis: string;
+}): string {
+  const when = (opts.createdAt ? new Date(opts.createdAt) : new Date()).toLocaleString();
+  const memberHtml = opts.members
+    .filter(m => (m.text || '').trim())
+    .map(m => `<section class="member"><h3>${escapeHtml(m.name)}</h3>${mdToHtml(m.text)}${
+      m.text2?.trim() ? `<div class="round2"><div class="round2-label">回應其他成員</div>${mdToHtml(m.text2)}</div>` : ''
+    }</section>`)
+    .join('');
+  return `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">
+<title>${escapeHtml(opts.teamTitle || 'AI 團隊協作報告')}</title>
+<style>
+  @page { margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Microsoft JhengHei","PingFang TC","Heiti TC","Noto Sans CJK TC",sans-serif; color:#1c1c1c; line-height:1.75; font-size:13px; margin:0; }
+  h1 { font-size:22px; margin:0 0 6px; }
+  h2 { font-size:16px; margin:22px 0 8px; padding-bottom:5px; border-bottom:2px solid #0b6; color:#0b6; }
+  h3 { font-size:14px; margin:14px 0 6px; }
+  .meta { color:#666; font-size:12px; margin:2px 0; }
+  hr { border:none; border-top:1px solid #ddd; margin:14px 0; }
+  table { border-collapse:collapse; width:100%; margin:8px 0; font-size:12px; }
+  th,td { border:1px solid #ccc; padding:6px 8px; text-align:left; vertical-align:top; }
+  th { background:#f3f4f6; font-weight:bold; }
+  code { background:#f3f4f6; padding:1px 4px; border-radius:3px; font-family:Consolas,monospace; font-size:.9em; }
+  pre { background:#f6f8fa; padding:10px; border-radius:6px; overflow:auto; }
+  blockquote { border-left:3px solid #0b6; margin:8px 0; padding:2px 12px; color:#555; }
+  mark, .flexible-marker { background:#fde68a; color:#1c1c1c; padding:0 2px; border-radius:2px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  ul,ol { padding-left:22px; }
+  .member { margin-top:6px; page-break-inside:avoid; }
+  .round2 { background:#f7f9f8; border:1px solid #e2eae6; border-radius:6px; padding:8px 12px; margin-top:8px; }
+  .round2-label { font-weight:bold; color:#0b6; font-size:12px; margin-bottom:4px; }
+  .footer { margin-top:24px; padding-top:10px; border-top:1px solid #eee; color:#999; font-size:11px; }
+  @media print { a { color:#0b6; text-decoration:none; } }
+</style></head>
+<body>
+  <h1>${escapeHtml(opts.teamTitle || 'AI 團隊協作報告')}</h1>
+  ${opts.question ? `<p class="meta"><b>主題／提問：</b>${escapeHtml(opts.question)}</p>` : ''}
+  <p class="meta"><b>產生時間：</b>${escapeHtml(when)}</p>
+  <hr>
+  <h2>協調者統整</h2>
+  ${mdToHtml(opts.synthesis)}
+  ${memberHtml ? `<h2>各成員分析</h2>${memberHtml}` : ''}
+  <div class="footer">本報告由 AI Agents Office · 團隊協作產生</div>
+</body></html>`;
+}
+
+// Open the report in a new window and trigger the browser's print/Save-as-PDF.
+function openReportPrint(html: string): void {
+  const w = window.open('', '_blank');
+  if (!w) { alert('請允許彈出視窗，才能下載 PDF'); return; }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  // Wait for fonts/layout, then print. onload is most reliable across browsers.
+  const go = () => { w.focus(); w.print(); };
+  if (w.document.readyState === 'complete') setTimeout(go, 300);
+  else w.onload = () => setTimeout(go, 300);
+}
 
 function TeamRunContent() {
   const { token, user } = useAuth();
@@ -75,15 +161,22 @@ function TeamRunContent() {
   const [expanded, setExpanded] = useState<{ title: string; icon: string; text: string } | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // The run currently shown in the synthesis panel (a loaded past run, or the
+  // just-finished live run) — lets share/download act on the report up front.
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const authHeaders = useCallback((): HeadersInit => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
-  const loadHistory = useCallback(() => {
-    fetch(`/api/teams/${teamId}/runs`, { headers: authHeaders() })
-      .then(r => r.json())
-      .then(d => { setHistory(Array.isArray(d.runs) ? d.runs : []); setTotal(d.total || null); })
-      .catch(() => {});
+  const loadHistory = useCallback(async (): Promise<RunRow[]> => {
+    try {
+      const r = await fetch(`/api/teams/${teamId}/runs`, { headers: authHeaders() });
+      const d = await r.json();
+      const runs: RunRow[] = Array.isArray(d.runs) ? d.runs : [];
+      setHistory(runs);
+      setTotal(d.total || null);
+      return runs;
+    } catch { return []; }
   }, [teamId, authHeaders]);
 
   const handleDeleteRun = useCallback(async () => {
@@ -102,6 +195,23 @@ function TeamRunContent() {
     setCopied(false);
     try { await navigator.clipboard.writeText(url); setCopied(true); } catch { /* ignore */ }
   }, [teamId, authHeaders]);
+
+  // Download the report currently shown (live stream or a loaded past run) as PDF,
+  // built from in-memory state — works for the just-finished report up front.
+  const handleDownloadCurrent = useCallback(() => {
+    const ms = memberOrder.map(id => members[id]).filter(Boolean).map(m => ({ name: m.name, text: m.text, text2: m.text2 }));
+    openReportPrint(buildReportHtml({ teamTitle: team?.title || '', question, members: ms, synthesis }));
+  }, [members, memberOrder, team, question, synthesis]);
+
+  // Download a specific history run as PDF, built straight from its stored data.
+  const handleDownloadRun = useCallback((run: RunRow) => {
+    let outs: Array<{ name: string; text: string; text2?: string }> = [];
+    try { outs = JSON.parse(run.member_outputs || '[]'); } catch { /* ignore */ }
+    openReportPrint(buildReportHtml({
+      teamTitle: team?.title || '', question: run.question, createdAt: run.created_at,
+      members: outs.map(o => ({ name: o.name, text: o.text, text2: o.text2 })), synthesis: run.result || '',
+    }));
+  }, [team]);
 
   useEffect(() => {
     if (!token) return;
@@ -140,6 +250,7 @@ function TeamRunContent() {
 
   const resetRun = useCallback(() => {
     setError(null);
+    setActiveRunId(null);
     setSynthesis('');
     setSynthRunning(false);
     setDiscussing(false);
@@ -219,7 +330,9 @@ function TeamRunContent() {
     } finally {
       setRunning(false);
       setSynthRunning(false);
-      loadHistory();
+      // Adopt the just-finished run (newest) so share/download up front act on it.
+      const runs = await loadHistory();
+      if (runs[0]) setActiveRunId(runs[0].id);
     }
   }, [question, running, token, teamId, authHeaders, resetRun, loadHistory, attachedFiles, allowWeb]);
 
@@ -269,6 +382,7 @@ function TeamRunContent() {
 
   const loadPastRun = (run: RunRow) => {
     setError(null);
+    setActiveRunId(run.id);
     // Still running in the background (scheduled / 立即測試) — no stored result yet.
     const inflight = run.status !== 'done' && run.status !== 'error' && run.status !== 'failed';
     if (inflight && !run.result) {
@@ -595,10 +709,22 @@ function TeamRunContent() {
               {synthRunning && <span className="material-symbols-outlined animate-spin text-primary text-base ml-1">progress_activity</span>}
               {totals && <span className="ml-auto text-xs text-on-surface-variant">實際 {(totals.inputTokens + totals.outputTokens).toLocaleString()} tokens · ${totals.costUsd}</span>}
               {synthesis && (
-                <button onClick={() => setExpanded({ title: '協調者統整', icon: 'hub', text: synthesis })}
-                  className={`w-7 h-7 flex items-center justify-center rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0 ${totals ? 'ml-1' : 'ml-auto'}`} title="放大檢視">
-                  <span className="material-symbols-outlined text-[18px]">open_in_full</span>
-                </button>
+                <div className={`flex items-center gap-1 shrink-0 ${totals ? 'ml-1' : 'ml-auto'}`}>
+                  <button onClick={handleDownloadCurrent}
+                    className="w-7 h-7 flex items-center justify-center rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer" title="下載報告（PDF）">
+                    <span className="material-symbols-outlined text-[18px]">download</span>
+                  </button>
+                  {activeRunId && (
+                    <button onClick={() => handleShareRun({ id: activeRunId } as RunRow)}
+                      className="w-7 h-7 flex items-center justify-center rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer" title="分享（唯讀）">
+                      <span className="material-symbols-outlined text-[18px]">share</span>
+                    </button>
+                  )}
+                  <button onClick={() => setExpanded({ title: '協調者統整', icon: 'hub', text: synthesis })}
+                    className="w-7 h-7 flex items-center justify-center rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer" title="放大檢視">
+                    <span className="material-symbols-outlined text-[18px]">open_in_full</span>
+                  </button>
+                </div>
               )}
             </div>
             <div className="p-5 text-sm text-on-surface leading-relaxed">
@@ -634,6 +760,12 @@ function TeamRunContent() {
                         <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />背景執行中
                       </span>
                     : run.status !== 'done' && <span className="text-[11px] px-2 py-0.5 rounded-full bg-error/10 text-error shrink-0">{run.status}</span>}
+                  {run.status === 'done' && (
+                    <button onClick={() => handleDownloadRun(run)} title="下載報告（PDF）"
+                      className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0">
+                      <span className="material-symbols-outlined text-[18px]">download</span>
+                    </button>
+                  )}
                   <button onClick={() => handleShareRun(run)} title="分享（唯讀）"
                     className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0">
                     <span className="material-symbols-outlined text-[18px]">share</span>
