@@ -232,6 +232,38 @@ router.post('/:id/runs/:runId/share', async (req: Request, res: Response) => {
   res.json({ token });
 });
 
+// POST /api/teams/:id/runs/:runId/report — generate a formal, consolidated
+// report (Markdown) from a finished run via the local Claude CLI. Streamed as
+// SSE: text chunks keep the connection alive (a 1–2 min silent request gets
+// reset by the dev proxy) and give live progress; ends with a `done` event
+// carrying the full markdown. The client renders it to a polished PDF.
+router.post('/:id/runs/:runId/report', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  const send = (type: string, data?: unknown) => res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
+  send('start'); // flush headers immediately so the proxy sees bytes
+  // Heartbeat: the model may think for 10–30s before the first token; keep the
+  // connection alive so the proxy doesn't idle-reset it.
+  const heartbeat = setInterval(() => { try { res.write(': ping\n\n'); } catch { /* ignore */ } }, 15_000);
+  try {
+    const { generateFormalReport } = await import('../services/teamReport.js');
+    const out = await generateFormalReport({
+      userId, teamId: String(req.params.id), runId: String(req.params.runId),
+      onText: chunk => send('text', chunk),
+    });
+    send('done', { markdown: out.markdown });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Report generation failed';
+    send('error', msg);
+  } finally {
+    clearInterval(heartbeat);
+    res.end();
+  }
+});
+
 // DELETE /api/teams/:id/runs/:runId — delete a single collaboration run.
 router.delete('/:id/runs/:runId', async (req: Request, res: Response) => {
   const userId = req.user!.userId;

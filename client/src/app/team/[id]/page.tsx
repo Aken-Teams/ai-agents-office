@@ -19,6 +19,7 @@ import { I18nProvider } from '../../../i18n';
 import Navbar from '../../components/Navbar';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 import TeamMarkdown from '../../components/TeamMarkdown';
+import Tooltip from '../../components/Tooltip';
 import { calcCostUsd } from '../../../lib/pricing';
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
@@ -150,6 +151,73 @@ function buildReportHtml(opts: {
 </body></html>`;
 }
 
+// ---- Formal report (AI-written, single cohesive document → polished PDF) ----
+function splitLeadingTitle(md: string): { title: string | null; body: string } {
+  const m = md.match(/^\s*#\s+(.+?)\s*$/m);
+  if (m) return { title: m[1].trim(), body: md.replace(m[0], '').trim() };
+  return { title: null, body: md.trim() };
+}
+
+function buildFormalReportHtml(opts: { teamTitle: string; markdown: string; createdAt?: string; logoDataUrl?: string | null }): string {
+  const when = (opts.createdAt ? new Date(opts.createdAt) : new Date()).toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
+  const { title, body } = splitLeadingTitle(opts.markdown);
+  const reportTitle = title || opts.teamTitle || '專業分析報告';
+  return `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">
+<title>${escapeHtml(reportTitle)}</title>
+<style>
+  @page { margin: 20mm 18mm; }
+  * { box-sizing: border-box; }
+  body { font-family:"Microsoft JhengHei","PingFang TC","Heiti TC","Noto Sans CJK TC",sans-serif; color:#1a1a1a; line-height:1.85; font-size:13px; margin:0; }
+  /* Cover */
+  .cover { height: calc(100vh - 40mm); min-height:240mm; display:flex; flex-direction:column; justify-content:center; page-break-after:always; text-align:center; }
+  .cover .cover-logo { width:58px; height:58px; object-fit:contain; margin:0 auto 22px; opacity:.95; }
+  .cover .kicker { letter-spacing:.4em; color:#0b6; font-size:13px; font-weight:bold; margin-bottom:24px; }
+  .cover h1 { font-size:34px; line-height:1.4; margin:0 0 28px; color:#111; font-weight:800; }
+  .cover .rule { width:64px; height:4px; background:#0b6; margin:0 auto 28px; border-radius:2px; }
+  .cover .sub { color:#444; font-size:15px; margin:4px 0; }
+  .cover .date { color:#888; font-size:13px; margin-top:10px; }
+  .cover .brand { margin-top:48px; color:#aaa; font-size:11px; letter-spacing:.1em; }
+  /* Body */
+  .report-body h1 { font-size:22px; margin:26px 0 10px; }
+  .report-body h2 { font-size:17px; margin:24px 0 10px; padding-bottom:6px; border-bottom:2px solid #0b6; color:#0b6; }
+  .report-body h3 { font-size:14px; margin:16px 0 6px; color:#222; }
+  .report-body p { margin:0 0 10px; text-align:justify; }
+  .report-body ul,.report-body ol { padding-left:24px; margin:6px 0 12px; }
+  .report-body li { margin:3px 0; }
+  .report-body strong { color:#111; }
+  .report-body blockquote { border-left:3px solid #0b6; margin:10px 0; padding:4px 14px; color:#555; background:#f7faf9; }
+  .report-body table { border-collapse:collapse; width:100%; margin:10px 0; font-size:12px; }
+  .report-body th,.report-body td { border:1px solid #ccc; padding:6px 9px; text-align:left; vertical-align:top; }
+  .report-body th { background:#eef5f2; font-weight:bold; }
+  .report-body code { background:#f3f4f6; padding:1px 4px; border-radius:3px; font-family:Consolas,monospace; font-size:.9em; }
+  .report-body mark,.report-body .flexible-marker { background:#fde68a; padding:0 2px; border-radius:2px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .report-body h2,.report-body h3 { page-break-after:avoid; }
+  .report-body table,.report-body blockquote { page-break-inside:avoid; }
+  .doc-footer { margin-top:30px; padding-top:10px; border-top:1px solid #eee; color:#999; font-size:11px; text-align:center; }
+</style></head>
+<body>
+  <section class="cover">
+    ${opts.logoDataUrl ? `<img class="cover-logo" src="${opts.logoDataUrl}" alt="" />` : ''}
+    <div class="kicker">分析報告</div>
+    <h1>${escapeHtml(reportTitle)}</h1>
+    <div class="rule"></div>
+    ${opts.teamTitle ? `<div class="sub">${escapeHtml(opts.teamTitle)}</div>` : ''}
+    <div class="date">${escapeHtml(when)}</div>
+    <div class="brand">AI AGENTS OFFICE</div>
+  </section>
+  <section class="report-body">
+    ${mdToHtml(body)}
+    <div class="doc-footer">本報告由 AI Agents Office 智能團隊產生 · ${escapeHtml(when)}</div>
+  </section>
+</body></html>`;
+}
+
+const REPORT_LOADING_HTML = `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><title>產生正式報告中…</title>
+<style>body{font-family:"Microsoft JhengHei",sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;color:#444;background:#fafafa}
+.sp{width:40px;height:40px;border:4px solid #e0e0e0;border-top-color:#0b6;border-radius:50%;animation:s 1s linear infinite;margin-bottom:20px}
+@keyframes s{to{transform:rotate(360deg)}}.t{font-size:16px;font-weight:bold}.d{font-size:13px;color:#888;margin-top:8px}</style></head>
+<body><div class="sp"></div><div class="t">正在撰寫正式報告…</div><div class="d">AI 正在整理成完整報告，約需 1–2 分鐘，請勿關閉此分頁。</div></body></html>`;
+
 // Fill an already-opened window with the report and trigger print/Save-as-PDF.
 // The window must be opened synchronously in the click handler (before any await)
 // so popup blockers don't kill it; we then fill it after images are fetched.
@@ -274,6 +342,57 @@ function TeamRunContent() {
     const attachments = await resolveAttachments(attachedFiles.map(f => ({ id: f.id, name: f.name })));
     fillReportWindow(w, buildReportHtml({ teamTitle: team?.title || '', question, members: ms, synthesis, attachments }));
   }, [activeRunId, history, handleDownloadRun, members, memberOrder, team, question, synthesis, attachedFiles, resolveAttachments]);
+
+  // Generate a formal, AI-written report (one cohesive document) and open it as a
+  // polished PDF. Needs a saved run id; takes ~1–2 min (local Claude CLI).
+  const [reportingRunId, setReportingRunId] = useState<string | null>(null);
+  const handleFormalReport = useCallback(async (runId: string) => {
+    if (reportingRunId) return; // one at a time
+    const w = window.open('', '_blank');
+    if (!w) { alert('請允許彈出視窗，才能產生正式報告 PDF'); return; }
+    w.document.write(REPORT_LOADING_HTML);
+    w.document.close();
+    setReportingRunId(runId);
+    try {
+      // Streamed as SSE (text chunks keep the long request alive through the proxy).
+      const res = await fetch(`${SSE_BASE}/api/teams/${teamId}/runs/${runId}/report`, { method: 'POST', headers: authHeaders() });
+      if (!res.ok || !res.body) throw new Error(`產生失敗 (${res.status})`);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let markdown = '';
+      let streamError = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let ev: { type: string; data?: any };
+          try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+          if (ev.type === 'text' && typeof ev.data === 'string') markdown += ev.data;
+          else if (ev.type === 'done') { if (ev.data?.markdown) markdown = ev.data.markdown; }
+          else if (ev.type === 'error') streamError = typeof ev.data === 'string' ? ev.data : '產生失敗';
+        }
+      }
+      if (streamError) throw new Error(streamError);
+      if (!markdown.trim()) throw new Error('報告內容為空');
+      const run = history.find(r => r.id === runId);
+      const logoDataUrl = await fetchAsDataUrl('/logo.png', {});
+      fillReportWindow(w, buildFormalReportHtml({ teamTitle: team?.title || '', markdown, createdAt: run?.created_at, logoDataUrl }));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '產生失敗';
+      try {
+        w.document.open();
+        w.document.write(`<!DOCTYPE html><meta charset="utf-8"><body style="font-family:'Microsoft JhengHei',sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;color:#b00;text-align:center;padding:40px"><div><div style="font-size:40px;margin-bottom:12px">⚠️</div><div style="font-size:16px;font-weight:bold">正式報告產生失敗</div><div style="font-size:13px;color:#888;margin-top:8px">${msg}</div></div></body>`);
+        w.document.close();
+      } catch { /* window may be closed */ }
+    } finally {
+      setReportingRunId(null);
+    }
+  }, [reportingRunId, teamId, authHeaders, history, team]);
 
   useEffect(() => {
     if (!token) return;
@@ -772,20 +891,35 @@ function TeamRunContent() {
               {totals && <span className="ml-auto text-xs text-on-surface-variant">實際 {(totals.inputTokens + totals.outputTokens).toLocaleString()} tokens · ${totals.costUsd}</span>}
               {synthesis && (
                 <div className={`flex items-center gap-1 shrink-0 ${totals ? 'ml-1' : 'ml-auto'}`}>
-                  <button onClick={handleDownloadCurrent}
-                    className="w-7 h-7 flex items-center justify-center rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer" title="下載報告（PDF）">
-                    <span className="material-symbols-outlined text-[18px]">download</span>
-                  </button>
                   {activeRunId && (
-                    <button onClick={() => handleShareRun({ id: activeRunId } as RunRow)}
-                      className="w-7 h-7 flex items-center justify-center rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer" title="分享（唯讀）">
-                      <span className="material-symbols-outlined text-[18px]">share</span>
-                    </button>
+                    <Tooltip label="用 AI 整理成正式完整報告，輸出專業 PDF" align="right">
+                      <button onClick={() => handleFormalReport(activeRunId)} disabled={!!reportingRunId}
+                        className="flex items-center gap-1 h-7 px-2.5 rounded-lg bg-primary text-on-primary text-xs font-bold hover:bg-primary/85 transition-colors cursor-pointer shrink-0 disabled:opacity-60 disabled:cursor-wait">
+                        <span className="material-symbols-outlined text-[16px]">{reportingRunId === activeRunId ? 'progress_activity' : 'article'}</span>
+                        <span className={reportingRunId === activeRunId ? 'animate-pulse' : ''}>{reportingRunId === activeRunId ? '產生中…' : '正式報告'}</span>
+                      </button>
+                    </Tooltip>
                   )}
-                  <button onClick={() => setExpanded({ title: '協調者統整', icon: 'hub', text: synthesis })}
-                    className="w-7 h-7 flex items-center justify-center rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer" title="放大檢視">
-                    <span className="material-symbols-outlined text-[18px]">open_in_full</span>
-                  </button>
+                  <Tooltip label="下載原始報告（PDF）" align="right">
+                    <button onClick={handleDownloadCurrent}
+                      className="w-7 h-7 flex items-center justify-center rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer">
+                      <span className="material-symbols-outlined text-[18px]">download</span>
+                    </button>
+                  </Tooltip>
+                  {activeRunId && (
+                    <Tooltip label="分享（唯讀連結）" align="right">
+                      <button onClick={() => handleShareRun({ id: activeRunId } as RunRow)}
+                        className="w-7 h-7 flex items-center justify-center rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer">
+                        <span className="material-symbols-outlined text-[18px]">share</span>
+                      </button>
+                    </Tooltip>
+                  )}
+                  <Tooltip label="放大檢視" align="right">
+                    <button onClick={() => setExpanded({ title: '協調者統整', icon: 'hub', text: synthesis })}
+                      className="w-7 h-7 flex items-center justify-center rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer">
+                      <span className="material-symbols-outlined text-[18px]">open_in_full</span>
+                    </button>
+                  </Tooltip>
                 </div>
               )}
             </div>
@@ -823,19 +957,33 @@ function TeamRunContent() {
                       </span>
                     : run.status !== 'done' && <span className="text-[11px] px-2 py-0.5 rounded-full bg-error/10 text-error shrink-0">{run.status}</span>}
                   {run.status === 'done' && (
-                    <button onClick={() => handleDownloadRun(run)} title="下載報告（PDF）"
-                      className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0">
-                      <span className="material-symbols-outlined text-[18px]">download</span>
-                    </button>
+                    <Tooltip label="產生正式完整報告（AI 整理，輸出專業 PDF）" align="right">
+                      <button onClick={() => handleFormalReport(run.id)} disabled={!!reportingRunId}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-wait">
+                        <span className={`material-symbols-outlined text-[18px] ${reportingRunId === run.id ? 'animate-spin' : ''}`}>{reportingRunId === run.id ? 'progress_activity' : 'article'}</span>
+                      </button>
+                    </Tooltip>
                   )}
-                  <button onClick={() => handleShareRun(run)} title="分享（唯讀）"
-                    className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0">
-                    <span className="material-symbols-outlined text-[18px]">share</span>
-                  </button>
-                  <button onClick={() => setRunDeleteTarget(run)} title="刪除此協作紀錄"
-                    className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer shrink-0">
-                    <span className="material-symbols-outlined text-[18px]">delete</span>
-                  </button>
+                  {run.status === 'done' && (
+                    <Tooltip label="下載原始報告（PDF）" align="right">
+                      <button onClick={() => handleDownloadRun(run)}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0">
+                        <span className="material-symbols-outlined text-[18px]">download</span>
+                      </button>
+                    </Tooltip>
+                  )}
+                  <Tooltip label="分享（唯讀連結）" align="right">
+                    <button onClick={() => handleShareRun(run)}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0">
+                      <span className="material-symbols-outlined text-[18px]">share</span>
+                    </button>
+                  </Tooltip>
+                  <Tooltip label="刪除此協作紀錄" align="right">
+                    <button onClick={() => setRunDeleteTarget(run)}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer shrink-0">
+                      <span className="material-symbols-outlined text-[18px]">delete</span>
+                    </button>
+                  </Tooltip>
                 </div>
               ))}
             </div>
