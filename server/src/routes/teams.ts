@@ -199,7 +199,7 @@ router.get('/:id/estimate', async (req: Request, res: Response) => {
 router.get('/:id/runs', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const runs = await dbAll(
-    `SELECT id, question, result, member_outputs, input_tokens, output_tokens, status, created_at, share_token, schedule_id, emailed
+    `SELECT id, question, result, member_outputs, input_tokens, output_tokens, status, created_at, share_token, schedule_id, emailed, attachments
      FROM team_runs WHERE team_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 30`,
     req.params.id, userId,
   );

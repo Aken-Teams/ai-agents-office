@@ -30,7 +30,7 @@ const isPanjit = deployMode === 'pro-panjit';
 interface Agent { id: string; title: string; icon: string | null; skill_id: string | null }
 interface TeamInfo { id: string; title: string; topic: string | null; icon: string | null }
 interface Estimate { memberCount: number; inputTokens: number; outputTokens: number; costUsd: number }
-interface RunRow { id: string; question: string; result: string | null; member_outputs: string | null; input_tokens: number; output_tokens: number; status: string; created_at: string; share_token: string | null; schedule_id: string | null; emailed: number | null }
+interface RunRow { id: string; question: string; result: string | null; member_outputs: string | null; input_tokens: number; output_tokens: number; status: string; created_at: string; share_token: string | null; schedule_id: string | null; emailed: number | null; attachments: string | null }
 interface TeamTotal { count: number; inputTokens: number; outputTokens: number; costUsd: number }
 
 type MemberStatus = 'pending' | 'running' | 'responding' | 'done' | 'failed';
@@ -61,14 +61,46 @@ function mdToHtml(md: string): string {
   );
 }
 
+const IMG_EXT = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
+function isImageAttachment(a: { name?: string; mime?: string | null }): boolean {
+  return !!(a.mime?.startsWith('image/')) || IMG_EXT.test(a.name || '');
+}
+
+// Fetch a (possibly auth-protected) file and inline it as a data URL so it can be
+// embedded directly in the printable report window.
+async function fetchAsDataUrl(url: string, headers: HeadersInit): Promise<string | null> {
+  try {
+    const r = await fetch(url, { headers });
+    if (!r.ok) return null;
+    const blob = await r.blob();
+    return await new Promise<string>((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => res(String(fr.result));
+      fr.onerror = rej;
+      fr.readAsDataURL(blob);
+    });
+  } catch { return null; }
+}
+
+interface ReportAttachment { name: string; isImage: boolean; dataUrl?: string | null }
+
 function buildReportHtml(opts: {
   teamTitle: string;
   question: string;
   createdAt?: string;
   members: { name: string; text: string; text2?: string }[];
   synthesis: string;
+  attachments?: ReportAttachment[];
 }): string {
   const when = (opts.createdAt ? new Date(opts.createdAt) : new Date()).toLocaleString();
+  const atts = opts.attachments || [];
+  const attHtml = atts.length
+    ? `<h2>分析附件</h2><div class="attachments">${atts.map(a =>
+        a.isImage && a.dataUrl
+          ? `<figure class="att-img"><img src="${a.dataUrl}" alt="${escapeHtml(a.name)}"/><figcaption>${escapeHtml(a.name)}</figcaption></figure>`
+          : `<div class="att-file"><span class="att-ico">📎</span>${escapeHtml(a.name)}</div>`
+      ).join('')}</div>`
+    : '';
   const memberHtml = opts.members
     .filter(m => (m.text || '').trim())
     .map(m => `<section class="member"><h3>${escapeHtml(m.name)}</h3>${mdToHtml(m.text)}${
@@ -98,6 +130,11 @@ function buildReportHtml(opts: {
   .round2 { background:#f7f9f8; border:1px solid #e2eae6; border-radius:6px; padding:8px 12px; margin-top:8px; }
   .round2-label { font-weight:bold; color:#0b6; font-size:12px; margin-bottom:4px; }
   .footer { margin-top:24px; padding-top:10px; border-top:1px solid #eee; color:#999; font-size:11px; }
+  .attachments { display:flex; flex-wrap:wrap; gap:12px; margin:8px 0; }
+  .att-img { margin:0; max-width:48%; page-break-inside:avoid; }
+  .att-img img { max-width:100%; max-height:340px; border:1px solid #ddd; border-radius:6px; }
+  .att-img figcaption { font-size:11px; color:#666; margin-top:4px; text-align:center; }
+  .att-file { display:flex; align-items:center; gap:6px; font-size:12px; background:#f3f4f6; border:1px solid #e2e2e2; border-radius:6px; padding:6px 12px; }
   @media print { a { color:#0b6; text-decoration:none; } }
 </style></head>
 <body>
@@ -105,6 +142,7 @@ function buildReportHtml(opts: {
   ${opts.question ? `<p class="meta"><b>主題／提問：</b>${escapeHtml(opts.question)}</p>` : ''}
   <p class="meta"><b>產生時間：</b>${escapeHtml(when)}</p>
   <hr>
+  ${attHtml}
   <h2>協調者統整</h2>
   ${mdToHtml(opts.synthesis)}
   ${memberHtml ? `<h2>各成員分析</h2>${memberHtml}` : ''}
@@ -112,17 +150,16 @@ function buildReportHtml(opts: {
 </body></html>`;
 }
 
-// Open the report in a new window and trigger the browser's print/Save-as-PDF.
-function openReportPrint(html: string): void {
-  const w = window.open('', '_blank');
-  if (!w) { alert('請允許彈出視窗，才能下載 PDF'); return; }
+// Fill an already-opened window with the report and trigger print/Save-as-PDF.
+// The window must be opened synchronously in the click handler (before any await)
+// so popup blockers don't kill it; we then fill it after images are fetched.
+function fillReportWindow(w: Window, html: string): void {
   w.document.open();
   w.document.write(html);
   w.document.close();
-  // Wait for fonts/layout, then print. onload is most reliable across browsers.
   const go = () => { w.focus(); w.print(); };
-  if (w.document.readyState === 'complete') setTimeout(go, 300);
-  else w.onload = () => setTimeout(go, 300);
+  if (w.document.readyState === 'complete') setTimeout(go, 350);
+  else w.onload = () => setTimeout(go, 350);
 }
 
 function TeamRunContent() {
@@ -196,22 +233,47 @@ function TeamRunContent() {
     try { await navigator.clipboard.writeText(url); setCopied(true); } catch { /* ignore */ }
   }, [teamId, authHeaders]);
 
-  // Download the report currently shown (live stream or a loaded past run) as PDF,
-  // built from in-memory state — works for the just-finished report up front.
-  const handleDownloadCurrent = useCallback(() => {
-    const ms = memberOrder.map(id => members[id]).filter(Boolean).map(m => ({ name: m.name, text: m.text, text2: m.text2 }));
-    openReportPrint(buildReportHtml({ teamTitle: team?.title || '', question, members: ms, synthesis }));
-  }, [members, memberOrder, team, question, synthesis]);
+  // Resolve a list of {id, name, mime} into report attachments, inlining images.
+  const resolveAttachments = useCallback(async (
+    items: { id: string; name: string; mime?: string | null }[],
+  ): Promise<ReportAttachment[]> => {
+    return Promise.all(items.map(async a => {
+      const isImage = isImageAttachment(a);
+      const dataUrl = isImage ? await fetchAsDataUrl(`${SSE_BASE}/api/uploads/${a.id}/download`, authHeaders()) : null;
+      // If an image can't be fetched, fall back to showing it as a named file.
+      return { name: a.name, isImage: isImage && !!dataUrl, dataUrl };
+    }));
+  }, [authHeaders]);
 
   // Download a specific history run as PDF, built straight from its stored data.
-  const handleDownloadRun = useCallback((run: RunRow) => {
+  const handleDownloadRun = useCallback(async (run: RunRow) => {
+    const w = window.open('', '_blank');
+    if (!w) { alert('請允許彈出視窗，才能下載 PDF'); return; }
+    w.document.write('<!DOCTYPE html><meta charset="utf-8"><body style="font-family:sans-serif;padding:40px;color:#666">報告產生中，請稍候…</body>');
     let outs: Array<{ name: string; text: string; text2?: string }> = [];
     try { outs = JSON.parse(run.member_outputs || '[]'); } catch { /* ignore */ }
-    openReportPrint(buildReportHtml({
+    let attItems: { id: string; name: string; mime?: string | null }[] = [];
+    try { attItems = JSON.parse(run.attachments || '[]'); } catch { /* ignore */ }
+    const attachments = await resolveAttachments(attItems);
+    fillReportWindow(w, buildReportHtml({
       teamTitle: team?.title || '', question: run.question, createdAt: run.created_at,
-      members: outs.map(o => ({ name: o.name, text: o.text, text2: o.text2 })), synthesis: run.result || '',
+      members: outs.map(o => ({ name: o.name, text: o.text, text2: o.text2 })), synthesis: run.result || '', attachments,
     }));
-  }, [team]);
+  }, [team, resolveAttachments]);
+
+  // Download the report shown in the synthesis panel. If it's a saved run (loaded
+  // past run or the just-finished one), use its stored data + attachments; during
+  // a still-streaming live run, build from in-memory state + current attachments.
+  const handleDownloadCurrent = useCallback(async () => {
+    const activeRun = activeRunId ? history.find(r => r.id === activeRunId) : null;
+    if (activeRun) { handleDownloadRun(activeRun); return; }
+    const w = window.open('', '_blank');
+    if (!w) { alert('請允許彈出視窗，才能下載 PDF'); return; }
+    w.document.write('<!DOCTYPE html><meta charset="utf-8"><body style="font-family:sans-serif;padding:40px;color:#666">報告產生中，請稍候…</body>');
+    const ms = memberOrder.map(id => members[id]).filter(Boolean).map(m => ({ name: m.name, text: m.text, text2: m.text2 }));
+    const attachments = await resolveAttachments(attachedFiles.map(f => ({ id: f.id, name: f.name })));
+    fillReportWindow(w, buildReportHtml({ teamTitle: team?.title || '', question, members: ms, synthesis, attachments }));
+  }, [activeRunId, history, handleDownloadRun, members, memberOrder, team, question, synthesis, attachedFiles, resolveAttachments]);
 
   useEffect(() => {
     if (!token) return;

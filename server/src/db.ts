@@ -661,6 +661,11 @@ export async function initializeDatabase(): Promise<void> {
     try {
       await conn.query('ALTER TABLE team_runs ADD COLUMN emailed TINYINT DEFAULT NULL');
     } catch { /* column already exists */ }
+    // Snapshot of the files attached to the run (JSON [{id,name,mime}]), so reports
+    // can show them later even if the upload is removed.
+    try {
+      await conn.query('ALTER TABLE team_runs ADD COLUMN attachments TEXT DEFAULT NULL');
+    } catch { /* column already exists */ }
 
     // Scheduled team runs — the scheduler runs due ones and emails the result.
     await conn.query(`

@@ -280,10 +280,21 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
   );
   if (members.length === 0) throw new Error('Team has no members');
 
+  // Snapshot attached files (name + mime) so the report can show them later.
+  let attachmentsJson: string | null = null;
+  if (uploadIds.length) {
+    const ph = uploadIds.map(() => '?').join(',');
+    const ups = await dbAll<{ id: string; original_name: string; mime_type: string | null }>(
+      `SELECT id, original_name, mime_type FROM user_uploads WHERE id IN (${ph}) AND user_id = ?`,
+      ...uploadIds, userId,
+    );
+    if (ups.length) attachmentsJson = JSON.stringify(ups.map(u => ({ id: u.id, name: u.original_name, mime: u.mime_type })));
+  }
+
   const runId = uuidv4();
   await dbRun(
-    'INSERT INTO team_runs (id, team_id, user_id, question, status, schedule_id) VALUES (?, ?, ?, ?, ?, ?)',
-    runId, teamId, userId, question, 'running', scheduleId || null,
+    'INSERT INTO team_runs (id, team_id, user_id, question, status, schedule_id, attachments) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    runId, teamId, userId, question, 'running', scheduleId || null, attachmentsJson,
   );
 
   const est = estimateRunTokens(members.length);
