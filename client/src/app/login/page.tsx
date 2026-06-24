@@ -13,6 +13,9 @@ const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
 const isPanjit = deployMode === 'pro-panjit';
 
+// Toggle the "訪客 Demo" one-time trial button on the login page. Hidden for now.
+const SHOW_DEMO_LOGIN = false;
+
 const AD_DOMAINS = [
   { value: 'PANJIT', label: 'PANJIT（台灣）' },
   { value: 'PYNMAX', label: 'PYNMAX（璟茂）' },
@@ -1034,8 +1037,9 @@ function EmailLoginForm({ onBack }: { onBack?: () => void }) {
                 onNeedsVerification={onGoogleNeedsVerification} />
               </div>
             )}
-            {/* Guest demo (pro-out only): one-time 36h trial, no signup */}
-            {!isPanjit && (
+            {/* Guest demo (pro-out only): one-time 36h trial, no signup.
+                Hidden for now per request — flip `SHOW_DEMO_LOGIN` to re-enable. */}
+            {SHOW_DEMO_LOGIN && !isPanjit && (
               <div className="flex-1 min-w-0">
                 <DemoLoginButton />
               </div>
