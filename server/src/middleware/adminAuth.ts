@@ -12,6 +12,8 @@ const ROUTE_TO_PAGE_KEY: Record<string, string> = {
   '/conversations': 'conversations',
   '/quota-groups': 'quota-groups',
   '/quota-requests': 'quota-requests',
+  '/quota-notify': 'quota-requests', // notify settings live on the quota-requests page
+  '/ad/resolve-email': 'quota-requests', // recipient picker helper
   '/invite-codes': 'invite-codes',
   '/announcements': 'announcements',
   '/terms': 'terms',
