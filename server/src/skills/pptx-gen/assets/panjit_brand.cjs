@@ -29,7 +29,9 @@ const ACCENTS = ['0075C2', '17A2D6', '5BC2E7', '124E78', '2E9E5B', 'E08A1E'];
 const FONT = 'Arial';
 const COPYRIGHT = 'Copyright© 2020 PANJIT International Inc. All rights reserved.';
 const W = 13.333, H = 7.5;
-const AREA = { x: 0.6, y: 1.55, w: 12.13, h: 5.05 };
+// Content box — pushed close to the edges so slides can fill nearly the whole
+// page (only the header strip + thin footer are reserved). Use it ALL.
+const AREA = { x: 0.5, y: 1.35, w: 12.33, h: 5.55 };
 
 function init(pptx) {
   pptx.defineLayout({ name: 'PANJIT16x9', width: W, height: H });
@@ -79,16 +81,33 @@ function content(pptx, title, pageNum) {
   _footer(s, pageNum);
   return s;
 }
-// Section divider WITH a visual: big tinted index panel + label.
-function section(pptx, title, pageNum, index) {
+// Section divider — a bold left colour band with the title, and a "本章重點"
+// agenda on the right so the slide carries information (never an empty big title).
+// opts: { kicker?, subtitle?, agenda?: [string,...], color? }  (a string is treated
+// as a kicker for backward-compat).
+function section(pptx, title, pageNum, opts) {
+  if (opts == null || typeof opts !== 'object') opts = {};
+  const col = opts.color || BRAND;
   const s = pptx.addSlide();
   s.background = { color: 'FFFFFF' };
-  s.addImage({ path: LOGO_IMG, x: W - 1.85, y: 0.4, w: 1.25, h: 0.508 });
-  s.addShape('rect', { x: 0, y: 0, w: 0.35, h: H, fill: { color: BRAND } });
-  s.addShape('roundRect', { x: 1.4, y: 2.35, w: 2.8, h: 2.8, fill: { color: LIGHT }, line: { color: BRAND, width: 1.25 }, rectRadius: 0.1 });
-  s.addText(index != null ? String(index) : '', { x: 1.4, y: 2.35, w: 2.8, h: 2.8, fontSize: 110, bold: true, color: BRAND, align: 'center', valign: 'middle', fontFace: FONT });
-  s.addShape('rect', { x: 4.9, y: 3.05, w: 0.9, h: 0.12, fill: { color: BRAND } });
-  s.addText(title || '', { x: 4.9, y: 3.25, w: 7.4, h: 1.4, fontSize: 34, bold: true, color: INK, fontFace: FONT, valign: 'top' });
+  const bw = 5.5;
+  s.addShape('rect', { x: 0, y: 0, w: bw, h: H, fill: { color: col } });
+  s.addImage({ path: LOGO_IMG, x: W - 1.85, y: 0.45, w: 1.25, h: 0.508 });
+  if (opts.kicker) s.addText(String(opts.kicker), { x: 0.75, y: 2.5, w: bw - 1.2, h: 0.5, fontSize: 14, bold: true, color: 'FFFFFF', charSpacing: 3, fontFace: FONT });
+  s.addShape('rect', { x: 0.78, y: 3.05, w: 0.85, h: 0.1, fill: { color: 'FFFFFF' } });
+  s.addText(title || '', { x: 0.75, y: 3.25, w: bw - 1.1, h: 1.8, fontSize: 30, bold: true, color: 'FFFFFF', valign: 'top', fontFace: FONT });
+  if (opts.subtitle) s.addText(String(opts.subtitle), { x: 0.78, y: 5.0, w: bw - 1.2, h: 1.0, fontSize: 13, color: 'FFFFFF', fontFace: FONT });
+  const ag = opts.agenda || [];
+  if (ag.length) {
+    s.addText('本章重點', { x: bw + 0.8, y: 1.85, w: 6, h: 0.5, fontSize: 14, bold: true, color: col, charSpacing: 2, fontFace: FONT });
+    const ih = Math.min(1.1, (H - 3.0) / ag.length);
+    ag.forEach((it, i) => {
+      const y = 2.6 + i * ih;
+      s.addText(String(i + 1).padStart(2, '0'), { x: bw + 0.8, y, w: 0.75, h: 0.65, fontSize: 24, bold: true, color: col, fontFace: FONT });
+      s.addText(String(it), { x: bw + 1.65, y, w: W - bw - 2.4, h: 0.65, fontSize: 16, color: INK, valign: 'middle', fontFace: FONT });
+      if (i < ag.length - 1) s.addShape('rect', { x: bw + 0.8, y: y + ih - 0.18, w: W - bw - 1.6, h: 0.012, fill: { color: LINE } });
+    });
+  }
   _footer(s, pageNum);
   return s;
 }
@@ -307,7 +326,7 @@ function heroStat(s, value, label, points = [], r = AREA) {
   if (points && points.length) { const sp = splitH(s, 0.42, 0.5, r); L = sp[0]; numbered(s, points, sp[1]); }
   s.addShape('roundRect', { x: L.x, y: L.y, w: L.w, h: L.h, fill: { color: LIGHT }, line: { color: BRAND, width: 1 }, rectRadius: 0.08, shadow: SHADOW });
   const vsize = String(value).length <= 4 ? 54 : String(value).length <= 6 ? 44 : 34;
-  s.addText(String(value), { x: L.x + 0.1, y: L.y + L.h * 0.24, w: L.w - 0.2, h: L.h * 0.42, fontSize: vsize, bold: true, color: BRAND, align: 'center', valign: 'middle', fontFace: FONT, fit: 'shrink', wrap: false });
+  s.addText(String(value), { x: L.x + 0.1, y: L.y + L.h * 0.24, w: L.w - 0.2, h: L.h * 0.42, fontSize: vsize, bold: true, color: BRAND, align: 'center', valign: 'middle', fontFace: FONT, wrap: false });
   s.addText(label, { x: L.x + 0.1, y: L.y + L.h * 0.66, w: L.w - 0.2, h: L.h * 0.26, fontSize: 16, color: BODY, align: 'center', fontFace: FONT });
 }
 
