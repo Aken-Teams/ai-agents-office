@@ -165,25 +165,32 @@ await pptx.writeFile({ fileName: 'output.pptx' });   // ALSO write slides.json (
 | `B.content(pptx, title, pageNum)` → `s` | content frame (header+underline+logo+footer+page#); compose into it |
 | `B.closing(pptx, title, subtitle)` | closing (cover artwork) — once, last |
 | `B.lead(s, text)` | one-line italic lead sentence at the top |
-| `B.chart(s, 'bar'\|'line'\|'pie'\|'doughnut'\|'area', data, region, opts)` | **polished** chart (clean axes, data labels, brand palette) |
+| `await B.chart(s, 'bar'\|'line'\|'pie'\|'doughnut'\|'area', data, region, opts)` | **ASYNC** — polished ECharts chart (gradient bars, smooth lines, modern). `data` = `[{name,labels,values}]`; bar horizontal via `opts={barDir:'bar'}`. **MUST `await`**. |
 | `B.table(s, head, rows, region, colW)` | branded table (blue header, zebra rows) |
-| `B.kpiRow(s, [[value,label],...], region)` | big-number KPI cards row |
-| `B.cards(s, [[title,desc],...], cols, region)` | card grid (2-4 cols) |
+| `B.kpiRow(s, [[value,label],...], region)` | big-number KPI cards row (with shadow) |
+| `B.cards(s, [[title,desc],...], cols, region)` | card grid (2-4 cols, shadow) |
 | `B.twoPanel(s, {title,items:[[t,d]]}, {title,items}, region)` | red/green two-panel numbered comparison |
 | `B.timeline(s, [[label,detail],...], region)` | horizontal milestone timeline |
-| `B.numbered(s, [[title,desc],...], region)` | vertical numbered list |
-| `B.splitH(s, frac, gap, region)` → `[L,R]` | split a region into left/right (no overlap) |
-| `B.splitV(s, frac, gap, region)` → `[Top,Bot]` | split a region into top/bottom |
+| `B.numbered(s, [[title,desc],...], region)` | vertical numbered list (index boxes) |
+| `B.points(s, [[title,desc],...], region)` | compact bullet list (for side panels) |
+| `B.beforeAfter(s, {label,value}, {label,value}, region)` | before → after boxes + arrow |
+| `B.processFlow(s, [[title,desc],...], region)` | chevron process steps |
+| `B.heroStat(s, value, label, points, region)` | one giant number + side points |
+| `B.callout(s, text, region, color?)` | takeaway / insight bar |
+| `B.splitH(s, frac, gap, region)` → `[L,R]` · `B.splitV(s, frac, gap, region)` → `[Top,Bot]` | split a region (no overlap; **nest them** to make grids) |
 | `B.below(s, hasLead, region)` → region | the area under a `B.lead` line |
-Constants: `B.BRAND B.INK B.BODY B.LIGHT B.ACCENTS B.FONT B.AREA B.RED B.GREEN`. `region` defaults to `B.AREA` (the full content box).
+Constants: `B.BRAND B.INK B.BODY B.LIGHT B.ACCENTS B.FONT B.AREA B.RED B.GREEN`. `region` defaults to `B.AREA`.
 
 Rules for this mode:
-- **First slide = `B.cover`, last = `B.closing`.** Always pass the correct `pageNum` (1-based) to `B.content`/`B.section`.
-- **Build EVERY content slide from the components above — never a plain bullet list.** Pick the component that fits the content: numbers→`chart`/`kpiRow`; structured rows→`table`; comparison→`twoPanel`; phases/schedule→`timeline`; categories→`cards`; key points→`numbered`. Vary it slide to slide — never repeat the same layout.
-- **When a slide has two things (e.g. table + chart, or KPI + chart), `splitH`/`splitV` first** and pass each region — this guarantees no overlap. Add a `B.lead(...)` sentence on most slides and build the visual in `B.below(s, true)`.
-- **Make it full & rich** — fill the content area; a sparse slide is a failure. Use `B.section(..., index)` before each major part.
+- **First slide = `B.cover`, last = `B.closing`.** Always pass the correct `pageNum` (1-based). **`await` every `B.chart(...)`.**
+- **PACK EVERY SLIDE — fill the whole content area, like a dense consultant deck. This is critical.** One chart sitting in a sea of whitespace is a FAILURE. **Combine 2-4 components per content slide** by nesting `splitV`/`splitH`, e.g.:
+  - lead + `[chart | points]` + a `callout` takeaway bar at the bottom;
+  - `kpiRow` on top + `[chart | table]` below;
+  - `twoPanel` + a row of `callout`s underneath;
+  - `heroStat` (left) + `[chart / points]` (right).
+  Leave only small gaps between blocks — the slide should look information-rich, not airy.
+- **Build from the components — never a plain bullet list.** Pick what fits: numbers→`chart`/`kpiRow`/`heroStat`; rows→`table`; comparison→`twoPanel`/`beforeAfter`; phases→`timeline`/`processFlow`; categories→`cards`; points→`numbered`/`points`; takeaways→`callout`. **Vary the composition every slide.**
 - Do NOT draw your own logo/header/footer/page-number, and do NOT change the brand colours/fonts — the components own the design.
-  - **Vary the layout every slide** (timeline → two-panel → table → KPI row → process → chart). Never repeat the same bullet layout. Match the polish and density of the slides shown above; do NOT simplify just because the frame is templated — the frame is fixed, but the CONTENT must be your best, most elaborate work.
 - **Concise cover title** (≤ ~16 chars); put version/doc-type/audience in the subtitle.
 - Use a section slide (`B.section`) before each major part; aim for a balanced deck. Scale to the requested length (10 / 20 slides → that many).
 - **slides.json (required):** also write a `slides.json` with `{"title": "...", "style": "panjit", "slides": [ {"type":"title"|"section_divider"|"content"|"stats"|"closing", "title":"...", ...} ]}` describing each slide so the editor works. Always produce `output.pptx` AND `slides.json`.

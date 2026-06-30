@@ -101,28 +101,77 @@ function closing(pptx, title, subtitle) {
 }
 
 // ── components ───────────────────────────────────────────────────────────────
-// Polished chart with brand defaults per type (clean axes, data labels, palette).
-function chart(s, type, data, r = AREA, opts = {}) {
-  const base = {
-    x: r.x, y: r.y, w: r.w, h: r.h, chartColors: ACCENTS, fontFace: FONT, showLegend: false,
-    showValue: true, dataLabelColor: INK, dataLabelFontFace: FONT, dataLabelFontSize: 11, dataLabelFontBold: true,
-    catAxisLabelColor: INK, catAxisLabelFontFace: FONT, catAxisLabelFontSize: 11,
-    valAxisHidden: true, catAxisLineShow: false, valAxisLineShow: false,
-    valGridLine: { style: 'none' }, catGridLine: { style: 'none' },
+const SHADOW = { type: 'outer', blur: 9, offset: 3, angle: 90, color: '8AA0B5', opacity: 0.28 };
+const HEX = c => '#' + c;
+
+// Build a PANJIT-styled ECharts option from pptxgenjs-style data
+// (`[{name,labels,values}, ...]`). Modern look: gradients, rounded bars, clean axes.
+function _chartOption(echarts, type, data, opts) {
+  const series0 = data[0] || { labels: [], values: [] };
+  const cats = series0.labels || [];
+  const pal = ACCENTS.map(HEX);
+  const grad = (a, b) => new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: a }, { offset: 1, color: b }]);
+  const axisCommon = {
+    nameTextStyle: { color: HEX(GREY) },
+    axisLine: { lineStyle: { color: '#cfd8e0' } },
+    axisTick: { show: false },
   };
-  if (type === 'bar') { base.barGapWidthPct = 45; }
-  else if (type === 'pie' || type === 'doughnut') {
-    Object.assign(base, { showValue: false, showPercent: true, dataLabelColor: 'FFFFFF', dataLabelFontBold: true,
-      showLegend: true, legendPos: 'r', legendColor: INK, legendFontFace: FONT, legendFontSize: 11,
-      valAxisHidden: false });
-    delete base.valGridLine; delete base.catGridLine;
-    if (type === 'doughnut') base.holeSize = 58;
+  // Chart is rendered at 2× then scaled down, so use large font px to stay legible.
+  const FS = 26, FSlabel = 26;
+  const o = { backgroundColor: '#ffffff', textStyle: { fontFamily: FONT }, color: pal };
+  if (type === 'pie' || type === 'doughnut') {
+    o.legend = { orient: 'vertical', right: 10, top: 'center', itemGap: 14, textStyle: { color: HEX(INK), fontSize: FS } };
+    o.series = [{
+      type: 'pie', radius: type === 'doughnut' ? ['46%', '74%'] : ['0%', '74%'], center: ['38%', '50%'],
+      avoidLabelOverlap: true, itemStyle: { borderColor: '#fff', borderWidth: 3 },
+      label: { color: HEX(INK), fontSize: FS, fontWeight: 'bold', formatter: '{b} {d}%' },
+      labelLine: { length: 14, length2: 16 },
+      data: cats.map((c, i) => ({ name: c, value: series0.values[i] })),
+    }];
   } else if (type === 'line' || type === 'area') {
-    Object.assign(base, { lineSmooth: true, lineDataSymbol: 'circle', lineDataSymbolSize: 6, lineSize: 2.5,
-      valAxisHidden: false, valAxisLabelColor: GREY, valAxisLabelFontFace: FONT,
-      valGridLine: { style: 'solid', color: 'EEF2F6', size: 1 } });
+    o.grid = { left: 72, right: 36, top: 40, bottom: 56 };
+    o.xAxis = Object.assign({ type: 'category', data: cats, boundaryGap: type !== 'line', axisLabel: { color: HEX(INK), fontSize: FS } }, axisCommon);
+    o.yAxis = Object.assign({ type: 'value', splitLine: { lineStyle: { color: '#eef2f6' } }, axisLabel: { color: HEX(GREY), fontSize: FS }, axisLine: { show: false } }, axisCommon);
+    o.series = data.map((d, si) => ({
+      name: d.name, type: 'line', smooth: true, symbol: 'circle', symbolSize: 12,
+      lineStyle: { width: 4, color: pal[si % pal.length] },
+      itemStyle: { color: pal[si % pal.length], borderColor: '#fff', borderWidth: 3 },
+      areaStyle: type === 'area' ? { color: grad(pal[si % pal.length] + 'cc', '#ffffff00') } : undefined,
+      label: { show: true, position: 'top', color: HEX(INK), fontWeight: 'bold', fontSize: FSlabel },
+      data: d.values,
+    }));
+  } else { // bar
+    const horiz = opts.barDir === 'bar';
+    const catAxis = Object.assign({ type: 'category', data: cats, axisLabel: { color: HEX(INK), fontSize: FS } }, axisCommon);
+    const valAxis = Object.assign({ type: 'value', splitLine: { lineStyle: { color: '#eef2f6' } }, axisLabel: { color: HEX(GREY), fontSize: FS }, axisLine: { show: false } }, axisCommon);
+    o.grid = { left: horiz ? 130 : 64, right: 48, top: 32, bottom: 52 };
+    o.xAxis = horiz ? valAxis : catAxis;
+    o.yAxis = horiz ? Object.assign({}, catAxis, { inverse: true }) : valAxis;
+    o.series = data.map((d, si) => ({
+      name: d.name, type: 'bar', barWidth: '54%',
+      itemStyle: {
+        borderRadius: horiz ? [0, 8, 8, 0] : [8, 8, 0, 0],
+        color: horiz ? grad(pal[0], pal[1] || pal[0]) : grad(pal[1] || pal[0], pal[0]),
+      },
+      label: { show: true, position: horiz ? 'right' : 'top', color: HEX(BRAND), fontWeight: 'bold', fontSize: FSlabel },
+      data: d.values,
+    }));
   }
-  return s.addChart(type, data, Object.assign(base, opts));
+  return o;
+}
+
+// Polished chart rendered via ECharts → SVG → PNG (modern, gradient, infographic
+// quality). ASYNC — the caller MUST `await` it. Lays the image into `region`.
+async function chart(s, type, data, r = AREA, opts = {}) {
+  const echarts = require('echarts');
+  const sharp = require('sharp');
+  const px = 2;
+  const inst = echarts.init(null, null, { renderer: 'svg', ssr: true, width: Math.round(r.w * 96 * px), height: Math.round(r.h * 96 * px) });
+  inst.setOption(_chartOption(echarts, type, data, opts));
+  const svg = inst.renderToSVGString();
+  inst.dispose();
+  const png = await sharp(Buffer.from(svg)).png().toBuffer();
+  s.addImage({ data: 'image/png;base64,' + png.toString('base64'), x: r.x, y: r.y, w: r.w, h: r.h });
 }
 
 function table(s, head, rows, r = AREA, colW) {
@@ -138,7 +187,7 @@ function kpiRow(s, items, r = AREA) {
   const n = items.length, gap = 0.3, w = (r.w - gap * (n - 1)) / n, h = Math.min(2.0, r.h);
   items.forEach((k, i) => {
     const x = r.x + i * (w + gap);
-    s.addShape('roundRect', { x, y: r.y, w, h, fill: { color: PANEL }, line: { color: LINE, width: 1 }, rectRadius: 0.06 });
+    s.addShape('roundRect', { x, y: r.y, w, h, fill: { color: 'FFFFFF' }, line: { color: LINE, width: 1 }, rectRadius: 0.06, shadow: SHADOW });
     s.addShape('rect', { x, y: r.y, w, h: 0.1, fill: { color: BRAND } });
     s.addText(String(k[0]), { x, y: r.y + h * 0.18, w, h: h * 0.5, fontSize: 32, bold: true, color: BRAND, align: 'center', fontFace: FONT });
     s.addText(String(k[1]), { x, y: r.y + h * 0.68, w, h: h * 0.28, fontSize: 12.5, color: BODY, align: 'center', fontFace: FONT });
@@ -151,7 +200,7 @@ function cards(s, items, cols = 3, r = AREA) {
   const w = (r.w - gx * (cols - 1)) / cols, h = (r.h - gy * (rows - 1)) / rows;
   items.forEach((c, i) => {
     const x = r.x + (i % cols) * (w + gx), y = r.y + Math.floor(i / cols) * (h + gy);
-    s.addShape('roundRect', { x, y, w, h, fill: { color: PANEL }, line: { color: BRAND, width: 1 }, rectRadius: 0.05 });
+    s.addShape('roundRect', { x, y, w, h, fill: { color: 'FFFFFF' }, line: { color: LINE, width: 1 }, rectRadius: 0.05, shadow: SHADOW });
     s.addShape('rect', { x, y, w, h: 0.52, fill: { color: BRAND } });
     s.addText(String(c[0]), { x: x + 0.22, y, w: w - 0.4, h: 0.52, fontSize: 14, bold: true, color: 'FFFFFF', valign: 'middle', fontFace: FONT });
     s.addText(String(c[1]), { x: x + 0.22, y: y + 0.66, w: w - 0.44, h: h - 0.85, fontSize: 12, color: BODY, fontFace: FONT, valign: 'top' });
@@ -162,7 +211,7 @@ function cards(s, items, cols = 3, r = AREA) {
 function twoPanel(s, left, right, r = AREA) {
   [[r.x, left, left.color || RED], [r.x + r.w / 2 + 0.2, right, right.color || GREEN]].forEach(arr => {
     const x = arr[0], p = arr[1], col = arr[2], pw = r.w / 2 - 0.2;
-    s.addShape('roundRect', { x, y: r.y, w: pw, h: r.h, fill: { color: PANEL }, line: { color: col, width: 1.25 }, rectRadius: 0.05 });
+    s.addShape('roundRect', { x, y: r.y, w: pw, h: r.h, fill: { color: 'FFFFFF' }, line: { color: col, width: 1.25 }, rectRadius: 0.05, shadow: SHADOW });
     s.addShape('rect', { x, y: r.y, w: pw, h: 0.6, fill: { color: col } });
     s.addText(p.title, { x: x + 0.28, y: r.y, w: pw - 0.5, h: 0.6, fontSize: 14, bold: true, color: 'FFFFFF', valign: 'middle', fontFace: FONT });
     const ih = (r.h - 0.95) / p.items.length;
@@ -202,9 +251,64 @@ function numbered(s, items, r = AREA) {
   });
 }
 
+// callout / insight bar — brand-tinted box with an accent edge, for takeaways.
+function callout(s, text, r = AREA, color = BRAND) {
+  s.addShape('roundRect', { x: r.x, y: r.y, w: r.w, h: r.h, fill: { color: LIGHT }, line: { color: 'FFFFFF', width: 0 }, rectRadius: 0.04 });
+  s.addShape('rect', { x: r.x, y: r.y, w: 0.13, h: r.h, fill: { color } });
+  s.addText(text, { x: r.x + 0.35, y: r.y, w: r.w - 0.6, h: r.h, fontSize: 13, color: INK, valign: 'middle', fontFace: FONT });
+}
+
+// compact bullet list (for side panels) — items: [string, ...] or [[t,d],...]
+function points(s, items, r = AREA) {
+  const ih = r.h / items.length;
+  items.forEach((it, i) => {
+    const y = r.y + i * ih, t = Array.isArray(it) ? it[0] : it, d = Array.isArray(it) ? it[1] : '';
+    s.addShape('ellipse', { x: r.x, y: y + 0.1, w: 0.18, h: 0.18, fill: { color: BRAND } });
+    s.addText([{ text: t + (d ? '  ' : ''), options: { bold: true, color: INK } }, { text: d || '', options: { color: BODY } }],
+      { x: r.x + 0.32, y, w: r.w - 0.4, h: ih - 0.05, fontSize: 12.5, fontFace: FONT, valign: 'top' });
+  });
+}
+
+// before → after: two boxes + arrow + optional big-number outcome under each.
+// left/right: { label, value }  (value optional, shown big)
+function beforeAfter(s, left, right, r = AREA) {
+  const bw = (r.w - 1.2) / 2, by = r.y + 0.1, bh = Math.min(2.6, r.h - 0.2);
+  const box = (x, p, col) => {
+    s.addShape('roundRect', { x, y: by, w: bw, h: bh, fill: { color: 'FFFFFF' }, line: { color: col, width: 1.5 }, rectRadius: 0.06, shadow: SHADOW });
+    s.addText(p.label, { x: x + 0.2, y: by + 0.25, w: bw - 0.4, h: 0.6, fontSize: 16, bold: true, color: col, align: 'center', fontFace: FONT });
+    if (p.value != null) s.addText(String(p.value), { x: x + 0.2, y: by + 0.95, w: bw - 0.4, h: bh - 1.1, fontSize: 40, bold: true, color: col, align: 'center', valign: 'middle', fontFace: FONT });
+  };
+  box(r.x, left, GREY);
+  box(r.x + bw + 1.2, right, BRAND);
+  s.addShape('rightArrow', { x: r.x + bw + 0.2, y: by + bh / 2 - 0.35, w: 0.8, h: 0.7, fill: { color: BRAND } });
+}
+
+// process flow: chevron steps left→right. steps: [[title, desc], ...]
+function processFlow(s, steps, r = AREA) {
+  const n = steps.length, gap = 0.18, w = (r.w - gap * (n - 1)) / n, h = Math.min(1.9, r.h), y = r.y + (r.h - h) / 2;
+  steps.forEach((st, i) => {
+    const x = r.x + i * (w + gap);
+    s.addShape(i === n - 1 ? 'roundRect' : 'chevron', { x, y, w: w + (i === n - 1 ? 0 : 0.3), h, fill: { color: i % 2 ? '17A2D6' : BRAND }, rectRadius: 0.04 });
+    s.addText(String(i + 1), { x: x + 0.15, y: y + 0.15, w: 0.7, h: 0.5, fontSize: 20, bold: true, color: 'FFFFFF', fontFace: FONT });
+    s.addText(st[0], { x: x + 0.15, y: y + 0.62, w: w - 0.5, h: 0.5, fontSize: 14, bold: true, color: 'FFFFFF', fontFace: FONT });
+    s.addText(st[1], { x: x + 0.15, y: y + 1.08, w: w - 0.5, h: h - 1.15, fontSize: 10.5, color: 'EAF4FB', fontFace: FONT });
+  });
+}
+
+// hero stat: one giant number + (optional) supporting points. value, label, points:[[t,d]]
+function heroStat(s, value, label, points = [], r = AREA) {
+  let L = r;
+  if (points && points.length) { const sp = splitH(s, 0.42, 0.5, r); L = sp[0]; numbered(s, points, sp[1]); }
+  s.addShape('roundRect', { x: L.x, y: L.y, w: L.w, h: L.h, fill: { color: LIGHT }, line: { color: BRAND, width: 1 }, rectRadius: 0.08, shadow: SHADOW });
+  const vsize = String(value).length <= 4 ? 54 : String(value).length <= 6 ? 44 : 34;
+  s.addText(String(value), { x: L.x + 0.1, y: L.y + L.h * 0.24, w: L.w - 0.2, h: L.h * 0.42, fontSize: vsize, bold: true, color: BRAND, align: 'center', valign: 'middle', fontFace: FONT, fit: 'shrink', wrap: false });
+  s.addText(label, { x: L.x + 0.1, y: L.y + L.h * 0.66, w: L.w - 0.2, h: L.h * 0.26, fontSize: 16, color: BODY, align: 'center', fontFace: FONT });
+}
+
 module.exports = {
   init, cover, content, section, closing,
   chart, table, kpiRow, cards, twoPanel, timeline, numbered, lead,
+  beforeAfter, processFlow, heroStat, callout, points,
   splitH, splitV, below,
   BRAND, DARK, INK, BODY, GREY, LIGHT, LINE, PANEL, RED, GREEN, AMBER, ACCENTS, FONT, AREA, W, H,
 };
