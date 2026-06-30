@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { config, validateConfig } from './config.js';
-import { initializeDatabase } from './db.js';
+import { initializeDatabase, dbGet } from './db.js';
 import { initOpsDb } from './opsDb.js';
 import { reportsRouter, adminReportsRouter } from './routes/reports.js';
 import authRoutes from './routes/auth.js';
@@ -83,9 +83,22 @@ async function main() {
   // Periodically clean up the in-memory LINE rate-limit map.
   setInterval(pruneExpiredBuckets, 5 * 60 * 1000).unref();
 
-  // Health check
-  app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString(), isBeta: config.isBeta, deployMode: config.deployMode });
+  // Health check — pings the DB so the login page can show a calm "maintenance"
+  // state (rather than a broken-looking error) when the database is unreachable.
+  app.get('/api/health', async (_req, res) => {
+    let db: 'up' | 'down' = 'up';
+    try {
+      await dbGet('SELECT 1 AS ok');
+    } catch {
+      db = 'down';
+    }
+    res.json({
+      status: db === 'up' ? 'ok' : 'maintenance',
+      db,
+      timestamp: new Date().toISOString(),
+      isBeta: config.isBeta,
+      deployMode: config.deployMode,
+    });
   });
 
   // Routes

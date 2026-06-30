@@ -12,7 +12,7 @@
 
 ## 1. 背景與問題陳述（Background / Problem）
 
-- 公司已有成熟的 **Agent Office** 系統，具備多 Agent 協作引擎（Router → Worker）、SSE 即時串流、角色權限控管（admin / user / readonly）、AD / OAuth / Email 三種認證方式。
+- 公司已有成熟的 **Agent Office** 系統，具備多 Agent 協作引擎（Router → Worker）、SSE 即時串流、角色權限控管（admin / user / readonly）、AD 認證方式。
 - 因此決策方向為：**將 LINE Bot 整合進 Agent Office**，而非另起爐灶。
 - 整合後將同時存在 **兩個入口（Web UI + LINE Bot）** 但共用同一套後端引擎，採用 AI 個人助理方式進行溝通。
 - 核心挑戰：如何讓公司既有的 **AD（Active Directory）帳號體系** 與 LINE 使用者身分安全綁定，並在人員異動時自動撤銷權限。
@@ -34,12 +34,10 @@
 
 ### 1.2 現有 Agent Office 認證架構
 
-目前系統支援三種認證方式，LINE Bot 整合需建立在此基礎上：
+目前系統支援 AD 認證方式，LINE Bot 整合需建立在此基礎上：
 
 | 認證方式 | 部署模式 | 說明 |
 |---------|---------|------|
-| Email + Password | 全部 | bcrypt 雜湊 + JWT（7 天效期）|
-| Google OAuth2 | 全部 | OAuth 第三方登入 |
 | Active Directory | 內部部署 | AD 帳號 + 網域驗證 |
 
 ---

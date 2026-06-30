@@ -645,7 +645,7 @@ function AdWizard({
 /* ============================================================
    AD Login Form (pro-panjit)
    ============================================================ */
-function AdLoginForm({ onAdminMode }: { onAdminMode?: () => void }) {
+function AdLoginForm({ onAdminMode, maintenance }: { onAdminMode?: () => void; maintenance?: boolean }) {
   const { t } = useTranslation();
   const router = useRouter();
   const [domain, setDomain] = useState('PANJIT');
@@ -722,13 +722,21 @@ function AdLoginForm({ onAdminMode }: { onAdminMode?: () => void }) {
         <p className="text-on-surface-variant text-sm">使用 AD 工號登入系統</p>
       </div>
 
-      {/* Deployment notice — pro-panjit only. Data-purge deadline + domain move. */}
+      {/* Deployment notice — pro-panjit only. Data-purge deadline + domain move.
+          When the DB is unreachable, the maintenance notice merges in here as the
+          first item (rather than a separate stacked banner). */}
       {isPanjit && (
         <div className="mb-6 rounded-lg border border-amber-500/20 bg-amber-500/[0.07] px-3.5 py-3">
           <div className="flex items-center gap-1.5 mb-2">
             <span className="material-symbols-outlined text-amber-600 text-[17px]">campaign</span>
             <span className="font-label text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">系統公告</span>
           </div>
+          {maintenance && (
+            <div className="flex items-start gap-1.5 mb-2 pb-2 border-b border-amber-500/15 text-[13px] leading-relaxed">
+              <span className="material-symbols-outlined text-amber-600 text-[16px] mt-0.5 shrink-0">build</span>
+              <span><span className="font-semibold text-on-surface">系統正在維護中</span>，暫時無法登入，造成不便敬請見諒，請稍候再試。</span>
+            </div>
+          )}
           <ul className="space-y-1.5 text-[13px] leading-relaxed text-on-surface-variant">
             <li className="flex gap-1.5">
               <span className="text-amber-600/70 shrink-0">•</span>
@@ -1057,6 +1065,22 @@ function EmailLoginForm({ onBack }: { onBack?: () => void }) {
 function LoginForm() {
   const { t } = useTranslation();
   const [adminMode, setAdminMode] = useState(false);
+  // Poll the health endpoint so we can show a calm "maintenance" state (not a
+  // crash) when the database is unreachable. A failed fetch (server down) also
+  // counts as maintenance.
+  const [maintenance, setMaintenance] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const check = () => {
+      fetch('/api/health')
+        .then(r => (r.ok ? r.json() : Promise.reject(new Error('bad status'))))
+        .then(d => { if (alive) setMaintenance(d?.db === 'down' || d?.status === 'maintenance'); })
+        .catch(() => { if (alive) setMaintenance(true); });
+    };
+    check();
+    const id = setInterval(check, 20_000);
+    return () => { alive = false; clearInterval(id); };
+  }, []);
 
   return (
     <div className="bg-surface-container-lowest text-on-surface font-body min-h-[100svh] flex flex-col items-center justify-center md:p-6 overflow-hidden relative selection:bg-primary/30">
@@ -1090,8 +1114,8 @@ function LoginForm() {
           </div>
           <div className="space-y-4">
             <div className="flex items-center gap-4 p-4 bg-surface-container rounded-lg">
-              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span className="font-label text-sm uppercase tracking-widest text-on-surface-variant">{t('login.systemStatus')}</span>
+              <div className={`w-2 h-2 rounded-full ${maintenance ? 'bg-amber-500' : 'bg-primary animate-pulse'}`} />
+              <span className="font-label text-sm uppercase tracking-widest text-on-surface-variant">{maintenance ? '系統維護中' : t('login.systemStatus')}</span>
             </div>
             <div className="flex gap-2">
               <div className="h-1 w-8 bg-primary" />
@@ -1118,8 +1142,19 @@ function LoginForm() {
               </div>
             </div>
 
+            {/* Standalone maintenance banner only when there's no 系統公告 box to
+                merge into (i.e. the email / admin form). The AD form merges it in. */}
+            {maintenance && !(isPanjit && !adminMode) && (
+              <div className="mb-6 rounded-lg border border-amber-500/25 bg-amber-500/[0.08] px-4 py-3 flex items-start gap-2.5">
+                <span className="material-symbols-outlined text-amber-600 text-[19px] mt-0.5 shrink-0">build</span>
+                <div className="text-[13px] leading-relaxed text-on-surface-variant">
+                  <span className="font-semibold text-on-surface">系統正在維護中</span>，暫時無法登入，造成不便敬請見諒，請稍候再試。
+                </div>
+              </div>
+            )}
+
             {isPanjit && !adminMode
-              ? <AdLoginForm onAdminMode={() => setAdminMode(true)} />
+              ? <AdLoginForm onAdminMode={() => setAdminMode(true)} maintenance={maintenance} />
               : <EmailLoginForm onBack={isPanjit ? () => setAdminMode(false) : undefined} />
             }
           </div>
