@@ -273,6 +273,9 @@ const en = {
   'templates.active': 'Template',
   'templates.instruction': 'Template format',
 
+  'templates.pptx.panjit': 'PANJIT Template',
+  'templates.pptx.panjit.desc': 'Official PANJIT corporate template',
+  'templates.pptx.panjit.prompt': 'Use the official PANJIT corporate template for this presentation. Keep the cover title concise (put long version info in the subtitle), 4–6 sharp bullets per slide, and use section and stats slides where appropriate so the deck is rich, consistent and professional.',
   'templates.pptx.minimalPro': 'Minimal Pro',
   'templates.pptx.minimalPro.desc': 'Clean whitespace, low-contrast',
   'templates.pptx.minimalPro.prompt': 'Minimal professional style: generous whitespace, low-contrast palette (white background, light gray accents, dark gray text), no decorative lines, sans-serif fonts, one key point per slide, monochrome charts, clean and sharp overall.',

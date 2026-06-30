@@ -279,6 +279,9 @@ const zhTW = {
   'templates.instruction': '範本格式',
 
   // PPTX Style Templates
+  'templates.pptx.panjit': '強茂模板',
+  'templates.pptx.panjit.desc': '官方強茂企業範本（logo／品牌色）',
+  'templates.pptx.panjit.prompt': '請使用強茂官方企業範本（PANJIT corporate template）製作這份簡報。封面主標題請精簡（較長的版本資訊放副標題），每頁重點控制在 4–6 條、文字精煉有重點，適度安排章節頁與數據頁，讓整份簡報內容豐富、版面一致且專業。',
   'templates.pptx.minimalPro': '簡約專業',
   'templates.pptx.minimalPro.desc': '乾淨留白、低對比配色',
   'templates.pptx.minimalPro.prompt': '簡約專業風格：大量留白，低對比度配色（白底、淺灰輔助色、深灰文字），無裝飾線條，San-serif 字體，每頁只放一個重點，圖表使用單色系，整體簡潔俐落。',

@@ -101,6 +101,108 @@ sec.addText('Section Name', { x: '10%', y: '30%', w: '80%', h: '40%', fontSize: 
 await pptx.writeFile({ fileName: 'output.pptx' });
 ```
 
+## 強茂官方範本模式（PANJIT corporate template — pro-panjit）
+
+If the task asks to use the **PANJIT / 強茂 corporate template** (官方企業範本), you still use **pptxgenjs** — but you import the **PANJIT brand kit**, which draws the FIXED corporate frame (real circuit-board cover, PANJIT logo, brand blue #0075C2, brand underline, footer + page number). **The frame is fixed; the CONTENT is fully yours to design** — charts, tables, columns, KPI cards, diagrams, polished wording. This is the whole point: every slide keeps the PANJIT frame, while you make the content rich and professional like a real consultant deck.
+
+The brand kit lives here (absolute path):
+
+```
+__PANJIT_ASSETS_DIR__
+```
+
+Write ONE **CommonJS** script (`build.cjs`) in your cwd and run it: `NODE_PATH="<node_modules>" node build.cjs` (the node_modules path is the one given in "How to Call Generator Scripts" above; use `require`, not `import`).
+
+The brand kit is a **component library** — call its pre-styled, polished components (they already look good and never overlap). Build the whole deck from these; only drop to raw `addShape` for something truly custom.
+
+```javascript
+const PptxGenJS = require('pptxgenjs');
+const B = require('__PANJIT_ASSETS_DIR__/panjit_brand.cjs');
+const pptx = new PptxGenJS();
+B.init(pptx);
+
+B.cover(pptx, 'AI Agent × KM 企業知識整合平台', '產品需求文件 (PRD) v1.0 ｜ 對象：產品 · 開發 · 資安');
+
+B.section(pptx, '市場概況', 2, '1');                 // section divider with a big "1" visual
+
+// content frame (header + logo + footer + page#); then compose components into it
+let s = B.content(pptx, '各產業 AI 導入率', 3);
+B.lead(s, '科技與金融領先，製造業加速追趕。');
+B.chart(s, 'bar', [{ name:'導入率(%)', labels:['科技','金融','零售','製造','醫療'], values:[78,65,52,48,40] }], B.below(s, true), { barDir:'bar' });
+
+// split the area so a table + chart never overlap
+s = B.content(pptx, 'AI 投資領域分布', 4);
+B.lead(s, '生成式 AI 與基礎模型吸納過半投資。');
+const [L, R] = B.splitH(s, 0.56, 0.5, B.below(s, true));
+B.table(s, ['領域','占比'], [['生成式 AI','34%'],['基礎模型','22%'],['機器視覺','15%'],['語音 NLP','12%']], L, [2.8,1.6]);
+B.chart(s, 'doughnut', [{ name:'占比', labels:['生成式AI','基礎模型','機器視覺','語音NLP'], values:[34,22,15,12] }], R);
+
+s = B.content(pptx, '企業六大應用場景', 5);
+B.cards(s, [['知識管理','文件問答、智能檢索'],['客戶服務','24/7 智能客服'],['程式開發','Copilot 輔助編碼'],['行銷內容','文案、素材生成'],['流程自動化','RPA × AI Agent'],['數據分析','自然語言查詢 BI']], 3);
+
+s = B.content(pptx, '導入效益總覽', 6);
+const [T, Bot] = B.splitV(s, 0.36, 0.4);
+B.kpiRow(s, [['-58%','人工工時'],['3.2x','處理效率'],['+41%','滿意度'],['<6月','回收期']], T);
+B.chart(s, 'line', [{ name:'累積效益', labels:['M1','M2','M3','M4','M5','M6'], values:[10,28,45,68,85,100] }], Bot);
+
+s = B.content(pptx, '導入挑戰與因應', 7);
+B.twoPanel(s,
+  { title:'主要挑戰  Challenges', items:[['資料品質','分散、未結構化'],['人才短缺','AI 工程人力不足'],['資安與隱私','資料外洩風險']] },
+  { title:'因應策略  Strategy',   items:[['資料治理','建立統一資料平台'],['內外併用','培訓 + 外部合作'],['分層防護','權限/加密/稽核']] });
+
+s = B.content(pptx, '企業導入路線圖', 8);
+B.timeline(s, [['第一階段','評估與試點'],['第二階段','知識整合'],['第三階段','場景擴展'],['第四階段','全面導入'],['第五階段','持續優化']]);
+
+B.closing(pptx, 'Thank You', '強茂 PANJIT Semiconductor');
+await pptx.writeFile({ fileName: 'output.pptx' });   // ALSO write slides.json (see below)
+```
+
+### Component API (USE THESE — they are pre-styled & overlap-free)
+| Call | Makes |
+|------|-------|
+| `B.cover(pptx, title, subtitle)` | cover (real circuit-board image) — once, first |
+| `B.section(pptx, title, pageNum, '1')` | section divider with a big index number visual |
+| `B.content(pptx, title, pageNum)` → `s` | content frame (header+underline+logo+footer+page#); compose into it |
+| `B.closing(pptx, title, subtitle)` | closing (cover artwork) — once, last |
+| `B.lead(s, text)` | one-line italic lead sentence at the top |
+| `B.chart(s, 'bar'\|'line'\|'pie'\|'doughnut'\|'area', data, region, opts)` | **polished** chart (clean axes, data labels, brand palette) |
+| `B.table(s, head, rows, region, colW)` | branded table (blue header, zebra rows) |
+| `B.kpiRow(s, [[value,label],...], region)` | big-number KPI cards row |
+| `B.cards(s, [[title,desc],...], cols, region)` | card grid (2-4 cols) |
+| `B.twoPanel(s, {title,items:[[t,d]]}, {title,items}, region)` | red/green two-panel numbered comparison |
+| `B.timeline(s, [[label,detail],...], region)` | horizontal milestone timeline |
+| `B.numbered(s, [[title,desc],...], region)` | vertical numbered list |
+| `B.splitH(s, frac, gap, region)` → `[L,R]` | split a region into left/right (no overlap) |
+| `B.splitV(s, frac, gap, region)` → `[Top,Bot]` | split a region into top/bottom |
+| `B.below(s, hasLead, region)` → region | the area under a `B.lead` line |
+Constants: `B.BRAND B.INK B.BODY B.LIGHT B.ACCENTS B.FONT B.AREA B.RED B.GREEN`. `region` defaults to `B.AREA` (the full content box).
+
+Rules for this mode:
+- **First slide = `B.cover`, last = `B.closing`.** Always pass the correct `pageNum` (1-based) to `B.content`/`B.section`.
+- **Build EVERY content slide from the components above — never a plain bullet list.** Pick the component that fits the content: numbers→`chart`/`kpiRow`; structured rows→`table`; comparison→`twoPanel`; phases/schedule→`timeline`; categories→`cards`; key points→`numbered`. Vary it slide to slide — never repeat the same layout.
+- **When a slide has two things (e.g. table + chart, or KPI + chart), `splitH`/`splitV` first** and pass each region — this guarantees no overlap. Add a `B.lead(...)` sentence on most slides and build the visual in `B.below(s, true)`.
+- **Make it full & rich** — fill the content area; a sparse slide is a failure. Use `B.section(..., index)` before each major part.
+- Do NOT draw your own logo/header/footer/page-number, and do NOT change the brand colours/fonts — the components own the design.
+  - **Vary the layout every slide** (timeline → two-panel → table → KPI row → process → chart). Never repeat the same bullet layout. Match the polish and density of the slides shown above; do NOT simplify just because the frame is templated — the frame is fixed, but the CONTENT must be your best, most elaborate work.
+- **Concise cover title** (≤ ~16 chars); put version/doc-type/audience in the subtitle.
+- Use a section slide (`B.section`) before each major part; aim for a balanced deck. Scale to the requested length (10 / 20 slides → that many).
+- **slides.json (required):** also write a `slides.json` with `{"title": "...", "style": "panjit", "slides": [ {"type":"title"|"section_divider"|"content"|"stats"|"closing", "title":"...", ...} ]}` describing each slide so the editor works. Always produce `output.pptx` AND `slides.json`.
+- All text must come from the task / user message / uploaded files (see Content Source Rules). The PANJIT branding (logo, cover, footer) is part of the kit and is allowed.
+- **Reply to the user in their language** (繁體中文 for a zh-TW user — do NOT reply in English). In your user-facing messages, keep it brief and **never mention the implementation** (no "pptxgenjs", "Python", "brand kit", "panjit_brand.cjs", script/file names). Just say something like「正在使用強茂官方範本製作簡報…」and, when done,「簡報已完成」.
+
+Example of a dense table inside `B.AREA`:
+```javascript
+let s = B.content(pptx, '功能需求對照', 4);
+s.addTable([
+  [{ text:'編號', options:{fill:B.BRAND,color:'FFFFFF',bold:true} }, { text:'功能', options:{fill:B.BRAND,color:'FFFFFF',bold:true} }, { text:'說明', options:{fill:B.BRAND,color:'FFFFFF',bold:true} }, { text:'優先級', options:{fill:B.BRAND,color:'FFFFFF',bold:true} }],
+  ['FR-1','登入身分','AD 工號 + 密碼，1:1 綁定','P0'],
+  ['FR-2','AI 問答','自然語言查詢並引用來源','P0'],
+  ['FR-3','權限控管','依部門/角色控制存取範圍','P0'],
+], { x:B.AREA.x, y:B.AREA.y, w:B.AREA.w, h:B.AREA.h, fontSize:13, fontFace:B.FONT, color:B.BODY, border:{type:'solid',color:'D9E6F2',pt:1}, align:'left', valign:'middle', rowH:0.5 });
+```
+
+For all OTHER styles, use pptxgenjs with the colour themes below.
+
 ## Available Styles
 
 When the user requests a specific style, use these color themes:

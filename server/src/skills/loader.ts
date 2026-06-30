@@ -276,6 +276,14 @@ export function buildSystemPrompt(
   // Also normalize generatorsDir for the prompt (bash-friendly forward slashes)
   const genDir = generatorsDir.replace(/\\/g, '/');
 
+  // pptx-gen's 強茂 template mode references a bundled python helper/template;
+  // resolve its absolute path so the agent's script can import panjit_deck and
+  // open panjit-template.pptx.
+  const skillPrompt = skill.id === 'pptx-gen'
+    ? skill.systemPrompt.replace(/__PANJIT_ASSETS_DIR__/g,
+        path.join(config.skillsDir, 'pptx-gen', 'assets').replace(/\\/g, '/'))
+    : skill.systemPrompt;
+
   const parts = [
     getLanguageInstruction(userLocale),
     '',
@@ -289,7 +297,7 @@ export function buildSystemPrompt(
     '',
     FILE_OUTPUT_RULES,
     '',
-    skill.systemPrompt,
+    skillPrompt,
     '',
     SANDBOX_RULES,
     '',

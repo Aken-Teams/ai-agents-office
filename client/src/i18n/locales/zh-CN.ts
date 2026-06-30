@@ -278,6 +278,9 @@ const zhCN = {
   'templates.active': '使用模板',
   'templates.instruction': '模板格式',
 
+  'templates.pptx.panjit': '强茂模板',
+  'templates.pptx.panjit.desc': '官方强茂企业范本（logo／品牌色）',
+  'templates.pptx.panjit.prompt': '请使用强茂官方企业范本（PANJIT corporate template）制作这份简报。封面主标题请精简（较长的版本信息放副标题），每页重点控制在 4–6 条、文字精炼有重点，适度安排章节页与数据页，让整份简报内容丰富、版面一致且专业。',
   'templates.pptx.minimalPro': '简约专业',
   'templates.pptx.minimalPro.desc': '干净留白、低对比配色',
   'templates.pptx.minimalPro.prompt': '简约专业风格：大量留白，低对比度配色（白底、浅灰辅助色、深灰文字），无装饰线条，San-serif 字体，每页只放一个重点，图表使用单色系，整体简洁利落。',
