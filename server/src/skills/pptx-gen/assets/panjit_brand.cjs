@@ -109,8 +109,12 @@ const HEX = c => '#' + c;
 function _chartOption(echarts, type, data, opts) {
   const series0 = data[0] || { labels: [], values: [] };
   const cats = series0.labels || [];
-  const pal = ACCENTS.map(HEX);
-  const grad = (a, b) => new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: a }, { offset: 1, color: b }]);
+  // Palette defaults to brand accents, but the deck author can override per chart
+  // (opts.colors) so charts match the slide's own palette — not forced blue.
+  const pal = (opts.colors || ACCENTS).map(c => c[0] === '#' ? c : HEX(c));
+  const grad = (a, b, x2 = 0, y2 = 1) => new echarts.graphic.LinearGradient(0, 0, x2, y2, [{ offset: 0, color: a }, { offset: 1, color: b }]);
+  // lighten a #hex toward white (for a subtle SAME-hue bar gradient, not two clashing colours)
+  const lighten = (hex, amt) => { const h = hex.replace('#', ''); const m = i => { const c = parseInt(h.substr(i, 2), 16); return Math.round(c + (255 - c) * amt).toString(16).padStart(2, '0'); }; return '#' + m(0) + m(2) + m(4); };
   const axisCommon = {
     nameTextStyle: { color: HEX(GREY) },
     axisLine: { lineStyle: { color: '#cfd8e0' } },
@@ -147,15 +151,17 @@ function _chartOption(echarts, type, data, opts) {
     o.grid = { left: horiz ? 130 : 64, right: 48, top: 32, bottom: 52 };
     o.xAxis = horiz ? valAxis : catAxis;
     o.yAxis = horiz ? Object.assign({}, catAxis, { inverse: true }) : valAxis;
-    o.series = data.map((d, si) => ({
-      name: d.name, type: 'bar', barWidth: '54%',
-      itemStyle: {
-        borderRadius: horiz ? [0, 8, 8, 0] : [8, 8, 0, 0],
-        color: horiz ? grad(pal[0], pal[1] || pal[0]) : grad(pal[1] || pal[0], pal[0]),
-      },
-      label: { show: true, position: horiz ? 'right' : 'top', color: HEX(BRAND), fontWeight: 'bold', fontSize: FSlabel },
-      data: d.values,
-    }));
+    o.series = data.map((d, si) => {
+      const c = pal[si % pal.length], lc = lighten(c, 0.3);
+      // subtle SAME-hue gradient along the bar (solid → lighter); rounded ends.
+      const fill = horiz ? grad(c, lc, 1, 0) : grad(lc, c, 0, 1);
+      return {
+        name: d.name, type: 'bar', barWidth: '52%',
+        itemStyle: { borderRadius: horiz ? [0, 7, 7, 0] : [7, 7, 0, 0], color: fill },
+        label: { show: true, position: horiz ? 'right' : 'top', color: c, fontWeight: 'bold', fontSize: FSlabel },
+        data: d.values,
+      };
+    });
   }
   return o;
 }

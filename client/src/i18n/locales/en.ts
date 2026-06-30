@@ -452,6 +452,8 @@ const en = {
   'chat.sidebar.generatedFiles': 'Generated Files',
   'chat.sidebar.noFiles': 'No files generated yet.',
   'chat.sidebar.noFilesHint': 'Describe your needs to the AI to get started.',
+  'chat.sidebar.generating': 'AI is designing your deck…',
+  'chat.sidebar.generatingHint': 'This can take a while — the file will appear automatically when done.',
   'chat.sidebar.uploadedFiles': 'Uploaded Files',
   'chat.sidebar.agentTasks': 'Agent Tasks',
   'chat.sidebar.safe': 'Safe',

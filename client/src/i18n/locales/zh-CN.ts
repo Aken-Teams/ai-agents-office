@@ -458,6 +458,8 @@ const zhCN = {
   'chat.sidebar.generatedFiles': '生成的文件',
   'chat.sidebar.noFiles': '尚未生成任何文件。',
   'chat.sidebar.noFilesHint': '向 AI 描述需求即可开始。',
+  'chat.sidebar.generating': 'AI 正在设计简报中…',
+  'chat.sidebar.generatingHint': '制作较花时间，完成后档案会自动出现，请稍候。',
   'chat.sidebar.uploadedFiles': '上传的文件',
   'chat.sidebar.agentTasks': '代理任务',
   'chat.sidebar.safe': '安全',

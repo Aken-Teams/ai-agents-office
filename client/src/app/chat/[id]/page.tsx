@@ -2453,7 +2453,15 @@ function ChatContent() {
               <div className="overflow-y-auto p-4 space-y-4">
                 {/* Generated files */}
                 {files.length === 0 ? (
-                  <p className="text-xs text-on-surface-variant text-center py-4">{t('chat.sidebar.noFiles')}</p>
+                  streaming ? (
+                    <div className="flex flex-col items-center gap-1.5 py-4 text-center">
+                      <span className="material-symbols-outlined text-primary animate-spin text-xl">progress_activity</span>
+                      <p className="text-xs font-medium text-on-surface">{t('chat.sidebar.generating')}</p>
+                      <p className="text-[11px] text-on-surface-variant">{t('chat.sidebar.generatingHint')}</p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-on-surface-variant text-center py-4">{t('chat.sidebar.noFiles')}</p>
+                  )
                 ) : (
                   <div className="space-y-1">
                     {files.map(file => {
@@ -2711,9 +2719,17 @@ function ChatContent() {
               {t('chat.sidebar.generatedFiles')}
             </h4>
             {files.length === 0 ? (
-              <p className="text-sm text-on-surface-variant text-center py-6 leading-relaxed">
-                {t('chat.sidebar.noFiles')}<br />{t('chat.sidebar.noFilesHint')}
-              </p>
+              streaming ? (
+                <div className="flex flex-col items-center gap-2 py-6 px-2 text-center">
+                  <span className="material-symbols-outlined text-primary animate-spin text-2xl">progress_activity</span>
+                  <p className="text-sm font-medium text-on-surface">{t('chat.sidebar.generating')}</p>
+                  <p className="text-xs text-on-surface-variant leading-relaxed">{t('chat.sidebar.generatingHint')}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-on-surface-variant text-center py-6 leading-relaxed">
+                  {t('chat.sidebar.noFiles')}<br />{t('chat.sidebar.noFilesHint')}
+                </p>
+              )
             ) : (
               <div className="space-y-1.5">
                 {files.map(file => (

@@ -462,6 +462,8 @@ const zhTW = {
   'chat.sidebar.generatedFiles': '生成的檔案',
   'chat.sidebar.noFiles': '尚未生成任何檔案。',
   'chat.sidebar.noFilesHint': '向 AI 描述需求即可開始。',
+  'chat.sidebar.generating': 'AI 正在設計簡報中…',
+  'chat.sidebar.generatingHint': '製作較花時間，完成後檔案會自動出現，請稍候。',
   'chat.sidebar.uploadedFiles': '上傳的檔案',
   'chat.sidebar.agentTasks': '代理任務',
   'chat.sidebar.safe': '安全',

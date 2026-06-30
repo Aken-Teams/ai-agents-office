@@ -584,6 +584,10 @@ async function handleDirect(
   // then hand it to the card agent (source-of-truth, no fabrication). Only fires
   // when files are attached this turn — the no-upload "style only" path is
   // untouched and stays fast. The post-gen data-fidelity gate below still runs.
+  // When a data-analyst pre-parse ran, show the consumer agent (e.g. 簡報產生器)
+  // visibly TAKING OVER the task afterwards — otherwise the activity ends on the
+  // analyst and looks stuck/broken to the user.
+  let mainTaskId: string | null = null;
   if (uploadIds.length > 0 && PRE_PARSE_CONSUMER_SKILLS.has(effectiveSkillId)) {
     const pre = await runUploadParsePreStep({
       userId, conversationId, uploadIds, userLocale,
@@ -595,6 +599,8 @@ async function handleDirect(
         await recordTokenUsage({ userId, conversationId, inputTokens: pre.inputTokens, outputTokens: pre.outputTokens, model: pre.model });
       }
     }
+    mainTaskId = uuidv4();
+    sseWrite({ type: 'task_dispatched', data: { taskId: mainTaskId, skillId: effectiveSkillId, description: '依解析結果製作文件中…' } });
   }
 
   async function startClaude(sid: string, isResume: boolean) {
@@ -666,6 +672,7 @@ async function handleDirect(
       if (event.type === 'done') {
         clearInterval(keepaliveTimer);
         activeGenerations.delete(conversationId);
+        if (mainTaskId) { sseWrite({ type: 'task_completed', data: { taskId: mainTaskId, skillId: effectiveSkillId } }); mainTaskId = null; }
 
         (async () => {
           if (assistantText) {

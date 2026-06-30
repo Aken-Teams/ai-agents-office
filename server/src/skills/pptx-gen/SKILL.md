@@ -113,49 +113,55 @@ __PANJIT_ASSETS_DIR__
 
 Write ONE **CommonJS** script (`build.cjs`) in your cwd and run it: `NODE_PATH="<node_modules>" node build.cjs` (the node_modules path is the one given in "How to Call Generator Scripts" above; use `require`, not `import`).
 
-The brand kit is a **component library** — call its pre-styled, polished components (they already look good and never overlap). Build the whole deck from these; only drop to raw `addShape` for something truly custom.
+**IMPORTANT — this example shows the *spirit*: every slide a DIFFERENT colour scheme and a DIFFERENT, mostly hand-built layout.** Do NOT just call the same components with default colours on every slide — that is the rigid look to avoid. The brand frame (`B.cover`/`B.content`/`B.closing`) stays; everything inside it you design freely with `addShape`/`addText` + your chosen palette (and use a helper only when it genuinely fits).
 
 ```javascript
 const PptxGenJS = require('pptxgenjs');
 const B = require('__PANJIT_ASSETS_DIR__/panjit_brand.cjs');
 const pptx = new PptxGenJS();
 B.init(pptx);
+const A = B.AREA, F = B.FONT;
 
-B.cover(pptx, 'AI Agent × KM 企業知識整合平台', '產品需求文件 (PRD) v1.0 ｜ 對象：產品 · 開發 · 資安');
+B.cover(pptx, 'AI Agent × KM 企業知識整合平台', '產品需求文件 (PRD) v1.0');
 
-B.section(pptx, '市場概況', 2, '1');                 // section divider with a big "1" visual
+// — Slide: GREEN theme, hand-built hero + metric bars (no helper) —
+let s = B.content(pptx, '市場概況', 2);
+const G = '0E9F8E', Gl = 'E3F5F0';
+s.addShape('roundRect', { x: A.x, y: A.y, w: 3.8, h: 3.0, fill:{color:Gl}, line:{color:G,width:1}, rectRadius:0.08 });
+s.addText('$9,000 億', { x: A.x, y: A.y+0.8, w: 3.8, h: 1, fontSize: 38, bold:true, color:G, align:'center', fontFace:F });
+s.addText('2026 市場規模 · CAGR 36%', { x: A.x, y: A.y+1.9, w: 3.8, h: 0.5, fontSize: 13, color: B.BODY, align:'center', fontFace:F });
+[['北美',42],['亞太',33],['歐洲',25]].forEach((b,i)=>{ const y=A.y+0.2+i*0.95;
+  s.addText(b[0], { x:4.6, y, w:1.1, h:0.6, fontSize:14, bold:true, color:B.INK, valign:'middle', fontFace:F });
+  s.addShape('roundRect', { x:5.8, y:y+0.12, w:6.6*b[1]/45, h:0.5, fill:{color:i?'7CC6B3':G}, rectRadius:0.06 });
+  s.addText(b[1]+'%', { x:5.9+6.6*b[1]/45, y:y+0.12, w:1, h:0.5, fontSize:14, bold:true, color:G, valign:'middle', fontFace:F }); });
 
-// content frame (header + logo + footer + page#); then compose components into it
-let s = B.content(pptx, '各產業 AI 導入率', 3);
-B.lead(s, '科技與金融領先，製造業加速追趕。');
-B.chart(s, 'bar', [{ name:'導入率(%)', labels:['科技','金融','零售','製造','醫療'], values:[78,65,52,48,40] }], B.below(s, true), { barDir:'bar' });
+// — Slide: AMBER theme, chart with custom colours + custom side notes —
+s = B.content(pptx, 'AI 投資熱區', 3);
+const [L, R] = B.splitH(s, 0.58, 0.5);
+await B.chart(s, 'doughnut', [{ labels:['生成式AI','基礎模型','視覺','其他'], values:[34,24,18,24] }], L,
+  { colors:['E08A1E','D9663B','F0B254','F3D08A'] });   // ← pass colours so it's NOT blue
+['生成式 AI 領跑 34%','車用視覺剛需','邊緣 AI 隨 IoT 起飛'].forEach((t,i)=>{ const y=R.y+i*1.65;
+  s.addShape('roundRect', { x:R.x, y, w:R.w, h:1.4, fill:{color:'FCF1E2'}, rectRadius:0.06 });
+  s.addShape('rect', { x:R.x, y, w:0.14, h:1.4, fill:{color:'E08A1E'} });
+  s.addText(t, { x:R.x+0.4, y, w:R.w-0.6, h:1.4, fontSize:15, bold:true, color:B.INK, valign:'middle', fontFace:F }); });
 
-// split the area so a table + chart never overlap
-s = B.content(pptx, 'AI 投資領域分布', 4);
-B.lead(s, '生成式 AI 與基礎模型吸納過半投資。');
-const [L, R] = B.splitH(s, 0.56, 0.5, B.below(s, true));
-B.table(s, ['領域','占比'], [['生成式 AI','34%'],['基礎模型','22%'],['機器視覺','15%'],['語音 NLP','12%']], L, [2.8,1.6]);
-B.chart(s, 'doughnut', [{ name:'占比', labels:['生成式AI','基礎模型','機器視覺','語音NLP'], values:[34,22,15,12] }], R);
+// — Slide: PURPLE theme, hand-built 2×2 matrix (no helper) —
+s = B.content(pptx, '技術成熟度', 4);
+[['生成式 AI','已規模化','6C5CE7'],['RAG','快速成熟','8E7CF0'],['Agent','萌芽放量','9B8BF2'],['治理','待補強','B7ACF5']]
+  .forEach((c,i)=>{ const x=A.x+(i%2)*6.15, y=A.y+Math.floor(i/2)*2.45;
+    s.addShape('roundRect', { x, y, w:5.85, h:2.25, fill:{color:c[2]}, rectRadius:0.06 });
+    s.addText(c[0], { x:x+0.35, y:y+0.35, w:5, h:0.6, fontSize:19, bold:true, color:'FFFFFF', fontFace:F });
+    s.addText(c[1], { x:x+0.35, y:y+1.2, w:5, h:0.6, fontSize:14, color:'FFFFFF', fontFace:F }); });
 
-s = B.content(pptx, '企業六大應用場景', 5);
-B.cards(s, [['知識管理','文件問答、智能檢索'],['客戶服務','24/7 智能客服'],['程式開發','Copilot 輔助編碼'],['行銷內容','文案、素材生成'],['流程自動化','RPA × AI Agent'],['數據分析','自然語言查詢 BI']], 3);
-
-s = B.content(pptx, '導入效益總覽', 6);
-const [T, Bot] = B.splitV(s, 0.36, 0.4);
-B.kpiRow(s, [['-58%','人工工時'],['3.2x','處理效率'],['+41%','滿意度'],['<6月','回收期']], T);
-B.chart(s, 'line', [{ name:'累積效益', labels:['M1','M2','M3','M4','M5','M6'], values:[10,28,45,68,85,100] }], Bot);
-
-s = B.content(pptx, '導入挑戰與因應', 7);
-B.twoPanel(s,
-  { title:'主要挑戰  Challenges', items:[['資料品質','分散、未結構化'],['人才短缺','AI 工程人力不足'],['資安與隱私','資料外洩風險']] },
-  { title:'因應策略  Strategy',   items:[['資料治理','建立統一資料平台'],['內外併用','培訓 + 外部合作'],['分層防護','權限/加密/稽核']] });
-
-s = B.content(pptx, '企業導入路線圖', 8);
-B.timeline(s, [['第一階段','評估與試點'],['第二階段','知識整合'],['第三階段','場景擴展'],['第四階段','全面導入'],['第五階段','持續優化']]);
+// A section divider — keep it SIMPLE & varied, NOT a big "1/2/3" number block:
+s = B.content(pptx, '', 5);
+s.addShape('rect', { x:A.x, y:A.y+1.9, w:1.0, h:0.14, fill:{color:'1597C4'} });
+s.addText('挑戰與展望', { x:A.x, y:A.y+2.1, w:10, h:1, fontSize:32, bold:true, color:B.INK, fontFace:F });
 
 B.closing(pptx, 'Thank You', '強茂 PANJIT Semiconductor');
 await pptx.writeFile({ fileName: 'output.pptx' });   // ALSO write slides.json (see below)
 ```
+(The remaining slides would each pick a *different* palette and a *different* layout — a teal KPI strip, a navy roadmap, a comparison, an annotated line chart, etc. Never two slides that look alike.)
 
 ### Component API (USE THESE — they are pre-styled & overlap-free)
 | Call | Makes |
@@ -181,16 +187,23 @@ await pptx.writeFile({ fileName: 'output.pptx' });   // ALSO write slides.json (
 | `B.below(s, hasLead, region)` → region | the area under a `B.lead` line |
 Constants: `B.BRAND B.INK B.BODY B.LIGHT B.ACCENTS B.FONT B.AREA B.RED B.GREEN`. `region` defaults to `B.AREA`.
 
-Rules for this mode:
+### Mindset — PANJIT is ONLY the outer template; design freely inside (READ THIS)
+Treat PANJIT as just the **master/frame** — the circuit-board cover, the corner logo, the footer + page number. **Everything ON the content area you design with your FULL normal creativity and diversity, exactly like your best non-templated decks.** The brand kit must NOT make the deck feel formulaic.
+
+**Avoid these "templated" tells the user dislikes:**
+- ❌ Do NOT put a big "1 / 2 / 3" number block on every section page. Design section/divider slides with variety (or skip them) — make them look different each time.
+- ❌ Do NOT default every comparison to red-vs-green. Choose colours that suit the content.
+- ❌ Do NOT force the whole deck blue. **Use a rich, varied palette** — pick a tasteful colour scheme per deck/section (greens, ambers, teals, purples, navy, etc.), accent colours, light tints. Brand blue is available but is NOT mandatory for content.
+- ❌ Do NOT repeat the same component layout slide after slide. Each slide should look visibly different — custom diagrams, annotated visuals, infographics, inventive compositions.
+
+**The only fixed brand elements:** slide 1 = `B.cover`; last = `B.closing`; each content slide uses `B.content(title, pageNum)` for the frame (logo/footer/page#) — don't redraw those. Beyond that, design like normal: any colours, any layout, your own `addShape`/`addText` compositions.
+
+`B.chart(s, type, data, region, { colors:['2E9E5B','E08A1E',...] })` gives polished ECharts charts — pass your own `colors` so charts match each slide's palette (don't leave them all blue). The helper components (`kpiRow`, `cards`, `twoPanel`, `timeline`, `heroStat`, `callout`, `points`, `table`, `numbered`) are **optional conveniences** — use them when handy, but freely build your own custom layouts too.
+
+Rules:
 - **First slide = `B.cover`, last = `B.closing`.** Always pass the correct `pageNum` (1-based). **`await` every `B.chart(...)`.**
-- **PACK EVERY SLIDE — fill the whole content area, like a dense consultant deck. This is critical.** One chart sitting in a sea of whitespace is a FAILURE. **Combine 2-4 components per content slide** by nesting `splitV`/`splitH`, e.g.:
-  - lead + `[chart | points]` + a `callout` takeaway bar at the bottom;
-  - `kpiRow` on top + `[chart | table]` below;
-  - `twoPanel` + a row of `callout`s underneath;
-  - `heroStat` (left) + `[chart / points]` (right).
-  Leave only small gaps between blocks — the slide should look information-rich, not airy.
-- **Build from the components — never a plain bullet list.** Pick what fits: numbers→`chart`/`kpiRow`/`heroStat`; rows→`table`; comparison→`twoPanel`/`beforeAfter`; phases→`timeline`/`processFlow`; categories→`cards`; points→`numbered`/`points`; takeaways→`callout`. **Vary the composition every slide.**
-- Do NOT draw your own logo/header/footer/page-number, and do NOT change the brand colours/fonts — the components own the design.
+- **Fill the slide, make it rich and VARIED** — apply the full quality of the "Slide Type Patterns" & "Default Quality Standards" below, in diverse colours and layouts. No formulaic repetition; no sea of whitespace.
+- Stay inside the content area below the header; don't redraw the logo/footer/page-number. Use `B.FONT` for fonts.
 - **Concise cover title** (≤ ~16 chars); put version/doc-type/audience in the subtitle.
 - Use a section slide (`B.section`) before each major part; aim for a balanced deck. Scale to the requested length (10 / 20 slides → that many).
 - **slides.json (required):** also write a `slides.json` with `{"title": "...", "style": "panjit", "slides": [ {"type":"title"|"section_divider"|"content"|"stats"|"closing", "title":"...", ...} ]}` describing each slide so the editor works. Always produce `output.pptx` AND `slides.json`.

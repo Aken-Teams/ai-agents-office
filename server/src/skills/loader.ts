@@ -100,15 +100,31 @@ const SANDBOX_RULES = `
 
 // Cache skills to avoid re-reading from disk on every call
 let _skillsCache: SkillDefinition[] | null = null;
+let _watcherSet = false;
+
+// In development, watch the skills dir so edits to SKILL.md (a non-.ts file that
+// does NOT trigger a tsx/nodemon restart) take effect without a manual restart.
+function _ensureSkillWatcher(skillsDir: string): void {
+  if (_watcherSet || config.nodeEnv === 'production') return;
+  _watcherSet = true;
+  try {
+    fs.watch(skillsDir, { recursive: true }, (_e, file) => {
+      if (!file || /\.md$/i.test(String(file))) { _skillsCache = null; }
+    });
+  } catch { /* watching is best-effort */ }
+}
 
 /**
  * Load all skill definitions from the skills directory.
  * Each skill is a directory containing a SKILL.md file with frontmatter metadata.
  */
 export function loadSkills(): SkillDefinition[] {
-  if (_skillsCache) return _skillsCache;
+  // In dev, never cache — so edits to SKILL.md (a .md file that does NOT trigger a
+  // tsx/nodemon restart) always take effect on the next generation. Cache only in prod.
+  if (_skillsCache && config.nodeEnv === 'production') return _skillsCache;
 
   const skillsDir = config.skillsDir;
+  _ensureSkillWatcher(skillsDir);
   const skills: SkillDefinition[] = [];
 
   if (!fs.existsSync(skillsDir)) return skills;
