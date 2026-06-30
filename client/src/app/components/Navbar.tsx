@@ -165,6 +165,8 @@ const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
 
 export default function Navbar() {
   const { user, token, logout, updateUser, hasPermission } = useAuth();
+  // 強茂官方範本：僅檢閱者(readonly)與管理者(admin)可見，一般 USER 看不到此卡片
+  const canSeePanjitTemplate = isPanjit && (user?.role === 'admin' || user?.role === 'readonly');
   const { locale, theme, setLocale, setTheme, t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
@@ -1154,8 +1156,8 @@ export default function Navbar() {
                 </div>
                 <div>
                   {/* Template Grid */}
-                  <div className={`p-4 grid gap-3 ${(SKILL_TEMPLATES[selectedSkill] || []).filter(tm => !tm.panjitOnly || isPanjit).length > 4 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2'}`}>
-                    {(SKILL_TEMPLATES[selectedSkill] || []).filter(tm => !tm.panjitOnly || isPanjit).map(tmpl => {
+                  <div className={`p-4 grid gap-3 ${(SKILL_TEMPLATES[selectedSkill] || []).filter(tm => !tm.panjitOnly || canSeePanjitTemplate).length > 4 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2'}`}>
+                    {(SKILL_TEMPLATES[selectedSkill] || []).filter(tm => !tm.panjitOnly || canSeePanjitTemplate).map(tmpl => {
                       const previewKey = `${selectedSkill}:${tmpl.id}`;
                       const preview = TEMPLATE_PREVIEW[previewKey];
                       const isHovered = hoveredTemplate === tmpl.id;
