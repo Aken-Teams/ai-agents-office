@@ -16,6 +16,9 @@ const isPanjit = deployMode === 'pro-panjit';
 // Toggle the "訪客 Demo" one-time trial button on the login page. Hidden for now.
 const SHOW_DEMO_LOGIN = false;
 
+// Toggle the pro-panjit deployment notice (7/1 資料清除 + 網域轉移). Hidden after 7/1.
+const SHOW_DEPLOY_NOTICE = false;
+
 const AD_DOMAINS = [
   { value: 'PANJIT', label: 'PANJIT（台灣）' },
   { value: 'PYNMAX', label: 'PYNMAX（璟茂）' },
@@ -722,31 +725,33 @@ function AdLoginForm({ onAdminMode, maintenance }: { onAdminMode?: () => void; m
         <p className="text-on-surface-variant text-sm">使用 AD 工號登入系統</p>
       </div>
 
-      {/* Deployment notice — pro-panjit only. Data-purge deadline + domain move.
-          When the DB is unreachable, the maintenance notice merges in here as the
-          first item (rather than a separate stacked banner). */}
-      {isPanjit && (
+      {/* Deployment notice — pro-panjit only. Data-purge deadline + domain move
+          (toggled off after 7/1 via SHOW_DEPLOY_NOTICE). When the DB is
+          unreachable, the maintenance notice merges into this same box. */}
+      {isPanjit && (SHOW_DEPLOY_NOTICE || maintenance) && (
         <div className="mb-6 rounded-lg border border-amber-500/20 bg-amber-500/[0.07] px-3.5 py-3">
           <div className="flex items-center gap-1.5 mb-2">
             <span className="material-symbols-outlined text-amber-600 text-[17px]">campaign</span>
             <span className="font-label text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">系統公告</span>
           </div>
           {maintenance && (
-            <div className="flex items-start gap-1.5 mb-2 pb-2 border-b border-amber-500/15 text-[13px] leading-relaxed">
+            <div className={`flex items-start gap-1.5 text-[13px] leading-relaxed ${SHOW_DEPLOY_NOTICE ? 'mb-2 pb-2 border-b border-amber-500/15' : ''}`}>
               <span className="material-symbols-outlined text-amber-600 text-[16px] mt-0.5 shrink-0">build</span>
               <span><span className="font-semibold text-on-surface">系統正在維護中</span>，暫時無法登入，造成不便敬請見諒，請稍候再試。</span>
             </div>
           )}
-          <ul className="space-y-1.5 text-[13px] leading-relaxed text-on-surface-variant">
-            <li className="flex gap-1.5">
-              <span className="text-amber-600/70 shrink-0">•</span>
-              <span><span className="font-semibold text-on-surface">7/1</span> 將清除舊資料，請儘速完成<span className="font-semibold text-on-surface">註冊與帳號綁定</span>，以免資料遺失。</span>
-            </li>
-            <li className="flex gap-1.5">
-              <span className="text-amber-600/70 shrink-0">•</span>
-              <span>本服務後續將轉移至新網域 <span className="font-semibold text-on-surface">panjit-jv.com</span>。</span>
-            </li>
-          </ul>
+          {SHOW_DEPLOY_NOTICE && (
+            <ul className="space-y-1.5 text-[13px] leading-relaxed text-on-surface-variant">
+              <li className="flex gap-1.5">
+                <span className="text-amber-600/70 shrink-0">•</span>
+                <span><span className="font-semibold text-on-surface">7/1</span> 將清除舊資料，請儘速完成<span className="font-semibold text-on-surface">註冊與帳號綁定</span>，以免資料遺失。</span>
+              </li>
+              <li className="flex gap-1.5">
+                <span className="text-amber-600/70 shrink-0">•</span>
+                <span>本服務後續將轉移至新網域 <span className="font-semibold text-on-surface">panjit-jv.com</span>。</span>
+              </li>
+            </ul>
+          )}
         </div>
       )}
 
