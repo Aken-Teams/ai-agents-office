@@ -53,7 +53,7 @@ function formatFileSize(bytes: number): string {
 }
 
 export default function AdminSecurity() {
-  const { token } = useAdminAuth();
+  const { token, isReadonly } = useAdminAuth();
   const { t } = useTranslation();
   const [stats, setStats] = useState<SecurityStats | null>(null);
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
@@ -68,44 +68,63 @@ export default function AdminSecurity() {
   const [secTotal, setSecTotal] = useState(0);
   const [secTotalPages, setSecTotalPages] = useState(1);
   const [exporting, setExporting] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportFrom, setReportFrom] = useState('');
+  const [reportTo, setReportTo] = useState('');
+  const [reportStage, setReportStage] = useState('');
+  const [reportError, setReportError] = useState('');
 
-  async function exportCsv() {
+  async function generateReport() {
     if (!token || exporting) return;
+    if (reportFrom && reportTo && reportTo < reportFrom) {
+      setReportError('\u7D50\u675F\u65E5\u671F\u4E0D\u53EF\u65E9\u65BC\u958B\u59CB\u65E5\u671F');
+      return;
+    }
+    setReportError('');
     setExporting(true);
+    setReportStage('\u6B63\u5728\u5F59\u6574\u8CC7\u5B89\u8CC7\u6599\u2026');
+    // Translate raw HTTP failures into plain language so a permission block
+    // reads as "no permission" rather than a cryptic code that looks like a bug.
+    const friendlyHttp = (status: number) =>
+      status === 403 ? '\u60A8\u7684\u5E33\u865F\u6C92\u6709\u7522\u751F\u6B64\u5831\u544A\u7684\u6B0A\u9650\uFF0C\u8ACB\u806F\u7E6B\u7CFB\u7D71\u7BA1\u7406\u8005'
+        : status === 401 ? '\u767B\u5165\u5DF2\u903E\u671F\uFF0C\u8ACB\u91CD\u65B0\u767B\u5165\u5F8C\u518D\u8A66'
+        : `\u4F3A\u670D\u5668\u56DE\u61C9\u7570\u5E38\uFF0C\u8ACB\u7A0D\u5F8C\u518D\u8A66 (\u4EE3\u78BC ${status})`;
     try {
-      const [auditRes, secRes] = await Promise.all([
-        fetch('/api/admin/security/audit-log?page=1&limit=9999', { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('/api/admin/security/events?page=1&limit=9999', { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
-      const auditData = await auditRes.json();
-      const secData = await secRes.json();
+      const startRes = await fetch('/api/admin/security/report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ from: reportFrom || null, to: reportTo || null }),
+      });
+      if (!startRes.ok) throw new Error(friendlyHttp(startRes.status));
+      const { jobId } = await startRes.json();
+      setReportStage('AI \u6B63\u5728\u64B0\u5BEB\u5C08\u696D\u5831\u544A\uFF0C\u7D04\u9700 1\u20133 \u5206\u9418\u2026');
 
-      // Sheet 1: Audit Log
-      const auditHeader = ['Event Type', 'Actor', 'Actor Name', 'Detail', 'Created At'];
-      const auditRows = (auditData.entries as AuditEntry[]).map(e => [
-        e.event_type, e.actor || '', e.actor_name || '', (e.detail || '').replace(/\n/g, ' '), e.created_at,
-      ]);
+      // Poll until done / error (report generation can take a couple of minutes).
+      const deadline = Date.now() + 6 * 60_000;
+      for (;;) {
+        await new Promise(r => setTimeout(r, 3000));
+        if (Date.now() > deadline) throw new Error('timeout');
+        const st = await fetch(`/api/admin/security/report/${jobId}/status`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!st.ok) throw new Error(friendlyHttp(st.status));
+        const data = await st.json();
+        if (data.status === 'error') throw new Error(data.error || '\u7522\u751F\u5931\u6557');
+        if (data.status === 'done') break;
+      }
 
-      // Sheet 2: Security Events
-      const secHeader = ['ID', 'Severity', 'Event Type', 'User Email', 'User Name', 'Detail', 'Raw Input', 'Created At'];
-      const secRows = (secData.events as SecurityEvent[]).map(e => [
-        e.id, e.severity, e.event_type, e.user_email || '', e.user_name || '',
-        (e.detail || '').replace(/\n/g, ' '), (e.raw_input || '').replace(/\n/g, ' '), e.created_at,
-      ]);
-
-      const csvParts = [
-        '--- Audit Log ---',
-        [auditHeader, ...auditRows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n'),
-        '',
-        '--- Security Events ---',
-        [secHeader, ...secRows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n'),
-      ];
-      const csv = '\uFEFF' + csvParts.join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      setReportStage('\u6B63\u5728\u4E0B\u8F09\u5831\u544A\u2026');
+      const dl = await fetch(`/api/admin/security/report/${jobId}/download`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!dl.ok) throw new Error(friendlyHttp(dl.status));
+      const blob = await dl.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `security_log_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+      a.href = url; a.download = `security_report_${new Date().toISOString().slice(0, 10)}.docx`; a.click();
       URL.revokeObjectURL(url);
+      setShowReportModal(false);
+      setReportStage('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      setReportError(msg === 'timeout' ? '\u7522\u751F\u903E\u6642\uFF0C\u8ACB\u7A0D\u5F8C\u518D\u8A66' : (msg || '\u7522\u751F\u5831\u544A\u5931\u6557\uFF0C\u8ACB\u7A0D\u5F8C\u518D\u8A66'));
+      setReportStage('');
     } finally { setExporting(false); }
   }
 
@@ -192,15 +211,83 @@ export default function AdminSecurity() {
       {/* Header */}
       <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
         <span className="text-base md:text-lg font-black text-on-surface font-headline">{t('admin.security.title')}</span>
-        <button
-          onClick={exportCsv}
-          disabled={exporting}
-          className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer shrink-0 disabled:opacity-50"
-        >
-          <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'download'}</span>
-          {t('admin.security.exportLog')}
-        </button>
+        {/* Report generation is admin-only; reviewers (readonly) don't see it. */}
+        {!isReadonly && (
+          <button
+            onClick={() => { setShowReportModal(true); setReportError(''); setReportStage(''); }}
+            disabled={exporting}
+            className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+          >
+            <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'description'}</span>
+            {t('admin.security.exportLog')}
+          </button>
+        )}
       </header>
+
+      {/* AI Security Report Modal — pick date range, then AI writes a formal Word report */}
+      {showReportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => { if (!exporting) setShowReportModal(false); }}>
+          <div className="w-full max-w-md bg-surface rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-outline-variant/10">
+              <span className="material-symbols-outlined text-primary">shield_lock</span>
+              <h3 className="text-sm font-black text-on-surface">產生資安稽核報告（Word）</h3>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-xs text-on-surface-variant leading-relaxed">
+                由 AI 依實際系統日誌與資安事件，撰寫一份極度專業的正式資安稽核報告，並匯出為 Word (.docx) 檔案。
+              </p>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-on-surface-variant w-10 shrink-0">開始</span>
+                <input
+                  type="date"
+                  value={reportFrom}
+                  max={reportTo || undefined}
+                  disabled={exporting}
+                  onChange={e => { setReportFrom(e.target.value); setReportError(''); }}
+                  className="flex-1 bg-surface-container border border-outline-variant/30 rounded-lg px-3 py-1.5 text-sm text-on-surface focus:outline-none focus:border-primary disabled:opacity-50"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-on-surface-variant w-10 shrink-0">結束</span>
+                <input
+                  type="date"
+                  value={reportTo}
+                  min={reportFrom || undefined}
+                  disabled={exporting}
+                  onChange={e => { setReportTo(e.target.value); setReportError(''); }}
+                  className={`flex-1 bg-surface-container border rounded-lg px-3 py-1.5 text-sm text-on-surface focus:outline-none focus:border-primary disabled:opacity-50 ${reportError ? 'border-error' : 'border-outline-variant/30'}`}
+                />
+              </div>
+              {reportError ? (
+                <p className="text-[11px] text-error pl-[52px] flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[13px]">error</span>{reportError}
+                </p>
+              ) : reportStage ? (
+                <p className="text-[11px] text-primary pl-[52px] flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[13px] animate-spin">progress_activity</span>{reportStage}
+                </p>
+              ) : (
+                <p className="text-[11px] text-on-surface-variant pl-[52px]">留空則涵蓋全部歷史資料</p>
+              )}
+            </div>
+            <div className="flex gap-2 px-5 pb-5">
+              <button
+                onClick={() => setShowReportModal(false)}
+                disabled={exporting}
+                className="flex-1 py-2 rounded-lg text-sm font-bold text-on-surface-variant bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50"
+              >取消</button>
+              <button
+                onClick={generateReport}
+                disabled={exporting}
+                className="flex-1 py-2 rounded-lg text-sm font-bold text-on-primary bg-primary hover:brightness-110 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'description'}</span>
+                {exporting ? '產生中…' : '產生 Word 報告'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="p-4 md:p-8 flex-1 space-y-4 md:space-y-6 overflow-y-auto">
         {/* Stats Row */}

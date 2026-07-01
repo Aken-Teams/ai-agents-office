@@ -820,6 +820,7 @@ const en = {
   'admin.users.filter.pending': 'Pending',
   'admin.users.filter.active': 'Active',
   'admin.users.filter.suspended': 'Suspended',
+  'admin.users.filter.allRoles': 'All roles',
   'admin.users.table.user': 'User',
   'admin.users.table.registered': 'Registered',
   'admin.users.table.role': 'Role',
@@ -866,7 +867,7 @@ const en = {
 
   'admin.tokens.title': 'Token Ledger & Billing',
   'admin.tokens.syncStatus': 'Real-time Sync',
-  'admin.tokens.exportCsv': 'Export CSV',
+  'admin.tokens.exportCsv': 'Export',
   'admin.tokens.summary.totalUsage': 'Total Token Usage',
   'admin.tokens.summary.estimatedCost': 'Estimated Cost (USD)',
   'admin.tokens.summary.pricingNote': 'AI Model Pricing',

@@ -837,6 +837,7 @@ const zhTW = {
   'admin.users.filter.pending': '待審核',
   'admin.users.filter.active': '啟用',
   'admin.users.filter.suspended': '停用',
+  'admin.users.filter.allRoles': '全部角色',
   'admin.users.table.user': '用戶',
   'admin.users.table.registered': '註冊日期',
   'admin.users.table.role': '角色',
@@ -884,7 +885,7 @@ const zhTW = {
   // Admin Tokens
   'admin.tokens.title': 'Token 帳本與計費',
   'admin.tokens.syncStatus': '即時同步',
-  'admin.tokens.exportCsv': '匯出 CSV',
+  'admin.tokens.exportCsv': '匯出',
   'admin.tokens.summary.totalUsage': '總 Token 用量',
   'admin.tokens.summary.estimatedCost': '預估費用 (USD)',
   'admin.tokens.summary.pricingNote': 'AI 模型定價',

@@ -9,6 +9,8 @@ import { loadSkills } from '../skills/loader.js';
 import { config } from '../config.js';
 import { applyWatermark, getWatermarkSettings, setWatermarkSettings } from '../services/watermark.js';
 import { getMailToken, fetchMessageDetail, resolveCidImages } from '../services/outlookApi.js';
+import { sendXlsx } from '../services/xlsxExport.js';
+import { buildSecurityReportDocx } from '../services/securityReport.js';
 import { getUserUsageLimitUsd, setUserUsageLimitUsd, getUserDisplayCost, getEffectiveUserLimit, getStorageQuotaGb, setStorageQuotaGb, getUploadQuotaMb, setUploadQuotaMb } from '../services/usageLimit.js';
 import { getRolePermissions, setRolePermissions, type RolePermissions } from '../services/rolePermissions.js';
 import { getLineSettings, setLineSetting, type LineSettings } from '../services/lineSettings.js';
@@ -191,8 +193,10 @@ router.get('/users', async (req: Request, res: Response) => {
   const offset = (page - 1) * limit;
   const search = req.query.search as string || '';
   const status = req.query.status as string || '';
+  const role = req.query.role as string || '';
   const sortBy = req.query.sortBy as string || '';
   const sortDir = (req.query.sortDir as string || 'desc').toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+  const format = req.query.format as string || '';
 
   let whereClause = "WHERE 1=1";
   const params: any[] = [];
@@ -206,13 +210,18 @@ router.get('/users', async (req: Request, res: Response) => {
     whereClause += ' AND u.status = ?';
     params.push(status);
   }
+  if (role && ['admin', 'readonly', 'user'].includes(role)) {
+    whereClause += ' AND u.role = ?';
+    params.push(role);
+  }
 
-  const countRow = await dbGet<{ total: number }>(
-    `SELECT COUNT(*) as total FROM users u ${whereClause}`,
-    ...params
-  );
+  const orderBy =
+    sortBy === 'tokens' ? `total_tokens ${sortDir}` :
+    sortBy === 'conversations' ? `conversation_count ${sortDir}` :
+    sortBy === 'files' ? `file_count ${sortDir}` :
+    'u.created_at DESC';
 
-  const rows = await dbAll(`
+  const baseSelect = `
     SELECT
       u.id, u.email, u.display_name, u.status, u.role, u.created_at, u.last_login_at,
       u.company, u.quota_group_id, qg.name as quota_group_name,
@@ -239,14 +248,28 @@ router.get('/users', async (req: Request, res: Response) => {
       FROM conversations GROUP BY user_id
     ) c ON c.user_id = u.id
     ${whereClause}
-    ORDER BY ${
-      sortBy === 'tokens' ? `total_tokens ${sortDir}` :
-      sortBy === 'conversations' ? `conversation_count ${sortDir}` :
-      sortBy === 'files' ? `file_count ${sortDir}` :
-      'u.created_at DESC'
-    }
-    LIMIT ? OFFSET ?
-  `, ...params, limit, offset);
+    ORDER BY ${orderBy}`;
+
+  // Excel export — ALL filtered rows (no pagination cap), styled workbook.
+  if (format === 'xlsx') {
+    const rows = await dbAll<any>(baseSelect, ...params);
+    const roleLabel: Record<string, string> = { admin: '管理者', readonly: '檢閱者', user: '一般用戶' };
+    const headers = ['Email', '名稱', '角色', '狀態', '公司', '額度群組', '總 Tokens', '輸入 Tokens', '輸出 Tokens', '成本(USD)', '對話數', '檔案數', '建立時間', '最後登入'];
+    const sheetRows = rows.map(u => [
+      u.email, u.display_name || '', roleLabel[u.role] || u.role, u.status, u.company || '', u.quota_group_name || '',
+      u.total_tokens, u.total_input_tokens, u.total_output_tokens,
+      Math.round(((u.total_input_tokens / 1_000_000) * 3 + (u.total_output_tokens / 1_000_000) * 15) * config.pricingMarkup * 100) / 100,
+      u.conversation_count, u.file_count, u.created_at, u.last_login_at || '',
+    ]);
+    await sendXlsx(res, `users_${new Date().toISOString().slice(0, 10)}.xlsx`, [{ name: '用戶資料', headers, rows: sheetRows }]);
+    return;
+  }
+
+  const countRow = await dbGet<{ total: number }>(
+    `SELECT COUNT(*) as total FROM users u ${whereClause}`,
+    ...params
+  );
+  const rows = await dbAll(`${baseSelect} LIMIT ? OFFSET ?`, ...params, limit, offset);
 
   res.json({
     users: rows,
@@ -924,6 +947,67 @@ router.get('/security/events/stats', async (_req: Request, res: Response) => {
   const last24h = (await dbGet<{ count: number }>("SELECT COUNT(*) as count FROM security_events WHERE created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)"))?.count ?? 0;
 
   res.json({ total, blocked, last24h });
+});
+
+// ── AI-generated professional security report (Word) ────────────────────────
+// Generation is slow (Claude writes the whole report), so we run it as an
+// in-memory async job and let the client poll — avoids proxy idle-timeouts.
+interface SecurityReportJob {
+  status: 'running' | 'done' | 'error';
+  buffer?: Buffer;
+  filename?: string;
+  error?: string;
+  createdAt: number;
+}
+const securityReportJobs = new Map<string, SecurityReportJob>();
+
+function pruneSecurityReportJobs() {
+  const now = Date.now();
+  for (const [id, job] of securityReportJobs) {
+    if (now - job.createdAt > 30 * 60_000) securityReportJobs.delete(id);
+  }
+}
+
+// POST /api/admin/security/report — kick off generation, returns { jobId }.
+// POST (not GET) so read-only reviewers are blocked by adminMiddleware — only
+// full admins may generate the security audit report.
+router.post('/security/report', async (req: Request, res: Response) => {
+  pruneSecurityReportJobs();
+  const from = typeof req.body?.from === 'string' && req.body.from ? req.body.from : null;
+  const to = typeof req.body?.to === 'string' && req.body.to ? req.body.to : null;
+  const jobId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  securityReportJobs.set(jobId, { status: 'running', createdAt: Date.now() });
+
+  buildSecurityReportDocx(from, to)
+    .then(({ buffer, filename }) => {
+      securityReportJobs.set(jobId, { status: 'done', buffer, filename, createdAt: Date.now() });
+    })
+    .catch((err) => {
+      console.error('[SecurityReport] generation failed:', err);
+      securityReportJobs.set(jobId, { status: 'error', error: err?.message || '產生失敗', createdAt: Date.now() });
+    });
+
+  res.json({ jobId });
+});
+
+// GET /api/admin/security/report/:jobId/status — poll job state
+router.get('/security/report/:jobId/status', (req: Request, res: Response) => {
+  const jobId = req.params.jobId as string;
+  const job = securityReportJobs.get(jobId);
+  if (!job) return res.status(404).json({ status: 'error', error: 'not found' });
+  res.json({ status: job.status, error: job.error });
+});
+
+// GET /api/admin/security/report/:jobId/download — stream the finished .docx
+router.get('/security/report/:jobId/download', (req: Request, res: Response) => {
+  const jobId = req.params.jobId as string;
+  const job = securityReportJobs.get(jobId);
+  if (!job) return res.status(404).json({ error: 'not found' });
+  if (job.status !== 'done' || !job.buffer) return res.status(409).json({ error: 'not ready' });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(job.filename || 'security_report.docx')}"`);
+  res.end(job.buffer);
+  securityReportJobs.delete(jobId);
 });
 
 // ==================== Settings ====================
@@ -1991,6 +2075,19 @@ router.get('/tokens/monthly-summary', async (req: Request, res: Response) => {
     GROUP BY DATE_FORMAT(tu.created_at, '%Y-%m'), tu.user_id, u.email, u.display_name
     ORDER BY month DESC, total_tokens DESC
   `, ...params);
+
+  // Excel export — all filtered rows, styled workbook (matches the CSV columns).
+  if ((req.query.format as string) === 'xlsx') {
+    const headers = ['月份', 'Email', '姓名', '輸入 Token', '輸出 Token', '總 Token', '預估費用(USD)', '對話次數', 'API 呼叫次數'];
+    const sheetRows = (rows as any[]).map(r => {
+      const cost = ((r.input_tokens / 1_000_000) * 3 + (r.output_tokens / 1_000_000) * 15) * config.pricingMarkup;
+      return [r.month, r.email, r.display_name, r.input_tokens, r.output_tokens, r.total_tokens, Math.round(cost * 10000) / 10000, r.conversations, r.sessions];
+    });
+    const label = from || to ? `${from || 'all'}_${to || 'all'}` : 'all';
+    await sendXlsx(res, `token_billing_${label}.xlsx`, [{ name: 'Token 用量', headers, rows: sheetRows }]);
+    return;
+  }
+
   res.json(rows);
 });
 

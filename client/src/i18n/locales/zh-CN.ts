@@ -833,6 +833,7 @@ const zhCN = {
   'admin.users.filter.pending': '待审核',
   'admin.users.filter.active': '启用',
   'admin.users.filter.suspended': '停用',
+  'admin.users.filter.allRoles': '全部角色',
   'admin.users.table.user': '用户',
   'admin.users.table.registered': '注册日期',
   'admin.users.table.role': '角色',
@@ -880,7 +881,7 @@ const zhCN = {
   // Admin Tokens
   'admin.tokens.title': 'Token 账本与计费',
   'admin.tokens.syncStatus': '即时同步',
-  'admin.tokens.exportCsv': '导出 CSV',
+  'admin.tokens.exportCsv': '导出',
   'admin.tokens.summary.totalUsage': '总 Token 用量',
   'admin.tokens.summary.estimatedCost': '预估费用 (USD)',
   'admin.tokens.summary.pricingNote': 'AI 模型定价',

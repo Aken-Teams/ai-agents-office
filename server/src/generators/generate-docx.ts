@@ -88,15 +88,15 @@ function levelFromTitle(title: string, fallback = 1): number {
   return fallback;
 }
 
-interface DocxInput {
+export interface DocxInput {
   title: string;
   author?: string;
   style?: string;
   sections: Section[];
 }
 
-async function generateDocx(inputPath: string, outputPath: string) {
-  const input: DocxInput = JSON.parse(fs.readFileSync(inputPath, 'utf-8'));
+/** Build a .docx as an in-memory Buffer (no filesystem). Reused by server routes. */
+export async function buildDocxBuffer(input: DocxInput): Promise<Buffer> {
   const s = STYLES[input.style || ''] || DEFAULT_STYLE;
 
   const children: (Paragraph | Table)[] = [];
@@ -215,17 +215,26 @@ async function generateDocx(inputPath: string, outputPath: string) {
     }],
   });
 
-  const buffer = await Packer.toBuffer(doc);
+  return await Packer.toBuffer(doc);
+}
+
+async function generateDocx(inputPath: string, outputPath: string) {
+  const input: DocxInput = JSON.parse(fs.readFileSync(inputPath, 'utf-8'));
+  const buffer = await buildDocxBuffer(input);
   fs.writeFileSync(outputPath, buffer);
   console.log(`DOCX generated: ${outputPath}`);
 }
 
-const [inputPath, outputPath] = process.argv.slice(2);
-if (!inputPath || !outputPath) {
-  console.error('Usage: generate-docx.ts <input.json> <output.docx>');
-  process.exit(1);
+// CLI entry — only run when invoked directly, not when imported as a module.
+const invokedDirectly = process.argv[1] && /generate-docx\.[tj]s$/.test(process.argv[1]);
+if (invokedDirectly) {
+  const [inputPath, outputPath] = process.argv.slice(2);
+  if (!inputPath || !outputPath) {
+    console.error('Usage: generate-docx.ts <input.json> <output.docx>');
+    process.exit(1);
+  }
+  generateDocx(inputPath, outputPath).catch(err => {
+    console.error('Failed to generate DOCX:', err);
+    process.exit(1);
+  });
 }
-generateDocx(inputPath, outputPath).catch(err => {
-  console.error('Failed to generate DOCX:', err);
-  process.exit(1);
-});

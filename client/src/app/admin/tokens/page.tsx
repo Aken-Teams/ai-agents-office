@@ -71,13 +71,13 @@ export default function AdminTokens() {
   const [exportFrom, setExportFrom] = useState('');
   const [exportTo, setExportTo] = useState('');
   const [dateError, setDateError] = useState('');
-  const [modalTab, setModalTab] = useState<'csv' | 'quote'>('quote');
+  const [modalTab, setModalTab] = useState<'excel' | 'quote'>('quote');
   const [quoteMonth, setQuoteMonth] = useState('');
   const [quoteCurrency, setQuoteCurrency] = useState<'USD' | 'TWD'>('USD');
   const [quoteRate, setQuoteRate] = useState('32');
   const [quoteSections, setQuoteSections] = useState({ summary: true, detail: false, analytics: false });
 
-  async function exportCsv() {
+  async function exportExcel() {
     if (!token || exporting) return;
     if (exportFrom && exportTo && exportTo < exportFrom) {
       setDateError('結束月份不可早於開始月份');
@@ -86,26 +86,16 @@ export default function AdminTokens() {
     setDateError('');
     setExporting(true);
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ format: 'xlsx' });
       if (exportFrom) params.set('from', exportFrom);
       if (exportTo)   params.set('to',   exportTo);
       const res = await fetch(`/api/admin/tokens/monthly-summary?${params}`, { headers: { Authorization: `Bearer ${token}` } });
-      const rows: Array<{
-        month: string; email: string; display_name: string;
-        input_tokens: number; output_tokens: number; total_tokens: number;
-        conversations: number; sessions: number;
-      }> = await res.json();
-      const header = ['月份', 'Email', '姓名', '輸入 Token', '輸出 Token', '總 Token', '預估費用 (USD)', '對話次數', 'API 呼叫次數'];
-      const csvRows = rows.map(r => {
-        const cost = ((r.input_tokens / 1_000_000) * 3 + (r.output_tokens / 1_000_000) * 15) * PRICING_MARKUP;
-        return [r.month, r.email, r.display_name, r.input_tokens, r.output_tokens, r.total_tokens, cost.toFixed(4), r.conversations, r.sessions];
-      });
-      const csv = '\uFEFF' + [header, ...csvRows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      if (!res.ok) throw new Error('export failed');
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       const label = exportFrom || exportTo ? `${exportFrom || 'all'}_${exportTo || 'all'}` : 'all';
-      a.href = url; a.download = `token_billing_${label}.csv`; a.click();
+      a.href = url; a.download = `token_billing_${label}.xlsx`; a.click();
       URL.revokeObjectURL(url);
       setShowExportModal(false);
     } finally { setExporting(false); }
@@ -588,7 +578,7 @@ export default function AdminTokens() {
           >
             <span className="material-symbols-outlined text-sm">download</span>
             <span className="hidden md:inline">{t('admin.tokens.exportCsv')}</span>
-            <span className="md:hidden">CSV</span>
+            <span className="md:hidden">{t('admin.tokens.exportCsv')}</span>
           </button>
         </div>
         {/* Row 2 (mobile only): date filter */}
@@ -629,6 +619,7 @@ export default function AdminTokens() {
             </div>
             {/* Tabs */}
             <div className="flex px-5 mt-3 gap-1 border-b border-outline-variant/10">
+              {/* '匯出 Excel' tab hidden per request — re-add ['excel', 'table_view', '匯出 Excel'] to restore. */}
               {([['quote', 'receipt', '產生報價單']] as const).map(([tab, icon, label]) => (
                 <button
                   key={tab}
@@ -645,8 +636,8 @@ export default function AdminTokens() {
               ))}
             </div>
 
-            {/* CSV Tab */}
-            {modalTab === 'csv' && (
+            {/* Excel Tab */}
+            {modalTab === 'excel' && (
               <>
                 <div className="px-5 py-4 space-y-3">
                   <div className="flex items-center gap-3">
@@ -679,9 +670,9 @@ export default function AdminTokens() {
                 </div>
                 <div className="flex gap-2 px-5 pb-5">
                   <button onClick={() => setShowExportModal(false)} className="flex-1 py-2 rounded-lg text-sm font-bold text-on-surface-variant bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer">取消</button>
-                  <button onClick={exportCsv} disabled={exporting} className="flex-1 py-2 rounded-lg text-sm font-bold text-on-primary bg-primary hover:brightness-110 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5">
+                  <button onClick={exportExcel} disabled={exporting} className="flex-1 py-2 rounded-lg text-sm font-bold text-on-primary bg-primary hover:brightness-110 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5">
                     <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'download'}</span>
-                    下載 CSV
+                    下載 Excel
                   </button>
                 </div>
               </>

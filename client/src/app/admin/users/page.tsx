@@ -100,6 +100,7 @@ export default function AdminUsers() {
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -118,39 +119,24 @@ export default function AdminUsers() {
     setTimeout(() => setToastMsg(''), 3500);
   }
 
-  async function exportCsv() {
+  // Export ALL filtered users as a real Excel workbook (server-side, no row cap).
+  async function exportExcel() {
     if (!token || exporting) return;
     setExporting(true);
     try {
-      const params = new URLSearchParams({ page: '1', limit: '9999' });
+      const params = new URLSearchParams({ format: 'xlsx' });
       if (search) params.set('search', search);
       if (statusFilter) params.set('status', statusFilter);
+      if (roleFilter) params.set('role', roleFilter);
       if (sortBy) { params.set('sortBy', sortBy); params.set('sortDir', sortDir); }
       const res = await fetch(`/api/admin/users?${params}`, { headers: { Authorization: `Bearer ${token}` } });
-      const data = await res.json();
-      const rows: UserRow[] = data.users;
-      const header = ['Email', 'Display Name', 'Role', 'Status', 'Total Tokens', 'Input Tokens', 'Output Tokens', 'Cost (USD)', 'Conversations', 'Files', 'Created At', 'Last Login'];
-      const csvRows = rows.map(u => [
-        u.email,
-        u.display_name || '',
-        u.role,
-        u.status,
-        u.total_tokens,
-        u.total_input_tokens,
-        u.total_output_tokens,
-        calcCost(u.total_input_tokens, u.total_output_tokens).toFixed(2),
-        u.conversation_count,
-        u.file_count,
-        u.created_at,
-        u.last_login_at || '',
-      ]);
-      const csv = '\uFEFF' + [header, ...csvRows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      if (!res.ok) throw new Error('export failed');
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `users_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+      a.href = url; a.download = `users_${new Date().toISOString().slice(0, 10)}.xlsx`; a.click();
       URL.revokeObjectURL(url);
-    } finally { setExporting(false); }
+    } catch { showToast('\u532F\u51FA\u5931\u6557\uFF0C\u8ACB\u7A0D\u5F8C\u518D\u8A66'); } finally { setExporting(false); }
   }
 
   const fetchUsers = useCallback(() => {
@@ -158,6 +144,7 @@ export default function AdminUsers() {
     const params = new URLSearchParams({ page: String(page), limit: String(limit) });
     if (search) params.set('search', search);
     if (statusFilter) params.set('status', statusFilter);
+    if (roleFilter) params.set('role', roleFilter);
     if (sortBy) { params.set('sortBy', sortBy); params.set('sortDir', sortDir); }
 
     fetch(`/api/admin/users?${params}`, {
@@ -170,7 +157,7 @@ export default function AdminUsers() {
         setTotalPages(data.totalPages);
       })
       .catch(console.error);
-  }, [token, page, search, statusFilter, sortBy, sortDir]);
+  }, [token, page, search, statusFilter, roleFilter, sortBy, sortDir]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
@@ -541,13 +528,13 @@ export default function AdminUsers() {
           <span className="text-xs md:text-sm text-on-surface-variant font-mono">{t('admin.users.count', { count: total })}</span>
         </div>
         <button
-          onClick={exportCsv}
+          onClick={exportExcel}
           disabled={exporting}
           className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 bg-surface-container text-on-surface-variant text-xs md:text-sm font-bold uppercase tracking-wider hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50"
         >
           <span className={`material-symbols-outlined text-sm ${exporting ? 'animate-spin' : ''}`}>{exporting ? 'progress_activity' : 'download'}</span>
-          <span className="hidden md:inline">{t('admin.users.exportCsv')}</span>
-          <span className="md:hidden">CSV</span>
+          <span className="hidden md:inline">匯出 Excel</span>
+          <span className="md:hidden">Excel</span>
         </button>
       </header>
 
@@ -577,6 +564,26 @@ export default function AdminUsers() {
                   onClick={() => { setStatusFilter(opt.value); setPage(1); }}
                   className={`flex-1 md:flex-none px-3 md:px-4 py-2 text-xs md:text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
                     statusFilter === opt.value
+                      ? 'bg-primary/15 text-primary'
+                      : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex rounded overflow-hidden border border-outline-variant/15 shrink-0">
+              {[
+                { value: '', label: t('admin.users.filter.allRoles') },
+                { value: 'admin', label: t('userMenu.role.admin') },
+                { value: 'readonly', label: t('userMenu.role.readonly') },
+                { value: 'user', label: t('userMenu.role.user') },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => { setRoleFilter(opt.value); setPage(1); }}
+                  className={`flex-1 md:flex-none px-3 md:px-4 py-2 text-xs md:text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
+                    roleFilter === opt.value
                       ? 'bg-primary/15 text-primary'
                       : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
                   }`}
