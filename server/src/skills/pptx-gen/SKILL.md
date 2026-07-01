@@ -171,6 +171,8 @@ If the task asks to use the **強茂 / PANJIT 官方企業範本** (PANJIT corpo
 
 **Brand palette:** lead accent = brand blue `#0075C2` (supporting shades `17A2D6`, `5BC2E7`, `124E78`). Add greens / ambers / teals for variety — do **NOT** force every slide blue.
 
+**Required deck structure (ALWAYS):** slide 1 = **cover**, slides 2 … N-1 = **content**, and the **last slide = closing (Thank You)**. The cover and the closing are both mandatory — every 強茂 deck begins with the cover and ends with the closing, no matter how many content slides are in between.
+
 **The three branded slide types (everything else = design freely like a normal deck):**
 
 1. **Cover (slide 1)** — full-bleed cover image, then title in brand blue in the WHITE area:
@@ -189,11 +191,15 @@ s.addText(TITLE, { x: '4%', y: '4.5%', w: '68%', h: '9%', fontSize: 22, bold: tr
 s.addShape(pptx.ShapeType.rect, { x: '4%', y: '15%', w: '92%', h: 0.03, fill: { color: '0075C2' } });
 s.addImage({ path: '__PANJIT_ASSETS_DIR__/panjit-logo.png', x: '84.5%', y: '4%', w: 1.15, h: 0.47 });
 // … your rich, varied content here (use the whole area below the underline) …
-s.addText('PANJIT International Inc.', { x: '4%', y: '94%', w: '60%', h: '4%', fontSize: 8, color: 'A9B2BC' });
-s.addText(String(pageNum),            { x: '90%', y: '94%', w: '6%', h: '4%', fontSize: 9, bold: true, color: '0075C2', align: 'right' });
+// PANJIT footer + page number (match the official template exactly):
+//   centred copyright line, and the page number in WHITE on a brand-blue block in the bottom-right corner.
+s.addText('Copyright© 2020 PANJIT International Inc. All rights reserved.', { x: '15%', y: '93.5%', w: '70%', h: '5%', fontSize: 8, color: 'A9B2BC', align: 'center' });
+s.addShape(pptx.ShapeType.rect, { x: '91%', y: '91%', w: '9%', h: '9%', fill: { color: '0075C2' } });
+s.addText(String(pageNum),         { x: '91%', y: '91%', w: '9%', h: '9%', fontSize: 12, bold: true, color: 'FFFFFF', align: 'center', valign: 'middle' });
 ```
+> The page number **must** use this PANJIT style — a white bold number on the brand-blue corner block (bottom-right) — on every content slide, exactly like the official template.
 
-3. **Closing (last slide)** — reuse the cover image + a "Thank You" / closing line in brand blue (same pattern as the cover).
+3. **Closing (last slide) — MANDATORY, never skip it.** The deck's **final** slide MUST be the closing: reuse the full-bleed cover image + a "Thank You" line + the organisation line, in brand blue (same pattern as the cover). **Never end the deck on a content slide** — always finish with this closing slide.
 
 **Design like a normal deck (READ THIS):** apply the full **Style Constants + Slide Type Patterns + Default Quality Standards** above — varied slide types (stats / two-column / three-column / section / quote), rich supporting palette, charts, section dividers, and **FULL-BLEED content (no big empty white bands)**. It must look as diverse and polished as your best non-templated decks. Brand blue leads; other colours support.
 
