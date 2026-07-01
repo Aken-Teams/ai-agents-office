@@ -161,6 +161,49 @@ If specific content (company names, **department / business-unit / division / gr
 
 **Uploaded file metadata hint**: filenames may contain organization-name fragments. You may reference the file's contents once read, but do **not** elevate a department / BU name from the filename alone into a header or footer.
 
+## 強茂官方企業範本（PANJIT corporate template）
+
+If the task asks to use the **強茂 / PANJIT 官方企業範本** (PANJIT corporate template), you generate the deck **exactly like a normal presentation above** — same `new PptxGenJS()`, same default layout, same coordinate style, and the **full richness of the Style Constants, Slide Type Patterns, and Default Quality Standards** (diverse slide types, rich colours, stat cards, charts, full-bleed slides). The **only** thing that changes is a **branding skin** applied on top. Think: a normal, varied, colourful deck — just wearing PANJIT's cover, logo, blue title bar and footer.
+
+**Branding assets** (absolute paths — pass to `addImage({ path })`):
+- Cover artwork: `__PANJIT_ASSETS_DIR__/panjit-cover.jpg` — full-bleed 16:9; a blue circuit-board triangle sits top-left, and a large **WHITE area** on the right/centre is where the title goes.
+- Logo: `__PANJIT_ASSETS_DIR__/panjit-logo.png` — place small, top-right of content slides.
+
+**Brand palette:** lead accent = brand blue `#0075C2` (supporting shades `17A2D6`, `5BC2E7`, `124E78`). Add greens / ambers / teals for variety — do **NOT** force every slide blue.
+
+**The three branded slide types (everything else = design freely like a normal deck):**
+
+1. **Cover (slide 1)** — full-bleed cover image, then title in brand blue in the WHITE area:
+```javascript
+const c = pptx.addSlide();
+c.addImage({ path: '__PANJIT_ASSETS_DIR__/panjit-cover.jpg', x: 0, y: 0, w: '100%', h: '100%' });
+c.addText(TITLE,    { x: '24%', y: '38%', w: '72%', h: '14%', fontSize: 34, bold: true, color: '0075C2' });
+c.addText(SUBTITLE, { x: '24%', y: '54%', w: '72%', h: '9%',  fontSize: 18, bold: true, color: '0075C2' });
+```
+
+2. **Content (slides 2 … N-1)** — white bg, brand-blue title + underline, logo top-right, footer + page number; then fill the body richly (stat cards, charts, columns, callouts) edge-to-edge like your best normal decks:
+```javascript
+const s = pptx.addSlide();
+s.background = { color: 'FFFFFF' };
+s.addText(TITLE, { x: '4%', y: '4.5%', w: '68%', h: '9%', fontSize: 22, bold: true, color: '0075C2' });
+s.addShape(pptx.ShapeType.rect, { x: '4%', y: '15%', w: '92%', h: 0.03, fill: { color: '0075C2' } });
+s.addImage({ path: '__PANJIT_ASSETS_DIR__/panjit-logo.png', x: '84.5%', y: '4%', w: 1.15, h: 0.47 });
+// … your rich, varied content here (use the whole area below the underline) …
+s.addText('PANJIT International Inc.', { x: '4%', y: '94%', w: '60%', h: '4%', fontSize: 8, color: 'A9B2BC' });
+s.addText(String(pageNum),            { x: '90%', y: '94%', w: '6%', h: '4%', fontSize: 9, bold: true, color: '0075C2', align: 'right' });
+```
+
+3. **Closing (last slide)** — reuse the cover image + a "Thank You" / closing line in brand blue (same pattern as the cover).
+
+**Design like a normal deck (READ THIS):** apply the full **Style Constants + Slide Type Patterns + Default Quality Standards** above — varied slide types (stats / two-column / three-column / section / quote), rich supporting palette, charts, section dividers, and **FULL-BLEED content (no big empty white bands)**. It must look as diverse and polished as your best non-templated decks. Brand blue leads; other colours support.
+
+**⛔ 100% NO "repair-needed" files — non-negotiable (the customer opens these on old Office 2019/2024 that CANNOT run repair):**
+- Build the deck with **exactly the same standard `pptxgenjs` calls the normal templates use** — `addSlide`, `slide.background`, `addText`, `addShape` (rect / roundRect), `addImage`, `addChart`, `addTable`. Nothing more exotic.
+- Do **NOT** set `pptx.theme`; do **NOT** call `pptx.defineLayout` (use the default layout); do **NOT** import any extra "brand kit" / helper module; do **NOT** shell out to convert or post-process the `.pptx`. Keep the file **structurally identical to a normal deck**, which opens in every PowerPoint version without a repair prompt.
+- The output must be a plain `await pptx.writeFile(...)` result — never rewrite or touch the `.pptx` bytes afterwards.
+
+**slides.json:** also write `slides.json` with `"style": "panjit"` plus the slide list (same format as normal) so the interactive editor works.
+
 ## Output Rules
 - Always name the output file descriptively (e.g., "marketing-plan-2026.pptx")
 - Place all files in the current working directory

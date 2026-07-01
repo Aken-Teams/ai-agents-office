@@ -278,6 +278,9 @@ const zhCN = {
   'templates.active': '使用模板',
   'templates.instruction': '模板格式',
 
+  'templates.pptx.panjit': '强茂官方范本',
+  'templates.pptx.panjit.desc': '强茂企业品牌，蓝白商务风',
+  'templates.pptx.panjit.prompt': '请使用「强茂官方企业范本」制作这份幻灯片：封面套用强茂品牌封面图、每页右上角放上强茂 Logo、以强茂品牌蓝为主色调、页脚含公司名称与页码。内容设计要像专业商务幻灯片一样丰富多元、色彩鲜明、版面满版（充分利用整个画面、避免大片空白），善用数据卡片、图表、多栏排版与章节页，让每一页都完整精致。',
   'templates.pptx.minimalPro': '简约专业',
   'templates.pptx.minimalPro.desc': '干净留白、低对比配色',
   'templates.pptx.minimalPro.prompt': '简约专业风格：大量留白，低对比度配色（白底、浅灰辅助色、深灰文字），无装饰线条，San-serif 字体，每页只放一个重点，图表使用单色系，整体简洁利落。',

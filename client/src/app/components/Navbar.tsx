@@ -61,8 +61,9 @@ const DOC_TYPES = [
   // pro-panjit 部署模式隱藏「資訊圖表」（客戶擔心 token 用量）；其他模式照常顯示
   .filter(d => !(isPanjit && d.id === 'infographic-gen'));
 
-const SKILL_TEMPLATES: Record<string, Array<{ id: string; icon: string; labelKey: string; promptKey: string; descKey: string }>> = {
+const SKILL_TEMPLATES: Record<string, Array<{ id: string; icon: string; labelKey: string; promptKey: string; descKey: string; panjitOnly?: boolean }>> = {
   'pptx-gen': [
+    { id: 'panjit', icon: 'corporate_fare', labelKey: 'templates.pptx.panjit' as any, descKey: 'templates.pptx.panjit.desc' as any, promptKey: 'templates.pptx.panjit.prompt' as any, panjitOnly: true },
     { id: 'minimal-pro', icon: 'tune', labelKey: 'templates.pptx.minimalPro' as any, descKey: 'templates.pptx.minimalPro.desc' as any, promptKey: 'templates.pptx.minimalPro.prompt' as any },
     { id: 'tech-dark', icon: 'dark_mode', labelKey: 'templates.pptx.techDark' as any, descKey: 'templates.pptx.techDark.desc' as any, promptKey: 'templates.pptx.techDark.prompt' as any },
     { id: 'corporate', icon: 'business_center', labelKey: 'templates.pptx.corporate' as any, descKey: 'templates.pptx.corporate.desc' as any, promptKey: 'templates.pptx.corporate.prompt' as any },
@@ -113,6 +114,7 @@ const SKILL_TEMPLATES: Record<string, Array<{ id: string; icon: string; labelKey
 // Style preview colors for template hover preview
 const TEMPLATE_PREVIEW: Record<string, { bg: string; accent: string; text: string; card: string }> = {
   // PPTX
+  'pptx-gen:panjit': { bg: '#ffffff', accent: '#0075C2', text: '#124E78', card: '#eaf4fb' },
   'pptx-gen:minimal-pro': { bg: '#ffffff', accent: '#6b7280', text: '#1f2937', card: '#f3f4f6' },
   'pptx-gen:tech-dark': { bg: '#0f172a', accent: '#22d3ee', text: '#f1f5f9', card: '#1e293b' },
   'pptx-gen:corporate': { bg: '#ffffff', accent: '#2563eb', text: '#1e3a5f', card: '#eff6ff' },
@@ -161,6 +163,8 @@ const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
 
 export default function Navbar() {
   const { user, token, logout, updateUser, hasPermission } = useAuth();
+  // 強茂官方範本：僅檢閱者(readonly)與管理者(admin)可見，一般 USER 看不到此卡片
+  const canSeePanjitTemplate = isPanjit && (user?.role === 'admin' || user?.role === 'readonly');
   const { locale, theme, setLocale, setTheme, t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
@@ -1150,8 +1154,8 @@ export default function Navbar() {
                 </div>
                 <div>
                   {/* Template Grid */}
-                  <div className={`p-4 grid gap-3 ${(SKILL_TEMPLATES[selectedSkill] || []).length > 4 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2'}`}>
-                    {(SKILL_TEMPLATES[selectedSkill] || []).map(tmpl => {
+                  <div className={`p-4 grid gap-3 ${(SKILL_TEMPLATES[selectedSkill] || []).filter(tm => !tm.panjitOnly || canSeePanjitTemplate).length > 4 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-2'}`}>
+                    {(SKILL_TEMPLATES[selectedSkill] || []).filter(tm => !tm.panjitOnly || canSeePanjitTemplate).map(tmpl => {
                       const previewKey = `${selectedSkill}:${tmpl.id}`;
                       const preview = TEMPLATE_PREVIEW[previewKey];
                       const isHovered = hoveredTemplate === tmpl.id;

@@ -276,6 +276,12 @@ export function buildSystemPrompt(
   // Also normalize generatorsDir for the prompt (bash-friendly forward slashes)
   const genDir = generatorsDir.replace(/\\/g, '/');
 
+  // PANJIT corporate-template branding assets (cover + logo) live in the pptx-gen
+  // skill's assets/ dir. The pptx-gen SKILL.md references them via the
+  // __PANJIT_ASSETS_DIR__ token; resolve it to the real absolute path here.
+  const panjitAssetsDir = path.join(config.skillsDir, 'pptx-gen', 'assets').replace(/\\/g, '/');
+  const skillPrompt = skill.systemPrompt.replace(/__PANJIT_ASSETS_DIR__/g, panjitAssetsDir);
+
   const parts = [
     getLanguageInstruction(userLocale),
     '',
@@ -289,7 +295,7 @@ export function buildSystemPrompt(
     '',
     FILE_OUTPUT_RULES,
     '',
-    skill.systemPrompt,
+    skillPrompt,
     '',
     SANDBOX_RULES,
     '',
