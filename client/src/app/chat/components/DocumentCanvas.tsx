@@ -377,6 +377,10 @@ export default function DocumentCanvas({
   const [previewType, setPreviewType] = useState<'html' | 'pdf' | 'other'>('html');
   const [previewLoading, setPreviewLoading] = useState(false);
   const [selectedPageIndex, setSelectedPageIndex] = useState(0);
+  // Mirror of selectedPageIndex so keyboard handlers can read the latest value
+  // without stale closures — and without calling parent setState inside a state updater.
+  const selectedPageIndexRef = useRef(0);
+  selectedPageIndexRef.current = selectedPageIndex;
   const [totalPages, setTotalPages] = useState(0);
   const [slideShapes, setSlideShapes] = useState<Record<number, ShapeRect[]>>({});
   const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
@@ -661,21 +665,20 @@ export default function DocumentCanvas({
     if (maxPage === 0) return;
 
     const handleKey = (e: KeyboardEvent) => {
+      const cur = selectedPageIndexRef.current;
+      let next: number | null = null;
       if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedPageIndex(prev => {
-          const next = Math.max(0, prev - 1);
-          if (blocks[next]) onSelectBlock(blocks[next].id);
-          return next;
-        });
+        next = Math.max(0, cur - 1);
       } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedPageIndex(prev => {
-          const next = Math.min(maxPage - 1, prev + 1);
-          if (blocks[next]) onSelectBlock(blocks[next].id);
-          return next;
-        });
+        next = Math.min(maxPage - 1, cur + 1);
       }
+      if (next === null || next === cur) return;
+      // Both setState calls happen in the event handler (not during render),
+      // and neither runs inside a state updater — so no cross-component setState warning.
+      setSelectedPageIndex(next);
+      if (blocks[next]) onSelectBlock(blocks[next].id);
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);

@@ -166,8 +166,10 @@ If specific content (company names, **department / business-unit / division / gr
 If the task asks to use the **強茂 / PANJIT 官方企業範本** (PANJIT corporate template), you generate the deck **exactly like a normal presentation above** — same `new PptxGenJS()`, same default layout, same coordinate style, and the **full richness of the Style Constants, Slide Type Patterns, and Default Quality Standards** (diverse slide types, rich colours, stat cards, charts, full-bleed slides). The **only** thing that changes is a **branding skin** applied on top. Think: a normal, varied, colourful deck — just wearing PANJIT's cover, logo, blue title bar and footer.
 
 **Branding assets** (absolute paths — pass to `addImage({ path })`):
-- Cover artwork: `__PANJIT_ASSETS_DIR__/panjit-cover.jpg` — full-bleed 16:9; a blue circuit-board triangle sits top-left, and a large **WHITE area** on the right/centre is where the title goes.
-- Logo: `__PANJIT_ASSETS_DIR__/panjit-logo.png` — place small, top-right of content slides.
+- Cover artwork: `__PANJIT_ASSETS_DIR__/panjit-cover.jpg` — full-bleed 16:9; blue circuit triangle top-left + a gradient footer bar; a large **WHITE area** right/centre is where the title goes.
+- Closing artwork: `__PANJIT_ASSETS_DIR__/panjit-closing.jpg` — full-bleed 16:9 **official closing** (circuit triangle top-RIGHT, gradient footer bar, the PANJIT slogan already baked into the image). Use it **as-is** for the last slide — do NOT add a "Thank You" or any other title over it.
+- Logo: `__PANJIT_ASSETS_DIR__/panjit-logo.png` — top-right on content slides; **bottom-right** on the cover and closing.
+- Page-number wedge: `__PANJIT_ASSETS_DIR__/panjit-pagenum.png` — the gradient corner tab the page number sits on (bottom-right of every content slide).
 
 **Brand palette:** lead accent = brand blue `#0075C2` (supporting shades `17A2D6`, `5BC2E7`, `124E78`). Add greens / ambers / teals for variety — do **NOT** force every slide blue.
 
@@ -179,27 +181,41 @@ If the task asks to use the **強茂 / PANJIT 官方企業範本** (PANJIT corpo
 ```javascript
 const c = pptx.addSlide();
 c.addImage({ path: '__PANJIT_ASSETS_DIR__/panjit-cover.jpg', x: 0, y: 0, w: '100%', h: '100%' });
-c.addText(TITLE,    { x: '24%', y: '38%', w: '72%', h: '14%', fontSize: 34, bold: true, color: '0075C2' });
-c.addText(SUBTITLE, { x: '24%', y: '54%', w: '72%', h: '9%',  fontSize: 18, bold: true, color: '0075C2' });
+c.addText(TITLE,    { x: '24%', y: '36%', w: '72%', h: '14%', fontSize: 34, bold: true, color: '0075C2' });
+c.addText(SUBTITLE, { x: '24%', y: '52%', w: '72%', h: '9%',  fontSize: 18, bold: true, color: '0075C2' });
+c.addImage({ path: '__PANJIT_ASSETS_DIR__/panjit-logo.png', x: '84.7%', y: '82.5%', w: 1.13, h: 0.46 });   // logo bottom-right
 ```
 
-2. **Content (slides 2 … N-1)** — white bg, brand-blue title + underline, logo top-right, footer + page number; then fill the body richly (stat cards, charts, columns, callouts) edge-to-edge like your best normal decks:
+2. **Content (slides 2 … N-1)** — white bg with an **editorial header** (numbered kicker → dark-navy title → thin grey rule), logo top-right, footer + page number; then fill the body richly (stat cards, charts, columns, callouts) edge-to-edge like your best normal decks:
 ```javascript
 const s = pptx.addSlide();
 s.background = { color: 'FFFFFF' };
-s.addText(TITLE, { x: '4%', y: '4.5%', w: '68%', h: '9%', fontSize: 22, bold: true, color: '0075C2' });
-s.addShape(pptx.ShapeType.rect, { x: '4%', y: '15%', w: '92%', h: 0.03, fill: { color: '0075C2' } });
-s.addImage({ path: '__PANJIT_ASSETS_DIR__/panjit-logo.png', x: '84.5%', y: '4%', w: 1.15, h: 0.47 });
-// … your rich, varied content here (use the whole area below the underline) …
+// Editorial header: a numbered kicker on top (2-digit section no. in brand blue + a short
+// English label in grey, letter-spaced), then the title in DARK NAVY, then a thin grey rule.
+s.addText([
+  { text: SECTION_NO, options: { color: '0075C2', bold: true } },          // e.g. '01'
+  { text: '   ' + ENG_LABEL, options: { color: '8A93A0', bold: true } },   // e.g. 'MARKET SIZE'
+], { x: '4%', y: '6%', w: '78%', h: '5%', fontSize: 11, charSpacing: 2 });
+s.addText(TITLE, { x: '4%', y: '11%', w: '78%', h: '9%', fontSize: 24, bold: true, color: '1C2B36' });   // dark title, NOT blue
+s.addShape(pptx.ShapeType.rect, { x: '4%', y: '21%', w: '92%', h: 0.015, fill: { color: 'D5DBE0' } });   // thin light-grey divider
+s.addImage({ path: '__PANJIT_ASSETS_DIR__/panjit-logo.png', x: '84.5%', y: '5%', w: 1.15, h: 0.47 });
+// … your rich, varied content, starting BELOW the divider (around y '24%') …
 // PANJIT footer + page number (match the official template exactly):
-//   centred copyright line, and the page number in WHITE on a brand-blue block in the bottom-right corner.
+//   centred copyright line, and the page number in WHITE on the gradient corner wedge (bottom-right).
 s.addText('Copyright© 2020 PANJIT International Inc. All rights reserved.', { x: '15%', y: '93.5%', w: '70%', h: '5%', fontSize: 8, color: 'A9B2BC', align: 'center' });
-s.addShape(pptx.ShapeType.rect, { x: '91%', y: '91%', w: '9%', h: '9%', fill: { color: '0075C2' } });
-s.addText(String(pageNum),         { x: '91%', y: '91%', w: '9%', h: '9%', fontSize: 12, bold: true, color: 'FFFFFF', align: 'center', valign: 'middle' });
+s.addImage({ path: '__PANJIT_ASSETS_DIR__/panjit-pagenum.png', x: '89%', y: '90.6%', w: 1.1, h: 0.53 });
+s.addText(String(pageNum), { x: '91.5%', y: '90.6%', w: '8%', h: '9.4%', fontSize: 12, bold: true, color: 'FFFFFF', align: 'center', valign: 'middle' });
 ```
-> The page number **must** use this PANJIT style — a white bold number on the brand-blue corner block (bottom-right) — on every content slide, exactly like the official template.
+> The page number **must** use this PANJIT style — a white bold number on the gradient corner wedge (bottom-right) — on every content slide, exactly like the official template.
 
-3. **Closing (last slide) — MANDATORY, never skip it.** The deck's **final** slide MUST be the closing: reuse the full-bleed cover image + a "Thank You" line + the organisation line, in brand blue (same pattern as the cover). **Never end the deck on a content slide** — always finish with this closing slide.
+> **Header rules (important):** the header is three stacked, non-overlapping rows — **kicker** (`SECTION_NO` in brand blue + a short English `ENG_LABEL` in grey) on top, then the **title** in dark navy, then the **thin grey divider** as the lowest header element. Nothing may overlap: keep the kicker above the title, the title above the divider, and never draw text on the divider. Give each content slide a running 2-digit section number (`01`, `02`, …). If you have no clean English label, use the number alone (or a short Chinese label); the divider stays thin and light-grey (not a thick blue bar).
+
+3. **Closing (last slide) — MANDATORY, never skip it.** The deck's **final** slide MUST be the official closing artwork, used **as-is** (the PANJIT slogan is already baked into the image), with only the logo bottom-right. **Do NOT overlay "Thank You" or any other title** — the image is already complete. **Never end the deck on a content slide.**
+```javascript
+const e = pptx.addSlide();
+e.addImage({ path: '__PANJIT_ASSETS_DIR__/panjit-closing.jpg', x: 0, y: 0, w: '100%', h: '100%' });
+e.addImage({ path: '__PANJIT_ASSETS_DIR__/panjit-logo.png', x: '84.7%', y: '82.5%', w: 1.13, h: 0.46 });
+```
 
 **Design like a normal deck (READ THIS):** apply the full **Style Constants + Slide Type Patterns + Default Quality Standards** above — varied slide types (stats / two-column / three-column / section / quote), rich supporting palette, charts, section dividers, and **FULL-BLEED content (no big empty white bands)**. It must look as diverse and polished as your best non-templated decks. Brand blue leads; other colours support.
 
