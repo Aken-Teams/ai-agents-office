@@ -6,6 +6,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { getFileDownloadPath, deleteFile, getFileVersions, extractPptxShapes, registerNewFiles, snapshotExistingFiles, getExistingFilePaths } from '../services/fileManager.js';
 import { convertOfficeFile } from '../services/filePreview.js';
 import { applyWatermark, getWatermarkSettings } from '../services/watermark.js';
+import { sanitizePptxFile } from '../services/pptxSanitizer.js';
 import { config } from '../config.js';
 import { getSandboxPath } from '../services/sandbox.js';
 import { isGeminiEnabled } from '../services/geminiApi.js';
@@ -82,6 +83,11 @@ router.get('/share/:token', async (req: Request, res: Response) => {
     } catch (err) { console.warn('[FileShare] watermark failed, serving original:', err); }
   }
 
+  // Repair OOXML packaging defects on the way out — covers files generated
+  // before the sanitizer existed (pptxgenjs 4.0.1 orphan Content_Types
+  // overrides that strict Office builds reject). Idempotent; no-op if clean.
+  await sanitizePptxFile(filePath);
+
   const mime = OFFICE_MIME[ext] || MIME_MAP[ext] || 'application/octet-stream';
   const stat = fs.statSync(filePath);
   res.setHeader('Content-Type', mime);
@@ -155,6 +161,10 @@ router.get('/:id/download', async (req: Request, res: Response) => {
   if (!filePath) { res.status(404).json({ error: 'File not found' }); return; }
 
   const filename = path.basename(filePath);
+
+  // Repair OOXML packaging defects on the way out (covers pre-sanitizer files).
+  // Idempotent; no-op for PDFs and already-clean files.
+  await sanitizePptxFile(filePath);
 
   try {
     const watermarked = await applyWatermark(filePath);

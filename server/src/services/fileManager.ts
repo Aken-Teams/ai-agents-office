@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { config } from '../config.js';
 import { scanSandboxFiles, validateFilePath } from './sandbox.js';
+import { sanitizePptxFile } from './pptxSanitizer.js';
 import type { GeneratedFile, DocType, DocumentBlock } from '../types.js';
 
 /**
@@ -47,6 +48,14 @@ export async function registerNewFiles(
       );
 
       if (!existing || existing.file_size === file.fileSize) continue;
+
+      // Repair OOXML packaging defects before registering/serving (pptxgenjs
+      // 4.0.1 emits orphan slideMaster Overrides in [Content_Types].xml that
+      // strict Office builds — 2019/2024/LTSC — reject with a "repair" prompt).
+      // Idempotent; re-stat size if the file was actually rewritten.
+      if (await sanitizePptxFile(fullPath)) {
+        try { file.fileSize = fs.statSync(fullPath).size; } catch { /* keep scanned size */ }
+      }
 
       // File was overwritten with different content — create new version
       // Point old DB record to the versioned backup (created by snapshotExistingFiles)
@@ -101,7 +110,11 @@ export async function registerNewFiles(
       continue;
     }
 
-    // Brand new file — version 1
+    // Brand new file — version 1.
+    // Repair OOXML packaging defects first (see note above). Idempotent.
+    if (await sanitizePptxFile(fullPath)) {
+      try { file.fileSize = fs.statSync(fullPath).size; } catch { /* keep scanned size */ }
+    }
     const id = uuidv4();
     await dbRun(
       `INSERT INTO generated_files (id, user_id, conversation_id, filename, file_path, file_type, file_size, version)
