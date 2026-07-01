@@ -8,7 +8,8 @@ import { adminMiddleware } from '../middleware/adminAuth.js';
 import { loadSkills } from '../skills/loader.js';
 import { config } from '../config.js';
 import { applyWatermark, getWatermarkSettings, setWatermarkSettings } from '../services/watermark.js';
-import { getMailToken, fetchMessageDetail } from '../services/outlookApi.js';
+import { getMailToken, fetchMessageDetail, resolveCidImages } from '../services/outlookApi.js';
+import { generateLayer2Analysis } from '../services/emailAgentPoller.js';
 import { getUserUsageLimitUsd, setUserUsageLimitUsd, getUserDisplayCost, getEffectiveUserLimit, getStorageQuotaGb, setStorageQuotaGb, getUploadQuotaMb, setUploadQuotaMb } from '../services/usageLimit.js';
 import { getRolePermissions, setRolePermissions, type RolePermissions } from '../services/rolePermissions.js';
 import { getLineSettings, setLineSetting, type LineSettings } from '../services/lineSettings.js';
@@ -1190,11 +1191,31 @@ router.get('/email-agent/:id', async (req: Request, res: Response) => {
     `SELECT id, role, content, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at ASC`,
     convId,
   );
+  const totalRow = await dbGet<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM email_summary_cache WHERE user_id = ?', conversation.user_id);
+
+  res.json({ conversation, messages, analysisTotal: totalRow?.n ?? 0 });
+});
+
+// GET /api/admin/email-agent/:id/analyses?page=&limit= — paginated per-email
+// analyses for one user (subject / priority / summary / deep analysis).
+router.get('/email-agent/:id/analyses', async (req: Request, res: Response) => {
+  const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+  const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
+  const offset = (page - 1) * limit;
+  const conv = await dbGet<{ user_id: string }>(
+    "SELECT user_id FROM conversations WHERE id = ? AND category = 'email-agent'", req.params.id);
+  if (!conv) { res.status(404).json({ error: 'Not found' }); return; }
+
+  const totalRow = await dbGet<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM email_summary_cache WHERE user_id = ?', conv.user_id);
+  const total = totalRow?.n ?? 0;
   const analyses = await dbAll(`
     SELECT email_id, email_subject, summary, priority, category, analysis AS deep_analysis, created_at
-    FROM email_summary_cache WHERE user_id = ? ORDER BY created_at DESC LIMIT 300`, conversation.user_id);
+    FROM email_summary_cache WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+    conv.user_id, limit, offset);
 
-  res.json({ conversation, messages, analyses });
+  res.json({ analyses, total, page, limit, totalPages: Math.ceil(total / limit) });
 });
 
 // GET /api/admin/email-agent/:id/email?emailId=... — fetch the ORIGINAL email body
@@ -1211,16 +1232,50 @@ router.get('/email-agent/:id/email', async (req: Request, res: Response) => {
     if (!token) { res.status(409).json({ error: 'no_token', message: '信箱連線已過期或未授權，無法讀取原信件' }); return; }
     const msg = await fetchMessageDetail(token, emailId);
     if (!msg) { res.status(404).json({ error: 'not_found', message: '找不到原始信件（可能已被刪除或移動）' }); return; }
+    // Resolve inline cid: images to data URIs so embedded logos/pictures render.
+    let body = msg.body || '';
+    if (body && msg.attachments?.length) {
+      try { body = await resolveCidImages(token, emailId, body, msg.attachments); } catch { /* keep raw body */ }
+    }
+    // Recipient (msg.to) intentionally omitted — the backend is for technical
+    // review (what emails / AI quality), not for exposing who mail went to.
+    // Attachments: names/types only (NO content, NO download) — just an indicator.
+    const attachments = (msg.attachments || [])
+      .filter(a => !a.is_inline)
+      .map(a => ({ filename: a.filename, contentType: a.content_type, size: a.size }));
     res.json({
       subject: msg.subject,
       from: msg.from,
-      to: msg.to,
       receivedAt: msg.received_at,
-      body: msg.body || '',
+      body,
       bodyType: msg.body_type || 'text',
+      hasAttachments: !!msg.has_attachments,
+      attachments,
     });
   } catch {
     res.status(502).json({ error: 'fetch_failed', message: '讀取原信件失敗' });
+  }
+});
+
+// POST /api/admin/email-agent/:id/analyze?emailId=... — run Layer-2 DEEP analysis
+// on demand, for evaluating AI quality on an email the user never deep-analyzed.
+// Awaits the analysis (can take ~1 min) and returns the fresh result. Costs tokens.
+router.post('/email-agent/:id/analyze', async (req: Request, res: Response) => {
+  const emailId = String(req.query.emailId || '').trim();
+  if (!emailId) { res.status(400).json({ error: 'emailId required' }); return; }
+  const conv = await dbGet<{ user_id: string }>(
+    "SELECT user_id FROM conversations WHERE id = ? AND category = 'email-agent'", req.params.id);
+  if (!conv) { res.status(404).json({ error: 'Not found' }); return; }
+  try {
+    // No SSE connection for an admin — generateLayer2Analysis pushes via SSE
+    // (no-ops here) but always caches the result to email_summary_cache, so we
+    // await it then read the fresh analysis back.
+    await generateLayer2Analysis(conv.user_id, emailId, { includeAttachments: true, force: true });
+    const row = await dbGet<{ analysis: string | null }>(
+      'SELECT analysis FROM email_summary_cache WHERE user_id = ? AND email_id = ?', conv.user_id, emailId);
+    res.json({ analysis: row?.analysis || '' });
+  } catch {
+    res.status(502).json({ error: 'analyze_failed', message: '深度分析執行失敗' });
   }
 });
 

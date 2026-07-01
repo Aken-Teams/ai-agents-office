@@ -39,6 +39,8 @@ export default function AdminTeamsPage() {
   const { token } = useAdminAuth();
   const [teams, setTeams] = useState<TeamRow[]>([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [team, setTeam] = useState<TeamDetail | null>(null);
@@ -52,12 +54,12 @@ export default function AdminTeamsPage() {
   const load = useCallback(() => {
     if (!token) return;
     setLoading(true);
-    const params = new URLSearchParams({ limit: '50' });
+    const params = new URLSearchParams({ limit: '20', page: String(page) });
     if (search.trim()) params.set('search', search.trim());
     fetch(`/api/admin/teams?${params}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json()).then(d => { setTeams(d.teams || []); setTotal(d.total || 0); })
+      .then(r => r.json()).then(d => { setTeams(d.teams || []); setTotal(d.total || 0); setTotalPages(d.totalPages || 1); })
       .catch(() => {}).finally(() => setLoading(false));
-  }, [token, search]);
+  }, [token, search, page]);
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
 
@@ -264,7 +266,7 @@ export default function AdminTeamsPage() {
         {/* Search */}
         <div className="mb-4 md:mb-6 relative shrink-0">
           <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm">search</span>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜尋團隊名稱、議題或擁有者…"
+          <input value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="搜尋團隊名稱、議題或擁有者…"
             className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 rounded py-2.5 pl-10 pr-4 text-sm text-on-surface placeholder:text-outline font-body" />
         </div>
 
@@ -336,6 +338,22 @@ export default function AdminTeamsPage() {
             </div>
           ))}
         </div>
+
+        {/* Pagination — matches the 對話管理 page style */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between pt-4 border-t border-outline-variant/20 mt-4 shrink-0">
+            <span className="text-xs md:text-sm text-on-surface-variant hidden md:block">第 {(page - 1) * 20 + 1}-{Math.min(page * 20, total)} 筆，共 {total} 個團隊</span>
+            <span className="text-xs text-on-surface-variant md:hidden">{page}/{totalPages}</span>
+            <div className="flex gap-1">
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-2.5 md:px-3 py-1.5 text-xs md:text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer hover:bg-surface-container-high transition-colors">上一頁</button>
+              {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                const p = totalPages <= 5 ? i + 1 : page <= 3 ? i + 1 : page >= totalPages - 2 ? totalPages - 4 + i : page - 2 + i;
+                return <button key={p} onClick={() => setPage(p)} className={`px-2.5 md:px-3 py-1.5 text-xs md:text-sm rounded cursor-pointer transition-colors ${page === p ? 'bg-primary/15 text-primary font-bold' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'}`}>{p}</button>;
+              })}
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-2.5 md:px-3 py-1.5 text-xs md:text-sm bg-surface-container text-on-surface-variant rounded disabled:opacity-30 cursor-pointer hover:bg-surface-container-high transition-colors">下一頁</button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
