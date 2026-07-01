@@ -516,8 +516,10 @@ export default function EmailDetailModal({
             )}
           </div>
 
-          {/* AI Analysis panel (collapsible on desktop) */}
-          <div className={`${activePanel === 'analysis' ? 'flex' : 'hidden'} ${analysisCollapsed ? 'md:hidden' : 'md:flex'} flex-col flex-1 md:flex-initial min-h-0 md:w-[380px] md:shrink-0 overflow-hidden`}>
+          {/* AI Analysis panel (collapsible + animated on desktop) */}
+          <div className={`${activePanel === 'analysis' ? 'flex' : 'hidden'} md:flex flex-col flex-1 md:flex-initial min-h-0 md:shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${analysisCollapsed ? 'md:w-0' : 'md:w-[380px]'}`}>
+            {/* fixed-width inner so content clips (not squishes) while the width animates */}
+            <div className="flex flex-col min-h-0 h-full w-full md:w-[380px]">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-outline-variant/10 shrink-0 bg-surface-container-high/30">
               <span className="material-symbols-outlined text-primary text-lg">auto_awesome</span>
               <span className="text-sm font-semibold text-on-surface">AI 深度分析</span>
@@ -574,18 +576,19 @@ export default function EmailDetailModal({
                 </div>
               )}
             </div>
+            </div>
           </div>
 
-          {/* Collapsed strip — click to re-open the AI panel (desktop only) */}
-          {analysisCollapsed && (
+          {/* Collapsed strip — width animates in/out inversely to the panel (no jump); click to re-open (desktop only) */}
+          <div className={`hidden md:block shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${analysisCollapsed ? 'md:w-11' : 'md:w-0'}`}>
             <button onClick={() => setAnalysisCollapsed(false)}
-              className="hidden md:flex flex-col items-center gap-2 w-11 shrink-0 border-l border-outline-variant/10 bg-surface-container-high/30 hover:bg-surface-container-high/60 transition-colors cursor-pointer pt-3.5"
+              className="flex flex-col items-center gap-2 w-11 h-full border-l border-outline-variant/10 bg-surface-container-high/30 hover:bg-surface-container-high/60 transition-colors cursor-pointer pt-3.5"
               title="展開 AI 分析">
               <span className="material-symbols-outlined text-on-surface-variant">left_panel_open</span>
               <span className="material-symbols-outlined text-primary">auto_awesome</span>
               <span className="text-[11px] font-medium text-on-surface-variant [writing-mode:vertical-rl] mt-1">AI 分析</span>
             </button>
-          )}
+          </div>
         </div>
 
         {/* Bottom action bar */}

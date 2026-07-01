@@ -11,7 +11,7 @@ import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { registerConnection, unregisterConnection, pushEvent, isConnected, getConnectionId, unregisterIfMatch, markTaskActive, markTaskDone } from '../services/emailAgentRegistry.js';
-import { generateLayer2Analysis, pollNewEmails, scaleEmailAgentTokens } from '../services/emailAgentPoller.js';
+import { generateLayer2Analysis, pollNewEmails, scaleEmailAgentTokens, emailAgentLang } from '../services/emailAgentPoller.js';
 import { getMailToken, fetchMessageDetail } from '../services/outlookApi.js';
 import { extractEmailAgentMemory, buildEmailAgentMemoryContext } from '../services/emailAgentMemory.js';
 import { resolveClaudeCliPath } from '../services/resolveClaudeCli.js';
@@ -138,11 +138,14 @@ router.post('/chat', async (req: Request, res: Response) => {
       return `[${r}]: ${c}`;
     }).join('\n');
 
-    const prompt = `你是一位專業且貼心的 AI 信件秘書。你的個性是：主動、有洞察力、簡潔有效率。
+    const lang = emailAgentLang((await dbGet<{ locale: string }>('SELECT locale FROM users WHERE id = ?', userId))?.locale);
+    const prompt = `${lang.rule}
+
+你是一位專業且貼心的 AI 信件秘書。你的個性是：主動、有洞察力、簡潔有效率。
 你能幫助用戶：查看和分析 Outlook 信件、整理待辦、識別重要信件、提供回覆建議、標記資安風險。
 
 回覆規則：
-- 用繁體中文，語氣親切專業
+- 一律使用「${lang.name}」回覆（不論信件原文是什麼語言），語氣親切專業
 - 善用 markdown 格式（**粗體**標重點、列點整理、適當分段）
 - 回覆要有洞察力，不只是複述資訊，要給出建議和判斷
 - 直接根據下方的信件資料回答用戶問題，不要說你無法存取信箱

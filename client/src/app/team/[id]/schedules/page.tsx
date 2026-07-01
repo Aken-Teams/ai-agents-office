@@ -19,8 +19,9 @@ import ScheduleCreateModal from '../../../components/ScheduleCreateModal';
 
 const DOW = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
 
-// In pro-panjit, scheduling is limited to reviewers/admins (same as the 強茂
-// template); its emails go out via the AD mail gateway. Other modes: everyone.
+// In pro-panjit, scheduling is ADMIN ONLY for now (reviewers hidden pending some
+// details before the production rollout); its emails go via the AD mail gateway.
+// Other deploy modes: everyone.
 const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
 const isPanjit = deployMode === 'pro-panjit';
 
@@ -39,7 +40,7 @@ function SchedulesContent() {
 
   // In pro-panjit, only reviewers/admins may schedule — bounce everyone else back
   // to the team (wait until the user is loaded so we don't redirect prematurely).
-  const canSchedule = !isPanjit || user?.role === 'admin' || user?.role === 'readonly';
+  const canSchedule = !isPanjit || user?.role === 'admin';
   useEffect(() => {
     if (user && !canSchedule) router.replace(`/team/${teamId}`);
   }, [router, teamId, user, canSchedule]);
