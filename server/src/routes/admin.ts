@@ -9,7 +9,6 @@ import { loadSkills } from '../skills/loader.js';
 import { config } from '../config.js';
 import { applyWatermark, getWatermarkSettings, setWatermarkSettings } from '../services/watermark.js';
 import { getMailToken, fetchMessageDetail, resolveCidImages } from '../services/outlookApi.js';
-import { generateLayer2Analysis } from '../services/emailAgentPoller.js';
 import { getUserUsageLimitUsd, setUserUsageLimitUsd, getUserDisplayCost, getEffectiveUserLimit, getStorageQuotaGb, setStorageQuotaGb, getUploadQuotaMb, setUploadQuotaMb } from '../services/usageLimit.js';
 import { getRolePermissions, setRolePermissions, type RolePermissions } from '../services/rolePermissions.js';
 import { getLineSettings, setLineSetting, type LineSettings } from '../services/lineSettings.js';
@@ -1156,6 +1155,7 @@ router.get('/email-agent', async (req: Request, res: Response) => {
       (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) AS message_count,
       (SELECT COUNT(*) FROM email_summary_cache e WHERE e.user_id = c.user_id) AS analysis_count,
       (SELECT COUNT(*) FROM email_summary_cache e WHERE e.user_id = c.user_id AND e.analysis IS NOT NULL AND e.analysis <> '') AS deep_count,
+      (SELECT COUNT(*) FROM email_summary_cache e WHERE e.user_id = c.user_id AND e.attachment_analysis IS NOT NULL AND e.attachment_analysis <> '') AS attachment_count,
       GREATEST(
         COALESCE((SELECT MAX(m.created_at) FROM messages m WHERE m.conversation_id = c.id), c.created_at),
         COALESCE((SELECT MAX(e.created_at) FROM email_summary_cache e WHERE e.user_id = c.user_id), c.created_at)
@@ -1211,7 +1211,8 @@ router.get('/email-agent/:id/analyses', async (req: Request, res: Response) => {
     'SELECT COUNT(*) AS n FROM email_summary_cache WHERE user_id = ?', conv.user_id);
   const total = totalRow?.n ?? 0;
   const analyses = await dbAll(`
-    SELECT email_id, email_subject, summary, priority, category, analysis AS deep_analysis, created_at
+    SELECT email_id, email_subject, summary, priority, category,
+           analysis AS deep_analysis, attachment_analysis, created_at
     FROM email_summary_cache WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`,
     conv.user_id, limit, offset);
 
@@ -1224,10 +1225,12 @@ router.get('/email-agent/:id/analyses', async (req: Request, res: Response) => {
 router.get('/email-agent/:id/email', async (req: Request, res: Response) => {
   const emailId = String(req.query.emailId || '').trim();
   if (!emailId) { res.status(400).json({ error: 'emailId required' }); return; }
-  const conv = await dbGet<{ user_id: string }>(
-    "SELECT user_id FROM conversations WHERE id = ? AND category = 'email-agent'", req.params.id);
-  if (!conv) { res.status(404).json({ error: 'Not found' }); return; }
+  // Whole handler wrapped so a DB/gateway hiccup returns clean JSON (never the
+  // default "Internal Server Error" text that breaks the client's JSON parse).
   try {
+    const conv = await dbGet<{ user_id: string }>(
+      "SELECT user_id FROM conversations WHERE id = ? AND category = 'email-agent'", req.params.id);
+    if (!conv) { res.status(404).json({ error: 'Not found' }); return; }
     const token = await getMailToken(conv.user_id);
     if (!token) { res.status(409).json({ error: 'no_token', message: '信箱連線已過期或未授權，無法讀取原信件' }); return; }
     const msg = await fetchMessageDetail(token, emailId);
@@ -1252,30 +1255,9 @@ router.get('/email-agent/:id/email', async (req: Request, res: Response) => {
       hasAttachments: !!msg.has_attachments,
       attachments,
     });
-  } catch {
-    res.status(502).json({ error: 'fetch_failed', message: '讀取原信件失敗' });
-  }
-});
-
-// POST /api/admin/email-agent/:id/analyze?emailId=... — run Layer-2 DEEP analysis
-// on demand, for evaluating AI quality on an email the user never deep-analyzed.
-// Awaits the analysis (can take ~1 min) and returns the fresh result. Costs tokens.
-router.post('/email-agent/:id/analyze', async (req: Request, res: Response) => {
-  const emailId = String(req.query.emailId || '').trim();
-  if (!emailId) { res.status(400).json({ error: 'emailId required' }); return; }
-  const conv = await dbGet<{ user_id: string }>(
-    "SELECT user_id FROM conversations WHERE id = ? AND category = 'email-agent'", req.params.id);
-  if (!conv) { res.status(404).json({ error: 'Not found' }); return; }
-  try {
-    // No SSE connection for an admin — generateLayer2Analysis pushes via SSE
-    // (no-ops here) but always caches the result to email_summary_cache, so we
-    // await it then read the fresh analysis back.
-    await generateLayer2Analysis(conv.user_id, emailId, { includeAttachments: true, force: true });
-    const row = await dbGet<{ analysis: string | null }>(
-      'SELECT analysis FROM email_summary_cache WHERE user_id = ? AND email_id = ?', conv.user_id, emailId);
-    res.json({ analysis: row?.analysis || '' });
-  } catch {
-    res.status(502).json({ error: 'analyze_failed', message: '深度分析執行失敗' });
+  } catch (err) {
+    console.error('[admin] email fetch failed:', err);
+    res.status(502).json({ error: 'fetch_failed', message: '讀取原信件失敗（信箱 API 暫時異常，請稍後再試）' });
   }
 });
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -202,6 +202,7 @@ export default function EmailDetailModal({
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<MessageDetail | null>(null);
   const [activePanel, setActivePanel] = useState<'body' | 'analysis'>('body');
+  const [analysisCollapsed, setAnalysisCollapsed] = useState(false);
   const [recipientsExpanded, setRecipientsExpanded] = useState(false);
 
   // Fetch full message detail
@@ -226,6 +227,20 @@ export default function EmailDetailModal({
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Auto-run the AI analysis (text-only) shortly after the email is opened, so the
+  // user doesn't have to click. The heavier attachment deep-read stays manual.
+  // A ~1.5s delay means a quick glance-and-close skips it entirely (saves tokens);
+  // the delay's cleanup fires when the modal unmounts (i.e. the user closed it).
+  const triggeredFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (triggeredFor.current === email.emailId || email.analysis || email.analyzing) return;
+    const t = setTimeout(() => {
+      triggeredFor.current = email.emailId;
+      onRequestAnalysis(email.emailId, { withAttachments: false });
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [email.emailId, email.analysis, email.analyzing, onRequestAnalysis]);
 
   const security = detectSecurityFlags(email.analysis);
 
@@ -501,24 +516,32 @@ export default function EmailDetailModal({
             )}
           </div>
 
-          {/* AI Analysis panel */}
-          <div className={`${activePanel === 'analysis' ? 'flex' : 'hidden'} md:flex flex-col flex-1 md:flex-initial min-h-0 md:w-[380px] md:shrink-0 overflow-hidden`}>
+          {/* AI Analysis panel (collapsible on desktop) */}
+          <div className={`${activePanel === 'analysis' ? 'flex' : 'hidden'} ${analysisCollapsed ? 'md:hidden' : 'md:flex'} flex-col flex-1 md:flex-initial min-h-0 md:w-[380px] md:shrink-0 overflow-hidden`}>
             <div className="flex items-center gap-2 px-4 py-3 border-b border-outline-variant/10 shrink-0 bg-surface-container-high/30">
               <span className="material-symbols-outlined text-primary text-lg">auto_awesome</span>
               <span className="text-sm font-semibold text-on-surface">AI 深度分析</span>
-              {email.analysis && !email.analyzing && (
-                <div className="ml-auto flex items-center gap-1.5">
-                  <span className="text-[10px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">已完成</span>
-                  <button
-                    onClick={() => onRequestAnalysis(email.emailId, { withAttachments: email.hasAttachments, force: true })}
-                    className="flex items-center gap-1 text-[11px] font-medium text-on-surface-variant hover:text-primary px-1.5 py-0.5 rounded-full hover:bg-primary/10 transition-colors"
-                    title={email.hasAttachments ? '重新分析（含讀取附件）' : '重新分析'}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: 14 }}>refresh</span>
-                    重新分析
-                  </button>
-                </div>
-              )}
+              <div className="ml-auto flex items-center gap-1.5">
+                {email.analysis && !email.analyzing && (
+                  <>
+                    <span className="text-[10px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">已完成</span>
+                    <button
+                      onClick={() => onRequestAnalysis(email.emailId, { withAttachments: email.hasAttachments, force: true })}
+                      className="flex items-center gap-1 text-[11px] font-medium text-on-surface-variant hover:text-primary px-1.5 py-0.5 rounded-full hover:bg-primary/10 transition-colors"
+                      title={email.hasAttachments ? '重新分析（含讀取附件）' : '重新分析'}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>refresh</span>
+                      重新分析
+                    </button>
+                  </>
+                )}
+                {/* Collapse the AI panel (desktop only) */}
+                <button onClick={() => setAnalysisCollapsed(true)}
+                  className="hidden md:flex w-7 h-7 items-center justify-center rounded-lg hover:bg-surface-container-highest text-on-surface-variant transition-colors cursor-pointer"
+                  title="收合 AI 分析">
+                  <span className="material-symbols-outlined text-lg">right_panel_close</span>
+                </button>
+              </div>
             </div>
             <div
               className="flex-1 min-h-0 overflow-y-auto p-4"
@@ -552,6 +575,17 @@ export default function EmailDetailModal({
               )}
             </div>
           </div>
+
+          {/* Collapsed strip — click to re-open the AI panel (desktop only) */}
+          {analysisCollapsed && (
+            <button onClick={() => setAnalysisCollapsed(false)}
+              className="hidden md:flex flex-col items-center gap-2 w-11 shrink-0 border-l border-outline-variant/10 bg-surface-container-high/30 hover:bg-surface-container-high/60 transition-colors cursor-pointer pt-3.5"
+              title="展開 AI 分析">
+              <span className="material-symbols-outlined text-on-surface-variant">left_panel_open</span>
+              <span className="material-symbols-outlined text-primary">auto_awesome</span>
+              <span className="text-[11px] font-medium text-on-surface-variant [writing-mode:vertical-rl] mt-1">AI 分析</span>
+            </button>
+          )}
         </div>
 
         {/* Bottom action bar */}

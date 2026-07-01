@@ -100,8 +100,14 @@ router.get('/messages/:id', async (req: Request, res: Response) => {
     if (cached && Date.now() - cached.ts < CID_CACHE_TTL) {
       message.body = cached.body;
     } else {
-      message.body = await resolveCidImages(token, msgId, message.body!, message.attachments!);
-      cidCache.set(msgId, { body: message.body, ts: Date.now() });
+      // A gateway hiccup while downloading inline images must NOT 500 the whole
+      // request — fall back to the raw body (images may just not render).
+      try {
+        message.body = await resolveCidImages(token, msgId, message.body!, message.attachments!);
+        cidCache.set(msgId, { body: message.body, ts: Date.now() });
+      } catch (err) {
+        console.warn('[Outlook] resolveCidImages failed, serving raw body:', err instanceof Error ? err.message : err);
+      }
     }
   }
 

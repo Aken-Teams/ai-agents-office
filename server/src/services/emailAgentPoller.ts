@@ -14,6 +14,28 @@ import { resolveClaudeCliPath } from './resolveClaudeCli.js';
 import { acquireEmailSlot } from './emailAgentConcurrency.js';
 import { buildAttachmentContext } from './emailAttachmentReader.js';
 import { dbAll, dbGet, dbRun } from '../db.js';
+import { recordTokenUsage } from './tokenTracker.js';
+import { v4 as uuidv4 } from 'uuid';
+
+// Email-agent AI (lightweight Haiku analysis) is billed at a lighter ×2 markup
+// instead of the global markup. All cost / token-count displays multiply raw
+// token_usage by config.pricingMarkup (×10 in pro-panjit), so we pre-scale the
+// recorded email tokens by (2 / pricingMarkup) → the effective markup becomes ×2.
+const EMAIL_AGENT_MARKUP = 2;
+export function scaleEmailAgentTokens(tok: number): number {
+  return Math.max(0, Math.round(tok * EMAIL_AGENT_MARKUP / config.pricingMarkup));
+}
+
+/** Get (or lazily create) the email-agent conversation id, for token attribution. */
+export async function getEmailAgentConversationId(userId: string): Promise<string> {
+  const existing = await dbGet<{ id: string }>(
+    "SELECT id FROM conversations WHERE user_id = ? AND category = 'email-agent' LIMIT 1", userId);
+  if (existing) return existing.id;
+  const id = uuidv4();
+  await dbRun("INSERT INTO conversations (id, user_id, title, category, status) VALUES (?, ?, ?, ?, ?)",
+    id, userId, '信件助手', 'email-agent', 'active');
+  return id;
+}
 
 const LAYER1_TIMEOUT = 25_000; // 25s for batch summary
 const LAYER2_TIMEOUT = 60_000; // 60s for deep analysis
@@ -42,7 +64,7 @@ function isQuotaLimitError(text: string): boolean {
   return false;
 }
 
-async function spawnClaudeOneShot(prompt: string, timeoutMs: number, model?: string, images?: { media_type: string; data: string }[]): Promise<string | null> {
+async function spawnClaudeOneShot(prompt: string, timeoutMs: number, model?: string, images?: { media_type: string; data: string }[], usageOut?: { inTok: number; outTok: number }): Promise<string | null> {
   // Respect the global concurrency cap so concurrent users can't fan out into
   // dozens of simultaneous Claude processes.
   const release = await acquireEmailSlot();
@@ -144,6 +166,11 @@ async function spawnClaudeOneShot(prompt: string, timeoutMs: number, model?: str
               const text = parsed.result;
               if (typeof text === 'string' && text && !output) {
                 output = text;
+              }
+              // Capture token usage from the final result event (was discarded).
+              if (usageOut && parsed.usage) {
+                usageOut.inTok = (parsed.usage.input_tokens || 0) + (parsed.usage.cache_read_input_tokens || 0) + (parsed.usage.cache_creation_input_tokens || 0);
+                usageOut.outTok = parsed.usage.output_tokens || 0;
               }
             }
           } catch { /* skip malformed */ }
@@ -479,13 +506,23 @@ ${emailList}
   // of the long briefing wait). Haiku keeps each batch fast.
   const LAYER1_CONCURRENCY = 4;
   const outputs: (string | null)[] = new Array(batchDescs.length).fill(null);
+  let l1InTok = 0, l1OutTok = 0;
   let nextBatch = 0;
   async function batchWorker() {
     for (let my = nextBatch++; my < batchDescs.length; my = nextBatch++) {
-      outputs[my] = await spawnClaudeOneShot(batchDescs[my].prompt, LAYER1_TIMEOUT, 'claude-haiku-4-5-20251001');
+      const u = { inTok: 0, outTok: 0 };
+      outputs[my] = await spawnClaudeOneShot(batchDescs[my].prompt, LAYER1_TIMEOUT, 'claude-haiku-4-5-20251001', undefined, u);
+      l1InTok += u.inTok; l1OutTok += u.outTok;
     }
   }
   await Promise.all(Array.from({ length: Math.min(LAYER1_CONCURRENCY, batchDescs.length) }, batchWorker));
+
+  // Record Layer 1 token usage (one row for the whole batch of emails).
+  if (l1InTok || l1OutTok) {
+    getEmailAgentConversationId(userId)
+      .then(convId => recordTokenUsage({ userId, conversationId: convId, inputTokens: scaleEmailAgentTokens(l1InTok), outputTokens: scaleEmailAgentTokens(l1OutTok), model: 'claude-haiku-4-5-20251001' }))
+      .catch(() => {});
+  }
 
   // Parse each batch's output and map results back, in original order.
   for (let b = 0; b < batchDescs.length; b++) {
@@ -648,19 +685,40 @@ ${attachmentBlock}
 [RISK:NONE] — 無資安疑慮
 [RISK:HIGH] — 確實存在釣魚/惡意/詐騙等資安風險`;
 
-    const output = await spawnClaudeOneShot(prompt, LAYER2_TIMEOUT, undefined, attachmentImages.length ? attachmentImages : undefined);
+    const l2usage = { inTok: 0, outTok: 0 };
+    // Model split: attachment analysis (reads files / vision) uses the stronger
+    // Sonnet (CLI default); pure-text deep analysis uses Haiku to keep it cheap.
+    const l2model = options.includeAttachments ? undefined : 'claude-haiku-4-5-20251001';
+    const output = await spawnClaudeOneShot(prompt, LAYER2_TIMEOUT, l2model, attachmentImages.length ? attachmentImages : undefined, l2usage);
     console.log(`[EmailAgent] Layer 2 result: ${output ? output.substring(0, 100) + '...' : 'NULL'}`);
+
+    // Record Layer 2 (deep analysis) token usage.
+    if (l2usage.inTok || l2usage.outTok) {
+      const l2label = options.includeAttachments ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001';
+      getEmailAgentConversationId(userId)
+        .then(convId => recordTokenUsage({ userId, conversationId: convId, inputTokens: scaleEmailAgentTokens(l2usage.inTok), outputTokens: scaleEmailAgentTokens(l2usage.outTok), model: l2label }))
+        .catch(() => {});
+    }
 
     const analysis = output || '⚠️ AI 分析暫時無法回應，請稍後再試';
 
-    // Save analysis to cache with subject for integrity verification.
-    // Don't cache deep-read (attachment-augmented) results under the body-only key.
-    if (output && !options.includeAttachments) {
-      dbRun(
-        `INSERT INTO email_summary_cache (user_id, email_id, summary, analysis, email_subject) VALUES (?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE analysis = VALUES(analysis), email_subject = VALUES(email_subject)`,
-        userId, messageId, '', output, message.subject || ''
-      ).catch(err => console.error(`[EmailAgent] Failed to save Layer 2 analysis for ${messageId}:`, err));
+    // Save analysis to cache with subject for integrity verification. The
+    // attachment deep-read is stored in its OWN column so the admin can tell a
+    // text deep analysis apart from an attachment analysis.
+    if (output) {
+      if (options.includeAttachments) {
+        dbRun(
+          `INSERT INTO email_summary_cache (user_id, email_id, summary, attachment_analysis, email_subject) VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE attachment_analysis = VALUES(attachment_analysis), email_subject = VALUES(email_subject)`,
+          userId, messageId, '', output, message.subject || ''
+        ).catch(err => console.error(`[EmailAgent] Failed to save attachment analysis for ${messageId}:`, err));
+      } else {
+        dbRun(
+          `INSERT INTO email_summary_cache (user_id, email_id, summary, analysis, email_subject) VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE analysis = VALUES(analysis), email_subject = VALUES(email_subject)`,
+          userId, messageId, '', output, message.subject || ''
+        ).catch(err => console.error(`[EmailAgent] Failed to save Layer 2 analysis for ${messageId}:`, err));
+      }
     }
 
     markTaskDone(userId, `analyze:${messageId}`);

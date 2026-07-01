@@ -491,6 +491,7 @@ export async function initializeDatabase(): Promise<void> {
         priority      VARCHAR(5) NOT NULL DEFAULT '中',
         category      VARCHAR(50) NOT NULL DEFAULT '一般',
         analysis      LONGTEXT DEFAULT NULL,
+        attachment_analysis LONGTEXT DEFAULT NULL,
         email_subject VARCHAR(500) DEFAULT NULL,
         created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (user_id, email_id),
@@ -729,6 +730,12 @@ export async function initializeDatabase(): Promise<void> {
     // Migration: add email_subject for cache integrity verification
     try {
       await conn.query('ALTER TABLE email_summary_cache ADD COLUMN email_subject VARCHAR(500) DEFAULT NULL');
+    } catch { /* column already exists */ }
+
+    // Migration: add attachment_analysis (Layer-2 deep-read of attachments), stored
+    // separately from the body-only `analysis` so the admin can tell them apart.
+    try {
+      await conn.query('ALTER TABLE email_summary_cache ADD COLUMN attachment_analysis LONGTEXT DEFAULT NULL');
     } catch { /* column already exists */ }
 
     // Migration: clear stale analyses that may have been stored against wrong email IDs

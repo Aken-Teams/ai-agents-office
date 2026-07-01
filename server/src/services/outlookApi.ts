@@ -198,22 +198,41 @@ export async function fetchMessages(
  * Fetch a single message by ID (with full body).
  */
 export async function fetchMessageDetail(mailToken: string, messageId: string): Promise<OutlookMessage | null> {
-  const res = await fetch(`${OUTLOOK_BASE}/messages/${encodeURIComponent(messageId)}`, {
-    headers: { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${mailToken}` },
-  });
-  if (!res.ok) {
-    console.warn('[Outlook] fetchMessageDetail failed:', res.status, await res.text().catch(() => ''));
-    return null;
+  const url = `${OUTLOOK_BASE}/messages/${encodeURIComponent(messageId)}`;
+  const headers = { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${mailToken}` };
+  // The mail gateway is intermittently flaky — retry transient failures
+  // (5xx / network error / non-JSON body) up to 3 times with a short backoff.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const backoff = () => new Promise(r => setTimeout(r, 400 * (attempt + 1)));
+    try {
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+      if (!res.ok) {
+        const bodyText = await res.text().catch(() => '');
+        console.warn(`[Outlook] fetchMessageDetail ${res.status} (attempt ${attempt + 1}):`, bodyText.slice(0, 200));
+        if (res.status >= 500 && attempt < 2) { await backoff(); continue; }
+        return null;
+      }
+      const raw = await res.text();
+      let data: any;
+      try { data = JSON.parse(raw); } catch {
+        console.warn(`[Outlook] fetchMessageDetail non-JSON body (attempt ${attempt + 1}):`, raw.slice(0, 200));
+        if (attempt < 2) { await backoff(); continue; }
+        return null;
+      }
+      // Panjit API returns: { success, message: "查詢成功", message_detail: {...} }
+      const detail = data.message_detail;
+      if (!detail || typeof detail !== 'object') {
+        console.warn('[Outlook] fetchMessageDetail: no message_detail in response, keys:', Object.keys(data || {}));
+        return null;
+      }
+      return detail as OutlookMessage;
+    } catch (err) {
+      console.warn(`[Outlook] fetchMessageDetail error (attempt ${attempt + 1}):`, err instanceof Error ? err.message : err);
+      if (attempt < 2) { await backoff(); continue; }
+      return null;
+    }
   }
-  const data = await res.json() as any;
-
-  // Panjit API returns: { success, message: "查詢成功", message_detail: {...} }
-  const detail = data.message_detail;
-  if (!detail || typeof detail !== 'object') {
-    console.warn('[Outlook] fetchMessageDetail: no message_detail in response, keys:', Object.keys(data || {}));
-    return null;
-  }
-  return detail as OutlookMessage;
+  return null;
 }
 
 /**
@@ -221,11 +240,18 @@ export async function fetchMessageDetail(mailToken: string, messageId: string): 
  */
 export async function fetchAttachment(mailToken: string, messageId: string, attachmentId: string): Promise<Buffer | null> {
   const url = `${OUTLOOK_BASE}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`;
-  const res = await fetch(url, {
-    headers: { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${mailToken}` },
-  });
-  if (!res.ok) return null;
-  return Buffer.from(await res.arrayBuffer());
+  // Timeout + never throw: a single slow/404/erroring attachment must not reject
+  // the parallel CID resolution (which would 500 the whole email view).
+  try {
+    const res = await fetch(url, {
+      headers: { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${mailToken}` },
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -11,11 +11,12 @@ import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { registerConnection, unregisterConnection, pushEvent, isConnected, getConnectionId, unregisterIfMatch, markTaskActive, markTaskDone } from '../services/emailAgentRegistry.js';
-import { generateLayer2Analysis, pollNewEmails } from '../services/emailAgentPoller.js';
+import { generateLayer2Analysis, pollNewEmails, scaleEmailAgentTokens } from '../services/emailAgentPoller.js';
 import { getMailToken, fetchMessageDetail } from '../services/outlookApi.js';
 import { extractEmailAgentMemory, buildEmailAgentMemoryContext } from '../services/emailAgentMemory.js';
 import { resolveClaudeCliPath } from '../services/resolveClaudeCli.js';
 import { acquireEmailSlot } from '../services/emailAgentConcurrency.js';
+import { recordTokenUsage } from '../services/tokenTracker.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -163,8 +164,14 @@ ${chatHistory}
 
     // Spawn Claude CLI and stream response via SSE
     markTaskActive(userId, 'chat');
-    const responseText = await spawnChatClaude(userId, prompt);
+    const chatUsage = { inTok: 0, outTok: 0 };
+    const responseText = await spawnChatClaude(userId, prompt, chatUsage);
     markTaskDone(userId, 'chat');
+
+    // Record chat token usage against the email-agent conversation.
+    if (chatUsage.inTok || chatUsage.outTok) {
+      recordTokenUsage({ userId, conversationId, inputTokens: scaleEmailAgentTokens(chatUsage.inTok), outputTokens: scaleEmailAgentTokens(chatUsage.outTok), model: 'claude-haiku-4-5-20251001' }).catch(() => {});
+    }
 
     // Save assistant response
     if (responseText) {
@@ -292,7 +299,7 @@ async function getOrCreateConversation(userId: string): Promise<string> {
 /**
  * Spawn Claude CLI for chat — collects full response, streams deltas via SSE.
  */
-async function spawnChatClaude(userId: string, prompt: string): Promise<string | null> {
+async function spawnChatClaude(userId: string, prompt: string, usageOut?: { inTok: number; outTok: number }): Promise<string | null> {
   // Share the global email-agent concurrency cap with the poller's spawns.
   const release = await acquireEmailSlot();
   try {
@@ -352,6 +359,9 @@ async function spawnChatClaude(userId: string, prompt: string): Promise<string |
                 if (block.type === 'text' && block.text) output += block.text;
               }
             }
+          } else if (parsed.type === 'result' && usageOut && parsed.usage) {
+            usageOut.inTok = (parsed.usage.input_tokens || 0) + (parsed.usage.cache_read_input_tokens || 0) + (parsed.usage.cache_creation_input_tokens || 0);
+            usageOut.outTok = parsed.usage.output_tokens || 0;
           }
         } catch { /* skip malformed */ }
       }

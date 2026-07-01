@@ -16,10 +16,16 @@ import { useAdminAuth } from '../components/AdminAuthProvider';
 interface Row {
   id: string; user_id: string; created_at: string; status: string;
   user_email: string; user_display_name: string;
-  question_count: number; message_count: number; analysis_count: number; deep_count: number;
+  question_count: number; message_count: number; analysis_count: number; deep_count: number; attachment_count: number;
   last_activity: string;
 }
-interface Analysis { email_id: string; email_subject: string | null; summary: string | null; priority: string | null; category: string | null; deep_analysis: string | null; created_at: string }
+interface Analysis { email_id: string; email_subject: string | null; summary: string | null; priority: string | null; category: string | null; deep_analysis: string | null; attachment_analysis: string | null; created_at: string }
+// Which analysis level an email reached: 附件分析 > 深度分析 > 一般解析.
+function kindBadge(a: { deep_analysis: string | null; attachment_analysis: string | null }): { label: string; icon: string; cls: string } {
+  if (a.attachment_analysis && a.attachment_analysis.trim()) return { label: '附件分析', icon: 'attach_file', cls: 'bg-tertiary/15 text-tertiary' };
+  if (a.deep_analysis && a.deep_analysis.trim()) return { label: '深度分析', icon: 'psychology', cls: 'bg-primary/10 text-primary' };
+  return { label: '一般解析', icon: 'summarize', cls: 'bg-surface-container text-on-surface-variant/60' };
+}
 interface Message { id: string; role: string; content: string; created_at: string }
 interface Detail { conversation: { id: string; user_email: string; user_display_name: string; created_at: string }; messages: Message[]; analysisTotal: number }
 interface Attachment { filename: string; contentType: string; size: number }
@@ -148,7 +154,6 @@ export default function AdminEmailAgentPage() {
 
   const [modal, setModal] = useState<Analysis | null>(null);
   const [modalBody, setModalBody] = useState<BodyState>({});
-  const [analyzing, setAnalyzing] = useState(false);
 
   const load = useCallback(() => {
     if (!token) return;
@@ -180,25 +185,26 @@ export default function AdminEmailAgentPage() {
 
   const openModal = (a: Analysis) => {
     if (!detail) return;
-    setModal(a); setModalBody({ loading: true }); setAnalyzing(false);
+    setModal(a); setModalBody({ loading: true });
     fetch(`/api/admin/email-agent/${detail.conversation.id}/email?emailId=${encodeURIComponent(a.email_id)}`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.message || '讀取失敗'); return d as EmailBody; })
+      .then(async r => {
+        // Parse defensively — the mail API sometimes returns non-JSON (e.g. a
+        // plain "Internal Server Error"); never surface a raw JSON-parse error.
+        const txt = await r.text();
+        let d: any = null; try { d = txt ? JSON.parse(txt) : null; } catch { /* non-JSON */ }
+        if (!r.ok) throw new Error((d && d.message) || '信箱 API 暫時異常，請稍後再試');
+        if (!d) throw new Error('信箱 API 回應異常，請稍後再試');
+        return d as EmailBody;
+      })
       .then(d => setModalBody({ data: d })).catch(e => setModalBody({ err: e.message || '讀取失敗' }));
-  };
-  // Run Layer-2 deep analysis on demand (for evaluating AI quality). ~1 min, costs tokens.
-  const runDeepAnalysis = () => {
-    if (!detail || !modal || analyzing) return;
-    setAnalyzing(true);
-    fetch(`/api/admin/email-agent/${detail.conversation.id}/analyze?emailId=${encodeURIComponent(modal.email_id)}`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
-      .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.message || '失敗'); return d as { analysis: string }; })
-      .then(d => { if (d.analysis) { setModal(m => (m ? { ...m, deep_analysis: d.analysis } : m)); if (detail) loadAnalyses(detail.conversation.id, aPage); } })
-      .catch(() => {}).finally(() => setAnalyzing(false));
   };
 
   /* ---- Detail (full page) ---- */
   if (detail || detailLoading) {
     const questions = detail?.messages.filter(m => m.role === 'user').length ?? 0;
-    const modalDeep = !!(modal?.deep_analysis && modal.deep_analysis.trim());
+    // Prefer the attachment analysis (most complete) when present, else text deep analysis.
+    const modalDeepText = (modal?.attachment_analysis && modal.attachment_analysis.trim()) || (modal?.deep_analysis && modal.deep_analysis.trim()) || '';
+    const modalDeep = !!modalDeepText;
     return (
       <>
         <header className={HEADER + ' gap-3'}>
@@ -245,7 +251,7 @@ export default function AdminEmailAgentPage() {
                   <>
                     <div className="space-y-2">
                       {analyses.map(a => {
-                        const hasDeep = !!(a.deep_analysis && a.deep_analysis.trim());
+                        const bd = kindBadge(a);
                         return (
                           <button key={a.email_id} onClick={() => openModal(a)}
                             className="w-full flex items-start gap-3 px-4 py-3 text-left border border-outline-variant/30 rounded-xl bg-surface-container-lowest hover:border-primary/40 hover:bg-surface-container/40 transition-colors cursor-pointer">
@@ -253,8 +259,8 @@ export default function AdminEmailAgentPage() {
                               <div className="flex items-center gap-2 flex-wrap mb-1">
                                 <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded" style={{ color: priColor(a.priority), background: priColor(a.priority) + '18' }}>{a.priority || '中'}</span>
                                 {a.category && <span className="text-[11px] px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant">{a.category}</span>}
-                                <span className={`text-[11px] px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 ${hasDeep ? 'bg-primary/10 text-primary' : 'bg-surface-container text-on-surface-variant/60'}`}>
-                                  <span className="material-symbols-outlined text-[12px]">{hasDeep ? 'psychology' : 'summarize'}</span>{hasDeep ? '深度解析' : '一般解析'}
+                                <span className={`text-[11px] px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 ${bd.cls}`}>
+                                  <span className="material-symbols-outlined text-[12px]">{bd.icon}</span>{bd.label}
                                 </span>
                                 <span className="text-[11px] text-on-surface-variant/50 font-mono ml-auto">{fmtDateTime(a.created_at)}</span>
                               </div>
@@ -297,9 +303,11 @@ export default function AdminEmailAgentPage() {
                   <div className="flex items-center gap-2 flex-wrap mb-1.5">
                     <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded" style={{ color: priColor(modal.priority), background: priColor(modal.priority) + '18' }}>{modal.priority || '中'}優先</span>
                     {modal.category && <span className="text-[11px] px-1.5 py-0.5 rounded bg-surface-container text-on-surface-variant">{modal.category}</span>}
-                    <span className={`text-[11px] px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 ${modalDeep ? 'bg-primary/10 text-primary' : 'bg-surface-container text-on-surface-variant/60'}`}>
-                      <span className="material-symbols-outlined text-[12px]">{modalDeep ? 'psychology' : 'summarize'}</span>{modalDeep ? '深度解析' : '一般解析'}
-                    </span>
+                    {(() => { const bd = kindBadge(modal); return (
+                      <span className={`text-[11px] px-1.5 py-0.5 rounded inline-flex items-center gap-0.5 ${bd.cls}`}>
+                        <span className="material-symbols-outlined text-[12px]">{bd.icon}</span>{bd.label}
+                      </span>
+                    ); })()}
                   </div>
                   <h3 className="text-base font-bold text-on-surface leading-snug line-clamp-2">{modal.email_subject || '（無主旨）'}</h3>
                 </div>
@@ -315,7 +323,7 @@ export default function AdminEmailAgentPage() {
                     <span className="text-sm font-semibold text-on-surface">AI 分析</span>
                   </div>
                   <div className="flex-1 min-h-0 overflow-y-auto p-4">
-                    {modalDeep ? <AnalysisSections deep={modal.deep_analysis!} /> : (
+                    {modalDeep ? <AnalysisSections deep={modalDeepText} /> : (
                       <div className="space-y-3">
                         <div className="rounded-xl border border-outline-variant/15 overflow-hidden bg-surface-container-low/30">
                           <div className="flex items-center gap-2 px-3 py-2 border-b border-outline-variant/10 bg-primary/[0.08]">
@@ -325,12 +333,6 @@ export default function AdminEmailAgentPage() {
                           <div className="px-3 py-2.5 text-sm text-on-surface-variant leading-relaxed whitespace-pre-wrap">{modal.summary || '（無摘要）'}</div>
                         </div>
                         <p className="text-xs text-on-surface-variant/50 px-1">此封信未做深度解析 —— 使用者只看了 AI 摘要，未觸發行動建議 / 資安標記 / 緊急程度 / 建議回覆。</p>
-                        <button onClick={runDeepAnalysis} disabled={analyzing}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-on-primary text-sm font-medium hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors cursor-pointer">
-                          <span className={`material-symbols-outlined text-lg ${analyzing ? 'animate-spin' : ''}`}>{analyzing ? 'progress_activity' : 'auto_awesome'}</span>
-                          {analyzing ? 'AI 深度分析中…（約 1 分鐘）' : '執行 AI 深度分析'}
-                        </button>
-                        <p className="text-[11px] text-on-surface-variant/40 px-1 text-center">為評估 AI 品質而即時產生完整解析(會消耗 token)</p>
                       </div>
                     )}
                   </div>
@@ -415,7 +417,8 @@ export default function AdminEmailAgentPage() {
                   <th className="py-3 px-4 font-bold">使用者</th>
                   <th className="py-3 px-4 font-bold text-center">對話提問</th>
                   <th className="py-3 px-4 font-bold text-center">信件解析</th>
-                  <th className="py-3 px-4 font-bold text-center">深度解析</th>
+                  <th className="py-3 px-4 font-bold text-center">深度分析</th>
+                  <th className="py-3 px-4 font-bold text-center">附件分析</th>
                   <th className="py-3 px-4 font-bold">最近活動</th>
                 </tr>
               </thead>
@@ -434,6 +437,7 @@ export default function AdminEmailAgentPage() {
                     <td className="py-3 px-4 text-center text-sm">{it.question_count ? <span className="text-primary font-medium">{it.question_count}</span> : <span className="text-on-surface-variant/50">0</span>}</td>
                     <td className="py-3 px-4 text-center text-sm">{it.analysis_count ? <span className="text-on-surface font-medium">{it.analysis_count}</span> : <span className="text-on-surface-variant/50">0</span>}</td>
                     <td className="py-3 px-4 text-center text-sm">{it.deep_count ? <span className="text-primary font-medium">{it.deep_count}</span> : <span className="text-on-surface-variant/50">0</span>}</td>
+                    <td className="py-3 px-4 text-center text-sm">{it.attachment_count ? <span className="text-tertiary font-medium">{it.attachment_count}</span> : <span className="text-on-surface-variant/50">0</span>}</td>
                     <td className="py-3 px-4 text-sm text-on-surface-variant font-mono">{fmtDate(it.last_activity)}</td>
                   </tr>
                 ))}
@@ -460,6 +464,7 @@ export default function AdminEmailAgentPage() {
                 <span className="inline-flex items-center gap-1"><span className="material-symbols-outlined text-[13px]">forum</span>{it.question_count || 0}</span>
                 <span className="inline-flex items-center gap-1"><span className="material-symbols-outlined text-[13px]">mark_email_read</span>{it.analysis_count || 0}</span>
                 <span className="inline-flex items-center gap-1 text-primary"><span className="material-symbols-outlined text-[13px]">psychology</span>{it.deep_count || 0}</span>
+                <span className="inline-flex items-center gap-1 text-tertiary"><span className="material-symbols-outlined text-[13px]">attach_file</span>{it.attachment_count || 0}</span>
                 <span className="ml-auto font-mono">{fmtDate(it.last_activity)}</span>
               </div>
             </div>
