@@ -237,31 +237,57 @@ router.post('/:id/runs/:runId/share', async (req: Request, res: Response) => {
 // SSE: text chunks keep the connection alive (a 1–2 min silent request gets
 // reset by the dev proxy) and give live progress; ends with a `done` event
 // carrying the full markdown. The client renders it to a polished PDF.
+// Async job: generation (~1–2 min via local Claude) runs in the background and
+// writes its result to team_runs; the client polls GET below. This replaces the
+// old long-held SSE request, which buffering/idle-timeout proxies were cutting
+// ("network error") on some customer networks.
+const REPORT_STALE_MS = 5 * 60_000;
 router.post('/:id/runs/:runId/report', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  const send = (type: string, data?: unknown) => res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
-  send('start'); // flush headers immediately so the proxy sees bytes
-  // Heartbeat: the model may think for 10–30s before the first token; keep the
-  // connection alive so the proxy doesn't idle-reset it.
-  const heartbeat = setInterval(() => { try { res.write(': ping\n\n'); } catch { /* ignore */ } }, 15_000);
-  try {
-    const { generateFormalReport } = await import('../services/teamReport.js');
-    const out = await generateFormalReport({
-      userId, teamId: String(req.params.id), runId: String(req.params.runId),
-      onText: chunk => send('text', chunk),
-    });
-    send('done', { markdown: out.markdown });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'Report generation failed';
-    send('error', msg);
-  } finally {
-    clearInterval(heartbeat);
-    res.end();
+  const teamId = String(req.params.id);
+  const runId = String(req.params.runId);
+  const run = await dbGet<{ report_md: string | null; report_status: string | null; report_started_at: string | null }>(
+    'SELECT report_md, report_status, report_started_at FROM team_runs WHERE id = ? AND team_id = ? AND user_id = ?',
+    runId, teamId, userId);
+  if (!run) { res.status(404).json({ error: 'Run not found' }); return; }
+
+  if (run.report_status === 'done' && run.report_md) { res.json({ status: 'done' }); return; }
+  // Already generating and not stale → let the client keep polling (no dup job).
+  if (run.report_status === 'running' && run.report_started_at &&
+      Date.now() - new Date(run.report_started_at.replace(' ', 'T') + 'Z').getTime() < REPORT_STALE_MS) {
+    res.json({ status: 'running' });
+    return;
   }
+
+  // Start (or restart a stale) job, then return immediately.
+  await dbRun("UPDATE team_runs SET report_status = 'running', report_error = NULL, report_started_at = NOW() WHERE id = ?", runId);
+  res.json({ status: 'running' });
+
+  // Fire-and-forget background generation.
+  void (async () => {
+    try {
+      const { generateFormalReport } = await import('../services/teamReport.js');
+      const out = await generateFormalReport({ userId, teamId, runId });
+      await dbRun("UPDATE team_runs SET report_md = ?, report_status = 'done', report_error = NULL WHERE id = ?", out.markdown, runId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Report generation failed';
+      await dbRun("UPDATE team_runs SET report_status = 'error', report_error = ? WHERE id = ?", msg, runId).catch(() => {});
+    }
+  })();
+});
+
+// GET /api/teams/:id/runs/:runId/report — poll the formal-report job.
+router.get('/:id/runs/:runId/report', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const run = await dbGet<{ report_md: string | null; report_status: string | null; report_error: string | null }>(
+    'SELECT report_md, report_status, report_error FROM team_runs WHERE id = ? AND team_id = ? AND user_id = ?',
+    String(req.params.runId), String(req.params.id), userId);
+  if (!run) { res.status(404).json({ error: 'Run not found' }); return; }
+  res.json({
+    status: run.report_status || 'idle',
+    markdown: run.report_status === 'done' ? (run.report_md || '') : undefined,
+    error: run.report_error || undefined,
+  });
 });
 
 // DELETE /api/teams/:id/runs/:runId — delete a single collaboration run.

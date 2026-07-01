@@ -358,30 +358,23 @@ function TeamRunContent() {
     w.document.close();
     setReportingRunId(runId);
     try {
-      // Streamed as SSE (text chunks keep the long request alive through the proxy).
-      const res = await fetch(`${SSE_BASE}/api/teams/${teamId}/runs/${runId}/report`, { method: 'POST', headers: authHeaders() });
-      if (!res.ok || !res.body) throw new Error(`產生失敗 (${res.status})`);
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+      // Async job + polling: the POST starts (or resumes) a background job and returns
+      // immediately; we then poll short GET requests until it's done. No long-held
+      // connection, so a buffering/idle-timeout proxy can't cut it ("network error").
+      const startRes = await fetch(`${SSE_BASE}/api/teams/${teamId}/runs/${runId}/report`, { method: 'POST', headers: authHeaders() });
+      if (!startRes.ok) throw new Error(`啟動失敗 (${startRes.status})`);
+      const deadline = Date.now() + 4 * 60_000;
       let markdown = '';
-      let streamError = '';
       while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          let ev: { type: string; data?: any };
-          try { ev = JSON.parse(line.slice(6)); } catch { continue; }
-          if (ev.type === 'text' && typeof ev.data === 'string') markdown += ev.data;
-          else if (ev.type === 'done') { if (ev.data?.markdown) markdown = ev.data.markdown; }
-          else if (ev.type === 'error') streamError = typeof ev.data === 'string' ? ev.data : '產生失敗';
-        }
+        if (Date.now() > deadline) throw new Error('產生逾時，請稍後再試一次');
+        await new Promise(r => setTimeout(r, 2500));
+        const pr = await fetch(`${SSE_BASE}/api/teams/${teamId}/runs/${runId}/report`, { headers: authHeaders() });
+        if (!pr.ok) throw new Error(`查詢失敗 (${pr.status})`);
+        const d = await pr.json() as { status: string; markdown?: string; error?: string };
+        if (d.status === 'done') { markdown = d.markdown || ''; break; }
+        if (d.status === 'error') throw new Error(d.error || '產生失敗');
+        // 'running' / 'idle' → keep polling
       }
-      if (streamError) throw new Error(streamError);
       if (!markdown.trim()) throw new Error('報告內容為空');
       const run = history.find(r => r.id === runId);
       const logoDataUrl = await fetchAsDataUrl('/logo.png', {});
@@ -390,7 +383,7 @@ function TeamRunContent() {
       const msg = e instanceof Error ? e.message : '產生失敗';
       try {
         w.document.open();
-        w.document.write(`<!DOCTYPE html><meta charset="utf-8"><body style="font-family:'Microsoft JhengHei',sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;color:#b00;text-align:center;padding:40px"><div><div style="font-size:40px;margin-bottom:12px">⚠️</div><div style="font-size:16px;font-weight:bold">正式報告產生失敗</div><div style="font-size:13px;color:#888;margin-top:8px">${msg}</div></div></body>`);
+        w.document.write(`<!DOCTYPE html><meta charset="utf-8"><body style="font-family:'Microsoft JhengHei',sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;color:#b00;text-align:center;padding:40px"><div><svg width="46" height="46" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:14px"><circle cx="12" cy="12" r="10" fill="#fdeceb" stroke="#d84c3e" stroke-width="1.5"/><path d="M12 7.2v5.4" stroke="#d84c3e" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16.3" r="1.15" fill="#d84c3e"/></svg><div style="font-size:16px;font-weight:bold">正式報告產生失敗</div><div style="font-size:13px;color:#888;margin-top:8px">${msg}</div></div></body>`);
         w.document.close();
       } catch { /* window may be closed */ }
     } finally {
@@ -887,8 +880,8 @@ function TeamRunContent() {
 
         {/* Synthesis */}
         {(synthesis || synthRunning) && (
-          <div className="bg-surface-container rounded-2xl border border-primary/30 overflow-hidden mb-6">
-            <div className="flex items-center gap-2 p-3.5 border-b border-outline-variant/10 bg-primary/5">
+          <div className="bg-surface-container rounded-2xl border border-primary/30 mb-6">
+            <div className="flex items-center gap-2 p-3.5 border-b border-outline-variant/10 bg-primary/5 rounded-t-2xl">
               <span className="material-symbols-outlined text-primary">hub</span>
               <span className="font-headline font-bold text-on-surface">協調者統整</span>
               {synthRunning && <span className="material-symbols-outlined animate-spin text-primary text-base ml-1">progress_activity</span>}

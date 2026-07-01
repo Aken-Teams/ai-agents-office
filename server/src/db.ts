@@ -641,6 +641,10 @@ export async function initializeDatabase(): Promise<void> {
         output_tokens   INT NOT NULL DEFAULT 0,
         status          VARCHAR(20) NOT NULL DEFAULT 'running',
         share_token     VARCHAR(32) DEFAULT NULL,
+        report_md       LONGTEXT DEFAULT NULL,
+        report_status   VARCHAR(20) DEFAULT NULL,
+        report_error    TEXT DEFAULT NULL,
+        report_started_at DATETIME DEFAULT NULL,
         created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_team_runs_team (team_id),
         INDEX idx_team_runs_share (share_token),
@@ -737,6 +741,17 @@ export async function initializeDatabase(): Promise<void> {
     try {
       await conn.query('ALTER TABLE email_summary_cache ADD COLUMN attachment_analysis LONGTEXT DEFAULT NULL');
     } catch { /* column already exists */ }
+
+    // Migration: async formal-report job state on team_runs (generation runs in
+    // the background + is polled, so a slow request can't be cut by a proxy).
+    for (const col of [
+      'ADD COLUMN report_md LONGTEXT DEFAULT NULL',
+      'ADD COLUMN report_status VARCHAR(20) DEFAULT NULL',
+      'ADD COLUMN report_error TEXT DEFAULT NULL',
+      'ADD COLUMN report_started_at DATETIME DEFAULT NULL',
+    ]) {
+      try { await conn.query(`ALTER TABLE team_runs ${col}`); } catch { /* column already exists */ }
+    }
 
     // Migration: clear stale analyses that may have been stored against wrong email IDs
     // due to case-insensitive collation (one-time cleanup after switching to utf8mb4_bin)
