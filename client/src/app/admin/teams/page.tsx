@@ -258,6 +258,7 @@ export default function AdminTeamsPage() {
         <div className="flex items-center gap-1 mb-4 shrink-0">
           <Link href="/admin/conversations" className="px-3.5 py-1.5 rounded-full text-sm text-on-surface-variant hover:bg-surface-container transition-colors no-underline">對話管理</Link>
           <span className="px-3.5 py-1.5 rounded-full text-sm bg-primary text-on-primary font-medium">團隊協作</span>
+          <Link href="/admin/email-agent" className="px-3.5 py-1.5 rounded-full text-sm text-on-surface-variant hover:bg-surface-container transition-colors no-underline">信件助手</Link>
         </div>
 
         {/* Search */}

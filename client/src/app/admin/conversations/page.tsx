@@ -577,10 +577,11 @@ export default function AdminConversationsPage() {
       </header>
 
       <div className="flex-1 flex flex-col p-4 md:p-8 overflow-hidden">
-        {/* Tabs: 對話管理 / 團隊協作 */}
+        {/* Tabs: 對話管理 / 團隊協作 / 信件助手 */}
         <div className="flex items-center gap-1 mb-4 shrink-0">
           <span className="px-3.5 py-1.5 rounded-full text-sm bg-primary text-on-primary font-medium">對話管理</span>
           <Link href="/admin/teams" className="px-3.5 py-1.5 rounded-full text-sm text-on-surface-variant hover:bg-surface-container transition-colors no-underline">團隊協作</Link>
+          <Link href="/admin/email-agent" className="px-3.5 py-1.5 rounded-full text-sm text-on-surface-variant hover:bg-surface-container transition-colors no-underline">信件助手</Link>
         </div>
         {/* Search */}
         <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4 md:mb-6">

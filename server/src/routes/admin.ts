@@ -8,6 +8,7 @@ import { adminMiddleware } from '../middleware/adminAuth.js';
 import { loadSkills } from '../skills/loader.js';
 import { config } from '../config.js';
 import { applyWatermark, getWatermarkSettings, setWatermarkSettings } from '../services/watermark.js';
+import { getMailToken, fetchMessageDetail } from '../services/outlookApi.js';
 import { getUserUsageLimitUsd, setUserUsageLimitUsd, getUserDisplayCost, getEffectiveUserLimit, getStorageQuotaGb, setStorageQuotaGb, getUploadQuotaMb, setUploadQuotaMb } from '../services/usageLimit.js';
 import { getRolePermissions, setRolePermissions, type RolePermissions } from '../services/rolePermissions.js';
 import { getLineSettings, setLineSetting, type LineSettings } from '../services/lineSettings.js';
@@ -1066,9 +1067,10 @@ router.get('/conversations', async (req: Request, res: Response) => {
   const search = req.query.search as string || '';
   const userId = req.query.userId as string || '';
 
-  // Hide team-member sub-conversations (they show as 0-message noise); team
-  // collaborations are surfaced via the dedicated /teams endpoint instead.
-  let whereClause = 'WHERE c.team_id IS NULL';
+  // Hide team-member sub-conversations (0-message noise) AND the email-assistant
+  // conversations — both are surfaced via their own dedicated endpoints
+  // (/teams and /email-agent) so this list stays clean.
+  let whereClause = "WHERE c.team_id IS NULL AND (c.category IS NULL OR c.category <> 'email-agent')";
   const params: any[] = [];
 
   if (search) {
@@ -1121,6 +1123,105 @@ router.get('/conversations', async (req: Request, res: Response) => {
     limit,
     totalPages: Math.ceil((countRow?.total ?? 0) / limit),
   });
+});
+
+// GET /api/admin/email-agent — list email-assistant usage per user.
+// Surfaces whether each user is doing per-email ANALYSIS (信件解析, stored in
+// email_summary_cache) vs. actual Q&A CONVERSATION (對話, stored in messages).
+router.get('/email-agent', async (req: Request, res: Response) => {
+  const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+  const offset = (page - 1) * limit;
+  const search = (req.query.search as string || '').trim();
+
+  let where = "WHERE c.category = 'email-agent'";
+  const params: any[] = [];
+  if (search) {
+    where += ' AND (u.email LIKE ? OR u.display_name LIKE ?)';
+    const p = `%${search}%`;
+    params.push(p, p);
+  }
+
+  const countRow = await dbGet<{ total: number }>(
+    `SELECT COUNT(*) as total FROM conversations c LEFT JOIN users u ON u.id = c.user_id ${where}`,
+    ...params,
+  );
+
+  const rows = await dbAll(`
+    SELECT
+      c.id, c.user_id, c.created_at, c.status,
+      u.email AS user_email, u.display_name AS user_display_name,
+      (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id AND m.role = 'user') AS question_count,
+      (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) AS message_count,
+      (SELECT COUNT(*) FROM email_summary_cache e WHERE e.user_id = c.user_id) AS analysis_count,
+      (SELECT COUNT(*) FROM email_summary_cache e WHERE e.user_id = c.user_id AND e.analysis IS NOT NULL AND e.analysis <> '') AS deep_count,
+      GREATEST(
+        COALESCE((SELECT MAX(m.created_at) FROM messages m WHERE m.conversation_id = c.id), c.created_at),
+        COALESCE((SELECT MAX(e.created_at) FROM email_summary_cache e WHERE e.user_id = c.user_id), c.created_at)
+      ) AS last_activity
+    FROM conversations c
+    LEFT JOIN users u ON u.id = c.user_id
+    ${where}
+    ORDER BY last_activity DESC, c.created_at DESC
+    LIMIT ? OFFSET ?
+  `, ...params, limit, offset);
+
+  res.json({
+    items: rows,
+    total: countRow?.total ?? 0,
+    page,
+    limit,
+    totalPages: Math.ceil((countRow?.total ?? 0) / limit),
+  });
+});
+
+// GET /api/admin/email-agent/:id — one user's email-assistant detail:
+// the Q&A chat messages AND the per-email analyses (subject/priority/summary/deep).
+router.get('/email-agent/:id', async (req: Request, res: Response) => {
+  const convId = req.params.id;
+  const conversation = await dbGet<any>(`
+    SELECT c.id, c.user_id, c.title, c.created_at, c.status,
+           u.email AS user_email, u.display_name AS user_display_name
+    FROM conversations c LEFT JOIN users u ON u.id = c.user_id
+    WHERE c.id = ? AND c.category = 'email-agent'`, convId);
+  if (!conversation) { res.status(404).json({ error: 'Not found' }); return; }
+
+  const messages = await dbAll(
+    `SELECT id, role, content, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at ASC`,
+    convId,
+  );
+  const analyses = await dbAll(`
+    SELECT email_id, email_subject, summary, priority, category, analysis AS deep_analysis, created_at
+    FROM email_summary_cache WHERE user_id = ? ORDER BY created_at DESC LIMIT 300`, conversation.user_id);
+
+  res.json({ conversation, messages, analyses });
+});
+
+// GET /api/admin/email-agent/:id/email?emailId=... — fetch the ORIGINAL email body
+// live from the mail gateway, using the owner's stored mail token. NOTE: this
+// exposes the user's raw mailbox content to the admin (sensitive; admin-only).
+router.get('/email-agent/:id/email', async (req: Request, res: Response) => {
+  const emailId = String(req.query.emailId || '').trim();
+  if (!emailId) { res.status(400).json({ error: 'emailId required' }); return; }
+  const conv = await dbGet<{ user_id: string }>(
+    "SELECT user_id FROM conversations WHERE id = ? AND category = 'email-agent'", req.params.id);
+  if (!conv) { res.status(404).json({ error: 'Not found' }); return; }
+  try {
+    const token = await getMailToken(conv.user_id);
+    if (!token) { res.status(409).json({ error: 'no_token', message: '信箱連線已過期或未授權，無法讀取原信件' }); return; }
+    const msg = await fetchMessageDetail(token, emailId);
+    if (!msg) { res.status(404).json({ error: 'not_found', message: '找不到原始信件（可能已被刪除或移動）' }); return; }
+    res.json({
+      subject: msg.subject,
+      from: msg.from,
+      to: msg.to,
+      receivedAt: msg.received_at,
+      body: msg.body || '',
+      bodyType: msg.body_type || 'text',
+    });
+  } catch {
+    res.status(502).json({ error: 'fetch_failed', message: '讀取原信件失敗' });
+  }
 });
 
 // GET /api/admin/teams — list AI team collaborations with aggregates

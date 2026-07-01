@@ -24,7 +24,8 @@ import { calcCostUsd } from '../../../lib/pricing';
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
-// Scheduling is hidden in pro-panjit for now (pending AD-email integration).
+// In pro-panjit, scheduling (which emails via the AD gateway) is limited to
+// reviewers/admins — same policy as the 強茂 template. Other deploy modes: everyone.
 const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
 const isPanjit = deployMode === 'pro-panjit';
 
@@ -232,6 +233,8 @@ function fillReportWindow(w: Window, html: string): void {
 
 function TeamRunContent() {
   const { token, user } = useAuth();
+  // Scheduling: everyone in non-panjit; only reviewers/admins in pro-panjit.
+  const canSchedule = !isPanjit || user?.role === 'admin' || user?.role === 'readonly';
   const router = useRouter();
   const params = useParams();
   const teamId = String(params.id);
@@ -687,7 +690,7 @@ function TeamRunContent() {
               已協作 {total.count} 次 · 累計 {(total.inputTokens + total.outputTokens).toLocaleString()} tokens · ${total.costUsd}
             </span>
           )}
-          {!isPanjit && (
+          {canSchedule && (
             <Link href={`/team/${teamId}/schedules`} title="排程管理"
               className="shrink-0 flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-bold border border-outline-variant/30 text-on-surface hover:border-primary/50 hover:text-primary transition-colors cursor-pointer no-underline">
               <span className="material-symbols-outlined text-[18px]">schedule</span>

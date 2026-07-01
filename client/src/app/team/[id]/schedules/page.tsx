@@ -19,7 +19,8 @@ import ScheduleCreateModal from '../../../components/ScheduleCreateModal';
 
 const DOW = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
 
-// Scheduling is hidden in pro-panjit for now (pending AD-email integration).
+// In pro-panjit, scheduling is limited to reviewers/admins (same as the 強茂
+// template); its emails go out via the AD mail gateway. Other modes: everyone.
 const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
 const isPanjit = deployMode === 'pro-panjit';
 
@@ -36,10 +37,12 @@ function SchedulesContent() {
   const teamId = String(params.id);
   const sidebarMargin = useSidebarMargin();
 
-  // Scheduling hidden in pro-panjit — bounce direct navigation back to the team.
+  // In pro-panjit, only reviewers/admins may schedule — bounce everyone else back
+  // to the team (wait until the user is loaded so we don't redirect prematurely).
+  const canSchedule = !isPanjit || user?.role === 'admin' || user?.role === 'readonly';
   useEffect(() => {
-    if (isPanjit) router.replace(`/team/${teamId}`);
-  }, [router, teamId]);
+    if (user && !canSchedule) router.replace(`/team/${teamId}`);
+  }, [router, teamId, user, canSchedule]);
 
   const [team, setTeam] = useState<TeamInfo | null>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -120,7 +123,7 @@ function SchedulesContent() {
   const shiftMonth = (delta: number) => setCursor(c => { const d = new Date(c.y, c.m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() }; });
   const schedName = (id: string | null) => schedules.find(s => s.id === id)?.name || null;
 
-  if (isPanjit) return null; // redirecting away (scheduling hidden in pro-panjit)
+  if (user && !canSchedule) return null; // disallowed in pro-panjit — redirecting away
 
   if (!team) {
     return (
