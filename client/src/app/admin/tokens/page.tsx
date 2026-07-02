@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
-import { PRICING_MARKUP } from '../../../lib/pricing';
+import { PRICING_MARKUP, markupForMonth } from '../../../lib/pricing';
 
 interface TokenSummary {
   totalInput: number;
@@ -123,9 +123,10 @@ export default function AdminTokens() {
       const totalTokens = rows.reduce((sum, r) => sum + r.total_tokens, 0);
       const totalConversations = rows.reduce((sum, r) => sum + r.conversations, 0);
       const totalSessions = rows.reduce((sum, r) => sum + r.sessions, 0);
-      // Effective rates (include service multiplier ×10, or ×2 in pro-out)
-      const INPUT_RATE  = 3  * PRICING_MARKUP; // $30/MTok (×10) or $6/MTok (×2)
-      const OUTPUT_RATE = 15 * PRICING_MARKUP; // $150/MTok (×10) or $30/MTok (×2)
+      // Quote is for a specific month → bill at that month's historical rate.
+      const quoteMarkup = markupForMonth(quoteMonth);
+      const INPUT_RATE  = 3  * quoteMarkup; // $/MTok = raw × month rate
+      const OUTPUT_RATE = 15 * quoteMarkup;
       const inputCostUSD  = (totalInput  / 1_000_000) * INPUT_RATE;
       const outputCostUSD = (totalOutput / 1_000_000) * OUTPUT_RATE;
       const totalCostUSD  = inputCostUSD + outputCostUSD;
@@ -968,7 +969,7 @@ export default function AdminTokens() {
             </thead>
             <tbody className="divide-y divide-outline-variant/10">
               {ledger.map(entry => {
-                const cost = ((entry.input_tokens / 1_000_000) * 3 + (entry.output_tokens / 1_000_000) * 15) * PRICING_MARKUP;
+                const cost = ((entry.input_tokens / 1_000_000) * 3 + (entry.output_tokens / 1_000_000) * 15) * markupForMonth((entry.created_at || '').slice(0, 7));
                 return (
                   <tr key={entry.id} className="hover:bg-surface-container-high/50 transition-colors">
                     <td className="py-3 px-6 text-sm text-primary font-mono">{entry.id.slice(0, 8)}</td>

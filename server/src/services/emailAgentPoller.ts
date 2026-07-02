@@ -17,11 +17,12 @@ import { dbAll, dbGet, dbRun } from '../db.js';
 import { recordTokenUsage } from './tokenTracker.js';
 import { v4 as uuidv4 } from 'uuid';
 
-// Email-agent AI (lightweight Haiku analysis) is billed at a lighter ×2 markup
-// instead of the global markup. All cost / token-count displays multiply raw
-// token_usage by config.pricingMarkup (×10 in pro-panjit), so we pre-scale the
-// recorded email tokens by (2 / pricingMarkup) → the effective markup becomes ×2.
-const EMAIL_AGENT_MARKUP = 2;
+// Email-agent AI (lightweight Haiku analysis) is billed at ×1 (raw cost, no markup)
+// — it's a low-value convenience feature and customers baulk at "I only read mail,
+// why is the token cost so high". All cost / token displays multiply raw token_usage
+// by config.pricingMarkup, so we pre-scale the recorded email tokens by
+// (1 / pricingMarkup) → the effective markup becomes ×1.
+const EMAIL_AGENT_MARKUP = 1;
 export function scaleEmailAgentTokens(tok: number): number {
   return Math.max(0, Math.round(tok * EMAIL_AGENT_MARKUP / config.pricingMarkup));
 }

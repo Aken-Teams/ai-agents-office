@@ -6,7 +6,7 @@ import { dbGet, dbAll, dbRun } from '../db.js';
 import { opsGet } from '../opsDb.js';
 import { adminMiddleware } from '../middleware/adminAuth.js';
 import { loadSkills } from '../skills/loader.js';
-import { config } from '../config.js';
+import { config, pricingMarkupForMonth } from '../config.js';
 import { applyWatermark, getWatermarkSettings, setWatermarkSettings } from '../services/watermark.js';
 import { getMailToken, fetchMessageDetail, resolveCidImages } from '../services/outlookApi.js';
 import { sendXlsx } from '../services/xlsxExport.js';
@@ -548,10 +548,21 @@ router.get('/tokens/summary', async (req: Request, res: Response) => {
     ${where}
   `, ...params);
 
-  // Claude Sonnet 4 pricing: $3/M input, $15/M output (×10 billing markup, ×2 in pro-out)
+  // Claude Sonnet 4 pricing: $3/M input, $15/M output. Cost is billed per-month at
+  // that month's historical markup (強茂 ×10 through 2026-06, ×5 from 2026-07), so a
+  // range spanning the boundary — or filtered to a past month — prices each month right.
   const totalInput = row?.total_input ?? 0;
   const totalOutput = row?.total_output ?? 0;
-  const estimatedCost = ((totalInput / 1_000_000) * 3 + (totalOutput / 1_000_000) * 15) * config.pricingMarkup;
+  const monthly = await dbAll<{ month: string; in_tok: number; out_tok: number }>(`
+    SELECT DATE_FORMAT(created_at, '%Y-%m') as month,
+           COALESCE(SUM(input_tokens), 0) as in_tok,
+           COALESCE(SUM(output_tokens), 0) as out_tok
+    FROM token_usage
+    ${where}
+    GROUP BY DATE_FORMAT(created_at, '%Y-%m')
+  `, ...params);
+  const estimatedCost = monthly.reduce((sum, m) =>
+    sum + ((m.in_tok / 1_000_000) * 3 + (m.out_tok / 1_000_000) * 15) * pricingMarkupForMonth(m.month), 0);
 
   res.json({
     totalInput,
@@ -2080,7 +2091,8 @@ router.get('/tokens/monthly-summary', async (req: Request, res: Response) => {
   if ((req.query.format as string) === 'xlsx') {
     const headers = ['月份', 'Email', '姓名', '輸入 Token', '輸出 Token', '總 Token', '預估費用(USD)', '對話次數', 'API 呼叫次數'];
     const sheetRows = (rows as any[]).map(r => {
-      const cost = ((r.input_tokens / 1_000_000) * 3 + (r.output_tokens / 1_000_000) * 15) * config.pricingMarkup;
+      // Per-month invoice: bill each month at its historical rate (see pricingMarkupForMonth).
+      const cost = ((r.input_tokens / 1_000_000) * 3 + (r.output_tokens / 1_000_000) * 15) * pricingMarkupForMonth(r.month);
       return [r.month, r.email, r.display_name, r.input_tokens, r.output_tokens, r.total_tokens, Math.round(cost * 10000) / 10000, r.conversations, r.sessions];
     });
     const label = from || to ? `${from || 'all'}_${to || 'all'}` : 'all';

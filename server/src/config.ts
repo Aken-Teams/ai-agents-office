@@ -66,10 +66,12 @@ export const config = {
   // Deploy mode: 'pro-panjit' (internal) | 'pro-out' (external, per-user quota)
   deployMode: (process.env.DEPLOY_MODE || 'pro-panjit') as 'pro-panjit' | 'pro-out',
 
-  // Billing markup applied to raw Claude Sonnet pricing ($3/M in, $15/M out) for
-  // all displayed token counts and dollar costs. pro-out (external) bills at ×2;
-  // all other deploy modes at ×10.
-  pricingMarkup: (process.env.DEPLOY_MODE || 'pro-panjit') === 'pro-out' ? 2 : 10,
+  // Billing markup applied to raw Claude Sonnet pricing ($3/M in, $15/M output) for
+  // displayed token counts and dollar costs. This is the CURRENT (ongoing) rate:
+  // pro-out (external) ×2; pro-panjit (強茂) dropped ×10 → ×5 starting 2026-07.
+  // Historical months bill at their own rate — use pricingMarkupForMonth() for any
+  // per-month / invoice view so June-2026 and earlier stay ×10.
+  pricingMarkup: (process.env.DEPLOY_MODE || 'pro-panjit') === 'pro-out' ? 2 : 5,
 
   // AD (Active Directory) integration — pro-panjit only
   adApiUrl: process.env.AD_API_URL || 'https://apigw.panjit.com.tw/ldap/api/v1',
@@ -121,6 +123,19 @@ export const config = {
   // existing single-node deployments are unaffected.
   trustProxy: process.env.TRUST_PROXY === 'true',
 } as const;
+
+/**
+ * Billing markup for a specific month ('YYYY-MM'). Historical months must bill at
+ * the rate that was in effect then: 強茂 (pro-panjit) was ×10 through 2026-06 and
+ * ×5 from 2026-07 onward; pro-out is always ×2. Use this in any per-month / invoice
+ * view so past months are not retroactively re-priced. Live/lifetime views that
+ * have no single month use config.pricingMarkup (the current rate).
+ */
+export function pricingMarkupForMonth(month: string): number {
+  if ((process.env.DEPLOY_MODE || 'pro-panjit') === 'pro-out') return 2;
+  // ISO 'YYYY-MM' strings compare correctly with plain string comparison.
+  return month && month < '2026-07' ? 10 : 5;
+}
 
 const DEFAULT_JWT_SECRET = 'dev-secret-change-in-production';
 
