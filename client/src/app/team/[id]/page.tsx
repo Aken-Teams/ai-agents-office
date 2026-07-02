@@ -15,7 +15,7 @@ import remarkGfm from 'remark-gfm';
 import remarkCjkFriendly from 'remark-cjk-friendly';
 import remarkFlexibleMarkers from 'remark-flexible-markers';
 import { AuthProvider, useAuth } from '../../components/AuthProvider';
-import { I18nProvider } from '../../../i18n';
+import { I18nProvider, useTranslation } from '../../../i18n';
 import Navbar from '../../components/Navbar';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 import TeamMarkdown from '../../components/TeamMarkdown';
@@ -231,6 +231,141 @@ function fillReportWindow(w: Window, html: string): void {
   else w.onload = () => setTimeout(go, 350);
 }
 
+// Document-export catalogue — mirrors the front-end 範本精靈 (format + per-format
+// styles). Style prompts reuse the same i18n keys the template wizard uses.
+type ExportFormat = 'docx' | 'pdf' | 'pptx' | 'html';
+const DOC_EXPORT: Array<{ format: ExportFormat; icon: string; label: string; desc: string; styles: Array<{ id: string; labelKey: string; promptKey: string }> }> = [
+  { format: 'pptx', icon: 'slideshow', label: '簡報', desc: 'PPT 投影片', styles: [
+    { id: 'panjit', labelKey: 'templates.pptx.panjit', promptKey: 'templates.pptx.panjit.prompt' },
+    { id: 'corporate', labelKey: 'templates.pptx.corporate', promptKey: 'templates.pptx.corporate.prompt' },
+    { id: 'minimalPro', labelKey: 'templates.pptx.minimalPro', promptKey: 'templates.pptx.minimalPro.prompt' },
+    { id: 'techDark', labelKey: 'templates.pptx.techDark', promptKey: 'templates.pptx.techDark.prompt' },
+    { id: 'creative', labelKey: 'templates.pptx.creative', promptKey: 'templates.pptx.creative.prompt' },
+  ] },
+  { format: 'docx', icon: 'description', label: 'Word', desc: '文書文件', styles: [
+    { id: 'formal', labelKey: 'templates.docx.formal', promptKey: 'templates.docx.formal.prompt' },
+    { id: 'modern', labelKey: 'templates.docx.modern', promptKey: 'templates.docx.modern.prompt' },
+    { id: 'academic', labelKey: 'templates.docx.academic', promptKey: 'templates.docx.academic.prompt' },
+    { id: 'compact', labelKey: 'templates.docx.compact', promptKey: 'templates.docx.compact.prompt' },
+  ] },
+  { format: 'pdf', icon: 'picture_as_pdf', label: 'PDF', desc: '文件輸出', styles: [
+    { id: 'formal', labelKey: 'templates.pdf.formal', promptKey: 'templates.pdf.formal.prompt' },
+    { id: 'modern', labelKey: 'templates.pdf.modern', promptKey: 'templates.pdf.modern.prompt' },
+    { id: 'magazine', labelKey: 'templates.pdf.magazine', promptKey: 'templates.pdf.magazine.prompt' },
+    { id: 'technical', labelKey: 'templates.pdf.technical', promptKey: 'templates.pdf.technical.prompt' },
+  ] },
+  { format: 'html', icon: 'web', label: '網頁簡報', desc: '互動 HTML', styles: [
+    { id: 'business', labelKey: 'templates.slides.business', promptKey: 'templates.slides.business.prompt' },
+    { id: 'data', labelKey: 'templates.slides.data', promptKey: 'templates.slides.data.prompt' },
+    { id: 'personal', labelKey: 'templates.slides.personal', promptKey: 'templates.slides.personal.prompt' },
+    { id: 'creative', labelKey: 'templates.slides.creative', promptKey: 'templates.slides.creative.prompt' },
+  ] },
+];
+
+// One "產生文件" picker (format + style) → runs the format's doc-gen on the team's
+// report content (no conversation created) and downloads the file. 正式報告 unchanged.
+function DocExportModal({ teamId, runId, authHeaders, onClose }: { teamId: string; runId: string; authHeaders: () => HeadersInit; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [format, setFormat] = useState<ExportFormat>('pptx');
+  const [styleId, setStyleId] = useState<string>(DOC_EXPORT[0].styles[0].id);
+  const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState('');
+  const [error, setError] = useState('');
+  const fmt = DOC_EXPORT.find(f => f.format === format)!;
+
+  function pickFormat(f: ExportFormat) {
+    setFormat(f);
+    setStyleId(DOC_EXPORT.find(x => x.format === f)!.styles[0].id);
+  }
+
+  async function generate() {
+    if (busy) return;
+    setBusy(true); setError(''); setStage('AI 正在依報告內容產生文件，約需 1–3 分鐘…');
+    try {
+      const style = fmt.styles.find(s => s.id === styleId) || fmt.styles[0];
+      const stylePrompt = (t(style.promptKey as never) as string) || '';
+      const startRes = await fetch(`${SSE_BASE}/api/teams/${teamId}/runs/${runId}/document`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ format, stylePrompt }),
+      });
+      if (!startRes.ok) throw new Error(`啟動失敗 (${startRes.status})`);
+      const { jobId } = await startRes.json();
+      const deadline = Date.now() + 10 * 60_000;
+      for (;;) {
+        if (Date.now() > deadline) throw new Error('產生逾時，請稍後再試');
+        await new Promise(r => setTimeout(r, 3000));
+        const st = await fetch(`${SSE_BASE}/api/teams/${teamId}/runs/${runId}/document/${jobId}/status`, { headers: authHeaders() });
+        if (!st.ok) throw new Error(`狀態查詢失敗 (${st.status})`);
+        const d = await st.json() as { status: string; error?: string };
+        if (d.status === 'error') throw new Error(d.error || '產生失敗');
+        if (d.status === 'done') break;
+      }
+      setStage('下載中…');
+      const dl = await fetch(`${SSE_BASE}/api/teams/${teamId}/runs/${runId}/document/${jobId}/download`, { headers: authHeaders() });
+      if (!dl.ok) throw new Error(`下載失敗 (${dl.status})`);
+      const blob = await dl.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `團隊報告.${format}`; a.click();
+      URL.revokeObjectURL(url);
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '產生失敗');
+      setStage('');
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" onClick={() => !busy && onClose()}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div className="relative w-full max-w-lg bg-surface rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-outline-variant/10">
+          <span className="material-symbols-outlined text-primary">auto_awesome</span>
+          <h3 className="text-sm font-black text-on-surface">產生文件（用這次分析的報告內容）</h3>
+          <button onClick={() => !busy && onClose()} className="ml-auto text-on-surface-variant hover:text-on-surface cursor-pointer"><span className="material-symbols-outlined">close</span></button>
+        </div>
+        <div className="p-5">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant mb-2">格式</p>
+          <div className="grid grid-cols-4 gap-2 mb-4">
+            {DOC_EXPORT.map(f => (
+              <button key={f.format} onClick={() => pickFormat(f.format)} disabled={busy}
+                className={`flex flex-col items-center gap-1 rounded-xl border p-3 transition-colors cursor-pointer disabled:opacity-50 ${format === f.format ? 'border-primary bg-primary/10' : 'border-outline-variant/20 hover:bg-surface-container'}`}>
+                <span className={`material-symbols-outlined ${format === f.format ? 'text-primary' : 'text-on-surface-variant'}`}>{f.icon}</span>
+                <span className={`text-xs font-bold ${format === f.format ? 'text-primary' : 'text-on-surface'}`}>{f.label}</span>
+                <span className="text-[10px] text-on-surface-variant">{f.desc}</span>
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant mb-2">風格</p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {fmt.styles.map(s => (
+              <button key={s.id} onClick={() => setStyleId(s.id)} disabled={busy}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer disabled:opacity-50 ${styleId === s.id ? 'border-primary bg-primary/10 text-primary' : 'border-outline-variant/20 text-on-surface-variant hover:bg-surface-container'}`}>
+                {(t(s.labelKey as never) as string) || s.id}
+              </button>
+            ))}
+          </div>
+          {error ? (
+            <p className="text-xs text-error flex items-center gap-1 mb-3"><span className="material-symbols-outlined text-[14px]">error</span>{error}</p>
+          ) : stage ? (
+            <p className="text-xs text-primary flex items-center gap-1.5 mb-3"><span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>{stage}</p>
+          ) : (
+            <p className="text-[11px] text-on-surface-variant/70 mb-3">若尚未產生正式報告，系統會先自動整理報告內容，再依所選格式與風格產出檔案。</p>
+          )}
+          <div className="flex gap-2">
+            <button onClick={() => !busy && onClose()} className="flex-1 py-2 rounded-lg text-sm font-bold text-on-surface-variant bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50" disabled={busy}>取消</button>
+            <button onClick={generate} disabled={busy}
+              className="flex-1 py-2 rounded-lg text-sm font-bold text-on-primary bg-primary hover:brightness-110 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5">
+              <span className={`material-symbols-outlined text-sm ${busy ? 'animate-spin' : ''}`}>{busy ? 'progress_activity' : 'download'}</span>
+              {busy ? '產生中…' : '產生並下載'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TeamRunContent() {
   const { token, user } = useAuth();
   // Scheduling: everyone in non-panjit; ADMIN ONLY in pro-panjit for now
@@ -350,6 +485,7 @@ function TeamRunContent() {
   // Generate a formal, AI-written report (one cohesive document) and open it as a
   // polished PDF. Needs a saved run id; takes ~1–2 min (local Claude CLI).
   const [reportingRunId, setReportingRunId] = useState<string | null>(null);
+  const [docExportRunId, setDocExportRunId] = useState<string | null>(null);
   const handleFormalReport = useCallback(async (runId: string) => {
     if (reportingRunId) return; // one at a time
     const w = window.open('', '_blank');
@@ -596,6 +732,9 @@ function TeamRunContent() {
   return (
     <div className="min-h-screen bg-surface-container-lowest">
       <Navbar />
+      {docExportRunId && (
+        <DocExportModal teamId={teamId} runId={docExportRunId} authHeaders={authHeaders} onClose={() => setDocExportRunId(null)} />
+      )}
       {runDeleteTarget && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setRunDeleteTarget(null)}>
           <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
@@ -897,6 +1036,15 @@ function TeamRunContent() {
                       </button>
                     </Tooltip>
                   )}
+                  {activeRunId && (
+                    <Tooltip label="產生文件（Word / PPT / PDF / 網頁，可選風格）" align="right">
+                      <button onClick={() => setDocExportRunId(activeRunId)}
+                        className="flex items-center gap-1 h-7 px-2.5 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs font-bold hover:bg-primary/10 transition-colors cursor-pointer shrink-0">
+                        <span className="material-symbols-outlined text-[16px]">note_add</span>
+                        產生文件
+                      </button>
+                    </Tooltip>
+                  )}
                   <Tooltip label="下載原始報告（PDF）" align="right">
                     <button onClick={handleDownloadCurrent}
                       className="w-7 h-7 flex items-center justify-center rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer">
@@ -958,6 +1106,14 @@ function TeamRunContent() {
                       <button onClick={() => handleFormalReport(run.id)} disabled={!!reportingRunId}
                         className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-wait">
                         <span className={`material-symbols-outlined text-[18px] ${reportingRunId === run.id ? 'animate-spin' : ''}`}>{reportingRunId === run.id ? 'progress_activity' : 'article'}</span>
+                      </button>
+                    </Tooltip>
+                  )}
+                  {run.status === 'done' && (
+                    <Tooltip label="產生文件（Word / PPT / PDF / 網頁）" align="right">
+                      <button onClick={() => setDocExportRunId(run.id)}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0">
+                        <span className="material-symbols-outlined text-[18px]">note_add</span>
                       </button>
                     </Tooltip>
                   )}

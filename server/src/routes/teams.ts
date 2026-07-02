@@ -12,6 +12,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { dbGet, dbAll, dbRun } from '../db.js';
+import { startTeamDocumentJob, getDocJob, type DocFormat } from '../services/teamDocument.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
 import { TEAM_TEMPLATES, getTeamTemplate, type TeamAgentTemplate } from '../data/teamTemplates.js';
@@ -290,35 +291,44 @@ router.get('/:id/runs/:runId/report', async (req: Request, res: Response) => {
   });
 });
 
-// GET /api/teams/:id/runs/:runId/document?format=docx — build a downloadable
-// document from the run's FORMAL REPORT markdown. The formal report itself is
-// unchanged (still available as-is); this just re-renders the same content into a
-// real file. Word is deterministic (buildDocxBuffer). Requires the formal report
-// to have been generated first (report_md present).
-router.get('/:id/runs/:runId/document', async (req: Request, res: Response) => {
-  const userId = req.user!.userId;
-  const format = String(req.query.format || 'docx');
-  const run = await dbGet<{ report_md: string | null; report_status: string | null }>(
-    'SELECT report_md, report_status FROM team_runs WHERE id = ? AND team_id = ? AND user_id = ?',
-    String(req.params.runId), String(req.params.id), userId);
-  if (!run) { res.status(404).json({ error: 'Run not found' }); return; }
-  if (!run.report_md || run.report_status !== 'done') {
-    res.status(409).json({ error: '請先產生正式報告，再匯出文件' }); return;
-  }
+// ── Team document export (Word/PDF/PPT/HTML) — integrates the 範本精靈 formats
+// on top of a run's report. Runs the doc-gen agents headlessly (no conversation);
+// async job + download. The existing 正式報告(PDF) feature is unchanged.
+const VALID_DOC_FORMATS = new Set<DocFormat>(['docx', 'pdf', 'pptx', 'html']);
 
-  if (format === 'docx') {
-    const { markdownToSections } = await import('../services/securityReport.js');
-    const { buildDocxBuffer } = await import('../generators/generate-docx.js');
-    const { title, sections } = markdownToSections(run.report_md);
-    const buf = await buildDocxBuffer({ title, author: 'AI Agents Office', style: 'formal', sections });
-    const stamp = new Date().toISOString().slice(0, 10);
-    const safe = (title || 'report').replace(/[\\/:*?"<>|\n\r]+/g, ' ').trim().slice(0, 60) || 'report';
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(`${safe}_${stamp}.docx`)}"`);
-    res.end(buf);
-    return;
-  }
-  res.status(400).json({ error: `不支援的格式：${format}` });
+// POST /api/teams/:id/runs/:runId/document  {format, stylePrompt} → { jobId }
+router.post('/:id/runs/:runId/document', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const teamId = String(req.params.id);
+  const runId = String(req.params.runId);
+  const format = String((req.body?.format ?? '')) as DocFormat;
+  const stylePrompt = typeof req.body?.stylePrompt === 'string' ? req.body.stylePrompt : '';
+  if (!VALID_DOC_FORMATS.has(format)) { res.status(400).json({ error: `不支援的格式：${format}` }); return; }
+
+  const team = await dbGet<{ title: string }>('SELECT title FROM agent_teams WHERE id = ? AND user_id = ?', teamId, userId);
+  if (!team) { res.status(404).json({ error: 'Team not found' }); return; }
+  const run = await dbGet<{ id: string }>('SELECT id FROM team_runs WHERE id = ? AND team_id = ? AND user_id = ?', runId, teamId, userId);
+  if (!run) { res.status(404).json({ error: 'Run not found' }); return; }
+
+  const jobId = startTeamDocumentJob({ userId, teamId, runId, format, stylePrompt, teamTitle: team.title || '團隊報告' });
+  res.json({ jobId });
+});
+
+// GET /api/teams/:id/runs/:runId/document/:jobId/status
+router.get('/:id/runs/:runId/document/:jobId/status', (req: Request, res: Response) => {
+  const job = getDocJob(String(req.params.jobId));
+  if (!job) { res.status(404).json({ status: 'error', error: 'not found' }); return; }
+  res.json({ status: job.status, error: job.error });
+});
+
+// GET /api/teams/:id/runs/:runId/document/:jobId/download
+router.get('/:id/runs/:runId/document/:jobId/download', (req: Request, res: Response) => {
+  const job = getDocJob(String(req.params.jobId));
+  if (!job) { res.status(404).json({ error: 'not found' }); return; }
+  if (job.status !== 'done' || !job.buffer) { res.status(409).json({ error: 'not ready' }); return; }
+  res.setHeader('Content-Type', job.mime || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(job.filename || 'report')}"`);
+  res.end(job.buffer);
 });
 
 // DELETE /api/teams/:id/runs/:runId — delete a single collaboration run.
