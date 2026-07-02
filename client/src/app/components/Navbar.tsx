@@ -276,13 +276,18 @@ export default function Navbar() {
     try {
       const docType = DOC_TYPES.find(s => s.id === skillId);
       const title = docType?.labelKey ? t('nav.newDocTitle', { type: t(docType.labelKey) } as any) : t('nav.newConversation');
+      // Template selections (which carry a style prompt, e.g. 強茂) route through the
+      // FULL Router/auto flow — same refinement as a typed request — instead of the
+      // leaner direct single-skill path. We do this by leaving skill_id empty; the
+      // template prompt tells the Router what to build + which brand style to apply.
+      // Non-template quick-creates (data-analyst / research) keep their skillId.
       const res = await fetch('/api/conversations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ title, skillId }),
+        body: JSON.stringify({ title, skillId: templatePrompt ? '' : skillId }),
       });
       const conv = await res.json();
       if (templatePrompt) {

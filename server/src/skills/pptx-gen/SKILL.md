@@ -210,6 +210,22 @@ s.addText(String(pageNum), { x: '91.5%', y: '90.6%', w: '8%', h: '9.4%', fontSiz
 
 > **Header rules (important):** the header is three stacked, non-overlapping rows — **kicker** (`SECTION_NO` in brand blue + a short English `ENG_LABEL` in grey) on top, then the **title** in dark navy, then the **thin grey divider** as the lowest header element. Nothing may overlap: keep the kicker above the title, the title above the divider, and never draw text on the divider. Give each content slide a running 2-digit section number (`01`, `02`, …). If you have no clean English label, use the number alone (or a short Chinese label); the divider stays thin and light-grey (not a thick blue bar).
 
+> **⛔ 內容安全區 — 絕不壓到品牌元素（強茂最常見的跑版來源，務必嚴格遵守）：**
+> 每張內容頁的品牌元素是**固定的保留區**，你產生的任何內容（文字、bullet、圖表 `addChart`、圖片、卡片、色塊）**都不可以放進或覆蓋**這些區域：
+> - **右上角 Logo 區**：x ≥ `82%` 且 y ≤ `22%`（Logo 在 x`84.5%` y`5%`）。標題/kicker 的寬度也不要超過 x`80%`，替 Logo 留空。
+> - **頁首區**：y ≤ `22%`（kicker + 標題 + 分隔線專用）。
+> - **底部頁尾 / 頁碼角標區**：y ≥ `90%`（版權列 y`93.5%`、頁碼角標右下 x`89%`+ y`90.6%`+）。
+>
+> 因此**所有主體內容只能放在安全框內：x `4%`–`96%`、y `24%`–`89%`**。這是硬性上下界——任何元素的 `y + h` 不可超過 `89%`，`y` 不可小於 `24%`。
+>
+> **安全區「內部」的內容也絕不可互相重疊（這一點同樣重要）：**
+> - 每一個元素（文字框、bullet 區塊、`addChart`、`addImage`、卡片、色塊）都要有**明確的 x/y/w/h**，並在下筆前確認它的矩形**不與任何已經放上去的元素相交**。
+> - **圖表 / 圖片不可壓到文字**：雙欄版面讓「文字」佔一欄、「圖表/圖片」佔另一欄（例如文字 x`4%`–`48%`、圖表 x`52%`–`96%`），水平分開、各自在自己欄寬內；上下堆疊時，上一個元素的 `y + h` 要**小於**下一個元素的 `y`，中間留至少 `2%` 間距。
+> - 數據卡片 / 多欄要**等寬平均分佈、卡片之間留間距**，不可相黏或重疊。
+> - 文字太長就**縮小字級或精簡文字**，不要讓文字溢出撐爆到隔壁元素。
+>
+> 寧可**縮小圖表、減少每頁內容、或多開一頁**，也**不要**把元素塞到重疊、壓到品牌、或超出安全框。跑版（元素互相重疊 / 壓到品牌 / 超出邊界）在強茂範本是**不可接受**的。
+
 3. **Closing (last slide) — MANDATORY, never skip it.** The deck's **final** slide MUST be the official closing artwork, used **as-is** (the PANJIT slogan is already baked into the image), with only the logo bottom-right. **Do NOT overlay "Thank You" or any other title** — the image is already complete. **Never end the deck on a content slide.**
 ```javascript
 const e = pptx.addSlide();
