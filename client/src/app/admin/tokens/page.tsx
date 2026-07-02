@@ -8,6 +8,8 @@ import { PRICING_MARKUP, markupForMonth } from '../../../lib/pricing';
 interface TokenSummary {
   totalInput: number;
   totalOutput: number;
+  displayInput: number;   // raw × markup (date-aware), the billed token figure
+  displayOutput: number;
   totalInvocations: number;
   estimatedCost: number;
 }
@@ -137,8 +139,14 @@ export default function AdminTokens() {
       const inputCost  = inputCostUSD  * fx;
       const outputCost = outputCostUSD * fx;
       const totalCost  = totalCostUSD  * fx;
-      const inputUnitPrice  = isTWD ? `NT$${(INPUT_RATE  * rate).toFixed(0)}/MTok` : `$${INPUT_RATE}/MTok`;
-      const outputUnitPrice = isTWD ? `NT$${(OUTPUT_RATE * rate).toFixed(0)}/MTok` : `$${OUTPUT_RATE}/MTok`;
+      // Quote presents PUBLIC per-MTok rates ($3 in / $15 out); the markup is carried
+      // by the displayed quantity (raw × markup), so quantity × unit price reconciles
+      // to the subtotal even if the customer checks it against Claude's public price.
+      const inputUnitPrice  = isTWD ? `NT$${(3  * rate).toFixed(0)}/MTok` : `$3/MTok`;
+      const outputUnitPrice = isTWD ? `NT$${(15 * rate).toFixed(0)}/MTok` : `$15/MTok`;
+      // Displayed (billed) token quantities = raw × the quote month's markup.
+      const dispInput  = Math.round(totalInput  * quoteMarkup);
+      const dispOutput = Math.round(totalOutput * quoteMarkup);
       const [year, month] = quoteMonth.split('-');
       const quoteNo = `Q-${year}${month}-001`;
       const generatedAt = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
@@ -154,8 +162,8 @@ export default function AdminTokens() {
           <td style="color:#bbb;font-size:12px;width:32px">${i + 1}</td>
           <td style="color:#333"><strong>${r.display_name || r.email.split('@')[0]}</strong></td>
           <td style="color:#888;font-size:12px">${r.email}</td>
-          <td style="text-align:right;font-family:'Courier New',monospace;font-size:13px;color:#666">${r.input_tokens.toLocaleString()}</td>
-          <td style="text-align:right;font-family:'Courier New',monospace;font-size:13px;color:#666">${r.output_tokens.toLocaleString()}</td>
+          <td style="text-align:right;font-family:'Courier New',monospace;font-size:13px;color:#666">${Math.round(r.input_tokens * quoteMarkup).toLocaleString()}</td>
+          <td style="text-align:right;font-family:'Courier New',monospace;font-size:13px;color:#666">${Math.round(r.output_tokens * quoteMarkup).toLocaleString()}</td>
           <td style="text-align:right;font-family:'Courier New',monospace;font-weight:700;color:#111">${sym}${Math.ceil(uCost).toLocaleString()}</td>
         </tr>`;
       }).join('');
@@ -371,14 +379,14 @@ export default function AdminTokens() {
       <tr>
         <td style="color:#bbb;font-size:12px">1</td>
         <td class="desc"><strong>輸入 Token 使用費</strong><br><span style="font-size:12px;color:#888">Prompt / Input tokens</span></td>
-        <td class="qty">${totalInput.toLocaleString()} tok</td>
+        <td class="qty">${dispInput.toLocaleString()} tok</td>
         <td class="price">${inputUnitPrice}</td>
         <td class="amount">${sym}${Math.ceil(inputCost).toLocaleString()}</td>
       </tr>
       <tr>
         <td style="color:#bbb;font-size:12px">2</td>
         <td class="desc"><strong>輸出 Token 使用費</strong><br><span style="font-size:12px;color:#888">Completion / Output tokens</span></td>
-        <td class="qty">${totalOutput.toLocaleString()} tok</td>
+        <td class="qty">${dispOutput.toLocaleString()} tok</td>
         <td class="price">${outputUnitPrice}</td>
         <td class="amount">${sym}${Math.ceil(outputCost).toLocaleString()}</td>
       </tr>
@@ -795,11 +803,11 @@ export default function AdminTokens() {
             <span className="material-symbols-outlined absolute -bottom-4 -right-2 max-md:-bottom-2 max-md:-right-1 max-md:!text-[56px] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: 100 }}>token</span>
             <p className="text-[10px] md:text-sm uppercase tracking-widest text-on-surface-variant mb-1 md:mb-2">{t('admin.tokens.summary.totalUsage')}</p>
             <span className="text-xl md:text-3xl font-headline font-black text-on-surface">
-              {summary ? formatTokens(summary.totalInput + summary.totalOutput) : '\u2014'}
+              {summary ? formatTokens(summary.displayInput + summary.displayOutput) : '\u2014'}
             </span>
             <p className="text-[10px] md:text-sm text-on-surface-variant mt-1 md:mt-2 font-mono">
-              <span className="hidden md:inline">{t('admin.users.detail.tokenInput')}: {summary ? formatTokens(summary.totalInput) : '0'} | {t('admin.users.detail.tokenOutput')}: {summary ? formatTokens(summary.totalOutput) : '0'}</span>
-              <span className="md:hidden">In: {summary ? formatTokens(summary.totalInput) : '0'} · Out: {summary ? formatTokens(summary.totalOutput) : '0'}</span>
+              <span className="hidden md:inline">{t('admin.users.detail.tokenInput')}: {summary ? formatTokens(summary.displayInput) : '0'} | {t('admin.users.detail.tokenOutput')}: {summary ? formatTokens(summary.displayOutput) : '0'}</span>
+              <span className="md:hidden">In: {summary ? formatTokens(summary.displayInput) : '0'} · Out: {summary ? formatTokens(summary.displayOutput) : '0'}</span>
             </p>
           </div>
 
@@ -869,9 +877,11 @@ export default function AdminTokens() {
                       const total = v.total_input + v.total_output;
                       const pct = (total / maxChart) * 100;
                       const barHeight = Math.max(pct, 3);
+                      // Tooltip shows the billed token figure (raw × that point's month markup).
+                      const shownTotal = total * markupForMonth((v.date || '').slice(0, 7));
                       const tooltipLabel = period === 'monthly'
-                        ? `${v.date} · ${formatTokens(total)}`
-                        : `${v.date.slice(5)} · ${formatTokens(total)}`;
+                        ? `${v.date} · ${formatTokens(shownTotal)}`
+                        : `${v.date.slice(5)} · ${formatTokens(shownTotal)}`;
                       return (
                         <div key={i} className="flex-1 min-w-0 h-full flex items-end group/bar relative">
                           <div className={`w-full rounded-t transition-all group-hover/bar:brightness-125 ${period === 'monthly' ? 'bg-tertiary/70' : 'bg-primary/60'}`} style={{ height: `${barHeight}%` }} />
@@ -981,7 +991,7 @@ export default function AdminTokens() {
                       <p className="text-sm text-on-surface-variant font-mono truncate">{entry.email}</p>
                     </td>
                     <td className="py-3 px-6 text-right text-sm text-on-surface font-mono">
-                      {formatTokens(entry.input_tokens + entry.output_tokens)}
+                      {formatTokens((entry.input_tokens + entry.output_tokens) * markupForMonth((entry.created_at || '').slice(0, 7)))}
                     </td>
                     <td className="py-3 px-6 text-right text-sm text-on-surface font-mono">
                       ${cost.toFixed(3)}
@@ -1011,7 +1021,7 @@ export default function AdminTokens() {
                   <p className="text-sm text-on-surface font-medium truncate">{entry.user_prompt || entry.conversation_title || '\u2014'}</p>
                   <p className="text-xs text-on-surface-variant truncate">{entry.display_name || entry.email.split('@')[0]}</p>
                   <div className="flex items-center gap-3 mt-1.5 text-xs text-on-surface-variant font-mono">
-                    <span>{formatTokens(entry.input_tokens + entry.output_tokens)} tokens</span>
+                    <span>{formatTokens((entry.input_tokens + entry.output_tokens) * markupForMonth((entry.created_at || '').slice(0, 7)))} tokens</span>
                     <span>${cost.toFixed(3)}</span>
                   </div>
                 </div>

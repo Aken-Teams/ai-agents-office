@@ -234,6 +234,7 @@ function fillReportWindow(w: Window, html: string): void {
 // Document-export catalogue — mirrors the front-end 範本精靈 (format + per-format
 // styles). Style prompts reuse the same i18n keys the template wizard uses.
 type ExportFormat = 'docx' | 'pdf' | 'pptx' | 'html';
+type DocJobState = { runId: string; format: ExportFormat; label: string; status: 'running' | 'done' | 'error'; stage: string; error?: string };
 const DOC_EXPORT: Array<{ format: ExportFormat; icon: string; label: string; desc: string; styles: Array<{ id: string; labelKey: string; promptKey: string }> }> = [
   { format: 'pptx', icon: 'slideshow', label: '簡報', desc: 'PPT 投影片', styles: [
     { id: 'panjit', labelKey: 'templates.pptx.panjit', promptKey: 'templates.pptx.panjit.prompt' },
@@ -264,13 +265,15 @@ const DOC_EXPORT: Array<{ format: ExportFormat; icon: string; label: string; des
 
 // One "產生文件" picker (format + style) → runs the format's doc-gen on the team's
 // report content (no conversation created) and downloads the file. 正式報告 unchanged.
-function DocExportModal({ teamId, runId, authHeaders, onClose }: { teamId: string; runId: string; authHeaders: () => HeadersInit; onClose: () => void }) {
+function DocExportModal({ runId, onClose, onStart, jobRunning }: {
+  runId: string;
+  onClose: () => void;
+  onStart: (runId: string, format: ExportFormat, stylePrompt: string, label: string) => void;
+  jobRunning: boolean;
+}) {
   const { t } = useTranslation();
   const [format, setFormat] = useState<ExportFormat>('pptx');
   const [styleId, setStyleId] = useState<string>(DOC_EXPORT[0].styles[0].id);
-  const [busy, setBusy] = useState(false);
-  const [stage, setStage] = useState('');
-  const [error, setError] = useState('');
   const fmt = DOC_EXPORT.find(f => f.format === format)!;
 
   function pickFormat(f: ExportFormat) {
@@ -278,58 +281,31 @@ function DocExportModal({ teamId, runId, authHeaders, onClose }: { teamId: strin
     setStyleId(DOC_EXPORT.find(x => x.format === f)!.styles[0].id);
   }
 
-  async function generate() {
-    if (busy) return;
-    setBusy(true); setError(''); setStage('AI 正在依報告內容產生文件，約需 1–3 分鐘…');
-    try {
-      const style = fmt.styles.find(s => s.id === styleId) || fmt.styles[0];
-      const stylePrompt = (t(style.promptKey as never) as string) || '';
-      const startRes = await fetch(`${SSE_BASE}/api/teams/${teamId}/runs/${runId}/document`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ format, stylePrompt }),
-      });
-      if (!startRes.ok) throw new Error(`啟動失敗 (${startRes.status})`);
-      const { jobId } = await startRes.json();
-      const deadline = Date.now() + 10 * 60_000;
-      for (;;) {
-        if (Date.now() > deadline) throw new Error('產生逾時，請稍後再試');
-        await new Promise(r => setTimeout(r, 3000));
-        const st = await fetch(`${SSE_BASE}/api/teams/${teamId}/runs/${runId}/document/${jobId}/status`, { headers: authHeaders() });
-        if (!st.ok) throw new Error(`狀態查詢失敗 (${st.status})`);
-        const d = await st.json() as { status: string; error?: string };
-        if (d.status === 'error') throw new Error(d.error || '產生失敗');
-        if (d.status === 'done') break;
-      }
-      setStage('下載中…');
-      const dl = await fetch(`${SSE_BASE}/api/teams/${teamId}/runs/${runId}/document/${jobId}/download`, { headers: authHeaders() });
-      if (!dl.ok) throw new Error(`下載失敗 (${dl.status})`);
-      const blob = await dl.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = `團隊報告.${format}`; a.click();
-      URL.revokeObjectURL(url);
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '產生失敗');
-      setStage('');
-    } finally { setBusy(false); }
+  // Hand the job to the parent (it runs in the background) and close immediately —
+  // generation takes 1–3 min, so the user shouldn't be trapped in this dialog.
+  function submit() {
+    const style = fmt.styles.find(s => s.id === styleId) || fmt.styles[0];
+    const stylePrompt = (t(style.promptKey as never) as string) || '';
+    const styleLabel = (t(style.labelKey as never) as string) || style.id;
+    onStart(runId, format, stylePrompt, `${fmt.label} · ${styleLabel}`);
+    onClose();
   }
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" onClick={() => !busy && onClose()}>
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <div className="relative w-full max-w-lg bg-surface rounded-2xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 px-5 py-4 border-b border-outline-variant/10">
           <span className="material-symbols-outlined text-primary">auto_awesome</span>
           <h3 className="text-sm font-black text-on-surface">產生文件（用這次分析的報告內容）</h3>
-          <button onClick={() => !busy && onClose()} className="ml-auto text-on-surface-variant hover:text-on-surface cursor-pointer"><span className="material-symbols-outlined">close</span></button>
+          <button onClick={onClose} className="ml-auto text-on-surface-variant hover:text-on-surface cursor-pointer"><span className="material-symbols-outlined">close</span></button>
         </div>
         <div className="p-5">
           <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant mb-2">格式</p>
           <div className="grid grid-cols-4 gap-2 mb-4">
             {DOC_EXPORT.map(f => (
-              <button key={f.format} onClick={() => pickFormat(f.format)} disabled={busy}
-                className={`flex flex-col items-center gap-1 rounded-xl border p-3 transition-colors cursor-pointer disabled:opacity-50 ${format === f.format ? 'border-primary bg-primary/10' : 'border-outline-variant/20 hover:bg-surface-container'}`}>
+              <button key={f.format} onClick={() => pickFormat(f.format)}
+                className={`flex flex-col items-center gap-1 rounded-xl border p-3 transition-colors cursor-pointer ${format === f.format ? 'border-primary bg-primary/10' : 'border-outline-variant/20 hover:bg-surface-container'}`}>
                 <span className={`material-symbols-outlined ${format === f.format ? 'text-primary' : 'text-on-surface-variant'}`}>{f.icon}</span>
                 <span className={`text-xs font-bold ${format === f.format ? 'text-primary' : 'text-on-surface'}`}>{f.label}</span>
                 <span className="text-[10px] text-on-surface-variant">{f.desc}</span>
@@ -339,29 +315,52 @@ function DocExportModal({ teamId, runId, authHeaders, onClose }: { teamId: strin
           <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant mb-2">風格</p>
           <div className="flex flex-wrap gap-2 mb-4">
             {fmt.styles.map(s => (
-              <button key={s.id} onClick={() => setStyleId(s.id)} disabled={busy}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer disabled:opacity-50 ${styleId === s.id ? 'border-primary bg-primary/10 text-primary' : 'border-outline-variant/20 text-on-surface-variant hover:bg-surface-container'}`}>
+              <button key={s.id} onClick={() => setStyleId(s.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${styleId === s.id ? 'border-primary bg-primary/10 text-primary' : 'border-outline-variant/20 text-on-surface-variant hover:bg-surface-container'}`}>
                 {(t(s.labelKey as never) as string) || s.id}
               </button>
             ))}
           </div>
-          {error ? (
-            <p className="text-xs text-error flex items-center gap-1 mb-3"><span className="material-symbols-outlined text-[14px]">error</span>{error}</p>
-          ) : stage ? (
-            <p className="text-xs text-primary flex items-center gap-1.5 mb-3"><span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>{stage}</p>
+          {jobRunning ? (
+            <p className="text-xs text-primary flex items-center gap-1.5 mb-3"><span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>已有一份文件正在背景產生中，完成後會自動下載。</p>
           ) : (
-            <p className="text-[11px] text-on-surface-variant/70 mb-3">若尚未產生正式報告，系統會先自動整理報告內容，再依所選格式與風格產出檔案。</p>
+            <p className="text-[11px] text-on-surface-variant/70 mb-3">產生需 1–3 分鐘，會在背景執行，你可以關掉此視窗繼續操作，完成後會自動下載。</p>
           )}
           <div className="flex gap-2">
-            <button onClick={() => !busy && onClose()} className="flex-1 py-2 rounded-lg text-sm font-bold text-on-surface-variant bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer disabled:opacity-50" disabled={busy}>取消</button>
-            <button onClick={generate} disabled={busy}
+            <button onClick={onClose} className="flex-1 py-2 rounded-lg text-sm font-bold text-on-surface-variant bg-surface-container hover:bg-surface-container-high transition-colors cursor-pointer">取消</button>
+            <button onClick={submit} disabled={jobRunning}
               className="flex-1 py-2 rounded-lg text-sm font-bold text-on-primary bg-primary hover:brightness-110 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5">
-              <span className={`material-symbols-outlined text-sm ${busy ? 'animate-spin' : ''}`}>{busy ? 'progress_activity' : 'download'}</span>
-              {busy ? '產生中…' : '產生並下載'}
+              <span className="material-symbols-outlined text-sm">download</span>
+              背景產生並下載
             </button>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Small floating progress card for the background document-generation job.
+function DocJobPill({ job, onDismiss }: { job: DocJobState; onDismiss: () => void }) {
+  const running = job.status === 'running';
+  const done = job.status === 'done';
+  return (
+    <div className="fixed bottom-4 right-4 z-[130] w-[300px] bg-surface border border-outline-variant/20 rounded-xl shadow-2xl overflow-hidden">
+      <div className="flex items-start gap-2.5 p-3.5">
+        <span className={`material-symbols-outlined text-[20px] ${done ? 'text-success' : running ? 'text-primary animate-spin' : 'text-error'}`}>
+          {done ? 'check_circle' : running ? 'progress_activity' : 'error'}
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-black text-on-surface truncate">{job.label}</p>
+          <p className={`text-[11px] mt-0.5 ${done ? 'text-success' : running ? 'text-on-surface-variant' : 'text-error'}`}>
+            {job.status === 'error' ? (job.error || '產生失敗') : job.stage}
+          </p>
+        </div>
+        <button onClick={onDismiss} className="text-on-surface-variant hover:text-on-surface cursor-pointer shrink-0" title={running ? '取消' : '關閉'}>
+          <span className="material-symbols-outlined text-[18px]">close</span>
+        </button>
+      </div>
+      {running && <div className="h-0.5 bg-primary/20 overflow-hidden"><div className="h-full w-full bg-primary/70 animate-pulse" /></div>}
     </div>
   );
 }
@@ -486,6 +485,52 @@ function TeamRunContent() {
   // polished PDF. Needs a saved run id; takes ~1–2 min (local Claude CLI).
   const [reportingRunId, setReportingRunId] = useState<string | null>(null);
   const [docExportRunId, setDocExportRunId] = useState<string | null>(null);
+  // Background document-generation job (runs 1–3 min). Lives in the parent so the
+  // modal can close and the user keeps working; a floating pill shows progress.
+  const [docJob, setDocJob] = useState<DocJobState | null>(null);
+  const docJobCancel = useRef(false);
+
+  const startDocExport = useCallback(async (runId: string, format: ExportFormat, stylePrompt: string, label: string) => {
+    docJobCancel.current = false;
+    setDocJob({ runId, format, label, status: 'running', stage: 'AI 正在依報告內容產生文件，約需 1–3 分鐘…' });
+    try {
+      const startRes = await fetch(`${SSE_BASE}/api/teams/${teamId}/runs/${runId}/document`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ format, stylePrompt }),
+      });
+      if (!startRes.ok) throw new Error(`啟動失敗 (${startRes.status})`);
+      const { jobId } = await startRes.json();
+      const deadline = Date.now() + 10 * 60_000;
+      for (;;) {
+        if (docJobCancel.current) return;
+        if (Date.now() > deadline) throw new Error('產生逾時，請稍後再試');
+        await new Promise(r => setTimeout(r, 3000));
+        if (docJobCancel.current) return;
+        const st = await fetch(`${SSE_BASE}/api/teams/${teamId}/runs/${runId}/document/${jobId}/status`, { headers: authHeaders() });
+        if (!st.ok) throw new Error(`狀態查詢失敗 (${st.status})`);
+        const d = await st.json() as { status: string; error?: string };
+        if (d.status === 'error') throw new Error(d.error || '產生失敗');
+        if (d.status === 'done') break;
+      }
+      if (docJobCancel.current) return;
+      setDocJob(j => j ? { ...j, stage: '下載中…' } : j);
+      const dl = await fetch(`${SSE_BASE}/api/teams/${teamId}/runs/${runId}/document/${jobId}/download`, { headers: authHeaders() });
+      if (!dl.ok) throw new Error(`下載失敗 (${dl.status})`);
+      const blob = await dl.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `團隊報告.${format}`; a.click();
+      URL.revokeObjectURL(url);
+      if (docJobCancel.current) return;
+      setDocJob(j => j ? { ...j, status: 'done', stage: '已完成，檔案已下載' } : j);
+      setTimeout(() => setDocJob(j => (j && j.status === 'done') ? null : j), 6000);
+    } catch (e) {
+      if (docJobCancel.current) return;
+      setDocJob(j => j ? { ...j, status: 'error', error: e instanceof Error ? e.message : '產生失敗' } : j);
+    }
+  }, [teamId, authHeaders]);
+
+  const dismissDocJob = useCallback(() => { docJobCancel.current = true; setDocJob(null); }, []);
   const handleFormalReport = useCallback(async (runId: string) => {
     if (reportingRunId) return; // one at a time
     const w = window.open('', '_blank');
@@ -733,8 +778,9 @@ function TeamRunContent() {
     <div className="min-h-screen bg-surface-container-lowest">
       <Navbar />
       {docExportRunId && (
-        <DocExportModal teamId={teamId} runId={docExportRunId} authHeaders={authHeaders} onClose={() => setDocExportRunId(null)} />
+        <DocExportModal runId={docExportRunId} onClose={() => setDocExportRunId(null)} onStart={startDocExport} jobRunning={docJob?.status === 'running'} />
       )}
+      {docJob && <DocJobPill job={docJob} onDismiss={dismissDocJob} />}
       {runDeleteTarget && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setRunDeleteTarget(null)}>
           <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
