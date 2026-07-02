@@ -310,6 +310,7 @@ function AssistantEditModal({
   locale,
   onSave,
   onCancel,
+  hideSkill,
 }: {
   conversation: AssistantConversation | null; // null = create new
   skills: SkillOption[];
@@ -317,6 +318,7 @@ function AssistantEditModal({
   locale?: string;
   onSave: (data: { title: string; icon: string; system_prompt: string; skill_id: string }) => void;
   onCancel: () => void;
+  hideSkill?: boolean; // team members are role-only — hide the skill binding
 }) {
   const { t } = useTranslation();
   const nameRef = useRef<HTMLInputElement>(null);
@@ -413,16 +415,18 @@ function AssistantEditModal({
             </div>
           </div>
 
-          {/* Skill binding */}
-          <div>
-            <label className="block text-sm font-bold text-on-surface mb-1.5">
-              {t('assistant.editModal.skill' as any)}
-            </label>
-            <SkillPicker skills={skills} value={skillId} onChange={setSkillId} />
-            <p className="text-xs text-on-surface-variant/70 mt-1">
-              {t('assistant.editModal.skillHint' as any)}
-            </p>
-          </div>
+          {/* Skill binding — hidden for team members (they are role-only) */}
+          {!hideSkill && (
+            <div>
+              <label className="block text-sm font-bold text-on-surface mb-1.5">
+                {t('assistant.editModal.skill' as any)}
+              </label>
+              <SkillPicker skills={skills} value={skillId} onChange={setSkillId} />
+              <p className="text-xs text-on-surface-variant/70 mt-1">
+                {t('assistant.editModal.skillHint' as any)}
+              </p>
+            </div>
+          )}
 
           {/* Role description */}
           <div>
@@ -1556,6 +1560,8 @@ function AssistantContent() {
           conversation={editTarget === 'new' ? null : editTarget}
           // pro-panjit: 資訊圖表(infographic-gen) 暫不開放，從綁定技能清單隱藏
           skills={deployMode === 'pro-panjit' ? skills.filter(s => s.id !== 'infographic-gen') : skills}
+          // team members are role-only → hide skill binding (adding to a team, or editing an existing member)
+          hideSkill={!!addToTeamId || (editTarget !== 'new' && !!editTarget?.team_id)}
           token={token}
           locale={user?.locale}
           onSave={handleCreateOrEdit}

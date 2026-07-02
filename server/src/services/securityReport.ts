@@ -274,7 +274,7 @@ ${admin}
 }
 
 /** Parse the LLM Markdown report into generate-docx section blocks. */
-function markdownToSections(md: string): { title: string; sections: DocxInput['sections'] } {
+export function markdownToSections(md: string): { title: string; sections: DocxInput['sections'] } {
   const lines = md.replace(/\r\n/g, '\n').split('\n');
   let title = '資訊安全稽核報告';
   const sections: DocxInput['sections'] = [];

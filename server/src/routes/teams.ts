@@ -290,6 +290,37 @@ router.get('/:id/runs/:runId/report', async (req: Request, res: Response) => {
   });
 });
 
+// GET /api/teams/:id/runs/:runId/document?format=docx — build a downloadable
+// document from the run's FORMAL REPORT markdown. The formal report itself is
+// unchanged (still available as-is); this just re-renders the same content into a
+// real file. Word is deterministic (buildDocxBuffer). Requires the formal report
+// to have been generated first (report_md present).
+router.get('/:id/runs/:runId/document', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const format = String(req.query.format || 'docx');
+  const run = await dbGet<{ report_md: string | null; report_status: string | null }>(
+    'SELECT report_md, report_status FROM team_runs WHERE id = ? AND team_id = ? AND user_id = ?',
+    String(req.params.runId), String(req.params.id), userId);
+  if (!run) { res.status(404).json({ error: 'Run not found' }); return; }
+  if (!run.report_md || run.report_status !== 'done') {
+    res.status(409).json({ error: '請先產生正式報告，再匯出文件' }); return;
+  }
+
+  if (format === 'docx') {
+    const { markdownToSections } = await import('../services/securityReport.js');
+    const { buildDocxBuffer } = await import('../generators/generate-docx.js');
+    const { title, sections } = markdownToSections(run.report_md);
+    const buf = await buildDocxBuffer({ title, author: 'AI Agents Office', style: 'formal', sections });
+    const stamp = new Date().toISOString().slice(0, 10);
+    const safe = (title || 'report').replace(/[\\/:*?"<>|\n\r]+/g, ' ').trim().slice(0, 60) || 'report';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(`${safe}_${stamp}.docx`)}"`);
+    res.end(buf);
+    return;
+  }
+  res.status(400).json({ error: `不支援的格式：${format}` });
+});
+
 // DELETE /api/teams/:id/runs/:runId — delete a single collaboration run.
 router.delete('/:id/runs/:runId', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
