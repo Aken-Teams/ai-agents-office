@@ -275,7 +275,7 @@ const en = {
 
   'templates.pptx.panjit': 'PANJIT Official',
   'templates.pptx.panjit.desc': 'PANJIT corporate brand, blue/white',
-  'templates.pptx.panjit.prompt': 'Use the official PANJIT corporate template for this presentation: the branded PANJIT cover on slide 1, the PANJIT logo in the top-right of every content slide, brand blue as the lead colour, and a footer with the company name + page number. Design the content as richly and diversely as a top professional deck — vivid colours, full-bleed layouts (use the whole slide, no big empty areas), stat cards, charts, multi-column layouts and section dividers.',
+  'templates.pptx.panjit.prompt': 'Use the official PANJIT corporate template for this presentation: the branded PANJIT cover on slide 1, the PANJIT logo in the top-right of every content slide, brand blue as the lead colour, and a footer with the company name + page number. Design the content as richly and diversely as a top professional deck — vivid colours, full-bleed layouts (use the whole slide, no big empty areas), stat cards, charts, multi-column layouts and section dividers. **The deck structure MUST be: slide 1 = branded PANJIT cover → content slides in the middle → the LAST slide MUST be the official PANJIT Thank You closing slide; never omit the closing slide and never end on a content slide.**',
   'templates.pptx.minimalPro': 'Minimal Pro',
   'templates.pptx.minimalPro.desc': 'Clean whitespace, low-contrast',
   'templates.pptx.minimalPro.prompt': 'Minimal professional style: generous whitespace, low-contrast palette (white background, light gray accents, dark gray text), no decorative lines, sans-serif fonts, one key point per slide, monochrome charts, clean and sharp overall.',
