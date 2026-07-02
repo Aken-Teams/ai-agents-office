@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -228,19 +228,9 @@ export default function EmailDetailModal({
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Auto-run the AI analysis (text-only) shortly after the email is opened, so the
-  // user doesn't have to click. The heavier attachment deep-read stays manual.
-  // A ~1.5s delay means a quick glance-and-close skips it entirely (saves tokens);
-  // the delay's cleanup fires when the modal unmounts (i.e. the user closed it).
-  const triggeredFor = useRef<string | null>(null);
-  useEffect(() => {
-    if (triggeredFor.current === email.emailId || email.analysis || email.analyzing) return;
-    const t = setTimeout(() => {
-      triggeredFor.current = email.emailId;
-      onRequestAnalysis(email.emailId, { withAttachments: false });
-    }, 1500);
-    return () => clearTimeout(t);
-  }, [email.emailId, email.analysis, email.analyzing, onRequestAnalysis]);
+  // NOTE: AI deep analysis is MANUAL — the user must click the "AI 深度分析" button
+  // (see the empty-state panel below). We intentionally do NOT auto-run it on open,
+  // to avoid spending AI tokens on every email the customer merely glances at.
 
   const security = detectSecurityFlags(email.analysis);
 
