@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef, useCallback, useLayoutEffect, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -91,6 +91,11 @@ const SKILL_ICON_MAP: Record<string, string> = {
   'data-analyst': 'analytics',
   'rag-analyst': 'search',
 };
+
+// Distinct per-role colours so team members are visually distinguishable at a
+// glance (they were all the same teal before). Still a tasteful, on-brand set.
+const ROLE_PALETTE = ['#0e7c72', '#2b6cb0', '#7c3aed', '#e08700', '#12805c', '#d1495b', '#0891b2', '#c026d3'];
+const roleColor = (index: number) => ROLE_PALETTE[((index % ROLE_PALETTE.length) + ROLE_PALETTE.length) % ROLE_PALETTE.length];
 
 const DOC_SKILLS = new Set(['pptx-gen', 'docx-gen', 'xlsx-gen', 'pdf-gen', 'slides-gen', 'webapp-gen']);
 // Internal-only skills used by orchestrator, not exposed to users
@@ -1223,6 +1228,54 @@ function TeamAddMemberModal({ team, token, standalone, onCreateNew, onDone, onCa
   );
 }
 
+// ── Custom tooltip (replaces the ugly native title="" bubble) ────────────────
+function Tip({ text, children }: { text: string; children: ReactNode }) {
+  return (
+    <span className="relative inline-flex shrink-0 group/tip">
+      {children}
+      <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-[60] whitespace-nowrap rounded-lg bg-on-surface text-surface text-xs font-medium px-2.5 py-1.5 opacity-0 translate-y-1 group-hover/tip:opacity-100 group-hover/tip:translate-y-0 transition-all duration-150 shadow-xl">
+        {text}
+        <span className="absolute left-1/2 -translate-x-1/2 top-full -mt-1 w-2 h-2 rotate-45 bg-on-surface" />
+      </span>
+    </span>
+  );
+}
+
+// ── Card overflow menu (⋯) — keeps cards clean: primary = open chat, rest here ──
+function CardActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    window.addEventListener('mousedown', h);
+    return () => window.removeEventListener('mousedown', h);
+  }, [open]);
+  return (
+    <div className="relative shrink-0" ref={ref}>
+      <Tip text={t('assistant.more' as any) || '更多'}>
+        <button onClick={() => setOpen(o => !o)}
+          className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer border border-outline-variant/10">
+          <span className="material-symbols-outlined text-[18px]">more_horiz</span>
+        </button>
+      </Tip>
+      {open && (
+        <div className="absolute right-0 top-11 z-40 w-32 bg-surface-container-high border border-outline-variant/20 rounded-xl shadow-xl py-1 overflow-hidden">
+          <button onClick={() => { setOpen(false); onEdit(); }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-on-surface hover:bg-primary/10 transition-colors text-left cursor-pointer">
+            <span className="material-symbols-outlined text-[18px]">tune</span>{t('assistant.settings' as any) || '設定'}
+          </button>
+          <button onClick={() => { setOpen(false); onDelete(); }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-error hover:bg-error/10 transition-colors text-left cursor-pointer">
+            <span className="material-symbols-outlined text-[18px]">delete</span>{t('assistant.delete' as any) || '刪除'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Content ───────────────────────────────────────────────────────────
 function AssistantContent() {
   const { user, token, isLoading } = useAuth();
@@ -1248,6 +1301,10 @@ function AssistantContent() {
   const [teamDeleteTarget, setTeamDeleteTarget] = useState<Team | null>(null);
   const [addMemberTeam, setAddMemberTeam] = useState<Team | null>(null);
   const [addToTeamId, setAddToTeamId] = useState<string | null>(null);
+  // Workspace view controls (scale to many teams/assistants)
+  const [filterMode, setFilterMode] = useState<'all' | 'teams' | 'solo'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const didInitCollapse = useRef(false);
 
   const loadConversations = useCallback(() => {
     if (!token) return;
@@ -1272,6 +1329,15 @@ function AssistantContent() {
     if (n.has(id)) n.delete(id); else n.add(id);
     return n;
   });
+
+  // Default every team COLLAPSED on first load — keeps the page clean when there
+  // are many teams (user expands the one they want). Runs once; later user toggles
+  // and newly-created teams (which expand) are preserved.
+  useEffect(() => {
+    if (didInitCollapse.current || teams.length === 0) return;
+    didInitCollapse.current = true;
+    setCollapsedTeams(new Set(teams.map(t => t.id)));
+  }, [teams]);
 
   const handleTeamDelete = useCallback(async (withAgents: boolean) => {
     if (!teamDeleteTarget || !token) return;
@@ -1428,124 +1494,51 @@ function AssistantContent() {
     .map(team => ({ team, members: conversations.filter(c => c.team_id === team.id) }))
     .filter(g => g.members.length > 0);
 
-  const renderCard = (conv: AssistantConversation, index: number, muted = false) => {
+  // Filter (all/teams/solo) + search — so the page stays usable at high volume.
+  const q = searchQuery.trim().toLowerCase();
+  const matchConv = (c: AssistantConversation) =>
+    !q || c.title.toLowerCase().includes(q) || (c.summary || '').toLowerCase().includes(q);
+  const visibleTeams = filterMode === 'solo' ? [] : teamsWithMembers.filter(({ team, members }) =>
+    !q || team.title.toLowerCase().includes(q) || (team.topic || '').toLowerCase().includes(q) || members.some(matchConv));
+  const visibleSolo = filterMode === 'teams' ? [] : standaloneConvs.filter(matchConv);
+  const hasResults = visibleTeams.length > 0 || visibleSolo.length > 0;
+
+  // Compact card for a team member: emphasises role + "open chat", drops the
+  // summary / status noise so 4 members sit comfortably in a row.
+  // muted = standalone assistant (no team) → stays GREY (colour is reserved for
+  // team roles, so a coloured card always means "belongs to a team").
+  const renderMemberCard = (conv: AssistantConversation, index: number, muted = false) => {
     const cardIcon = conv.icon || 'smart_toy';
+    const color = roleColor(index);
+    const skillIcon = conv.skill_id ? (SKILL_ICON_MAP[conv.skill_id] || 'bolt') : 'psychology';
+    const skillLabel = conv.skill_id ? getSkillName(conv.skill_id) : (t('assistant.memoryActive' as any) || '自由對話');
     return (
-      <div key={conv.id} className={`group relative flex flex-col rounded-2xl border transition-all overflow-hidden ${muted ? 'bg-surface-container/50 border-outline-variant/15 hover:border-outline-variant/40' : 'bg-surface-container border-outline-variant/10 hover:border-primary/30'}`}>
-        <div className={`h-1 w-full ${muted ? 'bg-outline-variant/25' : 'cyber-gradient'}`} />
-        <div className="p-5 flex flex-col flex-1">
-          <div className="flex items-start justify-between mb-4">
-            <div className="relative">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${muted ? 'bg-surface-container-high' : 'cyber-gradient'}`}>
-                <span className={`material-symbols-outlined text-2xl ${muted ? 'text-on-surface-variant' : 'text-on-primary'}`}>{cardIcon}</span>
+      <div key={conv.id} className="group relative flex flex-col rounded-xl border border-outline-variant/10 bg-surface-container hover:border-primary/30 transition-all">
+        <div className={`h-1 w-full rounded-t-xl ${muted ? 'bg-outline-variant/30' : ''}`} style={muted ? undefined : { background: color + '80' }} />
+        <div className="p-3.5 flex flex-col flex-1">
+          {/* one compact band: icon + name + role */}
+          <div className="flex items-center gap-2.5 mb-3">
+            <div className="relative shrink-0">
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${muted ? 'bg-surface-container-high text-on-surface-variant' : ''}`} style={muted ? undefined : { backgroundColor: color + '1F', color }}>
+                <span className="material-symbols-outlined text-lg">{cardIcon}</span>
               </div>
-              {!muted && (
-                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-success rounded-full border-2 border-surface-container">
-                  <span className="absolute inset-0 rounded-full bg-success animate-ping opacity-60" />
-                </span>
-              )}
+              {!muted && <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-success rounded-full border-2 border-surface-container" />}
             </div>
-            <span className="text-xs font-mono font-bold text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">#{index + 1}</span>
-          </div>
-          <h3 className="font-headline font-bold text-on-surface text-base mb-1 group-hover:text-primary transition-colors line-clamp-1">{conv.title}</h3>
-          {conv.summary ? (
-            <p className="text-xs text-on-surface-variant/80 line-clamp-2 mb-2 leading-relaxed">{conv.summary}</p>
-          ) : (
-            <p className="text-xs text-outline/50 mb-2 italic">{t('assistant.noSummary' as any) || '對話中...'}</p>
-          )}
-          <div className="flex items-center gap-2 text-xs text-on-surface-variant mb-3 flex-wrap">
-            {processingIds.has(conv.id) ? (
-              <span className="flex items-center gap-1 text-primary">
-                <span className="material-symbols-outlined text-[13px] animate-spin">progress_activity</span>
-                {t('assistant.processing' as any)}
+            <div className="min-w-0 flex-1">
+              <h3 title={conv.title} className="font-bold text-on-surface text-sm leading-tight line-clamp-1 group-hover:text-primary transition-colors">{conv.title}</h3>
+              <span className="text-[11px] text-on-surface-variant flex items-center gap-1 mt-0.5">
+                <span className="material-symbols-outlined text-[13px] shrink-0">{skillIcon}</span>
+                <span className="truncate">{skillLabel}</span>
               </span>
-            ) : (
-              <span className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
-                {t('conversations.status.active' as any) || '進行中'}
-              </span>
-            )}
-            <span className="text-outline-variant/40">·</span>
-            <span>{formatDate(conv.created_at)}</span>
-            {conv.skill_id ? (
-              <>
-                <span className="text-outline-variant/40">·</span>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-primary/10 rounded text-primary font-medium">
-                  <span className="material-symbols-outlined text-[12px]">{SKILL_ICON_MAP[conv.skill_id] || 'bolt'}</span>
-                  {getSkillName(conv.skill_id)}
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="text-outline-variant/40">·</span>
-                <span className="flex items-center gap-1 text-tertiary">
-                  <span className="material-symbols-outlined text-[13px]">psychology</span>
-                  {t('assistant.memoryActive' as any) || '記憶中'}
-                </span>
-              </>
-            )}
+            </div>
+            <span className="text-[10px] font-mono text-outline shrink-0 self-start">#{index + 1}</span>
           </div>
           <div className="mt-auto flex items-center gap-2">
             <Link href={`/chat/${conv.id}`} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-bold font-headline active:scale-95 transition-all no-underline ${muted ? 'bg-surface-container-high text-on-surface hover:bg-surface-variant/50 border border-outline-variant/15' : 'cyber-gradient text-on-primary hover:brightness-110'}`}>
               <span className="material-symbols-outlined text-base">chat</span>
               {t('assistant.openChat' as any) || '開啟對話'}
             </Link>
-            <button onClick={() => setEditTarget(conv)} className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer border border-outline-variant/10" title={t('assistant.settings' as any) || '設定'}>
-              <span className="material-symbols-outlined text-[18px]">tune</span>
-            </button>
-            <button onClick={() => setDeleteTarget(conv)} className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer border border-outline-variant/10" title={t('assistant.delete' as any) || '刪除'}>
-              <span className="material-symbols-outlined text-[18px]">delete</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Compact card for a team member: emphasises role + "open chat", drops the
-  // summary / status noise so 4 members sit comfortably in a row.
-  const renderMemberCard = (conv: AssistantConversation, index: number) => {
-    const cardIcon = conv.icon || 'smart_toy';
-    return (
-      <div key={conv.id} className="group relative flex flex-col rounded-2xl border border-outline-variant/10 bg-surface-container hover:border-primary/30 transition-all overflow-hidden">
-        <div className="h-1 w-full cyber-gradient" />
-        <div className="p-4 flex flex-col flex-1">
-          <div className="flex items-start justify-between mb-3">
-            <div className="relative">
-              <div className="w-11 h-11 rounded-xl cyber-gradient flex items-center justify-center">
-                <span className="material-symbols-outlined text-xl text-on-primary">{cardIcon}</span>
-              </div>
-              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-success rounded-full border-2 border-surface-container">
-                <span className="absolute inset-0 rounded-full bg-success animate-ping opacity-60" />
-              </span>
-            </div>
-            <span className="text-xs font-mono font-bold text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">#{index + 1}</span>
-          </div>
-          <h3 className="font-headline font-bold text-on-surface text-base mb-2 leading-snug group-hover:text-primary transition-colors line-clamp-2">{conv.title}</h3>
-          <div className="mb-4">
-            {conv.skill_id ? (
-              <span className="inline-flex items-center gap-1 px-2 py-1 bg-primary/10 rounded-lg text-primary text-xs font-medium">
-                <span className="material-symbols-outlined text-[14px]">{SKILL_ICON_MAP[conv.skill_id] || 'bolt'}</span>
-                {getSkillName(conv.skill_id)}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 px-2 py-1 bg-tertiary/10 rounded-lg text-tertiary text-xs font-medium">
-                <span className="material-symbols-outlined text-[14px]">psychology</span>
-                {t('assistant.memoryActive' as any) || '自由對話'}
-              </span>
-            )}
-          </div>
-          <div className="mt-auto flex items-center gap-2">
-            <Link href={`/chat/${conv.id}`} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-bold font-headline cyber-gradient text-on-primary hover:brightness-110 active:scale-95 transition-all no-underline">
-              <span className="material-symbols-outlined text-base">chat</span>
-              {t('assistant.openChat' as any) || '開啟對話'}
-            </Link>
-            <button onClick={() => setEditTarget(conv)} className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer border border-outline-variant/10" title={t('assistant.settings' as any) || '設定'}>
-              <span className="material-symbols-outlined text-[18px]">tune</span>
-            </button>
-            <button onClick={() => setDeleteTarget(conv)} className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer border border-outline-variant/10" title={t('assistant.delete' as any) || '刪除'}>
-              <span className="material-symbols-outlined text-[18px]">delete</span>
-            </button>
+            <CardActions onEdit={() => setEditTarget(conv)} onDelete={() => setDeleteTarget(conv)} />
           </div>
         </div>
       </div>
@@ -1561,7 +1554,8 @@ function AssistantContent() {
       {editTarget && (
         <AssistantEditModal
           conversation={editTarget === 'new' ? null : editTarget}
-          skills={skills}
+          // pro-panjit: 資訊圖表(infographic-gen) 暫不開放，從綁定技能清單隱藏
+          skills={deployMode === 'pro-panjit' ? skills.filter(s => s.id !== 'infographic-gen') : skills}
           token={token}
           locale={user?.locale}
           onSave={handleCreateOrEdit}
@@ -1630,14 +1624,15 @@ function AssistantContent() {
             <div className="shrink-0 flex items-center gap-2 mt-1 md:mt-2">
               {/* Email button — pro-panjit only */}
               {deployMode === 'pro-panjit' && (
-                <button
-                  onClick={() => setEmailModalOpen(true)}
-                  className="relative w-10 h-10 flex items-center justify-center rounded-xl border border-tertiary/20 bg-tertiary/5 text-tertiary hover:bg-tertiary/15 active:scale-95 transition-all cursor-pointer"
-                  title={t('assistant.email.title' as any)}
-                >
-                  <span className="material-symbols-outlined text-xl">mail</span>
-                  {emailConnected && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-success rounded-full border-2 border-surface-container-lowest" />}
-                </button>
+                <Tip text={t('assistant.email.title' as any)}>
+                  <button
+                    onClick={() => setEmailModalOpen(true)}
+                    className="relative w-10 h-10 flex items-center justify-center rounded-xl border border-tertiary/20 bg-tertiary/5 text-tertiary hover:bg-tertiary/15 active:scale-95 transition-all cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-xl">mail</span>
+                    {emailConnected && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-success rounded-full border-2 border-surface-container-lowest" />}
+                  </button>
+                </Tip>
               )}
               {/* Create team button */}
               <button
@@ -1662,6 +1657,33 @@ function AssistantContent() {
           </div>
         </div>
 
+        {/* Controls: filter + search (scale to many teams/assistants) */}
+        {conversations.length > 0 && (
+          <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="inline-flex bg-surface-container border border-outline-variant/15 rounded-xl p-1 gap-1 self-start">
+              {([['all', t('assistant.filter.all' as any) || '全部', teamsWithMembers.length + standaloneConvs.length],
+                 ['teams', t('assistant.filter.teams' as any) || '團隊', teamsWithMembers.length],
+                 ['solo', t('assistant.filter.solo' as any) || '獨立助手', standaloneConvs.length]] as const).map(([mode, label, count]) => (
+                <button key={mode} onClick={() => setFilterMode(mode as 'all' | 'teams' | 'solo')}
+                  className={`px-3.5 py-1.5 rounded-lg text-sm font-bold transition-colors cursor-pointer ${filterMode === mode ? 'bg-surface text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}>
+                  {label}<span className="ml-1.5 text-xs opacity-60 font-mono">{count}</span>
+                </button>
+              ))}
+            </div>
+            <div className="sm:ml-auto sm:w-72 flex items-center gap-2 bg-surface-container border border-outline-variant/15 rounded-xl px-3 py-2">
+              <span className="material-symbols-outlined text-outline text-lg">search</span>
+              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                placeholder={t('assistant.searchPlaceholder' as any) || '搜尋團隊或助手名稱…'}
+                className="flex-1 bg-transparent border-none outline-none text-sm text-on-surface placeholder:text-outline" />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="text-outline hover:text-on-surface cursor-pointer">
+                  <span className="material-symbols-outlined text-base">close</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Grid */}
         {conversations.length === 0 ? (
           /* Empty state */
@@ -1683,11 +1705,11 @@ function AssistantContent() {
         ) : (
           <div className="space-y-10">
             {/* Team sections */}
-            {teamsWithMembers.map(({ team, members }) => {
+            {visibleTeams.map(({ team, members }) => {
               const collapsed = collapsedTeams.has(team.id);
               return (
                 <section key={team.id} className="rounded-2xl border border-primary/20 bg-primary/[0.04] p-4 md:p-5">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+                  <div className={`flex flex-col sm:flex-row sm:items-center gap-3 ${collapsed ? '' : 'mb-4'}`}>
                     <button onClick={() => toggleTeam(team.id)} className="group flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer w-full">
                       <div className="w-11 h-11 rounded-xl cyber-gradient flex items-center justify-center shrink-0">
                         <span className="material-symbols-outlined text-on-primary text-xl">{team.icon || 'groups'}</span>
@@ -1698,27 +1720,48 @@ function AssistantContent() {
                           <h3 className="font-headline font-bold text-on-surface text-base md:text-lg truncate group-hover:text-primary transition-colors">{team.title}</h3>
                           <span className="text-xs text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full shrink-0">{members.length} 位</span>
                         </div>
-                        {team.topic && <p className="text-xs text-on-surface-variant truncate mt-0.5">議題：{team.topic}</p>}
+                        {!collapsed && team.topic && <p className="text-xs text-on-surface-variant truncate mt-0.5">議題：{team.topic}</p>}
+                      </div>
+                      {/* member avatars — glance at who's in the team even when collapsed */}
+                      <div className="hidden md:flex items-center shrink-0 mr-1">
+                        {members.slice(0, 5).map((m, mi) => (
+                          <div key={m.id} title={m.title}
+                            className={`w-7 h-7 rounded-full border-2 border-surface-container flex items-center justify-center ${mi === 0 ? '' : '-ml-2'}`}
+                            style={{ backgroundColor: roleColor(mi) + '29', color: roleColor(mi) }}>
+                            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>{m.icon || 'smart_toy'}</span>
+                          </div>
+                        ))}
+                        {members.length > 5 && <span className="ml-1.5 text-xs text-on-surface-variant font-mono">+{members.length - 5}</span>}
                       </div>
                       <span className="material-symbols-outlined text-on-surface-variant ml-1 transition-transform shrink-0" style={{ transform: collapsed ? 'rotate(-90deg)' : 'none' }}>expand_more</span>
                     </button>
                     <div className="flex items-center gap-2 shrink-0">
-                      <Link href={`/team/${team.id}`} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 h-9 rounded-lg text-sm font-bold text-on-primary cyber-gradient hover:brightness-110 active:scale-95 transition-all cursor-pointer no-underline" title="跑團隊協作分析">
+                      <Link href={`/team/${team.id}`} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 h-9 rounded-lg text-sm font-bold text-on-primary cyber-gradient hover:brightness-110 active:scale-95 transition-all cursor-pointer no-underline">
                         <span className="material-symbols-outlined text-[18px]">bolt</span>
                         跑團隊分析
                       </Link>
-                      <button onClick={() => setAddMemberTeam(team)} title="新增助手到團隊"
-                        className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0">
-                        <span className="material-symbols-outlined text-[18px]">person_add</span>
-                      </button>
-                      <button onClick={() => setTeamDeleteTarget(team)} className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer shrink-0" title="刪除團隊">
-                        <span className="material-symbols-outlined text-[18px]">delete</span>
-                      </button>
+                      <Tip text="新增助手到團隊">
+                        <button onClick={() => setAddMemberTeam(team)}
+                          className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer">
+                          <span className="material-symbols-outlined text-[18px]">person_add</span>
+                        </button>
+                      </Tip>
+                      <Tip text="刪除團隊">
+                        <button onClick={() => setTeamDeleteTarget(team)} className="w-9 h-9 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer">
+                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                      </Tip>
                     </div>
                   </div>
                   {!collapsed && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4 gap-3 md:gap-4">
                       {members.map((conv, i) => renderMemberCard(conv, i))}
+                      {/* inline add-member card — discoverable way to grow the team */}
+                      <button onClick={() => setAddMemberTeam(team)}
+                        className="rounded-xl border-2 border-dashed border-primary/30 bg-primary/[0.03] hover:bg-primary/[0.07] flex flex-col items-center justify-center gap-1.5 text-primary text-sm font-bold cursor-pointer min-h-[104px] transition-colors">
+                        <span className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center"><span className="material-symbols-outlined">add</span></span>
+                        {t('assistant.addMember' as any) || '加成員 / 助手'}
+                      </button>
                     </div>
                   )}
                 </section>
@@ -1726,23 +1769,29 @@ function AssistantContent() {
             })}
 
             {/* Standalone assistants */}
-            {standaloneConvs.length > 0 && (
+            {visibleSolo.length > 0 && (
               <section>
-                {teamsWithMembers.length > 0 && (
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-11 h-11 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
-                      <span className="material-symbols-outlined text-on-surface-variant text-xl">person</span>
-                    </div>
-                    <div>
-                      <h3 className="font-headline font-bold text-on-surface text-lg">獨立助手</h3>
-                      <p className="text-xs text-on-surface-variant">不屬於任何團隊</p>
-                    </div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-11 h-11 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-on-surface-variant text-xl">person</span>
                   </div>
-                )}
+                  <div>
+                    <h3 className="font-headline font-bold text-on-surface text-lg">獨立助手</h3>
+                    <p className="text-xs text-on-surface-variant">不屬於任何團隊</p>
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {standaloneConvs.map((conv, i) => renderCard(conv, i, true))}
+                  {visibleSolo.map((conv, i) => renderMemberCard(conv, i, true))}
                 </div>
               </section>
+            )}
+
+            {/* No results after filter/search */}
+            {!hasResults && (
+              <div className="text-center py-16 text-on-surface-variant">
+                <span className="material-symbols-outlined text-4xl text-outline/50">search_off</span>
+                <p className="mt-2 text-sm">{t('assistant.noResults' as any) || '找不到符合的團隊或助手'}</p>
+              </div>
             )}
           </div>
         )}
