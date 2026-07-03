@@ -1073,6 +1073,7 @@ const zhTW = {
   'admin.permissions.desc.skills': '管理 AI 助手可用的技能',
   'admin.permissions.desc.tokens': '查看 Token 使用量與計費紀錄',
   'admin.permissions.desc.analytics': '查看系統使用數據與分析報表',
+  'admin.permissions.desc.reports': '查看與處理使用者回報的問題與意見',
   'admin.permissions.desc.security': '管理安全性設定與存取控制',
   'admin.permissions.desc.settings': '系統全域設定',
   // Frontend nav item descriptions

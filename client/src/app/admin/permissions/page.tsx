@@ -45,6 +45,7 @@ const ADMIN_SIDEBAR_GROUPS = [
       { key: 'skills', labelKey: 'admin.sidebar.skills', descKey: 'admin.permissions.desc.skills', icon: 'hub' },
       { key: 'tokens', labelKey: 'admin.sidebar.tokens', descKey: 'admin.permissions.desc.tokens', icon: 'payments' },
       { key: 'analytics', labelKey: 'admin.sidebar.analytics', descKey: 'admin.permissions.desc.analytics', icon: 'bar_chart' },
+      { key: 'reports', labelKey: 'admin.sidebar.reports', descKey: 'admin.permissions.desc.reports', icon: 'feedback' },
     ],
   },
   {

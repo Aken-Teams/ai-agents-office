@@ -1068,6 +1068,7 @@ const zhCN = {
   'admin.permissions.desc.skills': '管理 AI 助手可用的技能',
   'admin.permissions.desc.tokens': '查看 Token 使用量与计费记录',
   'admin.permissions.desc.analytics': '查看系统使用数据与分析报表',
+  'admin.permissions.desc.reports': '查看与处理用户回报的问题与意见',
   'admin.permissions.desc.security': '管理安全性设置与访问控制',
   'admin.permissions.desc.settings': '系统全局设置',
   'admin.permissions.desc.nav.dashboard': '用户首页仪表盘',

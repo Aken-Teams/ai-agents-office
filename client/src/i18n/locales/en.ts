@@ -1049,6 +1049,7 @@ const en = {
   'admin.permissions.desc.skills': 'Manage AI assistant available skills',
   'admin.permissions.desc.tokens': 'View token usage and billing records',
   'admin.permissions.desc.analytics': 'View system usage data and analytics reports',
+  'admin.permissions.desc.reports': 'View and handle user-submitted reports and feedback',
   'admin.permissions.desc.security': 'Manage security settings and access control',
   'admin.permissions.desc.settings': 'Global system settings',
   'admin.permissions.desc.nav.dashboard': 'User home dashboard',
