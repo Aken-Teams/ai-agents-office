@@ -382,6 +382,40 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
     return;
   }
 
+  // Background 60-second poll (isInitial=false): DETECT + NOTIFY only — NO AI.
+  // New (uncached) emails are pushed with basic info (subject as placeholder) so the
+  // user still gets a "new mail" notification, but they are NOT summarized or cached
+  // here. AI summarization is deferred to the next open / manual refresh (isInitial=
+  // true), which only summarises the uncached delta (usually a few) so open stays
+  // fast. This stops an assistant left open from spending tokens on every incoming
+  // mail — a deliberate cost-control decision (2026-07-03).
+  if (!isInitial) {
+    const state = await dbGet<{ last_overview: string | null }>(
+      'SELECT last_overview FROM email_agent_state WHERE user_id = ?', userId
+    );
+    const basicForNew: (EmailSummary & { analysis?: string })[] = uncachedEmails.map(email => {
+      const preservedAnalysis = analysisOnlyMap.get(email.id);
+      return {
+        emailId: email.id,
+        subject: email.subject,
+        from: email.from,
+        receivedAt: email.received_at,
+        isRead: email.is_read,
+        hasAttachments: email.has_attachments,
+        summary: email.subject,     // placeholder — real AI summary comes on open/refresh
+        priority: '中' as const,
+        category: '一般',
+        ...(preservedAnalysis ? { analysis: preservedAnalysis } : {}),
+      };
+    });
+    console.log(`[EmailAgent] Background poll: notifying ${uncachedEmails.length} new email(s) for user ${userId} WITHOUT AI summary (deferred to open/refresh)`);
+    pushEvent(userId, {
+      type: 'new_emails',
+      data: { emails: [...cachedSummaries, ...basicForNew], totalUnread, total, overview: state?.last_overview || '' },
+    });
+    return;
+  }
+
   console.log(`[EmailAgent] ${uncachedEmails.length}/${emailsToSummarize.length} emails need AI summary for user ${userId}`);
 
   // Send cached + basic placeholders for uncached immediately (fast spinner exit)

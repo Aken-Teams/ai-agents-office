@@ -22,8 +22,11 @@ interface UsageTotal {
   totalInvocations: number;
 }
 
+type UsageCategory = 'document' | 'team' | 'email';
+
 interface UsageResponse {
   summary: DailyUsage[];
+  byCategory?: Record<UsageCategory, DailyUsage[]>;
   total: UsageTotal;
   limit: number;
   isBeta: boolean;
@@ -34,6 +37,8 @@ function UsageContent() {
   const { t, locale } = useTranslation();
   const router = useRouter();
   const [daily, setDaily] = useState<DailyUsage[]>([]);
+  const [byCategory, setByCategory] = useState<Record<UsageCategory, DailyUsage[]>>({ document: [], team: [], email: [] });
+  const [detailCat, setDetailCat] = useState<'all' | UsageCategory>('all');
   const [total, setTotal] = useState<UsageTotal | null>(null);
   const [isBeta, setIsBeta] = useState(true);
   const [chartPeriod, setChartPeriod] = useState<'7d' | '30d'>('7d');
@@ -57,6 +62,7 @@ function UsageContent() {
       .then(r => r.json())
       .then((data: UsageResponse) => {
         setDaily(data.summary);
+        setByCategory(data.byCategory ?? { document: [], team: [], email: [] });
         setTotal(data.total);
         setIsBeta(data.isBeta ?? true);
       })
@@ -97,6 +103,22 @@ function UsageContent() {
     if (filterTo && date > filterTo) return false;
     return true;
   });
+
+  // Usage-detail table source, switchable by product surface (全部 / 文件產生 /
+  // AI 團隊 / 信件助手). Same date-range filtering as the overview.
+  const catSource = detailCat === 'all' ? daily : (byCategory[detailCat] ?? []);
+  const filteredCatDaily = catSource.filter(d => {
+    const date = d.date.slice(0, 10);
+    if (filterFrom && date < filterFrom) return false;
+    if (filterTo && date > filterTo) return false;
+    return true;
+  });
+  const CATEGORY_TABS: { key: 'all' | UsageCategory; label: string; icon: string }[] = [
+    { key: 'all', label: locale === 'en' ? 'All' : '全部', icon: 'apps' },
+    { key: 'document', label: locale === 'en' ? 'Documents' : '文件產生', icon: 'description' },
+    { key: 'team', label: locale === 'en' ? 'AI Teams' : 'AI 團隊', icon: 'groups' },
+    { key: 'email', label: locale === 'en' ? 'Email' : '信件助手', icon: 'mail' },
+  ];
 
   // When date filter is active, overview card reflects filtered range
   const hasFilter = !!(filterFrom || filterTo);
@@ -409,9 +431,26 @@ function UsageContent() {
                   <h4 className="text-xs md:text-sm font-bold font-headline uppercase tracking-widest text-on-surface">{t('usage.ledger.title')}</h4>
                   <span className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">
                     {filterFrom || filterTo
-                      ? `${filteredDaily.length} / ${daily.length}`
-                      : t('usage.ledger.totalRecords', { count: daily.length })}
+                      ? `${filteredCatDaily.length} / ${catSource.length}`
+                      : t('usage.ledger.totalRecords', { count: catSource.length })}
                   </span>
+                </div>
+                {/* Product-surface tabs — 全部 / 文件產生 / AI 團隊 / 信件助手 */}
+                <div className="flex flex-wrap gap-1.5">
+                  {CATEGORY_TABS.map(tab => (
+                    <button
+                      key={tab.key}
+                      onClick={() => { setDetailCat(tab.key); setLedgerPage(1); }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer ${
+                        detailCat === tab.key
+                          ? 'bg-primary text-on-primary'
+                          : 'bg-surface-container-high text-on-surface-variant hover:text-primary'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm">{tab.icon}</span>
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -420,7 +459,7 @@ function UsageContent() {
                   <span className="material-symbols-outlined text-2xl md:text-3xl text-on-surface-variant/30 mb-3">analytics</span>
                   <p className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">{t('usage.ledger.noData')}</p>
                 </div>
-              ) : filteredDaily.length === 0 ? (
+              ) : filteredCatDaily.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 md:py-16">
                   <span className="material-symbols-outlined text-2xl md:text-3xl text-on-surface-variant/30 mb-3">search_off</span>
                   <p className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">查無資料</p>
@@ -440,7 +479,7 @@ function UsageContent() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
-                        {filteredDaily.slice((ledgerPage - 1) * PAGE_SIZE, ledgerPage * PAGE_SIZE).map((day, i) => (
+                        {filteredCatDaily.slice((ledgerPage - 1) * PAGE_SIZE, ledgerPage * PAGE_SIZE).map((day, i) => (
                           <tr
                             key={day.date}
                             className={`hover:bg-primary/5 transition-colors ${i % 2 === 1 ? 'bg-surface-container-high/20' : ''}`}
@@ -465,7 +504,7 @@ function UsageContent() {
 
                   {/* Mobile Card List */}
                   <div className="md:hidden divide-y divide-white/5">
-                    {filteredDaily.slice((ledgerPage - 1) * PAGE_SIZE, ledgerPage * PAGE_SIZE).map((day, i) => (
+                    {filteredCatDaily.slice((ledgerPage - 1) * PAGE_SIZE, ledgerPage * PAGE_SIZE).map((day, i) => (
                       <div
                         key={day.date}
                         className={`p-3.5 active:bg-primary/5 transition-colors ${i % 2 === 1 ? 'bg-surface-container-high/20' : ''}`}
@@ -493,7 +532,7 @@ function UsageContent() {
                 </>
               )}
               {(() => {
-                const totalPages = Math.ceil(filteredDaily.length / PAGE_SIZE);
+                const totalPages = Math.ceil(filteredCatDaily.length / PAGE_SIZE);
                 if (totalPages <= 1) return null;
                 return (
                   <div className="p-3 md:p-4 border-t border-white/5 flex items-center justify-between">

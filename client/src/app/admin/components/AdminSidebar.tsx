@@ -90,8 +90,10 @@ export default function AdminSidebar() {
 
   // Poll pending-work counts so red-dots appear without a manual refresh.
   // Refetches on route change too, so a just-handled item clears quickly.
+  // Readonly reviewers have no operation permissions (they can't action reports or
+  // quota requests), so pending-work red-dots are irrelevant — skip the fetch.
   useEffect(() => {
-    if (!token) return;
+    if (!token || isReadonly) return;
     let cancelled = false;
     const load = () => {
       fetch(`${SSE_BASE}/api/admin/badge-counts`, { headers: { Authorization: `Bearer ${token}` } })
@@ -102,10 +104,13 @@ export default function AdminSidebar() {
     load();
     const timer = setInterval(load, 60_000);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [token, pathname]);
+  }, [token, pathname, isReadonly]);
 
-  // Map a nav item's permKey to its pending count (0 = no dot).
+  // Map a nav item's permKey to its pending count (0 = no dot). Only badge items the
+  // user can actually see/act on — no dot for readonly, or for anything the user
+  // lacks permission for (e.g. reports the reviewer can't open).
   const badgeFor = (permKey?: string): number => {
+    if (isReadonly || !permKey || !hasPermission('adminSidebar', permKey)) return 0;
     if (permKey === 'reports') return badges.reports;
     if (permKey === 'quota-requests') return badges.quotaRequests;
     return 0;

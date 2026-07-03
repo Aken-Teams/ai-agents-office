@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
-import { getUserUsageSummary, getUserTotalUsage } from '../services/tokenTracker.js';
+import { getUserUsageSummary, getUserUsageSummaryByCategory, getUserTotalUsage } from '../services/tokenTracker.js';
 import { getEffectiveUserLimit } from '../services/usageLimit.js';
 import { config } from '../config.js';
 
@@ -17,12 +17,18 @@ router.get('/', async (req: Request, res: Response) => {
     from as string | undefined,
     to as string | undefined,
   );
+  // Per-surface breakdown (文件產生 / AI 團隊 / 信件助手) for the usage-detail tabs.
+  const byCategory = await getUserUsageSummaryByCategory(
+    userId,
+    from as string | undefined,
+    to as string | undefined,
+  );
 
   // Official mode: total reflects current month only (monthly quota reset)
   const total = await getUserTotalUsage(userId, !config.isBeta);
   const limit = await getEffectiveUserLimit(userId);
 
-  res.json({ summary, total, limit, isBeta: config.isBeta });
+  res.json({ summary, byCategory, total, limit, isBeta: config.isBeta });
 });
 
 // GET /api/usage/daily — Daily breakdown for current month

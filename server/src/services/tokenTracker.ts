@@ -61,6 +61,54 @@ export async function getUserUsageSummary(
   return await dbAll(query, ...params);
 }
 
+export type UsageCategory = 'document' | 'team' | 'email';
+export interface DailyUsage {
+  date: string;
+  total_input: number;
+  total_output: number;
+  invocation_count: number;
+}
+
+/**
+ * Same daily breakdown as getUserUsageSummary but split into the three product
+ * surfaces the user actually uses:
+ *   - email    → the 信件助手 conversation (title '信件助手')
+ *   - team     → AI 團隊 runs/reports (model 'team-run' / 'team-report')
+ *   - document → everything else (this app is fundamentally a document generator)
+ */
+export async function getUserUsageSummaryByCategory(
+  userId: string,
+  from?: string,
+  to?: string,
+): Promise<Record<UsageCategory, DailyUsage[]>> {
+  // Category is derived from a CASE; under sql_mode=only_full_group_by we must
+  // GROUP BY the full expressions (not the aliases), so define it once.
+  const CATEGORY_EXPR = `CASE WHEN c.title = '信件助手' THEN 'email' WHEN tu.model LIKE 'team%' THEN 'team' ELSE 'document' END`;
+  let query = `
+    SELECT
+      DATE_FORMAT(tu.created_at, '%Y-%m-%d') as date,
+      ${CATEGORY_EXPR} as category,
+      SUM(tu.input_tokens) as total_input,
+      SUM(tu.output_tokens) as total_output,
+      COUNT(*) as invocation_count
+    FROM token_usage tu
+    LEFT JOIN conversations c ON c.id = tu.conversation_id
+    WHERE tu.user_id = ?
+  `;
+  const params: unknown[] = [userId];
+  if (from) { query += ' AND tu.created_at >= ?'; params.push(from); }
+  if (to)   { query += ' AND tu.created_at <= ?'; params.push(to); }
+  query += ` GROUP BY DATE_FORMAT(tu.created_at, '%Y-%m-%d'), ${CATEGORY_EXPR} ORDER BY date DESC`;
+
+  const rows = await dbAll<DailyUsage & { category: UsageCategory }>(query, ...params);
+  const out: Record<UsageCategory, DailyUsage[]> = { document: [], team: [], email: [] };
+  for (const r of rows) {
+    const { category, ...daily } = r;
+    (out[category] ?? out.document).push(daily);
+  }
+  return out;
+}
+
 export async function getUserTotalUsage(userId: string, monthlyOnly = false): Promise<{
   totalInput: number;
   totalOutput: number;
