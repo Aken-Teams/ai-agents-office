@@ -242,15 +242,14 @@ router.get('/history', async (req: Request, res: Response) => {
   res.json({ messages: messages.reverse() });
 });
 
-// Clear Layer 1 summary cache and re-poll (preserve Layer 2 analyses)
+// Refresh = re-poll the inbox for NEW mail only. Already-summarized emails are
+// served from the cache (no AI, no tokens); only genuinely new/uncached emails
+// get summarized. It does NOT wipe the summary cache — the old behaviour blanket-
+// cleared every summary for the user, so each refresh click re-scanned ~50 emails
+// (a major, silent token drain). Force-re-summarize, if ever needed, must be a
+// separate, per-email action — never a whole-cache wipe.
 router.post('/refresh', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  // Only clear Layer 1 summaries — preserve Layer 2 analyses
-  await dbRun(
-    `UPDATE email_summary_cache SET summary = '', priority = '中', category = '一般' WHERE user_id = ?`,
-    userId
-  );
-  // Trigger a fresh initial poll
   pollNewEmails(userId, true).catch(() => {});
   res.json({ ok: true });
 });
