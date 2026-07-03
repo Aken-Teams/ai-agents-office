@@ -132,24 +132,33 @@ export const config = {
  * SQL boundary literal below is Taipei-local (compared directly against created_at);
  * JS code uses the same instant as an absolute UTC millisecond value.
  */
-export const PRICING_X5_START_SQL = '2026-07-03 16:00:00';               // vs DB created_at (local)
-export const PRICING_X5_START_MS = Date.parse('2026-07-03T16:00:00+08:00');
+// Three-tier billing for 強茂 (pro-panjit), all in Taipei-local time (matches how
+// created_at is stored):
+//   • before 2026-07-01 00:00           → ×10  (June & earlier — historical, settled)
+//   • 2026-07-01 00:00 .. 2026-07-03 16:00 → ×0  (this-month grace period — FREE, shows $0)
+//   • from 2026-07-03 16:00              → ×5   (new ongoing rate)
+export const PRICING_FREE_START_SQL = '2026-07-01 00:00:00';
+export const PRICING_X5_START_SQL   = '2026-07-03 16:00:00';
+export const PRICING_FREE_START_MS = Date.parse('2026-07-01T00:00:00+08:00');
+export const PRICING_X5_START_MS   = Date.parse('2026-07-03T16:00:00+08:00');
 
 /** Markup for a single usage record's timestamp (per-record billing). */
 export function pricingMarkupForDate(ts: string | Date): number {
   if ((process.env.DEPLOY_MODE || 'pro-panjit') === 'pro-out') return 2;
   const ms = ts instanceof Date ? ts.getTime() : Date.parse(ts);
-  return ms < PRICING_X5_START_MS ? 10 : 5;
+  if (ms < PRICING_FREE_START_MS) return 10;
+  if (ms < PRICING_X5_START_MS) return 0;
+  return 5;
 }
 
 /**
  * SQL expression yielding each row's markup, so a cost SUM over a period that spans
- * the switch (e.g. July 2026) prices each record correctly. `col` is the created_at
+ * the tiers (e.g. July 2026) prices each record correctly. `col` is the created_at
  * column reference (e.g. 'created_at' or 'tu.created_at').
  */
 export function pricingMarkupSql(col: string): string {
   if ((process.env.DEPLOY_MODE || 'pro-panjit') === 'pro-out') return '2';
-  return `CASE WHEN ${col} < '${PRICING_X5_START_SQL}' THEN 10 ELSE 5 END`;
+  return `CASE WHEN ${col} < '${PRICING_FREE_START_SQL}' THEN 10 WHEN ${col} < '${PRICING_X5_START_SQL}' THEN 0 ELSE 5 END`;
 }
 
 const DEFAULT_JWT_SECRET = 'dev-secret-change-in-production';
