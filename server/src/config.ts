@@ -67,10 +67,10 @@ export const config = {
   deployMode: (process.env.DEPLOY_MODE || 'pro-panjit') as 'pro-panjit' | 'pro-out',
 
   // Billing markup applied to raw Claude Sonnet pricing ($3/M in, $15/M output) for
-  // displayed token counts and dollar costs. This is the CURRENT (ongoing) rate:
-  // pro-out (external) ×2; pro-panjit (強茂) dropped ×10 → ×5 starting 2026-07.
-  // Historical months bill at their own rate — use pricingMarkupForMonth() for any
-  // per-month / invoice view so June-2026 and earlier stay ×10.
+  // displayed dollar costs. This is the CURRENT (ongoing) rate: pro-out (external)
+  // ×2; pro-panjit (強茂) dropped ×10 → ×5 at 2026-07-03 16:00. Historical records
+  // bill at the rate in effect then — use pricingMarkupForDate()/pricingMarkupSql()
+  // for any per-record / invoice cost so pre-switch usage stays ×10.
   pricingMarkup: (process.env.DEPLOY_MODE || 'pro-panjit') === 'pro-out' ? 2 : 5,
 
   // AD (Active Directory) integration — pro-panjit only
@@ -125,16 +125,31 @@ export const config = {
 } as const;
 
 /**
- * Billing markup for a specific month ('YYYY-MM'). Historical months must bill at
- * the rate that was in effect then: 強茂 (pro-panjit) was ×10 through 2026-06 and
- * ×5 from 2026-07 onward; pro-out is always ×2. Use this in any per-month / invoice
- * view so past months are not retroactively re-priced. Live/lifetime views that
- * have no single month use config.pricingMarkup (the current rate).
+ * Historical billing markup, switched at a precise instant: 強茂 (pro-panjit) drops
+ * from ×10 to ×5 at 2026-07-03 16:00 Taipei. pro-out is always ×2.
+ *
+ * token_usage.created_at is stored in the DB server's local time (Taipei), so the
+ * SQL boundary literal below is Taipei-local (compared directly against created_at);
+ * JS code uses the same instant as an absolute UTC millisecond value.
  */
-export function pricingMarkupForMonth(month: string): number {
+export const PRICING_X5_START_SQL = '2026-07-03 16:00:00';               // vs DB created_at (local)
+export const PRICING_X5_START_MS = Date.parse('2026-07-03T16:00:00+08:00');
+
+/** Markup for a single usage record's timestamp (per-record billing). */
+export function pricingMarkupForDate(ts: string | Date): number {
   if ((process.env.DEPLOY_MODE || 'pro-panjit') === 'pro-out') return 2;
-  // ISO 'YYYY-MM' strings compare correctly with plain string comparison.
-  return month && month < '2026-07' ? 10 : 5;
+  const ms = ts instanceof Date ? ts.getTime() : Date.parse(ts);
+  return ms < PRICING_X5_START_MS ? 10 : 5;
+}
+
+/**
+ * SQL expression yielding each row's markup, so a cost SUM over a period that spans
+ * the switch (e.g. July 2026) prices each record correctly. `col` is the created_at
+ * column reference (e.g. 'created_at' or 'tu.created_at').
+ */
+export function pricingMarkupSql(col: string): string {
+  if ((process.env.DEPLOY_MODE || 'pro-panjit') === 'pro-out') return '2';
+  return `CASE WHEN ${col} < '${PRICING_X5_START_SQL}' THEN 10 ELSE 5 END`;
 }
 
 const DEFAULT_JWT_SECRET = 'dev-secret-change-in-production';

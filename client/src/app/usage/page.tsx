@@ -7,10 +7,9 @@ import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
 import HelpButton from '../components/HelpButton';
-import { calcCostUsd } from '../../lib/pricing';
 
 // Token counts on this page are shown RAW (no markup) so they match the admin
-// back-office figures exactly. Cost/費用 still carries the markup via calcCostUsd.
+// back-office figures exactly. Cost/費用 comes boundary-exact from the server.
 const rawTokens = (n: number): number => n;
 
 interface DailyUsage {
@@ -18,12 +17,14 @@ interface DailyUsage {
   total_input: number;
   total_output: number;
   invocation_count: number;
+  cost: number;   // boundary-exact (server-computed)
 }
 
 interface UsageTotal {
   totalInput: number;
   totalOutput: number;
   totalInvocations: number;
+  cost: number;   // boundary-exact (server-computed)
 }
 
 type UsageCategory = 'document' | 'team' | 'email';
@@ -84,7 +85,7 @@ function UsageContent() {
       const end = new Date(filterTo || new Date().toISOString().slice(0, 10));
       for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const key = d.toISOString().slice(0, 10);
-        days.push(dataMap.get(key) ?? { date: key, total_input: 0, total_output: 0, invocation_count: 0 });
+        days.push(dataMap.get(key) ?? { date: key, total_input: 0, total_output: 0, invocation_count: 0, cost: 0 });
       }
     } else {
       const today = new Date();
@@ -93,7 +94,7 @@ function UsageContent() {
         const d = new Date(today);
         d.setDate(d.getDate() - i);
         const key = d.toISOString().slice(0, 10);
-        days.push(dataMap.get(key) ?? { date: key, total_input: 0, total_output: 0, invocation_count: 0 });
+        days.push(dataMap.get(key) ?? { date: key, total_input: 0, total_output: 0, invocation_count: 0, cost: 0 });
       }
     }
     return days;
@@ -131,15 +132,15 @@ function UsageContent() {
         totalInput: filteredDaily.reduce((s, d) => s + d.total_input, 0),
         totalOutput: filteredDaily.reduce((s, d) => s + d.total_output, 0),
         totalInvocations: filteredDaily.reduce((s, d) => s + d.invocation_count, 0),
+        cost: filteredDaily.reduce((s, d) => s + (d.cost || 0), 0),
       }
     : total;
 
   const totalTokens = activeTotal ? activeTotal.totalInput + activeTotal.totalOutput : 0;
   const inputRatio = totalTokens > 0 ? ((activeTotal!.totalInput / totalTokens) * 100).toFixed(1) : '0';
   const outputRatio = totalTokens > 0 ? ((activeTotal!.totalOutput / totalTokens) * 100).toFixed(1) : '0';
-  const estimatedCost = activeTotal
-    ? calcCostUsd(activeTotal.totalInput, activeTotal.totalOutput)
-    : 0;
+  // Boundary-exact cost from the server (per record; ×10 before 2026-07-03 16:00, ×5 after).
+  const estimatedCost = activeTotal?.cost ?? 0;
 
   return (
     <div className="min-h-screen bg-surface-container-lowest">
@@ -200,8 +201,7 @@ function UsageContent() {
                   const q = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
                   const header = [t('usage.ledger.date'), t('usage.ledger.generations'), t('usage.ledger.inputTokens'), t('usage.ledger.outputTokens'), t('usage.ledger.total'), t('usage.overview.estimatedCost') + ' (USD)'].map(q).join(',');
                   const csvRows = daily.map(d => {
-                    const cost = calcCostUsd(d.total_input, d.total_output);
-                    return [d.date.slice(0, 10), d.invocation_count, rawTokens(d.total_input), rawTokens(d.total_output), rawTokens(d.total_input + d.total_output), `$${cost.toFixed(4)}`].map(q).join(',');
+                    return [d.date.slice(0, 10), d.invocation_count, rawTokens(d.total_input), rawTokens(d.total_output), rawTokens(d.total_input + d.total_output), `$${(d.cost || 0).toFixed(4)}`].map(q).join(',');
                   });
                   const csv = '\uFEFF' + [header, ...csvRows].join('\n');
                   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });

@@ -20,7 +20,7 @@ import Navbar from '../../components/Navbar';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 import TeamMarkdown from '../../components/TeamMarkdown';
 import Tooltip from '../../components/Tooltip';
-import { calcCostUsd } from '../../../lib/pricing';
+import { markupForDate } from '../../../lib/pricing';
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
@@ -574,7 +574,7 @@ function TeamRunContent() {
     }
     setSynthesis(run.result || '');
     setSynthRunning(false);
-    setTotals({ inputTokens: run.input_tokens, outputTokens: run.output_tokens, costUsd: Math.round(calcCostUsd(run.input_tokens, run.output_tokens) * 100) / 100 });
+    setTotals({ inputTokens: run.input_tokens, outputTokens: run.output_tokens, costUsd: Math.round(((run.input_tokens / 1_000_000 * 3 + run.output_tokens / 1_000_000 * 15) * markupForDate(run.created_at)) * 100) / 100 });
     setQuestion(run.question);
     let outs: Array<{ memberId: string; name: string; icon: string | null; text: string; text2?: string }> = [];
     try { outs = JSON.parse(run.member_outputs || '[]'); } catch { /* ignore */ }

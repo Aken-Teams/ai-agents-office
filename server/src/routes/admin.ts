@@ -6,7 +6,7 @@ import { dbGet, dbAll, dbRun } from '../db.js';
 import { opsGet } from '../opsDb.js';
 import { adminMiddleware } from '../middleware/adminAuth.js';
 import { loadSkills } from '../skills/loader.js';
-import { config, pricingMarkupForMonth } from '../config.js';
+import { config, pricingMarkupSql } from '../config.js';
 import { applyWatermark, getWatermarkSettings, setWatermarkSettings } from '../services/watermark.js';
 import { getMailToken, fetchMessageDetail, resolveCidImages } from '../services/outlookApi.js';
 import { sendXlsx } from '../services/xlsxExport.js';
@@ -229,6 +229,7 @@ router.get('/users', async (req: Request, res: Response) => {
       COALESCE(t.total_tokens, 0) as total_tokens,
       COALESCE(t.total_input, 0) as total_input_tokens,
       COALESCE(t.total_output, 0) as total_output_tokens,
+      COALESCE(t.cost, 0) as cost,
       COALESCE(f.file_count, 0) as file_count,
       COALESCE(c.conv_count, 0) as conversation_count
     FROM users u
@@ -236,7 +237,8 @@ router.get('/users', async (req: Request, res: Response) => {
     LEFT JOIN invite_codes ic ON ic.id = u.invite_code_id
     LEFT JOIN (
       SELECT user_id, SUM(input_tokens + output_tokens) as total_tokens,
-        SUM(input_tokens) as total_input, SUM(output_tokens) as total_output
+        SUM(input_tokens) as total_input, SUM(output_tokens) as total_output,
+        SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}) as cost
       FROM token_usage GROUP BY user_id
     ) t ON t.user_id = u.id
     LEFT JOIN (
@@ -258,7 +260,7 @@ router.get('/users', async (req: Request, res: Response) => {
     const sheetRows = rows.map(u => [
       u.email, u.display_name || '', roleLabel[u.role] || u.role, u.status, u.company || '', u.quota_group_name || '',
       u.total_tokens, u.total_input_tokens, u.total_output_tokens,
-      Math.round(((u.total_input_tokens / 1_000_000) * 3 + (u.total_output_tokens / 1_000_000) * 15) * config.pricingMarkup * 100) / 100,
+      Math.round((u.cost ?? 0) * 100) / 100,
       u.conversation_count, u.file_count, u.created_at, u.last_login_at || '',
     ]);
     await sendXlsx(res, `users_${new Date().toISOString().slice(0, 10)}.xlsx`, [{ name: '用戶資料', headers, rows: sheetRows }]);
@@ -299,11 +301,12 @@ router.get('/users/:id', async (req: Request, res: Response) => {
     return;
   }
 
-  const tokenStats = await dbGet(`
+  const tokenStats = await dbGet<{ total_input: number; total_output: number; invocation_count: number; total_cost: number }>(`
     SELECT
       COALESCE(SUM(input_tokens), 0) as total_input,
       COALESCE(SUM(output_tokens), 0) as total_output,
-      COUNT(*) as invocation_count
+      COUNT(*) as invocation_count,
+      COALESCE(SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}), 0) as total_cost
     FROM token_usage WHERE user_id = ?
   `, userId);
 
@@ -344,6 +347,7 @@ router.get('/users/:id', async (req: Request, res: Response) => {
     memory_count: memoryCount?.count ?? 0,
     effective_limit: effectiveLimit,
     display_cost: displayCost,
+    total_cost: tokenStats?.total_cost ?? 0,
     deploy_mode: config.deployMode,
   });
 });
@@ -539,30 +543,22 @@ router.get('/tokens/summary', async (req: Request, res: Response) => {
   if (to)   { conds.push('DATE(created_at) <= ?'); params.push(to); }
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
 
-  const row = await dbGet<{ total_input: number; total_output: number; total_invocations: number }>(`
+  // Claude Sonnet 4 pricing: $3/M input, $15/M output. Cost is computed PER RECORD
+  // with the markup in effect at each row's timestamp (強茂 ×10 before 2026-07-03
+  // 16:00, ×5 after), so a range spanning the switch prices every record correctly.
+  const row = await dbGet<{ total_input: number; total_output: number; total_invocations: number; est_cost: number }>(`
     SELECT
       COALESCE(SUM(input_tokens), 0) as total_input,
       COALESCE(SUM(output_tokens), 0) as total_output,
-      COUNT(*) as total_invocations
+      COUNT(*) as total_invocations,
+      COALESCE(SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}), 0) as est_cost
     FROM token_usage
     ${where}
   `, ...params);
 
-  // Claude Sonnet 4 pricing: $3/M input, $15/M output. Cost is billed per-month at
-  // that month's historical markup (強茂 ×10 through 2026-06, ×5 from 2026-07), so a
-  // range spanning the boundary — or filtered to a past month — prices each month right.
   const totalInput = row?.total_input ?? 0;
   const totalOutput = row?.total_output ?? 0;
-  const monthly = await dbAll<{ month: string; in_tok: number; out_tok: number }>(`
-    SELECT DATE_FORMAT(created_at, '%Y-%m') as month,
-           COALESCE(SUM(input_tokens), 0) as in_tok,
-           COALESCE(SUM(output_tokens), 0) as out_tok
-    FROM token_usage
-    ${where}
-    GROUP BY DATE_FORMAT(created_at, '%Y-%m')
-  `, ...params);
-  const estimatedCost = monthly.reduce((sum, m) =>
-    sum + ((m.in_tok / 1_000_000) * 3 + (m.out_tok / 1_000_000) * 15) * pricingMarkupForMonth(m.month), 0);
+  const estimatedCost = row?.est_cost ?? 0;
 
   res.json({
     totalInput,
@@ -674,6 +670,7 @@ router.get('/tokens/by-user', async (req: Request, res: Response) => {
       u.id, u.email, u.display_name,
       SUM(tu.input_tokens) as total_input,
       SUM(tu.output_tokens) as total_output,
+      SUM((tu.input_tokens / 1000000 * 3 + tu.output_tokens / 1000000 * 15) * ${pricingMarkupSql('tu.created_at')}) as cost,
       COUNT(*) as invocation_count
     FROM token_usage tu
     JOIN users u ON u.id = tu.user_id
@@ -1189,13 +1186,15 @@ router.get('/conversations', async (req: Request, res: Response) => {
       u.email as user_email, u.display_name as user_display_name,
       COALESCE(t.total_input, 0) as total_input_tokens,
       COALESCE(t.total_output, 0) as total_output_tokens,
+      COALESCE(t.cost, 0) as cost,
       COALESCE(f.file_count, 0) as file_count,
       COALESCE(msg.message_count, 0) as message_count,
       COALESCE(msg.last_message_at, c.created_at) as last_activity
     FROM conversations c
     LEFT JOIN users u ON u.id = c.user_id
     LEFT JOIN (
-      SELECT conversation_id, SUM(input_tokens) as total_input, SUM(output_tokens) as total_output
+      SELECT conversation_id, SUM(input_tokens) as total_input, SUM(output_tokens) as total_output,
+        SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}) as cost
       FROM token_usage GROUP BY conversation_id
     ) t ON t.conversation_id = c.id
     LEFT JOIN (
@@ -1475,11 +1474,12 @@ router.get('/conversations/:id', async (req: Request, res: Response) => {
     ORDER BY created_at DESC
   `, convId);
 
-  const tokenUsage = await dbGet<{ total_input: number; total_output: number; call_count: number }>(`
+  const tokenUsage = await dbGet<{ total_input: number; total_output: number; call_count: number; cost: number }>(`
     SELECT
       COALESCE(SUM(input_tokens), 0) as total_input,
       COALESCE(SUM(output_tokens), 0) as total_output,
-      COUNT(*) as call_count
+      COUNT(*) as call_count,
+      COALESCE(SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}), 0) as cost
     FROM token_usage WHERE conversation_id = ?
   `, convId);
 
@@ -2078,6 +2078,7 @@ router.get('/tokens/monthly-summary', async (req: Request, res: Response) => {
       SUM(tu.input_tokens)  AS input_tokens,
       SUM(tu.output_tokens) AS output_tokens,
       SUM(tu.input_tokens + tu.output_tokens) AS total_tokens,
+      COALESCE(SUM((tu.input_tokens / 1000000 * 3 + tu.output_tokens / 1000000 * 15) * ${pricingMarkupSql('tu.created_at')}), 0) AS cost,
       COUNT(DISTINCT tu.conversation_id) AS conversations,
       COUNT(*) AS sessions
     FROM token_usage tu
@@ -2091,9 +2092,8 @@ router.get('/tokens/monthly-summary', async (req: Request, res: Response) => {
   if ((req.query.format as string) === 'xlsx') {
     const headers = ['月份', 'Email', '姓名', '輸入 Token', '輸出 Token', '總 Token', '預估費用(USD)', '對話次數', 'API 呼叫次數'];
     const sheetRows = (rows as any[]).map(r => {
-      // Per-month invoice: bill each month at its historical rate (see pricingMarkupForMonth).
-      const cost = ((r.input_tokens / 1_000_000) * 3 + (r.output_tokens / 1_000_000) * 15) * pricingMarkupForMonth(r.month);
-      return [r.month, r.email, r.display_name, r.input_tokens, r.output_tokens, r.total_tokens, Math.round(cost * 10000) / 10000, r.conversations, r.sessions];
+      // Cost is boundary-exact (computed per record in SQL); split-month rows already correct.
+      return [r.month, r.email, r.display_name, r.input_tokens, r.output_tokens, r.total_tokens, Math.round(r.cost * 10000) / 10000, r.conversations, r.sessions];
     });
     const label = from || to ? `${from || 'all'}_${to || 'all'}` : 'all';
     await sendXlsx(res, `token_billing_${label}.xlsx`, [{ name: 'Token 用量', headers, rows: sheetRows }]);
@@ -2530,17 +2530,18 @@ router.get('/line/users', async (_req: Request, res: Response) => {
     line_user_id: string; display_name: string | null; linked_via: string | null;
     last_message_at: string | null; user_id: string; email: string; status: string;
     quota_override: number | null; quota_group_id: string | null; group_limit: number | null;
-    in_tok: number; out_tok: number; disabled: number;
+    in_tok: number; out_tok: number; cost: number; disabled: number;
   }>(
     `SELECT lu.line_user_id, lu.display_name, lu.linked_via, lu.last_message_at, lu.disabled,
             u.id AS user_id, u.email, u.status, u.quota_override, u.quota_group_id,
             qg.limit_usd AS group_limit,
-            COALESCE(tu.in_tok, 0) AS in_tok, COALESCE(tu.out_tok, 0) AS out_tok
+            COALESCE(tu.in_tok, 0) AS in_tok, COALESCE(tu.out_tok, 0) AS out_tok, COALESCE(tu.cost, 0) AS cost
      FROM line_users lu
      JOIN users u ON u.id = lu.internal_user_id
      LEFT JOIN quota_groups qg ON qg.id = u.quota_group_id
      LEFT JOIN (
-       SELECT user_id, SUM(input_tokens) AS in_tok, SUM(output_tokens) AS out_tok
+       SELECT user_id, SUM(input_tokens) AS in_tok, SUM(output_tokens) AS out_tok,
+              SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}) AS cost
        FROM token_usage${monthFilter} GROUP BY user_id
      ) tu ON tu.user_id = u.id
      ORDER BY (lu.last_message_at IS NULL), lu.last_message_at DESC`,
@@ -2548,8 +2549,8 @@ router.get('/line/users', async (_req: Request, res: Response) => {
   );
 
   const users = rows.map(r => {
-    // Display cost: Claude Sonnet 4 pricing ($3/M in, $15/M out) × markup (×10, or ×2 in pro-out).
-    const cost = ((r.in_tok / 1_000_000) * 3 + (r.out_tok / 1_000_000) * 15) * config.pricingMarkup;
+    // Cost is boundary-exact (per record; ×10 before 2026-07-03 16:00, ×5 after).
+    const cost = r.cost ?? 0;
     // Effective limit: personal override > group > global default.
     const limit = r.quota_override != null ? r.quota_override
       : r.group_limit != null ? r.group_limit

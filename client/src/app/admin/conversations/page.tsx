@@ -7,7 +7,6 @@ import remarkGfm from 'remark-gfm';
 import dynamic from 'next/dynamic';
 import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
-import { PRICING_MARKUP } from '../../../lib/pricing';
 
 const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { ssr: false });
 const ChatEChart = dynamic(() => import('../../components/charts/ChatEChart'), { ssr: false });
@@ -103,10 +102,6 @@ function formatTokens(n: number) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
   if (n >= 1_000) return (n / 1_000).toFixed(1) + 'k';
   return String(n);
-}
-
-function calcCost(input: number, output: number): number {
-  return ((input / 1_000_000 * 3) + (output / 1_000_000 * 15)) * PRICING_MARKUP;
 }
 
 function formatCost(cost: number): string {
@@ -250,9 +245,9 @@ function ConversationDetailPanel({
           <span className="text-xs md:text-sm font-bold text-on-surface font-mono">{formatTokens(data.tokenUsage?.total_input ?? 0)}</span>
           <span className="text-xs md:text-sm text-on-surface-variant">{t('admin.conversations.detail.outputTokens' as any)}</span>
           <span className="text-xs md:text-sm font-bold text-on-surface font-mono">{formatTokens(data.tokenUsage?.total_output ?? 0)}</span>
-          {calcCost(data.tokenUsage?.total_input ?? 0, data.tokenUsage?.total_output ?? 0) >= 0.01 && (
+          {(data.tokenUsage?.cost ?? 0) >= 0.01 && (
             <span className="text-xs md:text-sm font-bold text-success font-mono">
-              ({formatCost(calcCost(data.tokenUsage?.total_input ?? 0, data.tokenUsage?.total_output ?? 0))})
+              ({formatCost((data.tokenUsage?.cost ?? 0))})
             </span>
           )}
         </div>
@@ -638,8 +633,8 @@ export default function AdminConversationsPage() {
                     <td className="py-3 px-4 text-center text-sm text-on-surface-variant">{conv.message_count || 0}</td>
                     <td className="py-3 px-4 text-right text-sm font-mono">
                       <span className="text-on-surface">{totalTk > 0 ? formatTokens(totalTk) : '-'}</span>
-                      {calcCost(conv.total_input_tokens || 0, conv.total_output_tokens || 0) >= 0.01 && (
-                        <span className="text-xs text-success ml-1">({formatCost(calcCost(conv.total_input_tokens || 0, conv.total_output_tokens || 0))})</span>
+                      {(conv.cost ?? 0) >= 0.01 && (
+                        <span className="text-xs text-success ml-1">({formatCost((conv.cost ?? 0))})</span>
                       )}
                     </td>
                     <td className="py-3 px-4 text-right text-sm text-on-surface-variant">{conv.file_count || 0}</td>
@@ -686,8 +681,8 @@ export default function AdminConversationsPage() {
                 <div className="flex items-center gap-4 mt-2 ml-[52px] text-[11px] text-on-surface-variant">
                   <span className="font-mono">
                     {totalTk > 0 ? formatTokens(totalTk) : '-'}
-                    {calcCost(conv.total_input_tokens || 0, conv.total_output_tokens || 0) >= 0.01 && (
-                      <span className="text-success ml-1">({formatCost(calcCost(conv.total_input_tokens || 0, conv.total_output_tokens || 0))})</span>
+                    {(conv.cost ?? 0) >= 0.01 && (
+                      <span className="text-success ml-1">({formatCost((conv.cost ?? 0))})</span>
                     )}
                   </span>
                   <span>{conv.message_count || 0} msg</span>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
-import { markupForMonth } from '../../../lib/pricing';
+import { markupForDate, PRICING_MARKUP } from '../../../lib/pricing';
 
 interface TokenSummary {
   totalInput: number;
@@ -112,7 +112,7 @@ export default function AdminTokens() {
       const allRows: Array<{
         month: string; email: string; display_name: string;
         input_tokens: number; output_tokens: number; total_tokens: number;
-        conversations: number; sessions: number;
+        cost: number; conversations: number; sessions: number;
       }> = await res.json();
 
       const EXCLUDE_NAMES = ['System Admin', 'test', '李忠軒'];
@@ -123,13 +123,16 @@ export default function AdminTokens() {
       const totalTokens = rows.reduce((sum, r) => sum + r.total_tokens, 0);
       const totalConversations = rows.reduce((sum, r) => sum + r.conversations, 0);
       const totalSessions = rows.reduce((sum, r) => sum + r.sessions, 0);
-      // Quote is for a specific month → bill at that month's historical rate.
-      const quoteMarkup = markupForMonth(quoteMonth);
-      const INPUT_RATE  = 3  * quoteMarkup; // $/MTok = raw × month rate
-      const OUTPUT_RATE = 15 * quoteMarkup;
+      // Cost is boundary-exact per user (server sums it per record, splitting the
+      // ×10→×5 switch at 2026-07-03 16:00). Derive an effective blended $/MTok for the
+      // line-item display so quantity × unit price still reconciles to the subtotal.
+      const totalCostUSD = rows.reduce((sum, r) => sum + (r.cost || 0), 0);
+      const rawCost1xUSD = (totalInput / 1_000_000) * 3 + (totalOutput / 1_000_000) * 15;
+      const effMarkup = rawCost1xUSD > 0 ? totalCostUSD / rawCost1xUSD : PRICING_MARKUP;
+      const INPUT_RATE  = 3  * effMarkup;
+      const OUTPUT_RATE = 15 * effMarkup;
       const inputCostUSD  = (totalInput  / 1_000_000) * INPUT_RATE;
       const outputCostUSD = (totalOutput / 1_000_000) * OUTPUT_RATE;
-      const totalCostUSD  = inputCostUSD + outputCostUSD;
       const isTWD = quoteCurrency === 'TWD';
       const rate  = parseFloat(quoteRate) || 32;
       const fx    = isTWD ? rate : 1;
@@ -137,8 +140,8 @@ export default function AdminTokens() {
       const inputCost  = inputCostUSD  * fx;
       const outputCost = outputCostUSD * fx;
       const totalCost  = totalCostUSD  * fx;
-      const inputUnitPrice  = isTWD ? `NT$${(INPUT_RATE  * rate).toFixed(0)}/MTok` : `$${INPUT_RATE}/MTok`;
-      const outputUnitPrice = isTWD ? `NT$${(OUTPUT_RATE * rate).toFixed(0)}/MTok` : `$${OUTPUT_RATE}/MTok`;
+      const inputUnitPrice  = isTWD ? `NT$${(INPUT_RATE  * rate).toFixed(0)}/MTok` : `$${INPUT_RATE.toFixed(1)}/MTok`;
+      const outputUnitPrice = isTWD ? `NT$${(OUTPUT_RATE * rate).toFixed(0)}/MTok` : `$${OUTPUT_RATE.toFixed(1)}/MTok`;
       const [year, month] = quoteMonth.split('-');
       const quoteNo = `Q-${year}${month}-001`;
       const generatedAt = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
@@ -149,7 +152,7 @@ export default function AdminTokens() {
 
       // Detail table rows (per user cost)
       const detailRowsHtml = rows.map((r, i) => {
-        const uCost = ((r.input_tokens / 1_000_000) * INPUT_RATE + (r.output_tokens / 1_000_000) * OUTPUT_RATE) * fx;
+        const uCost = (r.cost || 0) * fx;   // boundary-exact per-user cost from server
         return `<tr>
           <td style="color:#bbb;font-size:12px;width:32px">${i + 1}</td>
           <td style="color:#333"><strong>${r.display_name || r.email.split('@')[0]}</strong></td>
@@ -969,7 +972,7 @@ export default function AdminTokens() {
             </thead>
             <tbody className="divide-y divide-outline-variant/10">
               {ledger.map(entry => {
-                const cost = ((entry.input_tokens / 1_000_000) * 3 + (entry.output_tokens / 1_000_000) * 15) * markupForMonth((entry.created_at || '').slice(0, 7));
+                const cost = ((entry.input_tokens / 1_000_000) * 3 + (entry.output_tokens / 1_000_000) * 15) * markupForDate(entry.created_at);
                 return (
                   <tr key={entry.id} className="hover:bg-surface-container-high/50 transition-colors">
                     <td className="py-3 px-6 text-sm text-primary font-mono">{entry.id.slice(0, 8)}</td>
@@ -1001,7 +1004,7 @@ export default function AdminTokens() {
           {/* Mobile Card List */}
           <div className="md:hidden divide-y divide-outline-variant/10">
             {ledger.map(entry => {
-              const cost = ((entry.input_tokens / 1_000_000) * 3 + (entry.output_tokens / 1_000_000) * 15) * markupForMonth((entry.created_at || '').slice(0, 7));
+              const cost = ((entry.input_tokens / 1_000_000) * 3 + (entry.output_tokens / 1_000_000) * 15) * markupForDate(entry.created_at);
               return (
                 <div key={entry.id} className="px-4 py-3">
                   <div className="flex items-center justify-between mb-1">

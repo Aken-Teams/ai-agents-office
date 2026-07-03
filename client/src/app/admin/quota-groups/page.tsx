@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
-import { PRICING_MARKUP } from '../../../lib/pricing';
 
 interface QuotaGroup {
   id: string;
@@ -23,6 +22,7 @@ interface GroupMember {
   quota_override: number | null;
   total_input: number;
   total_output: number;
+  cost: number;   // boundary-exact (server-computed)
 }
 
 interface UserOption {
@@ -115,9 +115,6 @@ function AdTreeRow({ node, depth, query, domain, selected, onToggle }: {
   );
 }
 
-function calcCost(input: number, output: number): number {
-  return ((input / 1_000_000 * 3) + (output / 1_000_000 * 15)) * PRICING_MARKUP;
-}
 
 export default function AdminQuotaGroups() {
   return <QuotaGroupsContent />;
@@ -508,7 +505,7 @@ function QuotaGroupsContent() {
                   ) : (
                     <div className="divide-y divide-outline-variant/10">
                       {members.slice(0, memberShowCount).map(m => {
-                        const cost = calcCost(m.total_input, m.total_output);
+                        const cost = m.cost ?? 0;
                         const effectiveLimit = m.quota_override != null ? m.quota_override : g.limit_usd;
                         const pct = effectiveLimit > 0 ? Math.min(cost / effectiveLimit * 100, 100) : 0;
                         // Highlight the member that matches the current search

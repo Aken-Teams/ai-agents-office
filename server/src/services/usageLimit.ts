@@ -1,5 +1,5 @@
 import { dbGet, dbRun } from '../db.js';
-import { config } from '../config.js';
+import { config, pricingMarkupSql } from '../config.js';
 
 /**
  * Get the global per-user usage limit in display dollars (x10 markup).
@@ -26,7 +26,9 @@ export async function setUserUsageLimitUsd(value: number): Promise<void> {
  * Beta mode: counts lifetime cumulative usage.
  */
 export async function getUserDisplayCost(userId: string): Promise<number> {
-  let query = 'SELECT COALESCE(SUM(input_tokens), 0) AS total_input, COALESCE(SUM(output_tokens), 0) AS total_output FROM token_usage WHERE user_id = ?';
+  // Cost is computed per record at the markup in effect at each row's timestamp
+  // (×10 before 2026-07-03 16:00, ×5 after), so it matches every other billing view.
+  let query = `SELECT COALESCE(SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}), 0) AS cost FROM token_usage WHERE user_id = ?`;
   const params: unknown[] = [userId];
 
   if (!config.isBeta) {
@@ -37,9 +39,8 @@ export async function getUserDisplayCost(userId: string): Promise<number> {
     params.push(monthStart);
   }
 
-  const row = await dbGet<{ total_input: number; total_output: number }>(query, ...params);
-  if (!row) return 0;
-  return ((row.total_input / 1_000_000) * 3 + (row.total_output / 1_000_000) * 15) * config.pricingMarkup;
+  const row = await dbGet<{ cost: number }>(query, ...params);
+  return row?.cost ?? 0;
 }
 
 /**

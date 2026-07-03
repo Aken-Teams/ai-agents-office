@@ -14,7 +14,7 @@ import crypto from 'crypto';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { startTeamDocumentJob, getDocJob, type DocFormat } from '../services/teamDocument.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { config } from '../config.js';
+import { config, pricingMarkupSql } from '../config.js';
 import { TEAM_TEMPLATES, getTeamTemplate, type TeamAgentTemplate } from '../data/teamTemplates.js';
 import { runTeam, estimateRunTokens, estimateCostUsd } from '../services/teamRun.js';
 import { checkUserUsageLimit } from '../services/usageLimit.js';
@@ -204,15 +204,16 @@ router.get('/:id/runs', async (req: Request, res: Response) => {
      FROM team_runs WHERE team_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 30`,
     req.params.id, userId,
   );
-  const agg = await dbGet<{ count: number; in_tok: number; out_tok: number }>(
-    `SELECT COUNT(*) AS count, COALESCE(SUM(input_tokens), 0) AS in_tok, COALESCE(SUM(output_tokens), 0) AS out_tok
+  const agg = await dbGet<{ count: number; in_tok: number; out_tok: number; cost: number }>(
+    `SELECT COUNT(*) AS count, COALESCE(SUM(input_tokens), 0) AS in_tok, COALESCE(SUM(output_tokens), 0) AS out_tok,
+            COALESCE(SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}), 0) AS cost
      FROM team_runs WHERE team_id = ? AND user_id = ?`,
     req.params.id, userId,
   );
   const inTok = agg?.in_tok ?? 0, outTok = agg?.out_tok ?? 0;
   res.json({
     runs,
-    total: { count: agg?.count ?? 0, inputTokens: inTok, outputTokens: outTok, costUsd: estimateCostUsd(inTok, outTok) },
+    total: { count: agg?.count ?? 0, inputTokens: inTok, outputTokens: outTok, costUsd: Math.round((agg?.cost ?? 0) * 100) / 100 },
   });
 });
 

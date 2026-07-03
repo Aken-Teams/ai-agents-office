@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
-import { PRICING_MARKUP } from '../../../lib/pricing';
 
 interface UserRow {
   id: string;
@@ -16,12 +15,9 @@ interface UserRow {
   total_tokens: number;
   total_input_tokens: number;
   total_output_tokens: number;
+  cost: number;   // boundary-exact lifetime cost (server-computed)
   file_count: number;
   conversation_count: number;
-}
-
-function calcCost(input: number, output: number): number {
-  return ((input / 1_000_000 * 3) + (output / 1_000_000 * 15)) * PRICING_MARKUP;
 }
 
 function formatCost(cost: number): string {
@@ -46,6 +42,7 @@ interface UserDetail {
   memory_count: number;
   effective_limit: number;
   display_cost: number;
+  total_cost: number;   // boundary-exact lifetime cost
   deploy_mode: string;
 }
 
@@ -342,9 +339,9 @@ export default function AdminUsers() {
               <span className="text-xs text-on-surface-variant">{t('admin.users.detail.tokenOutput')} </span>
               <span className="text-sm font-bold text-on-surface">{formatTokens(detail.tokenStats.total_output)}</span>
             </div>
-            {calcCost(detail.tokenStats.total_input, detail.tokenStats.total_output) >= 0.01 && (
+            {(detail.total_cost ?? 0) >= 0.01 && (
               <div className="ml-auto">
-                <span className="text-sm font-bold text-success font-mono">{formatCost(calcCost(detail.tokenStats.total_input, detail.tokenStats.total_output))}</span>
+                <span className="text-sm font-bold text-success font-mono">{formatCost((detail.total_cost ?? 0))}</span>
               </div>
             )}
           </div>
@@ -645,8 +642,8 @@ export default function AdminUsers() {
                     <td className="py-3 px-4"><StatusBadge status={user.status} /></td>
                     <td className="py-3 px-4 text-right text-sm font-mono">
                       <span className="text-on-surface">{formatTokens(user.total_tokens)}</span>
-                      {calcCost(user.total_input_tokens, user.total_output_tokens) >= 0.01 && (
-                        <span className="text-xs text-success ml-1">({formatCost(calcCost(user.total_input_tokens, user.total_output_tokens))})</span>
+                      {(user.cost ?? 0) >= 0.01 && (
+                        <span className="text-xs text-success ml-1">({formatCost((user.cost ?? 0))})</span>
                       )}
                     </td>
                     <td className="py-3 px-4 text-right text-sm text-on-surface-variant">{user.conversation_count}</td>
@@ -690,8 +687,8 @@ export default function AdminUsers() {
                 <div className="flex items-center gap-4 mt-2 ml-[52px] text-[11px] text-on-surface-variant">
                   <span className="font-mono">
                     {formatTokens(user.total_tokens)}
-                    {calcCost(user.total_input_tokens, user.total_output_tokens) >= 0.01 && (
-                      <span className="text-success ml-1">({formatCost(calcCost(user.total_input_tokens, user.total_output_tokens))})</span>
+                    {(user.cost ?? 0) >= 0.01 && (
+                      <span className="text-success ml-1">({formatCost((user.cost ?? 0))})</span>
                     )}
                   </span>
                   <span>{user.conversation_count} {t('admin.users.table.conversations')}</span>

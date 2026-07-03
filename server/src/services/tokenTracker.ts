@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbAll, dbRun } from '../db.js';
+import { pricingMarkupSql } from '../config.js';
 
 interface TokenUsageRecord {
   userId: string;
@@ -35,13 +36,17 @@ export async function getUserUsageSummary(
   total_input: number;
   total_output: number;
   invocation_count: number;
+  cost: number;
 }>> {
+  // Per-day cost is boundary-exact (each record at its era's markup), so summing
+  // days over any range gives the same total as every other billing view.
   let query = `
     SELECT
       DATE_FORMAT(created_at, '%Y-%m-%d') as date,
       SUM(input_tokens) as total_input,
       SUM(output_tokens) as total_output,
-      COUNT(*) as invocation_count
+      COUNT(*) as invocation_count,
+      COALESCE(SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}), 0) as cost
     FROM token_usage
     WHERE user_id = ?
   `;
@@ -67,6 +72,7 @@ export interface DailyUsage {
   total_input: number;
   total_output: number;
   invocation_count: number;
+  cost: number;
 }
 
 /**
@@ -90,7 +96,8 @@ export async function getUserUsageSummaryByCategory(
       ${CATEGORY_EXPR} as category,
       SUM(tu.input_tokens) as total_input,
       SUM(tu.output_tokens) as total_output,
-      COUNT(*) as invocation_count
+      COUNT(*) as invocation_count,
+      COALESCE(SUM((tu.input_tokens / 1000000 * 3 + tu.output_tokens / 1000000 * 15) * ${pricingMarkupSql('tu.created_at')}), 0) as cost
     FROM token_usage tu
     LEFT JOIN conversations c ON c.id = tu.conversation_id
     WHERE tu.user_id = ?
@@ -113,11 +120,13 @@ export async function getUserTotalUsage(userId: string, monthlyOnly = false): Pr
   totalInput: number;
   totalOutput: number;
   totalInvocations: number;
+  cost: number;
 }> {
   let query = `SELECT
     COALESCE(SUM(input_tokens), 0) as total_input,
     COALESCE(SUM(output_tokens), 0) as total_output,
-    COUNT(*) as total_invocations
+    COUNT(*) as total_invocations,
+    COALESCE(SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}), 0) as cost
   FROM token_usage
   WHERE user_id = ?`;
   const params: unknown[] = [userId];
@@ -129,7 +138,7 @@ export async function getUserTotalUsage(userId: string, monthlyOnly = false): Pr
     params.push(monthStart);
   }
 
-  const result = await dbGet<{ total_input: number; total_output: number; total_invocations: number }>(
+  const result = await dbGet<{ total_input: number; total_output: number; total_invocations: number; cost: number }>(
     query, ...params
   );
 
@@ -137,5 +146,6 @@ export async function getUserTotalUsage(userId: string, monthlyOnly = false): Pr
     totalInput: result?.total_input ?? 0,
     totalOutput: result?.total_output ?? 0,
     totalInvocations: result?.total_invocations ?? 0,
+    cost: result?.cost ?? 0,
   };
 }
