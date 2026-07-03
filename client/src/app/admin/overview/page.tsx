@@ -3,13 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
-import { markupForMonth } from '../../../lib/pricing';
 
 interface Stats {
   totalUsers: number;
   activeSkills: number;
   totalTokens: number;
-  displayTokens: number;   // raw × markup (date-aware), the billed token figure
   totalFiles: number;
   systemUptime: number;
   systemHealth: string;
@@ -207,9 +205,9 @@ export default function AdminOverview() {
           <div className="bg-surface-container p-3 md:p-6 rounded-lg group relative overflow-hidden">
             <span className="material-symbols-outlined absolute -bottom-4 -right-2 max-md:-bottom-2 max-md:-right-1 max-md:!text-[56px] text-on-surface opacity-[0.07] group-hover:opacity-[0.12] transition-opacity pointer-events-none" style={{ fontSize: 100 }}>token</span>
             <p className="text-[10px] md:text-sm uppercase tracking-widest text-on-surface-variant mb-1 md:mb-2">{t('admin.overview.stats.tokenConsumed')}</p>
-            <span className="text-xl md:text-4xl font-headline font-black text-on-surface">{stats ? formatTokens(stats.displayTokens) : '\u2014'}</span>
+            <span className="text-xl md:text-4xl font-headline font-black text-on-surface">{stats ? formatTokens(stats.totalTokens) : '\u2014'}</span>
             <div className="mt-1.5 md:mt-3 w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-primary to-tertiary rounded-full" style={{ width: `${Math.min((stats?.displayTokens ?? 0) / 50_000_000 * 100, 100)}%` }} />
+              <div className="h-full bg-gradient-to-r from-primary to-tertiary rounded-full" style={{ width: `${Math.min((stats?.totalTokens ?? 0) / 10_000_000 * 100, 100)}%` }} />
             </div>
           </div>
 
@@ -276,7 +274,7 @@ export default function AdminOverview() {
                           </div>
                           {/* Tooltip inside chart area */}
                           <span className="absolute top-0 left-1/2 -translate-x-1/2 text-[10px] bg-surface-container-highest text-on-surface px-1.5 py-0.5 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity font-mono font-bold whitespace-nowrap pointer-events-none z-10">
-                            {(() => { const shown = total * markupForMonth((v.date || '').slice(0, 7)); return period === 'monthly' ? `${v.date} · ${formatTokens(shown)}` : `${v.date.slice(5)} · ${formatTokens(shown)}`; })()}
+                            {period === 'monthly' ? `${v.date} · ${formatTokens(total)}` : `${v.date.slice(5)} · ${formatTokens(total)}`}
                           </span>
                         </div>
                       );

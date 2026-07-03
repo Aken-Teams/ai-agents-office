@@ -202,7 +202,9 @@ export default function EmailDetailModal({
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<MessageDetail | null>(null);
   const [activePanel, setActivePanel] = useState<'body' | 'analysis'>('body');
-  const [analysisCollapsed, setAnalysisCollapsed] = useState(false);
+  // AI deep analysis is manual + costs tokens, so the panel starts collapsed; the
+  // collapsed rail is highlighted so users still notice the feature is there.
+  const [analysisCollapsed, setAnalysisCollapsed] = useState(true);
   const [recipientsExpanded, setRecipientsExpanded] = useState(false);
 
   // Fetch full message detail
@@ -569,14 +571,20 @@ export default function EmailDetailModal({
             </div>
           </div>
 
-          {/* Collapsed strip — width animates in/out inversely to the panel (no jump); click to re-open (desktop only) */}
+          {/* Collapsed strip — width animates in/out inversely to the panel (no jump); click to re-open (desktop only).
+              Highlighted (primary tint + gently pulsing sparkle + status dot) so the AI feature stays discoverable. */}
           <div className={`hidden md:block shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${analysisCollapsed ? 'md:w-11' : 'md:w-0'}`}>
             <button onClick={() => setAnalysisCollapsed(false)}
-              className="flex flex-col items-center gap-2 w-11 h-full border-l border-outline-variant/10 bg-surface-container-high/30 hover:bg-surface-container-high/60 transition-colors cursor-pointer pt-3.5"
+              className="relative flex flex-col items-center gap-2 w-11 h-full border-l border-primary/20 bg-primary/[0.06] hover:bg-primary/[0.12] transition-colors cursor-pointer pt-3.5"
               title="展開 AI 分析">
-              <span className="material-symbols-outlined text-on-surface-variant">left_panel_open</span>
-              <span className="material-symbols-outlined text-primary">auto_awesome</span>
-              <span className="text-[11px] font-medium text-on-surface-variant [writing-mode:vertical-rl] mt-1">AI 分析</span>
+              {email.analyzing ? (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary animate-pulse" title="分析中" />
+              ) : email.analysis ? (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-success" title="分析已完成" />
+              ) : null}
+              <span className="material-symbols-outlined text-on-surface-variant text-lg">left_panel_open</span>
+              <span className={`material-symbols-outlined text-primary ${!email.analysis && !email.analyzing ? 'animate-pulse' : ''}`}>auto_awesome</span>
+              <span className="text-[11px] font-semibold text-primary [writing-mode:vertical-rl] mt-1">AI 分析</span>
             </button>
           </div>
         </div>

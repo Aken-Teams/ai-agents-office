@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { DocJobProvider } from './components/DocJobProvider';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://agents-office.zhgpt.org'),
@@ -45,7 +46,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="font-body">{children}</body>
+      <body className="font-body"><DocJobProvider>{children}</DocJobProvider></body>
     </html>
   );
 }

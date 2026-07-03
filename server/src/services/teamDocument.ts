@@ -20,11 +20,22 @@ import { recordTokenUsage } from './tokenTracker.js';
 export type DocFormat = 'docx' | 'pdf' | 'pptx' | 'html';
 
 const FORMAT_MAP: Record<DocFormat, { skill: string; ext: string; mime: string; label: string; timeoutMs: number }> = {
-  docx: { skill: 'docx-gen',   ext: '.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', label: 'Word 文件', timeoutMs: 300_000 },
-  pdf:  { skill: 'pdf-gen',    ext: '.pdf',  mime: 'application/pdf', label: 'PDF 文件', timeoutMs: 480_000 },
-  pptx: { skill: 'pptx-gen',   ext: '.pptx', mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', label: '簡報', timeoutMs: 600_000 },
-  html: { skill: 'slides-gen', ext: '.html', mime: 'text/html; charset=utf-8', label: '網頁簡報', timeoutMs: 480_000 },
+  docx: { skill: 'docx-gen',   ext: '.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', label: 'Word 文件', timeoutMs: 480_000 },
+  pdf:  { skill: 'pdf-gen',    ext: '.pdf',  mime: 'application/pdf', label: 'PDF 文件', timeoutMs: 600_000 },
+  pptx: { skill: 'pptx-gen',   ext: '.pptx', mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', label: '簡報', timeoutMs: 900_000 },
+  html: { skill: 'slides-gen', ext: '.html', mime: 'text/html; charset=utf-8', label: '網頁簡報', timeoutMs: 600_000 },
 };
+
+/** Newest output file of the given extension in dir (ignores build-script sidecars), or null. */
+function findOutputFile(dir: string, ext: string): string | null {
+  try {
+    const files = fs.readdirSync(dir)
+      .filter(f => f.toLowerCase().endsWith(ext) && !f.includes('.v'))
+      .map(f => ({ f, m: fs.statSync(path.join(dir, f)).mtimeMs }))
+      .sort((a, b) => b.m - a.m);
+    return files.length ? path.join(dir, files[0].f) : null;
+  } catch { return null; }
+}
 
 export interface DocJob {
   status: 'running' | 'done' | 'error';
@@ -94,16 +105,32 @@ function runDocAgent(opts: {
       sandboxSubdir: `_agents/${spec.skill}`,
     });
 
-    const timeout = setTimeout(() => {
-      if (settled) return; settled = true;
-      try { abort(); } catch { /* */ }
-      cleanup();
-      reject(new Error(`${spec.label}產生逾時`));
-    }, spec.timeoutMs);
-
     const cleanup = () => {
       try { fs.rmSync(getSandboxPath(userId, pseudoConvId), { recursive: true, force: true }); } catch { /* */ }
     };
+
+    // Deliver a produced file if one exists (used on done, and to salvage on
+    // timeout/error — generation is slow and the file is often already written).
+    const deliver = (): boolean => {
+      const out = findOutputFile(agentDir, spec.ext);
+      if (!out) return false;
+      const buffer = fs.readFileSync(out);
+      if (usage.inTok || usage.outTok) {
+        recordTokenUsage({ userId, conversationId: null as unknown as string, inputTokens: usage.inTok, outputTokens: usage.outTok, model: usage.model || spec.skill }).catch(() => {});
+      }
+      cleanup();
+      resolve({ buffer, filename: `${safeName(teamTitle || '團隊報告')}${spec.ext}` });
+      return true;
+    };
+
+    const timeout = setTimeout(() => {
+      if (settled) return; settled = true;
+      try { abort(); } catch { /* */ }
+      // Salvage: the agent may have finished the file without emitting 'done'.
+      try { if (deliver()) { console.warn(`[teamDocument] ${spec.skill} timed out but a file was produced — delivering it`); return; } } catch { /* */ }
+      cleanup();
+      reject(new Error(`${spec.label}產生逾時（超過 ${Math.round(spec.timeoutMs / 60000)} 分鐘）`));
+    }, spec.timeoutMs);
 
     emitter.on('event', async (event: { type: string; data?: unknown }) => {
       if (settled) return;
@@ -111,24 +138,19 @@ function runDocAgent(opts: {
         const u = event.data as { inputTokens?: number; outputTokens?: number; model?: string };
         usage.inTok = u.inputTokens || 0; usage.outTok = u.outputTokens || 0; usage.model = u.model || '';
       } else if (event.type === 'error') {
-        settled = true; clearTimeout(timeout); cleanup();
-        reject(new Error(typeof event.data === 'string' ? event.data : `${spec.label}產生失敗`));
+        settled = true; clearTimeout(timeout);
+        const errMsg = typeof event.data === 'string' ? event.data : `${spec.label}產生失敗`;
+        // The agent may have produced the file before erroring on a later step — use it.
+        try { if (deliver()) { console.warn(`[teamDocument] ${spec.skill} reported an error but a file was produced — delivering it (err: ${errMsg})`); return; } } catch { /* */ }
+        console.error(`[teamDocument] ${spec.skill} failed with no output file: ${errMsg}`);
+        cleanup();
+        reject(new Error(errMsg));
       } else if (event.type === 'done') {
         settled = true; clearTimeout(timeout);
         try {
-          const files = fs.readdirSync(agentDir)
-            .filter(f => f.toLowerCase().endsWith(spec.ext) && !f.includes('.v'))
-            .map(f => ({ f, m: fs.statSync(path.join(agentDir, f)).mtimeMs }))
-            .sort((a, b) => b.m - a.m);
-          if (files.length === 0) throw new Error(`未產生${spec.label}檔案`);
-          const buffer = fs.readFileSync(path.join(agentDir, files[0].f));
-          // Best-effort billing (headless → no conversation; conversation_id nullable).
-          if (usage.inTok || usage.outTok) {
-            recordTokenUsage({ userId, conversationId: null as unknown as string, inputTokens: usage.inTok, outputTokens: usage.outTok, model: usage.model || spec.skill }).catch(() => {});
-          }
-          cleanup();
-          resolve({ buffer, filename: `${safeName(teamTitle || '團隊報告')}${spec.ext}` });
+          if (!deliver()) throw new Error(`未產生${spec.label}檔案（產生器已結束但找不到輸出檔）`);
         } catch (e) {
+          console.error(`[teamDocument] ${spec.skill} done but delivery failed:`, e);
           cleanup();
           reject(e instanceof Error ? e : new Error(String(e)));
         }

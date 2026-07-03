@@ -58,17 +58,10 @@ router.get('/overview/stats', async (req: Request, res: Response) => {
 
   const activeSkills = loadSkills().length;
 
-  // Group by month so the displayed (billed) token figure applies each month's
-  // markup — the shown count carries the markup (see pricingMarkupForMonth).
-  const tokenByMonth = await dbAll<{ month: string; total: number }>(
-    `SELECT DATE_FORMAT(created_at, '%Y-%m') as month,
-            COALESCE(SUM(input_tokens + output_tokens), 0) as total
-     FROM token_usage ${tokenWhere}
-     GROUP BY DATE_FORMAT(created_at, '%Y-%m')`,
+  const tokenRow = await dbGet<{ total: number }>(
+    `SELECT COALESCE(SUM(input_tokens + output_tokens), 0) as total FROM token_usage ${tokenWhere}`,
     ...tokenParams
   );
-  const totalTokens = tokenByMonth.reduce((s, m) => s + m.total, 0);
-  const displayTokens = tokenByMonth.reduce((s, m) => s + m.total * pricingMarkupForMonth(m.month), 0);
 
   const totalFilesRow = await dbGet<{ count: number }>(
     'SELECT COUNT(*) as count FROM generated_files'
@@ -77,8 +70,7 @@ router.get('/overview/stats', async (req: Request, res: Response) => {
   res.json({
     totalUsers: totalUsersRow?.count ?? 0,
     activeSkills,
-    totalTokens,
-    displayTokens: Math.round(displayTokens),
+    totalTokens: tokenRow?.total ?? 0,
     totalFiles: totalFilesRow?.count ?? 0,
     systemUptime: Math.floor(process.uptime()),
     systemHealth: 'operational',
@@ -571,16 +563,10 @@ router.get('/tokens/summary', async (req: Request, res: Response) => {
   `, ...params);
   const estimatedCost = monthly.reduce((sum, m) =>
     sum + ((m.in_tok / 1_000_000) * 3 + (m.out_tok / 1_000_000) * 15) * pricingMarkupForMonth(m.month), 0);
-  // Displayed (billed) token figure = raw × each month's markup — the markup is
-  // carried in the shown token count so it reconciles with cost at public rates.
-  const displayInput  = monthly.reduce((sum, m) => sum + m.in_tok  * pricingMarkupForMonth(m.month), 0);
-  const displayOutput = monthly.reduce((sum, m) => sum + m.out_tok * pricingMarkupForMonth(m.month), 0);
 
   res.json({
     totalInput,
     totalOutput,
-    displayInput: Math.round(displayInput),
-    displayOutput: Math.round(displayOutput),
     totalInvocations: row?.total_invocations ?? 0,
     estimatedCost: Math.round(estimatedCost * 10000) / 10000,
   });
@@ -2106,11 +2092,8 @@ router.get('/tokens/monthly-summary', async (req: Request, res: Response) => {
     const headers = ['月份', 'Email', '姓名', '輸入 Token', '輸出 Token', '總 Token', '預估費用(USD)', '對話次數', 'API 呼叫次數'];
     const sheetRows = (rows as any[]).map(r => {
       // Per-month invoice: bill each month at its historical rate (see pricingMarkupForMonth).
-      // Token columns show the billed figure (raw × that month's markup) so quantity ×
-      // public rate reconciles with the cost — nothing to reverse-engineer.
-      const mk = pricingMarkupForMonth(r.month);
-      const cost = ((r.input_tokens / 1_000_000) * 3 + (r.output_tokens / 1_000_000) * 15) * mk;
-      return [r.month, r.email, r.display_name, Math.round(r.input_tokens * mk), Math.round(r.output_tokens * mk), Math.round(r.total_tokens * mk), Math.round(cost * 10000) / 10000, r.conversations, r.sessions];
+      const cost = ((r.input_tokens / 1_000_000) * 3 + (r.output_tokens / 1_000_000) * 15) * pricingMarkupForMonth(r.month);
+      return [r.month, r.email, r.display_name, r.input_tokens, r.output_tokens, r.total_tokens, Math.round(cost * 10000) / 10000, r.conversations, r.sessions];
     });
     const label = from || to ? `${from || 'all'}_${to || 'all'}` : 'all';
     await sendXlsx(res, `token_billing_${label}.xlsx`, [{ name: 'Token 用量', headers, rows: sheetRows }]);
