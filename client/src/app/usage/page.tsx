@@ -7,7 +7,11 @@ import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
 import HelpButton from '../components/HelpButton';
-import { calcCostUsd, displayTokens } from '../../lib/pricing';
+import { calcCostUsd } from '../../lib/pricing';
+
+// Token counts on this page are shown RAW (no markup) so they match the admin
+// back-office figures exactly. Cost/費用 still carries the markup via calcCostUsd.
+const rawTokens = (n: number): number => n;
 
 interface DailyUsage {
   date: string;
@@ -197,7 +201,7 @@ function UsageContent() {
                   const header = [t('usage.ledger.date'), t('usage.ledger.generations'), t('usage.ledger.inputTokens'), t('usage.ledger.outputTokens'), t('usage.ledger.total'), t('usage.overview.estimatedCost') + ' (USD)'].map(q).join(',');
                   const csvRows = daily.map(d => {
                     const cost = calcCostUsd(d.total_input, d.total_output);
-                    return [d.date.slice(0, 10), d.invocation_count, displayTokens(d.total_input), displayTokens(d.total_output), displayTokens(d.total_input + d.total_output), `$${cost.toFixed(4)}`].map(q).join(',');
+                    return [d.date.slice(0, 10), d.invocation_count, rawTokens(d.total_input), rawTokens(d.total_output), rawTokens(d.total_input + d.total_output), `$${cost.toFixed(4)}`].map(q).join(',');
                   });
                   const csv = '\uFEFF' + [header, ...csvRows].join('\n');
                   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -240,7 +244,7 @@ function UsageContent() {
                     ? (locale === 'en' ? 'Filtered Token Usage' : '篩選期間 Token 用量')
                     : !isBeta ? (locale === 'en' ? 'This Month\'s Token Usage' : '本月 Token 用量') : t('usage.overview.totalTokenUsage')}
                 </h3>
-                <div className="text-3xl md:text-5xl font-bold text-on-surface font-headline">{displayTokens(totalTokens).toLocaleString()}</div>
+                <div className="text-3xl md:text-5xl font-bold text-on-surface font-headline">{rawTokens(totalTokens).toLocaleString()}</div>
                 <p className="text-xs md:text-sm text-on-surface-variant mt-1.5 md:mt-2">
                   {t('usage.overview.estimatedCost')} <span className="text-primary font-bold font-headline text-base md:text-lg">${estimatedCost.toFixed(4)}</span> <span className="text-xs md:text-sm uppercase tracking-wider">USD</span>
                 </p>
@@ -252,11 +256,11 @@ function UsageContent() {
                 </div>
                 <div>
                   <p className="text-xs md:text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.input')}</p>
-                  <p className="text-xl md:text-2xl font-headline font-bold text-tertiary">{displayTokens(activeTotal?.totalInput ?? 0).toLocaleString()}</p>
+                  <p className="text-xl md:text-2xl font-headline font-bold text-tertiary">{rawTokens(activeTotal?.totalInput ?? 0).toLocaleString()}</p>
                 </div>
                 <div>
                   <p className="text-xs md:text-sm text-on-surface-variant uppercase tracking-wider mb-1">{t('usage.overview.output')}</p>
-                  <p className="text-xl md:text-2xl font-headline font-bold text-secondary">{displayTokens(activeTotal?.totalOutput ?? 0).toLocaleString()}</p>
+                  <p className="text-xl md:text-2xl font-headline font-bold text-secondary">{rawTokens(activeTotal?.totalOutput ?? 0).toLocaleString()}</p>
                 </div>
               </div>
             </div>
@@ -318,7 +322,7 @@ function UsageContent() {
                       return (
                         <div key={day.date} className="flex-1 min-w-0 h-full flex items-end relative z-10 group">
                           <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-surface-container-highest text-on-surface px-2 py-0.5 text-[10px] md:text-xs font-mono whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none">
-                            {day.date.slice(5)} · {displayTokens(dayTotal).toLocaleString()}
+                            {day.date.slice(5)} · {rawTokens(dayTotal).toLocaleString()}
                           </div>
                           <div
                             className="w-full rounded-t-sm overflow-hidden transition-all duration-300 group-hover:brightness-125"
@@ -411,10 +415,10 @@ function UsageContent() {
                       <div className="min-w-0 flex-1">
                         <p className="text-xs md:text-sm font-bold text-on-surface">{new Date(day.date).toLocaleDateString(locale === 'en' ? 'en-US' : 'zh-TW', { month: 'short', day: 'numeric', weekday: 'short' })}</p>
                         <p className="text-xs md:text-sm text-on-surface-variant truncate">
-                          {t('usage.activity.generationCount', { count: day.invocation_count })} · {displayTokens(day.total_input + day.total_output).toLocaleString()} tokens
+                          {t('usage.activity.generationCount', { count: day.invocation_count })} · {rawTokens(day.total_input + day.total_output).toLocaleString()} tokens
                         </p>
                       </div>
-                      <span className="text-xs md:text-sm font-mono text-primary ml-2 shrink-0">{displayTokens(day.total_output).toLocaleString()}</span>
+                      <span className="text-xs md:text-sm font-mono text-primary ml-2 shrink-0">{rawTokens(day.total_output).toLocaleString()}</span>
                     </div>
                   ))}
                   {daily.length === 0 && (
@@ -491,10 +495,10 @@ function UsageContent() {
                                 <span className="text-sm text-on-surface font-medium">{day.invocation_count}</span>
                               </div>
                             </td>
-                            <td className="px-6 py-4 text-sm font-mono text-on-surface">{displayTokens(day.total_input).toLocaleString()}</td>
-                            <td className="px-6 py-4 text-sm font-mono text-on-surface">{displayTokens(day.total_output).toLocaleString()}</td>
+                            <td className="px-6 py-4 text-sm font-mono text-on-surface">{rawTokens(day.total_input).toLocaleString()}</td>
+                            <td className="px-6 py-4 text-sm font-mono text-on-surface">{rawTokens(day.total_output).toLocaleString()}</td>
                             <td className="px-6 py-4 text-sm font-mono text-primary font-bold text-right">
-                              {displayTokens(day.total_input + day.total_output).toLocaleString()}
+                              {rawTokens(day.total_input + day.total_output).toLocaleString()}
                             </td>
                           </tr>
                         ))}
@@ -513,7 +517,7 @@ function UsageContent() {
                         <div className="flex justify-between items-center mb-1.5">
                           <span className="text-xs font-mono text-on-surface-variant">{day.date.slice(0, 10)}</span>
                           <span className="text-sm font-mono text-primary font-bold">
-                            {displayTokens(day.total_input + day.total_output).toLocaleString()}
+                            {rawTokens(day.total_input + day.total_output).toLocaleString()}
                           </span>
                         </div>
                         {/* Row 2: Generations + Input/Output breakdown */}
@@ -523,8 +527,8 @@ function UsageContent() {
                             {day.invocation_count}
                           </span>
                           <span className="text-on-surface-variant/40">|</span>
-                          <span>In: <span className="font-mono text-on-surface">{displayTokens(day.total_input).toLocaleString()}</span></span>
-                          <span>Out: <span className="font-mono text-on-surface">{displayTokens(day.total_output).toLocaleString()}</span></span>
+                          <span>In: <span className="font-mono text-on-surface">{rawTokens(day.total_input).toLocaleString()}</span></span>
+                          <span>Out: <span className="font-mono text-on-surface">{rawTokens(day.total_output).toLocaleString()}</span></span>
                         </div>
                       </div>
                     ))}
