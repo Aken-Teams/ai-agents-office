@@ -116,6 +116,35 @@ export async function getUserUsageSummaryByCategory(
   return out;
 }
 
+/**
+ * Invocation counts split by product surface (document / team / email). Same
+ * categorisation as getUserUsageSummaryByCategory. Used by the dashboard's
+ * "本月文件生成" stat (which should count DOCUMENTS only, with a hover breakdown).
+ */
+export async function getUserCategoryCounts(
+  userId: string,
+  monthlyOnly = false,
+): Promise<Record<UsageCategory, number>> {
+  const CATEGORY_EXPR = `CASE WHEN c.title = '信件助手' THEN 'email' WHEN tu.model LIKE 'team%' THEN 'team' ELSE 'document' END`;
+  let query = `
+    SELECT ${CATEGORY_EXPR} as category, COUNT(*) as n
+    FROM token_usage tu
+    LEFT JOIN conversations c ON c.id = tu.conversation_id
+    WHERE tu.user_id = ?`;
+  const params: unknown[] = [userId];
+  if (monthlyOnly) {
+    const now = new Date();
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    query += ' AND tu.created_at >= ?';
+    params.push(monthStart);
+  }
+  query += ` GROUP BY ${CATEGORY_EXPR}`;
+  const rows = await dbAll<{ category: UsageCategory; n: number }>(query, ...params);
+  const out: Record<UsageCategory, number> = { document: 0, team: 0, email: 0 };
+  for (const r of rows) out[r.category] = Number(r.n);
+  return out;
+}
+
 export async function getUserTotalUsage(userId: string, monthlyOnly = false): Promise<{
   totalInput: number;
   totalOutput: number;

@@ -699,6 +699,18 @@ export async function initializeDatabase(): Promise<void> {
     try {
       await conn.query('ALTER TABLE team_schedules ADD COLUMN name VARCHAR(255) DEFAULT NULL AFTER user_id');
     } catch { /* column already exists */ }
+    // Optional: a schedule can also produce a document each run (Word/PPT/PDF/HTML).
+    // NULL = text report only (the existing behaviour).
+    try {
+      await conn.query('ALTER TABLE team_schedules ADD COLUMN doc_format VARCHAR(10) DEFAULT NULL');
+    } catch { /* column already exists */ }
+    try {
+      await conn.query('ALTER TABLE team_schedules ADD COLUMN doc_style_prompt TEXT DEFAULT NULL');
+    } catch { /* column already exists */ }
+    // Marks a run that produced a downloadable document (which format).
+    try {
+      await conn.query('ALTER TABLE team_runs ADD COLUMN doc_format VARCHAR(10) DEFAULT NULL');
+    } catch { /* column already exists */ }
     // ─── end Agent Teams ─────────────────────────────────────────
 
     // Terms of Service: add acceptance tracking column

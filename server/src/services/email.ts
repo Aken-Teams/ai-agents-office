@@ -218,16 +218,18 @@ function mdToEmailHtml(md: string): string {
 }
 
 /** Email a scheduled team collaboration report to the user. */
-export async function sendTeamReportEmail(to: string, teamTitle: string, question: string, resultMarkdown: string, scheduleName?: string | null, shareUrl?: string | null): Promise<boolean> {
+export async function sendTeamReportEmail(to: string, teamTitle: string, question: string, resultMarkdown: string, scheduleName?: string | null, shareUrl?: string | null, docUrl?: string | null, docLabel?: string | null): Promise<boolean> {
   const label = scheduleName?.trim() || teamTitle;
   const subject = `【團隊協作報告】${label}`;
   const nameRow = scheduleName?.trim()
     ? `<p style="font-size:13px;color:#0f766e;margin:0 0 2px;font-weight:600">${escapeHtml(scheduleName.trim())}</p>`
     : '';
-  const shareBlock = shareUrl
-    ? `<div style="margin:24px 0 0;padding-top:20px;border-top:1px solid #e5e8ed;text-align:center">
-        <a href="${escapeHtml(shareUrl)}" style="display:inline-block;background:linear-gradient(135deg,#006970 0%,#009099 100%);color:#ffffff;text-decoration:none;padding:11px 32px;border-radius:8px;font-size:14px;font-weight:600">在網站上查看完整報告</a>
-      </div>`
+  // Buttons: view full report on the web, and (optionally) download the generated file.
+  const buttons: string[] = [];
+  if (shareUrl) buttons.push(`<a href="${escapeHtml(shareUrl)}" style="display:inline-block;background:linear-gradient(135deg,#006970 0%,#009099 100%);color:#ffffff;text-decoration:none;padding:11px 32px;border-radius:8px;font-size:14px;font-weight:600;margin:0 4px 8px">在網站上查看完整報告</a>`);
+  if (docUrl) buttons.push(`<a href="${escapeHtml(docUrl)}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:11px 32px;border-radius:8px;font-size:14px;font-weight:600;margin:0 4px 8px">下載 ${escapeHtml(docLabel || '文件')}</a>`);
+  const shareBlock = buttons.length
+    ? `<div style="margin:24px 0 0;padding-top:20px;border-top:1px solid #e5e8ed;text-align:center">${buttons.join('')}</div>`
     : '';
   const body = `<div style="padding:32px">
     <h2 style="font-size:18px;color:#0f172a;margin:0 0 6px">${escapeHtml(teamTitle)} · 團隊協作報告</h2>

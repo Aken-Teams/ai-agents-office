@@ -84,6 +84,7 @@ function DashboardContent() {
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [usage, setUsage] = useState<UsageTotal | null>(null);
+  const [catCounts, setCatCounts] = useState<{ document: number; team: number; email: number }>({ document: 0, team: 0, email: 0 });
   const [usageLimit, setUsageLimit] = useState<number | null>(null);
   const [isBeta, setIsBeta] = useState(true);
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -202,7 +203,7 @@ function DashboardContent() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then(data => { setUsage(data.total); if (data.limit != null) setUsageLimit(data.limit); setIsBeta(data.isBeta ?? true); })
+      .then(data => { setUsage(data.total); setCatCounts(data.categoryCounts ?? { document: 0, team: 0, email: 0 }); if (data.limit != null) setUsageLimit(data.limit); setIsBeta(data.isBeta ?? true); })
       .catch(console.error);
 
     fetch('/api/files', {
@@ -693,11 +694,17 @@ function DashboardContent() {
         <div className="hidden md:flex flex-col h-[calc(100vh-3.5rem)]">
           {/* Stats bar — flat inline strip */}
           <div className="flex items-center gap-6 px-8 py-3 shrink-0 text-sm text-on-surface-variant border-b border-outline-variant/10">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 relative group/gen cursor-default">
               <span className="material-symbols-outlined text-primary text-base">description</span>
               <span className="font-medium">{t('dashboard.stats.invocationsTitle')}</span>
-              <span className="font-headline font-bold text-on-surface">{usage?.totalInvocations ?? 0}</span>
+              <span className="font-headline font-bold text-on-surface">{catCounts.document}</span>
               <span className="text-primary font-bold">{t('dashboard.stats.invocationsUnit')}</span>
+              {/* Hover breakdown: 文件 / AI 團隊 / 信件 counts */}
+              <div className="pointer-events-none absolute top-full left-0 mt-2 z-30 w-max min-w-[140px] rounded-lg bg-inverse-surface text-inverse-on-surface text-xs shadow-lg opacity-0 scale-95 origin-top-left transition-all duration-150 group-hover/gen:opacity-100 group-hover/gen:scale-100 p-2.5">
+                <div className="flex items-center justify-between gap-4 py-0.5"><span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[14px]">description</span>文件</span><span className="font-mono font-bold">{catCounts.document}</span></div>
+                <div className="flex items-center justify-between gap-4 py-0.5"><span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[14px]">groups</span>AI 團隊</span><span className="font-mono font-bold">{catCounts.team}</span></div>
+                <div className="flex items-center justify-between gap-4 py-0.5"><span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[14px]">mail</span>信件</span><span className="font-mono font-bold">{catCounts.email}</span></div>
+              </div>
             </div>
             <div className="w-px h-4 bg-outline-variant/20" />
             <div className="flex items-center gap-1.5">

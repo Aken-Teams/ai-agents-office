@@ -25,7 +25,9 @@ const DOW = ['週日', '週一', '週二', '週三', '週四', '週五', '週六
 const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
 const isPanjit = deployMode === 'pro-panjit';
 
-interface Schedule { id: string; name: string | null; question: string; frequency: 'daily' | 'weekly'; hour: number; minute: number; day_of_week: number | null; email: string; enabled: number; next_run_at: string; last_run_at: string | null }
+interface Schedule { id: string; name: string | null; question: string; frequency: 'daily' | 'weekly'; hour: number; minute: number; day_of_week: number | null; email: string; enabled: number; next_run_at: string; last_run_at: string | null; doc_format: string | null }
+
+const DOC_LABELS: Record<string, string> = { docx: 'Word', pptx: '簡報', pdf: 'PDF', html: '網頁簡報' };
 interface RunRow { id: string; question: string; status: string; created_at: string; input_tokens: number; output_tokens: number; share_token: string | null; schedule_id: string | null; emailed: number | null }
 interface TeamInfo { id: string; title: string; icon: string | null }
 
@@ -50,6 +52,13 @@ function SchedulesContent() {
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [testing, setTesting] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  // Arriving from a team's detail page with ?q=<question> pre-fills + opens the
+  // create modal, so scheduling the topic you just analysed needs no re-typing.
+  const [prefillQuestion, setPrefillQuestion] = useState('');
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get('q');
+    if (q && q.trim()) { setPrefillQuestion(q); setCreateOpen(true); }
+  }, []);
   const [delTarget, setDelTarget] = useState<Schedule | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [cursor, setCursor] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
@@ -139,7 +148,7 @@ function SchedulesContent() {
       <Navbar />
 
       {createOpen && (
-        <ScheduleCreateModal teamId={teamId} token={token} defaultEmail={user?.email || ''}
+        <ScheduleCreateModal teamId={teamId} token={token} defaultEmail={user?.email || ''} defaultQuestion={prefillQuestion}
           onClose={() => setCreateOpen(false)} onCreated={() => { loadSchedules(); }} />
       )}
 
@@ -198,7 +207,14 @@ function SchedulesContent() {
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-bold text-on-surface truncate">{s.name || s.question}</div>
                       {s.name && <div className="text-xs text-on-surface-variant truncate">議題：{s.question}</div>}
-                      <div className="text-xs text-on-surface-variant truncate">{fmt(s)} · {s.email}</div>
+                      <div className="text-xs text-on-surface-variant truncate flex items-center gap-1.5">
+                        <span className="truncate">{fmt(s)} · {s.email}</span>
+                        {s.doc_format && DOC_LABELS[s.doc_format] && (
+                          <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-bold">
+                            <span className="material-symbols-outlined text-[11px]">description</span>{DOC_LABELS[s.doc_format]}
+                          </span>
+                        )}
+                      </div>
                       {s.enabled
                         ? <div className="text-[11px] text-tertiary">下次：{new Date(s.next_run_at).toLocaleString()}</div>
                         : <div className="text-[11px] text-on-surface-variant/60">已停用</div>}

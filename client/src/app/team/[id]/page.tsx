@@ -684,13 +684,21 @@ function TeamRunContent() {
               已協作 {total.count} 次 · 累計 {(total.inputTokens + total.outputTokens).toLocaleString()} tokens · ${total.costUsd}
             </span>
           )}
-          {canSchedule && (
-            <Link href={`/team/${teamId}/schedules`} title="排程管理"
-              className="shrink-0 flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-bold border border-outline-variant/30 text-on-surface hover:border-primary/50 hover:text-primary transition-colors cursor-pointer no-underline">
-              <span className="material-symbols-outlined text-[18px]">schedule</span>
-              <span className="hidden md:inline">排程</span>
-            </Link>
-          )}
+          {canSchedule && (() => {
+            // Carry the topic you're analysing (input, else the active run's question)
+            // into the schedule so it's pre-filled — no need to re-type it.
+            const scheduleQ = (question.trim() || (activeRunId ? history.find(r => r.id === activeRunId)?.question : '') || '').trim();
+            const href = scheduleQ
+              ? `/team/${teamId}/schedules?q=${encodeURIComponent(scheduleQ)}`
+              : `/team/${teamId}/schedules`;
+            return (
+              <Link href={href} title={scheduleQ ? '把目前議題加入排程' : '排程管理'}
+                className="shrink-0 flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-bold border border-outline-variant/30 text-on-surface hover:border-primary/50 hover:text-primary transition-colors cursor-pointer no-underline">
+                <span className="material-symbols-outlined text-[18px]">schedule</span>
+                <span className="hidden md:inline">排程</span>
+              </Link>
+            );
+          })()}
         </div>
 
         {/* Question input */}
@@ -891,9 +899,8 @@ function TeamRunContent() {
                   {activeRunId && (
                     <Tooltip label="用 AI 整理成正式完整報告，輸出專業 PDF" align="right">
                       <button onClick={() => handleFormalReport(activeRunId)} disabled={!!reportingRunId}
-                        className="flex items-center gap-1 h-7 px-2.5 rounded-lg bg-primary text-on-primary text-xs font-bold hover:bg-primary/85 transition-colors cursor-pointer shrink-0 disabled:opacity-60 disabled:cursor-wait">
-                        <span className="material-symbols-outlined text-[16px]">{reportingRunId === activeRunId ? 'progress_activity' : 'article'}</span>
-                        <span className={reportingRunId === activeRunId ? 'animate-pulse' : ''}>{reportingRunId === activeRunId ? '產生中…' : '正式報告'}</span>
+                        className="w-7 h-7 flex items-center justify-center rounded text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0 disabled:opacity-60 disabled:cursor-wait">
+                        <span className={`material-symbols-outlined text-[18px] ${reportingRunId === activeRunId ? 'animate-spin' : ''}`}>{reportingRunId === activeRunId ? 'progress_activity' : 'article'}</span>
                       </button>
                     </Tooltip>
                   )}

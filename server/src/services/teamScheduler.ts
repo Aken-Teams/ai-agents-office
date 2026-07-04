@@ -10,18 +10,42 @@ import { dbAll, dbGet, dbRun } from '../db.js';
 import { config } from '../config.js';
 import { runTeam } from './teamRun.js';
 import { sendTeamReportEmail } from './email.js';
+import { generateScheduledDoc, docFormatMeta, isDocFormat } from './teamDocument.js';
 import { checkUserUsageLimit } from './usageLimit.js';
 import { pushMessage, type LineMessage, type QuickReply } from './line/client.js';
 import { splitForLine } from './line/formatter.js';
 import { buildTeamReportFlex } from './line/flex.js';
 import { generateLineBriefing, type LineBriefing } from './personalization.js';
 
-/** Mint (once) a public share token for a run and return its full website URL. */
-async function buildShareUrl(runId: string): Promise<string> {
+/** Mint (once) a public share token for a run; return its share URL + the token. */
+async function buildShareUrl(runId: string): Promise<{ url: string; token: string }> {
   const token = crypto.randomBytes(8).toString('hex');
   await dbRun('UPDATE team_runs SET share_token = ? WHERE id = ? AND share_token IS NULL', token, runId);
   const row = await dbGet<{ share_token: string | null }>('SELECT share_token FROM team_runs WHERE id = ?', runId);
-  return `${config.publicWebUrl}/share/team/${row?.share_token || token}`;
+  const tok = row?.share_token || token;
+  return { url: `${config.publicWebUrl}/share/team/${tok}`, token: tok };
+}
+
+/**
+ * If the schedule opted to produce a document, generate + persist it and return a
+ * public download URL (via the run's share token) + a human label for the email
+ * button. Best-effort — a doc failure never blocks the (already-sent) text report.
+ */
+async function maybeBuildDoc(
+  s: ScheduleRow, teamTitle: string, runId: string, shareToken: string,
+): Promise<{ url: string; label: string } | null> {
+  if (!s.doc_format || !isDocFormat(s.doc_format)) return null;
+  try {
+    await generateScheduledDoc({
+      userId: s.user_id, teamId: s.team_id, runId, format: s.doc_format,
+      stylePrompt: s.doc_style_prompt || '', teamTitle,
+    });
+    await dbRun('UPDATE team_runs SET doc_format = ? WHERE id = ?', s.doc_format, runId);
+    return { url: `${config.publicWebUrl}/api/public/team-run/${shareToken}/document`, label: docFormatMeta(s.doc_format).label };
+  } catch (err) {
+    console.error(`[scheduler] doc generation failed for run ${runId}:`, err);
+    return null;
+  }
 }
 
 /** Follow-up chips so a notification can turn into a conversation with one tap. */
@@ -131,6 +155,8 @@ interface ScheduleRow extends ScheduleSpec {
   question: string;
   email: string;
   day_of_week: number | null;
+  doc_format: string | null;        // opt-in: also produce a file (docx/pdf/pptx/html)
+  doc_style_prompt: string | null;  // chosen style prompt for the doc
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -166,11 +192,12 @@ async function processSchedule(s: ScheduleRow): Promise<void> {
   if (!team) return;
 
   const result = await runTeam({ userId: s.user_id, teamId: s.team_id, question: s.question, writer: () => {}, scheduleId: s.id, personalized: true });
-  const shareUrl = await buildShareUrl(result.runId);
-  const ok = await sendTeamReportEmail(s.email, team.title, s.question, result.result, s.name, shareUrl);
+  const { url: shareUrl, token: shareToken } = await buildShareUrl(result.runId);
+  const doc = await maybeBuildDoc(s, team.title, result.runId, shareToken);
+  const ok = await sendTeamReportEmail(s.email, team.title, s.question, result.result, s.name, shareUrl, doc?.url, doc?.label);
   await dbRun('UPDATE team_runs SET emailed = ? WHERE id = ?', ok ? 1 : 0, result.runId);
   await deliverLineNotification(s, team.title, result.runId, result.result, shareUrl);
-  console.log(`[scheduler] ran team "${team.title}" → email ${ok ? 'sent' : 'FAILED'} to ${s.email}`);
+  console.log(`[scheduler] ran team "${team.title}" → email ${ok ? 'sent' : 'FAILED'} to ${s.email}${doc ? ' (+doc)' : ''}`);
 }
 
 async function runDueSchedules(): Promise<void> {
@@ -197,12 +224,13 @@ export async function runScheduleNow(scheduleId: string, userId: string): Promis
   const team = await dbGet<{ title: string }>('SELECT title FROM agent_teams WHERE id = ? AND user_id = ?', s.team_id, userId);
   if (!team) return false;
   const result = await runTeam({ userId, teamId: s.team_id, question: s.question, writer: () => {}, scheduleId: s.id, personalized: true });
-  const shareUrl = await buildShareUrl(result.runId);
-  const ok = await sendTeamReportEmail(s.email, team.title, s.question, result.result, s.name, shareUrl);
+  const { url: shareUrl, token: shareToken } = await buildShareUrl(result.runId);
+  const doc = await maybeBuildDoc(s, team.title, result.runId, shareToken);
+  const ok = await sendTeamReportEmail(s.email, team.title, s.question, result.result, s.name, shareUrl, doc?.url, doc?.label);
   await dbRun('UPDATE team_runs SET emailed = ? WHERE id = ?', ok ? 1 : 0, result.runId);
   await deliverLineNotification(s, team.title, result.runId, result.result, shareUrl);
   await dbRun('UPDATE team_schedules SET last_run_at = NOW() WHERE id = ?', s.id);
-  console.log(`[scheduler] manual test "${team.title}" → email ${ok ? 'sent' : 'FAILED'} to ${s.email}`);
+  console.log(`[scheduler] manual test "${team.title}" → email ${ok ? 'sent' : 'FAILED'} to ${s.email}${doc ? ' (+doc)' : ''}`);
   return ok;
 }
 

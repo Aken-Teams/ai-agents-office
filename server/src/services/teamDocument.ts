@@ -182,3 +182,49 @@ export function startTeamDocumentJob(args: {
 
   return jobId;
 }
+
+// ─── Scheduled documents ─────────────────────────────────────────────────────
+// A schedule can opt to also produce a file each run. Unlike the interactive job
+// above (in-memory buffer, polled + downloaded immediately), a scheduled doc is
+// persisted to a stable per-run location and delivered later via a share link.
+
+/** Stable on-disk path for a scheduled run's document (runId is a UUID → safe). */
+function scheduledDocPath(userId: string, runId: string, ext: string): string {
+  return path.join(getSandboxPath(userId, `scheduleddoc-${runId}`), `report${ext}`);
+}
+
+/**
+ * Generate the document for a scheduled run and persist it so it can be downloaded
+ * later via a share link. Slow (runs a doc-gen agent) — call off the scheduler tick.
+ */
+export async function generateScheduledDoc(args: {
+  userId: string; teamId: string; runId: string; format: DocFormat; stylePrompt: string; teamTitle: string;
+}): Promise<{ filename: string }> {
+  const { userId, teamId, runId, format, stylePrompt, teamTitle } = args;
+  const spec = FORMAT_MAP[format];
+  const reportMd = await ensureReportMarkdown(userId, teamId, runId);
+  const { buffer, filename } = await runDocAgent({ userId, format, reportMd, stylePrompt, teamTitle });
+  const dest = scheduledDocPath(userId, runId, spec.ext);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(dest, buffer);
+  return { filename };
+}
+
+/** Read a previously-generated scheduled document for download (null if missing). */
+export function readScheduledDoc(userId: string, runId: string, format: DocFormat, teamTitle?: string): { buffer: Buffer; filename: string; mime: string } | null {
+  const spec = FORMAT_MAP[format];
+  const p = scheduledDocPath(userId, runId, spec.ext);
+  if (!fs.existsSync(p)) return null;
+  return { buffer: fs.readFileSync(p), filename: `${safeName(teamTitle || '團隊報告')}${spec.ext}`, mime: spec.mime };
+}
+
+/** Format metadata (label / ext / mime) — shared by the email link + download route. */
+export function docFormatMeta(format: DocFormat): { label: string; ext: string; mime: string } {
+  const s = FORMAT_MAP[format];
+  return { label: s.label, ext: s.ext, mime: s.mime };
+}
+
+/** Is this a valid doc format string? */
+export function isDocFormat(v: unknown): v is DocFormat {
+  return v === 'docx' || v === 'pdf' || v === 'pptx' || v === 'html';
+}

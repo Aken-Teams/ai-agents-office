@@ -12,7 +12,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { dbGet, dbAll, dbRun } from '../db.js';
-import { startTeamDocumentJob, getDocJob, type DocFormat } from '../services/teamDocument.js';
+import { startTeamDocumentJob, getDocJob, isDocFormat, type DocFormat } from '../services/teamDocument.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { config, pricingMarkupSql } from '../config.js';
 import { TEAM_TEMPLATES, getTeamTemplate, type TeamAgentTemplate } from '../data/teamTemplates.js';
@@ -427,11 +427,15 @@ router.post('/:id/schedules', async (req: Request, res: Response) => {
   const team = await dbGet<{ id: string }>('SELECT id FROM agent_teams WHERE id = ? AND user_id = ?', req.params.id, userId);
   if (!team) { res.status(404).json({ error: 'Team not found' }); return; }
 
-  const { name, question, frequency, hour, minute, dayOfWeek, email } = req.body as {
+  const { name, question, frequency, hour, minute, dayOfWeek, email, docFormat, docStylePrompt } = req.body as {
     name?: string; question?: string; frequency?: string; hour?: number; minute?: number; dayOfWeek?: number; email?: string;
+    docFormat?: string; docStylePrompt?: string;
   };
   if (!question?.trim()) { res.status(400).json({ error: '請填入要分析的議題' }); return; }
   if (!email?.trim()) { res.status(400).json({ error: '請填入收件 email' }); return; }
+  // Optional document generation: only accept a known format, else store none (text-only).
+  const docFmt = isDocFormat(docFormat) ? docFormat : null;
+  const docStyle = docFmt && typeof docStylePrompt === 'string' ? docStylePrompt.slice(0, 2000) : null;
 
   // Content safety — vet the scheduled question up front so every future run is
   // pre-approved (the scheduler runs it headless, with no chance to refuse).
@@ -452,8 +456,8 @@ router.post('/:id/schedules', async (req: Request, res: Response) => {
   const id = uuidv4();
   try {
     await dbRun(
-      'INSERT INTO team_schedules (id, team_id, user_id, name, question, frequency, hour, minute, day_of_week, email, next_run_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      id, req.params.id, userId, schedName, question.trim(), freq, h, m, dow, email.trim(), mysqlDateTime(next),
+      'INSERT INTO team_schedules (id, team_id, user_id, name, question, frequency, hour, minute, day_of_week, email, next_run_at, doc_format, doc_style_prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      id, req.params.id, userId, schedName, question.trim(), freq, h, m, dow, email.trim(), mysqlDateTime(next), docFmt, docStyle,
     );
     const schedule = await dbGet('SELECT * FROM team_schedules WHERE id = ?', id);
     res.status(201).json({ schedule });
