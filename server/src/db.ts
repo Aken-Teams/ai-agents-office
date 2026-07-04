@@ -711,6 +711,11 @@ export async function initializeDatabase(): Promise<void> {
     try {
       await conn.query('ALTER TABLE team_runs ADD COLUMN doc_format VARCHAR(10) DEFAULT NULL');
     } catch { /* column already exists */ }
+    // Doc generation progress for a scheduled run: NULL = no doc requested,
+    // 'pending' = generating, 'done' = ready to download, 'failed' = gave up.
+    try {
+      await conn.query('ALTER TABLE team_runs ADD COLUMN doc_status VARCHAR(12) DEFAULT NULL');
+    } catch { /* column already exists */ }
     // Widen email to hold multiple comma-separated recipients (was VARCHAR(255)).
     try {
       await conn.query('ALTER TABLE team_schedules MODIFY COLUMN email VARCHAR(1000) NOT NULL');

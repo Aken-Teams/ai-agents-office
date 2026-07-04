@@ -18,6 +18,7 @@ interface SharedRun {
   memberOutputs: MemberOut[];
   createdAt: string;
   docFormat: string | null;
+  docStatus: string | null;   // null=no doc, 'pending'|'done'|'failed'
   docUrl: string | null;
 }
 
@@ -75,15 +76,34 @@ export default function TeamSharePage() {
       )}
 
       <main className="max-w-6xl mx-auto px-4 md:px-8 py-8">
-        {/* Header */}
+        {/* Header — doc status / download lives top-right */}
         <div className="flex items-center gap-3 mb-6">
           <div className="w-11 h-11 rounded-xl cyber-gradient flex items-center justify-center shrink-0">
             <span className="material-symbols-outlined text-on-primary text-xl">{data.teamIcon || 'groups'}</span>
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h1 className="font-headline text-xl md:text-2xl font-bold text-on-surface truncate">{data.teamTitle} · 團隊協作</h1>
             <p className="text-xs text-on-surface-variant">{new Date(data.createdAt).toLocaleString()} · 唯讀分享</p>
           </div>
+          {/* Simple top-right document indicator */}
+          {data.docStatus === 'done' && data.docUrl ? (
+            <a href={data.docUrl} className="shrink-0 inline-flex items-center gap-1.5 px-3.5 h-9 rounded-lg text-sm font-bold text-on-primary cyber-gradient hover:opacity-90 transition-opacity no-underline">
+              <span className="material-symbols-outlined text-[18px]">download</span>
+              下載文件{data.docFormat && DOC_LABELS[data.docFormat] ? `（${DOC_LABELS[data.docFormat]}）` : ''}
+            </a>
+          ) : data.docStatus === 'pending' ? (
+            <span className="shrink-0 inline-flex items-center gap-1.5 px-3.5 h-9 rounded-lg text-sm font-bold text-tertiary bg-tertiary/10">
+              <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>文件生成中…
+            </span>
+          ) : data.docStatus === 'failed' ? (
+            <span className="shrink-0 inline-flex items-center gap-1.5 px-3.5 h-9 rounded-lg text-sm font-bold text-error bg-error/10" title="文件產生失敗，其餘分析結果仍可查看">
+              <span className="material-symbols-outlined text-[18px]">error</span>文件產生失敗
+            </span>
+          ) : (
+            <span className="shrink-0 hidden sm:inline-flex items-center gap-1.5 px-3.5 h-9 rounded-lg text-xs text-on-surface-variant bg-surface-container border border-outline-variant/20">
+              <span className="material-symbols-outlined text-[16px]">block</span>此排程無產生文件
+            </span>
+          )}
         </div>
 
         {/* Question */}
@@ -91,20 +111,6 @@ export default function TeamSharePage() {
           <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">議題</p>
           <p className="text-sm text-on-surface">{data.question}</p>
         </div>
-
-        {/* Generated document download (scheduled runs that produced a file) */}
-        {data.docUrl && (
-          <a href={data.docUrl} className="flex items-center gap-3 bg-surface-container rounded-2xl border border-primary/30 p-4 mb-6 hover:bg-primary/5 transition-colors no-underline">
-            <div className="w-10 h-10 rounded-xl cyber-gradient flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-on-primary">description</span>
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-on-surface">下載報告文件{data.docFormat && DOC_LABELS[data.docFormat] ? `（${DOC_LABELS[data.docFormat]}）` : ''}</p>
-              <p className="text-xs text-on-surface-variant">本次排程產出的檔案</p>
-            </div>
-            <span className="material-symbols-outlined text-primary shrink-0">download</span>
-          </a>
-        )}
 
         {/* Members */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

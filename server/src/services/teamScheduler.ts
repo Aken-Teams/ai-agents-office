@@ -35,14 +35,18 @@ async function maybeBuildDoc(
   s: ScheduleRow, teamTitle: string, runId: string, shareToken: string,
 ): Promise<{ url: string; label: string } | null> {
   if (!s.doc_format || !isDocFormat(s.doc_format)) return null;
+  // Mark the requirement + "generating" up front so the share page can show
+  // "生成中" while the (slow) doc agent runs, then flip to done/failed.
+  await dbRun('UPDATE team_runs SET doc_format = ?, doc_status = ? WHERE id = ?', s.doc_format, 'pending', runId);
   try {
     await generateScheduledDoc({
       userId: s.user_id, teamId: s.team_id, runId, format: s.doc_format,
       stylePrompt: s.doc_style_prompt || '', teamTitle,
     });
-    await dbRun('UPDATE team_runs SET doc_format = ? WHERE id = ?', s.doc_format, runId);
+    await dbRun('UPDATE team_runs SET doc_status = ? WHERE id = ?', 'done', runId);
     return { url: `${config.publicWebUrl}/api/public/team-run/${shareToken}/document`, label: docFormatMeta(s.doc_format).label };
   } catch (err) {
+    await dbRun('UPDATE team_runs SET doc_status = ? WHERE id = ?', 'failed', runId);
     console.error(`[scheduler] doc generation failed for run ${runId}:`, err);
     return null;
   }

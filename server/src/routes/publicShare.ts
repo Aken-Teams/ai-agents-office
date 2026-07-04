@@ -21,13 +21,14 @@ interface SharedRunRow {
   team_title: string;
   team_icon: string | null;
   doc_format: string | null;
+  doc_status: string | null;
 }
 
 // GET /api/public/team-run/:token — read-only snapshot of one team run.
 router.get('/team-run/:token', async (req: Request, res: Response) => {
   const run = await dbGet<SharedRunRow>(
     `SELECT tr.question, tr.result, tr.member_outputs, tr.input_tokens, tr.output_tokens, tr.created_at,
-            t.title AS team_title, t.icon AS team_icon, tr.doc_format
+            t.title AS team_title, t.icon AS team_icon, tr.doc_format, tr.doc_status
      FROM team_runs tr JOIN agent_teams t ON t.id = tr.team_id
      WHERE tr.share_token = ?`,
     req.params.token,
@@ -37,6 +38,11 @@ router.get('/team-run/:token', async (req: Request, res: Response) => {
   let memberOutputs: Array<{ memberId: string; name: string; icon: string | null; text: string }> = [];
   try { memberOutputs = JSON.parse(run.member_outputs || '[]'); } catch { /* ignore */ }
 
+  // Document state for the share page's top-right indicator. docStatus:
+  // null = this run had no document requirement; 'pending' = still generating;
+  // 'done' = ready (docUrl is only given then); 'failed' = generation gave up.
+  const hasDoc = isDocFormat(run.doc_format);
+  const docStatus = hasDoc ? (run.doc_status || 'done') : null;
   res.json({
     teamTitle: run.team_title,
     teamIcon: run.team_icon,
@@ -44,10 +50,9 @@ router.get('/team-run/:token', async (req: Request, res: Response) => {
     result: run.result,
     memberOutputs,
     createdAt: run.created_at,
-    // If the scheduled run produced a file, expose format + download URL so the
-    // share page can offer it (previously only the email carried the link).
-    docFormat: isDocFormat(run.doc_format) ? run.doc_format : null,
-    docUrl: isDocFormat(run.doc_format) ? `/api/public/team-run/${req.params.token}/document` : null,
+    docFormat: hasDoc ? run.doc_format : null,
+    docStatus,
+    docUrl: hasDoc && docStatus === 'done' ? `/api/public/team-run/${req.params.token}/document` : null,
   });
 });
 

@@ -1,5 +1,6 @@
 import { spawn, ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
+import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { config } from '../config.js';
@@ -489,6 +490,13 @@ export function spawnClaude(
             ? 'account auth/token failure'
             : 'no-output failure (likely OAuth token refresh blip)';
         console.log(`[Claude CLI] ${logRole}/${logSkill} ${reason}, retrying with API key...`);
+        // The failed attempt may have already registered its --session-id with the
+        // CLI (session file written before it died), so reusing it on retry throws
+        // "Session ID <id> is already in use" — which is exactly what happens when
+        // several agents spawn at once (e.g. running multiple schedules). For a
+        // NEW-session spawn, swap in a fresh id; a --resume must keep its id.
+        const sidIdx = args.indexOf('--session-id');
+        if (sidIdx !== -1 && args[sidIdx + 1]) args[sidIdx + 1] = randomUUID();
         doSpawn(true);
         return;
       }

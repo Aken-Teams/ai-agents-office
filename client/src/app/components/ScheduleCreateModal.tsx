@@ -270,9 +270,9 @@ export default function ScheduleCreateModal({
             <textarea value={question} onChange={e => setQuestion(e.target.value)} rows={5} placeholder="要團隊定期分析的議題，例如：今天的台股盤勢與我持股的風險"
               className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-3 py-2.5 text-sm text-on-surface resize-none focus:outline-none focus:border-primary" />
 
-            <div className="flex items-start gap-2 mt-3 px-3 py-2.5 rounded-xl bg-surface-container border border-outline-variant/20 text-xs text-on-surface-variant leading-relaxed">
-              <span className="material-symbols-outlined text-[16px] text-on-surface-variant/70 shrink-0 mt-0.5">info</span>
-              <span>排程只會用「議題文字」定期重新分析，不會帶入你上傳的檔案。建議用於盤勢、新聞等會持續更新的公開議題；若分析依賴上傳資料，請改用即時分析。</span>
+            <div className="flex items-start gap-2.5 mt-3 px-3.5 py-3 rounded-xl bg-surface-container border border-outline-variant/20 text-sm text-on-surface-variant leading-relaxed">
+              <span className="material-symbols-outlined text-[20px] text-on-surface-variant/70 shrink-0 mt-0.5">info</span>
+              <span>排程只會用「議題文字」定期重新分析，<b className="text-on-surface">不會帶入你上傳的檔案</b>。適合盤勢、新聞等會持續更新的公開議題。若分析需要用到檔案，請直接回到團隊頁上傳檔案後執行分析（排程無法帶入檔案）。</span>
             </div>
           </>
         )}

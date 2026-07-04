@@ -304,7 +304,8 @@ function SchedulesContent() {
                     {inflight
                       ? <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary shrink-0"><span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />背景執行中</span>
                       : r.status === 'done'
-                        ? <span className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${r.emailed === 1 ? 'bg-success/10 text-success' : r.emailed === 0 ? 'bg-error/10 text-error' : 'bg-tertiary/10 text-tertiary'}`}>如期執行{r.emailed === 1 ? ' · 已寄送' : r.emailed === 0 ? ' · 寄送失敗' : ''}</span>
+                        ? <span title={r.emailed === 0 ? '寄信未成功，常見原因是內部郵件閘道尚未開放 mail:send 權限（請洽 IT）' : undefined}
+                            className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${r.emailed === 1 ? 'bg-success/10 text-success' : r.emailed === 0 ? 'bg-error/10 text-error' : 'bg-tertiary/10 text-tertiary'}`}>如期執行{r.emailed === 1 ? ' · 已寄送' : r.emailed === 0 ? ' · 寄信失敗（閘道未授權？）' : ''}</span>
                         : <span className="text-[11px] px-2 py-0.5 rounded-full bg-error/10 text-error shrink-0">執行失敗</span>}
                     {r.share_token && !inflight && (
                       <a href={`/share/team/${r.share_token}`} target="_blank" rel="noreferrer" title="查看完整報告"
