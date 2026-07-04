@@ -51,7 +51,7 @@ export default function Dropdown({ value, onChange, options, className, compact 
         <span className={`material-symbols-outlined text-on-surface-variant shrink-0 transition-transform ${compact ? 'text-[16px]' : 'text-[18px]'} ${open ? 'rotate-180' : ''}`}>expand_more</span>
       </button>
       {open && pos && createPortal(
-        <div ref={menuRef} style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: pos.width, zIndex: 100 }}
+        <div ref={menuRef} style={{ position: 'fixed', top: pos.top, left: pos.left, minWidth: pos.width, zIndex: 200 }}
           className="max-h-64 overflow-y-auto rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-2xl py-1">
           {options.map(o => {
             const active = String(o.value) === String(value);

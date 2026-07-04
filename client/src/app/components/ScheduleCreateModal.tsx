@@ -176,8 +176,8 @@ export default function ScheduleCreateModal({
   // used. Rather than silently drop them, block scheduling from a file-based run.
   if (sourceHasFiles) {
     return (
-      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
-        <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-md p-6 text-center" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4" onClick={onClose}>
+        <div className="bg-surface-container-lowest rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md p-6 text-center" onClick={e => e.stopPropagation()}>
           <div className="w-12 h-12 rounded-full bg-tertiary/10 flex items-center justify-center mx-auto mb-3">
             <span className="material-symbols-outlined text-tertiary">construction</span>
           </div>
@@ -193,15 +193,15 @@ export default function ScheduleCreateModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4" onClick={onClose}>
+      <div className="bg-surface-container-lowest rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] sm:max-h-[90vh] overflow-y-auto px-5 sm:px-6 pt-5 sm:pt-6 pb-0" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 mb-1">
           <span className="material-symbols-outlined text-primary">add_alarm</span>
           <h3 className="text-lg font-headline font-bold text-on-surface">{isEdit ? '編輯排程' : '新增排程'}</h3>
         </div>
         <p className="text-sm text-on-surface-variant mb-5">設定時間，團隊會自動跑分析、把結果寄到信箱，並記錄在排程管理頁。</p>
 
-        {/* Stepper */}
+        {/* Stepper — on mobile only the active step is labelled (labels are long) */}
         <div className="flex items-center mb-6">
           {STEPS.map((s, i) => (
             <div key={s.n} className={`flex items-center ${i < STEPS.length - 1 ? 'flex-1' : ''}`}>
@@ -209,7 +209,7 @@ export default function ScheduleCreateModal({
                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors ${step >= s.n ? 'cyber-gradient text-on-primary' : 'bg-surface-container-high text-on-surface-variant'}`}>
                   {step > s.n ? <span className="material-symbols-outlined text-[15px]">check</span> : s.n}
                 </span>
-                <span className={`text-xs font-bold ${step === s.n ? 'text-primary' : 'text-on-surface-variant'}`}>{s.label}</span>
+                <span className={`text-xs font-bold whitespace-nowrap ${step === s.n ? 'text-primary inline' : 'text-on-surface-variant hidden sm:inline'}`}>{s.label}</span>
               </div>
               {i < STEPS.length - 1 && <div className={`flex-1 h-0.5 mx-2 rounded ${step > s.n ? 'bg-primary/50' : 'bg-outline-variant/20'}`} />}
             </div>
@@ -238,31 +238,34 @@ export default function ScheduleCreateModal({
         {step === 2 && (
           <>
             <label className="block text-xs font-bold text-on-surface-variant mb-1.5">執行週期 <span className="text-error">*</span></label>
-            <div className="flex flex-wrap items-center gap-2.5 mb-5">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2.5 mb-5">
               <div className="flex rounded-lg border border-outline-variant/30 overflow-hidden shrink-0">
-                <button onClick={() => setFrequency('daily')} className={`px-4 py-2.5 text-sm cursor-pointer ${frequency === 'daily' ? 'cyber-gradient text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}>每天</button>
-                <button onClick={() => setFrequency('weekly')} className={`px-4 py-2.5 text-sm cursor-pointer ${frequency === 'weekly' ? 'cyber-gradient text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}>每週</button>
+                <button onClick={() => setFrequency('daily')} className={`flex-1 sm:flex-none px-4 py-2.5 text-sm cursor-pointer ${frequency === 'daily' ? 'cyber-gradient text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}>每天</button>
+                <button onClick={() => setFrequency('weekly')} className={`flex-1 sm:flex-none px-4 py-2.5 text-sm cursor-pointer ${frequency === 'weekly' ? 'cyber-gradient text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}>每週</button>
               </div>
-              {frequency === 'weekly' && (
-                <Dropdown value={dayOfWeek} onChange={v => setDayOfWeek(Number(v))} className="w-28 shrink-0"
-                  options={DOW.map((d, i) => ({ value: i, label: d }))} />
-              )}
-              <input type="time" value={time} onChange={e => setTime(e.target.value)}
-                className="bg-surface-container border border-outline-variant/30 rounded-lg px-3 py-2.5 text-sm text-on-surface focus:outline-none focus:border-primary shrink-0" />
+              {/* On mobile the weekday + time share one full-width row so neither is cramped */}
+              <div className="flex items-center gap-2.5">
+                {frequency === 'weekly' && (
+                  <Dropdown value={dayOfWeek} onChange={v => setDayOfWeek(Number(v))} className="flex-1 sm:flex-none sm:w-28"
+                    options={DOW.map((d, i) => ({ value: i, label: d }))} />
+                )}
+                <input type="time" value={time} onChange={e => setTime(e.target.value)}
+                  className="flex-1 sm:flex-none bg-surface-container border border-outline-variant/30 rounded-lg px-3 py-2.5 text-sm text-on-surface focus:outline-none focus:border-primary" />
+              </div>
             </div>
 
             <label className="block text-xs font-bold text-on-surface-variant mb-1.5">產出報告文件<span className="font-normal text-on-surface-variant/60">（選填，每次執行後自動附上下載連結）</span></label>
-            <div className="grid grid-cols-5 gap-2 mb-2">
+            <div className="grid grid-cols-5 gap-1.5 sm:gap-2 mb-2">
               <button type="button" onClick={() => pickDocFormat('')}
-                className={`flex flex-col items-center gap-0.5 rounded-xl border p-2 transition-colors cursor-pointer ${!docFormat ? 'border-primary bg-primary/10' : 'border-outline-variant/20 hover:bg-surface-container'}`}>
+                className={`flex flex-col items-center gap-0.5 rounded-xl border px-1 py-2 transition-colors cursor-pointer ${!docFormat ? 'border-primary bg-primary/10' : 'border-outline-variant/20 hover:bg-surface-container'}`}>
                 <span className={`material-symbols-outlined text-[18px] ${!docFormat ? 'text-primary' : 'text-on-surface-variant'}`}>block</span>
-                <span className={`text-[11px] font-bold ${!docFormat ? 'text-primary' : 'text-on-surface'}`}>不產生</span>
+                <span className={`text-[10px] sm:text-[11px] font-bold leading-tight text-center ${!docFormat ? 'text-primary' : 'text-on-surface'}`}>不產生</span>
               </button>
               {DOC_EXPORT.map(f => (
                 <button key={f.format} type="button" onClick={() => pickDocFormat(f.format)}
-                  className={`flex flex-col items-center gap-0.5 rounded-xl border p-2 transition-colors cursor-pointer ${docFormat === f.format ? 'border-primary bg-primary/10' : 'border-outline-variant/20 hover:bg-surface-container'}`}>
+                  className={`flex flex-col items-center gap-0.5 rounded-xl border px-1 py-2 transition-colors cursor-pointer ${docFormat === f.format ? 'border-primary bg-primary/10' : 'border-outline-variant/20 hover:bg-surface-container'}`}>
                   <span className={`material-symbols-outlined text-[18px] ${docFormat === f.format ? 'text-primary' : 'text-on-surface-variant'}`}>{f.icon}</span>
-                  <span className={`text-[11px] font-bold ${docFormat === f.format ? 'text-primary' : 'text-on-surface'}`}>{f.label}</span>
+                  <span className={`text-[10px] sm:text-[11px] font-bold leading-tight text-center ${docFormat === f.format ? 'text-primary' : 'text-on-surface'}`}>{f.label}</span>
                 </button>
               ))}
             </div>
@@ -408,21 +411,22 @@ export default function ScheduleCreateModal({
           </div>
         )}
 
-        {/* Footer nav */}
-        <div className="flex items-center justify-between gap-2 pt-5 mt-5 border-t border-outline-variant/15">
+        {/* Footer nav — sticky to the modal bottom so the primary action is always
+            reachable on mobile even inside a long step (e.g. the AD directory list) */}
+        <div className="sticky bottom-0 -mx-5 sm:-mx-6 px-5 sm:px-6 pt-4 pb-5 sm:pb-6 mt-5 bg-surface-container-lowest border-t border-outline-variant/15 flex items-center justify-between gap-2">
           <button onClick={() => step === 1 ? onClose() : setStep(step - 1)}
-            className="px-4 py-2 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer flex items-center gap-1">
+            className="px-4 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant hover:bg-surface-container-high transition-colors cursor-pointer flex items-center gap-1">
             {step > 1 && <span className="material-symbols-outlined text-[18px]">chevron_left</span>}
             {step === 1 ? '取消' : '上一步'}
           </button>
           {step < 4 ? (
             <button onClick={() => setStep(step + 1)} disabled={!canAdvance}
-              className="px-5 py-2 rounded-xl text-sm font-bold text-on-primary cyber-gradient disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center gap-1">
+              className="px-5 py-2.5 rounded-xl text-sm font-bold text-on-primary cyber-gradient disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center gap-1">
               下一步<span className="material-symbols-outlined text-[18px]">chevron_right</span>
             </button>
           ) : (
             <button onClick={add} disabled={!question.trim() || !recipients.length || saving}
-              className="px-5 py-2 rounded-xl text-sm font-bold text-on-primary cyber-gradient disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center gap-2">
+              className="px-5 py-2.5 rounded-xl text-sm font-bold text-on-primary cyber-gradient disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center gap-2">
               {saving && <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>}
               {isEdit ? '儲存變更' : '建立排程'}
             </button>

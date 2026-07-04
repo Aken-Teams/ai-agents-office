@@ -184,7 +184,7 @@ function SchedulesContent() {
       )}
 
       {delTarget && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setDelTarget(null)}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setDelTarget(null)}>
           <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-headline font-bold text-on-surface mb-2">刪除排程</h3>
             <p className="text-sm text-on-surface-variant mb-5">確定要刪除「{delTarget.name || delTarget.question}」這個排程嗎？此動作無法復原（已產生的執行紀錄會保留）。</p>
@@ -244,38 +244,43 @@ function SchedulesContent() {
             ) : (
               <div className="space-y-2">
                 {filteredSchedules.map(s => (
-                  <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl border border-outline-variant/15 bg-surface-container">
-                    <span className="material-symbols-outlined text-on-surface-variant shrink-0">{s.enabled ? 'alarm' : 'alarm_off'}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-on-surface truncate">{s.name || s.question}</div>
-                      {s.name && <div className="text-xs text-on-surface-variant truncate">議題：{s.question}</div>}
-                      <div className="text-xs text-on-surface-variant truncate flex items-center gap-1.5">
-                        <span className="truncate">{fmt(s)} · {(() => { const list = s.email.split(',').map(e => e.trim()).filter(Boolean); return list.length > 1 ? `${list[0]} 等 ${list.length} 位` : list[0] || s.email; })()}</span>
-                        {s.doc_format && DOC_LABELS[s.doc_format] && (
-                          <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-bold">
-                            <span className="material-symbols-outlined text-[11px]">description</span>{DOC_LABELS[s.doc_format]}
-                          </span>
-                        )}
+                  <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 rounded-xl border border-outline-variant/15 bg-surface-container">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <span className="material-symbols-outlined text-on-surface-variant shrink-0 mt-0.5">{s.enabled ? 'alarm' : 'alarm_off'}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold text-on-surface truncate">{s.name || s.question}</div>
+                        {s.name && <div className="text-xs text-on-surface-variant truncate">議題：{s.question}</div>}
+                        <div className="text-xs text-on-surface-variant truncate flex items-center gap-1.5">
+                          <span className="truncate">{fmt(s)} · {(() => { const list = s.email.split(',').map(e => e.trim()).filter(Boolean); return list.length > 1 ? `${list[0]} 等 ${list.length} 位` : list[0] || s.email; })()}</span>
+                          {s.doc_format && DOC_LABELS[s.doc_format] && (
+                            <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-bold">
+                              <span className="material-symbols-outlined text-[11px]">description</span>{DOC_LABELS[s.doc_format]}
+                            </span>
+                          )}
+                        </div>
+                        {s.enabled
+                          ? <div className="text-[11px] text-tertiary">下次：{new Date(s.next_run_at).toLocaleString()}</div>
+                          : <div className="text-[11px] text-on-surface-variant/60">已停用</div>}
                       </div>
-                      {s.enabled
-                        ? <div className="text-[11px] text-tertiary">下次：{new Date(s.next_run_at).toLocaleString()}</div>
-                        : <div className="text-[11px] text-on-surface-variant/60">已停用</div>}
                     </div>
-                    <button onClick={() => runNow(s)} disabled={testing === s.id} title="立即測試執行（馬上跑一次並寄出）"
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0 disabled:opacity-40">
-                      <span className={`material-symbols-outlined text-[18px] ${testing === s.id ? 'animate-spin' : ''}`}>{testing === s.id ? 'progress_activity' : 'play_arrow'}</span>
-                    </button>
-                    <button onClick={() => setEditTarget(s)} title="編輯排程"
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0">
-                      <span className="material-symbols-outlined text-[18px]">edit</span>
-                    </button>
-                    <button onClick={() => toggle(s)} title={s.enabled ? '停用' : '啟用'}
-                      className={`relative w-9 h-5 rounded-full transition-colors shrink-0 cursor-pointer ${s.enabled ? 'bg-primary' : 'bg-outline-variant/40'}`}>
-                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${s.enabled ? 'translate-x-4' : ''}`} />
-                    </button>
-                    <button onClick={() => setDelTarget(s)} title="刪除" className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer shrink-0">
-                      <span className="material-symbols-outlined text-[18px]">delete</span>
-                    </button>
+                    {/* Controls drop to their own right-aligned row on mobile */}
+                    <div className="flex items-center gap-1 shrink-0 justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-outline-variant/10">
+                      <button onClick={() => runNow(s)} disabled={testing === s.id} title="立即測試執行（馬上跑一次並寄出）"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0 disabled:opacity-40">
+                        <span className={`material-symbols-outlined text-[18px] ${testing === s.id ? 'animate-spin' : ''}`}>{testing === s.id ? 'progress_activity' : 'play_arrow'}</span>
+                      </button>
+                      <button onClick={() => setEditTarget(s)} title="編輯排程"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0">
+                        <span className="material-symbols-outlined text-[18px]">edit</span>
+                      </button>
+                      <button onClick={() => toggle(s)} title={s.enabled ? '停用' : '啟用'}
+                        className={`relative w-9 h-5 mx-1 rounded-full transition-colors shrink-0 cursor-pointer ${s.enabled ? 'bg-primary' : 'bg-outline-variant/40'}`}>
+                        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${s.enabled ? 'translate-x-4' : ''}`} />
+                      </button>
+                      <button onClick={() => setDelTarget(s)} title="刪除" className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer shrink-0">
+                        <span className="material-symbols-outlined text-[18px]">delete</span>
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -369,7 +374,7 @@ function SchedulesContent() {
                       ? <span className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary shrink-0"><span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />背景執行中</span>
                       : r.status === 'done'
                         ? <span title={r.emailed === 0 ? '寄信未成功，常見原因是內部郵件閘道尚未開放 mail:send 權限（請洽 IT）' : undefined}
-                            className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${r.emailed === 1 ? 'bg-success/10 text-success' : r.emailed === 0 ? 'bg-error/10 text-error' : 'bg-tertiary/10 text-tertiary'}`}>如期執行{r.emailed === 1 ? ' · 已寄送' : r.emailed === 0 ? ' · 寄信失敗（閘道未授權？）' : ''}</span>
+                            className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap ${r.emailed === 1 ? 'bg-success/10 text-success' : r.emailed === 0 ? 'bg-error/10 text-error' : 'bg-tertiary/10 text-tertiary'}`}>如期執行{r.emailed === 1 ? ' · 已寄送' : r.emailed === 0 ? <> · 寄信失敗<span className="hidden sm:inline">（閘道未授權？）</span></> : ''}</span>
                         : <span className="text-[11px] px-2 py-0.5 rounded-full bg-error/10 text-error shrink-0">執行失敗</span>}
                     {r.share_token && !inflight && (
                       <a href={`/share/team/${r.share_token}`} target="_blank" rel="noreferrer" title="查看完整報告"
@@ -408,8 +413,8 @@ function SchedulesContent() {
         const planned = schedulesByNextDay[dayDetail] || [];
         const dLabel = new Date(dayDetail + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
         return (
-          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setDayDetail(null)}>
-            <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm sm:p-4" onClick={() => setDayDetail(null)}>
+            <div className="bg-surface-container-lowest rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] sm:max-h-[85vh] overflow-y-auto p-5 sm:p-6" onClick={e => e.stopPropagation()}>
               <div className="flex items-center gap-2 mb-4">
                 <span className="material-symbols-outlined text-primary">event</span>
                 <h3 className="text-lg font-headline font-bold text-on-surface flex-1">{dLabel}</h3>
