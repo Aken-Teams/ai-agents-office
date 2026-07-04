@@ -711,6 +711,10 @@ export async function initializeDatabase(): Promise<void> {
     try {
       await conn.query('ALTER TABLE team_runs ADD COLUMN doc_format VARCHAR(10) DEFAULT NULL');
     } catch { /* column already exists */ }
+    // Widen email to hold multiple comma-separated recipients (was VARCHAR(255)).
+    try {
+      await conn.query('ALTER TABLE team_schedules MODIFY COLUMN email VARCHAR(1000) NOT NULL');
+    } catch { /* already widened */ }
     // ─── end Agent Teams ─────────────────────────────────────────
 
     // Terms of Service: add acceptance tracking column

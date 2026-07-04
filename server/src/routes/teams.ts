@@ -248,17 +248,24 @@ router.post('/:id/runs/:runId/report', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const teamId = String(req.params.id);
   const runId = String(req.params.runId);
-  const run = await dbGet<{ report_md: string | null; report_status: string | null; report_started_at: string | null }>(
+  const run = await dbGet<{ report_md: string | null; report_status: string | null; report_started_at: Date | string | null }>(
     'SELECT report_md, report_status, report_started_at FROM team_runs WHERE id = ? AND team_id = ? AND user_id = ?',
     runId, teamId, userId);
   if (!run) { res.status(404).json({ error: 'Run not found' }); return; }
 
-  if (run.report_status === 'done' && run.report_md) { res.json({ status: 'done' }); return; }
+  const force = req.query.force === '1';
+  if (!force && run.report_status === 'done' && run.report_md) { res.json({ status: 'done' }); return; }
   // Already generating and not stale → let the client keep polling (no dup job).
-  if (run.report_status === 'running' && run.report_started_at &&
-      Date.now() - new Date(run.report_started_at.replace(' ', 'T') + 'Z').getTime() < REPORT_STALE_MS) {
-    res.json({ status: 'running' });
-    return;
+  // NOTE: mysql2 returns DATETIME as a Date object (not a string), so use it
+  // directly — calling .replace() on it threw and 500'd the endpoint.
+  if (!force && run.report_status === 'running' && run.report_started_at) {
+    const startedMs = run.report_started_at instanceof Date
+      ? run.report_started_at.getTime()
+      : new Date(String(run.report_started_at).replace(' ', 'T')).getTime();
+    if (Number.isFinite(startedMs) && Date.now() - startedMs < REPORT_STALE_MS) {
+      res.json({ status: 'running' });
+      return;
+    }
   }
 
   // Start (or restart a stale) job, then return immediately.
@@ -431,8 +438,12 @@ router.post('/:id/schedules', async (req: Request, res: Response) => {
     name?: string; question?: string; frequency?: string; hour?: number; minute?: number; dayOfWeek?: number; email?: string;
     docFormat?: string; docStylePrompt?: string;
   };
+  if (!name?.trim()) { res.status(400).json({ error: '請填入排程名稱' }); return; }
   if (!question?.trim()) { res.status(400).json({ error: '請填入要分析的議題' }); return; }
-  if (!email?.trim()) { res.status(400).json({ error: '請填入收件 email' }); return; }
+  // Allow several recipients (comma-separated). Normalize + de-dup before storing.
+  const emailList = [...new Set((email || '').split(',').map(e => e.trim()).filter(Boolean))];
+  if (!emailList.length) { res.status(400).json({ error: '請填入收件 email' }); return; }
+  const emailStr = emailList.join(',').slice(0, 1000);
   // Optional document generation: only accept a known format, else store none (text-only).
   const docFmt = isDocFormat(docFormat) ? docFormat : null;
   const docStyle = docFmt && typeof docStylePrompt === 'string' ? docStylePrompt.slice(0, 2000) : null;
@@ -457,7 +468,7 @@ router.post('/:id/schedules', async (req: Request, res: Response) => {
   try {
     await dbRun(
       'INSERT INTO team_schedules (id, team_id, user_id, name, question, frequency, hour, minute, day_of_week, email, next_run_at, doc_format, doc_style_prompt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      id, req.params.id, userId, schedName, question.trim(), freq, h, m, dow, email.trim(), mysqlDateTime(next), docFmt, docStyle,
+      id, req.params.id, userId, schedName, question.trim(), freq, h, m, dow, emailStr, mysqlDateTime(next), docFmt, docStyle,
     );
     const schedule = await dbGet('SELECT * FROM team_schedules WHERE id = ?', id);
     res.status(201).json({ schedule });

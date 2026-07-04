@@ -208,7 +208,7 @@ function SchedulesContent() {
                       <div className="text-sm font-bold text-on-surface truncate">{s.name || s.question}</div>
                       {s.name && <div className="text-xs text-on-surface-variant truncate">議題：{s.question}</div>}
                       <div className="text-xs text-on-surface-variant truncate flex items-center gap-1.5">
-                        <span className="truncate">{fmt(s)} · {s.email}</span>
+                        <span className="truncate">{fmt(s)} · {(() => { const list = s.email.split(',').map(e => e.trim()).filter(Boolean); return list.length > 1 ? `${list[0]} 等 ${list.length} 位` : list[0] || s.email; })()}</span>
                         {s.doc_format && DOC_LABELS[s.doc_format] && (
                           <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-bold">
                             <span className="material-symbols-outlined text-[11px]">description</span>{DOC_LABELS[s.doc_format]}

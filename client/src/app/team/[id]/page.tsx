@@ -159,10 +159,12 @@ function splitLeadingTitle(md: string): { title: string | null; body: string } {
   return { title: null, body: md.trim() };
 }
 
-function buildFormalReportHtml(opts: { teamTitle: string; markdown: string; createdAt?: string; logoDataUrl?: string | null }): string {
+function buildFormalReportHtml(opts: { teamTitle: string; markdown: string; createdAt?: string; logoDataUrl?: string | null; runId?: string }): string {
   const when = (opts.createdAt ? new Date(opts.createdAt) : new Date()).toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
   const { title, body } = splitLeadingTitle(opts.markdown);
-  const reportTitle = title || opts.teamTitle || '專業分析報告';
+  // Never fall back to teamTitle — for prompt-style teams it's the whole system
+  // prompt, which must not appear on the report cover.
+  const reportTitle = title || '專業分析報告';
   return `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">
 <title>${escapeHtml(reportTitle)}</title>
 <style>
@@ -195,14 +197,18 @@ function buildFormalReportHtml(opts: { teamTitle: string; markdown: string; crea
   .report-body h2,.report-body h3 { page-break-after:avoid; }
   .report-body table,.report-body blockquote { page-break-inside:avoid; }
   .doc-footer { margin-top:30px; padding-top:10px; border-top:1px solid #eee; color:#999; font-size:11px; text-align:center; }
+  /* Floating "regenerate" button — hidden when printing/saving as PDF. */
+  .regen-btn { position:fixed; top:16px; right:16px; z-index:9999; background:#0b6; color:#fff; border:none; border-radius:8px; padding:8px 15px; font-size:13px; font-weight:bold; cursor:pointer; font-family:inherit; box-shadow:0 2px 10px rgba(0,0,0,.15); }
+  .regen-btn:hover { background:#0a5; }
+  @media print { .regen-btn { display:none !important; } }
 </style></head>
 <body>
+  ${opts.runId ? `<button class="regen-btn" onclick="try{window.opener&&window.opener.postMessage({type:'ao-regen-report',runId:'${opts.runId}'},'*')}catch(e){}">↻ 重新生成</button>` : ''}
   <section class="cover">
     ${opts.logoDataUrl ? `<img class="cover-logo" src="${opts.logoDataUrl}" alt="" />` : ''}
     <div class="kicker">分析報告</div>
     <h1>${escapeHtml(reportTitle)}</h1>
     <div class="rule"></div>
-    ${opts.teamTitle ? `<div class="sub">${escapeHtml(opts.teamTitle)}</div>` : ''}
     <div class="date">${escapeHtml(when)}</div>
     <div class="brand">AI AGENTS OFFICE</div>
   </section>
@@ -217,7 +223,7 @@ const REPORT_LOADING_HTML = `<!DOCTYPE html><html lang="zh-Hant"><head><meta cha
 <style>body{font-family:"Microsoft JhengHei",sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;color:#444;background:#fafafa}
 .sp{width:40px;height:40px;border:4px solid #e0e0e0;border-top-color:#0b6;border-radius:50%;animation:s 1s linear infinite;margin-bottom:20px}
 @keyframes s{to{transform:rotate(360deg)}}.t{font-size:16px;font-weight:bold}.d{font-size:13px;color:#888;margin-top:8px}</style></head>
-<body><div class="sp"></div><div class="t">正在撰寫正式報告…</div><div class="d">AI 正在整理成完整報告，約需 1–2 分鐘，請勿關閉此分頁。</div></body></html>`;
+<body><div class="sp"></div><div class="t">正在撰寫正式報告…</div><div class="d">AI 正在整理成完整報告，約需 1–2 分鐘。<br/>可先關閉此視窗，報告會在背景產生完成並保存，稍後再按一次「正式報告」即可開啟。</div></body></html>`;
 
 // Fill an already-opened window with the report and trigger print/Save-as-PDF.
 // The window must be opened synchronously in the click handler (before any await)
@@ -350,10 +356,12 @@ function TeamRunContent() {
   // Generate a formal, AI-written report (one cohesive document) and open it as a
   // polished PDF. Needs a saved run id; takes ~1–2 min (local Claude CLI).
   const [reportingRunId, setReportingRunId] = useState<string | null>(null);
-  const handleFormalReport = useCallback(async (runId: string) => {
-    if (reportingRunId) return; // one at a time
-    const w = window.open('', '_blank');
+  const handleFormalReport = useCallback(async (runId: string, opts?: { force?: boolean; win?: Window }) => {
+    if (reportingRunId && !opts?.win) return; // one at a time (but allow re-generate from the report window)
+    // Reuse the report window when re-generating from its "重新生成" button; else open one.
+    const w = (opts?.win && !opts.win.closed) ? opts.win : window.open('', '_blank');
     if (!w) { alert('請允許彈出視窗，才能產生正式報告 PDF'); return; }
+    w.document.open();
     w.document.write(REPORT_LOADING_HTML);
     w.document.close();
     setReportingRunId(runId);
@@ -361,13 +369,19 @@ function TeamRunContent() {
       // Async job + polling: the POST starts (or resumes) a background job and returns
       // immediately; we then poll short GET requests until it's done. No long-held
       // connection, so a buffering/idle-timeout proxy can't cut it ("network error").
-      const startRes = await fetch(`${SSE_BASE}/api/teams/${teamId}/runs/${runId}/report`, { method: 'POST', headers: authHeaders() });
+      // force=1 regenerates even if a report already exists (the 重新生成 button).
+      const startRes = await fetch(`${SSE_BASE}/api/teams/${teamId}/runs/${runId}/report${opts?.force ? '?force=1' : ''}`, { method: 'POST', headers: authHeaders() });
       if (!startRes.ok) throw new Error(`啟動失敗 (${startRes.status})`);
       const deadline = Date.now() + 4 * 60_000;
       let markdown = '';
       while (true) {
+        // If the user closed the preview window, stop waiting here — the button
+        // resets. The server job keeps running and SAVES the report (report_md), so
+        // nothing is wasted: clicking 正式報告 again opens the finished report instantly.
+        if (w.closed) return;
         if (Date.now() > deadline) throw new Error('產生逾時，請稍後再試一次');
         await new Promise(r => setTimeout(r, 2500));
+        if (w.closed) return;
         const pr = await fetch(`${SSE_BASE}/api/teams/${teamId}/runs/${runId}/report`, { headers: authHeaders() });
         if (!pr.ok) throw new Error(`查詢失敗 (${pr.status})`);
         const d = await pr.json() as { status: string; markdown?: string; error?: string };
@@ -376,9 +390,10 @@ function TeamRunContent() {
         // 'running' / 'idle' → keep polling
       }
       if (!markdown.trim()) throw new Error('報告內容為空');
+      if (w.closed) return;   // finished right as the window closed — skip render (report is saved)
       const run = history.find(r => r.id === runId);
       const logoDataUrl = await fetchAsDataUrl('/logo.png', {});
-      fillReportWindow(w, buildFormalReportHtml({ teamTitle: team?.title || '', markdown, createdAt: run?.created_at, logoDataUrl }));
+      fillReportWindow(w, buildFormalReportHtml({ teamTitle: team?.title || '', markdown, createdAt: run?.created_at, logoDataUrl, runId }));
     } catch (e) {
       const msg = e instanceof Error ? e.message : '產生失敗';
       try {
@@ -390,6 +405,19 @@ function TeamRunContent() {
       setReportingRunId(null);
     }
   }, [reportingRunId, teamId, authHeaders, history, team]);
+
+  // The report window's 「重新生成」 button postMessages back here; re-run the report
+  // with force=1, reusing that same window (via event.source).
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data;
+      if (d && d.type === 'ao-regen-report' && typeof d.runId === 'string' && e.source) {
+        handleFormalReport(d.runId, { force: true, win: e.source as Window });
+      }
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [handleFormalReport]);
 
   useEffect(() => {
     if (!token) return;

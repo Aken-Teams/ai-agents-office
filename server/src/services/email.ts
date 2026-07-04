@@ -219,6 +219,9 @@ function mdToEmailHtml(md: string): string {
 
 /** Email a scheduled team collaboration report to the user. */
 export async function sendTeamReportEmail(to: string, teamTitle: string, question: string, resultMarkdown: string, scheduleName?: string | null, shareUrl?: string | null, docUrl?: string | null, docLabel?: string | null): Promise<boolean> {
+  // A schedule may target several recipients, stored comma-separated.
+  const recipients = to.split(',').map(e => e.trim()).filter(Boolean);
+  if (!recipients.length) return false;
   const label = scheduleName?.trim() || teamTitle;
   const subject = `【團隊協作報告】${label}`;
   const nameRow = scheduleName?.trim()
@@ -243,14 +246,14 @@ export async function sendTeamReportEmail(to: string, teamTitle: string, questio
   // pro-panjit: deliver through the internal PANJIT mail gateway (AD email) instead
   // of Resend — scheduled reports go out via the company mail system.
   if (config.deployMode === 'pro-panjit' && isGatewayMailConfigured()) {
-    const r = await sendGatewayMail({ to: [to], subject, body: html, bodyType: 'html' });
+    const r = await sendGatewayMail({ to: recipients, subject, body: html, bodyType: 'html' });
     if (!r.ok) console.error('[email] gateway team report failed:', r.status, r.detail);
     return r.ok;
   }
 
   if (!resend || !config.emailFrom) return false;
   try {
-    const options: any = { from: config.emailFrom, to, subject, html };
+    const options: any = { from: config.emailFrom, to: recipients, subject, html };
     if (config.emailBcc) options.bcc = config.emailBcc;
     await resend.emails.send(options);
     return true;
