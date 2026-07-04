@@ -16,6 +16,7 @@ import { I18nProvider } from '../../../../i18n';
 import Navbar from '../../../components/Navbar';
 import { useSidebarMargin } from '../../../hooks/useSidebarCollapsed';
 import ScheduleCreateModal from '../../../components/ScheduleCreateModal';
+import Dropdown from '../../../components/Dropdown';
 
 const DOW = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
 
@@ -62,8 +63,14 @@ function SchedulesContent() {
     if (q && q.trim()) { setPrefillQuestion(q); setPrefillHasFiles(sp.get('hasFiles') === '1'); setCreateOpen(true); }
   }, []);
   const [delTarget, setDelTarget] = useState<Schedule | null>(null);
+  const [editTarget, setEditTarget] = useState<Schedule | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [cursor, setCursor] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; });
+  const [scheduleSearch, setScheduleSearch] = useState('');
+  const [runFilter, setRunFilter] = useState<string>('all');   // 'all' | schedule id
+  const [runPage, setRunPage] = useState(0);
+  const [dayDetail, setDayDetail] = useState<string | null>(null);   // calendar day key
+  const [dayPage, setDayPage] = useState(0);                          // day-detail run pagination
 
   const authHeaders = useCallback((): HeadersInit => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
@@ -122,7 +129,6 @@ function SchedulesContent() {
   const todayKey = ymd(new Date());
   const runsByDay: Record<string, RunRow[]> = {};
   runs.forEach(r => { const k = ymd(new Date(r.created_at)); (runsByDay[k] ||= []).push(r); });
-  const nextRunDays = new Set(schedules.filter(s => s.enabled).map(s => ymd(new Date(s.next_run_at))));
 
   const first = new Date(cursor.y, cursor.m, 1);
   const startPad = first.getDay();
@@ -134,6 +140,24 @@ function SchedulesContent() {
   const monthLabel = `${cursor.y} 年 ${cursor.m + 1} 月`;
   const shiftMonth = (delta: number) => setCursor(c => { const d = new Date(c.y, c.m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() }; });
   const schedName = (id: string | null) => schedules.find(s => s.id === id)?.name || null;
+
+  // A run "failed" if it errored out OR ran but couldn't email (gateway/scope).
+  const isFailRun = (r: RunRow) => r.status === 'error' || r.status === 'failed' || r.emailed === 0;
+  // Which schedules are planned for each upcoming day (for the calendar tooltip/popup).
+  const schedulesByNextDay: Record<string, Schedule[]> = {};
+  schedules.filter(s => s.enabled).forEach(s => { (schedulesByNextDay[ymd(new Date(s.next_run_at))] ||= []).push(s); });
+  const hhmm = (s: Schedule) => `${String(s.hour).padStart(2, '0')}:${String(s.minute).padStart(2, '0')}`;
+
+  // Schedule-list search + run-log filter/pagination.
+  const RUNS_PER_PAGE = 10;
+  const sq = scheduleSearch.trim().toLowerCase();
+  const filteredSchedules = sq
+    ? schedules.filter(s => (s.name || '').toLowerCase().includes(sq) || s.question.toLowerCase().includes(sq) || s.email.toLowerCase().includes(sq))
+    : schedules;
+  const filteredRuns = runFilter === 'all' ? runs : runs.filter(r => r.schedule_id === runFilter);
+  const runTotalPages = Math.max(1, Math.ceil(filteredRuns.length / RUNS_PER_PAGE));
+  const runPageClamped = Math.min(runPage, runTotalPages - 1);
+  const pagedRuns = filteredRuns.slice(runPageClamped * RUNS_PER_PAGE, runPageClamped * RUNS_PER_PAGE + RUNS_PER_PAGE);
 
   if (user && !canSchedule) return null; // disallowed in pro-panjit — redirecting away
 
@@ -152,6 +176,11 @@ function SchedulesContent() {
       {createOpen && (
         <ScheduleCreateModal teamId={teamId} token={token} defaultEmail={user?.email || ''} defaultQuestion={prefillQuestion} sourceHasFiles={prefillHasFiles}
           onClose={() => { setCreateOpen(false); setPrefillHasFiles(false); }} onCreated={() => { loadSchedules(); }} />
+      )}
+
+      {editTarget && (
+        <ScheduleCreateModal teamId={teamId} token={token} defaultEmail={user?.email || ''} existing={editTarget}
+          onClose={() => setEditTarget(null)} onCreated={() => { setEditTarget(null); loadSchedules(); }} />
       )}
 
       {delTarget && (
@@ -197,13 +226,24 @@ function SchedulesContent() {
           {/* Schedule list */}
           <section>
             <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3">排程清單（{schedules.length}）</h2>
+            {schedules.length > 3 && (
+              <div className="relative mb-3">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 text-[18px] pointer-events-none">search</span>
+                <input value={scheduleSearch} onChange={e => setScheduleSearch(e.target.value)} placeholder="搜尋排程名稱、議題或收件者"
+                  className="w-full bg-surface-container border border-outline-variant/30 rounded-xl pl-10 pr-3 py-2 text-sm text-on-surface focus:outline-none focus:border-primary" />
+              </div>
+            )}
             {schedules.length === 0 ? (
               <div className="p-6 rounded-2xl border border-dashed border-outline-variant/30 text-center text-sm text-on-surface-variant">
                 還沒有排程。按右上角「新增排程」設定團隊定時自動分析並寄信。
               </div>
+            ) : filteredSchedules.length === 0 ? (
+              <div className="p-6 rounded-2xl border border-dashed border-outline-variant/30 text-center text-sm text-on-surface-variant">
+                查無符合「{scheduleSearch}」的排程。
+              </div>
             ) : (
               <div className="space-y-2">
-                {schedules.map(s => (
+                {filteredSchedules.map(s => (
                   <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl border border-outline-variant/15 bg-surface-container">
                     <span className="material-symbols-outlined text-on-surface-variant shrink-0">{s.enabled ? 'alarm' : 'alarm_off'}</span>
                     <div className="flex-1 min-w-0">
@@ -224,6 +264,10 @@ function SchedulesContent() {
                     <button onClick={() => runNow(s)} disabled={testing === s.id} title="立即測試執行（馬上跑一次並寄出）"
                       className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0 disabled:opacity-40">
                       <span className={`material-symbols-outlined text-[18px] ${testing === s.id ? 'animate-spin' : ''}`}>{testing === s.id ? 'progress_activity' : 'play_arrow'}</span>
+                    </button>
+                    <button onClick={() => setEditTarget(s)} title="編輯排程"
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0">
+                      <span className="material-symbols-outlined text-[18px]">edit</span>
                     </button>
                     <button onClick={() => toggle(s)} title={s.enabled ? '停用' : '啟用'}
                       className={`relative w-9 h-5 rounded-full transition-colors shrink-0 cursor-pointer ${s.enabled ? 'bg-primary' : 'bg-outline-variant/40'}`}>
@@ -256,22 +300,32 @@ function SchedulesContent() {
                 {cells.map((c, i) => {
                   if (!c) return <div key={i} />;
                   const ran = runsByDay[c.key];
+                  const okCount = ran ? ran.filter(r => !isFailRun(r)).length : 0;
+                  const failCount = ran ? ran.filter(isFailRun).length : 0;
                   const isToday = c.key === todayKey;
-                  const isNext = nextRunDays.has(c.key);
+                  const planned = schedulesByNextDay[c.key];
+                  const isNext = !!planned?.length;
+                  const clickable = !!ran || isNext;
                   return (
-                    <div key={i} className={`aspect-square rounded-lg flex flex-col items-center justify-center text-xs relative ${isToday ? 'bg-primary/10 ring-1 ring-primary/40' : 'bg-surface-container-lowest'} ${isNext && !ran ? 'ring-1 ring-tertiary/50' : ''}`}>
-                      <span className={`${isToday ? 'font-bold text-primary' : 'text-on-surface-variant'}`}>{c.day}</span>
-                      {ran
-                        ? <span className="mt-0.5 flex items-center gap-0.5 text-[9px] text-success font-bold"><span className="w-1.5 h-1.5 rounded-full bg-success" />{ran.length}</span>
-                        : isNext ? <span className="mt-0.5 text-[9px] text-tertiary">預定</span> : null}
-                    </div>
+                    <button key={i} type="button" disabled={!clickable} onClick={() => { if (clickable) { setDayDetail(c.key); setDayPage(0); } }}
+                      className={`aspect-square rounded-lg flex flex-col items-center justify-center relative transition-colors ${clickable ? 'cursor-pointer hover:ring-2 hover:ring-primary/40' : 'cursor-default'} ${isToday ? 'bg-primary/10 ring-1 ring-primary/40' : 'bg-surface-container-lowest'} ${isNext && !ran ? 'ring-1 ring-tertiary/50' : ''}`}>
+                      <span className={`text-sm ${isToday ? 'font-bold text-primary' : 'text-on-surface'}`}>{c.day}</span>
+                      {ran ? (
+                        <span className="mt-0.5 flex items-center gap-1 text-[11px] font-bold">
+                          {okCount > 0 && <span className="flex items-center gap-0.5 text-success"><span className="w-1.5 h-1.5 rounded-full bg-success" />{okCount}</span>}
+                          {failCount > 0 && <span className="flex items-center gap-0.5 text-error"><span className="w-1.5 h-1.5 rounded-full bg-error" />{failCount}</span>}
+                        </span>
+                      ) : isNext ? <span className="mt-0.5 text-[10px] text-tertiary font-bold">預定 {planned.length}</span> : null}
+                    </button>
                   );
                 })}
               </div>
-              <div className="flex items-center gap-4 mt-3 pt-3 border-t border-outline-variant/15 text-[11px] text-on-surface-variant">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 pt-3 border-t border-outline-variant/15 text-[11px] text-on-surface-variant">
                 <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-success" />已執行</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-error" />失敗</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full ring-1 ring-tertiary/60" />下次預定</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-primary/20 ring-1 ring-primary/40" />今天</span>
+                <span className="ml-auto text-on-surface-variant/60">點日期看當天履歷</span>
               </div>
             </div>
           </section>
@@ -279,14 +333,24 @@ function SchedulesContent() {
 
         {/* Execution log */}
         <section className="mt-8">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3">執行紀錄</h2>
+          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">執行紀錄{filteredRuns.length > 0 && <span className="ml-1 normal-case tracking-normal text-on-surface-variant/60">（{filteredRuns.length}）</span>}</h2>
+            {runs.length > 0 && (
+              <Dropdown compact value={runFilter} onChange={v => { setRunFilter(v); setRunPage(0); }} className="min-w-[160px] max-w-[240px]"
+                options={[{ value: 'all', label: '全部排程' }, ...schedules.map(s => ({ value: s.id, label: s.name || s.question.slice(0, 20) }))]} />
+            )}
+          </div>
           {runs.length === 0 ? (
             <div className="p-6 rounded-2xl border border-dashed border-outline-variant/30 text-center text-sm text-on-surface-variant">
               還沒有排程執行紀錄。時間到時，系統會自動跑分析、寄信，並把每次執行列在這裡。
             </div>
+          ) : filteredRuns.length === 0 ? (
+            <div className="p-6 rounded-2xl border border-dashed border-outline-variant/30 text-center text-sm text-on-surface-variant">
+              這個排程還沒有執行紀錄。
+            </div>
           ) : (
             <div className="space-y-2">
-              {runs.map(r => {
+              {pagedRuns.map(r => {
                 const inflight = r.status !== 'done' && r.status !== 'error' && r.status !== 'failed';
                 const nm = schedName(r.schedule_id);
                 return (
@@ -318,8 +382,102 @@ function SchedulesContent() {
               })}
             </div>
           )}
+          {runTotalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-4">
+              <button onClick={() => setRunPage(p => Math.max(0, p - 1))} disabled={runPageClamped === 0}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+                <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+              </button>
+              <span className="text-xs text-on-surface-variant">第 {runPageClamped + 1} / {runTotalPages} 頁</span>
+              <button onClick={() => setRunPage(p => Math.min(runTotalPages - 1, p + 1))} disabled={runPageClamped >= runTotalPages - 1}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+                <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+              </button>
+            </div>
+          )}
         </section>
       </main>
+
+      {/* Calendar day detail — that day's run history + what's planned */}
+      {dayDetail && (() => {
+        const ran = (runsByDay[dayDetail] || []).slice().sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
+        const DAY_PER_PAGE = 6;
+        const dayTotalPages = Math.max(1, Math.ceil(ran.length / DAY_PER_PAGE));
+        const dayPageClamped = Math.min(dayPage, dayTotalPages - 1);
+        const pagedRan = ran.slice(dayPageClamped * DAY_PER_PAGE, dayPageClamped * DAY_PER_PAGE + DAY_PER_PAGE);
+        const planned = schedulesByNextDay[dayDetail] || [];
+        const dLabel = new Date(dayDetail + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+        return (
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setDayDetail(null)}>
+            <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="material-symbols-outlined text-primary">event</span>
+                <h3 className="text-lg font-headline font-bold text-on-surface flex-1">{dLabel}</h3>
+                <button onClick={() => setDayDetail(null)} className="w-8 h-8 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high cursor-pointer">
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+
+              {planned.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-bold text-tertiary mb-2">預定執行（{planned.length}）</p>
+                  <div className="space-y-1.5">
+                    {planned.slice().sort((a, b) => a.hour * 60 + a.minute - (b.hour * 60 + b.minute)).map(s => (
+                      <div key={s.id} className="flex items-center gap-2 p-2.5 rounded-xl border border-tertiary/25 bg-tertiary/5">
+                        <span className="text-sm font-bold text-tertiary tabular-nums shrink-0">{hhmm(s)}</span>
+                        <span className="flex-1 min-w-0 text-sm text-on-surface truncate">{s.name || s.question}</span>
+                        {s.doc_format && DOC_LABELS[s.doc_format] && <span className="text-[10px] font-bold text-primary shrink-0">{DOC_LABELS[s.doc_format]}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <p className="text-xs font-bold text-on-surface-variant mb-2">執行紀錄（{ran.length}）</p>
+              {ran.length === 0 ? (
+                <p className="text-sm text-on-surface-variant/60 py-4 text-center">這天還沒有執行紀錄。</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {pagedRan.map(r => {
+                    const inflight = r.status !== 'done' && r.status !== 'error' && r.status !== 'failed';
+                    const fail = isFailRun(r);
+                    return (
+                      <div key={r.id} className="flex items-center gap-2.5 p-2.5 rounded-xl border border-outline-variant/15 bg-surface-container">
+                        <span className={`material-symbols-outlined text-[18px] shrink-0 ${inflight ? 'text-primary animate-spin' : fail ? 'text-error' : 'text-success'}`}>
+                          {inflight ? 'progress_activity' : fail ? 'error' : 'check_circle'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-on-surface truncate">{schedName(r.schedule_id) || r.question}</div>
+                          <div className="text-xs text-on-surface-variant">{new Date(r.created_at).toLocaleTimeString()}{r.status === 'done' && r.emailed === 0 ? ' · 寄信失敗' : ''}</div>
+                        </div>
+                        {r.share_token && !inflight && (
+                          <a href={`/share/team/${r.share_token}`} target="_blank" rel="noreferrer" title="查看完整報告"
+                            className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 cursor-pointer shrink-0">
+                            <span className="material-symbols-outlined text-[18px]">open_in_new</span>
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {dayTotalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-3">
+                  <button onClick={() => setDayPage(p => Math.max(0, p - 1))} disabled={dayPageClamped === 0}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+                    <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+                  </button>
+                  <span className="text-xs text-on-surface-variant">第 {dayPageClamped + 1} / {dayTotalPages} 頁</span>
+                  <button onClick={() => setDayPage(p => Math.min(dayTotalPages - 1, p + 1))} disabled={dayPageClamped >= dayTotalPages - 1}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer">
+                    <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

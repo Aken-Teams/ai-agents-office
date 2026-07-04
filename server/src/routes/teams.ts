@@ -496,6 +496,53 @@ router.patch('/:id/schedules/:sid', async (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
+// PUT /api/teams/:id/schedules/:sid — edit a schedule's full config.
+// Body mirrors POST /schedules. Recomputes next_run_at from the new timing.
+router.put('/:id/schedules/:sid', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const existing = await dbGet<{ id: string }>('SELECT id FROM team_schedules WHERE id = ? AND team_id = ? AND user_id = ?', req.params.sid, req.params.id, userId);
+  if (!existing) { res.status(404).json({ error: 'Schedule not found' }); return; }
+
+  const { name, question, frequency, hour, minute, dayOfWeek, email, docFormat, docStylePrompt } = req.body as {
+    name?: string; question?: string; frequency?: string; hour?: number; minute?: number; dayOfWeek?: number; email?: string;
+    docFormat?: string; docStylePrompt?: string;
+  };
+  if (!name?.trim()) { res.status(400).json({ error: '請填入排程名稱' }); return; }
+  if (!question?.trim()) { res.status(400).json({ error: '請填入要分析的議題' }); return; }
+  const emailList = [...new Set((email || '').split(',').map(e => e.trim()).filter(Boolean))];
+  if (!emailList.length) { res.status(400).json({ error: '請填入收件 email' }); return; }
+  const emailStr = emailList.join(',').slice(0, 1000);
+
+  const docFmt = isDocFormat(docFormat) ? docFormat : null;
+  const docStyle = docFmt && typeof docStylePrompt === 'string' ? docStylePrompt.slice(0, 2000) : null;
+
+  // Re-vet the (possibly changed) question so every future headless run is pre-approved.
+  const verdict = await moderateTeamTopic(question.trim(), '無法更新這個排程');
+  if (!verdict.allowed) {
+    logSecurityEvent(userId, 'blocked_request', 'high', `team-schedule edit blocked (category=${verdict.category})`, question);
+    res.status(403).json({ error: verdict.reason });
+    return;
+  }
+
+  const freq = frequency === 'weekly' ? 'weekly' : 'daily';
+  const h = Math.max(0, Math.min(23, Number(hour) || 0));
+  const m = Math.max(0, Math.min(59, Number(minute) || 0));
+  const dow = freq === 'weekly' ? Math.max(0, Math.min(6, Number(dayOfWeek) || 0)) : null;
+  const next = computeNextRun(freq, h, m, dow);
+
+  try {
+    await dbRun(
+      `UPDATE team_schedules SET name = ?, question = ?, frequency = ?, hour = ?, minute = ?, day_of_week = ?, email = ?, doc_format = ?, doc_style_prompt = ?, next_run_at = ? WHERE id = ?`,
+      name.trim().slice(0, 255), question.trim(), freq, h, m, dow, emailStr, docFmt, docStyle, mysqlDateTime(next), existing.id,
+    );
+    const schedule = await dbGet('SELECT * FROM team_schedules WHERE id = ?', existing.id);
+    res.json({ schedule });
+  } catch (err) {
+    console.error('[teams] edit schedule failed:', err);
+    res.status(500).json({ error: '更新排程時發生錯誤，請稍後再試。' });
+  }
+});
+
 // POST /api/teams/:id/schedules/:sid/run-now — run a schedule immediately (test).
 // Fire-and-forget: the run takes ~1 min; the result lands in history + email.
 router.post('/:id/schedules/:sid/run-now', async (req: Request, res: Response) => {

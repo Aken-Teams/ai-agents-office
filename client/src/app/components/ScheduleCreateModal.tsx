@@ -5,74 +5,10 @@
  * and whether they ran on time lives on the /team/[id]/schedules calendar page.
  */
 
-import { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom';
+import { useState, useEffect } from 'react';
 import { useTranslation } from '../../i18n';
 import { DOC_EXPORT, type ExportFormat } from './docFormats';
-
-/**
- * Fully-custom dropdown. A native <select>'s open list is drawn by the OS (cramped,
- * unstyleable), and an in-flow popup gets clipped by the modal's overflow. So the
- * menu is rendered in a portal on <body> with fixed positioning — it always floats
- * above the window, matches the app's styling, and sizes to its content.
- */
-function Dropdown({ value, onChange, options, className }: {
-  value: string | number;
-  onChange: (v: string) => void;
-  options: { value: string | number; label: string }[];
-  className?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const place = () => {
-      const b = btnRef.current?.getBoundingClientRect();
-      if (b) setPos({ top: b.bottom + 4, left: b.left, width: b.width });
-    };
-    place();
-    const onDoc = (e: MouseEvent) => {
-      if (btnRef.current?.contains(e.target as Node) || menuRef.current?.contains(e.target as Node)) return;
-      setOpen(false);
-    };
-    // Re-anchoring on every scroll is fiddly; closing keeps the menu from drifting.
-    const close = () => setOpen(false);
-    document.addEventListener('mousedown', onDoc);
-    window.addEventListener('resize', close);
-    window.addEventListener('scroll', close, true);
-    return () => { document.removeEventListener('mousedown', onDoc); window.removeEventListener('resize', close); window.removeEventListener('scroll', close, true); };
-  }, [open]);
-
-  const sel = options.find(o => String(o.value) === String(value));
-  return (
-    <div className={`relative ${className || ''}`}>
-      <button ref={btnRef} type="button" onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between gap-1.5 bg-surface-container border border-outline-variant/30 rounded-lg pl-3 pr-2 py-2.5 text-sm text-on-surface focus:outline-none focus:border-primary hover:border-outline-variant/50 transition-colors cursor-pointer">
-        <span className="truncate">{sel?.label ?? ''}</span>
-        <span className={`material-symbols-outlined text-on-surface-variant text-[18px] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}>expand_more</span>
-      </button>
-      {open && pos && createPortal(
-        <div ref={menuRef} style={{ position: 'fixed', top: pos.top, left: pos.left, width: pos.width, zIndex: 100 }}
-          className="max-h-64 overflow-y-auto rounded-xl border border-outline-variant/30 bg-surface-container-lowest shadow-2xl py-1">
-          {options.map(o => {
-            const active = String(o.value) === String(value);
-            return (
-              <button key={String(o.value)} type="button" onClick={() => { onChange(String(o.value)); setOpen(false); }}
-                className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors cursor-pointer ${active ? 'text-primary font-bold bg-primary/10' : 'text-on-surface hover:bg-surface-container'}`}>
-                <span className="flex-1 truncate">{o.label}</span>
-                {active && <span className="material-symbols-outlined text-[16px] shrink-0">check</span>}
-              </button>
-            );
-          })}
-        </div>,
-        document.body,
-      )}
-    </div>
-  );
-}
+import Dropdown from './Dropdown';
 
 const DOW = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
 
@@ -106,32 +42,51 @@ function flattenAdTree(node: AdNodeT | null | undefined): AdMemberT[] {
   return out;
 }
 
+export interface EditableSchedule {
+  id: string;
+  name: string | null;
+  question: string;
+  frequency: 'daily' | 'weekly';
+  hour: number;
+  minute: number;
+  day_of_week: number | null;
+  email: string;
+  doc_format: string | null;
+}
+
 export default function ScheduleCreateModal({
-  teamId, token, defaultEmail, defaultQuestion, sourceHasFiles, onClose, onCreated,
+  teamId, token, defaultEmail, defaultQuestion, sourceHasFiles, existing, onClose, onCreated,
 }: {
   teamId: string;
   token: string | null;
   defaultEmail: string;
   defaultQuestion?: string;
   sourceHasFiles?: boolean;   // the analysis being scheduled had uploaded files
+  existing?: EditableSchedule; // when set → edit mode (prefill + PUT)
   onClose: () => void;
   onCreated?: () => void;
 }) {
   const { t } = useTranslation();
+  const isEdit = !!existing;
+  const pad2 = (n: number) => String(n).padStart(2, '0');
   const [step, setStep] = useState(1);
-  const [name, setName] = useState('');
-  const [question, setQuestion] = useState(defaultQuestion?.trim() || '');
-  const [frequency, setFrequency] = useState<'daily' | 'weekly'>('daily');
-  const [dayOfWeek, setDayOfWeek] = useState(1);
-  const [time, setTime] = useState('09:00');
+  const [name, setName] = useState(existing?.name || '');
+  const [question, setQuestion] = useState(existing?.question || defaultQuestion?.trim() || '');
+  const [frequency, setFrequency] = useState<'daily' | 'weekly'>(existing?.frequency || 'daily');
+  const [dayOfWeek, setDayOfWeek] = useState(existing?.day_of_week ?? 1);
+  const [time, setTime] = useState(existing ? `${pad2(existing.hour)}:${pad2(existing.minute)}` : '09:00');
   // Multiple recipients: each is an email plus (for AD picks) a display name.
   const [recipients, setRecipients] = useState<{ email: string; name?: string }[]>(
-    defaultEmail?.trim() ? [{ email: defaultEmail.trim() }] : [],
+    existing
+      ? existing.email.split(',').map(e => e.trim()).filter(Boolean).map(e => ({ email: e }))
+      : defaultEmail?.trim() ? [{ email: defaultEmail.trim() }] : [],
   );
   const [emailInput, setEmailInput] = useState('');
   const [showAllRecipients, setShowAllRecipients] = useState(false);
   // Optional: also produce a file each run ('' = text report only).
-  const [docFormat, setDocFormat] = useState<ExportFormat | ''>('');
+  const [docFormat, setDocFormat] = useState<ExportFormat | ''>(
+    existing && DOC_EXPORT.some(f => f.format === existing.doc_format) ? (existing.doc_format as ExportFormat) : '',
+  );
   const [docStyleId, setDocStyleId] = useState('');
   const docFmt = docFormat ? DOC_EXPORT.find(f => f.format === docFormat) : null;
   const [saving, setSaving] = useState(false);
@@ -193,10 +148,12 @@ export default function ScheduleCreateModal({
       docFields = { docFormat, docStylePrompt: (t(style.promptKey as never) as string) || '' };
     }
     try {
-      const res = await fetch(`/api/teams/${teamId}/schedules`, {
-        method: 'POST', headers: { ...headers(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), question: question.trim(), frequency, hour: h, minute: m, dayOfWeek, email: recipients.map(r => r.email).join(','), ...docFields }),
-      });
+      const res = await fetch(
+        isEdit ? `/api/teams/${teamId}/schedules/${existing!.id}` : `/api/teams/${teamId}/schedules`,
+        {
+          method: isEdit ? 'PUT' : 'POST', headers: { ...headers(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name.trim(), question: question.trim(), frequency, hour: h, minute: m, dayOfWeek, email: recipients.map(r => r.email).join(','), ...docFields }),
+        });
       if (res.ok) { onCreated?.(); onClose(); return; }
       // Surface the server's reason instead of leaving the modal silently stuck.
       const msg = await res.json().catch(() => null);
@@ -240,7 +197,7 @@ export default function ScheduleCreateModal({
       <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-2 mb-1">
           <span className="material-symbols-outlined text-primary">add_alarm</span>
-          <h3 className="text-lg font-headline font-bold text-on-surface">新增排程</h3>
+          <h3 className="text-lg font-headline font-bold text-on-surface">{isEdit ? '編輯排程' : '新增排程'}</h3>
         </div>
         <p className="text-sm text-on-surface-variant mb-5">設定時間，團隊會自動跑分析、把結果寄到信箱，並記錄在排程管理頁。</p>
 
@@ -409,7 +366,7 @@ export default function ScheduleCreateModal({
         {/* ── Step 4: 確認 ── */}
         {step === 4 && (
           <>
-            <p className="text-sm text-on-surface-variant mb-3">請確認以下設定，沒問題就建立排程。</p>
+            <p className="text-sm text-on-surface-variant mb-3">請確認以下設定，沒問題就{isEdit ? '儲存變更' : '建立排程'}。</p>
             <div className="rounded-xl border border-outline-variant/20 divide-y divide-outline-variant/10 overflow-hidden">
               {[
                 { icon: 'label', label: '排程名稱', value: name.trim(), onEdit: () => setStep(1) },
@@ -467,7 +424,7 @@ export default function ScheduleCreateModal({
             <button onClick={add} disabled={!question.trim() || !recipients.length || saving}
               className="px-5 py-2 rounded-xl text-sm font-bold text-on-primary cyber-gradient disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer flex items-center gap-2">
               {saving && <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>}
-              建立排程
+              {isEdit ? '儲存變更' : '建立排程'}
             </button>
           )}
         </div>
