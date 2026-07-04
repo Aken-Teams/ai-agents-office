@@ -439,13 +439,14 @@ function UsageContent() {
                       : t('usage.ledger.totalRecords', { count: catSource.length })}
                   </span>
                 </div>
-                {/* Product-surface tabs — 全部 / 文件產生 / AI 團隊 / 信件助手 */}
-                <div className="flex flex-wrap gap-1.5">
+                {/* Product-surface tabs — 全部 / 文件產生 / AI 團隊 / 信件助手.
+                    Single scrollable row on mobile (no awkward 2-row wrap). */}
+                <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-0.5 md:flex-wrap md:overflow-visible md:mx-0 md:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {CATEGORY_TABS.map(tab => (
                     <button
                       key={tab.key}
                       onClick={() => { setDetailCat(tab.key); setLedgerPage(1); }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold transition-colors cursor-pointer ${
+                      className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                         detailCat === tab.key
                           ? 'bg-primary text-on-primary'
                           : 'bg-surface-container-high text-on-surface-variant hover:text-primary'
@@ -514,21 +515,21 @@ function UsageContent() {
                         className={`p-3.5 active:bg-primary/5 transition-colors ${i % 2 === 1 ? 'bg-surface-container-high/20' : ''}`}
                       >
                         {/* Row 1: Date + Total */}
-                        <div className="flex justify-between items-center mb-1.5">
+                        <div className="flex justify-between items-baseline gap-2 mb-1.5">
                           <span className="text-xs font-mono text-on-surface-variant">{day.date.slice(0, 10)}</span>
-                          <span className="text-sm font-mono text-primary font-bold">
+                          <span className="text-base font-mono text-primary font-bold tabular-nums">
                             {rawTokens(day.total_input + day.total_output).toLocaleString()}
                           </span>
                         </div>
-                        {/* Row 2: Generations + Input/Output breakdown */}
-                        <div className="flex items-center gap-3 text-xs text-on-surface-variant">
+                        {/* Row 2: Generations + Input/Output breakdown (wraps, never overflows) */}
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-on-surface-variant">
                           <span className="flex items-center gap-1">
                             <span className="material-symbols-outlined text-xs text-tertiary">bolt</span>
                             {day.invocation_count}
                           </span>
                           <span className="text-on-surface-variant/40">|</span>
-                          <span>In: <span className="font-mono text-on-surface">{rawTokens(day.total_input).toLocaleString()}</span></span>
-                          <span>Out: <span className="font-mono text-on-surface">{rawTokens(day.total_output).toLocaleString()}</span></span>
+                          <span>In <span className="font-mono text-on-surface tabular-nums">{rawTokens(day.total_input).toLocaleString()}</span></span>
+                          <span>Out <span className="font-mono text-on-surface tabular-nums">{rawTokens(day.total_output).toLocaleString()}</span></span>
                         </div>
                       </div>
                     ))}
@@ -548,12 +549,15 @@ function UsageContent() {
                       <span className="material-symbols-outlined text-sm">chevron_left</span>
                       上一頁
                     </button>
-                    <div className="flex items-center gap-1">
+                    {/* Mobile: compact indicator (numbered strip overflows on phones) */}
+                    <span className="md:hidden text-xs font-mono text-on-surface-variant">{ledgerPage} / {totalPages}</span>
+                    {/* Desktop: numbered buttons */}
+                    <div className="hidden md:flex items-center gap-1">
                       {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
                         <button
                           key={p}
                           onClick={() => setLedgerPage(p)}
-                          className={`w-7 h-7 text-xs font-bold font-mono transition-colors cursor-pointer ${
+                          className={`w-7 h-7 rounded-lg text-xs font-bold font-mono transition-colors cursor-pointer ${
                             p === ledgerPage
                               ? 'bg-primary text-on-primary'
                               : 'text-on-surface-variant hover:text-primary'

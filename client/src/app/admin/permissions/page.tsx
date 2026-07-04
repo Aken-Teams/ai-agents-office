@@ -183,13 +183,13 @@ export default function AdminPermissions() {
       { value: 'operate', labelKey: 'admin.permissions.state.operate', icon: 'edit' },
     ];
     return (
-      <div className="inline-flex rounded-lg bg-surface-container-highest/50 p-0.5 gap-0.5">
+      <div className="flex w-full md:w-auto md:inline-flex rounded-lg bg-surface-container-highest/50 p-0.5 gap-0.5">
         {states.map(s => (
           <button
             key={s.value}
             onClick={() => onChange(s.value)}
             title={t(s.labelKey as any)}
-            className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+            className={`flex-1 md:flex-none flex items-center justify-center gap-1 px-2 py-1.5 md:py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
               state === s.value
                 ? s.value === 'hidden'
                   ? 'bg-surface-container text-on-surface-variant shadow-sm'
@@ -407,9 +407,9 @@ export default function AdminPermissions() {
               {/* Items */}
               <div className="divide-y divide-outline-variant/5">
                 {group.items.map(item => (
-                  <div key={item.key} className="px-4 py-3 space-y-2.5">
+                  <div key={item.key} className="px-4 py-3 space-y-2">
                     <ItemInfo item={item} />
-                    <div className="flex flex-col items-center gap-1">
+                    <div className="flex flex-col gap-1.5">
                       <span className="text-[10px] text-on-surface-variant font-medium">{t('admin.permissions.readonly' as any)}</span>
                       <StateSelector
                         state={getReadonlyState(item.key)}

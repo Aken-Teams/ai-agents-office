@@ -1596,8 +1596,8 @@ function AssistantContent() {
       <main className={`${sidebarMargin} md:pt-10 pb-12 px-4 md:px-10 transition-all duration-300`}>
         {/* Header */}
         <div className="mt-4 md:mt-0 mb-8 md:mb-12">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div className="min-w-0 md:flex-1">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-tertiary text-xs md:text-sm font-bold tracking-[0.3em] uppercase">
                   {t('assistant.header.subtitle' as any) || 'AI WORKSPACE'}
@@ -1614,9 +1614,9 @@ function AssistantContent() {
                 {t('assistant.description' as any)}
               </p>
               {memoryCount > 0 && (
-                <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-tertiary/10 border border-tertiary/20 rounded-xl text-sm text-tertiary max-w-full">
+                <div className="mt-4 inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-1.5 bg-tertiary/10 border border-tertiary/20 rounded-xl text-sm text-tertiary max-w-full">
                   <span className="material-symbols-outlined text-base shrink-0">psychology</span>
-                  <span className="font-medium">{t('assistant.memoryBadge' as any)}</span>
+                  <span className="font-medium whitespace-nowrap">{t('assistant.memoryBadge' as any)}</span>
                   <span className="text-tertiary/70 whitespace-nowrap">
                     {workLogCount > 0
                       ? t('assistant.memoryPrefs' as any, { prefs: memoryCount - workLogCount, logs: workLogCount })
@@ -1626,8 +1626,8 @@ function AssistantContent() {
               )}
             </div>
 
-            {/* Header buttons */}
-            <div className="shrink-0 flex items-center gap-2 mt-1 md:mt-2">
+            {/* Header buttons — two main actions share the row evenly on mobile */}
+            <div className="w-full md:w-auto shrink-0 flex items-center gap-2 md:mt-2">
               {/* Email button — pro-panjit only */}
               {deployMode === 'pro-panjit' && (
                 <Tip text={t('assistant.email.title' as any)}>
@@ -1643,21 +1643,21 @@ function AssistantContent() {
               {/* Create team button */}
               <button
                 onClick={() => setTeamModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-primary/30 bg-primary/5 text-primary font-bold text-sm hover:bg-primary/10 active:scale-95 transition-all cursor-pointer shadow-sm"
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-primary/30 bg-primary/5 text-primary font-bold text-sm hover:bg-primary/10 active:scale-95 transition-all cursor-pointer shadow-sm"
               >
                 <span className="material-symbols-outlined text-base">groups</span>
-                <span className="hidden sm:inline">建立團隊</span>
+                <span>建立團隊</span>
               </button>
               {/* New assistant button */}
               <button
                 onClick={() => setEditTarget('new')}
                 disabled={creating}
-                className="flex items-center gap-2 px-4 py-2.5 cyber-gradient text-on-primary rounded-xl font-bold text-sm hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 cyber-gradient text-on-primary rounded-xl font-bold text-sm hover:brightness-110 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
               >
                 <span className={`material-symbols-outlined text-base ${creating ? 'animate-spin' : ''}`}>
                   {creating ? 'progress_activity' : 'add'}
                 </span>
-                <span className="hidden sm:inline">{t('assistant.newButton' as any)}</span>
+                <span>{t('assistant.newButton' as any)}</span>
               </button>
             </div>
           </div>

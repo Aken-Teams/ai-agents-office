@@ -178,10 +178,10 @@ function AnnouncementsContent() {
 
       {/* Modal */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center" onClick={() => setShowForm(false)}>
+        <div className="fixed inset-x-0 top-0 h-[100dvh] z-50 flex items-end md:items-center justify-center" onClick={() => setShowForm(false)}>
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
           <div
-            className="relative bg-surface-container rounded-t-2xl md:rounded-2xl p-5 md:p-7 border border-outline-variant/20 shadow-2xl w-full md:w-[90vw] md:max-w-lg animate-[slideUp_0.25s_ease-out] md:animate-in"
+            className="relative bg-surface-container rounded-t-2xl md:rounded-2xl p-5 md:p-7 border border-outline-variant/20 shadow-2xl w-full md:w-[90vw] md:max-w-lg max-h-[92vh] overflow-y-auto animate-[slideUp_0.25s_ease-out] md:animate-in"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-5">

@@ -614,8 +614,8 @@ export default function AdminTokens() {
 
       {/* Export / Quote Modal */}
       {showExportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) setShowExportModal(false); }}>
-          <div className="bg-surface-container-highest rounded-2xl shadow-2xl border border-outline-variant/20 w-96">
+        <div className="fixed inset-x-0 top-0 h-[100dvh] z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm sm:p-4" onClick={e => { if (e.target === e.currentTarget) setShowExportModal(false); }}>
+          <div className="bg-surface-container-highest rounded-t-2xl sm:rounded-2xl shadow-2xl border border-outline-variant/20 w-full sm:w-96 max-h-[92vh] overflow-y-auto">
             {/* Header */}
             <div className="flex items-center gap-2 px-5 pt-5 pb-0">
               <span className="material-symbols-outlined text-primary text-[20px]">description</span>

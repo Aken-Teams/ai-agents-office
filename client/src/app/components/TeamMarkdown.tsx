@@ -42,9 +42,11 @@ const components: Record<string, any> = {
     if (className === 'language-map') return <ChatMap rawJson={text} />;
     return <code className="px-1 py-0.5 rounded bg-surface-container-high text-[0.9em] font-mono break-words">{children}</code>;
   },
-  table: ({ children }: any) => <div className="overflow-x-auto my-2 rounded-lg border border-outline-variant/20"><table className="w-full text-xs border-collapse">{children}</table></div>,
+  // On narrow screens w-full crams every column; a min-width keeps columns
+  // readable and lets the wrapper scroll horizontally instead (touch-friendly).
+  table: ({ children }: any) => <div className="overflow-x-auto my-2 rounded-lg border border-outline-variant/20 [-webkit-overflow-scrolling:touch]"><table className="w-full min-w-[30rem] text-xs border-collapse">{children}</table></div>,
   thead: ({ children }: any) => <thead className="bg-surface-container-high">{children}</thead>,
-  th: ({ children }: any) => <th className="text-left px-2 py-1.5 font-semibold text-on-surface border-b border-outline-variant/20">{children}</th>,
+  th: ({ children }: any) => <th className="text-left px-2 py-1.5 font-semibold text-on-surface border-b border-outline-variant/20 whitespace-nowrap">{children}</th>,
   td: ({ children }: any) => <td className="px-2 py-1.5 align-top border-b border-outline-variant/10">{children}</td>,
 };
 

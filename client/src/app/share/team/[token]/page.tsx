@@ -76,27 +76,29 @@ export default function TeamSharePage() {
       )}
 
       <main className="max-w-6xl mx-auto px-4 md:px-8 py-8">
-        {/* Header — doc status / download lives top-right */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-11 h-11 rounded-xl cyber-gradient flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-on-primary text-xl">{data.teamIcon || 'groups'}</span>
+        {/* Header — on mobile the doc button drops to its own full-width row */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div className="w-11 h-11 rounded-xl cyber-gradient flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-on-primary text-xl">{data.teamIcon || 'groups'}</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="font-headline text-xl md:text-2xl font-bold text-on-surface truncate">{data.teamTitle} · 團隊協作</h1>
+              <p className="text-xs text-on-surface-variant">{new Date(data.createdAt).toLocaleString()} · 唯讀分享</p>
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="font-headline text-xl md:text-2xl font-bold text-on-surface truncate">{data.teamTitle} · 團隊協作</h1>
-            <p className="text-xs text-on-surface-variant">{new Date(data.createdAt).toLocaleString()} · 唯讀分享</p>
-          </div>
-          {/* Simple top-right document indicator */}
+          {/* Document indicator: full-width tap target on mobile, chip on desktop */}
           {data.docStatus === 'done' && data.docUrl ? (
-            <a href={data.docUrl} className="shrink-0 inline-flex items-center gap-1.5 px-3.5 h-9 rounded-lg text-sm font-bold text-on-primary cyber-gradient hover:opacity-90 transition-opacity no-underline">
+            <a href={data.docUrl} className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 px-4 h-11 sm:h-9 rounded-lg text-sm font-bold text-on-primary cyber-gradient hover:opacity-90 transition-opacity no-underline">
               <span className="material-symbols-outlined text-[18px]">download</span>
               下載文件{data.docFormat && DOC_LABELS[data.docFormat] ? `（${DOC_LABELS[data.docFormat]}）` : ''}
             </a>
           ) : data.docStatus === 'pending' ? (
-            <span className="shrink-0 inline-flex items-center gap-1.5 px-3.5 h-9 rounded-lg text-sm font-bold text-tertiary bg-tertiary/10">
+            <span className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 px-4 h-11 sm:h-9 rounded-lg text-sm font-bold text-tertiary bg-tertiary/10">
               <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>文件生成中…
             </span>
           ) : data.docStatus === 'failed' ? (
-            <span className="shrink-0 inline-flex items-center gap-1.5 px-3.5 h-9 rounded-lg text-sm font-bold text-error bg-error/10" title="文件產生失敗，其餘分析結果仍可查看">
+            <span className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-1.5 px-4 h-11 sm:h-9 rounded-lg text-sm font-bold text-error bg-error/10" title="文件產生失敗，其餘分析結果仍可查看">
               <span className="material-symbols-outlined text-[18px]">error</span>文件產生失敗
             </span>
           ) : (

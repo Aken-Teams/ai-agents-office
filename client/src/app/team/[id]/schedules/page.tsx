@@ -71,6 +71,7 @@ function SchedulesContent() {
   const [runPage, setRunPage] = useState(0);
   const [dayDetail, setDayDetail] = useState<string | null>(null);   // calendar day key
   const [dayPage, setDayPage] = useState(0);                          // day-detail run pagination
+  const [mobileTab, setMobileTab] = useState<'list' | 'calendar' | 'log'>('list'); // mobile-only view switch
 
   const authHeaders = useCallback((): HeadersInit => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
@@ -222,10 +223,20 @@ function SchedulesContent() {
           </div>
         )}
 
+        {/* Mobile-only tab switch (desktop shows list + calendar side by side) */}
+        <div className="lg:hidden grid grid-cols-3 gap-1 mb-4 p-1 bg-surface-container rounded-xl">
+          {([['list', '清單', 'list'], ['calendar', '日曆', 'calendar_month'], ['log', '履歷', 'history']] as const).map(([key, label, icon]) => (
+            <button key={key} onClick={() => setMobileTab(key)}
+              className={`flex items-center justify-center gap-1 py-2 rounded-lg text-sm font-bold transition-colors cursor-pointer ${mobileTab === key ? 'cyber-gradient text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'}`}>
+              <span className="material-symbols-outlined text-[18px]">{icon}</span>{label}
+            </button>
+          ))}
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Schedule list */}
-          <section>
-            <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3">排程清單（{schedules.length}）</h2>
+          <section className={mobileTab === 'list' ? '' : 'hidden lg:block'}>
+            <h2 className="hidden lg:block text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3">排程清單（{schedules.length}）</h2>
             {schedules.length > 3 && (
               <div className="relative mb-3">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50 text-[18px] pointer-events-none">search</span>
@@ -288,9 +299,9 @@ function SchedulesContent() {
           </section>
 
           {/* Calendar */}
-          <section>
+          <section className={mobileTab === 'calendar' ? '' : 'hidden lg:block'}>
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">執行日曆</h2>
+              <h2 className="hidden lg:block text-xs font-bold uppercase tracking-wider text-on-surface-variant">執行日曆</h2>
               <div className="flex items-center gap-1">
                 <button onClick={() => shiftMonth(-1)} className="w-7 h-7 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high cursor-pointer"><span className="material-symbols-outlined text-[18px]">chevron_left</span></button>
                 <span className="text-sm font-bold text-on-surface w-28 text-center">{monthLabel}</span>
@@ -337,7 +348,7 @@ function SchedulesContent() {
         </div>
 
         {/* Execution log */}
-        <section className="mt-8">
+        <section className={`mt-0 lg:mt-8 ${mobileTab === 'log' ? '' : 'hidden lg:block'}`}>
           <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
             <h2 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">執行紀錄{filteredRuns.length > 0 && <span className="ml-1 normal-case tracking-normal text-on-surface-variant/60">（{filteredRuns.length}）</span>}</h2>
             {runs.length > 0 && (

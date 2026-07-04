@@ -247,7 +247,7 @@ function AdminTermsContent() {
           <span className="text-base md:text-lg font-black text-on-surface font-headline shrink-0">
             {t('admin.terms.title' as any) || '使用條款管理'}
           </span>
-          <span className="text-xs md:text-sm text-on-surface-variant font-mono truncate">
+          <span className="hidden sm:inline text-xs md:text-sm text-on-surface-variant font-mono truncate">
             {t('admin.terms.subtitle' as any) || '編輯使用者同意條款'}
           </span>
         </div>
@@ -295,7 +295,7 @@ function AdminTermsContent() {
               {t('admin.terms.placeholderGuide' as any) || '動態數值佔位符'}
             </span>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {[
               { key: '{{usage_limit_usd}}', desc: 'USD 用量上限' },
               { key: '{{storage_quota_gb}}', desc: 'GB 儲存上限' },
@@ -304,6 +304,7 @@ function AdminTermsContent() {
               <button
                 key={p.key}
                 type="button"
+                disabled={!editable}
                 onClick={() => {
                   if (!editable) return;
                   const ta = textareaRef.current;
@@ -319,10 +320,14 @@ function AdminTermsContent() {
                     ta.setSelectionRange(pos, pos);
                   });
                 }}
-                className="text-xs bg-primary/10 border border-primary/20 px-2.5 py-1.5 rounded-lg font-mono text-primary hover:bg-primary/20 transition-colors cursor-pointer"
+                title={editable ? `插入 ${p.key}` : undefined}
+                className="group flex items-center gap-2 text-left px-3 py-2 rounded-lg border border-outline-variant/15 bg-surface-container-high hover:border-primary/30 hover:bg-primary/[0.06] transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-default"
               >
-                <span className="text-primary font-semibold">{p.key}</span>
-                <span className="text-on-surface-variant ml-1.5">→ {p.desc}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono text-xs font-semibold text-primary truncate">{p.key}</div>
+                  <div className="text-[11px] text-on-surface-variant truncate mt-0.5">{p.desc}</div>
+                </div>
+                {editable && <span className="material-symbols-outlined text-[16px] text-on-surface-variant/40 group-hover:text-primary shrink-0 transition-colors">add</span>}
               </button>
             ))}
           </div>
@@ -449,11 +454,11 @@ function AdminTermsContent() {
               </div>
             )}
 
-            <div className="flex justify-end">
+            <div className="flex sm:justify-end">
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="px-6 py-2.5 rounded-xl font-bold text-on-primary bg-primary hover:brightness-110 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl font-bold text-on-primary bg-primary hover:brightness-110 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
               >
                 <span className="material-symbols-outlined text-lg">
                   {saving ? 'progress_activity' : 'save'}

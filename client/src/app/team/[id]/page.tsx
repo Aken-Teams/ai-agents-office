@@ -279,6 +279,7 @@ function TeamRunContent() {
   // The run currently shown in the synthesis panel (a loaded past run, or the
   // just-finished live run) — lets share/download act on the report up front.
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [mobileTab, setMobileTab] = useState<'work' | 'history'>('work'); // mobile-only: workspace vs history
   const abortRef = useRef<AbortController | null>(null);
 
   const authHeaders = useCallback((): HeadersInit => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
@@ -735,6 +736,21 @@ function TeamRunContent() {
           })()}
         </div>
 
+        {/* Mobile-only tab: workspace vs history (desktop stacks both) */}
+        {history.length > 0 && (
+          <div className="lg:hidden grid grid-cols-2 gap-1 mb-4 p-1 bg-surface-container rounded-xl">
+            {([['work', '協作', 'forum'], ['history', '歷史', 'history']] as const).map(([key, label, icon]) => (
+              <button key={key} onClick={() => setMobileTab(key)}
+                className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-bold transition-colors cursor-pointer ${mobileTab === key ? 'cyber-gradient text-on-primary' : 'text-on-surface-variant hover:bg-surface-container-high'}`}>
+                <span className="material-symbols-outlined text-[18px]">{icon}</span>{label}{key === 'history' ? `（${history.length}）` : ''}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ── Workspace: input + members + synthesis ── */}
+        <div className={mobileTab === 'work' ? '' : 'hidden lg:block'}>
+
         {/* Question input */}
         <div className="mb-6">
           <input
@@ -967,7 +983,10 @@ function TeamRunContent() {
           </div>
         )}
 
-        {/* History */}
+        </div>{/* ── end workspace ── */}
+
+        {/* ── History ── */}
+        <div className={mobileTab === 'history' ? '' : 'hidden lg:block'}>
         {history.length > 0 && (
           <div className="mt-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3">歷史協作</h3>
@@ -975,7 +994,7 @@ function TeamRunContent() {
               {history.map(run => (
                 <div key={run.id}
                   className="w-full flex items-center gap-2 p-3 rounded-xl border border-outline-variant/15 bg-surface-container hover:border-primary/40 transition-colors">
-                  <button onClick={() => loadPastRun(run)} className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer">
+                  <button onClick={() => { loadPastRun(run); setMobileTab('work'); }} className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer">
                     <span className="material-symbols-outlined text-on-surface-variant shrink-0">{run.schedule_id ? 'schedule' : 'history'}</span>
                     <span className="flex-1 min-w-0">
                       <span className="block text-sm text-on-surface truncate">{run.question}</span>
@@ -1027,6 +1046,7 @@ function TeamRunContent() {
             </div>
           </div>
         )}
+        </div>{/* ── end history ── */}
       </main>
     </div>
   );
