@@ -716,9 +716,15 @@ function TeamRunContent() {
             // Carry the topic you're analysing (input, else the active run's question)
             // into the schedule so it's pre-filled — no need to re-type it.
             const scheduleQ = (question.trim() || (activeRunId ? history.find(r => r.id === activeRunId)?.question : '') || '').trim();
-            const href = scheduleQ
-              ? `/team/${teamId}/schedules?q=${encodeURIComponent(scheduleQ)}`
-              : `/team/${teamId}/schedules`;
+            // Flag file-backed analyses so the schedule modal can block them — a
+            // schedule re-runs the topic text only and can't carry uploaded files.
+            const activeRun = activeRunId ? history.find(r => r.id === activeRunId) : null;
+            const hasFiles = attachedFiles.length > 0 || !!(activeRun?.attachments && activeRun.attachments !== '[]' && activeRun.attachments !== 'null');
+            const params = new URLSearchParams();
+            if (scheduleQ) params.set('q', scheduleQ);
+            if (hasFiles) params.set('hasFiles', '1');
+            const qs = params.toString();
+            const href = qs ? `/team/${teamId}/schedules?${qs}` : `/team/${teamId}/schedules`;
             return (
               <Link href={href} title={scheduleQ ? '把目前議題加入排程' : '排程管理'}
                 className="shrink-0 flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm font-bold border border-outline-variant/30 text-on-surface hover:border-primary/50 hover:text-primary transition-colors cursor-pointer no-underline">

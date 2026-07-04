@@ -55,9 +55,11 @@ function SchedulesContent() {
   // Arriving from a team's detail page with ?q=<question> pre-fills + opens the
   // create modal, so scheduling the topic you just analysed needs no re-typing.
   const [prefillQuestion, setPrefillQuestion] = useState('');
+  const [prefillHasFiles, setPrefillHasFiles] = useState(false);
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get('q');
-    if (q && q.trim()) { setPrefillQuestion(q); setCreateOpen(true); }
+    const sp = new URLSearchParams(window.location.search);
+    const q = sp.get('q');
+    if (q && q.trim()) { setPrefillQuestion(q); setPrefillHasFiles(sp.get('hasFiles') === '1'); setCreateOpen(true); }
   }, []);
   const [delTarget, setDelTarget] = useState<Schedule | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -148,8 +150,8 @@ function SchedulesContent() {
       <Navbar />
 
       {createOpen && (
-        <ScheduleCreateModal teamId={teamId} token={token} defaultEmail={user?.email || ''} defaultQuestion={prefillQuestion}
-          onClose={() => setCreateOpen(false)} onCreated={() => { loadSchedules(); }} />
+        <ScheduleCreateModal teamId={teamId} token={token} defaultEmail={user?.email || ''} defaultQuestion={prefillQuestion} sourceHasFiles={prefillHasFiles}
+          onClose={() => { setCreateOpen(false); setPrefillHasFiles(false); }} onCreated={() => { loadSchedules(); }} />
       )}
 
       {delTarget && (

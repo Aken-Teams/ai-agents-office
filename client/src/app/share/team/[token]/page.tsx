@@ -17,7 +17,11 @@ interface SharedRun {
   result: string | null;
   memberOutputs: MemberOut[];
   createdAt: string;
+  docFormat: string | null;
+  docUrl: string | null;
 }
+
+const DOC_LABELS: Record<string, string> = { pptx: '簡報', docx: 'Word', pdf: 'PDF', html: '網頁簡報' };
 
 export default function TeamSharePage() {
   const params = useParams();
@@ -87,6 +91,20 @@ export default function TeamSharePage() {
           <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-1">議題</p>
           <p className="text-sm text-on-surface">{data.question}</p>
         </div>
+
+        {/* Generated document download (scheduled runs that produced a file) */}
+        {data.docUrl && (
+          <a href={data.docUrl} className="flex items-center gap-3 bg-surface-container rounded-2xl border border-primary/30 p-4 mb-6 hover:bg-primary/5 transition-colors no-underline">
+            <div className="w-10 h-10 rounded-xl cyber-gradient flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-on-primary">description</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-on-surface">下載報告文件{data.docFormat && DOC_LABELS[data.docFormat] ? `（${DOC_LABELS[data.docFormat]}）` : ''}</p>
+              <p className="text-xs text-on-surface-variant">本次排程產出的檔案</p>
+            </div>
+            <span className="material-symbols-outlined text-primary shrink-0">download</span>
+          </a>
+        )}
 
         {/* Members */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

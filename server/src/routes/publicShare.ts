@@ -20,13 +20,14 @@ interface SharedRunRow {
   created_at: string;
   team_title: string;
   team_icon: string | null;
+  doc_format: string | null;
 }
 
 // GET /api/public/team-run/:token — read-only snapshot of one team run.
 router.get('/team-run/:token', async (req: Request, res: Response) => {
   const run = await dbGet<SharedRunRow>(
     `SELECT tr.question, tr.result, tr.member_outputs, tr.input_tokens, tr.output_tokens, tr.created_at,
-            t.title AS team_title, t.icon AS team_icon
+            t.title AS team_title, t.icon AS team_icon, tr.doc_format
      FROM team_runs tr JOIN agent_teams t ON t.id = tr.team_id
      WHERE tr.share_token = ?`,
     req.params.token,
@@ -43,6 +44,10 @@ router.get('/team-run/:token', async (req: Request, res: Response) => {
     result: run.result,
     memberOutputs,
     createdAt: run.created_at,
+    // If the scheduled run produced a file, expose format + download URL so the
+    // share page can offer it (previously only the email carried the link).
+    docFormat: isDocFormat(run.doc_format) ? run.doc_format : null,
+    docUrl: isDocFormat(run.doc_format) ? `/api/public/team-run/${req.params.token}/document` : null,
   });
 });
 

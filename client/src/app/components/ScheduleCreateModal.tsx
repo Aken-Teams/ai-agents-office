@@ -107,12 +107,13 @@ function flattenAdTree(node: AdNodeT | null | undefined): AdMemberT[] {
 }
 
 export default function ScheduleCreateModal({
-  teamId, token, defaultEmail, defaultQuestion, onClose, onCreated,
+  teamId, token, defaultEmail, defaultQuestion, sourceHasFiles, onClose, onCreated,
 }: {
   teamId: string;
   token: string | null;
   defaultEmail: string;
   defaultQuestion?: string;
+  sourceHasFiles?: boolean;   // the analysis being scheduled had uploaded files
   onClose: () => void;
   onCreated?: () => void;
 }) {
@@ -214,6 +215,26 @@ export default function ScheduleCreateModal({
   const scheduleText = frequency === 'daily' ? `每天 ${time}` : `每週${DOW[dayOfWeek]} ${time}`;
   const docStyleLabel = docFmt ? (t((docFmt.styles.find(s => s.id === docStyleId) || docFmt.styles[0]).labelKey as never) as string) : '';
 
+  // A schedule only re-runs the topic text; it can't carry the files this analysis
+  // used. Rather than silently drop them, block scheduling from a file-based run.
+  if (sourceHasFiles) {
+    return (
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
+        <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-md p-6 text-center" onClick={e => e.stopPropagation()}>
+          <div className="w-12 h-12 rounded-full bg-tertiary/10 flex items-center justify-center mx-auto mb-3">
+            <span className="material-symbols-outlined text-tertiary">construction</span>
+          </div>
+          <h3 className="text-lg font-headline font-bold text-on-surface mb-2">暫不支援此排程</h3>
+          <p className="text-sm text-on-surface-variant leading-relaxed mb-5">
+            此功能還在開發中，因此暫不提供有上傳過文件的分析進行排程。<br />
+            排程只會用「議題文字」定期重新分析，無法帶入你上傳的檔案；若分析依賴上傳資料，請改用即時分析。
+          </p>
+          <button onClick={onClose} className="px-5 py-2 rounded-xl text-sm font-bold text-on-primary cyber-gradient transition-all cursor-pointer">我知道了</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
@@ -248,6 +269,11 @@ export default function ScheduleCreateModal({
             <label className="block text-xs font-bold text-on-surface-variant mb-1.5">分析議題 / 需求 <span className="text-error">*</span><span className="font-normal text-on-surface-variant/60">（團隊真正要分析的內容）</span></label>
             <textarea value={question} onChange={e => setQuestion(e.target.value)} rows={5} placeholder="要團隊定期分析的議題，例如：今天的台股盤勢與我持股的風險"
               className="w-full bg-surface-container border border-outline-variant/30 rounded-xl px-3 py-2.5 text-sm text-on-surface resize-none focus:outline-none focus:border-primary" />
+
+            <div className="flex items-start gap-2 mt-3 px-3 py-2.5 rounded-xl bg-surface-container border border-outline-variant/20 text-xs text-on-surface-variant leading-relaxed">
+              <span className="material-symbols-outlined text-[16px] text-on-surface-variant/70 shrink-0 mt-0.5">info</span>
+              <span>排程只會用「議題文字」定期重新分析，不會帶入你上傳的檔案。建議用於盤勢、新聞等會持續更新的公開議題；若分析依賴上傳資料，請改用即時分析。</span>
+            </div>
           </>
         )}
 
