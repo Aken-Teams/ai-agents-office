@@ -16,6 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs';
 import { spawnClaude } from './claudeCli.js';
+import { acquireAiSlot } from './aiConcurrency.js';
 import { truncateResultForRouter } from './taskParser.js';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { recordTokenUsage } from './tokenTracker.js';
@@ -203,7 +204,7 @@ ${peersBlock || '（無）'}
 排版：粗體請節制，只標少數關鍵詞；最重要的 1–2 個結論用 ==重點== 高亮標示。${roleScopeGuard(member.title)}`;
 }
 
-function runOneClaude(
+async function runOneClaude(
   userId: string,
   conversationId: string,
   sandboxSubdir: string,
@@ -214,6 +215,9 @@ function runOneClaude(
   webSearch = false,
   images?: { media_type: string; data: string }[],
 ): Promise<{ text: string; inputTokens: number; outputTokens: number; model: string }> {
+  // Global gate: cap total heavy AI processes so the scheduler can't fan out
+  // dozens of Claude CLIs at once and exhaust host memory.
+  const release = await acquireAiSlot();
   return new Promise(resolve => {
     let text = '';
     let inputTokens = 0, outputTokens = 0, model = '';
@@ -239,6 +243,7 @@ function runOneClaude(
       if (finished) return;
       finished = true;
       clearTimeout(timer);
+      release();
       resolve({ text, inputTokens, outputTokens, model });
     };
     const timer = setTimeout(() => { try { abort(); } catch { /* ignore */ } finish(); }, timeoutMs);

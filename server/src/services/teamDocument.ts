@@ -13,6 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config.js';
 import { dbGet } from '../db.js';
 import { spawnClaude } from './claudeCli.js';
+import { acquireAiSlot } from './aiConcurrency.js';
 import { getSkill, buildSystemPrompt } from '../skills/loader.js';
 import { getSandboxPath } from './sandbox.js';
 import { recordTokenUsage } from './tokenTracker.js';
@@ -72,13 +73,15 @@ async function ensureReportMarkdown(userId: string, teamId: string, runId: strin
 }
 
 /** Run a doc-gen agent headlessly and read its output file. */
-function runDocAgent(opts: {
+async function runDocAgent(opts: {
   userId: string; format: DocFormat; reportMd: string; stylePrompt: string; teamTitle: string;
 }): Promise<{ buffer: Buffer; filename: string }> {
   const { userId, format, reportMd, stylePrompt, teamTitle } = opts;
   const spec = FORMAT_MAP[format];
   const skill = getSkill(spec.skill);
   if (!skill) throw new Error(`找不到產生器：${spec.skill}`);
+  // Global gate: doc-gen (Claude CLI + python) is heavy — share the system-wide cap.
+  const release = await acquireAiSlot();
 
   // Headless: a throwaway sandbox keyed by a random id (no DB conversation).
   const pseudoConvId = `teamdoc-${uuidv4()}`;
@@ -94,7 +97,8 @@ function runDocAgent(opts: {
     reportMd,
   ].join('\n');
 
-  return new Promise((resolve, reject) => {
+  try {
+    return await new Promise<{ buffer: Buffer; filename: string }>((resolve, reject) => {
     let settled = false;
     const usage = { inTok: 0, outTok: 0, model: '' };
     const { emitter, abort } = spawnClaude(message, systemPrompt, {
@@ -156,7 +160,10 @@ function runDocAgent(opts: {
         }
       }
     });
-  });
+    });
+  } finally {
+    release();
+  }
 }
 
 /** Start an async job that generates the document; returns a jobId to poll. */

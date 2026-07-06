@@ -117,6 +117,33 @@ export async function getUserUsageSummaryByCategory(
 }
 
 /**
+ * Per-record usage ledger — one row per generation (not daily rollups), with its
+ * product category + boundary-exact cost. Powers the front usage page's detailed
+ * "by record" view. Capped to keep the payload bounded.
+ */
+export async function getUserUsageRecords(
+  userId: string,
+  from?: string,
+  to?: string,
+): Promise<Array<{ id: string; created_at: string; category: UsageCategory; input_tokens: number; output_tokens: number; cost: number }>> {
+  const CATEGORY_EXPR = `CASE WHEN c.title = '信件助手' THEN 'email' WHEN tu.model LIKE 'team%' THEN 'team' ELSE 'document' END`;
+  // Format created_at in SQL to a plain string (DB stores Taipei local time) so
+  // mysql2's Date parsing + JSON serialization can't shift the displayed time.
+  let query = `
+    SELECT tu.id, DATE_FORMAT(tu.created_at, '%Y-%m-%d %H:%i:%s') as created_at, ${CATEGORY_EXPR} as category,
+      tu.input_tokens, tu.output_tokens,
+      (tu.input_tokens / 1000000 * 3 + tu.output_tokens / 1000000 * 15) * ${pricingMarkupSql('tu.created_at')} as cost
+    FROM token_usage tu
+    LEFT JOIN conversations c ON c.id = tu.conversation_id
+    WHERE tu.user_id = ?`;
+  const params: unknown[] = [userId];
+  if (from) { query += ' AND tu.created_at >= ?'; params.push(from); }
+  if (to)   { query += ' AND tu.created_at <= ?'; params.push(to); }
+  query += ' ORDER BY tu.created_at DESC LIMIT 2000';
+  return dbAll(query, ...params);
+}
+
+/**
  * Invocation counts split by product surface (document / team / email). Same
  * categorisation as getUserUsageSummaryByCategory. Used by the dashboard's
  * "本月文件生成" stat (which should count DOCUMENTS only, with a hover breakdown).

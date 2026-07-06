@@ -29,9 +29,19 @@ interface UsageTotal {
 
 type UsageCategory = 'document' | 'team' | 'email';
 
+interface UsageRecord {
+  id: string;
+  created_at: string;
+  category: UsageCategory;
+  input_tokens: number;
+  output_tokens: number;
+  cost: number;   // boundary-exact (server-computed)
+}
+
 interface UsageResponse {
   summary: DailyUsage[];
   byCategory?: Record<UsageCategory, DailyUsage[]>;
+  records?: UsageRecord[];
   total: UsageTotal;
   limit: number;
   isBeta: boolean;
@@ -43,6 +53,7 @@ function UsageContent() {
   const router = useRouter();
   const [daily, setDaily] = useState<DailyUsage[]>([]);
   const [byCategory, setByCategory] = useState<Record<UsageCategory, DailyUsage[]>>({ document: [], team: [], email: [] });
+  const [records, setRecords] = useState<UsageRecord[]>([]);
   const [detailCat, setDetailCat] = useState<'all' | UsageCategory>('all');
   const [total, setTotal] = useState<UsageTotal | null>(null);
   const [isBeta, setIsBeta] = useState(true);
@@ -53,7 +64,6 @@ function UsageContent() {
   });
   const [filterTo, setFilterTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [ledgerPage, setLedgerPage] = useState(1);
-  const PAGE_SIZE = 6;
   const sidebarMargin = useSidebarMargin();
 
   useEffect(() => {
@@ -68,6 +78,7 @@ function UsageContent() {
       .then((data: UsageResponse) => {
         setDaily(data.summary);
         setByCategory(data.byCategory ?? { document: [], team: [], email: [] });
+        setRecords(data.records ?? []);
         setTotal(data.total);
         setIsBeta(data.isBeta ?? true);
       })
@@ -111,9 +122,10 @@ function UsageContent() {
 
   // Usage-detail table source, switchable by product surface (全部 / 文件產生 /
   // AI 團隊 / 信件助手). Same date-range filtering as the overview.
-  const catSource = detailCat === 'all' ? daily : (byCategory[detailCat] ?? []);
-  const filteredCatDaily = catSource.filter(d => {
-    const date = d.date.slice(0, 10);
+  // Detailed "by record" ledger: one row per generation, filtered by category + date.
+  const filteredCatRecords = records.filter(r => {
+    if (detailCat !== 'all' && r.category !== detailCat) return false;
+    const date = r.created_at.slice(0, 10);
     if (filterFrom && date < filterFrom) return false;
     if (filterTo && date > filterTo) return false;
     return true;
@@ -124,6 +136,14 @@ function UsageContent() {
     { key: 'team', label: locale === 'en' ? 'AI Teams' : 'AI 團隊', icon: 'groups' },
     { key: 'email', label: locale === 'en' ? 'Email' : '信件助手', icon: 'mail' },
   ];
+  const CAT_META: Record<UsageCategory, { label: string; icon: string }> = {
+    document: { label: locale === 'en' ? 'Document' : '文件產生', icon: 'description' },
+    team: { label: locale === 'en' ? 'AI Team' : 'AI 團隊', icon: 'groups' },
+    email: { label: locale === 'en' ? 'Email' : '信件助手', icon: 'mail' },
+  };
+  const REC_PAGE_SIZE = 10;
+  // Server returns "YYYY-MM-DD HH:MM:SS" (Taipei local) — slice to minutes, no Date parsing.
+  const fmtRecTime = (s: string) => (s || '').replace('T', ' ').slice(0, 16);
 
   // When date filter is active, overview card reflects filtered range
   const hasFilter = !!(filterFrom || filterTo);
@@ -434,9 +454,7 @@ function UsageContent() {
                 <div className="flex justify-between items-center mb-3 md:mb-4">
                   <h4 className="text-xs md:text-sm font-bold font-headline uppercase tracking-widest text-on-surface">{t('usage.ledger.title')}</h4>
                   <span className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">
-                    {filterFrom || filterTo
-                      ? `${filteredCatDaily.length} / ${catSource.length}`
-                      : t('usage.ledger.totalRecords', { count: catSource.length })}
+                    {filteredCatRecords.length} 筆
                   </span>
                 </div>
                 {/* Product-surface tabs — 全部 / 文件產生 / AI 團隊 / 信件助手.
@@ -459,47 +477,47 @@ function UsageContent() {
                 </div>
               </div>
 
-              {daily.length === 0 ? (
+              {records.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 md:py-16">
                   <span className="material-symbols-outlined text-2xl md:text-3xl text-on-surface-variant/30 mb-3">analytics</span>
                   <p className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">{t('usage.ledger.noData')}</p>
                 </div>
-              ) : filteredCatDaily.length === 0 ? (
+              ) : filteredCatRecords.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 md:py-16">
                   <span className="material-symbols-outlined text-2xl md:text-3xl text-on-surface-variant/30 mb-3">search_off</span>
                   <p className="text-xs md:text-sm text-on-surface-variant/60 uppercase tracking-widest">查無資料</p>
                 </div>
               ) : (
                 <>
-                  {/* Desktop Table */}
+                  {/* Desktop Table — one row per generation (細項) */}
                   <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-surface-container-high/50 text-sm uppercase tracking-widest text-on-surface-variant">
-                          <th className="px-6 py-4 font-bold">{t('usage.ledger.date')}</th>
-                          <th className="px-6 py-4 font-bold">{t('usage.ledger.generations')}</th>
+                          <th className="px-6 py-4 font-bold">時間</th>
+                          <th className="px-6 py-4 font-bold">類別</th>
                           <th className="px-6 py-4 font-bold">{t('usage.ledger.inputTokens')}</th>
                           <th className="px-6 py-4 font-bold">{t('usage.ledger.outputTokens')}</th>
                           <th className="px-6 py-4 font-bold text-right">{t('usage.ledger.total')}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
-                        {filteredCatDaily.slice((ledgerPage - 1) * PAGE_SIZE, ledgerPage * PAGE_SIZE).map((day, i) => (
+                        {filteredCatRecords.slice((ledgerPage - 1) * REC_PAGE_SIZE, ledgerPage * REC_PAGE_SIZE).map((r, i) => (
                           <tr
-                            key={day.date}
+                            key={r.id}
                             className={`hover:bg-primary/5 transition-colors ${i % 2 === 1 ? 'bg-surface-container-high/20' : ''}`}
                           >
-                            <td className="px-6 py-4 text-sm font-mono text-on-surface-variant">{day.date.slice(0, 10)}</td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center gap-2">
-                                <span className="material-symbols-outlined text-sm text-tertiary">bolt</span>
-                                <span className="text-sm text-on-surface font-medium">{day.invocation_count}</span>
-                              </div>
+                            <td className="px-6 py-3.5 text-sm font-mono text-on-surface-variant whitespace-nowrap">{fmtRecTime(r.created_at)}</td>
+                            <td className="px-6 py-3.5">
+                              <span className="inline-flex items-center gap-1.5 text-sm text-on-surface">
+                                <span className="material-symbols-outlined text-sm text-tertiary">{CAT_META[r.category].icon}</span>
+                                {CAT_META[r.category].label}
+                              </span>
                             </td>
-                            <td className="px-6 py-4 text-sm font-mono text-on-surface">{rawTokens(day.total_input).toLocaleString()}</td>
-                            <td className="px-6 py-4 text-sm font-mono text-on-surface">{rawTokens(day.total_output).toLocaleString()}</td>
-                            <td className="px-6 py-4 text-sm font-mono text-primary font-bold text-right">
-                              {rawTokens(day.total_input + day.total_output).toLocaleString()}
+                            <td className="px-6 py-3.5 text-sm font-mono text-on-surface">{rawTokens(r.input_tokens).toLocaleString()}</td>
+                            <td className="px-6 py-3.5 text-sm font-mono text-on-surface">{rawTokens(r.output_tokens).toLocaleString()}</td>
+                            <td className="px-6 py-3.5 text-sm font-mono text-primary font-bold text-right">
+                              {rawTokens(r.input_tokens + r.output_tokens).toLocaleString()}
                             </td>
                           </tr>
                         ))}
@@ -507,29 +525,29 @@ function UsageContent() {
                     </table>
                   </div>
 
-                  {/* Mobile Card List */}
+                  {/* Mobile Card List — per record */}
                   <div className="md:hidden divide-y divide-white/5">
-                    {filteredCatDaily.slice((ledgerPage - 1) * PAGE_SIZE, ledgerPage * PAGE_SIZE).map((day, i) => (
+                    {filteredCatRecords.slice((ledgerPage - 1) * REC_PAGE_SIZE, ledgerPage * REC_PAGE_SIZE).map((r, i) => (
                       <div
-                        key={day.date}
+                        key={r.id}
                         className={`p-3.5 active:bg-primary/5 transition-colors ${i % 2 === 1 ? 'bg-surface-container-high/20' : ''}`}
                       >
-                        {/* Row 1: Date + Total */}
+                        {/* Row 1: Time + Total */}
                         <div className="flex justify-between items-baseline gap-2 mb-1.5">
-                          <span className="text-xs font-mono text-on-surface-variant">{day.date.slice(0, 10)}</span>
+                          <span className="text-xs font-mono text-on-surface-variant">{fmtRecTime(r.created_at)}</span>
                           <span className="text-base font-mono text-primary font-bold tabular-nums">
-                            {rawTokens(day.total_input + day.total_output).toLocaleString()}
+                            {rawTokens(r.input_tokens + r.output_tokens).toLocaleString()}
                           </span>
                         </div>
-                        {/* Row 2: Generations + Input/Output breakdown (wraps, never overflows) */}
+                        {/* Row 2: Category + Input/Output breakdown (wraps, never overflows) */}
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-on-surface-variant">
                           <span className="flex items-center gap-1">
-                            <span className="material-symbols-outlined text-xs text-tertiary">bolt</span>
-                            {day.invocation_count}
+                            <span className="material-symbols-outlined text-xs text-tertiary">{CAT_META[r.category].icon}</span>
+                            {CAT_META[r.category].label}
                           </span>
                           <span className="text-on-surface-variant/40">|</span>
-                          <span>In <span className="font-mono text-on-surface tabular-nums">{rawTokens(day.total_input).toLocaleString()}</span></span>
-                          <span>Out <span className="font-mono text-on-surface tabular-nums">{rawTokens(day.total_output).toLocaleString()}</span></span>
+                          <span>In <span className="font-mono text-on-surface tabular-nums">{rawTokens(r.input_tokens).toLocaleString()}</span></span>
+                          <span>Out <span className="font-mono text-on-surface tabular-nums">{rawTokens(r.output_tokens).toLocaleString()}</span></span>
                         </div>
                       </div>
                     ))}
@@ -537,7 +555,7 @@ function UsageContent() {
                 </>
               )}
               {(() => {
-                const totalPages = Math.ceil(filteredCatDaily.length / PAGE_SIZE);
+                const totalPages = Math.ceil(filteredCatRecords.length / REC_PAGE_SIZE);
                 if (totalPages <= 1) return null;
                 return (
                   <div className="p-3 md:p-4 border-t border-white/5 flex items-center justify-between">
