@@ -50,6 +50,7 @@ interface SecurityFlags {
 interface EmailDetailModalProps {
   email: EmailNotification;
   analysisMd: Record<string, React.ComponentType<any>>;
+  showAI?: boolean;   // false = pure-view: hide the AI panel, buttons and priority
   onClose: () => void;
   onRequestAnalysis: (emailId: string, opts?: { withAttachments?: boolean; force?: boolean }) => void;
   onChatAboutEmail: (subject: string, from: string) => void;
@@ -197,7 +198,7 @@ function AnalysisView({ analysis, analysisMd, security }: { analysis: string; an
 }
 
 export default function EmailDetailModal({
-  email, analysisMd, onClose, onRequestAnalysis, onChatAboutEmail,
+  email, analysisMd, showAI = true, onClose, onRequestAnalysis, onChatAboutEmail,
 }: EmailDetailModalProps) {
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<MessageDetail | null>(null);
@@ -371,9 +372,11 @@ export default function EmailDetailModal({
           <div className="flex items-start gap-2">
             <h2 className="flex-1 min-w-0 text-[15px] md:text-lg font-bold text-on-surface leading-snug line-clamp-2 md:line-clamp-none">{email.subject}</h2>
             <div className="flex items-center gap-1 shrink-0 -mt-0.5">
-              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                email.priority === '高' ? 'bg-error/10 text-error' : email.priority === '中' ? 'bg-warning/10 text-warning' : 'bg-surface-container text-on-surface-variant/60'
-              }`}>{email.priority}優先</span>
+              {showAI && (
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                  email.priority === '高' ? 'bg-error/10 text-error' : email.priority === '中' ? 'bg-warning/10 text-warning' : 'bg-surface-container text-on-surface-variant/60'
+                }`}>{email.priority}優先</span>
+              )}
               <button onClick={onClose} className="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-full hover:bg-surface-container-highest transition-colors">
                 <span className="material-symbols-outlined text-xl text-on-surface-variant">close</span>
               </button>
@@ -451,7 +454,8 @@ export default function EmailDetailModal({
           </div>
         )}
 
-        {/* Mobile tab bar */}
+        {/* Mobile tab bar — hidden in pure-view (no AI tab) */}
+        {showAI && (
         <div className="flex md:hidden border-b border-outline-variant/10 shrink-0">
           {([
             { id: 'body' as const, icon: 'mail', label: '原始信件' },
@@ -475,6 +479,7 @@ export default function EmailDetailModal({
             </button>
           ))}
         </div>
+        )}
 
         {/* Main content: two-column (desktop) / tabbed (mobile) */}
         <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
@@ -508,6 +513,7 @@ export default function EmailDetailModal({
             )}
           </div>
 
+          {showAI && (<>
           {/* AI Analysis panel (collapsible + animated on desktop) */}
           <div className={`${activePanel === 'analysis' ? 'flex' : 'hidden'} md:flex flex-col flex-1 md:flex-initial min-h-0 md:shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${analysisCollapsed ? 'md:w-0' : 'md:w-[380px]'}`}>
             {/* fixed-width inner so content clips (not squishes) while the width animates */}
@@ -587,10 +593,12 @@ export default function EmailDetailModal({
               <span className="text-[11px] font-semibold text-primary [writing-mode:vertical-rl] mt-1">AI 分析</span>
             </button>
           </div>
+          </>)}
         </div>
 
         {/* Bottom action bar */}
         <div className="border-t border-outline-variant/10 px-3 py-2 md:px-5 md:py-3 flex items-center gap-2 md:gap-3 shrink-0 bg-surface-container-high/30">
+          {showAI && (<>
           <button
             onClick={() => onChatAboutEmail(email.subject, email.from.name || email.from.address)}
             className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 rounded-full bg-surface-container hover:bg-surface-container-highest active:bg-surface-container-highest text-[13px] md:text-sm font-medium text-on-surface transition-colors"
@@ -608,6 +616,7 @@ export default function EmailDetailModal({
               <span className="md:hidden">分析</span>
             </button>
           )}
+          </>)}
           <div className="flex-1" />
           <button
             onClick={onClose}

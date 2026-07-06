@@ -244,8 +244,10 @@ async function spawnClaudeOneShot(prompt: string, timeoutMs: number, model?: str
 /**
  * Poll for new emails and push Layer 1 summaries to the user.
  * @param isInitial — true on first connect: always send recent unread as a welcome batch
+ * @param aiEnabled — false = pure-view mode: stream the inbox list but run NO AI
+ *   summaries and record NO tokens (the user hasn't opted in to Email Agents).
  */
-export async function pollNewEmails(userId: string, isInitial = false): Promise<void> {
+export async function pollNewEmails(userId: string, isInitial = false, aiEnabled = true): Promise<void> {
   let token = await getMailToken(userId);
 
   // On initial connect, the AD login may still be authenticating Outlook (fire-and-forget).
@@ -390,7 +392,7 @@ export async function pollNewEmails(userId: string, isInitial = false): Promise<
   // true), which only summarises the uncached delta (usually a few) so open stays
   // fast. This stops an assistant left open from spending tokens on every incoming
   // mail — a deliberate cost-control decision (2026-07-03).
-  if (!isInitial) {
+  if (!isInitial || !aiEnabled) {
     const state = await dbGet<{ last_overview: string | null }>(
       'SELECT last_overview FROM email_agent_state WHERE user_id = ?', userId
     );

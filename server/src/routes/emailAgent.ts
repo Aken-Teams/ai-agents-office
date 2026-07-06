@@ -30,6 +30,29 @@ router.use((_req: Request, res: Response, next) => {
   next();
 });
 
+// ─── Opt-in preference ───
+// email_agent_enabled: NULL = never asked (client shows the first-login prompt),
+// 0 = off (pure viewing, no AI, no token), 1 = on (full AI + billing).
+
+/** True only when the user has explicitly ENABLED the email agent (=1). */
+async function emailAgentEnabled(userId: string): Promise<boolean> {
+  const row = await dbGet<{ email_agent_enabled: number | null }>('SELECT email_agent_enabled FROM users WHERE id = ?', userId);
+  return row?.email_agent_enabled === 1;
+}
+
+// GET current preference (client decides whether to show the opt-in prompt).
+router.get('/preference', async (req: Request, res: Response) => {
+  const row = await dbGet<{ email_agent_enabled: number | null }>('SELECT email_agent_enabled FROM users WHERE id = ?', req.user!.userId);
+  res.json({ enabled: row?.email_agent_enabled ?? null });
+});
+
+// SET preference (from the opt-in modal or the panel's enable/disable toggle).
+router.post('/preference', async (req: Request, res: Response) => {
+  const on = req.body?.enabled === true || req.body?.enabled === 1;
+  await dbRun('UPDATE users SET email_agent_enabled = ? WHERE id = ?', on ? 1 : 0, req.user!.userId);
+  res.json({ enabled: on ? 1 : 0 });
+});
+
 // ─── GET /api/email-agent/events — Persistent SSE connection ───
 
 router.get('/events', async (req: Request, res: Response) => {
@@ -42,8 +65,11 @@ router.get('/events', async (req: Request, res: Response) => {
     'X-Accel-Buffering': 'no',
   });
 
+  // When the user hasn't enabled the agent, connect in PURE-VIEW mode: the inbox
+  // list still streams, but no AI summaries run and no tokens are recorded.
+  const aiEnabled = await emailAgentEnabled(userId);
   // Register this connection (starts polling + keepalive)
-  await registerConnection(userId, res);
+  await registerConnection(userId, res, aiEnabled);
 
   // Capture the connection ID so the close handler only kills THIS connection,
   // not a newer one that replaced it during reconnection.
@@ -70,6 +96,10 @@ router.post('/chat', async (req: Request, res: Response) => {
     }>;
   };
 
+  if (!(await emailAgentEnabled(userId))) {
+    res.status(403).json({ error: 'email_agent_disabled', message: '尚未開啟 Email Agents，請先開啟才能使用 AI 分析。' });
+    return;
+  }
   if (!message?.trim()) {
     res.status(400).json({ error: 'Message is required' });
     return;
@@ -212,6 +242,10 @@ router.post('/analyze/:emailId', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const emailId = req.params.emailId as string;
 
+  if (!(await emailAgentEnabled(userId))) {
+    res.status(403).json({ error: 'email_agent_disabled', message: '尚未開啟 Email Agents，請先開啟才能使用 AI 分析。' });
+    return;
+  }
   if (!isConnected(userId)) {
     res.status(400).json({ error: 'No active SSE connection' });
     return;
@@ -250,7 +284,9 @@ router.get('/history', async (req: Request, res: Response) => {
 // separate, per-email action — never a whole-cache wipe.
 router.post('/refresh', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  pollNewEmails(userId, true).catch(() => {});
+  // Disabled → pure-view refresh (list only, no AI, no tokens).
+  const aiEnabled = await emailAgentEnabled(userId);
+  pollNewEmails(userId, true, aiEnabled).catch(() => {});
   res.json({ ok: true });
 });
 

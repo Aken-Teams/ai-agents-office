@@ -22,6 +22,7 @@ interface UserConnection {
   pollTimer: ReturnType<typeof setTimeout>;
   keepaliveTimer: ReturnType<typeof setInterval>;
   lastSeenIds: Set<string>;
+  aiEnabled: boolean;  // false = pure-view (no AI summaries, no tokens)
 }
 
 // Track active AI tasks per user so reconnecting clients can restore animation state.
@@ -41,7 +42,7 @@ function scheduleNextPoll(userId: string): void {
     if (!connections.has(userId)) return;
     console.log(`[EmailAgent] Regular poll tick for user ${userId}`);
     try {
-      await pollNewEmails(userId, false);
+      await pollNewEmails(userId, false, conn.aiEnabled);
     } catch (err) {
       console.error(`[EmailAgent] Poll error for ${userId}:`, err);
     }
@@ -54,7 +55,7 @@ function scheduleNextPoll(userId: string): void {
  * Register a new SSE connection for a user.
  * If a stale connection exists, close it first.
  */
-export async function registerConnection(userId: string, res: Response): Promise<void> {
+export async function registerConnection(userId: string, res: Response, aiEnabled = true): Promise<void> {
   // Close stale connection if any
   if (connections.has(userId)) {
     unregisterConnection(userId);
@@ -80,7 +81,7 @@ export async function registerConnection(userId: string, res: Response): Promise
 
   // Store connection FIRST so pollNewEmails can find it via getLastSeenIds
   const connId = nextConnId++;
-  const conn: UserConnection = { id: connId, res, pollTimer: null as any, keepaliveTimer, lastSeenIds };
+  const conn: UserConnection = { id: connId, res, pollTimer: null as any, keepaliveTimer, lastSeenIds, aiEnabled };
   connections.set(userId, conn);
 
   // Send connected status (include any active AI tasks so client can restore animation)
@@ -88,8 +89,9 @@ export async function registerConnection(userId: string, res: Response): Promise
   pushEvent(userId, { type: 'status', data: { connected: true, activeTasks: currentTasks } });
   console.log(`[EmailAgent] User ${userId} connected (${connections.size} total, activeTasks=${currentTasks.length})`);
 
-  // Initial poll: always send recent unread emails
-  pollNewEmails(userId, true).catch(err =>
+  // Initial poll: stream the inbox. AI summaries only when the user opted in;
+  // otherwise pure-view (list only, no AI, no tokens).
+  pollNewEmails(userId, true, aiEnabled).catch(err =>
     console.error(`[EmailAgent] Initial poll error for ${userId}:`, err)
   );
 

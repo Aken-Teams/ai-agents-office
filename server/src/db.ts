@@ -405,6 +405,12 @@ export async function initializeDatabase(): Promise<void> {
       await conn.query('ALTER TABLE users ADD COLUMN onboarding_completed TINYINT(1) NOT NULL DEFAULT 0');
     } catch { /* column already exists */ }
 
+    // Email Agent opt-in: NULL = never asked (show the first-login prompt),
+    // 0 = off (pure email viewing, no AI, no token), 1 = on (full AI + billing).
+    try {
+      await conn.query('ALTER TABLE users ADD COLUMN email_agent_enabled TINYINT(1) DEFAULT NULL');
+    } catch { /* column already exists */ }
+
     // AD integration columns
     try {
       await conn.query('ALTER TABLE users ADD COLUMN ad_username VARCHAR(50) DEFAULT NULL');

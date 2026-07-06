@@ -141,6 +141,11 @@ export default function EmailAgentWidget() {
   const [hidden, setHidden] = useState(false);
   const [soundMuted, setSoundMuted] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  // Email-agent opt-in: null = not asked yet (show first-login prompt), 0 = off
+  // (pure viewing, no AI, no token), 1 = on. Default experience is OFF.
+  const [emailEnabled, setEmailEnabled] = useState<0 | 1 | null>(null);
+  const [prefLoaded, setPrefLoaded] = useState(false);
+  const [savingPref, setSavingPref] = useState(false);
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -362,8 +367,56 @@ export default function EmailAgentWidget() {
     }
   }, []);
 
+  // Drop the current SSE and open a fresh one — used after toggling the opt-in so
+  // the server re-registers with the new AI mode (on → summaries, off → pure view).
+  const reconnectSSE = useCallback(() => {
+    try { abortRef.current?.abort(); } catch { /* ignore */ }
+    if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    connectSSE(controller.signal);
+  }, [connectSSE]);
+
+  // Persist the opt-in preference, then reconnect so AI mode takes effect.
+  const applyEmailPref = useCallback(async (on: boolean) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    setSavingPref(true);
+    try {
+      const res = await fetch(`${SSE_BASE}/api/email-agent/preference`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: on }),
+      });
+      if (res.ok) { setEmailEnabled(on ? 1 : 0); reconnectSSE(); }
+    } catch { /* ignore */ }
+    finally { setSavingPref(false); }
+  }, [reconnectSSE]);
+
+  // Load the saved preference once (decides whether to show the first-login prompt).
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) { setPrefLoaded(true); return; }
+    fetch(`${SSE_BASE}/api/email-agent/preference`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setEmailEnabled(d.enabled === 1 ? 1 : d.enabled === 0 ? 0 : null); })
+      .catch(() => {})
+      .finally(() => setPrefLoaded(true));
+  }, []);
+
   const soundMutedRef = useRef(soundMuted);
   useEffect(() => { soundMutedRef.current = soundMuted; }, [soundMuted]);
+  const emailEnabledRef = useRef(emailEnabled);
+  useEffect(() => { emailEnabledRef.current = emailEnabled; }, [emailEnabled]);
+  // Off → chat (AI) is hidden; make sure we're on the mail tab.
+  useEffect(() => { if (emailEnabled !== 1) setActiveTab('mail'); }, [emailEnabled]);
+  // Guard AI actions when the agent is off; returns true if blocked (and toasts).
+  const blockIfDisabled = useCallback((): boolean => {
+    if (emailEnabledRef.current === 1) return false;
+    setToastMessage('尚未開啟 Email Agents，請點右上角開啟後才能使用 AI 分析。');
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToastMessage(null), 4000);
+    return true;
+  }, []);
   const expandedRef = useRef(expanded);
   useEffect(() => { expandedRef.current = expanded; }, [expanded]);
   const serverActiveTasksRef = useRef(serverActiveTasks);
@@ -588,6 +641,7 @@ export default function EmailAgentWidget() {
   // Send chat message (direct, for chips)
   const sendMessageDirect = useCallback(async (msg: string) => {
     if (!msg.trim() || streaming) return;
+    if (blockIfDisabled()) return;
     const token = localStorage.getItem('token');
     if (!token) return;
 
@@ -640,6 +694,7 @@ export default function EmailAgentWidget() {
   }, [chatInput]);
 
   const requestAnalysis = async (emailId: string, withAttachments = false, force = false) => {
+    if (blockIfDisabled()) return;
     const token = localStorage.getItem('token');
     if (!token) return;
     setNotifications(prev => prev.map(n =>
@@ -838,6 +893,10 @@ export default function EmailAgentWidget() {
   const badgeCount = notifications.filter(n => !n.isRead).length || totalUnread;
   const highPriorityCount = notifications.filter(n => n.priority === '高').length;
   const isAiWorking = streaming || notifications.some(n => n.analyzing) || serverActiveTasks.length > 0;
+  // When AI is off, the panel is pure-view: hide ALL AI-derived UI (summaries,
+  // priority, category, overview, chat, analysis buttons) rather than showing
+  // dead controls. Cache is kept so re-enabling is instant and free.
+  const showAI = emailEnabled === 1;
 
   const priorityIcon = { '高': 'priority_high', '中': 'radio_button_checked', '低': 'radio_button_unchecked' };
   const priorityColor = { '高': 'text-error', '中': 'text-warning', '低': 'text-on-surface-variant/60' };
@@ -866,6 +925,38 @@ export default function EmailAgentWidget() {
 
   const widget = (
     <>
+      {/* First-login opt-in prompt — shown once when the user has never chosen. */}
+      {mounted && prefLoaded && emailEnabled === null && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="material-symbols-outlined text-primary">mail</span>
+              <h3 className="text-lg font-headline font-bold text-on-surface">要開啟「信件助手」嗎？</h3>
+            </div>
+            <p className="text-sm text-on-surface-variant leading-relaxed mb-3">信件助手預設是<b className="text-on-surface">關閉</b>的，是否要開啟？</p>
+            <div className="space-y-2 mb-4 text-sm">
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-surface-container border border-outline-variant/15 text-on-surface-variant">
+                <span className="material-symbols-outlined text-[18px] mt-0.5">visibility</span>
+                <div><b className="text-on-surface">不開啟</b>：僅能純檢視信件，<b className="text-on-surface">不會使用 AI、不會產生任何 Token 費用</b>。</div>
+              </div>
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-primary/5 border border-primary/20 text-on-surface-variant">
+                <span className="material-symbols-outlined text-[18px] text-primary mt-0.5">auto_awesome</span>
+                <div><b className="text-primary">開啟</b>：提供 AI 摘要、分類、深度分析等功能；系統會<b className="text-on-surface">在背景自動讀取分析新信，並依實際用量計算 Token 費用</b>。</div>
+              </div>
+            </div>
+            <p className="text-xs text-on-surface-variant/70 mb-5">你隨時可以在信件助手右上角開啟或關閉。</p>
+            <div className="flex gap-2">
+              <button onClick={() => applyEmailPref(false)} disabled={savingPref}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-on-surface-variant bg-surface-container hover:bg-surface-container-high disabled:opacity-50 cursor-pointer">維持關閉（只看信）</button>
+              <button onClick={() => applyEmailPref(true)} disabled={savingPref}
+                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-on-primary cyber-gradient disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5">
+                {savingPref && <span className="material-symbols-outlined animate-spin text-base">progress_activity</span>}開啟 AI 功能
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hidden mode: thin edge strip with badge — auto-expands when toast */}
       {hidden && !expanded && (
         <div
@@ -917,7 +1008,9 @@ export default function EmailAgentWidget() {
             className={`fixed ${expanded ? 'z-[96]' : 'z-[90]'} w-12 h-12 md:w-14 md:h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 select-none touch-none ${
               bubblePos ? '' : 'bottom-4 right-4 md:bottom-6 md:right-6'
             } ${
-              expanded ? 'bg-surface-container-high text-on-surface scale-90 max-md:hidden' : 'bg-primary text-on-primary hover:shadow-2xl'
+              expanded ? 'bg-surface-container-high text-on-surface scale-90 max-md:hidden'
+                : emailEnabled === 1 ? 'bg-primary text-on-primary hover:shadow-2xl'
+                : 'bg-outline text-surface hover:shadow-2xl'
             } ${bubbleBounce && !expanded ? 'animate-bounce' : ''}`}
             style={bubblePos ? bubbleStyle : undefined}
             title={t('emailAgent.title' as any) || '信件助手'}
@@ -1017,6 +1110,19 @@ export default function EmailAgentWidget() {
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
+              {/* AI on/off toggle */}
+              <div className="relative group/tip">
+                <button
+                  onClick={() => applyEmailPref(emailEnabled !== 1)}
+                  disabled={savingPref}
+                  className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors disabled:opacity-50 ${emailEnabled === 1 ? 'text-primary hover:bg-primary/10' : 'text-on-surface-variant hover:bg-surface-container-highest'}`}
+                >
+                  <span className={`material-symbols-outlined text-xl ${savingPref ? 'animate-spin' : ''}`}>{savingPref ? 'progress_activity' : emailEnabled === 1 ? 'toggle_on' : 'toggle_off'}</span>
+                </button>
+                <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2.5 py-1 rounded-lg bg-inverse-surface text-inverse-on-surface text-[11px] font-medium whitespace-nowrap opacity-0 scale-95 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:scale-100 shadow-lg z-10">
+                  {emailEnabled === 1 ? 'AI 已開啟（點擊關閉）' : 'AI 已關閉（點擊開啟）'}
+                </span>
+              </div>
               {/* Refresh */}
               <div className="relative group/tip">
                 <button
@@ -1083,7 +1189,23 @@ export default function EmailAgentWidget() {
             </div>
           </div>
 
-          {/* Tab Bar */}
+          {/* AI-off banner — pure-view mode; tap to enable */}
+          {emailEnabled !== 1 && (
+            <button
+              onClick={() => applyEmailPref(true)}
+              disabled={savingPref}
+              className="w-full flex items-center gap-2 px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/20 text-left hover:bg-amber-500/15 transition-colors cursor-pointer disabled:opacity-60"
+            >
+              <span className={`material-symbols-outlined text-[18px] text-amber-600 shrink-0 ${savingPref ? 'animate-spin' : ''}`}>{savingPref ? 'progress_activity' : 'toggle_off'}</span>
+              <span className="flex-1 text-xs text-on-surface-variant leading-snug">
+                <b className="text-on-surface">AI 功能已關閉</b>——目前僅能檢視信件。點此開啟摘要與分析（將依用量計費）。
+              </span>
+              <span className="text-xs font-bold text-amber-700 shrink-0">開啟</span>
+            </button>
+          )}
+
+          {/* Tab Bar — hidden entirely in pure-view (only the mail list, no tabs) */}
+          {showAI && (
           <div className="flex border-b border-outline-variant/10 bg-surface-container-high">
             {([
               { id: 'mail' as TabId, icon: 'inbox', label: '信件', badge: notifications.length },
@@ -1111,6 +1233,7 @@ export default function EmailAgentWidget() {
               </button>
             ))}
           </div>
+          )}
 
           {/* Error Banner */}
           {error && (
@@ -1254,7 +1377,7 @@ export default function EmailAgentWidget() {
                 </div>
 
                 {/* AI Overview Banner */}
-                {!searchActive && overview && (
+                {showAI && !searchActive && overview && (
                   <div className="mb-3 bg-primary/5 border border-primary/10 rounded-xl p-3 flex gap-2.5">
                     <span className="material-symbols-outlined text-primary text-lg mt-0.5 shrink-0">auto_awesome</span>
                     <p className="text-sm text-on-surface leading-relaxed flex-1">{overview}</p>
@@ -1262,7 +1385,7 @@ export default function EmailAgentWidget() {
                 )}
 
                 {/* Priority Summary Chips */}
-                {!searchActive && notifications.length > 0 && highPriorityCount > 0 && (
+                {showAI && !searchActive && notifications.length > 0 && highPriorityCount > 0 && (
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-xs font-medium text-error bg-error/10 px-2.5 py-1 rounded-full flex items-center gap-1">
                       <span className="material-symbols-outlined text-xs">priority_high</span>
@@ -1282,15 +1405,15 @@ export default function EmailAgentWidget() {
                         }`}
                       >
                         <div className="flex items-start gap-2.5 px-3 py-2.5">
-                          {/* Priority icon */}
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${priorityBg[n.priority]}`}>
-                            <span className={`material-symbols-outlined text-sm ${priorityColor[n.priority]}`}>
-                              {priorityIcon[n.priority]}
+                          {/* Priority icon (AI) — neutral read/unread dot in pure-view */}
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${showAI ? priorityBg[n.priority] : 'bg-surface-container-highest'}`}>
+                            <span className={`material-symbols-outlined text-sm ${showAI ? priorityColor[n.priority] : 'text-on-surface-variant/40'}`}>
+                              {showAI ? priorityIcon[n.priority] : (n.isRead ? 'mail' : 'mark_email_unread')}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-[13px] text-on-surface font-medium leading-snug line-clamp-1">{n.subject}</p>
-                            {n.summary && n.summary !== n.subject && (
+                            {showAI && n.summary && n.summary !== n.subject && (
                               <p className="text-[12px] text-on-surface-variant leading-snug line-clamp-1 mt-0.5">{n.summary}</p>
                             )}
                             <div className="flex items-center gap-1.5 mt-1">
@@ -1304,14 +1427,14 @@ export default function EmailAgentWidget() {
                               {n.hasAttachments && (
                                 <span className="material-symbols-outlined text-[11px] text-on-surface-variant/60">attach_file</span>
                               )}
-                              {n.category && (
+                              {showAI && n.category && (
                                 <span className="text-[10px] text-on-surface-variant/60 bg-surface-container-highest px-1.5 py-0.5 rounded-full truncate max-w-[120px] shrink-0" title={n.category}>
                                   {n.category}
                                 </span>
                               )}
                               {/* Action icons — inline with metadata */}
                               <span className="flex-1" />
-                              {n.hasAttachments && !n.analyzing && (
+                              {showAI && n.hasAttachments && !n.analyzing && (
                                 <div className="relative group/tip">
                                   <button
                                     onClick={() => requestAnalysis(n.emailId, true)}
@@ -1335,7 +1458,7 @@ export default function EmailAgentWidget() {
                                   查看信件
                                 </span>
                               </div>
-                              {n.analyzing ? (
+                              {showAI && (n.analyzing ? (
                                 <span className="w-7 h-7 flex items-center justify-center">
                                   <span className="material-symbols-outlined text-primary animate-spin" style={{ fontSize: 15 }}>progress_activity</span>
                                 </span>
@@ -1363,7 +1486,7 @@ export default function EmailAgentWidget() {
                                     AI 深度分析
                                   </span>
                                 </div>
-                              )}
+                              ))}
                             </div>
                           </div>
                         </div>
@@ -1519,7 +1642,8 @@ export default function EmailAgentWidget() {
             )}
           </div>
 
-          {/* Bottom Area: Quick Chips + Input */}
+          {/* Bottom Area: Quick Chips + Input — AI chat only, hidden in pure-view */}
+          {showAI && (
           <div className="border-t border-outline-variant/10 bg-surface-container-high">
             {activeTab === 'mail' && notifications.length > 0 && (
               <div className="px-3 pt-2.5 pb-0 flex gap-1.5 overflow-x-auto scrollbar-none">
@@ -1585,6 +1709,7 @@ export default function EmailAgentWidget() {
               </div>
             </div>
           </div>
+          )}
         </div>
       )}
 
@@ -1597,6 +1722,7 @@ export default function EmailAgentWidget() {
           <EmailDetailModal
             email={currentEmail}
             analysisMd={analysisMd}
+            showAI={showAI}
             onClose={() => setDetailEmail(null)}
             onRequestAnalysis={(emailId, opts) => { requestAnalysis(emailId, opts?.withAttachments, opts?.force); }}
             onChatAboutEmail={(subject, from) => {
