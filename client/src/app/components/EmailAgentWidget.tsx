@@ -146,6 +146,9 @@ export default function EmailAgentWidget() {
   const [emailEnabled, setEmailEnabled] = useState<0 | 1 | null>(null);
   const [prefLoaded, setPrefLoaded] = useState(false);
   const [savingPref, setSavingPref] = useState(false);
+  // One-time coach-mark pointing at the top-right AI on/off toggle, shown the
+  // first time the panel opens after the user has made their opt-in choice.
+  const [showToggleHint, setShowToggleHint] = useState(false);
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -409,6 +412,15 @@ export default function EmailAgentWidget() {
   useEffect(() => { emailEnabledRef.current = emailEnabled; }, [emailEnabled]);
   // Off → chat (AI) is hidden; make sure we're on the mail tab.
   useEffect(() => { if (emailEnabled !== 1) setActiveTab('mail'); }, [emailEnabled]);
+  // Show the toggle coach-mark once, the first time the panel opens after choosing.
+  useEffect(() => {
+    if (!expanded || !prefLoaded || emailEnabled === null) return;
+    if (typeof window === 'undefined' || localStorage.getItem('emailAgentToggleHintSeen') === '1') return;
+    localStorage.setItem('emailAgentToggleHintSeen', '1');
+    setShowToggleHint(true);
+    const t = setTimeout(() => setShowToggleHint(false), 8000);
+    return () => clearTimeout(t);
+  }, [expanded, prefLoaded, emailEnabled]);
   // Guard AI actions when the agent is off; returns true if blocked (and toasts).
   const blockIfDisabled = useCallback((): boolean => {
     if (emailEnabledRef.current === 1) return false;
@@ -1122,6 +1134,19 @@ export default function EmailAgentWidget() {
                 <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2.5 py-1 rounded-lg bg-inverse-surface text-inverse-on-surface text-[11px] font-medium whitespace-nowrap opacity-0 scale-95 transition-all duration-150 group-hover/tip:opacity-100 group-hover/tip:scale-100 shadow-lg z-10">
                   {emailEnabled === 1 ? 'AI 已開啟（點擊關閉）' : 'AI 已關閉（點擊開啟）'}
                 </span>
+                {/* One-time coach-mark — "the AI switch lives here" */}
+                {showToggleHint && (
+                  <div className="absolute top-full right-0 mt-2 z-50 w-max max-w-[230px] animate-in fade-in slide-in-from-top-1 duration-200">
+                    <span className="absolute -top-1.5 right-3 w-3 h-3 bg-primary rotate-45 rounded-[2px]" />
+                    <div className="relative bg-primary text-on-primary rounded-xl px-3 py-2 shadow-xl">
+                      <div className="flex items-start gap-1.5 text-xs leading-snug">
+                        <span className="material-symbols-outlined text-[16px] shrink-0">toggle_on</span>
+                        <span>AI 開關在這裡<br />隨時可以<b>開啟／關閉</b> AI 功能。</span>
+                      </div>
+                      <button onClick={() => setShowToggleHint(false)} className="mt-1.5 text-[11px] font-bold underline underline-offset-2 opacity-90 hover:opacity-100 cursor-pointer">知道了</button>
+                    </div>
+                  </div>
+                )}
               </div>
               {/* Refresh */}
               <div className="relative group/tip">
