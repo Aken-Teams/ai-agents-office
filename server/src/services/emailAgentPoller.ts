@@ -12,6 +12,7 @@ import { pushEvent, getLastSeenIds, updateLastSeenIds, markTaskActive, markTaskD
 import { buildEmailAgentMemoryContext } from './emailAgentMemory.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
 import { acquireEmailSlot } from './emailAgentConcurrency.js';
+import { deepseekChat } from './deepseek.js';
 import { buildAttachmentContext } from './emailAttachmentReader.js';
 import { dbAll, dbGet, dbRun } from '../db.js';
 import { recordTokenUsage } from './tokenTracker.js';
@@ -561,19 +562,31 @@ ${emailList}
   const outputs: (string | null)[] = new Array(batchDescs.length).fill(null);
   let l1InTok = 0, l1OutTok = 0;
   let nextBatch = 0;
+  // Layer 1 is a pure text task (no tools) — run it on DeepSeek via a plain HTTP
+  // call instead of spawning a `claude` CLI per batch. The CLI is a full agent
+  // runtime (~100s of MB each); under many concurrent users those spawns were a
+  // major source of host-memory pressure. DeepSeek here is just a fetch → almost
+  // no local memory. Falls back to the Haiku CLI when DeepSeek isn't configured.
   async function batchWorker() {
     for (let my = nextBatch++; my < batchDescs.length; my = nextBatch++) {
-      const u = { inTok: 0, outTok: 0 };
-      outputs[my] = await spawnClaudeOneShot(batchDescs[my].prompt, LAYER1_TIMEOUT, 'claude-haiku-4-5-20251001', undefined, u);
-      l1InTok += u.inTok; l1OutTok += u.outTok;
+      const ds = await deepseekChat(batchDescs[my].prompt, { maxTokens: 1200, timeoutMs: LAYER1_TIMEOUT });
+      if (ds) {
+        outputs[my] = ds.text;
+        l1InTok += ds.inTok; l1OutTok += ds.outTok;
+      } else {
+        const u = { inTok: 0, outTok: 0 };
+        outputs[my] = await spawnClaudeOneShot(batchDescs[my].prompt, LAYER1_TIMEOUT, 'claude-haiku-4-5-20251001', undefined, u);
+        l1InTok += u.inTok; l1OutTok += u.outTok;
+      }
     }
   }
   await Promise.all(Array.from({ length: Math.min(LAYER1_CONCURRENCY, batchDescs.length) }, batchWorker));
 
   // Record Layer 1 token usage (one row for the whole batch of emails).
   if (l1InTok || l1OutTok) {
+    const l1Model = config.deepseekApiKey ? 'deepseek-chat' : 'claude-haiku-4-5-20251001';
     getEmailAgentConversationId(userId)
-      .then(convId => recordTokenUsage({ userId, conversationId: convId, inputTokens: scaleEmailAgentTokens(l1InTok), outputTokens: scaleEmailAgentTokens(l1OutTok), model: 'claude-haiku-4-5-20251001' }))
+      .then(convId => recordTokenUsage({ userId, conversationId: convId, inputTokens: scaleEmailAgentTokens(l1InTok), outputTokens: scaleEmailAgentTokens(l1OutTok), model: l1Model }))
       .catch(() => {});
   }
 
