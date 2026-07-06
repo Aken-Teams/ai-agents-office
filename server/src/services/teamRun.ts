@@ -17,6 +17,7 @@ import path from 'path';
 import fs from 'fs';
 import { spawnClaude } from './claudeCli.js';
 import { acquireAiSlot } from './aiConcurrency.js';
+import { deepseekChatStream } from './deepseek.js';
 import { truncateResultForRouter } from './taskParser.js';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { recordTokenUsage } from './tokenTracker.js';
@@ -34,7 +35,7 @@ interface MemberRow { id: string; title: string; icon: string | null; skill_id: 
 
 const MEMBER_TRUNCATE = 12000;     // chars of each member output fed to the coordinator — pass findings in full; cap only pathological cases
 const SHARED_MEMORY_MAX = 2000;    // chars of rolling team memory kept across runs
-const MEMBER_CONCURRENCY = 5;      // parallel Claude processes (covers the ≤5 team cap)
+const MEMBER_CONCURRENCY = 3;      // parallel Claude processes (memory cap — heavy CLI ≈ 100s of MB each)
 const MEMBER_TIMEOUT_MS = 240_000; // round-1 members may web-search → allow more time
 const SYNTH_TIMEOUT_MS = 180_000;
 
@@ -264,6 +265,27 @@ async function runOneClaude(
   });
 }
 
+/**
+ * Run a TOOL-FREE reasoning task (round-2 discussion, coordinator synthesis) on
+ * DeepSeek via a plain HTTP call instead of spawning a `claude` CLI. The CLI is a
+ * full agent runtime (~100s of MB per process); these steps only read text and
+ * write text — no tools — so they don't need it. Streams deltas through onText so
+ * the live UI is unchanged. Falls back to the CLI when DeepSeek isn't configured.
+ */
+async function runTextAgent(
+  userId: string,
+  conversationId: string,
+  sandboxSubdir: string,
+  message: string,
+  systemPrompt: string,
+  timeoutMs: number,
+  onText: (chunk: string) => void,
+): Promise<{ text: string; inputTokens: number; outputTokens: number; model: string }> {
+  const ds = await deepseekChatStream({ system: systemPrompt, user: message, onText, maxTokens: 8000, timeoutMs });
+  if (ds) return { text: ds.text, inputTokens: ds.inTok, outputTokens: ds.outTok, model: 'deepseek-chat' };
+  return runOneClaude(userId, conversationId, sandboxSubdir, message, systemPrompt, timeoutMs, onText);
+}
+
 interface MemberResult { member: MemberRow; text: string; inputTokens: number; outputTokens: number }
 
 export interface TeamRunResult { runId: string; result: string; inputTokens: number; outputTokens: number; model: string }
@@ -367,7 +389,8 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
         .join('\n\n');
       writer({ type: 'member_status', data: { memberId: member.id, status: 'responding' } });
       writer({ type: 'member_round2', data: { memberId: member.id } });
-      const r = await runOneClaude(
+      // Round-2 is tool-free reasoning → runs on DeepSeek (no CLI process).
+      const r = await runTextAgent(
         userId, member.id, `_team/${member.id}`, question, buildDiscussionSystemPrompt(member, own, peers, hasFile), MEMBER_TIMEOUT_MS,
         chunk => writer({ type: 'member_stream', data: { memberId: member.id, content: chunk } }),
       );
@@ -436,7 +459,8 @@ ${findingsBlock}${sourcesBlock}
 
 請整合以上分析，輸出最終結論與建議。`;
 
-  const synth = await runOneClaude(
+  // Synthesis is tool-free reasoning → runs on DeepSeek (no CLI process).
+  const synth = await runTextAgent(
     userId, teamId, `_team/_coordinator`, synthMessage, synthSystem, SYNTH_TIMEOUT_MS,
     chunk => writer({ type: 'synthesis_stream', data: { content: chunk } }),
   );
@@ -460,7 +484,9 @@ ${findingsBlock}${sourcesBlock}
   );
 
   if (totalIn > 0 || totalOut > 0) {
-    await recordTokenUsage({ userId, conversationId: null, inputTokens: totalIn, outputTokens: totalOut, model: synth.model || 'team-run' });
+    // Always label 'team-run' so usage stays categorised as "AI 團隊" regardless of
+    // which provider produced the synthesis (CLI model vs deepseek-chat).
+    await recordTokenUsage({ userId, conversationId: null, inputTokens: totalIn, outputTokens: totalOut, model: 'team-run' });
   }
 
   // ── Update rolling shared memory (Phase 3) — no extra LLM call ───────────

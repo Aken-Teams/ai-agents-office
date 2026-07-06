@@ -423,6 +423,13 @@ export function spawnClaude(
     let outputTokens = 0;
     let model = '';
     let stdoutBuffer = '';
+    // Output ceiling: a stuck agent (model in a loop / tool thrashing) can stream
+    // output for its whole timeout (pptx timeout is 15 min), and the accumulation
+    // downstream grows memory the whole time. Abort as runaway once total stdout
+    // exceeds a ceiling far above any legit generation. Tune with AI_MAX_OUTPUT_BYTES.
+    let stdoutBytes = 0;
+    let killedForOutput = false;
+    const MAX_OUTPUT_BYTES = Math.max(1_000_000, parseInt(process.env.AI_MAX_OUTPUT_BYTES || '', 10) || 8 * 1024 * 1024);
 
     // Shared token accumulator state (persists across processStreamEvent calls)
     const tokenState: TokenAccumulator = {
@@ -436,7 +443,19 @@ export function spawnClaude(
 
     // Parse stream-json output line by line
     proc.stdout!.on('data', (data: Buffer) => {
+      if (killedForOutput) return;
       const chunk = data.toString();
+      stdoutBytes += chunk.length;
+      if (stdoutBytes > MAX_OUTPUT_BYTES) {
+        killedForOutput = true;
+        console.error(`[Claude CLI] ${logRole}/${logSkill} output exceeded ${MAX_OUTPUT_BYTES} bytes — aborting as runaway (likely stuck in a loop)`);
+        emitter.emit('event', { type: 'error', data: 'AI 產生異常（輸出過長，可能陷入迴圈），已自動中止。' } satisfies SSEEvent);
+        try {
+          if (process.platform === 'win32') spawn('taskkill', ['/pid', String(proc.pid), '/f', '/t'], { shell: true });
+          else proc.kill('SIGKILL');
+        } catch { /* ignore */ }
+        return;
+      }
       stdoutBuffer += chunk;
       const lines = stdoutBuffer.split('\n');
       stdoutBuffer = lines.pop() || '';
@@ -452,12 +471,23 @@ export function spawnClaude(
       }
     });
 
-    // Capture stderr for debugging
+    // Capture stderr for debugging — but BOUNDED. With --verbose a long-running or
+    // concurrent CLI can emit huge amounts of stderr; the old unbounded `+=` grew
+    // this string for the whole process lifetime, and every line was logged. Under
+    // many concurrent heavy agents that accumulation (buffer + log volume) was a
+    // real memory leak. Keep only the last 16KB (enough for error detection/display)
+    // and stop per-line logging once we've logged ~16KB for this process.
+    const MAX_STDERR = 16 * 1024;
     let stderrBuffer = '';
+    let stderrLogged = 0;
     proc.stderr!.on('data', (data: Buffer) => {
       const chunk = data.toString();
       stderrBuffer += chunk;
-      console.error(`[Claude CLI stderr] ${chunk.trim()}`);
+      if (stderrBuffer.length > MAX_STDERR) stderrBuffer = stderrBuffer.slice(-MAX_STDERR);
+      if (stderrLogged < MAX_STDERR) {
+        console.error(`[Claude CLI stderr] ${chunk.trim()}`);
+        stderrLogged += chunk.length;
+      }
     });
 
     // Process close — fires AFTER all stdio streams are drained (exit fires earlier,
@@ -483,7 +513,7 @@ export function spawnClaude(
       // API key — it has no token-expiry/refresh failure mode. This covers quota
       // limits, auth/token blips, and silent (empty-stderr) crashes alike.
       // Suppress error/usage/done for this failed attempt; the retry will emit them.
-      if (!useApiKey && code !== 0 && !inputTokens && config.anthropicApiKey) {
+      if (!killedForOutput && !useApiKey && code !== 0 && !inputTokens && config.anthropicApiKey) {
         const reason = isQuotaLimitError(stderrBuffer)
           ? 'account quota exhausted'
           : isAuthError(stderrBuffer)
@@ -501,7 +531,7 @@ export function spawnClaude(
         return;
       }
 
-      if (code !== 0 && !inputTokens) {
+      if (!killedForOutput && code !== 0 && !inputTokens) {
         console.error(`[Claude CLI] ${logRole}/${logSkill} FAILED: code=${code}, inputTokens=0, stderr=${stderrBuffer.substring(0, 500)}`);
         const fallback = 'AI 處理程序發生非預期錯誤，請稍後再試。';
         emitter.emit('event', {
