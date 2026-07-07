@@ -85,9 +85,14 @@ function spawnClaudeText(prompt: string, timeoutMs: number): Promise<string | nu
         }
       });
 
+      const MAX_STDERR = 16 * 1024;   // cap retention (was unbounded += — leak)
       proc.stderr!.on('data', (data: Buffer) => {
         const msg = data.toString().trim();
-        if (msg) { stderrOutput += msg + '\n'; console.warn(`[SecurityReport CLI stderr] ${msg.substring(0, 300)}`); }
+        if (msg) {
+          stderrOutput += msg + '\n';
+          if (stderrOutput.length > MAX_STDERR) stderrOutput = stderrOutput.slice(-MAX_STDERR);
+          console.warn(`[SecurityReport CLI stderr] ${msg.substring(0, 300)}`);
+        }
       });
 
       const timeout = setTimeout(() => {

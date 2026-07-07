@@ -544,7 +544,7 @@ router.get('/tokens/summary', async (req: Request, res: Response) => {
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
 
   // Claude Sonnet 4 pricing: $3/M input, $15/M output. Cost is computed PER RECORD
-  // with the markup in effect at each row's timestamp (強茂 ×10 before 2026-07-03
+  // with the markup in effect at each row's timestamp (強茂 ×10 before 2026-07-07
   // 16:00, ×5 after), so a range spanning the switch prices every record correctly.
   const row = await dbGet<{ total_input: number; total_output: number; total_invocations: number; est_cost: number }>(`
     SELECT
@@ -2549,7 +2549,7 @@ router.get('/line/users', async (_req: Request, res: Response) => {
   );
 
   const users = rows.map(r => {
-    // Cost is boundary-exact (per record; ×10 before 2026-07-03 16:00, ×5 after).
+    // Cost is boundary-exact (per record; ×10 before 2026-07-07 16:00, ×5 after).
     const cost = r.cost ?? 0;
     // Effective limit: personal override > group > global default.
     const limit = r.quota_override != null ? r.quota_override

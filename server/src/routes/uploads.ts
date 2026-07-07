@@ -10,6 +10,11 @@ import {
   scanUploadedFile,
   isAllowedExtension,
   isAllowedSize,
+  getPdfPageCount,
+  MAX_FILE_SIZE,
+  MAX_FILES_PER_UPLOAD,
+  MAX_TOTAL_UPLOAD_BYTES,
+  MAX_PDF_PAGES,
 } from '../services/uploadScanner.js';
 import { getUploadQuotaMb } from '../services/usageLimit.js';
 import { applyWatermark } from '../services/watermark.js';
@@ -68,7 +73,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+  limits: { fileSize: MAX_FILE_SIZE, files: MAX_FILES_PER_UPLOAD },
   fileFilter: (_req, file, cb) => {
     // Note: fixFilename is applied in storage.filename callback, not here,
     // to avoid double-conversion which corrupts the name.
@@ -80,6 +85,30 @@ const upload = multer({
     cb(null, true);
   },
 });
+
+/**
+ * Multer wrapper that turns multer's limit errors into friendly JSON the client
+ * can surface in its upload-alert dialog (instead of an opaque 500).
+ */
+function uploadFiles(req: Request, res: Response, next: (err?: unknown) => void): void {
+  upload.array('files', MAX_FILES_PER_UPLOAD)(req, res, (err: unknown) => {
+    if (!err) { next(); return; }
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        res.status(413).json({ error: `單一檔案不可超過 ${MAX_FILE_SIZE / 1024 / 1024}MB`, code: 'FILE_TOO_LARGE' });
+        return;
+      }
+      if (err.code === 'LIMIT_FILE_COUNT') {
+        res.status(413).json({ error: `一次最多上傳 ${MAX_FILES_PER_UPLOAD} 個檔案`, code: 'TOO_MANY_FILES' });
+        return;
+      }
+      res.status(400).json({ error: `上傳失敗：${err.message}`, code: 'UPLOAD_ERROR' });
+      return;
+    }
+    // fileFilter errors (e.g. disallowed extension)
+    res.status(400).json({ error: (err as Error).message || '上傳失敗', code: 'UPLOAD_REJECTED' });
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Helper: get user's upload directory
@@ -107,7 +136,14 @@ async function getUserUploadSize(userId: string): Promise<number> {
 // POST /api/uploads — Upload file(s)
 // ---------------------------------------------------------------------------
 
-router.post('/', upload.array('files', 10), async (req: Request, res: Response) => {
+// Best-effort cleanup of temp files for an aborted request.
+function cleanupTemp(files: Express.Multer.File[]): void {
+  for (const f of files) {
+    try { fs.unlinkSync(f.path); } catch { /* ignore */ }
+  }
+}
+
+router.post('/', uploadFiles, async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const conversationId = (req.body?.conversationId as string) || null;
   const files = req.files as Express.Multer.File[];
@@ -117,9 +153,22 @@ router.post('/', upload.array('files', 10), async (req: Request, res: Response) 
     return;
   }
 
+  const incomingSize = files.reduce((sum, f) => sum + f.size, 0);
+
+  // Reject batches whose combined size is too large (single-file size + count are
+  // already enforced by multer; this caps the whole request).
+  if (incomingSize > MAX_TOTAL_UPLOAD_BYTES) {
+    cleanupTemp(files);
+    const totalMB = (incomingSize / (1024 * 1024)).toFixed(1);
+    res.status(413).json({
+      error: `本次上傳總大小 ${totalMB} MB 超過上限 ${MAX_TOTAL_UPLOAD_BYTES / 1024 / 1024} MB，請減少檔案數量或大小`,
+      code: 'TOTAL_TOO_LARGE',
+    });
+    return;
+  }
+
   // Check upload quota
   const currentUsage = await getUserUploadSize(userId);
-  const incomingSize = files.reduce((sum, f) => sum + f.size, 0);
   const uploadQuotaBytes = (await getUploadQuotaMb()) * 1024 * 1024;
   if (currentUsage + incomingSize > uploadQuotaBytes) {
     // Clean up temp files
@@ -153,8 +202,22 @@ router.post('/', upload.array('files', 10), async (req: Request, res: Response) 
     const destPath = path.join(uploadDir, destName);
     const relPath = path.relative(config.workspaceRoot, destPath);
 
-    // Run security scan on temp file
-    const scanResult = scanUploadedFile(file.path, file.originalname, file.mimetype, userId);
+    // PDF page-count guard (before the security scan): high-page PDFs balloon
+    // per-process memory when read page-by-page as vision images.
+    let pageReject: { status: 'rejected'; detail: string; flags: string[] } | null = null;
+    if (ext === '.pdf') {
+      const pages = await getPdfPageCount(file.path);
+      if (pages !== null && pages > MAX_PDF_PAGES) {
+        pageReject = {
+          status: 'rejected',
+          detail: `PDF 共 ${pages} 頁，超過上限 ${MAX_PDF_PAGES} 頁，請拆分後再上傳`,
+          flags: ['pdf_too_many_pages'],
+        };
+      }
+    }
+
+    // Run security scan on temp file (skipped if already rejected for page count)
+    const scanResult = pageReject ?? scanUploadedFile(file.path, file.originalname, file.mimetype, userId);
 
     if (scanResult.status === 'rejected') {
       // Delete temp file, don't save

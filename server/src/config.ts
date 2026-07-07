@@ -68,7 +68,7 @@ export const config = {
 
   // Billing markup applied to raw Claude Sonnet pricing ($3/M in, $15/M output) for
   // displayed dollar costs. This is the CURRENT (ongoing) rate: pro-out (external)
-  // ×2; pro-panjit (強茂) dropped ×10 → ×5 at 2026-07-03 16:00. Historical records
+  // ×2; pro-panjit (強茂) dropped ×10 → ×5 at 2026-07-07 16:00. Historical records
   // bill at the rate in effect then — use pricingMarkupForDate()/pricingMarkupSql()
   // for any per-record / invoice cost so pre-switch usage stays ×10.
   pricingMarkup: (process.env.DEPLOY_MODE || 'pro-panjit') === 'pro-out' ? 2 : 5,
@@ -126,7 +126,7 @@ export const config = {
 
 /**
  * Historical billing markup, switched at a precise instant: 強茂 (pro-panjit) drops
- * from ×10 to ×5 at 2026-07-03 16:00 Taipei. pro-out is always ×2.
+ * from ×10 to ×5 at 2026-07-07 16:00 Taipei. pro-out is always ×2.
  *
  * token_usage.created_at is stored in the DB server's local time (Taipei), so the
  * SQL boundary literal below is Taipei-local (compared directly against created_at);
@@ -135,12 +135,12 @@ export const config = {
 // Three-tier billing for 強茂 (pro-panjit), all in Taipei-local time (matches how
 // created_at is stored):
 //   • before 2026-07-01 00:00           → ×10  (June & earlier — historical, settled)
-//   • 2026-07-01 00:00 .. 2026-07-03 16:00 → ×0  (this-month grace period — FREE, shows $0)
-//   • from 2026-07-03 16:00              → ×5   (new ongoing rate)
+//   • 2026-07-01 00:00 .. 2026-07-07 16:00 → ×0  (this-month grace period — FREE, shows $0)
+//   • from 2026-07-07 16:00              → ×5   (new ongoing rate)
 export const PRICING_FREE_START_SQL = '2026-07-01 00:00:00';
-export const PRICING_X5_START_SQL   = '2026-07-03 16:00:00';
+export const PRICING_X5_START_SQL   = '2026-07-07 16:00:00';
 export const PRICING_FREE_START_MS = Date.parse('2026-07-01T00:00:00+08:00');
-export const PRICING_X5_START_MS   = Date.parse('2026-07-03T16:00:00+08:00');
+export const PRICING_X5_START_MS   = Date.parse('2026-07-07T16:00:00+08:00');
 
 /** Markup for a single usage record's timestamp (per-record billing). */
 export function pricingMarkupForDate(ts: string | Date): number {

@@ -471,26 +471,37 @@ function TeamRunContent() {
 
   const handleAttach = useCallback(async (fileList: FileList | null) => {
     if (!fileList || !fileList.length || !token) return;
+    const warns: string[] = [];
     // Images over 5MB are skipped by the team's vision reader — warn up front
     // instead of letting the upload look successful but go unanalysed.
     const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
     const tooBig = Array.from(fileList).filter(f => f.type.startsWith('image/') && f.size > MAX_IMAGE_BYTES);
-    setImageWarn(tooBig.length
-      ? `圖片「${tooBig.map(f => f.name).join('、')}」超過 5MB，團隊將無法分析此圖片內容，請壓縮後再上傳。`
-      : null);
+    if (tooBig.length) warns.push(`圖片「${tooBig.map(f => f.name).join('、')}」超過 5MB，團隊將無法分析此圖片內容，請壓縮後再上傳。`);
+    setImageWarn(null);
     setUploadingFile(true);
     try {
       const formData = new FormData();
       for (const f of Array.from(fileList)) formData.append('files', f);
       const resp = await fetch('/api/uploads', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData });
       const data = await resp.json();
-      if (resp.ok) {
-        const ok = (data.uploads || [])
-          .filter((u: any) => u.scanStatus !== 'rejected')
-          .map((u: any) => ({ id: u.id, name: u.originalName }));
-        setAttachedFiles(prev => [...prev, ...ok]);
+      if (!resp.ok) {
+        // Size / count / total-size / quota limits → tell the user (don't fail silently).
+        warns.push(data.error || '上傳失敗，請稍後再試。');
+        setImageWarn(warns.join('\n'));
+        return;
       }
-    } catch { /* ignore */ } finally {
+      const uploads = (data.uploads || []) as Array<{ id: string; originalName: string; scanStatus: string; scanDetail?: string }>;
+      const ok = uploads.filter(u => u.scanStatus !== 'rejected').map(u => ({ id: u.id, name: u.originalName }));
+      setAttachedFiles(prev => [...prev, ...ok]);
+      // Rejected files (e.g. PDF over the page limit, failed security scan) → surface why.
+      for (const u of uploads.filter(u => u.scanStatus === 'rejected')) {
+        warns.push(`「${u.originalName}」${u.scanDetail || '未通過檢查，已略過'}`);
+      }
+      setImageWarn(warns.length ? warns.join('\n') : null);
+    } catch {
+      warns.push('上傳失敗，請稍後再試。');
+      setImageWarn(warns.join('\n'));
+    } finally {
       setUploadingFile(false);
     }
   }, [token]);
@@ -800,7 +811,7 @@ function TeamRunContent() {
           {imageWarn && (
             <div className="mb-2 flex items-start gap-1.5 text-xs text-error">
               <span className="material-symbols-outlined text-[15px] shrink-0">warning</span>
-              <span className="leading-relaxed">{imageWarn}</span>
+              <span className="leading-relaxed whitespace-pre-line">{imageWarn}</span>
             </div>
           )}
           <div

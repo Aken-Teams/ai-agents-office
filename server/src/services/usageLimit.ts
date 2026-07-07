@@ -27,7 +27,7 @@ export async function setUserUsageLimitUsd(value: number): Promise<void> {
  */
 export async function getUserDisplayCost(userId: string): Promise<number> {
   // Cost is computed per record at the markup in effect at each row's timestamp
-  // (×10 before 2026-07-03 16:00, ×5 after), so it matches every other billing view.
+  // (×10 before 2026-07-07 16:00, ×5 after), so it matches every other billing view.
   let query = `SELECT COALESCE(SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}), 0) AS cost FROM token_usage WHERE user_id = ?`;
   const params: unknown[] = [userId];
 

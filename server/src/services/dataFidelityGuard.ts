@@ -151,7 +151,13 @@ function runChecker(prompt: string): Promise<string | null> {
           } catch { /* skip */ }
         }
       });
-      proc.stderr!.on('data', (d: Buffer) => { stderr += d.toString(); });
+      // Cap stderr retention (last 16KB) — the old unbounded += grew this string
+      // for the whole subprocess lifetime (same leak class fixed in claudeCli.ts).
+      const MAX_STDERR = 16 * 1024;
+      proc.stderr!.on('data', (d: Buffer) => {
+        stderr += d.toString();
+        if (stderr.length > MAX_STDERR) stderr = stderr.slice(-MAX_STDERR);
+      });
       const timer = setTimeout(() => { try { proc.kill(); } catch { /* ignore */ } cleanup(); resolve(output || null); }, CHECKER_TIMEOUT);
       proc.on('exit', code => {
         clearTimeout(timer);

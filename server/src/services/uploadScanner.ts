@@ -102,8 +102,19 @@ const MAGIC_BYTES: Record<string, number[][]> = {
   '.ico':  [[0x00, 0x00, 0x01, 0x00]],                        // ICO
 };
 
-// Max file size: 50MB
-const MAX_FILE_SIZE = 50 * 1024 * 1024;
+// Max single-file size: 20MB (was 50MB — lowered to curb "brute-force" uploads
+// that balloon downstream memory when read page-by-page as vision images).
+export const MAX_FILE_SIZE = 20 * 1024 * 1024;
+
+// Max files per single upload request.
+export const MAX_FILES_PER_UPLOAD = 3;
+
+// Max combined size of one upload request (all files in the batch).
+export const MAX_TOTAL_UPLOAD_BYTES = 40 * 1024 * 1024;
+
+// Max pages for an uploaded PDF. A high-page PDF read via the multimodal Read tool
+// becomes one base64 image per page → per-process RSS spikes (the 7/5–7/7 OOM).
+export const MAX_PDF_PAGES = 30;
 
 // Max upload quota per user: 500MB
 export const UPLOAD_QUOTA_BYTES = 500 * 1024 * 1024;
@@ -123,6 +134,23 @@ export function isAllowedExtension(filename: string): boolean {
 
 export function isAllowedSize(size: number): boolean {
   return size > 0 && size <= MAX_FILE_SIZE;
+}
+
+/**
+ * Count pages of a PDF. Returns null if the file can't be parsed (encrypted /
+ * malformed) — callers should fail open in that case (the security scan still runs).
+ * Used to reject high-page PDFs that would explode per-process memory when read
+ * page-by-page as vision images.
+ */
+export async function getPdfPageCount(filePath: string): Promise<number | null> {
+  try {
+    const { PDFDocument } = await import('pdf-lib');
+    const bytes = fs.readFileSync(filePath);
+    const doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
+    return doc.getPageCount();
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

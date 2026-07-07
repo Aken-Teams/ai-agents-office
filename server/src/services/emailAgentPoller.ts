@@ -196,10 +196,12 @@ async function spawnClaudeOneShot(prompt: string, timeoutMs: number, model?: str
         }
       });
 
+      const MAX_STDERR = 16 * 1024;   // cap retention (was unbounded += — leak)
       proc.stderr!.on('data', (data: Buffer) => {
         const msg = data.toString().trim();
         if (msg) {
           stderrOutput += msg + '\n';
+          if (stderrOutput.length > MAX_STDERR) stderrOutput = stderrOutput.slice(-MAX_STDERR);
           console.warn(`[EmailAgent CLI stderr] ${msg.substring(0, 300)}`);
         }
       });
