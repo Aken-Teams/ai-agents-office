@@ -235,6 +235,10 @@ export async function fetchMessageDetail(mailToken: string, messageId: string): 
   return null;
 }
 
+// The gateway's attachment download endpoint is slow (~20KB/s measured) — 12s was
+// too tight even for a 250KB image. Raised so mid-size inline images can finish.
+const ATTACHMENT_TIMEOUT_MS = 30_000;
+
 /**
  * Download a single attachment as a Buffer.
  */
@@ -245,7 +249,7 @@ export async function fetchAttachment(mailToken: string, messageId: string, atta
   try {
     const res = await fetch(url, {
       headers: { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${mailToken}` },
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(ATTACHMENT_TIMEOUT_MS),
     });
     if (!res.ok) return null;
     return Buffer.from(await res.arrayBuffer());
@@ -259,30 +263,51 @@ export async function fetchAttachment(mailToken: string, messageId: string, atta
  * and replacing cid: references with base64 data URIs.
  */
 export async function resolveCidImages(mailToken: string, messageId: string, body: string, attachments: OutlookAttachment[]): Promise<string> {
-  const inlineAtts = attachments.filter(a => a.is_inline);
-  if (inlineAtts.length === 0) return body;
+  if (!attachments?.length || !body) return body;
 
-  // Find all cid: references in body
-  const cidRefs = [...body.matchAll(/cid:([^"']+)/gi)];
+  // Find all cid: references in body. Stop the capture at quotes, '>', whitespace
+  // or ')' so we don't swallow trailing markup (the old /[^"']+/ over-captured on
+  // unquoted src=cid:... attributes).
+  const cidRefs = [...body.matchAll(/cid:([^"'>\s)]+)/gi)];
   if (cidRefs.length === 0) return body;
 
-  // Download and replace in parallel
-  const replacements = await Promise.all(cidRefs.map(async (match) => {
-    const cidValue = match[1]; // e.g. "image008.jpg@01DCD71A.FF39ECA0"
-    const filename = cidValue.split('@')[0]; // e.g. "image008.jpg"
+  // Normalize a Content-ID for tolerant matching: strip angle brackets, trim,
+  // lowercase. Real Content-IDs are often stored as "<image001@host>" while the
+  // body references "cid:image001@host" — exact compare missed those.
+  const norm = (s: string | undefined) => (s || '').replace(/[<>]/g, '').trim().toLowerCase();
 
-    // Match by cid field first, fallback to filename
-    const att = inlineAtts.find(a => a.cid === cidValue) || inlineAtts.find(a => a.filename === filename);
+  // Inline images larger than this are skipped: at the gateway's ~20KB/s this would
+  // time out anyway, and inlining it as base64 would bloat the whole email body.
+  // Skipping keeps the OTHER images rendering fast (they resolve in parallel).
+  const MAX_INLINE_BYTES = 1024 * 1024; // 1MB
+
+  // Resolve each DISTINCT cid once (an image referenced N times is fetched once).
+  const uniqueCids = [...new Set(cidRefs.map(m => m[1]))];
+
+  const replacements = await Promise.all(uniqueCids.map(async (cidValue) => {
+    const nCid = norm(cidValue);
+    const nFile = norm(cidValue.split('@')[0]); // "image008.jpg@..." → "image008.jpg"
+
+    // Match against ALL attachments (not just is_inline): some mail servers don't
+    // flag inline images correctly, which is exactly why they went missing before.
+    // Try cid, then filename, then cid-vs-filename cross match.
+    const att =
+      attachments.find(a => nCid && norm(a.cid) === nCid) ||
+      attachments.find(a => nFile && norm(a.filename) === nFile) ||
+      attachments.find(a => nFile && norm(a.cid) === nFile);
     if (!att) return null;
+    if (att.size && att.size > MAX_INLINE_BYTES) return null; // too big — leave as-is
 
     const buf = await fetchAttachment(mailToken, messageId, att.id);
     if (!buf) return null;
 
-    return { from: 'cid:' + cidValue, to: `data:${att.content_type};base64,${buf.toString('base64')}` };
+    return { cidValue, dataUri: `data:${att.content_type || 'image/png'};base64,${buf.toString('base64')}` };
   }));
 
   for (const r of replacements) {
-    if (r) body = body.replace(r.from, r.to);
+    if (!r) continue;
+    // Global literal replace (all occurrences) — String.replace only did the first.
+    body = body.split('cid:' + r.cidValue).join(r.dataUri);
   }
   return body;
 }
