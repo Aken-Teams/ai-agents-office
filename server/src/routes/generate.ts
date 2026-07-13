@@ -14,6 +14,7 @@ import { getSkill, buildSystemPrompt, buildMemoryContext, buildCrossAssistantCon
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from '../services/uploadContext.js';
 import { Orchestrator } from '../services/orchestrator.js';
 import { enforceDataFidelity } from '../services/dataFidelityGuard.js';
+import { normalizePptx } from '../services/pptxNormalize.js';
 import path from 'path';
 import fs from 'fs';
 import { parseInfographicDirective, renderInfographic, compositeRegionMask, regionEditToFile } from '../services/infographicService.js';
@@ -27,6 +28,27 @@ const router = Router();
 
 router.use(authMiddleware);
 router.use(rateLimit);
+
+/**
+ * Normalize generated .pptx chart decks into schema-valid OOXML (LibreOffice
+ * round-trip) BEFORE the user sees them, so PowerPoint never shows a "repair"
+ * prompt for pptxgenjs's non-compliant chart XML. Only chart decks are touched;
+ * updates file_size in the DB + on the passed objects. Non-fatal.
+ */
+async function normalizeDeckFiles<T extends { id: string; file_path: string; file_type: string; file_size: number }>(
+  files: T[],
+): Promise<T[]> {
+  await Promise.all(files.map(async (f) => {
+    if (f.file_type !== 'pptx') return;
+    const abs = path.isAbsolute(f.file_path) ? f.file_path : path.join(config.workspaceRoot, f.file_path);
+    const r = await normalizePptx(abs);
+    if (r.normalized && r.newSize) {
+      f.file_size = r.newSize;
+      await dbRun('UPDATE generated_files SET file_size = ? WHERE id = ?', r.newSize, f.id);
+    }
+  }));
+  return files;
+}
 
 const activeGenerations = new Map<string, () => void>();
 
@@ -342,6 +364,9 @@ async function handleOrchestrated(
         },
       );
       const finalFiles = newFiles.map(f => rebuilt.get(f.id) || f);
+      // Schema-normalize chart decks (LibreOffice round-trip) so PowerPoint never
+      // shows a "repair" prompt for pptxgenjs's non-compliant chart XML.
+      await normalizeDeckFiles(finalFiles);
       sseWriter({
         type: 'file_generated',
         data: finalFiles.map(f => ({ id: f.id, filename: f.filename, file_path: f.file_path, file_type: f.file_type, file_size: f.file_size, version: f.version })),
@@ -747,6 +772,9 @@ async function handleDirect(
               async () => (convNow?.session_id ? { skillId: effectiveSkillId, sessionId: convNow.session_id } : null),
             );
             const finalFiles = newFiles.map(f => rebuilt.get(f.id) || f);
+            // Schema-normalize chart decks (LibreOffice round-trip) so PowerPoint
+            // never shows a "repair" prompt for pptxgenjs's non-compliant chart XML.
+            await normalizeDeckFiles(finalFiles);
             sseWrite({
               type: 'file_generated',
               data: finalFiles.map(f => ({ id: f.id, filename: f.filename, file_path: f.file_path, file_type: f.file_type, file_size: f.file_size, version: f.version })),

@@ -5,6 +5,7 @@ import { promisify } from 'util';
 import JSZip from 'jszip';
 import PptxGenJSModule from 'pptxgenjs';
 import { dbGet, dbRun } from '../db.js';
+import { normalizePptx } from './pptxNormalize.js';
 
 // pptxgenjs may double-wrap the default export (ESM/CJS interop)
 const PptxGenJS = (PptxGenJSModule as unknown as { default?: typeof PptxGenJSModule }).default || PptxGenJSModule;
@@ -164,6 +165,10 @@ export async function rebuildFile(fileId: string, userId: string): Promise<Gener
     }
   }
 
+  // Schema-normalize chart decks (LibreOffice round-trip) so the rebuilt pptx
+  // opens in PowerPoint without a "repair" prompt for pptxgenjs's chart XML.
+  await normalizePptx(originalFilePath);
+
   // Update existing file record in-place (keep same ID so frontend doesn't need to track)
   const newSize = fs.statSync(originalFilePath).size;
   await dbRun(
@@ -306,6 +311,10 @@ export async function rebuildSingleSlide(
     // Write updated PPTX
     const output = await origZip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
     fs.writeFileSync(originalFilePath, output);
+
+    // The spliced slide came straight from pptxgenjs → re-normalize so the deck
+    // stays PowerPoint-clean.
+    await normalizePptx(originalFilePath);
 
     // Update file size
     const newSize = fs.statSync(originalFilePath).size;
@@ -551,6 +560,11 @@ export async function patchBlockInPlace(
   }
 
   if (!anyPatched) return true; // Fields were attempted but no XML match
+
+  // A chart type/colour/legend change re-renders the chart from pptxgenjs, which
+  // can reintroduce the non-compliant chart XML → re-normalize. Text/colour-only
+  // patches leave the (already-clean) file untouched, so they skip this.
+  if (chartChanged) await normalizePptx(filePath);
 
   // Invalidate preview cache
   const blockRecord = await dbGet<DocumentBlocksRecord>(

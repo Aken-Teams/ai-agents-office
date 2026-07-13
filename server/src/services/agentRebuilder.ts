@@ -8,6 +8,7 @@ import { getSkill, buildSystemPrompt } from '../skills/loader.js';
 import { getSandboxPath } from './sandbox.js';
 import { config } from '../config.js';
 import { snapshotExistingFiles } from './fileManager.js';
+import { normalizePptx } from './pptxNormalize.js';
 import type { DocumentBlocksRecord, DocumentBlock, GeneratedFile } from '../types.js';
 
 export type AgentRebuildEvent =
@@ -197,6 +198,9 @@ export async function agentRebuild(
           fs.mkdirSync(path.dirname(originalFilePath), { recursive: true });
           fs.copyFileSync(generatedPptx, originalFilePath);
           console.log(`[AgentRebuilder] Copied ${pptxFiles[0]} → ${fileRecord.file_path}`);
+
+          // Schema-normalize (LibreOffice) so the regenerated pptx stays PowerPoint-clean.
+          await normalizePptx(originalFilePath);
 
           // Update file size in DB
           const newSize = fs.statSync(originalFilePath).size;
@@ -454,6 +458,9 @@ export async function agentRebuildSlide(
           const output = await origZip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
           fs.writeFileSync(originalFilePath, output);
 
+          // The spliced slide came from pptxgenjs → re-normalize the deck.
+          await normalizePptx(originalFilePath);
+
           // Update file size
           const newSize = fs.statSync(originalFilePath).size;
           await dbRun(
@@ -686,6 +693,9 @@ export async function agentEditDeck(
             } else {
               console.log(`[AgentEditDeck] Edited deck in place at ${fileRecord.file_path}`);
             }
+
+            // Schema-normalize (LibreOffice) so the edited deck stays PowerPoint-clean.
+            await normalizePptx(originalFilePath);
 
             const newSize = fs.statSync(originalFilePath).size;
             await dbRun(
