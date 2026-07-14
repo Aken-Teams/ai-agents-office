@@ -91,12 +91,9 @@ s3.addShape(pptx.ShapeType.rect, { x: '5%', y: '14%', w: 1.5, h: 0.04, fill: { c
 s3.addText([{ text: 'Bullet 1', options: { bullet: true, breakLine: true } }], { x: '5%', y: '20%', w: '90%', h: '65%', fontSize: 17, color: T.body, lineSpacingMultiple: 1.4 });
 addFooter(s3, 'Title', 3);
 
-// ═══ SECTION DIVIDER ═══
-const sec = pptx.addSlide();
-sec.background = { color: T.darkBg };
-sec.addText('Section Name', { x: '10%', y: '30%', w: '80%', h: '40%', fontSize: 32, bold: true, align: 'center', color: 'FFFFFF' });
-
-// ... more slides ...
+// ... more slides — rotate through varied safe layouts (左文右圖 / 左圖右文 /
+//     上卡下圖 / 三欄 / 雙欄文字 …), NOT the same layout every page.
+//     Do NOT add full-page section-divider slides. ...
 
 await pptx.writeFile({ fileName: 'output.pptx' });
 ```
@@ -122,8 +119,9 @@ Use these patterns for content slides. The **cover slide is always custom** — 
 | **Content** | General information | Top bar + heading + accent underline + bullets |
 | **Two-Column** | Comparisons, pros/cons | Two side-by-side panels with light bg |
 | **Three-Column** | Phases, categories, pillars | Three card panels with colored top strips |
-| **Section Divider** | Between major topics | Dark bg, centered title, decorative accent bars |
 | **Quote** | Testimonials, key takeaway | Large quotation mark, centered italic text, attribution |
+
+> **不使用整頁的「章節分隔頁」（Section Divider）**——佔版面又不美觀。章節改用內容頁標題（如「第一章 · XXX」）帶過即可。
 
 ## CRITICAL: Default Quality Standards
 
@@ -131,8 +129,8 @@ Use these patterns for content slides. The **cover slide is always custom** — 
 
 1. **Cover slide**: Creative, unique design every time. Use shapes, color blocks, geometric patterns. Never a plain text slide.
 2. **2nd slide = Stats**: Show 2-4 key metrics with stat cards. Makes the presentation look data-driven.
-3. **Variety in slide types**: Mix stats → content → two-column → section → three-column → quote. NEVER more than 2 content slides in a row.
-4. **Section dividers** between major topics for visual breathing room.
+3. **版型輪替、避免每頁長一樣**: 混用 stats / two-column / three-column / 左文右圖 / 左圖右文 / 上卡下圖 / 純重點 等不同版型（見「防跑版硬規則」第 3 條的安全版型菜單）。**同一份 deck 至少用到 3–4 種不同版型，不要連續兩頁同一種**——每頁都「左圖右文」會顯得敷衍。
+4. **不要產生整頁的「章節分隔頁」（section divider / 深色大版面章節頁）**: 它佔掉一整頁、常不一致、也不美觀。章節之間直接用內容頁本身的標題 / kicker 區分即可（例如標題寫「第一章 · 傳統產業與製造」），不需要獨立一頁。
 5. **Keep bullets concise**: Max 4-5 per slide, under 50 characters each.
 6. **Footer on every content slide**: Presentation title + page number.
 7. **Aim for 8-15 slides**. More content = more slides, not more text per slide.
@@ -159,10 +157,15 @@ Use these patterns for content slides. The **cover slide is always custom** — 
 
 1. **每一個放內文 / bullet / 段落文字的 `addText` 都必須帶 `autoFit: true`** — 這樣文字太長時 pptxgenjs 會**自動縮字**塞進框內，而不是溢出撐爆到隔壁。這是防「溢出型跑版」最有效、成本最低的一招，**不可省略**（標題、頁碼等短字可免）。
 2. **一頁最多放「一個」圖表（最重要的一條）**：兩個圖表左右並排是跑版最大宗——寬度算不準、又要閃品牌區，空間根本不夠。**需要呈現兩組數據時，拆成兩頁、每頁一個圖表**，不要並排。（真的要並排只在極少數、資料極小時，且務必套下一條的固定區塊。）
-3. **圖表 / 圖片一律放「固定區塊」，不要憑空自由擺放**：
-   - 一頁同時有「文字」和「一個圖表」時，用**左右分欄**：文字佔一欄、圖表佔另一欄，水平分開、各自待在欄寬內（例如文字 `x:'4%'`–`48%`、圖表 `x:'52%'`–`96%`），兩者矩形**不得相交**。
-   - 只有圖表的頁：圖表放在標題底下的固定框（例如 `x:'8%', y:'24%', w:'84%', h:'62%'`），不要超過。
-   - 下筆放每個元素前，先確認它的矩形（x / y / w / h）**不與任何已放上去的元素相交**；上下堆疊時上一個的 `y + h` 要小於下一個的 `y`，中間留 ≥ `2%` 間距。
+3. **版型要「輪流變化」——從下面這組「安全版型」挑著用，同一份 deck 絕不要每頁都同一種**。每種版型的座標都已排好不重疊（圖表記得用吋），挑好直接套，不要自己另外亂算位置：
+   - **A. 左文右圖**：文字 `x:'4%', y:'24%', w:'44%', h:'62%'`；圖表 `{ x:6.9, y:1.9, w:5.8, h:4.2 }`（吋）
+   - **B. 左圖右文**：圖表 `{ x:0.7, y:1.9, w:5.8, h:4.2 }`（吋）；文字 `x:'52%', y:'24%', w:'44%', h:'62%'`
+   - **C. 上卡下圖**：3–4 張 KPI 卡片排一列在 `y:'24%'–'44%'`；下方放一個圖表 `{ x:0.7, y:3.5, w:11.9, h:3.0 }`（吋）
+   - **D. 滿版單圖**：標題底下放一個大圖 `{ x:0.7, y:1.9, w:11.9, h:4.4 }`（吋）+ 一行說明文字
+   - **E. 三欄卡片 / 三欄重點**：三欄等寬（每欄約 `w:'29%'`、欄間留 `2%`+ 間距），無圖表
+   - **F. 雙欄文字**：左右兩欄文字 / 重點（像官方範本那種乾淨雙欄），無圖表
+   - **G. 純重點頁**：標題 + 一欄 bullet，無圖表無卡片，留白也 OK
+   > **鐵則：一份 deck 至少輪替用到 3–4 種不同版型，且不要連續兩頁用同一種。** 這是避免「每頁長一樣、看起來敷衍」的關鍵。下筆放每個元素前，確認它的矩形不與已放上去的元素相交。
 4. **KPI 數據卡片與圖表，絕不可放在同一個垂直（y）區間**——這是「數字壓在柱子上」的元兇。規則：
    - 一頁**要嘛整頁是 KPI 卡片、要嘛整頁是圖表**，不要硬塞在一起。
    - 真的同頁：**卡片放上半**（例如 `y:'24%'`–`52%`），**圖表放下半**（例如 `y:'56%'`–`88%`），中間留明顯間隙，兩者 y 區間**不得重疊**。
@@ -280,7 +283,6 @@ e.addImage({ path: '__PANJIT_ASSETS_DIR__/panjit-logo.png', x: '84.7%', y: '82.5
     { "type": "stats", "title": "...", "kpis": [{"value": "...", "label": "..."}] },
     { "type": "content", "title": "...", "bullets": ["...", "..."] },
     { "type": "two_column", "title": "...", "left": {...}, "right": {...} },
-    { "type": "section_divider", "title": "..." },
     { "type": "quote", "quote": "...", "attribution": "..." }
   ]
 }
