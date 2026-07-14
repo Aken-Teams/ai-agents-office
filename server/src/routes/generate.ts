@@ -29,6 +29,43 @@ const router = Router();
 router.use(authMiddleware);
 router.use(rateLimit);
 
+// Friendly zh-TW label of what each single-skill agent can produce — for the
+// direct-mode scope guard below.
+const SKILL_PRODUCES: Record<string, string> = {
+  pptx: 'PowerPoint 簡報（.pptx）',
+  docx: 'Word 文件（.docx）',
+  xlsx: 'Excel 試算表（.xlsx）',
+  pdf: 'PDF 文件（.pdf）',
+  html: '互動網頁 / HTML 簡報',
+};
+
+/**
+ * Direct (quick-wizard / single-agent) mode locks the conversation to ONE skill.
+ * This guard tells that agent its boundary so it NEVER fakes an out-of-scope task
+ * (e.g. "好的，我幫你做成 Word 了" when it can't produce a Word file) — instead it
+ * honestly states what it is and redirects the user to AUTO mode / the matching
+ * button. NOT injected in orchestrated/AUTO mode (the router already dispatched
+ * to the correct agent there).
+ */
+function buildDirectScopeGuard(skill: { fileType: string }): string {
+  const produces = skill.fileType
+    ? (SKILL_PRODUCES[skill.fileType] || `.${skill.fileType} 檔`)
+    : '文字分析 / 研究內容（不會產生任何可下載的檔案）';
+  const outOfScope = skill.fileType
+    ? `要你產生「不是 ${SKILL_PRODUCES[skill.fileType] || skill.fileType}」的其他檔案（例如另一種 Word / 簡報 / Excel / PDF）`
+    : '要你產生任何可下載的檔案（Word / 簡報 / Excel / PDF 等）';
+  return `
+
+## ⛔ 職責邊界（單一 agent 模式 — 最高優先，務必遵守）
+這條對話**被鎖定為單一 agent**，你**只負責產出：${produces}**。
+
+當使用者的要求**超出你的職責**（尤其是${outOfScope}）時：
+- **絕對不可以**假裝「好的，我幫你做成 XX 了」或宣稱產出了根本不存在的檔案——那會讓使用者**空等一個永遠不會出現的檔**，是最糟的體驗。
+- **一開始就誠實講清楚**：你只能做「${produces}」，這個需求不在你的範圍內。
+- **引導**使用者去對的地方：回首頁用**最下面的大輸入框（AUTO 模式）**直接說需求，系統會自動派專門的 agent；或點對應按鈕（做 Word →「撰寫產品需求規格文件」、做簡報 →「製作 AI 趨勢簡報」、做 Excel →「建立銷售數據分析表」、做 PDF →「產生 PDF 商業報告」）。
+- 屬於你職責內的部分，仍照常盡力完成。`;
+}
+
 /**
  * Normalize generated .pptx chart decks into schema-valid OOXML (LibreOffice
  * round-trip) BEFORE the user sees them, so PowerPoint never shows a "repair"
@@ -564,7 +601,7 @@ async function handleDirect(
   const customRolePrompt = conversation.system_prompt
     ? `\n\n## Custom Role Instructions\nThe user has configured this assistant with the following role:\n${conversation.system_prompt}\nPlease behave according to this role description.\n`
     : '';
-  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + customRolePrompt + uploadContext + memoryContext + crossAssistantContext + refContext;
+  const baseSystemPrompt = buildSystemPrompt(skill, config.generatorsDir, userLocale) + buildDirectScopeGuard(skill) + customRolePrompt + uploadContext + memoryContext + crossAssistantContext + refContext;
 
   // Inject email data into user message (not system prompt) so it persists on resume
   let finalMessage = emailContext ? sanitizedMessage + emailContext : sanitizedMessage;
