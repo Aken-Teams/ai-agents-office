@@ -129,8 +129,8 @@ Use these patterns for content slides. The **cover slide is always custom** — 
 
 1. **Cover slide**: Creative, unique design every time. Use shapes, color blocks, geometric patterns. Never a plain text slide.
 2. **2nd slide = Stats**: Show 2-4 key metrics with stat cards. Makes the presentation look data-driven.
-3. **版型輪替、避免每頁長一樣**: 混用 stats / two-column / three-column / 左文右圖 / 左圖右文 / 上卡下圖 / 純重點 等不同版型（見「防跑版硬規則」第 3 條的安全版型菜單）。**同一份 deck 至少用到 3–4 種不同版型，不要連續兩頁同一種**——每頁都「左圖右文」會顯得敷衍。
-4. **不要產生整頁的「章節分隔頁」（section divider / 深色大版面章節頁）**: 它佔掉一整頁、常不一致、也不美觀。章節之間直接用內容頁本身的標題 / kicker 區分即可（例如標題寫「第一章 · 傳統產業與製造」），不需要獨立一頁。
+3. **Variety in slide types**: Mix stats → content → two-column → section → three-column → quote. NEVER more than 2 content slides in a row. 同一份 deck 至少用到 3–4 種不同版型，不要連續兩頁長一樣。（強茂範本另有專屬的安全版型菜單，見「防跑版硬規則」。）
+4. **Section dividers** between major topics for visual breathing room.（**強茂官方範本例外：不使用整頁章節分隔頁**，章節改用內容頁標題帶過。）
 5. **Keep bullets concise**: Max 4-5 per slide, under 50 characters each.
 6. **Footer on every content slide**: Presentation title + page number.
 7. **Aim for 8-15 slides**. More content = more slides, not more text per slide.
@@ -148,9 +148,23 @@ Use these patterns for content slides. The **cover slide is always custom** — 
 
 跑版（元素重疊、文字溢出、圖表壓到文字或超出邊界）是最常見的品質問題。以下是**機械式硬規則**，照做、不要憑感覺估：
 
-> **⛔⛔ 最高優先 — 圖表座標一律用「英吋數字」，絕對不要用百分比字串。**
+> **⚠️ 適用範圍（重要）：**
+> - **對「所有」deck 都適用（通用正確性 / 美觀，不影響豐富度）：** 上面「寬版 13.33 設定」＋「圖表座標用吋」＋下面第 1 條「`autoFit` 與行距段距」。
+> - **只適用於「強茂官方範本」及其他有固定品牌保留區的版型：** 下面的**安全版型菜單（A~H）、一頁一圖、最多兩區塊、KPI 卡片配方、硬性上下界 y24%–88%、不用章節頁**。強茂的畫布被 kicker/title/logo/頁尾切窄，所以需要這些嚴格版型。
+> - **一般 deck（corporate / tech-dark / creative / minimal-pro）**畫布是整張、沒有保留區——**請維持你原本自由、豐富、多變的設計**（可用整頁 y6%–94%、可自由排版、可用章節頁），**不要**套用上述強茂專用的版型限制，以免變單調。
+
+> **⛔⛔ 最高優先之一 — 腳本開頭必須把投影片設成「寬版 13.33 × 7.5」。**
+> pptxgenjs **預設投影片只有 10 吋寬**。下面所有「吋」座標（圖表、卡片配方）都是照 **13.33 吋**算的，所以**每個腳本一開頭都要設定寬版**：
+> ```javascript
+> const pptx = new PptxGenJS();
+> pptx.defineLayout({ name: 'WIDE', width: 13.33, height: 7.5 });
+> pptx.layout = 'WIDE';
+> ```
+> **若沒設這兩行，投影片會是預設 10 吋，所有吋座標就會超出右邊、看起來「全部變大／被切掉」。**（defineLayout 不會造成開檔需要修復，放心用。）
+>
+> **⛔⛔ 最高優先之二 — 圖表座標一律用「英吋數字」，絕對不要用百分比字串。**
 > `addChart` **不支援 `%`**！你若寫 `x: '52%'`，pptxgenjs 會**直接無視**，把圖表**砸到左上角的預設位置、預設大小**，蓋住上面的標題和卡片——這就是「下面圖表直接覆蓋上面東西」的**頭號元兇**。
-> - 投影片尺寸 = **13.33 吋寬 × 7.5 吋高**。換算：`x吋 = 百分比 × 13.33`、`y吋 = 百分比 × 7.5`。
+> - 投影片尺寸 = **13.33 吋寬 × 7.5 吋高**（依上面設定）。換算：`x吋 = 百分比 × 13.33`、`y吋 = 百分比 × 7.5`。
 > - 安全區換算成吋：內容 `x: 0.53`–`12.8`；圖表建議放 **`y: 1.8`–`6.6`** 之間（對應 y 24%–88%）。
 > - 例：右半欄放圖表 → `s.addChart(type, data, { x: 6.9, y: 1.9, w: 5.8, h: 4.2 })`（吋）。
 > - **`addText` / `addShape` / `addImage` 可以用 `%`；唯獨 `addChart` 必須用吋數字。** 放圖表前，先把你算好的 `%` 位置換成吋再填進去。
@@ -285,7 +299,7 @@ e.addImage({ path: '__PANJIT_ASSETS_DIR__/panjit-logo.png', x: '84.7%', y: '82.5
 
 **⛔ 100% NO "repair-needed" files — non-negotiable (the customer opens these on old Office 2019/2024 that CANNOT run repair):**
 - Build the deck with **exactly the same standard `pptxgenjs` calls the normal templates use** — `addSlide`, `slide.background`, `addText`, `addShape` (rect / roundRect), `addImage`, `addChart`, `addTable`. Nothing more exotic.
-- Do **NOT** set `pptx.theme`; do **NOT** call `pptx.defineLayout` (use the default layout); do **NOT** import any extra "brand kit" / helper module; do **NOT** shell out to convert or post-process the `.pptx`. Keep the file **structurally identical to a normal deck**, which opens in every PowerPoint version without a repair prompt.
+- **DO** set the wide layout at the top (`pptx.defineLayout({ name:'WIDE', width:13.33, height:7.5 }); pptx.layout='WIDE';`) — this is required so the 13.33-inch coordinates line up, and it does **NOT** cause a repair prompt. Do **NOT** set `pptx.theme`; do **NOT** import any extra "brand kit" / helper module; do **NOT** shell out to convert or post-process the `.pptx`. Keep the file **structurally like a normal deck**, which opens in every PowerPoint version without a repair prompt.
 - The output must be a plain `await pptx.writeFile(...)` result — never rewrite or touch the `.pptx` bytes afterwards.
 
 **slides.json:** also write `slides.json` with `"style": "panjit"` plus the slide list (same format as normal) so the interactive editor works.
