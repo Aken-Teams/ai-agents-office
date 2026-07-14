@@ -24,6 +24,31 @@ function unfoldAll(node: any) {
   node.children?.forEach((child: any) => unfoldAll(child));
 }
 
+/**
+ * markmap's `fit()` reads the SVG's own length (which defaults to 100%). When
+ * the SVG isn't laid out yet — 0-size / hidden / collapsed container — the
+ * browser can't resolve that relative length and throws
+ *   "Failed to read the 'value' property from 'SVGLength': Could not resolve relative length"
+ * Worse, `fit()` returns a promise, and the un-awaited calls surface that as an
+ * UNHANDLED rejection (a runtime error overlay). This wrapper:
+ *   1. skips fit() until the SVG has a real rendered size (retrying once on the
+ *      next frame, for the case where it was hidden at creation), and
+ *   2. swallows the async rejection so a best-effort view-centering never crashes.
+ */
+function safeFit(mm: any, retry = true) {
+  try {
+    const svg = mm?.svg?.node?.() as SVGSVGElement | undefined;
+    const r = svg?.getBoundingClientRect?.();
+    if (!r || r.width < 1 || r.height < 1) {
+      if (retry && typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => safeFit(mm, false));
+      }
+      return;
+    }
+    Promise.resolve(mm?.fit?.()).catch(() => { /* non-critical layout op */ });
+  } catch { /* non-critical layout op */ }
+}
+
 export default function ChatMindmap({ code }: ChatMindmapProps) {
   const { t } = useTranslation();
   const svgRef = useRef<SVGSVGElement>(null);
@@ -64,7 +89,7 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
           },
         }, root);
         // Fit once for initial view, then let user pan/zoom freely
-        mm.fit();
+        safeFit(mm);
         // Override click: toggle node then pan to show expanded children
         mm.handleClick = async (e: MouseEvent, d: any) => {
           const wasFolded = d.payload?.fold;
@@ -118,7 +143,7 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
               return colors[(node.state?.depth ?? 0) % colors.length];
             },
           }, root);
-          mm.fit();
+          safeFit(mm);
           mm.handleClick = async (e: MouseEvent, d: any) => {
             const wasFolded = d.payload?.fold;
             const recursive = (navigator.platform.startsWith('Mac') ? e.metaKey : e.ctrlKey) && mm.options.toggleRecursively;
@@ -172,7 +197,7 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
             return colors[(node.state?.depth ?? 0) % colors.length];
           },
         }, root);
-        mm.fit();
+        safeFit(mm);
         mm.handleClick = async (e: MouseEvent, d: any) => {
           const wasFolded = d.payload?.fold;
           const recursive = (navigator.platform.startsWith('Mac') ? e.metaKey : e.ctrlKey) && mm.options.toggleRecursively;
@@ -197,19 +222,19 @@ export default function ChatMindmap({ code }: ChatMindmapProps) {
     if (!mm?.state?.data) return;
     unfoldAll(mm.state.data);
     await mm.renderData();
-    await mm.fit();
+    safeFit(mm);
   }, []);
 
   const handleCollapseAll = useCallback(async (mm: any) => {
     if (!mm?.state?.data) return;
     foldTree(mm.state.data, 0, 1);
     await mm.renderData();
-    await mm.fit();
+    safeFit(mm);
   }, []);
 
-  const handleFitView = useCallback(async (mm: any) => {
+  const handleFitView = useCallback((mm: any) => {
     if (!mm) return;
-    await mm.fit();
+    safeFit(mm);
   }, []);
 
   const handleDownloadHtml = useCallback(() => {
