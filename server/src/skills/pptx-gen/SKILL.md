@@ -208,6 +208,9 @@ CARD.forEach((k, i) => {
 ```
 重點：**數字（y `cy+0.18`, h `0.6`）與標籤（y `cy+0.9`）上下錯開、有間距**；單位（如 `/年`、`%`）用**同一個 `addText` 的第二個 run** 接在數字後面，**不要**另開一個框疊上去；數字字級 ≤ `26`、標籤 ≤ `11`，兩者都 `autoFit: true`，字太長會自動縮、不會撐爆卡片。3 張卡片時把 `2.85`→`3.9`、間距 `3.05`→`4.1`。
 
+> **⛔ 卡片列的「下界」是 `cy + 1.5 = 3.4 吋`（≈ 45%）。卡片下方接的任何東西（bullets／文字／圖表）`y` 必須 ≥ `'48%'`（或吋 `3.6`），留出間隙。**
+> 這是「文字多時 bullets 壓到卡片」的元兇——**不要**因為內容多就把下方文字往上擠到 45% 以內。若下方 bullets 放不下，就**減少 bullet 數／精簡文字／改用純重點頁（版型 G）不放卡片**，絕不可讓 bullets 疊進卡片區間。範例：`s.addText(bullets, { x:'4%', y:'48%', w:'92%', h:'40%', autoFit:true, ... })`。
+
 ## CRITICAL — Content Source Rules
 
 **All content in the generated document** — title, subtitle, body text, bullets, footer, branding, terminology, everything — must come from either:
