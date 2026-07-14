@@ -40,6 +40,10 @@ interface OutlookAttachment {
   content_type: string;
   size: number;
   is_inline: boolean;
+  // The gateway's 2026-07 rewrite returns the inline-image id in `content_id`
+  // (the value that a body's `cid:xxx` reference points at). Older/other shapes
+  // used `cid`. Read either — see `cidOf()` in resolveCidImages.
+  content_id?: string;
   cid?: string;
 }
 
@@ -201,22 +205,27 @@ export async function fetchMessageDetail(mailToken: string, messageId: string): 
   const url = `${OUTLOOK_BASE}/messages/${encodeURIComponent(messageId)}`;
   const headers = { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${mailToken}` };
   // The mail gateway is intermittently flaky — retry transient failures
-  // (5xx / network error / non-JSON body) up to 3 times with a short backoff.
-  for (let attempt = 0; attempt < 3; attempt++) {
+  // (5xx / network error / non-JSON body). Bounded at 2 attempts so a slow
+  // gateway can't stack up to ~90s (30s × 3) and outlast the frontend request.
+  for (let attempt = 0; attempt < 2; attempt++) {
     const backoff = () => new Promise(r => setTimeout(r, 400 * (attempt + 1)));
     try {
-      const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+      // The gateway can take >15s to assemble a message with inline images. The
+      // API's own guidance is ~30s for non-attachment endpoints; a too-tight
+      // timeout aborted attempt-after-attempt and the frontend proxy gave up
+      // (ECONNRESET) before any retry could land. 30s lets attempt 1 succeed.
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(30000) });
       if (!res.ok) {
         const bodyText = await res.text().catch(() => '');
         console.warn(`[Outlook] fetchMessageDetail ${res.status} (attempt ${attempt + 1}):`, bodyText.slice(0, 200));
-        if (res.status >= 500 && attempt < 2) { await backoff(); continue; }
+        if (res.status >= 500 && attempt < 1) { await backoff(); continue; }
         return null;
       }
       const raw = await res.text();
       let data: any;
       try { data = JSON.parse(raw); } catch {
         console.warn(`[Outlook] fetchMessageDetail non-JSON body (attempt ${attempt + 1}):`, raw.slice(0, 200));
-        if (attempt < 2) { await backoff(); continue; }
+        if (attempt < 1) { await backoff(); continue; }
         return null;
       }
       // Panjit API returns: { success, message: "查詢成功", message_detail: {...} }
@@ -228,7 +237,7 @@ export async function fetchMessageDetail(mailToken: string, messageId: string): 
       return detail as OutlookMessage;
     } catch (err) {
       console.warn(`[Outlook] fetchMessageDetail error (attempt ${attempt + 1}):`, err instanceof Error ? err.message : err);
-      if (attempt < 2) { await backoff(); continue; }
+      if (attempt < 1) { await backoff(); continue; }
       return null;
     }
   }
@@ -237,23 +246,30 @@ export async function fetchMessageDetail(mailToken: string, messageId: string): 
 
 // The gateway's attachment download endpoint is slow (~20KB/s measured) — 12s was
 // too tight even for a 250KB image. Raised so mid-size inline images can finish.
-const ATTACHMENT_TIMEOUT_MS = 30_000;
+// The attachment download endpoint is the slow one (streams file bytes); the
+// API's own guidance is a 60s client timeout for it. A too-tight value was
+// leaving mid-size inline images as broken boxes.
+const ATTACHMENT_TIMEOUT_MS = 60_000;
 
 /**
  * Download a single attachment as a Buffer.
  */
-export async function fetchAttachment(mailToken: string, messageId: string, attachmentId: string): Promise<Buffer | null> {
+export async function fetchAttachment(mailToken: string, messageId: string, attachmentId: string, timeoutMs: number = ATTACHMENT_TIMEOUT_MS): Promise<Buffer | null> {
   const url = `${OUTLOOK_BASE}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`;
   // Timeout + never throw: a single slow/404/erroring attachment must not reject
   // the parallel CID resolution (which would 500 the whole email view).
   try {
     const res = await fetch(url, {
       headers: { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${mailToken}` },
-      signal: AbortSignal.timeout(ATTACHMENT_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[Outlook][cid] attachment download ${res.status} for att=${attachmentId.slice(0, 24)}…`);
+      return null;
+    }
     return Buffer.from(await res.arrayBuffer());
-  } catch {
+  } catch (err) {
+    console.warn(`[Outlook][cid] attachment download error for att=${attachmentId.slice(0, 24)}…:`, err instanceof Error ? err.message : err);
     return null;
   }
 }
@@ -279,10 +295,16 @@ export async function resolveCidImages(mailToken: string, messageId: string, bod
   // Inline images larger than this are skipped: at the gateway's ~20KB/s this would
   // time out anyway, and inlining it as base64 would bloat the whole email body.
   // Skipping keeps the OTHER images rendering fast (they resolve in parallel).
-  const MAX_INLINE_BYTES = 1024 * 1024; // 1MB
+  const MAX_INLINE_BYTES = 8 * 1024 * 1024; // 8MB — cover oversized inline banners
+  // (senders sometimes embed a 6MB+ banner). Base64-inlining that bloats the
+  // email HTML by ~33%, but it's a one-off view; the 60s attachment timeout still
+  // caps how long we'll wait, so a genuinely huge/slow file degrades gracefully.
 
   // Resolve each DISTINCT cid once (an image referenced N times is fetched once).
   const uniqueCids = [...new Set(cidRefs.map(m => m[1]))];
+
+  // The inline id lives in `content_id` (new gateway) or `cid` (older). Read either.
+  const cidOf = (a: OutlookAttachment) => a.content_id ?? a.cid;
 
   const replacements = await Promise.all(uniqueCids.map(async (cidValue) => {
     const nCid = norm(cidValue);
@@ -290,19 +312,37 @@ export async function resolveCidImages(mailToken: string, messageId: string, bod
 
     // Match against ALL attachments (not just is_inline): some mail servers don't
     // flag inline images correctly, which is exactly why they went missing before.
-    // Try cid, then filename, then cid-vs-filename cross match.
+    // Try content_id/cid, then filename, then id-vs-filename cross match.
     const att =
-      attachments.find(a => nCid && norm(a.cid) === nCid) ||
+      attachments.find(a => nCid && norm(cidOf(a)) === nCid) ||
       attachments.find(a => nFile && norm(a.filename) === nFile) ||
-      attachments.find(a => nFile && norm(a.cid) === nFile);
-    if (!att) return null;
-    if (att.size && att.size > MAX_INLINE_BYTES) return null; // too big — leave as-is
+      attachments.find(a => nFile && norm(cidOf(a)) === nFile);
+    if (!att) { console.warn(`[Outlook][cid] NO MATCH for "cid:${cidValue}"`); return null; }
+    if (att.size && att.size > MAX_INLINE_BYTES) {
+      console.warn(`[Outlook][cid] "cid:${cidValue}" → ${att.filename} SKIPPED (too big: ${att.size} bytes > ${MAX_INLINE_BYTES})`);
+      return null;
+    }
 
-    const buf = await fetchAttachment(mailToken, messageId, att.id);
-    if (!buf) return null;
+    // Big images get a SHORTER budget so a slow gateway can't hold the whole
+    // email hostage for the full 60s: small inline images (≤2MB) finish even at
+    // ~20KB/s, but a 6MB banner only lands if the endpoint is genuinely fast —
+    // otherwise we bail after 20s and show a placeholder (email stays snappy).
+    const dlTimeout = (att.size && att.size > 2 * 1024 * 1024) ? 20_000 : ATTACHMENT_TIMEOUT_MS;
+    const buf = await fetchAttachment(mailToken, messageId, att.id, dlTimeout);
+    if (!buf) { console.warn(`[Outlook][cid] "cid:${cidValue}" → ${att.filename} (${att.size}B) download returned null`); return null; }
 
     return { cidValue, dataUri: `data:${att.content_type || 'image/png'};base64,${buf.toString('base64')}` };
   }));
+
+  // One-line diagnostic: how many resolved, and the raw cid ↔ attachment picture,
+  // so an unresolved image can be pinned to no-match / too-big / download-fail.
+  const okCount = replacements.filter(Boolean).length;
+  if (okCount < uniqueCids.length) {
+    console.warn(
+      `[Outlook][cid] resolved ${okCount}/${uniqueCids.length}. body cids=${JSON.stringify(uniqueCids)} ` +
+      `attachments=${JSON.stringify((attachments || []).map(a => ({ file: a.filename, content_id: a.content_id ?? a.cid ?? null, inline: a.is_inline, size: a.size })))}`,
+    );
+  }
 
   for (const r of replacements) {
     if (!r) continue;
