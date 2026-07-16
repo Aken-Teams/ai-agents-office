@@ -131,6 +131,10 @@ export interface ClaudeCliOptions {
   model?: string;                      // Override default model (e.g. 'claude-haiku-4-5-20251001' for fast edits)
   maxTurns?: number;                   // Cap tool-loop turns (e.g. bounded WebSearch for team members)
   images?: { media_type: string; data: string }[];  // base64 image blocks delivered via stream-json input (vision)
+  // Data-source MCP: when set, attach the email-mcp stdio server carrying THIS
+  // user's Outlook mail JWT, so the agent can pull the user's own mail (search /
+  // read message) to build a document. Identity is the token — no cross-user access.
+  mcpEmailToken?: string;
 }
 
 interface ClaudeResult {
@@ -315,9 +319,42 @@ export function spawnClaude(
     ? [...new Set([...baseDisallowed, ...options.customDisallowedTools])]
     : baseDisallowed;
 
+  // Data-source MCP servers (stdio, per-run). When requested, attach the
+  // email-mcp carrying THIS user's mail JWT via env — identity lives in the
+  // token, so the agent can only ever reach the run owner's mailbox. The tool
+  // names are added to the allow-list so the model may call them.
+  const mcpToolNames: string[] = [];
+  if (options.mcpEmailToken) {
+    const mcpConfigPath = path.join(sandboxPath, '.mcp-servers.json');
+    const emailMcpScript = path.join(config.rootDir, 'server', 'src', 'mcp', 'emailMcp.ts');
+    const mcpConfig = {
+      mcpServers: {
+        email: {
+          command: process.execPath,           // absolute node binary — robust cross-platform
+          args: ['--import', 'tsx', emailMcpScript],
+          env: {
+            NODE_PATH: path.join(config.rootDir, 'server', 'node_modules'),
+            MCP_MAIL_TOKEN: options.mcpEmailToken,
+            MCP_MAIL_API_BASE: config.adApiUrl,
+            MCP_MAIL_API_KEY: config.adApiKey,
+          },
+        },
+      },
+    };
+    fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig), 'utf-8');
+    // --strict-mcp-config: use ONLY our config, ignore any global MCP servers.
+    args.push('--mcp-config', mcpConfigPath, '--strict-mcp-config');
+    mcpToolNames.push(
+      'mcp__email__email_list_folders',
+      'mcp__email__email_search',
+      'mcp__email__email_get_message',
+    );
+  }
+
   // Tool restrictions (security layer 2)
-  if (allowedTools.length > 0) {
-    args.push('--allowedTools', allowedTools.join(','));
+  const finalAllowedTools = [...allowedTools, ...mcpToolNames];
+  if (finalAllowedTools.length > 0) {
+    args.push('--allowedTools', finalAllowedTools.join(','));
   }
   args.push('--disallowedTools', disallowedTools.join(','));
 
@@ -372,7 +409,7 @@ export function spawnClaude(
     // Verbose tool/arg dump (which may contain prompt fragments) only in
     // development; production logs stay terse to avoid data exposure if shipped.
     if (config.nodeEnv !== 'production') {
-      console.log(`[Claude CLI]   allowedTools: ${allowedTools.join(',')}`);
+      console.log(`[Claude CLI]   allowedTools: ${finalAllowedTools.join(',')}`);
       console.log(`[Claude CLI]   args: ${args.join(' ')}`);
     }
 
