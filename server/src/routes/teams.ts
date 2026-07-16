@@ -20,6 +20,7 @@ import { runTeam, estimateRunTokens, estimateCostUsd } from '../services/teamRun
 import { checkUserUsageLimit } from '../services/usageLimit.js';
 import { analyzeInput, logSecurityEvent } from '../services/inputGuard.js';
 import { moderateTeamTopic } from '../services/contentSafety.js';
+import { getMailToken } from '../services/outlookApi.js';
 import { computeNextRun, mysqlDateTime, runScheduleNow } from '../services/teamScheduler.js';
 import { generateTeamSpec, insertTeamWithAgents, type GeneratedAgent } from '../services/teamBuilder.js';
 import type { Conversation } from '../types.js';
@@ -349,11 +350,12 @@ router.delete('/:id/runs/:runId', async (req: Request, res: Response) => {
 // POST /api/teams/:id/run — run a team collaboration. Streams progress as SSE.
 router.post('/:id/run', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { message, uploadIds, allowWeb } = req.body as { message?: string; uploadIds?: string[]; allowWeb?: boolean };
+  const { message, uploadIds, allowWeb, dataSources } = req.body as { message?: string; uploadIds?: string[]; allowWeb?: boolean; dataSources?: string[] };
   if (!message || typeof message !== 'string' || !message.trim()) {
     res.status(400).json({ error: 'message is required' });
     return;
   }
+  const emailDataSource = Array.isArray(dataSources) && dataSources.includes('email');
 
   const team = await dbGet<{ id: string }>('SELECT id FROM agent_teams WHERE id = ? AND user_id = ?', req.params.id, userId);
   if (!team) { res.status(404).json({ error: 'Team not found' }); return; }
@@ -368,11 +370,22 @@ router.post('/:id/run', async (req: Request, res: Response) => {
   // …plus content safety: refuse crime / hacking / secret-theft / harassment /
   // harming the system or other users (the same gate as team creation). Runs
   // before the SSE stream starts so a plain JSON error can still be returned.
-  const verdict = await moderateTeamTopic(message.trim(), '無法回答這個問題');
+  const verdict = await moderateTeamTopic(message.trim(), '無法回答這個問題',
+    emailDataSource
+      ? { contextNote: '使用者已在對話中選取「我的信件」資料源。系統只會用其本人的授權 Token 讀取「他自己」的 Outlook 信箱（不可能存取他人信箱）。因此「查詢／列出／整理／摘要自己的信件」是被授權的正當操作，不屬於竊取機密或危害他人。' }
+      : undefined);
   if (!verdict.allowed) {
     logSecurityEvent(userId, 'blocked_request', 'high', `team-run blocked (category=${verdict.category})`, message);
     res.status(403).json({ error: verdict.reason });
     return;
+  }
+
+  // "我的信件" data source → read the run owner's OWN mailbox (identity via their
+  // own token; no cross-user access). Fetched server-side and injected as a
+  // file-like context block so the team analyses it, mirroring uploaded files.
+  let mcpEmailToken: string | undefined;
+  if (emailDataSource) {
+    mcpEmailToken = (await getMailToken(userId)) || undefined;
   }
 
   // Quota — reuse the same accounting as the web/LINE flow.
@@ -405,6 +418,7 @@ router.post('/:id/run', async (req: Request, res: Response) => {
       userId, teamId: String(req.params.id), question: message.trim(), writer,
       uploadIds: Array.isArray(uploadIds) ? uploadIds : [],
       allowWeb: typeof allowWeb === 'boolean' ? allowWeb : undefined,
+      mcpEmailToken,
     });
   } catch (err) {
     console.error('[teams] run failed:', err);

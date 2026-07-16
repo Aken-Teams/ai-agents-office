@@ -9,6 +9,7 @@ import GreetingPopup from '../components/GreetingPopup';
 import FeatureSpotlightModal, { hasSeenSpotlight } from '../components/FeatureSpotlightModal';
 import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
+import { DataSourceSelector } from '../components/DataSourceSelector';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
 import HelpButton from '../components/HelpButton';
 
@@ -76,67 +77,6 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-}
-
-// Data sources the agent can be granted read access to for a run (Gemini-style
-// multi-select). Kept in sync with the chat page's DATA_SOURCES. The selection
-// travels to the new conversation via sessionStorage and is applied to its first
-// generation. 'email' only resolves in pro-panjit; elsewhere it degrades to a no-op.
-const DATA_SOURCES: { id: string; label: string; desc: string; icon: string }[] = [
-  { id: 'email', label: '我的信件', desc: 'Outlook 信箱（只讀自己的）', icon: 'mail' },
-];
-
-/** The 資料源 dropdown button (used by both the mobile and desktop input bars). */
-function DataSourceSelector({ selected, onToggle, disabled }: { selected: string[]; onToggle: (id: string) => void; disabled?: boolean }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [open]);
-  return (
-    <div className="relative shrink-0" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        disabled={disabled}
-        className={`w-9 h-9 flex items-center justify-center rounded transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${open || selected.length > 0 ? 'bg-primary/15 text-primary' : 'hover:bg-surface-container-high text-on-surface-variant hover:text-primary'}`}
-        title="資料源"
-      >
-        <span className="material-symbols-outlined text-lg">database</span>
-      </button>
-      {open && (
-        <div className="absolute bottom-full left-0 mb-1 w-60 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl overflow-hidden z-50">
-          <div className="px-3 py-2 border-b border-outline-variant/10">
-            <p className="text-xs font-medium text-on-surface-variant">資料源（可多選）</p>
-            <p className="text-[10px] text-on-surface-variant/60 mt-0.5">勾選後，AI 產文件時可讀取這些來源</p>
-          </div>
-          <div className="max-h-48 overflow-y-auto">
-            {DATA_SOURCES.map(ds => {
-              const isSel = selected.includes(ds.id);
-              return (
-                <button
-                  key={ds.id}
-                  type="button"
-                  onClick={() => onToggle(ds.id)}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors cursor-pointer ${isSel ? 'bg-primary/10' : 'hover:bg-surface-container-high'}`}
-                >
-                  <span className={`material-symbols-outlined text-sm shrink-0 ${isSel ? 'text-primary' : 'text-on-surface-variant'}`}>{ds.icon}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className={`text-xs font-medium ${isSel ? 'text-primary' : 'text-on-surface'}`}>{ds.label}</p>
-                    <p className="text-[10px] text-on-surface-variant/60 truncate">{ds.desc}</p>
-                  </div>
-                  {isSel && <span className="material-symbols-outlined text-sm text-primary shrink-0">check</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
 }
 
 function DashboardContent() {

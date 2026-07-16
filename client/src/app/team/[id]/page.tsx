@@ -17,6 +17,7 @@ import remarkFlexibleMarkers from 'remark-flexible-markers';
 import { AuthProvider, useAuth } from '../../components/AuthProvider';
 import { I18nProvider, useTranslation } from '../../../i18n';
 import Navbar from '../../components/Navbar';
+import { DataSourceSelector } from '../../components/DataSourceSelector';
 import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 import TeamMarkdown from '../../components/TeamMarkdown';
 import Tooltip from '../../components/Tooltip';
@@ -260,9 +261,13 @@ function TeamRunContent() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dragCounter = useRef(0);
+  const [selectedDataSources, setSelectedDataSources] = useState<string[]>([]);
+  const toggleDataSource = (id: string) => setSelectedDataSources(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   const hasFiles = attachedFiles.length > 0;
-  // Default the web toggle off the moment a file is attached (file-only), back on when removed.
-  useEffect(() => { setAllowWeb(!hasFiles); }, [hasFiles]);
+  const hasDataSources = selectedDataSources.length > 0;
+  // Default the web toggle off the moment a file is attached OR a data source is
+  // picked (both mean "analyse THIS input", not browse the web), back on when cleared.
+  useEffect(() => { setAllowWeb(!(hasFiles || hasDataSources)); }, [hasFiles, hasDataSources]);
   const [members, setMembers] = useState<Record<string, MemberStream>>({});
   const [memberOrder, setMemberOrder] = useState<string[]>([]);
   const [synthesis, setSynthesis] = useState('');
@@ -519,6 +524,7 @@ function TeamRunContent() {
         body: JSON.stringify({
           message: question.trim(),
           ...(attachedFiles.length ? { uploadIds: attachedFiles.map(f => f.id) } : {}),
+          ...(selectedDataSources.length ? { dataSources: selectedDataSources } : {}),
           allowWeb,
         }),
         signal: controller.signal,
@@ -552,7 +558,7 @@ function TeamRunContent() {
       const runs = await loadHistory();
       if (runs[0]) setActiveRunId(runs[0].id);
     }
-  }, [question, running, token, teamId, authHeaders, resetRun, loadHistory, attachedFiles, allowWeb]);
+  }, [question, running, token, teamId, authHeaders, resetRun, loadHistory, attachedFiles, allowWeb, selectedDataSources]);
 
   function handleEvent(ev: { type: string; data?: any }) {
     const d = ev.data || {};
@@ -847,6 +853,7 @@ function TeamRunContent() {
               >
                 <span className="material-symbols-outlined text-[20px]">attach_file</span>
               </button>
+              <DataSourceSelector selected={selectedDataSources} onToggle={toggleDataSource} disabled={running} round />
               <button
                 onClick={() => { if (!allowWeb && hasFiles) setShowWebWarn(true); else setAllowWeb(v => !v); }}
                 disabled={running}
