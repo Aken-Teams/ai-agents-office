@@ -348,6 +348,7 @@ export function spawnClaude(
       'mcp__email__email_list_folders',
       'mcp__email__email_search',
       'mcp__email__email_get_message',
+      'mcp__email__email_get_attachments',
     );
   }
 
