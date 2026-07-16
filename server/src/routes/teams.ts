@@ -386,6 +386,9 @@ router.post('/:id/run', async (req: Request, res: Response) => {
   let mcpEmailToken: string | undefined;
   if (emailDataSource) {
     mcpEmailToken = (await getMailToken(userId)) || undefined;
+    console.log(`[teams] run email data-source: requested=true, tokenResolved=${!!mcpEmailToken} (user=${userId})`);
+  } else {
+    console.log(`[teams] run email data-source: requested=false, dataSources=${JSON.stringify(dataSources)}`);
   }
 
   // Quota — reuse the same accounting as the web/LINE flow.

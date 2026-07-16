@@ -117,6 +117,7 @@ async function buildTeamEmailContext(mailToken: string): Promise<string> {
     console.warn('[teamRun] buildTeamEmailContext fetch failed:', e);
     return '';
   }
+  console.log(`[teamRun] buildTeamEmailContext: fetched ${messages.length} inbox messages`);
   if (!messages.length) return '';
   const lines = messages.map((m, i) => {
     const from = m.from?.name || m.from?.address || '未知';
@@ -388,6 +389,7 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
   const webEnabled = allowWeb ?? !hasData;
   // Combined untrusted data block injected into each member (same slot as files).
   const dataBlock = `${fileBlock}${emailBlock}`;
+  console.log(`[teamRun] data mode: mcpEmailToken=${!!mcpEmailToken} emailBlockLen=${emailBlock.length} fileBlockLen=${fileBlock.length} hasData=${hasData} webEnabled=${webEnabled}`);
   writer({ type: 'team_data_mode', data: { hasFile: hasData, webEnabled } });
 
   // ── Fan out to members (batched for a concurrency cap) ──────────────────
