@@ -80,8 +80,12 @@ export class Orchestrator {
   private userLocale: string;
   private referenceContext: string;
   private customRolePrompt: string;
+  // Per-run data-source MCP: the user's Outlook mail JWT, attached to WORKER
+  // agents so a doc generator can pull the user's own mail. Set only when the
+  // user selected the "email" data source. Identity is the token — no cross-user.
+  private mcpEmailToken?: string;
 
-  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document', referenceContext: string = '', customRolePrompt: string = '') {
+  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document', referenceContext: string = '', customRolePrompt: string = '', mcpEmailToken?: string) {
     this.userId = userId;
     this.conversationId = conversationId;
     this.conversationCategory = conversationCategory;
@@ -90,6 +94,7 @@ export class Orchestrator {
     this.uploadIds = uploadIds;
     this.referenceContext = referenceContext;
     this.customRolePrompt = customRolePrompt;
+    this.mcpEmailToken = mcpEmailToken;
   }
 
   async run(message: string): Promise<OrchestratorResult> {
@@ -572,6 +577,9 @@ export class Orchestrator {
         skillId: opts.skillId,
         customAllowedTools: skillDef?.allowedTools,
         customDisallowedTools: skillDef?.disallowedTools,
+        // Attach the email data-source MCP to WORKER agents only (never the
+        // router) when the user opted into it — lets a doc generator pull mail.
+        ...(opts.role === 'worker' && this.mcpEmailToken ? { mcpEmailToken: this.mcpEmailToken } : {}),
         // Each agent gets its own subdirectory to avoid CLAUDE.md conflicts
         sandboxSubdir: `_agents/${opts.skillId}`,
       });

@@ -28,7 +28,7 @@ export default function AdminSkillsPage() {
   const { token } = useAdminAuth();
   const { t } = useTranslation();
   const [skills, setSkills] = useState<Skill[]>([]);
-  const [filter, setFilter] = useState<'all' | 'generator' | 'agent'>('all');
+  const [filter, setFilter] = useState<'all' | 'generator' | 'agent' | 'mcp'>('all');
   const [deployMode, setDeployMode] = useState<string>('');
 
   const SKILL_META: Record<string, { icon: string; iconColor: string; bgColor: string; tag: string; tagColor: string }> = {
@@ -72,7 +72,8 @@ export default function AdminSkillsPage() {
 
   const filtered = filter === 'all' ? skills
     : filter === 'generator' ? generators
-    : agents;
+    : filter === 'agent' ? agents
+    : []; // 'mcp' — the data-source card is rendered separately below, not from `skills`
 
   return (
     <>
@@ -80,7 +81,7 @@ export default function AdminSkillsPage() {
       <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
         <span className="text-base md:text-lg font-black text-on-surface font-headline shrink-0">{t('admin.skills.title')}</span>
         <div className="flex gap-px md:gap-1 rounded overflow-hidden border border-outline-variant/15 shrink-0">
-          {(['all', 'generator', 'agent'] as const).map(f => (
+          {(['all', 'generator', 'agent', 'mcp'] as const).map(f => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -90,7 +91,7 @@ export default function AdminSkillsPage() {
                   : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
               }`}
             >
-              {f === 'all' ? t('admin.skills.filter.all') : f === 'generator' ? t('admin.skills.filter.generator') : t('admin.skills.filter.agent')}
+              {f === 'all' ? t('admin.skills.filter.all') : f === 'generator' ? t('admin.skills.filter.generator') : f === 'agent' ? t('admin.skills.filter.agent') : t('admin.skills.filter.mcp')}
             </button>
           ))}
         </div>
@@ -174,35 +175,35 @@ export default function AdminSkillsPage() {
             );
           })}
           {/* Email MCP — display-only card for pro-panjit */}
-          {deployMode === 'pro-panjit' && (filter === 'all' || filter === 'agent') && (
+          {deployMode === 'pro-panjit' && (filter === 'all' || filter === 'mcp') && (
             <div className="group bg-surface-container hover:bg-surface-container-high transition-all duration-300 p-4 md:p-6 rounded-lg border border-transparent hover:border-primary/10 flex flex-col justify-between">
               <div>
                 <div className="flex justify-between items-start mb-3 md:mb-5">
                   <div className="w-10 h-10 md:w-12 md:h-12 rounded flex items-center justify-center bg-tertiary/10">
                     <span className="material-symbols-outlined text-2xl md:text-3xl text-tertiary">mail</span>
                   </div>
-                  <span className="px-2 py-0.5 bg-surface-container-highest text-xs md:text-sm font-bold tracking-widest uppercase text-secondary">
-                    {t('admin.skills.tag.assistantAgent')}
+                  <span className="px-2 py-0.5 bg-surface-container-highest text-xs md:text-sm font-bold tracking-widest uppercase text-tertiary">
+                    資料源
                   </span>
                 </div>
                 <h3 className="text-base md:text-xl font-headline font-semibold text-on-surface mb-1">
-                  Email Context Injector (Outlook)
+                  Outlook Email (Data Source)
                 </h3>
                 <p className="text-xs md:text-sm text-on-surface-variant mb-2 md:mb-3 font-medium">
                   ID: <span className="font-mono text-primary/80">email-mcp</span>
                 </p>
                 <p className="text-xs md:text-sm text-on-surface-variant/80 mb-4 md:mb-6 leading-relaxed">
-                  Auto-detect email-related conversations and inject Outlook inbox data as context. No skill binding needed — triggers on email keywords.
+                  MCP data source. Once the user enables it from the &quot;Data Source&quot; menu next to the chat input, document-generating agents can read Outlook email through MCP tools. Bound to the signed-in user&apos;s mail token — reads only their own mailbox, no cross-user access.
                 </p>
               </div>
               <div className="flex items-center justify-between text-xs md:text-sm text-on-surface-variant bg-surface-container-low p-2.5 md:p-3 rounded">
                 <span className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-xs md:text-sm">psychology</span>
-                  {t('admin.skills.noFileType')}
+                  <span className="material-symbols-outlined text-xs md:text-sm">hub</span>
+                  Data Source (MCP)
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-xs md:text-sm">auto_awesome</span>
-                  Keyword Trigger
+                  <span className="material-symbols-outlined text-xs md:text-sm">check_circle</span>
+                  User-selected
                 </span>
               </div>
             </div>

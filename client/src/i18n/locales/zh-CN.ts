@@ -686,7 +686,7 @@ const zhCN = {
   'admin.sidebar.group.system': '系统',
   'admin.sidebar.overview': '总览',
   'admin.sidebar.users': '用户管理',
-  'admin.sidebar.skills': 'Skills 中心',
+  'admin.sidebar.skills': 'AI 中心',
   'admin.sidebar.tokens': 'Token 账本',
   'admin.sidebar.permissions': '权限管理',
   'admin.sidebar.security': '安全审计',
@@ -1087,10 +1087,11 @@ const zhCN = {
   'admin.settings.preferences.themeLight': '浅色',
 
   // Admin Skills
-  'admin.skills.title': 'Skills 中心',
+  'admin.skills.title': 'AI 中心',
   'admin.skills.filter.all': '全部',
   'admin.skills.filter.generator': '文档生成',
   'admin.skills.filter.agent': '辅助代理',
+  'admin.skills.filter.mcp': 'MCP',
   'admin.skills.hero.loaded': '{count} 个 Skills 已载入',
   'admin.skills.hero.summary': '包含 {generatorCount} 个文档生成器与 {agentCount} 个辅助代理',
   'admin.skills.tag.docGen': '文档生成',

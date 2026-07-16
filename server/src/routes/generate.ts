@@ -15,6 +15,7 @@ import { getUserUploadsForPrompt, getConversationFilesForPrompt } from '../servi
 import { Orchestrator } from '../services/orchestrator.js';
 import { enforceDataFidelity } from '../services/dataFidelityGuard.js';
 import { normalizePptx } from '../services/pptxNormalize.js';
+import { getMailToken } from '../services/outlookApi.js';
 import path from 'path';
 import fs from 'fs';
 import { parseInfographicDirective, renderInfographic, compositeRegionMask, regionEditToFile } from '../services/infographicService.js';
@@ -182,7 +183,7 @@ async function buildChatHistory(conversationId: string): Promise<string> {
 router.post('/:conversationId', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const conversationId = req.params.conversationId as string;
-  const { message, docContext, skillId, uploadIds, referencedConvIds: rawRefIds, regionMask, regionFileId } = req.body;
+  const { message, docContext, skillId, uploadIds, referencedConvIds: rawRefIds, regionMask, regionFileId, dataSources } = req.body;
   const referencedConvIds: string[] = Array.isArray(rawRefIds)
     ? rawRefIds.filter((id: unknown) => typeof id === 'string').slice(0, 3)
     : [];
@@ -218,7 +219,15 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
   // and probing THIS system's own internals (底層技術/原始碼/架構/提示詞). The
   // injection guard above only catches jailbreak syntax; this catches malicious
   // INTENT phrased as a normal question. Runs before any streaming starts.
-  const safetyVerdict = await moderateAiRequest(message, '無法回答這個問題');
+  // When the user explicitly attached the "我的信件" data source, the run is
+  // authorized to read THEIR OWN mailbox (identity via their own token, no
+  // cross-user access). Tell the moderator so "列出我的信件" isn't mistaken for
+  // data exfiltration — own-mailbox access is legitimate personal productivity.
+  const emailDataSource = Array.isArray(dataSources) && dataSources.includes('email');
+  const safetyVerdict = await moderateAiRequest(message, '無法回答這個問題',
+    emailDataSource
+      ? { contextNote: '使用者已在對話中選取「我的信件」資料源。系統只會用其本人的授權 Token 讀取「他自己」的 Outlook 信箱（不可能存取他人信箱）。因此「查詢／列出／整理／摘要自己的信件」是被授權的正當操作，不屬於竊取機密或危害他人。' }
+      : undefined);
   if (!safetyVerdict.allowed) {
     logSecurityEvent(userId, 'blocked_request', 'high', `chat blocked (category=${safetyVerdict.category})`, message);
     res.status(403).json({ error: safetyVerdict.reason, code: 'CONTENT_BLOCKED' }); return;
@@ -288,12 +297,20 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
     ? `[DOC_CONTEXT: ${docContext}]\n\n${sanitizedMessage}`
     : sanitizedMessage;
 
+  // Data-source MCP: when the user picked "email" in the data-source selector,
+  // resolve THEIR OWN mail token so worker/doc agents can pull their mailbox via
+  // email-mcp. Explicit selection (not intent-guessing) → deterministic + opt-in.
+  let mcpEmailToken: string | undefined;
+  if (Array.isArray(dataSources) && dataSources.includes('email')) {
+    mcpEmailToken = (await getMailToken(userId)) || undefined;
+  }
+
   if (useOrchestrator) {
-    await handleOrchestrated(req, res, userId, conversationId, aiMessage, validUploadIds, userLocale, conversation.category || 'document', refContext, conversation.system_prompt || '');
+    await handleOrchestrated(req, res, userId, conversationId, aiMessage, validUploadIds, userLocale, conversation.category || 'document', refContext, conversation.system_prompt || '', mcpEmailToken);
   } else {
     await handleDirect(req, res, userId, conversationId, conversation, aiMessage, skillId, validUploadIds, userLocale, refContext,
       typeof regionMask === 'string' ? regionMask : undefined,
-      typeof regionFileId === 'string' ? regionFileId : undefined);
+      typeof regionFileId === 'string' ? regionFileId : undefined, mcpEmailToken);
   }
 });
 
@@ -301,7 +318,7 @@ async function handleOrchestrated(
   _req: Request, res: Response,
   userId: string, conversationId: string, message: string,
   uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document',
-  refContext: string = '', systemPrompt: string = '',
+  refContext: string = '', systemPrompt: string = '', mcpEmailToken?: string,
 ) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
@@ -323,7 +340,7 @@ async function handleOrchestrated(
   const customRolePrompt = systemPrompt
     ? `\n\n## Custom Role Instructions\nThe user has configured this assistant with the following role:\n${systemPrompt}\nPlease behave according to this role description.\n`
     : '';
-  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds, userLocale, conversationCategory, refContext, customRolePrompt);
+  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds, userLocale, conversationCategory, refContext, customRolePrompt, mcpEmailToken);
   activeGenerations.set(conversationId, () => orchestrator.abort());
 
   try {
@@ -538,7 +555,7 @@ async function handleDirect(
   userId: string, conversationId: string, conversation: Conversation,
   sanitizedMessage: string, skillId?: string, uploadIds: string[] = [],
   userLocale: string = 'zh-TW', refContext: string = '',
-  regionMask?: string, regionFileId?: string,
+  regionMask?: string, regionFileId?: string, mcpEmailToken?: string,
 ) {
   const effectiveSkillId = skillId || conversation.skill_id || 'pptx-gen';
   const skill = getSkill(effectiveSkillId);
@@ -680,6 +697,7 @@ async function handleDirect(
       customAllowedTools: skill?.allowedTools,
       customDisallowedTools: skill?.disallowedTools,
       ...(regionImages ? { images: regionImages } : {}),
+      ...(mcpEmailToken ? { mcpEmailToken } : {}),
     });
 
     activeGenerations.set(conversationId, abort);

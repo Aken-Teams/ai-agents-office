@@ -398,6 +398,13 @@ function getFileColor(type: string): string {
 const IFRAME_PREVIEWABLE = new Set(['pdf', 'html', 'htm']);
 /** Types that show a styled file-type cover card */
 const CARD_PREVIEWABLE = new Set(['pptx', 'ppt', 'docx', 'doc', 'xlsx', 'xls']);
+
+// Data sources the agent can be granted (explicit multi-select, Gemini-style).
+// Selecting one sends it in `dataSources`; the backend attaches the matching MCP.
+// (KM will be added here once km-mcp lands.)
+const DATA_SOURCES: { id: string; label: string; desc: string; icon: string }[] = [
+  { id: 'email', label: '我的信件', desc: 'Outlook 信箱（只讀自己的）', icon: 'mail' },
+];
 const PREVIEWABLE_TYPES = new Set([...IFRAME_PREVIEWABLE, ...CARD_PREVIEWABLE]);
 
 /** Simple cover card for Office files — light bg + icon */
@@ -535,8 +542,14 @@ function ChatContent() {
   // Cross-assistant reference (@mention) state — only active for assistant conversations
   const [refAssistants, setRefAssistants] = useState<RefConv[]>([]);
   const [selectedRefs, setSelectedRefs] = useState<RefConv[]>([]);
+  // Data-source selector (Gemini-style, explicit opt-in): which internal sources
+  // the agent may pull from to build the document. Sent as `dataSources` in the
+  // request; the backend attaches the matching MCP (e.g. 'email' → email-mcp).
+  const [selectedDataSources, setSelectedDataSources] = useState<string[]>([]);
+  const [dataSourceMenuOpen, setDataSourceMenuOpen] = useState(false);
   const [showRefPicker, setShowRefPicker] = useState(false);
   const refPickerRef = useRef<HTMLDivElement>(null);
+  const dataSourceMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sidebarMargin = useSidebarMargin();
   const abortRef = useRef<AbortController | null>(null);
@@ -711,6 +724,15 @@ function ChatContent() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showRefPicker]);
+
+  useEffect(() => {
+    if (!dataSourceMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (!dataSourceMenuRef.current?.contains(e.target as Node)) setDataSourceMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [dataSourceMenuOpen]);
 
   const pendingHandled = useRef(false);
   const [backgroundProcessing, setBackgroundProcessing] = useState(false);
@@ -898,7 +920,7 @@ function ChatContent() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [streaming]);
 
-  const sendMessage = useCallback(async (directMessage?: string, extraUploadIds?: string[]) => {
+  const sendMessage = useCallback(async (directMessage?: string, extraUploadIds?: string[], extraDataSources?: string[]) => {
     const messageToSend = directMessage || input.trim();
     if (!messageToSend || streaming || !token) return;
 
@@ -1079,6 +1101,9 @@ function ChatContent() {
           ...(currentUploadIds.length > 0 && { uploadIds: currentUploadIds }),
           ...(selectedRefs.length > 0 && { referencedConvIds: selectedRefs.map(r => r.id) }),
           ...(region && { regionMask: region.mask, regionFileId: region.fileId }),
+          ...((extraDataSources && extraDataSources.length > 0 ? extraDataSources : selectedDataSources).length > 0 && {
+            dataSources: extraDataSources && extraDataSources.length > 0 ? extraDataSources : selectedDataSources,
+          }),
         }),
         signal: controller.signal,
       });
@@ -1326,6 +1351,20 @@ function ChatContent() {
       sessionStorage.removeItem(key);
       pendingHandled.current = true;
 
+      // Restore the data sources picked on the dashboard so the first run uses them
+      // (and reflect them in the selector chip). Passed explicitly to sendMessage to
+      // avoid a stale-closure read of the just-set state.
+      let pendingDs: string[] = [];
+      const dsKey = `pending_datasources_${conversationId}`;
+      const pendingDsRaw = sessionStorage.getItem(dsKey);
+      if (pendingDsRaw) {
+        sessionStorage.removeItem(dsKey);
+        try {
+          pendingDs = JSON.parse(pendingDsRaw) as string[];
+          if (pendingDs.length > 0) setSelectedDataSources(pendingDs);
+        } catch { /* ignore parse errors */ }
+      }
+
       // Restore uploaded files from dashboard smart input
       const uploadsKey = `pending_uploads_${conversationId}`;
       const pendingUploads = sessionStorage.getItem(uploadsKey);
@@ -1334,11 +1373,11 @@ function ChatContent() {
         try {
           const files = JSON.parse(pendingUploads) as Array<{ id: string; name: string }>;
           const uploadIds = files.map(f => f.id);
-          sendMessage(pending, uploadIds);
+          sendMessage(pending, uploadIds, pendingDs);
           return;
         } catch { /* ignore parse errors */ }
       }
-      sendMessage(pending);
+      sendMessage(pending, undefined, pendingDs);
     }
   }, [conversationLoaded, token, conversationId, streaming, sendMessage]);
 
@@ -2322,6 +2361,45 @@ function ChatContent() {
                 >
                   <span className="material-symbols-outlined text-base md:text-lg">attach_file</span>
                 </button>
+                {/* Data-source selector (Gemini-style multi-select) — grant the agent
+                    read access to internal sources (email / KM …) for this message. */}
+                <div className="relative shrink-0" ref={dataSourceMenuRef}>
+                  <button
+                    onClick={() => setDataSourceMenuOpen(o => !o)}
+                    disabled={streaming}
+                    className={`w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${dataSourceMenuOpen || selectedDataSources.length > 0 ? 'bg-primary/15 text-primary' : 'active:bg-surface-container-high md:hover:bg-surface-container-high text-on-surface-variant active:text-primary md:hover:text-primary'}`}
+                    title="資料源"
+                  >
+                    <span className="material-symbols-outlined text-base md:text-lg">database</span>
+                  </button>
+                  {dataSourceMenuOpen && (
+                    <div className="absolute bottom-full left-0 mb-1 w-60 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl overflow-hidden z-50">
+                      <div className="px-3 py-2 border-b border-outline-variant/10">
+                        <p className="text-xs font-medium text-on-surface-variant">資料源（可多選）</p>
+                        <p className="text-[10px] text-on-surface-variant/60 mt-0.5">勾選後，AI 產文件時可讀取這些來源</p>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto">
+                        {DATA_SOURCES.map(ds => {
+                          const isSel = selectedDataSources.includes(ds.id);
+                          return (
+                            <button
+                              key={ds.id}
+                              onClick={() => setSelectedDataSources(prev => isSel ? prev.filter(x => x !== ds.id) : [...prev, ds.id])}
+                              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors cursor-pointer ${isSel ? 'bg-primary/10' : 'md:hover:bg-surface-container-high active:bg-surface-container-high'}`}
+                            >
+                              <span className={`material-symbols-outlined text-sm shrink-0 ${isSel ? 'text-primary' : 'text-on-surface-variant'}`}>{ds.icon}</span>
+                              <div className="min-w-0 flex-1">
+                                <p className={`text-xs font-medium ${isSel ? 'text-primary' : 'text-on-surface'}`}>{ds.label}</p>
+                                <p className="text-[10px] text-on-surface-variant/60 truncate">{ds.desc}</p>
+                              </div>
+                              {isSel && <span className="material-symbols-outlined text-sm text-primary shrink-0">check</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 {/* @ Reference button — only for assistant conversations */}
                 {convCategory === 'assistant' && refAssistants.length > 0 && (
                   <div className="relative shrink-0" ref={refPickerRef}>

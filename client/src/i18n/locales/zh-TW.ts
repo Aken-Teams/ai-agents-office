@@ -690,7 +690,7 @@ const zhTW = {
   'admin.sidebar.group.system': '系統',
   'admin.sidebar.overview': '總覽',
   'admin.sidebar.users': '用戶管理',
-  'admin.sidebar.skills': 'Skills 中心',
+  'admin.sidebar.skills': 'AI 中心',
   'admin.sidebar.tokens': 'Token 帳本',
   'admin.sidebar.permissions': '權限管理',
   'admin.sidebar.security': '安全審計',
@@ -1094,10 +1094,11 @@ const zhTW = {
   'admin.settings.preferences.themeLight': '淺色',
 
   // Admin Skills
-  'admin.skills.title': 'Skills 中心',
+  'admin.skills.title': 'AI 中心',
   'admin.skills.filter.all': '全部',
   'admin.skills.filter.generator': '文件生成',
   'admin.skills.filter.agent': '輔助代理',
+  'admin.skills.filter.mcp': 'MCP',
   'admin.skills.hero.loaded': '{count} 個 Skills 已載入',
   'admin.skills.hero.summary': '包含 {generatorCount} 個文件生成器與 {agentCount} 個輔助代理',
   'admin.skills.tag.docGen': '文件生成',

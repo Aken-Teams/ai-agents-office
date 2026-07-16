@@ -78,6 +78,67 @@ function formatFileSize(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+// Data sources the agent can be granted read access to for a run (Gemini-style
+// multi-select). Kept in sync with the chat page's DATA_SOURCES. The selection
+// travels to the new conversation via sessionStorage and is applied to its first
+// generation. 'email' only resolves in pro-panjit; elsewhere it degrades to a no-op.
+const DATA_SOURCES: { id: string; label: string; desc: string; icon: string }[] = [
+  { id: 'email', label: '我的信件', desc: 'Outlook 信箱（只讀自己的）', icon: 'mail' },
+];
+
+/** The 資料源 dropdown button (used by both the mobile and desktop input bars). */
+function DataSourceSelector({ selected, onToggle, disabled }: { selected: string[]; onToggle: (id: string) => void; disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+  return (
+    <div className="relative shrink-0" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        disabled={disabled}
+        className={`w-9 h-9 flex items-center justify-center rounded transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${open || selected.length > 0 ? 'bg-primary/15 text-primary' : 'hover:bg-surface-container-high text-on-surface-variant hover:text-primary'}`}
+        title="資料源"
+      >
+        <span className="material-symbols-outlined text-lg">database</span>
+      </button>
+      {open && (
+        <div className="absolute bottom-full left-0 mb-1 w-60 bg-surface-container border border-outline-variant/20 rounded-xl shadow-xl overflow-hidden z-50">
+          <div className="px-3 py-2 border-b border-outline-variant/10">
+            <p className="text-xs font-medium text-on-surface-variant">資料源（可多選）</p>
+            <p className="text-[10px] text-on-surface-variant/60 mt-0.5">勾選後，AI 產文件時可讀取這些來源</p>
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {DATA_SOURCES.map(ds => {
+              const isSel = selected.includes(ds.id);
+              return (
+                <button
+                  key={ds.id}
+                  type="button"
+                  onClick={() => onToggle(ds.id)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors cursor-pointer ${isSel ? 'bg-primary/10' : 'hover:bg-surface-container-high'}`}
+                >
+                  <span className={`material-symbols-outlined text-sm shrink-0 ${isSel ? 'text-primary' : 'text-on-surface-variant'}`}>{ds.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-xs font-medium ${isSel ? 'text-primary' : 'text-on-surface'}`}>{ds.label}</p>
+                    <p className="text-[10px] text-on-surface-variant/60 truncate">{ds.desc}</p>
+                  </div>
+                  {isSel && <span className="material-symbols-outlined text-sm text-primary shrink-0">check</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DashboardContent() {
   const { user, token, isLoading } = useAuth();
   const { t } = useTranslation();
@@ -89,6 +150,8 @@ function DashboardContent() {
   const [isBeta, setIsBeta] = useState(true);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [smartInput, setSmartInput] = useState('');
+  const [selectedDataSources, setSelectedDataSources] = useState<string[]>([]);
+  const toggleDataSource = (id: string) => setSelectedDataSources(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   const [creating, setCreating] = useState(false);
   const [smartAttached, setSmartAttached] = useState<Array<{ id: string; name: string; uploading?: boolean }>>([]);
   const [uploadAlerts, setUploadAlerts] = useState<UploadAlertItem[]>([]);
@@ -247,6 +310,10 @@ function DashboardContent() {
         if (validFiles.length > 0) {
           sessionStorage.setItem(`pending_uploads_${conv.id}`, JSON.stringify(validFiles));
         }
+      }
+      // Carry the selected data sources so the chat page applies them to the first run.
+      if (!skillId && selectedDataSources.length > 0) {
+        sessionStorage.setItem(`pending_datasources_${conv.id}`, JSON.stringify(selectedDataSources));
       }
       router.push(`/chat/${conv.id}`);
     } finally {
@@ -663,6 +730,9 @@ function DashboardContent() {
             >
               <span className="material-symbols-outlined text-[20px]">attach_file</span>
             </button>
+            <div className="mb-px">
+              <DataSourceSelector selected={selectedDataSources} onToggle={toggleDataSource} disabled={creating} />
+            </div>
             <div className="flex-1">
               <textarea
                 className="w-full bg-surface-container border-none focus:ring-1 focus:ring-primary/30 rounded-2xl py-3 px-4 text-sm text-on-surface placeholder:text-outline font-body resize-none min-h-[90px] max-h-[120px] leading-snug"
@@ -840,7 +910,7 @@ function DashboardContent() {
                   onChange={e => { handleSmartFileAttach(e.target.files); e.target.value = ''; }}
                 />
                 <textarea
-                  className="w-full bg-transparent border-none focus:ring-0 py-3 pl-12 pr-14 text-sm text-on-surface placeholder:text-outline font-body resize-none min-h-[80px] max-h-[160px] min-[1920px]:min-h-[140px] min-[1920px]:max-h-[240px]"
+                  className="w-full bg-transparent border-none focus:ring-0 py-3 pl-[5.5rem] pr-14 text-sm text-on-surface placeholder:text-outline font-body resize-none min-h-[80px] max-h-[160px] min-[1920px]:min-h-[140px] min-[1920px]:max-h-[240px]"
                   value={smartInput}
                   onChange={e => setSmartInput(e.target.value)}
                   onKeyDown={e => {
@@ -853,13 +923,17 @@ function DashboardContent() {
                   placeholder={t('dashboard.smartInput.placeholder')}
                   disabled={creating}
                 />
-                <button
-                  className="absolute left-3 bottom-3 w-9 h-9 flex items-center justify-center rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
-                  onClick={() => smartFileRef.current?.click()}
-                  title={t('dashboard.smartInput.uploadTooltip')}
-                >
-                  <span className="material-symbols-outlined text-lg">attach_file</span>
-                </button>
+                <div className="absolute left-3 bottom-3 flex items-center gap-1">
+                  <button
+                    type="button"
+                    className="w-9 h-9 flex items-center justify-center rounded hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+                    onClick={() => smartFileRef.current?.click()}
+                    title={t('dashboard.smartInput.uploadTooltip')}
+                  >
+                    <span className="material-symbols-outlined text-lg">attach_file</span>
+                  </button>
+                  <DataSourceSelector selected={selectedDataSources} onToggle={toggleDataSource} disabled={creating} />
+                </div>
                 <button
                   className="absolute right-3 bottom-3 w-10 h-10 cyber-gradient rounded-lg flex items-center justify-center text-on-primary disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 active:scale-95 transition-all"
                   onClick={handleSmartSubmit}
