@@ -53,6 +53,21 @@ function toAttachments(data: any): KmAttachment[] {
 }
 function ext(name: string): string { const i = name.lastIndexOf('.'); return i >= 0 ? name.slice(i + 1).toLowerCase() : ''; }
 const IMG_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']);
+// Office types the server converts to PDF (LibreOffice) so the pdf.js viewer can
+// preview + highlight them.
+const OFFICE_EXTS = new Set(['pptx', 'ppt', 'docx', 'doc', 'xlsx', 'xls']);
+
+// Colour-coded file-type icon (matches the usual PDF=red / PPT=orange / Word=blue
+// / Excel=green / image=purple convention).
+function fileIcon(name: string): { icon: string; cls: string } {
+  const e = ext(name);
+  if (e === 'pdf') return { icon: 'picture_as_pdf', cls: 'text-red-500' };
+  if (e === 'pptx' || e === 'ppt') return { icon: 'slideshow', cls: 'text-orange-500' };
+  if (e === 'docx' || e === 'doc') return { icon: 'description', cls: 'text-blue-600' };
+  if (e === 'xlsx' || e === 'xls' || e === 'csv') return { icon: 'table_chart', cls: 'text-green-600' };
+  if (IMG_EXTS.has(e)) return { icon: 'image', cls: 'text-purple-500' };
+  return { icon: 'draft', cls: 'text-on-surface-variant/70' };
+}
 
 // Map the currently-running tool to a human-readable progress step (perceived speed).
 function toolProgress(tool: string): string {
@@ -93,7 +108,7 @@ const compactMd = {
   th: (p: any) => <th className="border border-outline-variant/30 px-1.5 py-0.5 bg-surface-container-high" {...p} />,
   td: (p: any) => <td className="border border-outline-variant/20 px-1.5 py-0.5" {...p} />,
   code: (p: any) => <code className="px-1 py-0.5 rounded bg-surface-container text-[0.85em]" {...p} />,
-  mark: (p: any) => <mark className="bg-amber-300/50 text-on-surface rounded px-1 font-medium [box-decoration-break:clone] [-webkit-box-decoration-break:clone]" {...p} />,
+  mark: (p: any) => <mark className="bg-amber-200/35 text-on-surface rounded px-1 [box-decoration-break:clone] [-webkit-box-decoration-break:clone]" {...p} />,
 };
 
 export default function KMAssistantWidget() {
@@ -148,7 +163,7 @@ export default function KMAssistantWidget() {
   async function runSearch() {
     const q = query.trim();
     if (!q || searching) return;
-    setSearching(true); setSearchErr(''); setSearched(true); setDetail(null);
+    setSearching(true); setSearchErr(''); setSearched(true); setDetail(null); setResults([]);
     try {
       // The endpoint STREAMS (keepalives while KM is slow, then a single data: event
       // with the result) — so broad terms complete instead of the proxy resetting.
@@ -232,15 +247,25 @@ export default function KMAssistantWidget() {
 
   async function viewAttachment(docId: string, filename: string, highlight?: string, page?: number) {
     const e = ext(filename);
-    const kind: 'pdf' | 'image' | 'other' = e === 'pdf' ? 'pdf' : IMG_EXTS.has(e) ? 'image' : 'other';
+    const isOffice = OFFICE_EXTS.has(e);
+    // Office files are converted to PDF server-side, so they view (and highlight) via
+    // the same pdf.js viewer.
+    const kind: 'pdf' | 'image' | 'other' = (e === 'pdf' || isOffice) ? 'pdf' : IMG_EXTS.has(e) ? 'image' : 'other';
     if (kind === 'other') { await downloadAttachment(docId, filename); return; } // non-viewable → just download
     const search = highlight?.trim() || query.trim() || undefined; // carry the term → highlight in the PDF
     setViewerLoading(true); setViewer({ docId, filename, url: '', kind, search, page });
     try {
-      const url = await fetchBlobUrl(docId, filename, false);
+      const url = isOffice ? await fetchAsPdfBlobUrl(docId, filename) : await fetchBlobUrl(docId, filename, false);
       setViewer({ docId, filename, url, kind, search, page });
     } catch (err) { setViewer(null); alert((err as Error).message); }
     finally { setViewerLoading(false); }
+  }
+
+  // Fetch an Office attachment converted to PDF (for preview + highlight).
+  async function fetchAsPdfBlobUrl(docId: string, filename: string): Promise<string> {
+    const res = await fetch(`${API_BASE}/api/km-agent/document/${encodeURIComponent(docId)}/attachment/${encodeURIComponent(filename)}/as-pdf`, { headers: authHeaders() });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error((d && d.error) || `轉檔預覽失敗（${res.status}）`); }
+    return URL.createObjectURL(await res.blob());
   }
 
   // Load 命中位置: which pages of this attachment mention the current search term.
@@ -470,15 +495,15 @@ export default function KMAssistantWidget() {
                 <div className="space-y-1.5">
                   {detail.attachments.map((att, i) => {
                     const e = ext(att.filename);
-                    const canView = e === 'pdf' || IMG_EXTS.has(e);
+                    const canView = e === 'pdf' || IMG_EXTS.has(e) || OFFICE_EXTS.has(e);
                     const q = query.trim();
                     const attHits = hits && hits.filename === att.filename ? hits : null;
                     return (
                       <div key={i} className="rounded-lg bg-surface-container overflow-hidden">
                         <div className="flex items-center gap-2 p-2.5">
-                          <span className="material-symbols-outlined text-on-surface-variant/70 text-lg shrink-0">{e === 'pdf' ? 'picture_as_pdf' : IMG_EXTS.has(e) ? 'image' : 'draft'}</span>
+                          <span className={`material-symbols-outlined ${fileIcon(att.filename).cls} text-lg shrink-0`}>{fileIcon(att.filename).icon}</span>
                           <p className="text-sm text-on-surface truncate flex-1 min-w-0">{att.filename}</p>
-                          {q && (e === 'pdf' || e === 'docx' || e === 'xlsx' || e === 'xls') && (
+                          {q && (e === 'pdf' || OFFICE_EXTS.has(e)) && (
                             <button onClick={() => loadHits(detail.doc.id, att.filename)} title={`找「${q}」在哪`}
                               className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary shrink-0">
                               <span className="material-symbols-outlined text-lg">manage_search</span>

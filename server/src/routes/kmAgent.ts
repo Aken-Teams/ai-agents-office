@@ -11,6 +11,8 @@
  * surface honestly. Only available in pro-panjit with KM_API_KEY set.
  */
 import { Router, Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
@@ -99,6 +101,47 @@ router.get('/document/:id/attachment/:filename', async (req: Request, res: Respo
   res.send(r.buf);
 });
 
+// ─── Office (PPT/Word/Excel) → PDF, so the pdf.js highlight viewer can preview it ───
+const OFFICE_PDF_EXTS = new Set(['pptx', 'ppt', 'docx', 'doc', 'xlsx', 'xls']);
+router.get('/document/:id/attachment/:filename/as-pdf', async (req: Request, res: Response) => {
+  const onBehalf = await getKmOnBehalf(req.user!.userId);
+  if (!onBehalf) { res.status(400).json({ error: '無法取得你的員編。' }); return; }
+  const filename = decodeURIComponent(String(req.params.filename));
+  const e = filename.slice(filename.lastIndexOf('.') + 1).toLowerCase();
+  const r = await kmFetchAttachment(onBehalf, String(req.params.id), filename);
+  if (!r.ok || !r.buf) { res.status(r.status && r.status < 500 ? r.status : 502).json({ error: r.error }); return; }
+
+  if (e === 'pdf') {
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.send(r.buf);
+    return;
+  }
+  if (!OFFICE_PDF_EXTS.has(e)) { res.status(415).json({ error: '此類型無法轉為 PDF 預覽。' }); return; }
+
+  const dir = path.join(config.workspaceRoot, '_km_preview');
+  try { fs.mkdirSync(dir, { recursive: true }); } catch { /* ignore */ }
+  const tmp = path.join(dir, `km_${String(req.params.id)}_${Date.now().toString(36)}.${e}`);
+  try {
+    fs.writeFileSync(tmp, r.buf);
+    const { convertOfficeFile } = await import('../services/filePreview.js');
+    const out = await convertOfficeFile(tmp, e);
+    if (out.mime === 'application/pdf' && Buffer.isBuffer(out.content)) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(filename.replace(/\.[^.]+$/, ''))}.pdf`);
+      res.send(out.content);
+    } else {
+      // JS fallback produced HTML → pdf.js can't render it. Ask the user to download.
+      res.status(422).json({ error: '此伺服器未安裝 LibreOffice，無法將 Office 檔轉成 PDF 預覽，請改用「下載」。' });
+    }
+  } catch (err) {
+    console.warn('[KM] office→pdf failed:', err);
+    res.status(500).json({ error: 'Office 轉 PDF 預覽失敗，請改用「下載」。' });
+  } finally {
+    try { fs.rmSync(tmp, { force: true }); } catch { /* ignore */ }
+  }
+});
+
 // ─── 命中位置: which page(s) of an attachment mention the keyword + snippets ───
 // Deterministic (no AI): download → per-page PDF text → find the term. Answers
 // "這份文件哪一段在講差勤" and lets the viewer jump straight to that page.
@@ -124,21 +167,43 @@ router.get('/document/:id/attachment/:filename/hits', async (req: Request, res: 
     return out;
   };
 
+  const perPagePdf = async (buf: Buffer) => {
+    const { extractText, getDocumentProxy } = await import('unpdf');
+    const pdf = await getDocumentProxy(new Uint8Array(buf));
+    const { totalPages, text } = await extractText(pdf, { mergePages: false });
+    const pages: string[] = Array.isArray(text) ? text : [String(text)];
+    const hits: { page: number; snippets: string[] }[] = [];
+    for (let p = 0; p < pages.length && hits.length < 30; p++) {
+      const snips = snippetsFrom(pages[p] || '', 3);
+      if (snips.length) hits.push({ page: p + 1, snippets: snips });
+    }
+    return { total_pages: totalPages, hits };
+  };
+
   try {
-    if (e === 'pdf') {
-      const { extractText, getDocumentProxy } = await import('unpdf');
-      const pdf = await getDocumentProxy(new Uint8Array(r.buf));
-      const { totalPages, text } = await extractText(pdf, { mergePages: false });
-      const pages: string[] = Array.isArray(text) ? text : [String(text)];
-      const hits: { page: number; snippets: string[] }[] = [];
-      for (let p = 0; p < pages.length && hits.length < 30; p++) {
-        const snips = snippetsFrom(pages[p] || '', 3);
-        if (snips.length) hits.push({ page: p + 1, snippets: snips });
-      }
-      res.json({ q, filename, total_pages: totalPages, hits, kind: 'pdf' });
+    // PDFs directly; Office → convert to PDF (LibreOffice) so hits carry PAGE numbers
+    // that line up with the pdf.js viewer (same converted PDF).
+    let pdfBuf: Buffer | null = e === 'pdf' ? r.buf : null;
+    if (!pdfBuf && OFFICE_PDF_EXTS.has(e)) {
+      const dir = path.join(config.workspaceRoot, '_km_preview');
+      try { fs.mkdirSync(dir, { recursive: true }); } catch { /* ignore */ }
+      const tmp = path.join(dir, `km_hits_${String(req.params.id)}_${Date.now().toString(36)}.${e}`);
+      try {
+        fs.writeFileSync(tmp, r.buf);
+        const { convertOfficeFile } = await import('../services/filePreview.js');
+        const out = await convertOfficeFile(tmp, e);
+        if (out.mime === 'application/pdf' && Buffer.isBuffer(out.content)) pdfBuf = out.content;
+      } catch (err) { console.warn('[KM] hits office→pdf failed:', err); }
+      finally { try { fs.rmSync(tmp, { force: true }); } catch { /* ignore */ } }
+    }
+
+    if (pdfBuf) {
+      const { total_pages, hits } = await perPagePdf(pdfBuf);
+      res.json({ q, filename, total_pages, hits, kind: e === 'pdf' ? 'pdf' : 'office' });
       return;
     }
-    // Non-PDF: no page concept — return snippets from the whole text.
+
+    // No LibreOffice (or not Office): whole-text snippets, no page (docx/xlsx/txt).
     const { extractFileText } = await import('../services/emailContentUtils.js');
     const text = await extractFileText(r.buf, e).catch(() => '');
     const snips = snippetsFrom(text, 8);
