@@ -9,7 +9,7 @@
  * The panel is always mounted (hidden when collapsed) so the email assistant's SSE
  * stays connected exactly as before. A gear opens 助手設定 to enable/disable each.
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import EmailAgentWidget, { type EmailWidgetStatus } from './EmailAgentWidget';
 import KMAssistantWidget from './KMAssistantWidget';
@@ -75,6 +75,11 @@ export default function AssistantDock({ emailAvailable }: { emailAvailable: bool
     setKmEnabled(on);
     fetch(`${API_BASE}/api/km-agent/preference`, { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: on }) }).catch(() => {});
   };
+
+  // Stable element refs — so the (heavy) widgets DON'T re-render when only the dock's
+  // own state (emailStatus/open/active…) changes. Props are stable, so [] is safe.
+  const emailEl = useMemo(() => <EmailAgentWidget embedded onStatus={setEmailStatus} />, []);
+  const kmEl = useMemo(() => <KMAssistantWidget />, []);
 
   if (!mounted) return null;
 
@@ -203,12 +208,12 @@ export default function AssistantDock({ emailAvailable }: { emailAvailable: bool
         <div className="relative flex-1 min-h-0">
           {emailInDock && (
             <div className={activeTab === 'email' ? 'absolute inset-0' : 'hidden'}>
-              <EmailAgentWidget embedded onStatus={setEmailStatus} />
+              {emailEl}
             </div>
           )}
           {kmInDock && (
             <div className={activeTab === 'km' ? 'absolute inset-0' : 'hidden'}>
-              <KMAssistantWidget />
+              {kmEl}
             </div>
           )}
         </div>

@@ -101,16 +101,37 @@ export default function KMAssistantWidget() {
     if (!q || searching) return;
     setSearching(true); setSearchErr(''); setSearched(true); setDetail(null);
     try {
+      // The endpoint STREAMS (keepalives while KM is slow, then a single data: event
+      // with the result) — so broad terms complete instead of the proxy resetting.
       const res = await fetch(`${API_BASE}/api/km-agent/search`, {
         method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: q }),
       });
-      const data = await res.json().catch(() => ({ error: `伺服器回應非 JSON（HTTP ${res.status}）` }));
-      if (!res.ok) { setSearchErr(data.error || `KM 搜尋失敗（${res.status}）`); setResults([]); }
-      else setResults(toDocs(data));
+      if (!res.ok || !res.body) {
+        const d = await res.json().catch(() => null);
+        setSearchErr((d && d.error) || `KM 搜尋失敗（${res.status}）`); setResults([]); return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let payload: any = null;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop() || '';
+        for (const part of parts) {
+          const line = part.split('\n').find(l => l.startsWith('data:'));
+          if (line) { try { payload = JSON.parse(line.slice(5).trim()); } catch { /* skip */ } }
+        }
+      }
+      if (!payload) setSearchErr('KM 搜尋沒有回應，請稍後再試。');
+      else if (!payload.ok) setSearchErr(payload.error || 'KM 搜尋失敗，請稍後再試。');
+      else { setSearchErr(''); setResults(toDocs(payload.data)); }
     } catch (err) {
       console.error('[KM search] fetch failed:', err);
-      setSearchErr('KM 搜尋連線失敗：' + ((err as Error).message || '未知錯誤'));
+      setSearchErr('KM 搜尋連線中斷,請稍後再試。');
       setResults([]);
     }
     finally { setSearching(false); }

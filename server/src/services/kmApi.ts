@@ -62,7 +62,9 @@ export async function kmSearch(
       method: 'POST',
       headers: { ...kmHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(90_000), // KM /api/search is slow
+      // The /search route streams keepalives while we wait, so the proxy won't reset
+      // mid-query — we can afford to let even broad terms (「請假」 ~40s) finish.
+      signal: AbortSignal.timeout(60_000),
     });
     const ms = Date.now() - t0;
     if (!res.ok) {
@@ -75,8 +77,9 @@ export async function kmSearch(
     return { ok: true, data };
   } catch (e) {
     const ms = Date.now() - t0;
+    const timedOut = (e as Error).name === 'TimeoutError' || ms >= 29_000;
     console.warn(`[KM] search "${query}" FAILED in ${ms}ms: ${(e as Error).message}`);
-    return { ok: false, error: `KM 搜尋逾時或連線失敗：${(e as Error).message}` };
+    return { ok: false, error: timedOut ? 'KM 搜尋逾時（此關鍵字結果較多、KM 回應較慢）。請改用更精確的關鍵字（如加上部門或文件名），或稍後再試。' : `KM 搜尋連線失敗：${(e as Error).message}` };
   }
 }
 

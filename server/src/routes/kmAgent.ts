@@ -51,17 +51,27 @@ async function kmAgentEnabled(userId: string): Promise<boolean> {
   return row?.km_agent_enabled === 1;
 }
 
-// ─── 文件 tab: search (direct, no AI, no tokens) ───
+// ─── 文件 tab: search — streamed so slow KM queries still complete ───
+// KM's /api/search is slow for broad terms (~40s). A plain request sends nothing
+// while waiting, so the dev proxy treats it as idle and resets (ECONNRESET → 500).
+// We stream keepalive bytes while KM works (like the email SSE), then emit the
+// result — so even broad searches return everything instead of erroring out.
 router.post('/search', async (req: Request, res: Response) => {
   const { query, folder_id, page, page_size } = req.body as { query?: string; folder_id?: number; page?: number; page_size?: number };
   if (!query?.trim()) { res.status(400).json({ error: 'query is required' }); return; }
+
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
+  try { res.write(': searching\n\n'); } catch { /* closed */ }
+  const keepalive = setInterval(() => { try { res.write(': ka\n\n'); } catch { /* closed */ } }, 5000);
+
   const r = await kmSearch(query.trim(), {
     folderId: typeof folder_id === 'number' ? folder_id : undefined,
     page: typeof page === 'number' ? page : undefined,
     pageSize: typeof page_size === 'number' ? page_size : undefined,
   });
-  if (!r.ok) { res.status(r.status && r.status < 500 ? r.status : 502).json({ error: r.error }); return; }
-  res.json(r.data);
+  clearInterval(keepalive);
+  const payload = r.ok ? { ok: true, data: r.data } : { ok: false, status: r.status ?? 502, error: r.error };
+  try { res.write(`data: ${JSON.stringify(payload)}\n\n`); res.end(); } catch { /* closed */ }
 });
 
 // ─── 文件 tab: document detail (per-user permission) ───
