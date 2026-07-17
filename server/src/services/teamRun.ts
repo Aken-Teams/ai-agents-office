@@ -22,6 +22,7 @@ import { truncateResultForRouter } from './taskParser.js';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { recordTokenUsage } from './tokenTracker.js';
 import { getUserPersonaContext } from './personalization.js';
+import { EMAIL_RETRIEVER_SYSTEM_PROMPT } from './emailContext.js';
 import { config } from '../config.js';
 import { extractFileText } from './dataFidelityGuard.js';
 import { analyzeFileContent, logSecurityEvent } from './inputGuard.js';
@@ -110,21 +111,17 @@ async function buildTeamFileContext(userId: string, uploadIds: string[]): Promis
  */
 async function retrieveTeamEmailData(
   userId: string, teamId: string, question: string, mcpEmailToken: string,
+  writer: TeamRunWriter,
 ): Promise<string> {
-  const sys = `你是團隊的「信件檢索員」。使用者授權你存取他自己的 Outlook 信箱（只讀他自己的，不可跨使用者）。
-你有信箱工具：
-- mcp__email__email_search：搜整個資料夾（含很舊的信），帶主旨關鍵字或日期範圍。
-- mcp__email__email_get_message：取單封信完整內文＋內嵌圖。
-- mcp__email__email_get_attachments：讀附件檔內容（PDF/Word/Excel→文字）＋附件圖。
-任務：依團隊要分析的議題，主動去信箱把「相關的信件」找出來並整理。鐵則：
-1. **自己直接呼叫這些工具**（工具是延遲載入，需要時系統會讓你載入；**不要說「沒有信箱工具」或「連不上」就放棄**，也不要把查信轉包給別的子代理）。
-2. 找特定信用 email_search 帶主旨關鍵字（沒命中就換關鍵字或加日期再搜；不要只列最近幾封就說找不到）。
-3. 需要就讀附件內容與圖片。**絕不編造**寄件者／日期／內文／附件。
-4. 最後**完整整理輸出**你找到的信件（主旨、寄件者、時間、重點內文、附件重點與圖片判讀），這份會交給團隊成員分析。若找不到相關信件，如實說明。`;
-  const msg = `團隊這次要分析的議題／問題：\n${question}\n\n請依此議題檢索使用者信箱中相關的信件並完整整理輸出（供團隊分析）。`;
+  // Same LEAN retriever prompt as the dashboard (with the "stop once found — don't
+  // keep re-searching" efficiency rule, which prevents the retrieve-loop timeouts).
+  const msg = `團隊這次要分析的議題／問題：\n${question}\n\n請到使用者信箱檢索與此議題相關的信件並完整整理輸出（供團隊分析）。若使用者指名了某一封特定的信，就聚焦找那封、讀完就好。`;
   let r: { text: string };
   try {
-    r = await runOneClaude(userId, teamId, '_agents/email-retriever', msg, sys, 240_000, () => {}, false, undefined, mcpEmailToken);
+    // 150s cap + maxTurns 8 (in runOneClaude): bound the step so a stray loop can't
+    // freeze the whole team. Stream its text so the UI shows it working (not frozen).
+    r = await runOneClaude(userId, teamId, '_agents/email-retriever', msg, EMAIL_RETRIEVER_SYSTEM_PROMPT, 150_000,
+      (chunk) => writer({ type: 'email_retrieval_stream', data: { content: chunk } }), false, undefined, mcpEmailToken);
   } catch (e) {
     console.warn('[teamRun] retrieveTeamEmailData failed:', e);
     return '';
@@ -276,7 +273,7 @@ async function runOneClaude(
       sandboxSubdir,
       ...(images && images.length ? { images } : {}),
       ...(mcpEmailToken
-        ? { customAllowedTools: ['Read'], maxTurns: 12, mcpEmailToken }
+        ? { customAllowedTools: ['Read'], maxTurns: 8, mcpEmailToken }
         : webSearch
           ? { customAllowedTools: ['WebSearch', 'WebFetch'], maxTurns: 6 }
           : { role: 'router' as const }),
@@ -392,7 +389,7 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
   let emailBlock = '';
   if (mcpEmailToken) {
     writer({ type: 'email_retrieval', data: { status: 'running' } });
-    emailBlock = await retrieveTeamEmailData(userId, teamId, question, mcpEmailToken);
+    emailBlock = await retrieveTeamEmailData(userId, teamId, question, mcpEmailToken, writer);
     writer({ type: 'email_retrieval', data: { status: 'done', found: !!emailBlock } });
   }
   // Images can't be text-extracted — read them as vision blocks so members SEE them.

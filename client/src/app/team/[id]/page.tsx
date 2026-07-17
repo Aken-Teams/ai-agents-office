@@ -270,6 +270,10 @@ function TeamRunContent() {
   useEffect(() => { setAllowWeb(!(hasFiles || hasDataSources)); }, [hasFiles, hasDataSources]);
   const [members, setMembers] = useState<Record<string, MemberStream>>({});
   const [memberOrder, setMemberOrder] = useState<string[]>([]);
+  // "信件檢索員" — the pre-fan-out email-MCP retrieval step (only when the 我的信件
+  // data source is on). Shown so the team never looks frozen during retrieval.
+  const [emailRetrieval, setEmailRetrieval] = useState<{ status: 'running' | 'done'; text: string; found?: boolean } | null>(null);
+  const [emailRetrievalOpen, setEmailRetrievalOpen] = useState(true);
   const [synthesis, setSynthesis] = useState('');
   const [synthRunning, setSynthRunning] = useState(false);
   const [totals, setTotals] = useState<{ inputTokens: number; outputTokens: number; costUsd: number } | null>(null);
@@ -466,6 +470,8 @@ function TeamRunContent() {
     setSynthesis('');
     setSynthRunning(false);
     setDiscussing(false);
+    setEmailRetrieval(null);
+    setEmailRetrievalOpen(true);
     setTotals(null);
     setMembers(prev => {
       const next: Record<string, MemberStream> = {};
@@ -580,6 +586,14 @@ function TeamRunContent() {
         break;
       case 'member_done':
         setMembers(prev => prev[d.memberId] ? { ...prev, [d.memberId]: { ...prev[d.memberId], status: d.status === 'failed' ? 'failed' : 'done' } } : prev);
+        break;
+      case 'email_retrieval':
+        setEmailRetrieval(prev => d.status === 'running'
+          ? { status: 'running', text: prev?.text || '' }
+          : { status: 'done', text: prev?.text || '', found: d.found });
+        break;
+      case 'email_retrieval_stream':
+        setEmailRetrieval(prev => ({ status: prev?.status === 'done' ? 'done' : 'running', text: (prev?.text || '') + (d.content || ''), found: prev?.found }));
         break;
       case 'discussion_start':
         setDiscussing(true);
@@ -895,6 +909,30 @@ function TeamRunContent() {
           <div className="flex items-center gap-2 p-3 mb-4 rounded-xl bg-tertiary/5 border border-tertiary/20 text-sm text-tertiary">
             <span className="material-symbols-outlined text-base animate-pulse">forum</span>
             第二輪：成員正在互相討論、回應彼此的觀點…
+          </div>
+        )}
+
+        {/* 信件檢索員 — pre-fan-out email-MCP retrieval step (only when 我的信件 is on) */}
+        {emailRetrieval && (
+          <div className="mb-4 rounded-xl bg-primary/5 border border-primary/20 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setEmailRetrievalOpen(o => !o)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/5 transition-colors cursor-pointer text-left"
+            >
+              <span className={`material-symbols-outlined text-base ${emailRetrieval.status === 'running' ? 'animate-spin' : ''}`}>
+                {emailRetrieval.status === 'running' ? 'progress_activity' : (emailRetrieval.found ? 'mark_email_read' : 'mail')}
+              </span>
+              <span className="flex-1">信件檢索員：{emailRetrieval.status === 'running' ? '正在你的信箱檢索相關信件…' : (emailRetrieval.found ? '檢索完成，資料已交給團隊' : '沒有找到相關信件')}</span>
+              {emailRetrieval.text && (
+                <span className="material-symbols-outlined text-base opacity-70">{emailRetrievalOpen ? 'expand_less' : 'expand_more'}</span>
+              )}
+            </button>
+            {emailRetrievalOpen && emailRetrieval.text && (
+              <div className="max-h-[60vh] overflow-y-auto px-4 py-3 border-t border-primary/10 text-sm">
+                <TeamMarkdown>{emailRetrieval.text}</TeamMarkdown>
+              </div>
+            )}
           </div>
         )}
 
