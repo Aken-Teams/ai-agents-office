@@ -33,9 +33,6 @@ export default function AssistantDock({ emailAvailable }: { emailAvailable: bool
   const [kmEnabled, setKmEnabled] = useState(false);
   // Email status lifted from the embedded widget → drives the bubble badge/icon/toast.
   const [emailStatus, setEmailStatus] = useState<EmailWidgetStatus>({ badge: 0, working: false, enabled: false, connected: false, toast: null });
-  // Bumped when 助手設定 toggles email, so the embedded widget re-reads its pref
-  // (otherwise the bubble wouldn't grey out after toggling email off in settings).
-  const [emailPrefNonce, setEmailPrefNonce] = useState(0);
   // Dock-level "hide to edge": collapse the whole dock to a thin strip so the
   // corner isn't permanently occupied by an AI bubble. The panel stays MOUNTED
   // (hidden) so email SSE keeps running in the background.
@@ -45,9 +42,12 @@ export default function AssistantDock({ emailAvailable }: { emailAvailable: bool
   // opted out of the corner bubble, so we respect that until they un-hide.
   const toggleHidden = () => setHidden(h => { const nv = !h; try { localStorage.setItem('assistant-dock-hidden', nv ? '1' : '0'); } catch { /* ignore */ } return nv; });
 
-  // Email on/off pref (null = never asked, 0 = off, 1 = on). Drives whether the
-  // email tab appears — off means it's dropped from the dock, not just AI-muted.
-  const [emailPref, setEmailPref] = useState<number | null>(null);
+  // "Show assistant in dock" — a UI preference SEPARATE from the AI-function switch.
+  //   • 顯示助手 (this)         → whether the assistant's TAB is in the dock at all.
+  //   • AI 功能 (email_agent_enabled) → whether AI runs; email stays a pure viewer
+  //     when off, so it does NOT hide the tab. Kept in the email panel header.
+  // Email show flag lives in localStorage (client UI pref); KM's is km_agent_enabled.
+  const [showEmail, setShowEmail] = useState(true);
 
   const loadKmPref = useCallback(async () => {
     try {
@@ -58,26 +58,28 @@ export default function AssistantDock({ emailAvailable }: { emailAvailable: bool
       setKmEnabled(d.enabled === 1);
     } catch { setKmAvailable(false); }
   }, []);
-  const loadEmailPref = useCallback(async () => {
-    if (!emailAvailable) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/email-agent/preference`, { headers: authHeaders() });
-      if (res.ok) { const d = await res.json(); setEmailPref(d.enabled ?? null); }
-    } catch { /* ignore */ }
-  }, [emailAvailable]);
-  const reloadPrefs = useCallback(() => { loadKmPref(); loadEmailPref(); }, [loadKmPref, loadEmailPref]);
 
   useEffect(() => {
     setMounted(true);
-    reloadPrefs();
-    try { if (localStorage.getItem('assistant-dock-hidden') === '1') setHidden(true); } catch { /* ignore */ }
-  }, [reloadPrefs]);
+    loadKmPref();
+    try {
+      if (localStorage.getItem('assistant-dock-hidden') === '1') setHidden(true);
+      setShowEmail(localStorage.getItem('dock.show.email') !== '0'); // default: shown
+    } catch { /* ignore */ }
+  }, [loadKmPref]);
+
+  // Toggles update dock state IMMEDIATELY (so the tab appears/disappears at once,
+  // no refresh) and persist. Email → localStorage; KM → its preference endpoint.
+  const toggleShowEmail = (on: boolean) => { setShowEmail(on); try { localStorage.setItem('dock.show.email', on ? '1' : '0'); } catch { /* ignore */ } };
+  const toggleShowKm = (on: boolean) => {
+    setKmEnabled(on);
+    fetch(`${API_BASE}/api/km-agent/preference`, { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: on }) }).catch(() => {});
+  };
 
   if (!mounted) return null;
 
-  // A tab appears only when its assistant is ENABLED. Email: shown unless explicitly
-  // turned off (0) — null (never asked) still shows so the opt-in flow works.
-  const emailInDock = emailAvailable && emailPref !== 0;
+  // TAB visibility = "show assistant", independent of the AI-function switch.
+  const emailInDock = emailAvailable && showEmail;
   const kmInDock = kmAvailable && kmEnabled;
 
   const tabs: Which[] = [];
@@ -201,10 +203,10 @@ export default function AssistantDock({ emailAvailable }: { emailAvailable: bool
         <div className="relative flex-1 min-h-0">
           {emailInDock && (
             <div className={activeTab === 'email' ? 'absolute inset-0' : 'hidden'}>
-              <EmailAgentWidget embedded onStatus={setEmailStatus} prefNonce={emailPrefNonce} />
+              <EmailAgentWidget embedded onStatus={setEmailStatus} />
             </div>
           )}
-          {kmAvailable && kmEnabled && (
+          {kmInDock && (
             <div className={activeTab === 'km' ? 'absolute inset-0' : 'hidden'}>
               <KMAssistantWidget />
             </div>
@@ -215,9 +217,12 @@ export default function AssistantDock({ emailAvailable }: { emailAvailable: bool
       {settingsOpen && (
         <AssistantSettings
           emailAvailable={emailAvailable}
+          showEmail={showEmail}
+          onToggleEmail={toggleShowEmail}
           kmAvailable={kmAvailable}
+          kmShown={kmEnabled}
+          onToggleKm={toggleShowKm}
           onClose={() => setSettingsOpen(false)}
-          onChanged={() => { reloadPrefs(); setEmailPrefNonce(n => n + 1); }}
         />
       )}
     </>
@@ -226,31 +231,14 @@ export default function AssistantDock({ emailAvailable }: { emailAvailable: bool
   return createPortal(dock, document.body);
 }
 
-// ── 助手設定 — enable/disable each resident assistant ──
-function AssistantSettings({ emailAvailable, kmAvailable, onClose, onChanged }: {
-  emailAvailable: boolean; kmAvailable: boolean; onClose: () => void; onChanged: () => void;
+// ── 助手設定 — SHOW/HIDE each assistant in the dock (distinct from the AI-function
+// switch, which lives in the email panel header and leaves the tab in place). ──
+function AssistantSettings({ emailAvailable, showEmail, onToggleEmail, kmAvailable, kmShown, onToggleKm, onClose }: {
+  emailAvailable: boolean; showEmail: boolean; onToggleEmail: (on: boolean) => void;
+  kmAvailable: boolean; kmShown: boolean; onToggleKm: (on: boolean) => void;
+  onClose: () => void;
 }) {
-  const [emailPref, setEmailPref] = useState<number | null>(null);
-  const [kmPref, setKmPref] = useState<number | null>(null);
-  const [saving, setSaving] = useState<string>('');
-
-  useEffect(() => {
-    if (emailAvailable) fetch(`${API_BASE}/api/email-agent/preference`, { headers: authHeaders() }).then(r => r.json()).then(d => setEmailPref(d.enabled ?? null)).catch(() => {});
-    if (kmAvailable) fetch(`${API_BASE}/api/km-agent/preference`, { headers: authHeaders() }).then(r => r.json()).then(d => setKmPref(d.enabled ?? null)).catch(() => {});
-  }, [emailAvailable, kmAvailable]);
-
-  async function setPref(which: 'email' | 'km', on: boolean) {
-    setSaving(which);
-    try {
-      const url = which === 'email' ? '/api/email-agent/preference' : '/api/km-agent/preference';
-      await fetch(`${API_BASE}${url}`, { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: on }) });
-      if (which === 'email') setEmailPref(on ? 1 : 0); else setKmPref(on ? 1 : 0);
-      onChanged();
-    } catch { /* ignore */ }
-    finally { setSaving(''); }
-  }
-
-  const Row = ({ id, icon, label, desc, on, note }: { id: 'email' | 'km'; icon: string; label: string; desc: string; on: boolean; note?: string }) => (
+  const Row = ({ icon, label, desc, note, on, onToggle }: { icon: string; label: string; desc: string; note?: string; on: boolean; onToggle: (on: boolean) => void }) => (
     <div className="flex items-start gap-3 p-3 rounded-xl bg-surface-container">
       <span className="material-symbols-outlined text-primary text-xl mt-0.5 shrink-0">{icon}</span>
       <div className="flex-1 min-w-0">
@@ -258,9 +246,8 @@ function AssistantSettings({ emailAvailable, kmAvailable, onClose, onChanged }: 
         <p className="text-xs text-on-surface-variant/70 mt-0.5">{desc}</p>
         {note && <p className="text-[11px] text-on-surface-variant/50 mt-1">{note}</p>}
       </div>
-      <button onClick={() => setPref(id, !on)} disabled={saving === id}
-        className={`shrink-0 transition-colors ${on ? 'text-primary' : 'text-on-surface-variant/50'} disabled:opacity-50`}>
-        <span className={`material-symbols-outlined text-[32px] ${saving === id ? 'animate-spin' : ''}`}>{saving === id ? 'progress_activity' : on ? 'toggle_on' : 'toggle_off'}</span>
+      <button onClick={() => onToggle(!on)} className={`shrink-0 transition-colors ${on ? 'text-primary' : 'text-on-surface-variant/50'}`}>
+        <span className="material-symbols-outlined text-[32px]">{on ? 'toggle_on' : 'toggle_off'}</span>
       </button>
     </div>
   );
@@ -273,16 +260,16 @@ function AssistantSettings({ emailAvailable, kmAvailable, onClose, onChanged }: 
           <h3 className="text-lg font-bold text-on-surface">助手設定</h3>
           <button onClick={onClose} className="ml-auto w-8 h-8 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container"><span className="material-symbols-outlined">close</span></button>
         </div>
-        <p className="text-xs text-on-surface-variant/70 mb-4">選擇右下角要開啟哪些 AI 駐守。開啟多個時，可在面板上方切換。</p>
+        <p className="text-xs text-on-surface-variant/70 mb-4">選擇右下角要顯示哪些 AI 助手。開啟多個時，可在面板上方切換。</p>
         <div className="space-y-2.5">
           {emailAvailable && (
-            <Row id="email" icon="mail" label="信件助手" on={emailPref === 1}
-              desc="AI 摘要、分類、深度分析你的 Outlook 信件。"
-              note={emailPref === 1 ? '已開啟 AI（依用量計費）' : '關閉時仍可純檢視信件、不計費'} />
+            <Row icon="mail" label="信件助手" on={showEmail} onToggle={onToggleEmail}
+              desc="在右下角顯示信件助手。"
+              note="（AI 摘要／分析的開關在信件助手面板內；關掉 AI 仍可純檢視信件、不計費。）" />
           )}
           {kmAvailable && (
-            <Row id="km" icon="menu_book" label="KM 助手" on={kmPref === 1}
-              desc="搜尋、檢視、下載你有權限的 KM 文件；並可 AI 問答附來源。" />
+            <Row icon="menu_book" label="KM 助手" on={kmShown} onToggle={onToggleKm}
+              desc="在右下角顯示 KM 助手：搜尋、檢視、下載你有權限的 KM 文件，並可 AI 問答附來源。" />
           )}
           {!emailAvailable && !kmAvailable && (
             <p className="text-sm text-on-surface-variant py-4 text-center">目前沒有可用的助手。</p>
