@@ -3,6 +3,7 @@ import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { pathToFileURL } from 'url';
 import { config } from '../config.js';
 import { getSandboxPath } from './sandbox.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
@@ -315,9 +316,9 @@ export function spawnClaude(
     || (options.role === 'router' ? ROUTER_ALLOWED_TOOLS : ALLOWED_TOOLS);
   // Disallowed tools: merge global + per-skill restrictions (additive, not replace)
   const baseDisallowed = options.role === 'router' ? ROUTER_DISALLOWED_TOOLS : DISALLOWED_TOOLS;
-  const disallowedTools = options.customDisallowedTools
+  let disallowedTools = options.customDisallowedTools
     ? [...new Set([...baseDisallowed, ...options.customDisallowedTools])]
-    : baseDisallowed;
+    : [...baseDisallowed];
 
   // Data-source MCP servers (stdio, per-run). When requested, attach the
   // email-mcp carrying THIS user's mail JWT via env — identity lives in the
@@ -326,17 +327,37 @@ export function spawnClaude(
   const mcpToolNames: string[] = [];
   if (options.mcpEmailToken) {
     const mcpConfigPath = path.join(sandboxPath, '.mcp-servers.json');
-    const emailMcpScript = path.join(config.rootDir, 'server', 'src', 'mcp', 'emailMcp.ts');
+    // Portable dev↔prod: prefer the COMPILED emailMcp.js (production `tsc` build) run
+    // with plain node — no tsx, no source .ts needed. Fall back to the TS source via
+    // the tsx loader in dev. All paths are derived from config.rootDir (computed at
+    // runtime), so this works on any machine — nothing is hard-coded to this box.
+    //
+    // WHY the tsx loader must be an ABSOLUTE file:// URL (not bare `--import tsx`):
+    // ESM's --import resolution does NOT consult NODE_PATH, and the CLI spawns the MCP
+    // with cwd=repo-root where pnpm has no top-level `tsx` → `ERR_MODULE_NOT_FOUND` →
+    // the MCP never boots, no tools register, agents thrash on ToolSearch / fake
+    // "recent 20". The absolute loader URL resolves from any cwd.
+    // Detect dev↔prod from where THIS module is loaded (not a stale-dist heuristic):
+    // tsx-watch dev → .../server/src/services/claudeCli.ts; compiled prod → .../dist/....
+    const runningCompiled = import.meta.url.includes('/dist/');
+    const distMcp = path.join(config.rootDir, 'server', 'dist', 'mcp', 'emailMcp.js');
+    const srcMcp = path.join(config.rootDir, 'server', 'src', 'mcp', 'emailMcp.ts');
+    const mcpArgs = runningCompiled
+      ? [distMcp] // production: compiled JS, plain node (no tsx needed)
+      : ['--import', pathToFileURL(path.join(config.rootDir, 'server', 'node_modules', 'tsx', 'dist', 'loader.mjs')).href, srcMcp]; // dev: tsx loader + TS source
     const mcpConfig = {
       mcpServers: {
         email: {
           command: process.execPath,           // absolute node binary — robust cross-platform
-          args: ['--import', 'tsx', emailMcpScript],
+          args: mcpArgs,
           env: {
             NODE_PATH: path.join(config.rootDir, 'server', 'node_modules'),
             MCP_MAIL_TOKEN: options.mcpEmailToken,
             MCP_MAIL_API_BASE: config.adApiUrl,
             MCP_MAIL_API_KEY: config.adApiKey,
+            // Debug: email-mcp appends every tool call + gateway response/error here
+            // (the CLI swallows MCP stderr, so this is how we see what actually happened).
+            MCP_DEBUG_LOG: path.join(config.workspaceRoot, 'email-mcp-debug.log'),
           },
         },
       },
@@ -348,7 +369,16 @@ export function spawnClaude(
       'mcp__email__email_list_folders',
       'mcp__email__email_search',
       'mcp__email__email_get_message',
+      'mcp__email__email_get_attachments',
     );
+    // Reliability (verified): disable ONLY Task when MCP tools are attached — NOT
+    // ToolSearch. This CLI puts MCP tools in a DEFERRED pool that the model loads via
+    // ToolSearch ("I'll load the email tools" → ToolSearch → call), so ToolSearch is
+    // REQUIRED; disabling it leaves the model unable to reach the tools → "no mailbox
+    // tools". Task IS disabled because the worker otherwise delegates the lookup to a
+    // fresh sub-agent that has no mcp-config → it reports "no tools". Removing Task
+    // forces the agent to load+call the email tools itself.
+    if (!disallowedTools.includes('Task')) disallowedTools = [...disallowedTools, 'Task'];
   }
 
   // Tool restrictions (security layer 2)
@@ -398,6 +428,13 @@ export function spawnClaude(
         delete cleanEnv[key];
       }
     }
+    // CRITICAL for MCP reliability: MCP_CONNECTION_NONBLOCKING (inherited from the
+    // parent Claude Code env) makes the CLI START THE AGENT BEFORE the MCP server
+    // finishes connecting — a race where email-mcp's tools aren't registered yet, so
+    // the agent burns turns on ToolSearch, finds nothing, and gives up ("no mailbox
+    // tools" / "only recent 20"). Removing it forces the CLI to WAIT for the MCP
+    // handshake, so the email tools are always registered before the agent runs.
+    delete cleanEnv['MCP_CONNECTION_NONBLOCKING'];
 
     // API key fallback mode: inject ANTHROPIC_API_KEY for CLI to use
     if (useApiKey && config.anthropicApiKey) {

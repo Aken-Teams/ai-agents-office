@@ -16,6 +16,7 @@ import { Orchestrator } from '../services/orchestrator.js';
 import { enforceDataFidelity } from '../services/dataFidelityGuard.js';
 import { normalizePptx } from '../services/pptxNormalize.js';
 import { getMailToken } from '../services/outlookApi.js';
+import { EMAIL_RETRIEVER_SYSTEM_PROMPT } from '../services/emailContext.js';
 import path from 'path';
 import fs from 'fs';
 import { parseInfographicDirective, renderInfographic, compositeRegionMask, regionEditToFile } from '../services/infographicService.js';
@@ -550,6 +551,95 @@ async function runUploadParsePreStep(opts: {
   });
 }
 
+/**
+ * Template-wizard (single-agent) EMAIL retrieval pre-step.
+ *
+ * Direct mode runs ONE doc-gen agent (e.g. pptx-gen). When the user attaches the
+ * "我的信件" data source, we do NOT hand the generator the raw mail tools (its job
+ * is making documents, not searching mailboxes — bolting tools on is unreliable).
+ * Instead — exactly like runUploadParsePreStep — we first run ONE rag-analyst pass
+ * that HAS the email-mcp tools, retrieves the relevant emails/attachments/images,
+ * writes them to `email_context.md`, and returns a hand-off to prepend. So direct
+ * mode gets the same retrieve→generate split as the orchestrated flow.
+ *
+ * Non-fatal: on failure returns ok:false and the generator proceeds without email.
+ */
+async function runEmailRetrievalPreStep(opts: {
+  userId: string; conversationId: string; mcpEmailToken: string;
+  userLocale: string; baseSandboxPath: string; userMessage: string;
+  sseWrite: (e: SSEEvent) => void;
+}): Promise<{ ok: boolean; handoff: string; inputTokens: number; outputTokens: number; model: string }> {
+  const { userId, conversationId, mcpEmailToken, userLocale, baseSandboxPath, userMessage, sseWrite } = opts;
+  const fail = { ok: false, handoff: '', inputTokens: 0, outputTokens: 0, model: '' };
+  const analyst = getSkill('rag-analyst');
+  if (!analyst) return fail;
+
+  const taskId = uuidv4();
+  sseWrite({ type: 'task_dispatched', data: { taskId, skillId: 'rag-analyst', description: '從你的信箱檢索相關信件中…' } });
+
+  // LEAN focused retriever prompt (NOT the full rag-analyst SKILL.md, which distracts
+  // the model into thrashing on ToolSearch). analyst is still used for its tool list.
+  const systemPrompt = EMAIL_RETRIEVER_SYSTEM_PROMPT;
+  const message = `使用者接下來要用「他自己的 Outlook 信箱」內容製作文件。請依下面的需求，檢索相關的信件（含舊信、附件、內嵌圖）並完整整理輸出。\n\n使用者的需求：\n${userMessage}`;
+
+  return await new Promise(resolve => {
+    let text = '';
+    let inputTokens = 0, outputTokens = 0, model = '';
+    let settled = false;
+    const finish = (v: typeof fail | { ok: true; handoff: string; inputTokens: number; outputTokens: number; model: string }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(v);
+    };
+
+    const { emitter, abort } = spawnClaude(message, systemPrompt, {
+      userId, conversationId, skillId: 'rag-analyst',
+      sandboxSubdir: '_agents/rag-analyst',
+      sessionId: uuidv4(), isResume: false,
+      customAllowedTools: analyst.allowedTools,
+      customDisallowedTools: analyst.disallowedTools,
+      mcpEmailToken, // attaches email-mcp + (in claudeCli) disables Task, keeps ToolSearch
+    });
+    activeGenerations.set(conversationId, abort);
+
+    const timer = setTimeout(() => {
+      try { abort(); } catch { /* ignore */ }
+      sseWrite({ type: 'task_failed', data: { taskId, skillId: 'rag-analyst', error: 'email retrieval timed out' } });
+      finish(fail);
+    }, 240000);
+
+    emitter.on('event', (event: SSEEvent) => {
+      if (event.type === 'text') {
+        text += event.data as string;
+      } else if (event.type === 'tool_activity') {
+        sseWrite({ type: 'agent_stream', data: { taskId, skillId: 'rag-analyst', type: 'tool_activity', content: event.data } });
+      } else if (event.type === 'usage') {
+        const u = event.data as { inputTokens: number; outputTokens: number; model: string };
+        inputTokens = u.inputTokens; outputTokens = u.outputTokens; model = u.model;
+      } else if (event.type === 'done') {
+        if (!text.trim()) {
+          sseWrite({ type: 'task_failed', data: { taskId, skillId: 'rag-analyst', error: 'no email data retrieved' } });
+          finish(fail);
+          return;
+        }
+        try {
+          const agentCwd = path.join(baseSandboxPath, '_agents');
+          fs.mkdirSync(agentCwd, { recursive: true });
+          fs.writeFileSync(path.join(baseSandboxPath, 'email_context.md'), text, 'utf-8');
+        } catch (e) {
+          console.warn('[EmailRetrieve] write email_context.md failed:', e);
+          finish(fail);
+          return;
+        }
+        sseWrite({ type: 'task_completed', data: { taskId, skillId: 'rag-analyst' } });
+        const handoff = `## 從你信箱檢索到的信件資料（重要，務必先讀）\n與本需求相關的信件資料已檢索並存於工作目錄的 \`email_context.md\`。\n**你必須先用 Read 工具讀取 \`email_context.md\`**，所有主旨／寄件者／日期／內文／附件內容一律以該檔為準，**不可超出該檔內容，也不可自行補充或編造**任何來源外的資訊。\n\n`;
+        finish({ ok: true, handoff, inputTokens, outputTokens, model });
+      }
+    });
+  });
+}
+
 async function handleDirect(
   _req: Request, res: Response,
   userId: string, conversationId: string, conversation: Conversation,
@@ -608,11 +698,15 @@ async function handleDirect(
     crossAssistantContext = buildCrossAssistantContext(otherSummaries, conversationId);
   }
 
-  // Pre-fetch email data when user mentions email keywords (any skill)
-  const { messageNeedsEmail, getEmailContextForPrompt } = await import('../services/emailContext.js');
-  const emailContext = messageNeedsEmail(sanitizedMessage)
-    ? await getEmailContextForPrompt(userId, sanitizedMessage)
-    : '';
+  // Email: when the "我的信件" data source is explicitly selected we run the
+  // rag-analyst retrieval pre-step below (flexible — old mail + attachments + images).
+  // Only fall back to the legacy keyword pre-fetch (recent-list preview) when NO data
+  // source was selected, so the two mechanisms never compete.
+  let emailContext = '';
+  if (!mcpEmailToken) {
+    const { messageNeedsEmail, getEmailContextForPrompt } = await import('../services/emailContext.js');
+    if (messageNeedsEmail(sanitizedMessage)) emailContext = await getEmailContextForPrompt(userId, sanitizedMessage);
+  }
 
   // Inject user-defined system_prompt (role description) for this assistant
   const customRolePrompt = conversation.system_prompt
@@ -674,6 +768,27 @@ async function handleDirect(
         await recordTokenUsage({ userId, conversationId, inputTokens: pre.inputTokens, outputTokens: pre.outputTokens, model: pre.model });
       }
     }
+  }
+
+  // ── Email retrieval pre-step (template-wizard + "我的信件" data source) ──
+  // Same split as the orchestrated flow: run rag-analyst (with the mail tools) to
+  // RETRIEVE the relevant emails/attachments/images first, then hand the data to the
+  // single doc-gen agent — which gets the DATA, not the raw tools. Skipped when the
+  // user picked the rag-analyst card itself (it IS the retriever, keep its tools).
+  if (mcpEmailToken && effectiveSkillId !== 'rag-analyst') {
+    const pre = await runEmailRetrievalPreStep({
+      userId, conversationId, mcpEmailToken, userLocale,
+      baseSandboxPath: sandboxPath, userMessage: sanitizedMessage, sseWrite,
+    });
+    if (pre.ok) {
+      finalMessage = pre.handoff + finalMessage;
+      if (pre.inputTokens > 0 || pre.outputTokens > 0) {
+        await recordTokenUsage({ userId, conversationId, inputTokens: pre.inputTokens, outputTokens: pre.outputTokens, model: pre.model });
+      }
+    }
+    // The generator consumes the retrieved data (email_context.md), NOT the raw mail
+    // tools — keeps it a reliable single-purpose generator.
+    mcpEmailToken = undefined;
   }
 
   async function startClaude(sid: string, isResume: boolean) {

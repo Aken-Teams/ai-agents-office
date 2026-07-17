@@ -6,6 +6,7 @@ import { dbGet, dbAll, dbRun } from '../db.js';
 import { spawnClaude } from './claudeCli.js';
 import { parsePipelineBlocks, truncateResultForRouter } from './taskParser.js';
 import { getSkill, buildSystemPrompt, buildMemoryContext, buildCrossAssistantContext, getRouterSkill, buildRouterPrompt } from '../skills/loader.js';
+import { EMAIL_RETRIEVER_SYSTEM_PROMPT } from './emailContext.js';
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from './uploadContext.js';
 import { getSandboxPath } from './sandbox.js';
 import { parseInfographicDirective, renderInfographic } from './infographicService.js';
@@ -38,6 +39,19 @@ const SKILL_TIMEOUT: Record<string, number> = {
   'rag-analyst': 600_000, // 10 min — cross-file analysis + charts/visualizations
 };
 const DEFAULT_TASK_TIMEOUT_MS = 300_000; // 5 min fallback for unknown skills
+
+// Injected into the Router's message when the user attached the "我的信件" data
+// source (mcpEmailToken set). Email is just ONE MORE DATA SOURCE plugged into the
+// existing flow: the rag-analyst holds the mailbox tools and retrieves; the result
+// flows to doc-gen through the normal previous_step.md bridge. Nothing else changes.
+const EMAIL_DATASOURCE_ROUTER_NOTE = `
+
+[System — 資料源：使用者的 Outlook 信箱（已授權，只讀他自己的）]
+使用者這次掛載了「我的信件」資料源。**負責檢索信箱的是 rag-analyst**——它具備信箱工具（搜整個資料夾含舊信、讀附件檔內容、看內嵌圖與附件圖）。
+派工原則（沿用你原本的 [TASK]/[PIPELINE] 機制，不需改變）：
+- 若使用者只是要「找某封信 / 看某封信或其附件」→ 派一個 [TASK:rag-analyst]，任務寫清楚要找的信（主旨關鍵字）與要看什麼（內文／附件／圖）。
+- 若使用者要「用信件內容產出文件」（Word/PPT/Excel/PDF）→ 用 [PIPELINE]：先 [TASK:rag-analyst] 檢索並整理出需要的信件資料，再接 [TASK:對應的 doc-gen]。rag-analyst 的完整輸出會自動透過檔案交給下一步。
+- **信件檢索一律交給 rag-analyst**，不要派給 research（那是網路搜尋）、也不要自己臆測信件內容。`;
 
 export interface OrchestratorResult {
   assistantText: string;
@@ -168,11 +182,21 @@ export class Orchestrator {
         messageWithFileContext = messageWithFileContext + '\n\n[System: The user has attached files for this request.]\n' + fileContext;
       }
     }
-    // Inject email data when message mentions email keywords
-    const { messageNeedsEmail, getEmailContextForPrompt } = await import('./emailContext.js');
-    if (messageNeedsEmail(message)) {
-      const emailCtx = await getEmailContextForPrompt(this.userId, message);
-      if (emailCtx) messageWithFileContext += emailCtx;
+    // Email as a DATA SOURCE (does not change the orchestration flow):
+    //  • Explicit data source selected (mcpEmailToken) → tell the Router to route
+    //    mail retrieval to rag-analyst (which has the email tools). It searches old
+    //    mail, reads attachments + inline images, and hands data to doc-gen via the
+    //    existing previous_step.md bridge. No pre-fetch → the agent pulls exactly what
+    //    is needed (flexible, never capped at "recent 20").
+    //  • No data source → legacy keyword-triggered pre-fetch (back-compat, unchanged).
+    if (this.mcpEmailToken) {
+      messageWithFileContext += EMAIL_DATASOURCE_ROUTER_NOTE;
+    } else {
+      const { messageNeedsEmail, getEmailContextForPrompt } = await import('./emailContext.js');
+      if (messageNeedsEmail(message)) {
+        const emailCtx = await getEmailContextForPrompt(this.userId, message);
+        if (emailCtx) messageWithFileContext += emailCtx;
+      }
     }
 
     // Recursive orchestration loop
@@ -483,7 +507,14 @@ export class Orchestrator {
           uploadIds: this.uploadIds.length > 0 ? this.uploadIds : undefined,
           conversationId: this.conversationId,
         });
-    const systemPrompt = buildSystemPrompt(skill, config.generatorsDir, this.userLocale) + uploadContext;
+    // When rag-analyst is doing EMAIL retrieval (it holds the email-mcp tools), give
+    // it a LEAN focused retriever prompt instead of its full 187-line file-analysis
+    // SKILL.md — the big prompt distracts the model into thrashing on ToolSearch. Its
+    // retrieved output still flows to doc-gen via the normal previous_step.md bridge.
+    const useEmailRetriever = task.skillId === 'rag-analyst' && !!this.mcpEmailToken;
+    const systemPrompt = useEmailRetriever
+      ? EMAIL_RETRIEVER_SYSTEM_PROMPT + uploadContext
+      : buildSystemPrompt(skill, config.generatorsDir, this.userLocale) + uploadContext;
 
     // Get or create session for this skill agent
     const { sessionId: agentSessionId, initialized: agentInitialized } = await this.getOrCreateAgentSession(task.skillId);
@@ -577,9 +608,12 @@ export class Orchestrator {
         skillId: opts.skillId,
         customAllowedTools: skillDef?.allowedTools,
         customDisallowedTools: skillDef?.disallowedTools,
-        // Attach the email data-source MCP to WORKER agents only (never the
-        // router) when the user opted into it — lets a doc generator pull mail.
-        ...(opts.role === 'worker' && this.mcpEmailToken ? { mcpEmailToken: this.mcpEmailToken } : {}),
+        // Email data source (MCP): attach ONLY to the rag-analyst — our dedicated
+        // data-retrieval agent. It fetches the emails/attachments/images the user
+        // needs and hands the data to doc-gen via the existing previous_step.md
+        // bridge. Keeping the tools on one focused agent (not every worker) is far
+        // more reliable than bolting mail tools onto the generic research worker.
+        ...(opts.skillId === 'rag-analyst' && this.mcpEmailToken ? { mcpEmailToken: this.mcpEmailToken } : {}),
         // Each agent gets its own subdirectory to avoid CLAUDE.md conflicts
         sandboxSubdir: `_agents/${opts.skillId}`,
       });
