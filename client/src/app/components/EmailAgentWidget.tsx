@@ -105,10 +105,16 @@ function playNotificationSound() {
   } catch {}
 }
 
-export default function EmailAgentWidget() {
+// `embedded`: render only the panel body (no own bubble / toast / hidden-strip /
+// portal) so the shared AssistantDock can host it under a switcher. All existing
+// standalone behaviour is preserved when embedded=false.
+export default function EmailAgentWidget({ embedded = false }: { embedded?: boolean } = {}) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  // Embedded (inside AssistantDock): always "expanded" — the dock owns show/hide,
+  // and several data-load effects gate on `expanded`, so without this the mailbox
+  // would never load in the dock.
+  const [expanded, setExpanded] = useState(embedded);
   const [connected, setConnected] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('mail');
   const [notifications, setNotifications] = useState<EmailNotification[]>([]);
@@ -970,7 +976,7 @@ export default function EmailAgentWidget() {
       )}
 
       {/* Hidden mode: thin edge strip with badge — auto-expands when toast */}
-      {hidden && !expanded && (
+      {hidden && !expanded && !embedded && (
         <div
           className={`fixed z-[90] group cursor-pointer`}
           style={hiddenStripStyle}
@@ -1003,8 +1009,8 @@ export default function EmailAgentWidget() {
         </div>
       )}
 
-      {/* Floating Bubble (visible when not hidden) */}
-      {!hidden && (
+      {/* Floating Bubble (visible when not hidden) — dock provides it when embedded */}
+      {!hidden && !embedded && (
         <>
           <button
             ref={bubbleRef}
@@ -1056,7 +1062,7 @@ export default function EmailAgentWidget() {
       )}
 
       {/* AI Toast Notification Bubble — only when bubble is visible (not hidden) */}
-      {toastMessage && !expanded && !hidden && (
+      {toastMessage && !expanded && !hidden && !embedded && (
         <div
           className="fixed z-[91] animate-in slide-in-from-bottom-2 fade-in duration-300"
           style={bubblePos ? {
@@ -1092,9 +1098,11 @@ export default function EmailAgentWidget() {
         </div>
       )}
 
-      {/* Expanded Panel */}
-      {expanded && (
-        <div className="fixed top-0 right-0 bottom-0 left-0 md:top-auto md:left-auto md:bottom-24 md:right-6 z-[95] md:w-[min(520px,calc(100vw-5rem))] md:max-h-[min(700px,calc(100vh-8rem))] bg-surface-container-high md:rounded-2xl shadow-2xl md:border md:border-outline-variant/10 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-200 safe-area-top safe-area-bottom">
+      {/* Expanded Panel — embedded fills the dock body; standalone floats bottom-right */}
+      {(embedded || expanded) && (
+        <div className={embedded
+          ? 'absolute inset-0 bg-surface-container-high flex flex-col overflow-hidden'
+          : 'fixed top-0 right-0 bottom-0 left-0 md:top-auto md:left-auto md:bottom-24 md:right-6 z-[95] md:w-[min(520px,calc(100vw-5rem))] md:max-h-[min(700px,calc(100vh-8rem))] bg-surface-container-high md:rounded-2xl shadow-2xl md:border md:border-outline-variant/10 flex flex-col overflow-hidden animate-in slide-in-from-bottom-4 duration-200 safe-area-top safe-area-bottom'}>
           {/* Header */}
           <div className="flex items-center gap-3 px-4 py-3 border-b border-outline-variant/10 bg-surface-container-high">
             <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
@@ -1774,7 +1782,9 @@ export default function EmailAgentWidget() {
     </>
   );
 
-  return createPortal(widget, document.body);
+  // Embedded: render inline so the dock's positioned container hosts the panel.
+  // Standalone: portal the floating bubble + panel to <body>.
+  return embedded ? widget : createPortal(widget, document.body);
 }
 
 function formatTime(dateStr: string): string {

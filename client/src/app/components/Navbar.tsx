@@ -8,7 +8,7 @@ import remarkGfm from 'remark-gfm';
 import { useAuth } from './AuthProvider';
 import { useTranslation } from '../../i18n';
 import type { Locale, Theme } from '../../i18n/types';
-import EmailAgentWidget from './EmailAgentWidget';
+import AssistantDock from './AssistantDock';
 import ReportModal from './ReportModal';
 
 const SIDEBAR_KEY = 'sidebar-collapsed';
@@ -1611,8 +1611,8 @@ export default function Navbar() {
           </div>
         </div>
       )}
-      {/* Email Agent Widget — pro-panjit only */}
-      {isPanjit && hasPermission('features', 'email-agent') && <EmailAgentWidget />}
+      {/* Assistant dock (信件助手 / KM 助手 switcher) — pro-panjit only */}
+      {isPanjit && <AssistantDock emailAvailable={hasPermission('features', 'email-agent')} />}
 
       {/* Terms Modal */}
       {showTermsModal && (

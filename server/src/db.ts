@@ -411,6 +411,12 @@ export async function initializeDatabase(): Promise<void> {
       await conn.query('ALTER TABLE users ADD COLUMN email_agent_enabled TINYINT(1) DEFAULT NULL');
     } catch { /* column already exists */ }
 
+    // KM Agent opt-in (bottom-right 助手 dock): NULL = never asked, 0 = off, 1 = on.
+    // On-demand only (no polling); KM enforces per-user permission via 員編.
+    try {
+      await conn.query('ALTER TABLE users ADD COLUMN km_agent_enabled TINYINT(1) DEFAULT NULL');
+    } catch { /* column already exists */ }
+
     // AD integration columns
     try {
       await conn.query('ALTER TABLE users ADD COLUMN ad_username VARCHAR(50) DEFAULT NULL');

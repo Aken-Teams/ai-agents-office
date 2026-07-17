@@ -18,6 +18,7 @@ import greetingRoutes from './routes/greeting.js';
 import quotaRequestRoutes from './routes/quota-request.js';
 import outlookRoutes from './routes/outlook.js';
 import emailAgentRoutes from './routes/emailAgent.js';
+import kmAgentRoutes from './routes/kmAgent.js';
 import blockRoutes from './routes/blocks.js';
 import teamRoutes from './routes/teams.js';
 import publicShareRoutes from './routes/publicShare.js';
@@ -115,6 +116,7 @@ async function main() {
   app.use('/api/quota-request', quotaRequestRoutes);
   app.use('/api/outlook', outlookRoutes);
   app.use('/api/email-agent', emailAgentRoutes);
+  app.use('/api/km-agent', kmAgentRoutes);
   app.use('/api/blocks', blockRoutes);
   app.use('/api/teams', teamRoutes);
   app.use('/api/public', publicShareRoutes);
