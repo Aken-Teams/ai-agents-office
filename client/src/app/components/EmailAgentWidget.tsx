@@ -106,9 +106,11 @@ function playNotificationSound() {
 }
 
 // `embedded`: render only the panel body (no own bubble / toast / hidden-strip /
-// portal) so the shared AssistantDock can host it under a switcher. All existing
-// standalone behaviour is preserved when embedded=false.
-export default function EmailAgentWidget({ embedded = false }: { embedded?: boolean } = {}) {
+// portal) so the shared AssistantDock can host it under a switcher. `onStatus`
+// reports unread/working/enabled up to the dock so its bubble can show the badge.
+// All existing standalone behaviour is preserved when embedded=false.
+export interface EmailWidgetStatus { badge: number; working: boolean; enabled: boolean; connected: boolean; toast: string | null }
+export default function EmailAgentWidget({ embedded = false, onStatus, prefNonce = 0 }: { embedded?: boolean; onStatus?: (s: EmailWidgetStatus) => void; prefNonce?: number } = {}) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   // Embedded (inside AssistantDock): always "expanded" — the dock owns show/hide,
@@ -410,7 +412,7 @@ export default function EmailAgentWidget({ embedded = false }: { embedded?: bool
       .then(d => { if (d) setEmailEnabled(d.enabled === 1 ? 1 : d.enabled === 0 ? 0 : null); })
       .catch(() => {})
       .finally(() => setPrefLoaded(true));
-  }, []);
+  }, [prefNonce]); // re-read when 助手設定 toggles email so the dock bubble reflects it
 
   const soundMutedRef = useRef(soundMuted);
   useEffect(() => { soundMutedRef.current = soundMuted; }, [soundMuted]);
@@ -581,6 +583,15 @@ export default function EmailAgentWidget({ embedded = false }: { embedded?: bool
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
     };
   }, [connectSSE]);
+
+  // Report status up to the AssistantDock (embedded) so its bubble can show the
+  // unread badge, working animation, and enabled/gray state.
+  useEffect(() => {
+    if (!embedded || !onStatus) return;
+    const badge = notifications.filter(n => !n.isRead).length || totalUnread;
+    const working = streaming || notifications.some(n => n.analyzing) || serverActiveTasks.length > 0;
+    onStatus({ badge, working, enabled: emailEnabled === 1, connected, toast: toastMessage });
+  }, [embedded, onStatus, notifications, totalUnread, streaming, serverActiveTasks, emailEnabled, connected, toastMessage]);
 
   // ─── Drag handlers ───
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
@@ -1193,7 +1204,8 @@ export default function EmailAgentWidget({ embedded = false }: { embedded?: bool
                   {soundMuted ? '開啟音效' : '靜音'}
                 </span>
               </div>
-              {/* Hide button */}
+              {/* Hide + close — only standalone; the dock owns hide/close when embedded */}
+              {!embedded && (<>
               <div className="relative group/tip">
                 <button
                   onClick={toggleHidden}
@@ -1207,7 +1219,6 @@ export default function EmailAgentWidget({ embedded = false }: { embedded?: bool
                   隱藏到側邊
                 </span>
               </div>
-              {/* Close button */}
               <div className="relative group/tip">
                 <button
                   onClick={() => setExpanded(false)}
@@ -1219,6 +1230,7 @@ export default function EmailAgentWidget({ embedded = false }: { embedded?: bool
                   關閉
                 </span>
               </div>
+              </>)}
             </div>
           </div>
 
