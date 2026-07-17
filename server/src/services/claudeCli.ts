@@ -356,8 +356,11 @@ export function spawnClaude(
             MCP_MAIL_API_BASE: config.adApiUrl,
             MCP_MAIL_API_KEY: config.adApiKey,
             // Debug: email-mcp appends every tool call + gateway response/error here
-            // (the CLI swallows MCP stderr, so this is how we see what actually happened).
-            MCP_DEBUG_LOG: path.join(config.workspaceRoot, 'email-mcp-debug.log'),
+            // (the CLI swallows MCP stderr, so this is how we diagnose it). Gated OFF in
+            // production (unbounded file) unless EMAIL_MCP_DEBUG is explicitly set.
+            ...(config.nodeEnv !== 'production' || process.env.EMAIL_MCP_DEBUG
+              ? { MCP_DEBUG_LOG: path.join(config.workspaceRoot, 'email-mcp-debug.log') }
+              : {}),
           },
         },
       },
