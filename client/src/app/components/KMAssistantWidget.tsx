@@ -12,8 +12,17 @@
  * <iframe src> can't send) then shown via an object URL.
  */
 import { useState, useRef, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkCjkFriendly from 'remark-cjk-friendly';
+import remarkFlexibleMarkers from 'remark-flexible-markers';
+
+// pdf.js is heavy — load the viewer only when a PDF is actually opened.
+const KmPdfViewer = dynamic(() => import('./KmPdfViewer'), { ssr: false });
+
+// Shared plugin set: gfm tables + CJK-friendly bold/italic + ==highlight== markers.
+const MD_PLUGINS = [remarkGfm, remarkCjkFriendly, remarkFlexibleMarkers];
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
@@ -84,6 +93,7 @@ const compactMd = {
   th: (p: any) => <th className="border border-outline-variant/30 px-1.5 py-0.5 bg-surface-container-high" {...p} />,
   td: (p: any) => <td className="border border-outline-variant/20 px-1.5 py-0.5" {...p} />,
   code: (p: any) => <code className="px-1 py-0.5 rounded bg-surface-container text-[0.85em]" {...p} />,
+  mark: (p: any) => <mark className="bg-amber-300/50 text-on-surface rounded px-1 font-medium [box-decoration-break:clone] [-webkit-box-decoration-break:clone]" {...p} />,
 };
 
 export default function KMAssistantWidget() {
@@ -105,6 +115,7 @@ export default function KMAssistantWidget() {
   // "問 AI 這份在講什麼" — shown INLINE in the 文件 detail and cached per document,
   // so re-opening shows the previous answer (no re-ask). Badged in the result list.
   const [explain, setExplain] = useState<{ docId: string; text: string; streaming: boolean; cached: boolean } | null>(null);
+  const [explainOpen, setExplainOpen] = useState(false); // default collapsed; auto-open on fresh ask
   const [explainedIds, setExplainedIds] = useState<Set<string>>(new Set());
 
   // ── 對話 tab ──
@@ -177,7 +188,7 @@ export default function KMAssistantWidget() {
 
   async function openDoc(doc: KmDoc) {
     setDetailLoading(true); setDetailErr(''); setDetail({ doc, attachments: [] });
-    setHits(null); setExplain(null);
+    setHits(null); setExplain(null); setExplainOpen(false);
     // Show a previously-cached AI explanation for this doc, if any (no re-ask).
     fetch(`${API_BASE}/api/km-agent/document/${encodeURIComponent(doc.id)}/explain`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : null)
@@ -271,6 +282,7 @@ export default function KMAssistantWidget() {
   async function explainDoc(doc: KmDoc) {
     const q = query.trim();
     setExplain({ docId: doc.id, text: '', streaming: true, cached: false });
+    setExplainOpen(true); // fresh ask → auto-expand
     let acc = '';
     try {
       const res = await fetch(`${API_BASE}/api/km-agent/document/${encodeURIComponent(doc.id)}/explain`, {
@@ -410,7 +422,7 @@ export default function KMAssistantWidget() {
           ) : (
             <div className="flex-1 flex flex-col min-h-0">
               <div className="p-3 shrink-0 border-b border-outline-variant/10">
-                <button onClick={() => setDetail(null)} className="text-xs text-primary flex items-center gap-1 mb-2 hover:underline">
+                <button onClick={() => setDetail(null)} className="text-xs text-primary flex items-center gap-1 mb-2 hover:opacity-80">
                   <span className="material-symbols-outlined text-sm">arrow_back</span>返回搜尋結果
                 </button>
                 <p className="text-sm font-semibold text-on-surface">{detail.doc.title}</p>
@@ -425,16 +437,31 @@ export default function KMAssistantWidget() {
               <div className="flex-1 overflow-y-auto p-3 min-h-0 space-y-3">
                 {/* AI 解讀 — inline, cached (shows previous answer without re-asking) */}
                 {explain && explain.docId === detail.doc.id && (
-                  <div className="rounded-xl bg-primary/5 border border-primary/15 p-3">
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      <span className="material-symbols-outlined text-primary text-lg">smart_toy</span>
-                      <span className="text-xs font-medium text-primary">AI 解讀{explain.cached ? '（先前已回答）' : ''}</span>
-                      {!explain.streaming && <button onClick={() => explainDoc(detail.doc)} className="ml-auto text-[11px] text-primary/70 hover:underline">重新問</button>}
+                  <div className="rounded-xl bg-primary/5 border border-primary/15 overflow-hidden">
+                    <div className="flex items-center gap-1.5 px-3 py-2">
+                      <button onClick={() => setExplainOpen(o => !o)} className="flex items-center gap-1.5 flex-1 min-w-0 text-left">
+                        <span className="material-symbols-outlined text-primary text-lg shrink-0">smart_toy</span>
+                        <span className="text-xs font-medium text-primary">AI 解讀{explain.cached ? '（先前已回答）' : ''}</span>
+                        {!explainOpen && explain.text && <span className="text-[11px] text-on-surface-variant/50 truncate">— {explain.text.replace(/[#*=`>-]/g, '').slice(0, 24)}…</span>}
+                        <span className="material-symbols-outlined text-on-surface-variant/60 text-lg ml-auto shrink-0">{explainOpen ? 'expand_less' : 'expand_more'}</span>
+                      </button>
+                      {!explain.streaming && (
+                        <div className="relative group/tip shrink-0">
+                          <button onClick={() => explainDoc(detail.doc)} className="w-7 h-7 flex items-center justify-center rounded-full text-primary/70 hover:bg-primary/10">
+                            <span className="material-symbols-outlined text-lg">refresh</span>
+                          </button>
+                          <span className="pointer-events-none absolute right-0 top-full mt-1 px-2 py-1 rounded-lg bg-inverse-surface text-inverse-on-surface text-[11px] whitespace-nowrap opacity-0 group-hover/tip:opacity-100 transition-opacity shadow-lg z-10">重新問 AI</span>
+                        </div>
+                      )}
                     </div>
-                    {explain.text
-                      ? <div className="text-sm leading-relaxed break-words"><ReactMarkdown remarkPlugins={[remarkGfm]} components={compactMd}>{explain.text}</ReactMarkdown></div>
-                      : <div className="text-xs text-on-surface-variant flex items-center gap-1.5"><span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>AI 讀取文件中…</div>}
-                    {explain.streaming && explain.text && <span className="inline-block w-1.5 h-4 bg-primary/60 animate-pulse ml-0.5 rounded-sm" />}
+                    {explainOpen && (
+                      <div className="px-3 pb-3">
+                        {explain.text
+                          ? <div className="text-sm leading-relaxed break-words"><ReactMarkdown remarkPlugins={MD_PLUGINS} components={compactMd}>{explain.text}</ReactMarkdown></div>
+                          : <div className="text-xs text-on-surface-variant flex items-center gap-1.5"><span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>AI 讀取文件中…</div>}
+                        {explain.streaming && explain.text && <span className="inline-block w-1.5 h-4 bg-primary/60 animate-pulse ml-0.5 rounded-sm" />}
+                      </div>
+                    )}
                   </div>
                 )}
                 {detailLoading && <div className="text-sm text-on-surface-variant flex items-center gap-2"><span className="material-symbols-outlined animate-spin text-base">progress_activity</span>載入文件中…</div>}
@@ -509,7 +536,7 @@ export default function KMAssistantWidget() {
                 <div className={`px-3.5 py-2.5 rounded-xl text-sm ${m.role === 'user' ? 'max-w-[80%] bg-primary text-on-primary rounded-br-sm' : 'flex-1 min-w-0 bg-surface-container text-on-surface rounded-bl-sm'}`}>
                   {m.role === 'assistant'
                     ? <>
-                        <div className="leading-relaxed break-words"><ReactMarkdown remarkPlugins={[remarkGfm]} components={compactMd}>{m.content}</ReactMarkdown></div>
+                        <div className="leading-relaxed break-words"><ReactMarkdown remarkPlugins={MD_PLUGINS} components={compactMd}>{m.content}</ReactMarkdown></div>
                         {(() => { const src = extractSources(m.content); return src.length > 0 && (
                           <div className="mt-2 pt-2 border-t border-outline-variant/15">
                             <p className="text-[11px] text-on-surface-variant/60 mb-1">來源文件（點擊開啟原文）</p>
@@ -535,7 +562,7 @@ export default function KMAssistantWidget() {
                 <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center mr-2 mt-0.5 shrink-0"><span className="material-symbols-outlined text-primary text-sm">menu_book</span></div>
                 <div className="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl rounded-bl-sm bg-surface-container text-on-surface text-sm">
                   {streamText
-                    ? <div className="leading-relaxed break-words"><ReactMarkdown remarkPlugins={[remarkGfm]} components={compactMd}>{streamText}</ReactMarkdown></div>
+                    ? <div className="leading-relaxed break-words"><ReactMarkdown remarkPlugins={MD_PLUGINS} components={compactMd}>{streamText}</ReactMarkdown></div>
                     : <div className="flex items-center gap-2 text-on-surface-variant"><span className="material-symbols-outlined text-base animate-spin">progress_activity</span>{toolNote || '檢索 KM 中…'}</div>}
                 </div>
               </div>
@@ -574,7 +601,7 @@ export default function KMAssistantWidget() {
               ? <div className="text-sm text-white/80 flex items-center gap-2"><span className="material-symbols-outlined animate-spin text-base">progress_activity</span>載入中…</div>
               : viewer.kind === 'image'
                 ? <img src={viewer.url} alt={viewer.filename} className="max-w-full max-h-full object-contain" />
-                : <iframe src={`${viewer.url}#navpanes=0&view=FitH${viewer.page ? `&page=${viewer.page}` : ''}${viewer.search ? `&search=${encodeURIComponent(viewer.search)}` : ''}`} title={viewer.filename} className="w-full h-full border-0 bg-white" />}
+                : <KmPdfViewer url={viewer.url} search={viewer.search} initialPage={viewer.page} />}
           </div>
         </div>
       )}
