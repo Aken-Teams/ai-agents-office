@@ -417,6 +417,20 @@ export async function initializeDatabase(): Promise<void> {
       await conn.query('ALTER TABLE users ADD COLUMN km_agent_enabled TINYINT(1) DEFAULT NULL');
     } catch { /* column already exists */ }
 
+    // Per-user cached "AI 這份在講什麼" explanation for a KM document, so it's shown
+    // in the 文件 detail next time (no re-asking) and the list can badge answered docs.
+    try {
+      await conn.query(`CREATE TABLE IF NOT EXISTS km_doc_analysis (
+        user_id VARCHAR(36) NOT NULL,
+        document_id VARCHAR(64) NOT NULL,
+        title VARCHAR(512) NULL,
+        question TEXT NULL,
+        answer MEDIUMTEXT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, document_id)
+      )`);
+    } catch { /* table already exists */ }
+
     // AD integration columns
     try {
       await conn.query('ALTER TABLE users ADD COLUMN ad_username VARCHAR(50) DEFAULT NULL');

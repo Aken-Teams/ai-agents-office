@@ -102,6 +102,10 @@ export default function KMAssistantWidget() {
   const [viewerLoading, setViewerLoading] = useState(false);
   // 命中位置 (Phase 2): which pages of the open document mention the search term.
   const [hits, setHits] = useState<{ filename: string; loading: boolean; items: { page: number | null; snippets: string[] }[]; err?: string } | null>(null);
+  // "問 AI 這份在講什麼" — shown INLINE in the 文件 detail and cached per document,
+  // so re-opening shows the previous answer (no re-ask). Badged in the result list.
+  const [explain, setExplain] = useState<{ docId: string; text: string; streaming: boolean; cached: boolean } | null>(null);
+  const [explainedIds, setExplainedIds] = useState<Set<string>>(new Set());
 
   // ── 對話 tab ──
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -125,7 +129,8 @@ export default function KMAssistantWidget() {
     historyLoaded.current = true;
     fetch(`${API_BASE}/api/km-agent/history`, { headers: authHeaders() })
       .then(r => r.ok ? r.json() : { messages: [] })
-      .then(d => setMessages((d.messages || []).map((m: any) => ({ role: m.role, content: m.content }))))
+      // Don't clobber an in-flight message the user just sent while history loaded.
+      .then(d => setMessages(prev => prev.length ? prev : (d.messages || []).map((m: any) => ({ role: m.role, content: m.content }))))
       .catch(() => {});
   }, [tab]);
 
@@ -161,7 +166,7 @@ export default function KMAssistantWidget() {
       }
       if (!payload) setSearchErr('KM 搜尋沒有回應，請稍後再試。');
       else if (!payload.ok) setSearchErr(payload.error || 'KM 搜尋失敗，請稍後再試。');
-      else { setSearchErr(''); setResults(toDocs(payload.data)); }
+      else { setSearchErr(''); setResults(toDocs(payload.data)); loadExplainedIds(); }
     } catch (err) {
       console.error('[KM search] fetch failed:', err);
       setSearchErr('KM 搜尋連線中斷,請稍後再試。');
@@ -172,6 +177,12 @@ export default function KMAssistantWidget() {
 
   async function openDoc(doc: KmDoc) {
     setDetailLoading(true); setDetailErr(''); setDetail({ doc, attachments: [] });
+    setHits(null); setExplain(null);
+    // Show a previously-cached AI explanation for this doc, if any (no re-ask).
+    fetch(`${API_BASE}/api/km-agent/document/${encodeURIComponent(doc.id)}/explain`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && d.answer) setExplain({ docId: doc.id, text: d.answer, streaming: false, cached: true }); })
+      .catch(() => {});
     try {
       const res = await fetch(`${API_BASE}/api/km-agent/document/${encodeURIComponent(doc.id)}`, { headers: authHeaders() });
       const data = await res.json();
@@ -248,12 +259,52 @@ export default function KMAssistantWidget() {
     setViewer(null);
   }
 
-  // Ask the AI to explain a specific document (from the 文件 tab). Jumps to 對話.
-  function askAiAboutDoc(doc: KmDoc) {
+  const loadExplainedIds = () => {
+    fetch(`${API_BASE}/api/km-agent/explained`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && Array.isArray(d.ids)) setExplainedIds(new Set(d.ids.map(String))); })
+      .catch(() => {});
+  };
+
+  // Ask the AI to explain a specific document — streamed INLINE in the 文件 detail
+  // (not the chat tab) and cached server-side so it persists next time.
+  async function explainDoc(doc: KmDoc) {
     const q = query.trim();
-    const question = `請讀取 KM 文件 #${doc.id}《${doc.title}》，用幾句話說明它的重點${q ? `，以及跟「${q}」相關的內容在哪、在講什麼` : ''}。`;
-    setTab('chat');
-    setTimeout(() => sendChat(question), 0);
+    setExplain({ docId: doc.id, text: '', streaming: true, cached: false });
+    let acc = '';
+    try {
+      const res = await fetch(`${API_BASE}/api/km-agent/document/${encodeURIComponent(doc.id)}/explain`, {
+        method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: doc.title, keyword: q || undefined }),
+      });
+      if (!res.ok || !res.body) {
+        const d = await res.json().catch(() => null);
+        setExplain({ docId: doc.id, text: (d && (d.message || d.error)) || '解讀失敗，請稍後再試。', streaming: false, cached: false });
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop() || '';
+        for (const part of parts) {
+          const line = part.split('\n').find(l => l.startsWith('data:'));
+          if (!line) continue;
+          try {
+            const ev = JSON.parse(line.slice(5).trim());
+            if (ev.type === 'text') { acc += ev.data as string; setExplain(e => (e && e.docId === doc.id ? { ...e, text: acc } : e)); }
+          } catch { /* skip */ }
+        }
+      }
+    } catch { if (!acc) acc = '解讀連線中斷，請再試一次。'; }
+    finally {
+      setExplain(e => (e && e.docId === doc.id ? { ...e, text: acc || e.text, streaming: false } : e));
+      setExplainedIds(prev => new Set(prev).add(doc.id));
+    }
   }
 
   async function sendChat(override?: string) {
@@ -340,7 +391,14 @@ export default function KMAssistantWidget() {
                       <div className="flex items-start gap-2">
                         <span className="material-symbols-outlined text-primary/70 text-lg shrink-0 mt-0.5">description</span>
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-on-surface truncate">{doc.title}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium text-on-surface truncate">{doc.title}</p>
+                            {explainedIds.has(doc.id) && (
+                              <span title="AI 已解讀過" className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-medium">
+                                <span className="material-symbols-outlined text-[12px]">smart_toy</span>AI
+                              </span>
+                            )}
+                          </div>
                           <p className="text-[11px] text-on-surface-variant/60 truncate">#{doc.id}{doc.category ? ` · ${doc.category}` : ''}</p>
                         </div>
                       </div>
@@ -357,12 +415,28 @@ export default function KMAssistantWidget() {
                 </button>
                 <p className="text-sm font-semibold text-on-surface">{detail.doc.title}</p>
                 <p className="text-[11px] text-on-surface-variant/60">#{detail.doc.id}{detail.doc.category ? ` · ${detail.doc.category}` : ''}</p>
-                <button onClick={() => askAiAboutDoc(detail.doc)}
-                  className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20">
-                  <span className="material-symbols-outlined text-sm">smart_toy</span>問 AI：這份在講什麼{query.trim() ? `／跟「${query.trim()}」的關係` : ''}
-                </button>
+                {!(explain && explain.docId === detail.doc.id) && (
+                  <button onClick={() => explainDoc(detail.doc)}
+                    className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20">
+                    <span className="material-symbols-outlined text-sm">smart_toy</span>問 AI：這份在講什麼{query.trim() ? `／跟「${query.trim()}」的關係` : ''}
+                  </button>
+                )}
               </div>
-              <div className="flex-1 overflow-y-auto p-3 min-h-0">
+              <div className="flex-1 overflow-y-auto p-3 min-h-0 space-y-3">
+                {/* AI 解讀 — inline, cached (shows previous answer without re-asking) */}
+                {explain && explain.docId === detail.doc.id && (
+                  <div className="rounded-xl bg-primary/5 border border-primary/15 p-3">
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <span className="material-symbols-outlined text-primary text-lg">smart_toy</span>
+                      <span className="text-xs font-medium text-primary">AI 解讀{explain.cached ? '（先前已回答）' : ''}</span>
+                      {!explain.streaming && <button onClick={() => explainDoc(detail.doc)} className="ml-auto text-[11px] text-primary/70 hover:underline">重新問</button>}
+                    </div>
+                    {explain.text
+                      ? <div className="text-sm leading-relaxed break-words"><ReactMarkdown remarkPlugins={[remarkGfm]} components={compactMd}>{explain.text}</ReactMarkdown></div>
+                      : <div className="text-xs text-on-surface-variant flex items-center gap-1.5"><span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>AI 讀取文件中…</div>}
+                    {explain.streaming && explain.text && <span className="inline-block w-1.5 h-4 bg-primary/60 animate-pulse ml-0.5 rounded-sm" />}
+                  </div>
+                )}
                 {detailLoading && <div className="text-sm text-on-surface-variant flex items-center gap-2"><span className="material-symbols-outlined animate-spin text-base">progress_activity</span>載入文件中…</div>}
                 {detailErr && <div className="text-sm text-error py-2">{detailErr}</div>}
                 {!detailLoading && !detailErr && detail.attachments.length === 0 && <div className="text-sm text-on-surface-variant py-4 text-center">這份文件沒有可下載的附件。</div>}

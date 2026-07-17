@@ -158,61 +158,101 @@ async function getOrCreateKmConversation(userId: string): Promise<string> {
   return id;
 }
 
-router.post('/chat', async (req: Request, res: Response) => {
-  const userId = req.user!.userId;
-  const { message } = req.body as { message?: string };
-  if (!(await kmAgentEnabled(userId))) { res.status(403).json({ error: 'km_agent_disabled', message: '尚未開啟 KM 助手。' }); return; }
-  if (!message?.trim()) { res.status(400).json({ error: 'Message is required' }); return; }
-
-  const usage = await checkUserUsageLimit(userId);
-  if (usage.exceeded) { res.status(403).json({ error: `本月用量已達上限 USD $${usage.limit.toFixed(2)}` }); return; }
-
-  const onBehalf = await getKmOnBehalf(userId);
-  if (!onBehalf) { res.status(400).json({ error: '無法取得你的員編（KM 需要 AD 帳號）。' }); return; }
-
+// Shared: spawn the KM agent (Sonnet + km-mcp), stream its answer over SSE, and
+// hand the final text/tokens to onComplete (chat saves a message; explain caches it).
+async function streamKmAgentAnswer(
+  res: Response, userId: string, onBehalf: string, prompt: string, conversationId: string,
+  onComplete: (text: string, inTok: number, outTok: number, model: string) => Promise<void>,
+): Promise<void> {
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
   const write = (event: SSEEvent) => { try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* closed */ } };
   const keepalive = setInterval(() => { try { res.write(': keepalive\n\n'); } catch { /* closed */ } }, 10000);
-
-  const conversationId = await getOrCreateKmConversation(userId);
-  await dbRun('INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)', uuidv4(), conversationId, 'user', message.trim());
-
-  // Recent turns for lightweight context (last 6 messages).
-  const history = await dbAll<{ role: string; content: string }>(
-    'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 6', conversationId);
-  const historyBlock = history.reverse().map(m => `${m.role === 'user' ? '使用者' : '助手'}：${m.content.slice(0, 500)}`).join('\n');
-  const prompt = historyBlock ? `${historyBlock}\n\n使用者最新問題：${message.trim()}` : message.trim();
-
-  let text = '';
-  let inTok = 0, outTok = 0, model = '';
+  let text = '', inTok = 0, outTok = 0, model = '';
   const { emitter, abort } = spawnClaude(prompt, KM_ASSISTANT_SYSTEM_PROMPT, {
     userId, conversationId,
     sandboxSubdir: '_agents/km-assistant',
     sessionId: uuidv4(), isResume: false,
     customAllowedTools: ['Read'], maxTurns: 8,
-    // Sonnet: fast + reliable at the km-mcp tool orchestration. The KM API itself is
-    // the real latency floor, but a lighter model trims the thinking/synthesis time.
-    model: 'claude-sonnet-4-6',
-    mcpKmOnBehalf: onBehalf, // attaches km-mcp (claudeCli disables Task, keeps ToolSearch)
+    model: 'claude-sonnet-4-6', // fast + reliable at km-mcp orchestration
+    mcpKmOnBehalf: onBehalf,     // attaches km-mcp (claudeCli disables Task, keeps ToolSearch)
   });
   const timer = setTimeout(() => { try { abort(); } catch { /* ignore */ } }, 180_000);
-  req.on('close', () => { try { abort(); } catch { /* ignore */ } });
-
+  res.on('close', () => { try { abort(); } catch { /* ignore */ } });
   emitter.on('event', async (ev: SSEEvent) => {
     if (ev.type === 'text') { text += ev.data as string; write({ type: 'text', data: ev.data }); }
     else if (ev.type === 'tool_activity') { write(ev); }
     else if (ev.type === 'usage') { const u = ev.data as { inputTokens: number; outputTokens: number; model: string }; inTok = u.inputTokens; outTok = u.outputTokens; model = u.model; }
     else if (ev.type === 'done') {
-      clearTimeout(timer);
-      clearInterval(keepalive);
-      if (text.trim()) {
-        await dbRun('INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)', uuidv4(), conversationId, 'assistant', text).catch(() => {});
-        if (inTok || outTok) await recordTokenUsage({ userId, conversationId, inputTokens: inTok, outputTokens: outTok, model: model || 'claude-haiku-4-5-20251001' }).catch(() => {});
-      }
+      clearTimeout(timer); clearInterval(keepalive);
+      await onComplete(text, inTok, outTok, model).catch(() => {});
       write({ type: 'done', data: {} });
       try { res.end(); } catch { /* closed */ }
     }
   });
+}
+
+router.post('/chat', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const { message } = req.body as { message?: string };
+  if (!(await kmAgentEnabled(userId))) { res.status(403).json({ error: 'km_agent_disabled', message: '尚未開啟 KM 助手。' }); return; }
+  if (!message?.trim()) { res.status(400).json({ error: 'Message is required' }); return; }
+  const usage = await checkUserUsageLimit(userId);
+  if (usage.exceeded) { res.status(403).json({ error: `本月用量已達上限 USD $${usage.limit.toFixed(2)}` }); return; }
+  const onBehalf = await getKmOnBehalf(userId);
+  if (!onBehalf) { res.status(400).json({ error: '無法取得你的員編（KM 需要 AD 帳號）。' }); return; }
+
+  const conversationId = await getOrCreateKmConversation(userId);
+  await dbRun('INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)', uuidv4(), conversationId, 'user', message.trim());
+  const history = await dbAll<{ role: string; content: string }>(
+    'SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY created_at DESC LIMIT 6', conversationId);
+  const historyBlock = history.reverse().map(m => `${m.role === 'user' ? '使用者' : '助手'}：${m.content.slice(0, 500)}`).join('\n');
+  const prompt = historyBlock ? `${historyBlock}\n\n使用者最新問題：${message.trim()}` : message.trim();
+
+  await streamKmAgentAnswer(res, userId, onBehalf, prompt, conversationId, async (text, inTok, outTok, model) => {
+    if (text.trim()) {
+      await dbRun('INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)', uuidv4(), conversationId, 'assistant', text).catch(() => {});
+      if (inTok || outTok) await recordTokenUsage({ userId, conversationId, inputTokens: inTok, outputTokens: outTok, model: model || 'claude-sonnet-4-6' }).catch(() => {});
+    }
+  });
+});
+
+// ─── 文件 tab: "問 AI 這份在講什麼" — explain ONE document, cached per user ───
+router.post('/document/:id/explain', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  if (!(await kmAgentEnabled(userId))) { res.status(403).json({ error: 'km_agent_disabled', message: '尚未開啟 KM 助手。' }); return; }
+  const usage = await checkUserUsageLimit(userId);
+  if (usage.exceeded) { res.status(403).json({ error: `本月用量已達上限 USD $${usage.limit.toFixed(2)}` }); return; }
+  const onBehalf = await getKmOnBehalf(userId);
+  if (!onBehalf) { res.status(400).json({ error: '無法取得你的員編（KM 需要 AD 帳號）。' }); return; }
+
+  const id = String(req.params.id);
+  const { title, keyword } = req.body as { title?: string; keyword?: string };
+  const question = `請讀取 KM 文件 #${id}${title ? `《${title}》` : ''}，用幾句話說明它的重點${keyword ? `，以及跟「${keyword}」相關的內容在哪、在講什麼` : ''}。`;
+  const conversationId = await getOrCreateKmConversation(userId);
+
+  await streamKmAgentAnswer(res, userId, onBehalf, question, conversationId, async (text, inTok, outTok, model) => {
+    if (text.trim()) {
+      await dbRun(
+        `INSERT INTO km_doc_analysis (user_id, document_id, title, question, answer) VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE title = VALUES(title), question = VALUES(question), answer = VALUES(answer)`,
+        userId, id, title || null, question, text,
+      ).catch(() => {});
+      if (inTok || outTok) await recordTokenUsage({ userId, conversationId, inputTokens: inTok, outputTokens: outTok, model: model || 'claude-sonnet-4-6' }).catch(() => {});
+    }
+  });
+});
+
+// Cached explanation for one document (shown in 文件 detail on open, no re-ask).
+router.get('/document/:id/explain', async (req: Request, res: Response) => {
+  const row = await dbGet<{ answer: string | null; question: string | null; updated_at: string }>(
+    'SELECT answer, question, updated_at FROM km_doc_analysis WHERE user_id = ? AND document_id = ?', req.user!.userId, String(req.params.id));
+  res.json(row || { answer: null });
+});
+
+// The set of document_ids the user has already asked AI about (for list badges).
+router.get('/explained', async (req: Request, res: Response) => {
+  const rows = await dbAll<{ document_id: string }>('SELECT document_id FROM km_doc_analysis WHERE user_id = ?', req.user!.userId);
+  res.json({ ids: rows.map(r => r.document_id) });
 });
 
 // ─── Chat history (for the 對話 tab on open) ───
