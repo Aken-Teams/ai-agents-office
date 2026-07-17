@@ -99,6 +99,56 @@ router.get('/document/:id/attachment/:filename', async (req: Request, res: Respo
   res.send(r.buf);
 });
 
+// ─── 命中位置: which page(s) of an attachment mention the keyword + snippets ───
+// Deterministic (no AI): download → per-page PDF text → find the term. Answers
+// "這份文件哪一段在講差勤" and lets the viewer jump straight to that page.
+router.get('/document/:id/attachment/:filename/hits', async (req: Request, res: Response) => {
+  const q = String(req.query.q || '').trim();
+  if (!q) { res.status(400).json({ error: 'q is required' }); return; }
+  const onBehalf = await getKmOnBehalf(req.user!.userId);
+  if (!onBehalf) { res.status(400).json({ error: '無法取得你的員編。' }); return; }
+  const filename = decodeURIComponent(String(req.params.filename));
+  const e = filename.slice(filename.lastIndexOf('.') + 1).toLowerCase();
+  const r = await kmFetchAttachment(onBehalf, String(req.params.id), filename);
+  if (!r.ok || !r.buf) { res.status(r.status && r.status < 500 ? r.status : 502).json({ error: r.error }); return; }
+
+  const snippetsFrom = (text: string, max: number): string[] => {
+    const out: string[] = [];
+    const lower = text.toLowerCase(); const ql = q.toLowerCase();
+    let idx = lower.indexOf(ql);
+    while (idx >= 0 && out.length < max) {
+      const s = Math.max(0, idx - 40);
+      out.push(text.slice(s, idx + q.length + 70).replace(/\s+/g, ' ').trim());
+      idx = lower.indexOf(ql, idx + q.length);
+    }
+    return out;
+  };
+
+  try {
+    if (e === 'pdf') {
+      const { extractText, getDocumentProxy } = await import('unpdf');
+      const pdf = await getDocumentProxy(new Uint8Array(r.buf));
+      const { totalPages, text } = await extractText(pdf, { mergePages: false });
+      const pages: string[] = Array.isArray(text) ? text : [String(text)];
+      const hits: { page: number; snippets: string[] }[] = [];
+      for (let p = 0; p < pages.length && hits.length < 30; p++) {
+        const snips = snippetsFrom(pages[p] || '', 3);
+        if (snips.length) hits.push({ page: p + 1, snippets: snips });
+      }
+      res.json({ q, filename, total_pages: totalPages, hits, kind: 'pdf' });
+      return;
+    }
+    // Non-PDF: no page concept — return snippets from the whole text.
+    const { extractFileText } = await import('../services/emailContentUtils.js');
+    const text = await extractFileText(r.buf, e).catch(() => '');
+    const snips = snippetsFrom(text, 8);
+    res.json({ q, filename, hits: snips.length ? [{ page: null, snippets: snips }] : [], kind: e });
+  } catch (err) {
+    console.warn('[KM] hits extraction failed:', err);
+    res.status(500).json({ error: '無法解析文件內容以定位關鍵字。' });
+  }
+});
+
 // ─── 對話 tab: AI Q&A grounded in KM (via km-mcp), streamed over SSE on THIS request ───
 async function getOrCreateKmConversation(userId: string): Promise<string> {
   const existing = await dbGet<{ id: string }>("SELECT id FROM conversations WHERE user_id = ? AND category = 'km-agent' LIMIT 1", userId);
@@ -140,6 +190,9 @@ router.post('/chat', async (req: Request, res: Response) => {
     sandboxSubdir: '_agents/km-assistant',
     sessionId: uuidv4(), isResume: false,
     customAllowedTools: ['Read'], maxTurns: 8,
+    // Sonnet: fast + reliable at the km-mcp tool orchestration. The KM API itself is
+    // the real latency floor, but a lighter model trims the thinking/synthesis time.
+    model: 'claude-sonnet-4-6',
     mcpKmOnBehalf: onBehalf, // attaches km-mcp (claudeCli disables Task, keeps ToolSearch)
   });
   const timer = setTimeout(() => { try { abort(); } catch { /* ignore */ } }, 180_000);

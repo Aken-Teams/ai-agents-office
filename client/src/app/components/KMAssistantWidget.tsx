@@ -45,6 +45,15 @@ function toAttachments(data: any): KmAttachment[] {
 function ext(name: string): string { const i = name.lastIndexOf('.'); return i >= 0 ? name.slice(i + 1).toLowerCase() : ''; }
 const IMG_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']);
 
+// Map the currently-running tool to a human-readable progress step (perceived speed).
+function toolProgress(tool: string): string {
+  if (tool.includes('km_search')) return '搜尋 KM 文件中…（結果多時較慢）';
+  if (tool.includes('km_get_document')) return '讀取文件資訊中…';
+  if (tool.includes('km_get_attachment')) return '讀取文件內容中…';
+  if (tool.includes('ToolSearch')) return '準備工具中…';
+  return '檢索 KM 中…';
+}
+
 // Pull cited KM documents out of an AI answer so they can be shown as clickable
 // source chips. The retriever prompt cites them as 「標題（#3474）」; we also catch
 // bare #ids as a fallback.
@@ -89,8 +98,10 @@ export default function KMAssistantWidget() {
   const [detail, setDetail] = useState<{ doc: KmDoc; attachments: KmAttachment[] } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailErr, setDetailErr] = useState('');
-  const [viewer, setViewer] = useState<{ docId: string; filename: string; url: string; kind: 'pdf' | 'image' | 'other'; search?: string } | null>(null);
+  const [viewer, setViewer] = useState<{ docId: string; filename: string; url: string; kind: 'pdf' | 'image' | 'other'; search?: string; page?: number } | null>(null);
   const [viewerLoading, setViewerLoading] = useState(false);
+  // 命中位置 (Phase 2): which pages of the open document mention the search term.
+  const [hits, setHits] = useState<{ filename: string; loading: boolean; items: { page: number | null; snippets: string[] }[]; err?: string } | null>(null);
 
   // ── 對話 tab ──
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -197,17 +208,30 @@ export default function KMAssistantWidget() {
     return URL.createObjectURL(await res.blob());
   }
 
-  async function viewAttachment(docId: string, filename: string, highlight?: string) {
+  async function viewAttachment(docId: string, filename: string, highlight?: string, page?: number) {
     const e = ext(filename);
     const kind: 'pdf' | 'image' | 'other' = e === 'pdf' ? 'pdf' : IMG_EXTS.has(e) ? 'image' : 'other';
     if (kind === 'other') { await downloadAttachment(docId, filename); return; } // non-viewable → just download
     const search = highlight?.trim() || query.trim() || undefined; // carry the term → highlight in the PDF
-    setViewerLoading(true); setViewer({ docId, filename, url: '', kind, search });
+    setViewerLoading(true); setViewer({ docId, filename, url: '', kind, search, page });
     try {
       const url = await fetchBlobUrl(docId, filename, false);
-      setViewer({ docId, filename, url, kind, search });
+      setViewer({ docId, filename, url, kind, search, page });
     } catch (err) { setViewer(null); alert((err as Error).message); }
     finally { setViewerLoading(false); }
+  }
+
+  // Load 命中位置: which pages of this attachment mention the current search term.
+  async function loadHits(docId: string, filename: string) {
+    const q = query.trim();
+    if (!q) return;
+    setHits({ filename, loading: true, items: [] });
+    try {
+      const res = await fetch(`${API_BASE}/api/km-agent/document/${encodeURIComponent(docId)}/attachment/${encodeURIComponent(filename)}/hits?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) { setHits({ filename, loading: false, items: [], err: (data && data.error) || '無法定位關鍵字' }); return; }
+      setHits({ filename, loading: false, items: data.hits || [] });
+    } catch { setHits({ filename, loading: false, items: [], err: '定位失敗，請再試一次。' }); }
   }
 
   async function downloadAttachment(docId: string, filename: string) {
@@ -224,8 +248,16 @@ export default function KMAssistantWidget() {
     setViewer(null);
   }
 
-  async function sendChat() {
-    const msg = input.trim();
+  // Ask the AI to explain a specific document (from the 文件 tab). Jumps to 對話.
+  function askAiAboutDoc(doc: KmDoc) {
+    const q = query.trim();
+    const question = `請讀取 KM 文件 #${doc.id}《${doc.title}》，用幾句話說明它的重點${q ? `，以及跟「${q}」相關的內容在哪、在講什麼` : ''}。`;
+    setTab('chat');
+    setTimeout(() => sendChat(question), 0);
+  }
+
+  async function sendChat(override?: string) {
+    const msg = (override ?? input).trim();
     if (!msg || streaming) return;
     setInput(''); setToolNote('');
     setMessages(prev => [...prev, { role: 'user', content: msg }]);
@@ -256,7 +288,7 @@ export default function KMAssistantWidget() {
           try {
             const ev = JSON.parse(line.slice(5).trim());
             if (ev.type === 'text') { acc += ev.data as string; setStreamText(acc); }
-            else if (ev.type === 'tool_activity') { setToolNote(typeof ev.data === 'string' ? ev.data : '檢索 KM 中…'); }
+            else if (ev.type === 'tool_activity') { setToolNote(toolProgress((ev.data && ev.data.tool) || '')); }
           } catch { /* skip */ }
         }
       }
@@ -325,6 +357,10 @@ export default function KMAssistantWidget() {
                 </button>
                 <p className="text-sm font-semibold text-on-surface">{detail.doc.title}</p>
                 <p className="text-[11px] text-on-surface-variant/60">#{detail.doc.id}{detail.doc.category ? ` · ${detail.doc.category}` : ''}</p>
+                <button onClick={() => askAiAboutDoc(detail.doc)}
+                  className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20">
+                  <span className="material-symbols-outlined text-sm">smart_toy</span>問 AI：這份在講什麼{query.trim() ? `／跟「${query.trim()}」的關係` : ''}
+                </button>
               </div>
               <div className="flex-1 overflow-y-auto p-3 min-h-0">
                 {detailLoading && <div className="text-sm text-on-surface-variant flex items-center gap-2"><span className="material-symbols-outlined animate-spin text-base">progress_activity</span>載入文件中…</div>}
@@ -334,20 +370,46 @@ export default function KMAssistantWidget() {
                   {detail.attachments.map((att, i) => {
                     const e = ext(att.filename);
                     const canView = e === 'pdf' || IMG_EXTS.has(e);
+                    const q = query.trim();
+                    const attHits = hits && hits.filename === att.filename ? hits : null;
                     return (
-                      <div key={i} className="flex items-center gap-2 p-2.5 rounded-lg bg-surface-container">
-                        <span className="material-symbols-outlined text-on-surface-variant/70 text-lg shrink-0">{e === 'pdf' ? 'picture_as_pdf' : IMG_EXTS.has(e) ? 'image' : 'draft'}</span>
-                        <p className="text-sm text-on-surface truncate flex-1 min-w-0">{att.filename}</p>
-                        {canView && (
-                          <button onClick={() => viewAttachment(detail.doc.id, att.filename)} title="檢視"
+                      <div key={i} className="rounded-lg bg-surface-container overflow-hidden">
+                        <div className="flex items-center gap-2 p-2.5">
+                          <span className="material-symbols-outlined text-on-surface-variant/70 text-lg shrink-0">{e === 'pdf' ? 'picture_as_pdf' : IMG_EXTS.has(e) ? 'image' : 'draft'}</span>
+                          <p className="text-sm text-on-surface truncate flex-1 min-w-0">{att.filename}</p>
+                          {q && (e === 'pdf' || e === 'docx' || e === 'xlsx' || e === 'xls') && (
+                            <button onClick={() => loadHits(detail.doc.id, att.filename)} title={`找「${q}」在哪`}
+                              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary shrink-0">
+                              <span className="material-symbols-outlined text-lg">manage_search</span>
+                            </button>
+                          )}
+                          {canView && (
+                            <button onClick={() => viewAttachment(detail.doc.id, att.filename)} title="檢視"
+                              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary shrink-0">
+                              <span className="material-symbols-outlined text-lg">visibility</span>
+                            </button>
+                          )}
+                          <button onClick={() => downloadAttachment(detail.doc.id, att.filename)} title="下載"
                             className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary shrink-0">
-                            <span className="material-symbols-outlined text-lg">visibility</span>
+                            <span className="material-symbols-outlined text-lg">download</span>
                           </button>
+                        </div>
+                        {attHits && (
+                          <div className="px-2.5 pb-2.5 pt-1 border-t border-outline-variant/10">
+                            {attHits.loading && <div className="text-xs text-on-surface-variant flex items-center gap-1.5 py-1"><span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>定位「{q}」中…</div>}
+                            {attHits.err && <div className="text-xs text-error py-1">{attHits.err}</div>}
+                            {!attHits.loading && !attHits.err && attHits.items.length === 0 && <div className="text-xs text-on-surface-variant/70 py-1">此附件內文找不到「{q}」(可能在圖片或別的附件)。</div>}
+                            <div className="space-y-1">
+                              {attHits.items.map((h, hi) => (
+                                <button key={hi} onClick={() => viewAttachment(detail.doc.id, att.filename, q, h.page ?? undefined)}
+                                  className="w-full text-left px-2 py-1.5 rounded-md hover:bg-surface-container-high">
+                                  <span className="text-[11px] font-medium text-primary">{h.page ? `第 ${h.page} 頁` : '內文'} · 開啟並跳到此處</span>
+                                  <p className="text-[11px] text-on-surface-variant/80 line-clamp-2">…{h.snippets[0]}…</p>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         )}
-                        <button onClick={() => downloadAttachment(detail.doc.id, att.filename)} title="下載"
-                          className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary shrink-0">
-                          <span className="material-symbols-outlined text-lg">download</span>
-                        </button>
                       </div>
                     );
                   })}
@@ -411,7 +473,7 @@ export default function KMAssistantWidget() {
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
               placeholder="輸入 KM 相關問題…"
               className="flex-1 resize-none px-3 py-2 text-sm rounded-lg bg-surface-container border border-outline-variant/20 focus:outline-none focus:border-primary max-h-24" />
-            <button onClick={sendChat} disabled={streaming || !input.trim()}
+            <button onClick={() => sendChat()} disabled={streaming || !input.trim()}
               className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-primary text-on-primary disabled:opacity-40">
               <span className="material-symbols-outlined text-lg">{streaming ? 'progress_activity' : 'arrow_upward'}</span>
             </button>
@@ -438,7 +500,7 @@ export default function KMAssistantWidget() {
               ? <div className="text-sm text-white/80 flex items-center gap-2"><span className="material-symbols-outlined animate-spin text-base">progress_activity</span>載入中…</div>
               : viewer.kind === 'image'
                 ? <img src={viewer.url} alt={viewer.filename} className="max-w-full max-h-full object-contain" />
-                : <iframe src={`${viewer.url}#navpanes=0&view=FitH${viewer.search ? `&search=${encodeURIComponent(viewer.search)}` : ''}`} title={viewer.filename} className="w-full h-full border-0 bg-white" />}
+                : <iframe src={`${viewer.url}#navpanes=0&view=FitH${viewer.page ? `&page=${viewer.page}` : ''}${viewer.search ? `&search=${encodeURIComponent(viewer.search)}` : ''}`} title={viewer.filename} className="w-full h-full border-0 bg-white" />}
           </div>
         </div>
       )}
