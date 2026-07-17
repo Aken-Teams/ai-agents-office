@@ -45,6 +45,28 @@ function toAttachments(data: any): KmAttachment[] {
 function ext(name: string): string { const i = name.lastIndexOf('.'); return i >= 0 ? name.slice(i + 1).toLowerCase() : ''; }
 const IMG_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp']);
 
+// Pull cited KM documents out of an AI answer so they can be shown as clickable
+// source chips. The retriever prompt cites them as 「標題（#3474）」; we also catch
+// bare #ids as a fallback.
+function extractSources(text: string): { id: string; title: string }[] {
+  const out: { id: string; title: string }[] = [];
+  const seen = new Set<string>();
+  const titled = /([^\n（()）]{2,40})[（(]\s*#(\d{2,})\s*[）)]/g;
+  let m: RegExpExecArray | null;
+  while ((m = titled.exec(text))) {
+    const id = m[2];
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, title: m[1].trim().replace(/^[-*・•\d.、）)\s]+/, '').slice(0, 40) });
+  }
+  const bare = /#(\d{2,})/g;
+  while ((m = bare.exec(text))) {
+    const id = m[1];
+    if (!seen.has(id)) { seen.add(id); out.push({ id, title: `文件 #${id}` }); }
+  }
+  return out;
+}
+
 const compactMd = {
   p: (p: any) => <p className="mb-1.5 last:mb-0" {...p} />,
   ul: (p: any) => <ul className="list-disc pl-4 mb-1.5 space-y-0.5" {...p} />,
@@ -67,7 +89,7 @@ export default function KMAssistantWidget() {
   const [detail, setDetail] = useState<{ doc: KmDoc; attachments: KmAttachment[] } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailErr, setDetailErr] = useState('');
-  const [viewer, setViewer] = useState<{ filename: string; url: string; kind: 'pdf' | 'image' | 'other' } | null>(null);
+  const [viewer, setViewer] = useState<{ docId: string; filename: string; url: string; kind: 'pdf' | 'image' | 'other'; search?: string } | null>(null);
   const [viewerLoading, setViewerLoading] = useState(false);
 
   // ── 對話 tab ──
@@ -148,6 +170,24 @@ export default function KMAssistantWidget() {
     finally { setDetailLoading(false); }
   }
 
+  // Open a document straight from a chat answer's source chip: fetch its detail,
+  // then view the first viewable attachment (or download if none is viewable).
+  const [openingSource, setOpeningSource] = useState<string>('');
+  async function openDocById(id: string, highlight?: string) {
+    setOpeningSource(id);
+    try {
+      const res = await fetch(`${API_BASE}/api/km-agent/document/${encodeURIComponent(id)}`, { headers: authHeaders() });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) { alert((data && data.error) || `無法開啟文件 #${id}`); return; }
+      const atts = toAttachments(data);
+      const viewable = atts.find(a => { const e = ext(a.filename); return e === 'pdf' || IMG_EXTS.has(e); });
+      if (viewable) await viewAttachment(id, viewable.filename, highlight);
+      else if (atts[0]) await downloadAttachment(id, atts[0].filename);
+      else alert('這份文件沒有可開啟的附件。');
+    } catch { alert('開啟文件失敗，請稍後再試。'); }
+    finally { setOpeningSource(''); }
+  }
+
   async function fetchBlobUrl(docId: string, filename: string, download: boolean): Promise<string> {
     const res = await fetch(
       `${API_BASE}/api/km-agent/document/${encodeURIComponent(docId)}/attachment/${encodeURIComponent(filename)}${download ? '?download=1' : ''}`,
@@ -157,14 +197,15 @@ export default function KMAssistantWidget() {
     return URL.createObjectURL(await res.blob());
   }
 
-  async function viewAttachment(docId: string, filename: string) {
+  async function viewAttachment(docId: string, filename: string, highlight?: string) {
     const e = ext(filename);
     const kind: 'pdf' | 'image' | 'other' = e === 'pdf' ? 'pdf' : IMG_EXTS.has(e) ? 'image' : 'other';
     if (kind === 'other') { await downloadAttachment(docId, filename); return; } // non-viewable → just download
-    setViewerLoading(true); setViewer({ filename, url: '', kind });
+    const search = highlight?.trim() || query.trim() || undefined; // carry the term → highlight in the PDF
+    setViewerLoading(true); setViewer({ docId, filename, url: '', kind, search });
     try {
       const url = await fetchBlobUrl(docId, filename, false);
-      setViewer({ filename, url, kind });
+      setViewer({ docId, filename, url, kind, search });
     } catch (err) { setViewer(null); alert((err as Error).message); }
     finally { setViewerLoading(false); }
   }
@@ -331,7 +372,24 @@ export default function KMAssistantWidget() {
                 {m.role === 'assistant' && <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center mr-2 mt-0.5 shrink-0"><span className="material-symbols-outlined text-primary text-sm">menu_book</span></div>}
                 <div className={`px-3.5 py-2.5 rounded-xl text-sm ${m.role === 'user' ? 'max-w-[80%] bg-primary text-on-primary rounded-br-sm' : 'flex-1 min-w-0 bg-surface-container text-on-surface rounded-bl-sm'}`}>
                   {m.role === 'assistant'
-                    ? <div className="leading-relaxed break-words"><ReactMarkdown remarkPlugins={[remarkGfm]} components={compactMd}>{m.content}</ReactMarkdown></div>
+                    ? <>
+                        <div className="leading-relaxed break-words"><ReactMarkdown remarkPlugins={[remarkGfm]} components={compactMd}>{m.content}</ReactMarkdown></div>
+                        {(() => { const src = extractSources(m.content); return src.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-outline-variant/15">
+                            <p className="text-[11px] text-on-surface-variant/60 mb-1">來源文件（點擊開啟原文）</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {src.map(s => (
+                                <button key={s.id} onClick={() => openDocById(s.id)} disabled={openingSource === s.id}
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/10 text-primary text-xs hover:bg-primary/20 disabled:opacity-50 max-w-full">
+                                  <span className={`material-symbols-outlined text-sm ${openingSource === s.id ? 'animate-spin' : ''}`}>{openingSource === s.id ? 'progress_activity' : 'description'}</span>
+                                  <span className="truncate">{s.title}</span>
+                                  <span className="material-symbols-outlined text-sm shrink-0">open_in_new</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ); })()}
+                      </>
                     : <p className="whitespace-pre-wrap leading-relaxed break-words">{m.content}</p>}
                 </div>
               </div>
@@ -361,21 +419,26 @@ export default function KMAssistantWidget() {
         </div>
       )}
 
-      {/* Attachment viewer overlay */}
+      {/* Attachment viewer — full-screen overlay (breaks out of the small dock panel),
+          native PDF thumbnails hidden + fit-width; the search term is passed to the
+          PDF viewer so occurrences are highlighted. */}
       {viewer && (
-        <div className="absolute inset-0 z-10 bg-black/60 flex flex-col">
+        <div className="fixed inset-0 z-[130] bg-black/80 flex flex-col">
           <div className="flex items-center gap-2 px-3 py-2 bg-surface-container-high shrink-0">
             <span className="material-symbols-outlined text-on-surface-variant text-lg">{viewer.kind === 'pdf' ? 'picture_as_pdf' : 'image'}</span>
             <p className="text-sm text-on-surface truncate flex-1 min-w-0">{viewer.filename}</p>
-            <button onClick={() => { if (detail) downloadAttachment(detail.doc.id, viewer.filename); }} title="下載" className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface-variant"><span className="material-symbols-outlined text-lg">download</span></button>
-            <button onClick={closeViewer} title="關閉" className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface-variant"><span className="material-symbols-outlined text-lg">close</span></button>
+            {viewer.search && viewer.kind === 'pdf' && (
+              <span className="text-[11px] text-on-surface-variant/70 shrink-0 hidden sm:inline">已標示「{viewer.search}」</span>
+            )}
+            <button onClick={() => downloadAttachment(viewer.docId, viewer.filename)} title="下載" className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface-variant"><span className="material-symbols-outlined text-lg">download</span></button>
+            <button onClick={closeViewer} title="關閉" className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-surface-container text-on-surface-variant"><span className="material-symbols-outlined text-lg">close</span></button>
           </div>
-          <div className="flex-1 min-h-0 bg-surface flex items-center justify-center overflow-auto">
+          <div className="flex-1 min-h-0 bg-neutral-800 flex items-center justify-center overflow-auto">
             {viewerLoading || !viewer.url
-              ? <div className="text-sm text-on-surface-variant flex items-center gap-2"><span className="material-symbols-outlined animate-spin text-base">progress_activity</span>載入中…</div>
+              ? <div className="text-sm text-white/80 flex items-center gap-2"><span className="material-symbols-outlined animate-spin text-base">progress_activity</span>載入中…</div>
               : viewer.kind === 'image'
                 ? <img src={viewer.url} alt={viewer.filename} className="max-w-full max-h-full object-contain" />
-                : <iframe src={viewer.url} title={viewer.filename} className="w-full h-full border-0" />}
+                : <iframe src={`${viewer.url}#navpanes=0&view=FitH${viewer.search ? `&search=${encodeURIComponent(viewer.search)}` : ''}`} title={viewer.filename} className="w-full h-full border-0 bg-white" />}
           </div>
         </div>
       )}
