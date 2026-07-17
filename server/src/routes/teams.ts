@@ -21,6 +21,7 @@ import { checkUserUsageLimit } from '../services/usageLimit.js';
 import { analyzeInput, logSecurityEvent } from '../services/inputGuard.js';
 import { moderateTeamTopic } from '../services/contentSafety.js';
 import { getMailToken } from '../services/outlookApi.js';
+import { getKmOnBehalf } from '../services/kmApi.js';
 import { computeNextRun, mysqlDateTime, runScheduleNow } from '../services/teamScheduler.js';
 import { generateTeamSpec, insertTeamWithAgents, type GeneratedAgent } from '../services/teamBuilder.js';
 import type { Conversation } from '../types.js';
@@ -356,6 +357,7 @@ router.post('/:id/run', async (req: Request, res: Response) => {
     return;
   }
   const emailDataSource = Array.isArray(dataSources) && dataSources.includes('email');
+  const kmDataSource = Array.isArray(dataSources) && dataSources.includes('km');
 
   const team = await dbGet<{ id: string }>('SELECT id FROM agent_teams WHERE id = ? AND user_id = ?', req.params.id, userId);
   if (!team) { res.status(404).json({ error: 'Team not found' }); return; }
@@ -371,8 +373,8 @@ router.post('/:id/run', async (req: Request, res: Response) => {
   // harming the system or other users (the same gate as team creation). Runs
   // before the SSE stream starts so a plain JSON error can still be returned.
   const verdict = await moderateTeamTopic(message.trim(), '無法回答這個問題',
-    emailDataSource
-      ? { contextNote: '使用者已在對話中選取「我的信件」資料源。系統只會用其本人的授權 Token 讀取「他自己」的 Outlook 信箱（不可能存取他人信箱）。因此「查詢／列出／整理／摘要自己的信件」是被授權的正當操作，不屬於竊取機密或危害他人。' }
+    (emailDataSource || kmDataSource)
+      ? { contextNote: '使用者已在對話中選取資料源（「我的信件」／「KM 知識庫」）。系統只會以其本人身分讀取「他自己」有權限的資料（信箱用本人 Token、KM 用本人員編判權限，不可能存取他人資料）。因此「查詢／列出／整理／摘要自己有權限的信件或文件」是被授權的正當操作，不屬於竊取機密或危害他人。' }
       : undefined);
   if (!verdict.allowed) {
     logSecurityEvent(userId, 'blocked_request', 'high', `team-run blocked (category=${verdict.category})`, message);
@@ -387,8 +389,12 @@ router.post('/:id/run', async (req: Request, res: Response) => {
   if (emailDataSource) {
     mcpEmailToken = (await getMailToken(userId)) || undefined;
     console.log(`[teams] run email data-source: requested=true, tokenResolved=${!!mcpEmailToken} (user=${userId})`);
-  } else {
-    console.log(`[teams] run email data-source: requested=false, dataSources=${JSON.stringify(dataSources)}`);
+  }
+  // "KM 知識庫" data source → resolve the user's 員編 (X-On-Behalf-Of) for km-mcp.
+  let mcpKmOnBehalf: string | undefined;
+  if (kmDataSource) {
+    mcpKmOnBehalf = (await getKmOnBehalf(userId)) || undefined;
+    console.log(`[teams] run km data-source: requested=true, onBehalfResolved=${!!mcpKmOnBehalf} (user=${userId})`);
   }
 
   // Quota — reuse the same accounting as the web/LINE flow.
@@ -422,6 +428,7 @@ router.post('/:id/run', async (req: Request, res: Response) => {
       uploadIds: Array.isArray(uploadIds) ? uploadIds : [],
       allowWeb: typeof allowWeb === 'boolean' ? allowWeb : undefined,
       mcpEmailToken,
+      mcpKmOnBehalf,
     });
   } catch (err) {
     console.error('[teams] run failed:', err);

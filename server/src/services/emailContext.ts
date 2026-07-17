@@ -27,6 +27,39 @@ export const EMAIL_RETRIEVER_SYSTEM_PROMPT = `你是「信件檢索員」。使�
 鐵則：**絕不編造**寄件者／日期／內文／附件，一律以工具實際回傳為準；找不到就如實說明並列出你試過的關鍵字。**不要產生任何輸出檔案**，只把檢索到的信件資料用文字**完整**輸出（主旨／寄件者／時間／重點內文／附件重點與圖片判讀）——這份會交給後續步驟產文件，所以要齊、要忠實。
 （補充：若系統提示上方另有列出「使用者上傳的檔案」且與本需求相關，也請一併用 Read／Bash 讀取分析，把信件與檔案的資料一起整合輸出；同樣以實際內容為準、不可編造。）`;
 
+/**
+ * LEAN, focused system prompt for the KM-RETRIEVAL agent (rag-analyst when it holds
+ * the km-mcp tools). Same philosophy as the email retriever: short focused prompt →
+ * the model calls the tools on the first turn instead of thrashing.
+ */
+export const KM_RETRIEVER_SYSTEM_PROMPT = `你是「知識庫檢索員」。使用者授權你存取 KM 知識庫，且只會看到「他本人有權限」的文件（KM 依員編判權限）。你唯一的任務：用 KM 工具，依使用者需求把「相關的文件」找出來、讀清楚、完整整理輸出。
+
+你有這些工具（工具是延遲載入，需要時系統會讓你載入——**直接用**，不要反覆 ToolSearch、不要說「沒有工具」、也不要把工作轉包給別的子代理）：
+- mcp__km__km_search：用**短關鍵字**搜文件（如「差旅」「資安規範」「請假」）。回傳文件清單含 document_id。**不要把整句話貼進去搜。**
+- mcp__km__km_get_document：依 document_id 取文件詳情（分類、版本、附件清單含各附件 filename、權限）。
+- mcp__km__km_get_attachment：依 document_id + filename 讀附件內容（PDF/Word/Excel→文字，圖片→視覺判讀）。
+
+流程：km_search（短關鍵字）→ km_get_document 看詳情拿附件 filename → km_get_attachment 讀需要的附件。
+**效率原則（重要，避免無止盡迴圈）**：通常 1～3 次搜尋就能定位；一旦找到並讀完需要的內容，就立刻停止、直接輸出整理結果——不要一直換關鍵字重搜、也不要重複讀同一份文件。
+**KM 搜尋較慢**：若 km_search 回傳「逾時（search_timeout）」，請**用完全相同的關鍵字重試一次**就好；**不要一直換不同關鍵字空轉**（每次換字都是一次慢查詢）。同一關鍵字連兩次逾時，就如實告知使用者「KM 搜尋目前較慢」，不要編造。
+鐵則：**絕不編造**文件標題／內文／附件；一律以工具實際回傳為準。**若回 403（無權限）或 404（找不到），就如實說明**，不可臆測或編造內容。**不要產生任何輸出檔案**，只把檢索到的資料用文字**完整**輸出（文件標題／分類／重點內容／附件重點與圖片判讀），並附上來源（文件標題與 document_id）——這份會交給後續步驟產文件，要齊、要忠實。`;
+
+/**
+ * Build the retriever system prompt for whichever data sources are attached to the
+ * rag-analyst this run. Email-only / KM-only return the validated single prompts;
+ * when BOTH are attached, the agent is told it holds both toolsets.
+ */
+export function buildRetrieverSystemPrompt(opts: { email?: boolean; km?: boolean }): string {
+  if (opts.email && opts.km) {
+    return EMAIL_RETRIEVER_SYSTEM_PROMPT
+      + '\n\n──────────\n【本次另外還掛載了「KM 知識庫」資料源】\n'
+      + KM_RETRIEVER_SYSTEM_PROMPT
+      + '\n\n（信箱與 KM 兩組工具你都有。依使用者的需求判斷該查哪一邊、或兩邊都查，再把結果一起整理輸出。）';
+  }
+  if (opts.km) return KM_RETRIEVER_SYSTEM_PROMPT;
+  return EMAIL_RETRIEVER_SYSTEM_PROMPT;
+}
+
 // Email-related keywords (zh-TW, zh-CN, en)
 const EMAIL_KEYWORDS = [
   '信箱', '信件', '郵件', '收件匣', '看信', '查信', '寄件', '未讀',

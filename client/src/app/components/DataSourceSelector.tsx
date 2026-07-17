@@ -20,11 +20,13 @@ export interface DataSource {
   icon: string;
 }
 
-// 'email' only resolves in pro-panjit; elsewhere ticking it is a harmless no-op
-// (the server can't mint a mail token, so nothing is attached). KM will be added
-// here once km-mcp lands.
+// 'email' / 'km' only resolve in pro-panjit; elsewhere ticking them is a harmless
+// no-op (the server can't mint the credential, so nothing is attached). Both read
+// ONLY the signed-in user's own permitted data (email via their token, KM via their
+// 員編 → KM enforces per-document permission).
 export const DATA_SOURCES: DataSource[] = [
   { id: 'email', label: '我的信件', desc: 'Outlook 信箱（只讀自己的）', icon: 'mail' },
+  { id: 'km', label: 'KM 知識庫', desc: '知識庫文件（依你的權限）', icon: 'menu_book' },
 ];
 
 export function DataSourceSelector({

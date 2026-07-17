@@ -16,7 +16,8 @@ import { Orchestrator } from '../services/orchestrator.js';
 import { enforceDataFidelity } from '../services/dataFidelityGuard.js';
 import { normalizePptx } from '../services/pptxNormalize.js';
 import { getMailToken } from '../services/outlookApi.js';
-import { EMAIL_RETRIEVER_SYSTEM_PROMPT } from '../services/emailContext.js';
+import { getKmOnBehalf } from '../services/kmApi.js';
+import { buildRetrieverSystemPrompt } from '../services/emailContext.js';
 import path from 'path';
 import fs from 'fs';
 import { parseInfographicDirective, renderInfographic, compositeRegionMask, regionEditToFile } from '../services/infographicService.js';
@@ -305,13 +306,19 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
   if (Array.isArray(dataSources) && dataSources.includes('email')) {
     mcpEmailToken = (await getMailToken(userId)) || undefined;
   }
+  // KM data source: resolve the user's 員編 (X-On-Behalf-Of) for km-mcp. May be
+  // combined with email. Both flow through the same rag-analyst retriever path.
+  let mcpKmOnBehalf: string | undefined;
+  if (Array.isArray(dataSources) && dataSources.includes('km')) {
+    mcpKmOnBehalf = (await getKmOnBehalf(userId)) || undefined;
+  }
 
   if (useOrchestrator) {
-    await handleOrchestrated(req, res, userId, conversationId, aiMessage, validUploadIds, userLocale, conversation.category || 'document', refContext, conversation.system_prompt || '', mcpEmailToken);
+    await handleOrchestrated(req, res, userId, conversationId, aiMessage, validUploadIds, userLocale, conversation.category || 'document', refContext, conversation.system_prompt || '', mcpEmailToken, mcpKmOnBehalf);
   } else {
     await handleDirect(req, res, userId, conversationId, conversation, aiMessage, skillId, validUploadIds, userLocale, refContext,
       typeof regionMask === 'string' ? regionMask : undefined,
-      typeof regionFileId === 'string' ? regionFileId : undefined, mcpEmailToken);
+      typeof regionFileId === 'string' ? regionFileId : undefined, mcpEmailToken, mcpKmOnBehalf);
   }
 });
 
@@ -319,7 +326,7 @@ async function handleOrchestrated(
   _req: Request, res: Response,
   userId: string, conversationId: string, message: string,
   uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document',
-  refContext: string = '', systemPrompt: string = '', mcpEmailToken?: string,
+  refContext: string = '', systemPrompt: string = '', mcpEmailToken?: string, mcpKmOnBehalf?: string,
 ) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
@@ -341,7 +348,7 @@ async function handleOrchestrated(
   const customRolePrompt = systemPrompt
     ? `\n\n## Custom Role Instructions\nThe user has configured this assistant with the following role:\n${systemPrompt}\nPlease behave according to this role description.\n`
     : '';
-  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds, userLocale, conversationCategory, refContext, customRolePrompt, mcpEmailToken);
+  const orchestrator = new Orchestrator(userId, conversationId, sseWriter, uploadIds, userLocale, conversationCategory, refContext, customRolePrompt, mcpEmailToken, mcpKmOnBehalf);
   activeGenerations.set(conversationId, () => orchestrator.abort());
 
   try {
@@ -564,23 +571,29 @@ async function runUploadParsePreStep(opts: {
  *
  * Non-fatal: on failure returns ok:false and the generator proceeds without email.
  */
-async function runEmailRetrievalPreStep(opts: {
-  userId: string; conversationId: string; mcpEmailToken: string;
+async function runDataSourceRetrievalPreStep(opts: {
+  userId: string; conversationId: string; mcpEmailToken?: string; mcpKmOnBehalf?: string;
   userLocale: string; baseSandboxPath: string; userMessage: string;
   sseWrite: (e: SSEEvent) => void;
 }): Promise<{ ok: boolean; handoff: string; inputTokens: number; outputTokens: number; model: string }> {
-  const { userId, conversationId, mcpEmailToken, userLocale, baseSandboxPath, userMessage, sseWrite } = opts;
+  const { userId, conversationId, mcpEmailToken, mcpKmOnBehalf, userLocale, baseSandboxPath, userMessage, sseWrite } = opts;
   const fail = { ok: false, handoff: '', inputTokens: 0, outputTokens: 0, model: '' };
   const analyst = getSkill('rag-analyst');
   if (!analyst) return fail;
 
+  // Which sources are attached → labels for prompts/UI.
+  const srcLabels: string[] = [];
+  if (mcpEmailToken) srcLabels.push('他自己的 Outlook 信箱');
+  if (mcpKmOnBehalf) srcLabels.push('KM 知識庫（他有權限的文件）');
+  const srcLabel = srcLabels.join('與');
+
   const taskId = uuidv4();
-  sseWrite({ type: 'task_dispatched', data: { taskId, skillId: 'rag-analyst', description: '從你的信箱檢索相關信件中…' } });
+  sseWrite({ type: 'task_dispatched', data: { taskId, skillId: 'rag-analyst', description: `從${srcLabel}檢索相關資料中…` } });
 
   // LEAN focused retriever prompt (NOT the full rag-analyst SKILL.md, which distracts
   // the model into thrashing on ToolSearch). analyst is still used for its tool list.
-  const systemPrompt = EMAIL_RETRIEVER_SYSTEM_PROMPT;
-  const message = `使用者接下來要用「他自己的 Outlook 信箱」內容製作文件。請依下面的需求，檢索相關的信件（含舊信、附件、內嵌圖）並完整整理輸出。\n\n使用者的需求：\n${userMessage}`;
+  const systemPrompt = buildRetrieverSystemPrompt({ email: !!mcpEmailToken, km: !!mcpKmOnBehalf });
+  const message = `使用者接下來要用「${srcLabel}」的內容製作文件。請依下面的需求，檢索相關的資料（含舊信/文件、附件、圖片）並完整整理輸出（附來源）。\n\n使用者的需求：\n${userMessage}`;
 
   return await new Promise(resolve => {
     let text = '';
@@ -599,13 +612,15 @@ async function runEmailRetrievalPreStep(opts: {
       sessionId: uuidv4(), isResume: false,
       customAllowedTools: analyst.allowedTools,
       customDisallowedTools: analyst.disallowedTools,
-      mcpEmailToken, // attaches email-mcp + (in claudeCli) disables Task, keeps ToolSearch
+      // Attaches email-mcp and/or km-mcp + (in claudeCli) disables Task, keeps ToolSearch
+      ...(mcpEmailToken ? { mcpEmailToken } : {}),
+      ...(mcpKmOnBehalf ? { mcpKmOnBehalf } : {}),
     });
     activeGenerations.set(conversationId, abort);
 
     const timer = setTimeout(() => {
       try { abort(); } catch { /* ignore */ }
-      sseWrite({ type: 'task_failed', data: { taskId, skillId: 'rag-analyst', error: 'email retrieval timed out' } });
+      sseWrite({ type: 'task_failed', data: { taskId, skillId: 'rag-analyst', error: 'data-source retrieval timed out' } });
       finish(fail);
     }, 240000);
 
@@ -619,21 +634,21 @@ async function runEmailRetrievalPreStep(opts: {
         inputTokens = u.inputTokens; outputTokens = u.outputTokens; model = u.model;
       } else if (event.type === 'done') {
         if (!text.trim()) {
-          sseWrite({ type: 'task_failed', data: { taskId, skillId: 'rag-analyst', error: 'no email data retrieved' } });
+          sseWrite({ type: 'task_failed', data: { taskId, skillId: 'rag-analyst', error: 'no data retrieved' } });
           finish(fail);
           return;
         }
         try {
           const agentCwd = path.join(baseSandboxPath, '_agents');
           fs.mkdirSync(agentCwd, { recursive: true });
-          fs.writeFileSync(path.join(baseSandboxPath, 'email_context.md'), text, 'utf-8');
+          fs.writeFileSync(path.join(baseSandboxPath, 'datasource_context.md'), text, 'utf-8');
         } catch (e) {
-          console.warn('[EmailRetrieve] write email_context.md failed:', e);
+          console.warn('[DataSourceRetrieve] write datasource_context.md failed:', e);
           finish(fail);
           return;
         }
         sseWrite({ type: 'task_completed', data: { taskId, skillId: 'rag-analyst' } });
-        const handoff = `## 從你信箱檢索到的信件資料（重要，務必先讀）\n與本需求相關的信件資料已檢索並存於工作目錄的 \`email_context.md\`。\n**你必須先用 Read 工具讀取 \`email_context.md\`**，所有主旨／寄件者／日期／內文／附件內容一律以該檔為準，**不可超出該檔內容，也不可自行補充或編造**任何來源外的資訊。\n\n`;
+        const handoff = `## 從你的資料源檢索到的資料（重要，務必先讀）\n與本需求相關的資料已檢索並存於工作目錄的 \`datasource_context.md\`。\n**你必須先用 Read 工具讀取 \`datasource_context.md\`**，所有標題／寄件者／日期／內文／附件內容一律以該檔為準，**不可超出該檔內容，也不可自行補充或編造**任何來源外的資訊。\n\n`;
         finish({ ok: true, handoff, inputTokens, outputTokens, model });
       }
     });
@@ -645,7 +660,7 @@ async function handleDirect(
   userId: string, conversationId: string, conversation: Conversation,
   sanitizedMessage: string, skillId?: string, uploadIds: string[] = [],
   userLocale: string = 'zh-TW', refContext: string = '',
-  regionMask?: string, regionFileId?: string, mcpEmailToken?: string,
+  regionMask?: string, regionFileId?: string, mcpEmailToken?: string, mcpKmOnBehalf?: string,
 ) {
   const effectiveSkillId = skillId || conversation.skill_id || 'pptx-gen';
   const skill = getSkill(effectiveSkillId);
@@ -770,14 +785,14 @@ async function handleDirect(
     }
   }
 
-  // ── Email retrieval pre-step (template-wizard + "我的信件" data source) ──
-  // Same split as the orchestrated flow: run rag-analyst (with the mail tools) to
-  // RETRIEVE the relevant emails/attachments/images first, then hand the data to the
-  // single doc-gen agent — which gets the DATA, not the raw tools. Skipped when the
-  // user picked the rag-analyst card itself (it IS the retriever, keep its tools).
-  if (mcpEmailToken && effectiveSkillId !== 'rag-analyst') {
-    const pre = await runEmailRetrievalPreStep({
-      userId, conversationId, mcpEmailToken, userLocale,
+  // ── Data-source retrieval pre-step (template-wizard + "我的信件" / "KM 知識庫") ──
+  // Same split as the orchestrated flow: run rag-analyst (with the mail/KM tools) to
+  // RETRIEVE the relevant emails/documents/attachments/images first, then hand the
+  // DATA to the single doc-gen agent — which gets the data, not the raw tools. Skipped
+  // when the user picked the rag-analyst card itself (it IS the retriever).
+  if ((mcpEmailToken || mcpKmOnBehalf) && effectiveSkillId !== 'rag-analyst') {
+    const pre = await runDataSourceRetrievalPreStep({
+      userId, conversationId, mcpEmailToken, mcpKmOnBehalf, userLocale,
       baseSandboxPath: sandboxPath, userMessage: sanitizedMessage, sseWrite,
     });
     if (pre.ok) {
@@ -786,9 +801,10 @@ async function handleDirect(
         await recordTokenUsage({ userId, conversationId, inputTokens: pre.inputTokens, outputTokens: pre.outputTokens, model: pre.model });
       }
     }
-    // The generator consumes the retrieved data (email_context.md), NOT the raw mail
+    // The generator consumes the retrieved data (datasource_context.md), NOT the raw
     // tools — keeps it a reliable single-purpose generator.
     mcpEmailToken = undefined;
+    mcpKmOnBehalf = undefined;
   }
 
   async function startClaude(sid: string, isResume: boolean) {
@@ -813,6 +829,7 @@ async function handleDirect(
       customDisallowedTools: skill?.disallowedTools,
       ...(regionImages ? { images: regionImages } : {}),
       ...(mcpEmailToken ? { mcpEmailToken } : {}),
+      ...(mcpKmOnBehalf ? { mcpKmOnBehalf } : {}),
     });
 
     activeGenerations.set(conversationId, abort);

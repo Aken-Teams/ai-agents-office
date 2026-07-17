@@ -400,10 +400,12 @@ const IFRAME_PREVIEWABLE = new Set(['pdf', 'html', 'htm']);
 const CARD_PREVIEWABLE = new Set(['pptx', 'ppt', 'docx', 'doc', 'xlsx', 'xls']);
 
 // Data sources the agent can be granted (explicit multi-select, Gemini-style).
-// Selecting one sends it in `dataSources`; the backend attaches the matching MCP.
-// (KM will be added here once km-mcp lands.)
+// Selecting one sends it in `dataSources`; the backend attaches the matching MCP
+// ('email' → email-mcp, 'km' → km-mcp). Both read only the signed-in user's own
+// permitted data.
 const DATA_SOURCES: { id: string; label: string; desc: string; icon: string }[] = [
   { id: 'email', label: '我的信件', desc: 'Outlook 信箱（只讀自己的）', icon: 'mail' },
+  { id: 'km', label: 'KM 知識庫', desc: '知識庫文件（依你的權限）', icon: 'menu_book' },
 ];
 const PREVIEWABLE_TYPES = new Set([...IFRAME_PREVIEWABLE, ...CARD_PREVIEWABLE]);
 

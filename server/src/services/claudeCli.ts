@@ -136,6 +136,10 @@ export interface ClaudeCliOptions {
   // user's Outlook mail JWT, so the agent can pull the user's own mail (search /
   // read message) to build a document. Identity is the token — no cross-user access.
   mcpEmailToken?: string;
+  // Data-source MCP: when set, attach the km-mcp stdio server carrying THIS user's
+  // 員編 (X-On-Behalf-Of), so the agent can search/read KM documents the user is
+  // permitted to see. May be combined with mcpEmailToken (both MCPs mount together).
+  mcpKmOnBehalf?: string;
 }
 
 interface ClaudeResult {
@@ -325,62 +329,86 @@ export function spawnClaude(
   // token, so the agent can only ever reach the run owner's mailbox. The tool
   // names are added to the allow-list so the model may call them.
   const mcpToolNames: string[] = [];
-  if (options.mcpEmailToken) {
+  // Data-source MCPs: mount email-mcp and/or km-mcp, each carrying THIS run owner's
+  // own credentials (mail JWT / 員編) so an agent can only ever reach the owner's
+  // data — no cross-user access. Both can mount together.
+  if (options.mcpEmailToken || options.mcpKmOnBehalf) {
     const mcpConfigPath = path.join(sandboxPath, '.mcp-servers.json');
-    // Portable dev↔prod: prefer the COMPILED emailMcp.js (production `tsc` build) run
-    // with plain node — no tsx, no source .ts needed. Fall back to the TS source via
-    // the tsx loader in dev. All paths are derived from config.rootDir (computed at
-    // runtime), so this works on any machine — nothing is hard-coded to this box.
+    // Portable dev↔prod: prefer the COMPILED .js (production `tsc` build) run with
+    // plain node — no tsx, no source .ts needed. Fall back to the TS source via the
+    // tsx loader in dev. All paths derive from config.rootDir (runtime), so this
+    // works on any machine — nothing is hard-coded to this box.
     //
     // WHY the tsx loader must be an ABSOLUTE file:// URL (not bare `--import tsx`):
     // ESM's --import resolution does NOT consult NODE_PATH, and the CLI spawns the MCP
     // with cwd=repo-root where pnpm has no top-level `tsx` → `ERR_MODULE_NOT_FOUND` →
-    // the MCP never boots, no tools register, agents thrash on ToolSearch / fake
-    // "recent 20". The absolute loader URL resolves from any cwd.
+    // the MCP never boots, no tools register, agents thrash on ToolSearch. The
+    // absolute loader URL resolves from any cwd.
     // Detect dev↔prod from where THIS module is loaded (not a stale-dist heuristic):
     // tsx-watch dev → .../server/src/services/claudeCli.ts; compiled prod → .../dist/....
     const runningCompiled = import.meta.url.includes('/dist/');
-    const distMcp = path.join(config.rootDir, 'server', 'dist', 'mcp', 'emailMcp.js');
-    const srcMcp = path.join(config.rootDir, 'server', 'src', 'mcp', 'emailMcp.ts');
-    const mcpArgs = runningCompiled
-      ? [distMcp] // production: compiled JS, plain node (no tsx needed)
-      : ['--import', pathToFileURL(path.join(config.rootDir, 'server', 'node_modules', 'tsx', 'dist', 'loader.mjs')).href, srcMcp]; // dev: tsx loader + TS source
-    const mcpConfig = {
-      mcpServers: {
-        email: {
-          command: process.execPath,           // absolute node binary — robust cross-platform
-          args: mcpArgs,
-          env: {
-            NODE_PATH: path.join(config.rootDir, 'server', 'node_modules'),
-            MCP_MAIL_TOKEN: options.mcpEmailToken,
-            MCP_MAIL_API_BASE: config.adApiUrl,
-            MCP_MAIL_API_KEY: config.adApiKey,
-            // Debug: email-mcp appends every tool call + gateway response/error here
-            // (the CLI swallows MCP stderr, so this is how we diagnose it). Gated OFF in
-            // production (unbounded file) unless EMAIL_MCP_DEBUG is explicitly set.
-            ...(config.nodeEnv !== 'production' || process.env.EMAIL_MCP_DEBUG
-              ? { MCP_DEBUG_LOG: path.join(config.workspaceRoot, 'email-mcp-debug.log') }
-              : {}),
-          },
-        },
-      },
+    const tsxLoader = pathToFileURL(path.join(config.rootDir, 'server', 'node_modules', 'tsx', 'dist', 'loader.mjs')).href;
+    const mcpSpawnArgs = (mcpName: string): string[] => {
+      const distMcp = path.join(config.rootDir, 'server', 'dist', 'mcp', `${mcpName}.js`);
+      const srcMcp = path.join(config.rootDir, 'server', 'src', 'mcp', `${mcpName}.ts`);
+      return runningCompiled ? [distMcp] : ['--import', tsxLoader, srcMcp];
     };
-    fs.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig), 'utf-8');
+    const nodePath = path.join(config.rootDir, 'server', 'node_modules');
+    // Debug logs (the CLI swallows MCP stderr). Gated OFF in production unless
+    // EMAIL_MCP_DEBUG is explicitly set.
+    const debugEnv = (file: string) =>
+      (config.nodeEnv !== 'production' || process.env.EMAIL_MCP_DEBUG)
+        ? { MCP_DEBUG_LOG: path.join(config.workspaceRoot, file) }
+        : {};
+
+    const mcpServers: Record<string, any> = {};
+    if (options.mcpEmailToken) {
+      mcpServers.email = {
+        command: process.execPath,             // absolute node binary — robust cross-platform
+        args: mcpSpawnArgs('emailMcp'),
+        env: {
+          NODE_PATH: nodePath,
+          MCP_MAIL_TOKEN: options.mcpEmailToken,
+          MCP_MAIL_API_BASE: config.adApiUrl,
+          MCP_MAIL_API_KEY: config.adApiKey,
+          ...debugEnv('email-mcp-debug.log'),
+        },
+      };
+      mcpToolNames.push(
+        'mcp__email__email_list_folders',
+        'mcp__email__email_search',
+        'mcp__email__email_get_message',
+        'mcp__email__email_get_attachments',
+      );
+    }
+    if (options.mcpKmOnBehalf) {
+      mcpServers.km = {
+        command: process.execPath,
+        args: mcpSpawnArgs('kmMcp'),
+        env: {
+          NODE_PATH: nodePath,
+          KM_API_BASE: config.kmApiBase,
+          KM_API_KEY: config.kmApiKey,
+          KM_ON_BEHALF: options.mcpKmOnBehalf,
+          ...debugEnv('km-mcp-debug.log'),
+        },
+      };
+      mcpToolNames.push(
+        'mcp__km__km_search',
+        'mcp__km__km_get_document',
+        'mcp__km__km_get_attachment',
+      );
+    }
+    fs.writeFileSync(mcpConfigPath, JSON.stringify({ mcpServers }), 'utf-8');
     // --strict-mcp-config: use ONLY our config, ignore any global MCP servers.
     args.push('--mcp-config', mcpConfigPath, '--strict-mcp-config');
-    mcpToolNames.push(
-      'mcp__email__email_list_folders',
-      'mcp__email__email_search',
-      'mcp__email__email_get_message',
-      'mcp__email__email_get_attachments',
-    );
     // Reliability (verified): disable ONLY Task when MCP tools are attached — NOT
-    // ToolSearch. This CLI puts MCP tools in a DEFERRED pool that the model loads via
-    // ToolSearch ("I'll load the email tools" → ToolSearch → call), so ToolSearch is
-    // REQUIRED; disabling it leaves the model unable to reach the tools → "no mailbox
-    // tools". Task IS disabled because the worker otherwise delegates the lookup to a
-    // fresh sub-agent that has no mcp-config → it reports "no tools". Removing Task
-    // forces the agent to load+call the email tools itself.
+    // ToolSearch. This CLI puts MCP tools in a DEFERRED pool the model loads via
+    // ToolSearch ("I'll load the tools" → ToolSearch → call), so ToolSearch is
+    // REQUIRED; disabling it leaves the model unable to reach the tools. Task IS
+    // disabled because the worker otherwise delegates the lookup to a fresh sub-agent
+    // that has no mcp-config → it reports "no tools". Removing Task forces the agent
+    // to load+call the data-source tools itself.
     if (!disallowedTools.includes('Task')) disallowedTools = [...disallowedTools, 'Task'];
   }
 

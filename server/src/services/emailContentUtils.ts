@@ -74,6 +74,47 @@ export function extractCurrentMessage(
   return { current: head, trimmedHistory: true };
 }
 
+export const FILE_TEXT_EXTS = new Set(['txt', 'csv', 'md', 'log', 'json', 'xml', 'html', 'htm']);
+
+/**
+ * Extract plain text from a document buffer (PDF / Word / Excel / plain text).
+ * Heavy parsers (unpdf / mammoth / exceljs) are LAZY-imported so this module
+ * stays cheap for the MCP subprocesses that import it at startup. Throws
+ * 'unsupported' for types we can't turn into text (e.g. images — handle those
+ * via downscaleImageForVision instead).
+ */
+export async function extractFileText(buf: Buffer, ext: string): Promise<string> {
+  const e = ext.toLowerCase();
+  if (e === 'pdf') {
+    const { extractText, getDocumentProxy } = await import('unpdf');
+    const pdf = await getDocumentProxy(new Uint8Array(buf));
+    const { text } = await extractText(pdf, { mergePages: true });
+    return Array.isArray(text) ? text.join('\n') : text;
+  }
+  if (e === 'docx') {
+    const mammoth = (await import('mammoth')).default;
+    const { value } = await mammoth.extractRawText({ buffer: buf });
+    return value;
+  }
+  if (e === 'xlsx' || e === 'xls') {
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf as unknown as ArrayBuffer);
+    const lines: string[] = [];
+    wb.eachSheet(sheet => {
+      lines.push(`# ${sheet.name}`);
+      sheet.eachRow(row => {
+        const cells: string[] = [];
+        row.eachCell({ includeEmpty: false }, cell => cells.push(String(cell.text ?? '')));
+        if (cells.length) lines.push(cells.join('\t'));
+      });
+    });
+    return lines.join('\n');
+  }
+  if (FILE_TEXT_EXTS.has(e)) return buf.toString('utf8');
+  throw new Error('unsupported');
+}
+
 export interface DownscaledImage {
   base64: string;
   mediaType: string;

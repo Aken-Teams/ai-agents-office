@@ -76,6 +76,10 @@ export const config = {
   // AD (Active Directory) integration — pro-panjit only
   adApiUrl: process.env.AD_API_URL || 'https://apigw.panjit.com.tw/ldap/api/v1',
   adApiKey: process.env.AD_API_KEY || process.env.AD_API || '',
+  // KM (Knowledge Management) integration — pro-panjit only. System X-API-Key +
+  // per-user X-On-Behalf-Of (the user's AD 員編) → KM enforces per-user permission.
+  kmApiBase: (process.env.KM_API_BASE || 'https://kmapi.panjit.com.tw').replace(/\/+$/, ''),
+  kmApiKey: process.env.KM_API_KEY || '',
   // Whitelist: these emails can still use email/password login even in pro-panjit mode
   emailLoginWhitelist: (process.env.EMAIL_LOGIN_WHITELIST || 'admin@zhaoi.ai,aken1023@gmail.com').split(',').map(e => e.trim().toLowerCase()),
 

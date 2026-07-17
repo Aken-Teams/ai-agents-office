@@ -6,7 +6,7 @@ import { dbGet, dbAll, dbRun } from '../db.js';
 import { spawnClaude } from './claudeCli.js';
 import { parsePipelineBlocks, truncateResultForRouter } from './taskParser.js';
 import { getSkill, buildSystemPrompt, buildMemoryContext, buildCrossAssistantContext, getRouterSkill, buildRouterPrompt } from '../skills/loader.js';
-import { EMAIL_RETRIEVER_SYSTEM_PROMPT } from './emailContext.js';
+import { EMAIL_RETRIEVER_SYSTEM_PROMPT, buildRetrieverSystemPrompt } from './emailContext.js';
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from './uploadContext.js';
 import { getSandboxPath } from './sandbox.js';
 import { parseInfographicDirective, renderInfographic } from './infographicService.js';
@@ -53,6 +53,18 @@ const EMAIL_DATASOURCE_ROUTER_NOTE = `
 - 若使用者要「用信件內容產出文件」（Word/PPT/Excel/PDF）→ 用 [PIPELINE]：先 [TASK:rag-analyst] 檢索並整理出需要的信件資料，再接 [TASK:對應的 doc-gen]。rag-analyst 的完整輸出會自動透過檔案交給下一步。
 - **信件檢索一律交給 rag-analyst**，不要派給 research（那是網路搜尋）、也不要自己臆測信件內容。`;
 
+// Injected when the user attached the "KM 知識庫" data source (mcpKmOnBehalf set).
+// KM is just ONE MORE DATA SOURCE: rag-analyst holds the KM tools and retrieves;
+// the result flows to doc-gen through the normal previous_step.md bridge.
+const KM_DATASOURCE_ROUTER_NOTE = `
+
+[System — 資料源：KM 知識庫（已授權，只讀使用者本人有權限的文件）]
+使用者這次掛載了「KM 知識庫」資料源。**負責檢索 KM 的是 rag-analyst**——它具備 KM 工具（搜文件、讀文件詳情、讀附件檔內容與圖）。
+派工原則（沿用你原本的 [TASK]/[PIPELINE] 機制）：
+- 若使用者只是要「找某份文件 / 看某份文件或其附件」→ 派一個 [TASK:rag-analyst]，寫清楚要找什麼（短關鍵字）與要看什麼。
+- 若使用者要「用 KM 文件內容產出文件」（Word/PPT/Excel/PDF）→ 用 [PIPELINE]：先 [TASK:rag-analyst] 檢索整理，再接對應的 doc-gen。
+- **KM 檢索一律交給 rag-analyst**，不要派給 research、也不要自己臆測文件內容。`;
+
 export interface OrchestratorResult {
   assistantText: string;
   totalInputTokens: number;
@@ -98,8 +110,11 @@ export class Orchestrator {
   // agents so a doc generator can pull the user's own mail. Set only when the
   // user selected the "email" data source. Identity is the token — no cross-user.
   private mcpEmailToken?: string;
+  // Per-run KM data source: the user's 員編 (X-On-Behalf-Of). Attached to the
+  // rag-analyst retriever so it can pull KM documents the user is permitted to read.
+  private mcpKmOnBehalf?: string;
 
-  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document', referenceContext: string = '', customRolePrompt: string = '', mcpEmailToken?: string) {
+  constructor(userId: string, conversationId: string, sseWriter: SSEWriter, uploadIds: string[] = [], userLocale: string = 'zh-TW', conversationCategory: string = 'document', referenceContext: string = '', customRolePrompt: string = '', mcpEmailToken?: string, mcpKmOnBehalf?: string) {
     this.userId = userId;
     this.conversationId = conversationId;
     this.conversationCategory = conversationCategory;
@@ -109,6 +124,7 @@ export class Orchestrator {
     this.referenceContext = referenceContext;
     this.customRolePrompt = customRolePrompt;
     this.mcpEmailToken = mcpEmailToken;
+    this.mcpKmOnBehalf = mcpKmOnBehalf;
   }
 
   async run(message: string): Promise<OrchestratorResult> {
@@ -197,6 +213,11 @@ export class Orchestrator {
         const emailCtx = await getEmailContextForPrompt(this.userId, message);
         if (emailCtx) messageWithFileContext += emailCtx;
       }
+    }
+    // KM as a DATA SOURCE (same pattern as email; both can be attached at once):
+    // route KM retrieval to rag-analyst, which holds the KM tools.
+    if (this.mcpKmOnBehalf) {
+      messageWithFileContext += KM_DATASOURCE_ROUTER_NOTE;
     }
 
     // Recursive orchestration loop
@@ -511,9 +532,9 @@ export class Orchestrator {
     // it a LEAN focused retriever prompt instead of its full 187-line file-analysis
     // SKILL.md — the big prompt distracts the model into thrashing on ToolSearch. Its
     // retrieved output still flows to doc-gen via the normal previous_step.md bridge.
-    const useEmailRetriever = task.skillId === 'rag-analyst' && !!this.mcpEmailToken;
-    const systemPrompt = useEmailRetriever
-      ? EMAIL_RETRIEVER_SYSTEM_PROMPT + uploadContext
+    const useDataSourceRetriever = task.skillId === 'rag-analyst' && (!!this.mcpEmailToken || !!this.mcpKmOnBehalf);
+    const systemPrompt = useDataSourceRetriever
+      ? buildRetrieverSystemPrompt({ email: !!this.mcpEmailToken, km: !!this.mcpKmOnBehalf }) + uploadContext
       : buildSystemPrompt(skill, config.generatorsDir, this.userLocale) + uploadContext;
 
     // Get or create session for this skill agent
@@ -614,6 +635,7 @@ export class Orchestrator {
         // bridge. Keeping the tools on one focused agent (not every worker) is far
         // more reliable than bolting mail tools onto the generic research worker.
         ...(opts.skillId === 'rag-analyst' && this.mcpEmailToken ? { mcpEmailToken: this.mcpEmailToken } : {}),
+        ...(opts.skillId === 'rag-analyst' && this.mcpKmOnBehalf ? { mcpKmOnBehalf: this.mcpKmOnBehalf } : {}),
         // Each agent gets its own subdirectory to avoid CLAUDE.md conflicts
         sandboxSubdir: `_agents/${opts.skillId}`,
       });
