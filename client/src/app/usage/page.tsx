@@ -27,7 +27,7 @@ interface UsageTotal {
   cost: number;   // boundary-exact (server-computed)
 }
 
-type UsageCategory = 'document' | 'team' | 'email';
+type UsageCategory = 'document' | 'team' | 'email' | 'km';
 
 interface UsageRecord {
   id: string;
@@ -52,7 +52,7 @@ function UsageContent() {
   const { t, locale } = useTranslation();
   const router = useRouter();
   const [daily, setDaily] = useState<DailyUsage[]>([]);
-  const [byCategory, setByCategory] = useState<Record<UsageCategory, DailyUsage[]>>({ document: [], team: [], email: [] });
+  const [byCategory, setByCategory] = useState<Record<UsageCategory, DailyUsage[]>>({ document: [], team: [], email: [], km: [] });
   const [records, setRecords] = useState<UsageRecord[]>([]);
   const [detailCat, setDetailCat] = useState<'all' | UsageCategory>('all');
   const [total, setTotal] = useState<UsageTotal | null>(null);
@@ -77,7 +77,7 @@ function UsageContent() {
       .then(r => r.json())
       .then((data: UsageResponse) => {
         setDaily(data.summary);
-        setByCategory(data.byCategory ?? { document: [], team: [], email: [] });
+        setByCategory(data.byCategory ?? { document: [], team: [], email: [], km: [] });
         setRecords(data.records ?? []);
         setTotal(data.total);
         setIsBeta(data.isBeta ?? true);
@@ -135,11 +135,13 @@ function UsageContent() {
     { key: 'document', label: locale === 'en' ? 'Documents' : '文件產生', icon: 'description' },
     { key: 'team', label: locale === 'en' ? 'AI Teams' : 'AI 團隊', icon: 'groups' },
     { key: 'email', label: locale === 'en' ? 'Email' : '信件助手', icon: 'mail' },
+    { key: 'km', label: locale === 'en' ? 'KM Assistant' : 'KM 助手', icon: 'menu_book' },
   ];
   const CAT_META: Record<UsageCategory, { label: string; icon: string }> = {
     document: { label: locale === 'en' ? 'Document' : '文件產生', icon: 'description' },
     team: { label: locale === 'en' ? 'AI Team' : 'AI 團隊', icon: 'groups' },
     email: { label: locale === 'en' ? 'Email' : '信件助手', icon: 'mail' },
+    km: { label: locale === 'en' ? 'KM Assistant' : 'KM 助手', icon: 'menu_book' },
   };
   const REC_PAGE_SIZE = 10;
   // Server returns "YYYY-MM-DD HH:MM:SS" (Taipei local) — slice to minutes, no Date parsing.

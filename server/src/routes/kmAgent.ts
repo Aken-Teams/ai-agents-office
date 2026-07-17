@@ -302,6 +302,11 @@ router.post('/document/:id/explain', async (req: Request, res: Response) => {
          ON DUPLICATE KEY UPDATE title = VALUES(title), question = VALUES(question), answer = VALUES(answer)`,
         userId, id, title || null, question, text,
       ).catch(() => {});
+      // Also record as chat messages so the 檢索/解讀 activity is visible (in the
+      // conversation history + admin), not just cached silently.
+      const label = `【AI 解讀文件：${title || '文件'}（#${id}）${keyword ? `，與「${keyword}」的關係` : ''}】`;
+      await dbRun('INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)', uuidv4(), conversationId, 'user', label).catch(() => {});
+      await dbRun('INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)', uuidv4(), conversationId, 'assistant', text).catch(() => {});
       if (inTok || outTok) await recordTokenUsage({ userId, conversationId, inputTokens: inTok, outputTokens: outTok, model: model || 'claude-sonnet-4-6' }).catch(() => {});
     }
   });

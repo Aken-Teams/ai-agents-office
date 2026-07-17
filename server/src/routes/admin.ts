@@ -1158,6 +1158,7 @@ router.get('/conversations', async (req: Request, res: Response) => {
   const offset = (page - 1) * limit;
   const search = req.query.search as string || '';
   const userId = req.query.userId as string || '';
+  const category = req.query.category as string || '';
 
   // Hide team-member sub-conversations (0-message noise) AND the email-assistant
   // conversations — both are surfaced via their own dedicated endpoints
@@ -1173,6 +1174,11 @@ router.get('/conversations', async (req: Request, res: Response) => {
   if (userId) {
     whereClause += ' AND c.user_id = ?';
     params.push(userId);
+  }
+  // Optional category filter (e.g. the KM 助手 tab → category=km-agent).
+  if (category) {
+    whereClause += ' AND c.category = ?';
+    params.push(category);
   }
 
   const countRow = await dbGet<{ total: number }>(

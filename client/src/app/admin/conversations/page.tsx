@@ -503,6 +503,7 @@ export default function AdminConversationsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
+  const [category, setCategory] = useState(''); // '' = 對話管理(全部); 'km-agent' = KM 助手
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const limit = PAGE_SIZE;
@@ -512,6 +513,7 @@ export default function AdminConversationsPage() {
     setLoading(true);
     const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
     if (search) params.set('search', search);
+    if (category) params.set('category', category);
     fetch(`/api/admin/conversations?${params}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -523,7 +525,7 @@ export default function AdminConversationsPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [token, page, search]);
+  }, [token, page, search, category]);
 
   useEffect(() => { fetchConversations(); }, [fetchConversations]);
 
@@ -572,11 +574,14 @@ export default function AdminConversationsPage() {
       </header>
 
       <div className="flex-1 flex flex-col p-4 md:p-8 overflow-hidden">
-        {/* Tabs: 對話管理 / 團隊協作 / 信件助手 */}
+        {/* Tabs: 對話管理 / KM 助手 (same page, filtered) · 團隊協作 / 信件助手 (own pages) */}
         <div className="flex items-center gap-1 mb-4 shrink-0">
-          <span className="px-3.5 py-1.5 rounded-full text-sm bg-primary text-on-primary font-medium">對話管理</span>
+          <button onClick={() => { setCategory(''); setPage(1); }}
+            className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${category === '' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}>對話管理</button>
           <Link href="/admin/teams" className="px-3.5 py-1.5 rounded-full text-sm text-on-surface-variant hover:bg-surface-container transition-colors no-underline">團隊協作</Link>
           <Link href="/admin/email-agent" className="px-3.5 py-1.5 rounded-full text-sm text-on-surface-variant hover:bg-surface-container transition-colors no-underline">信件助手</Link>
+          <button onClick={() => { setCategory('km-agent'); setPage(1); }}
+            className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${category === 'km-agent' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}>KM 助手</button>
         </div>
         {/* Search */}
         <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4 md:mb-6">
