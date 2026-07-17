@@ -63,7 +63,8 @@ const KM_DATASOURCE_ROUTER_NOTE = `
 派工原則（沿用你原本的 [TASK]/[PIPELINE] 機制）：
 - 若使用者只是要「找某份文件 / 看某份文件或其附件」→ 派一個 [TASK:rag-analyst]，寫清楚要找什麼（短關鍵字）與要看什麼。
 - 若使用者要「用 KM 文件內容產出文件」（Word/PPT/Excel/PDF）→ 用 [PIPELINE]：先 [TASK:rag-analyst] 檢索整理，再接對應的 doc-gen。
-- **KM 檢索一律交給 rag-analyst**，不要派給 research、也不要自己臆測文件內容。`;
+- **KM 檢索一律交給 rag-analyst**，不要派給 research、也不要自己臆測文件內容。
+彙整最終回覆時的**來源標註**：「資料來源／KM 依據」**只列實際查到的 KM 文件**（\`文件標題（#document_id）\`），不要把「文件內文裡提到的網址」當成資料來源；若要提內文網址，明確標成「（文件內文提到的連結）」，以免使用者誤以為那是 KM 文件連結。`;
 
 export interface OrchestratorResult {
   assistantText: string;
