@@ -34,6 +34,9 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+// Light, dependency-free helpers (no heavy top-level imports) — safe to load at
+// MCP startup. Body → text with line breaks preserved + quoted-history stripping.
+import { htmlToText, extractCurrentMessage } from '../services/emailContentUtils.js';
 
 const MAIL_TOKEN = process.env.MCP_MAIL_TOKEN || '';
 const API_BASE = (process.env.MCP_MAIL_API_BASE || '').replace(/\/+$/, '');
@@ -49,10 +52,13 @@ function dlog(msg: string): void {
   try { fs.appendFileSync(DEBUG_LOG, `[${new Date().toISOString()}] ${msg}\n`); } catch { /* ignore */ }
 }
 
-const DETAIL_MAX_CHARS = 6000;           // cap a single message body fed to the model
+// Accuracy > token: feed the AI the current message / full attachment, not a
+// starved slice. Body is just THIS email (history already stripped), so 20k is
+// plenty; attachments get 40k so long PDFs/Excels arrive whole.
+const DETAIL_MAX_CHARS = 20000;          // cap a single (current) message body fed to the model
 const ATT_MAX = 8;                       // attachments processed per email
 const ATT_MAX_BYTES = 10 * 1024 * 1024;  // skip files larger than 10MB
-const ATT_TEXT_MAX = 8000;               // per-attachment text budget
+const ATT_TEXT_MAX = 40000;              // per-attachment text budget
 const IMG_MAX_COUNT = 6;                  // vision images returned per call
 const IMG_MAX_BYTES = 5 * 1024 * 1024;    // 5MB per image (vision payload cap)
 const IMG_DOWNLOAD_MAX = 25 * 1024 * 1024; // download images up to 25MB, then downscale
@@ -227,7 +233,12 @@ async function getMessage(messageId: string, includeImages: boolean): Promise<an
   const data = await gwGet(`/messages/${encodeURIComponent(messageId)}`, 45_000);
   const d = data.message_detail ?? data;
   let body: string = d.body || '';
-  if (d.body_type === 'html') body = body.replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  // Keep line breaks (htmlToText) so quoted-reply boundaries survive, then feed
+  // only THIS email — Outlook embeds the whole quoted thread inline, and flattening
+  // it all in would just be old-thread noise that confuses current-vs-history.
+  if (d.body_type === 'html') body = htmlToText(body);
+  const { current, trimmedHistory } = extractCurrentMessage(body);
+  body = current;
   const truncated = body.length > DETAIL_MAX_CHARS;
   const atts: any[] = d.attachments || [];
   const summary = {
@@ -235,6 +246,7 @@ async function getMessage(messageId: string, includeImages: boolean): Promise<an
     received_at: d.received_at, sent_at: d.sent_at, is_read: d.is_read,
     body: truncated ? body.slice(0, DETAIL_MAX_CHARS) : body,
     body_truncated: truncated,
+    ...(trimmedHistory ? { body_note: '本文只含這封信本身；下方原本內嵌的「歷史回覆／轉寄鏈」已略去以免混淆。若使用者要看整串往來，請告知需另外查詢。' } : {}),
     attachments: atts.map(a => ({ filename: a.filename, content_type: a.content_type, size: a.size, is_inline: a.is_inline })),
   };
   if (!includeImages) return jsonText(summary);
@@ -303,8 +315,9 @@ async function getAttachments(messageId: string): Promise<any> {
     text = text.replace(/ /g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
     if (!text) { blocks.push(`${header}\n[無可擷取的文字內容（可能是掃描圖檔或空白）]`); continue; }
     const visible = text.slice(0, ATT_TEXT_MAX);
-    // SECURITY: injection-scan the exact slice that reaches the model.
-    if (!analyze) analyze = (await import('../services/inputGuard.js')).analyzeFileContent as any;
+    // SECURITY: injection-scan the exact slice that reaches the model. Chunked so a
+    // long legit doc (now up to 40k) isn't false-blocked as "message_too_long".
+    if (!analyze) analyze = (await import('../services/inputGuard.js')).analyzeFileContentChunked as any;
     const scan = analyze!(visible, att.filename || 'attachment');
     if (scan.blocked) {
       flagged++;

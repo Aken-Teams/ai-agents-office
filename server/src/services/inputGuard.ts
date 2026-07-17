@@ -370,6 +370,30 @@ export function analyzeFileContent(content: string, filename: string): GuardResu
   return result;
 }
 
+/**
+ * Scan arbitrarily-long extracted file text WITHOUT tripping the message-length
+ * block. analyzeInput() hard-blocks anything over config.maxMessageLength as
+ * "message_too_long" — fine for chat, but it would false-block a long legitimate
+ * attachment (a 40k-char PDF/Excel) that we now feed to the AI in full for
+ * accuracy. So we split into maxMessageLength-sized chunks, scan each (the length
+ * check never fires within a chunk), and aggregate: a real injection anywhere is
+ * still caught, but sheer length no longer blocks. The per-filename check is
+ * applied identically to every chunk.
+ */
+export function analyzeFileContentChunked(content: string, filename: string): GuardResult {
+  const size = config.maxMessageLength;
+  if (content.length <= size) return analyzeFileContent(content, filename);
+
+  let worst: GuardResult | null = null;
+  for (let i = 0; i < content.length; i += size) {
+    const r = analyzeFileContent(content.slice(i, i + size), filename);
+    // A real injection (not merely "too long") → block immediately.
+    if (r.blocked && !r.flags.includes('message_too_long')) return r;
+    if (!worst || r.score > worst.score) worst = r;
+  }
+  return worst!;
+}
+
 // ---------------------------------------------------------------------------
 // Log security event to DB
 // ---------------------------------------------------------------------------

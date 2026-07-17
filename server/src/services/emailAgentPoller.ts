@@ -14,6 +14,7 @@ import { resolveClaudeCliPath } from './resolveClaudeCli.js';
 import { acquireEmailSlot } from './emailAgentConcurrency.js';
 import { deepseekChat } from './deepseek.js';
 import { buildAttachmentContext } from './emailAttachmentReader.js';
+import { htmlToText, extractCurrentMessage } from './emailContentUtils.js';
 import { dbAll, dbGet, dbRun } from '../db.js';
 import { recordTokenUsage } from './tokenTracker.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -693,12 +694,12 @@ export async function generateLayer2Analysis(userId: string, messageId: string, 
     );
     const memoryBlock = buildEmailAgentMemoryContext(memories);
 
-    // Strip HTML tags for text analysis. Cap generously so the security review
-    // sees (essentially) the whole email — only a pathological newsletter hits
-    // the limit. (Was 3000, which truncated long policy/notice mails.)
+    // HTML→text preserving line breaks, then feed only THIS email (drop the quoted
+    // reply/forward history Outlook embeds) so current-vs-history never blurs. Cap
+    // generously — it's just the current message now.
     const BODY_LIMIT = 20000;
     const bodyText = message.body
-      ? message.body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').substring(0, BODY_LIMIT)
+      ? extractCurrentMessage(htmlToText(message.body)).current.substring(0, BODY_LIMIT) || '(無內容)'
       : '(無內容)';
 
     console.log(`[EmailAgent] Layer 2: subject="${message.subject}", bodyLen=${bodyText.length}`);
@@ -716,11 +717,15 @@ export async function generateLayer2Analysis(userId: string, messageId: string, 
     // buildAttachmentContext before it ever reaches the prompt.
     let attachmentBlock = '';
     let attachmentImages: { media_type: string; data: string }[] = [];
-    if (options.includeAttachments && realAtts.length > 0) {
+    // Deep-read when there are real attachments OR inline images. The latter matters
+    // for picture-only emails (e.g. a monthly report that is all embedded slides) —
+    // those have no "real" attachment but their content lives entirely in inline images.
+    const hasInlineImg = (message.attachments || []).some(a => a.is_inline && /\.(png|jpe?g|gif|webp)$/i.test(a.filename || ''));
+    if (options.includeAttachments && (realAtts.length > 0 || hasInlineImg)) {
       const ctx = await buildAttachmentContext(userId, token, messageId, message.attachments || []);
       attachmentBlock = ctx.promptSection;
       attachmentImages = ctx.images;
-      console.log(`[EmailAgent] Layer 2 deep-read attachments for ${messageId}: read=${ctx.readCount}, flagged=${ctx.flaggedCount}, images=${ctx.images.length}, skipped=${ctx.skipped.length}`);
+      console.log(`[EmailAgent] Layer 2 deep-read for ${messageId}: read=${ctx.readCount}, flagged=${ctx.flaggedCount}, images=${ctx.images.length}, skipped=${ctx.skipped.length}`);
     }
 
     const lang = emailAgentLang(await getUserLocale(userId));

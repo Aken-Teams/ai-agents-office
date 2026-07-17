@@ -17,6 +17,7 @@ import { extractEmailAgentMemory, buildEmailAgentMemoryContext } from '../servic
 import { resolveClaudeCliPath } from '../services/resolveClaudeCli.js';
 import { acquireEmailSlot } from '../services/emailAgentConcurrency.js';
 import { recordTokenUsage } from '../services/tokenTracker.js';
+import { htmlToText, extractCurrentMessage } from '../services/emailContentUtils.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -150,7 +151,8 @@ router.post('/chat', async (req: Request, res: Response) => {
         const attPart = cachedRow?.attachment_analysis ? `\n【附件分析】\n${cachedRow.attachment_analysis}\n` : '';
 
         if (detail) {
-          const body = (detail.body || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 8000);
+          // Only THIS email's current message (quoted history stripped), fed in full.
+          const body = extractCurrentMessage(htmlToText(detail.body || '')).current.slice(0, 20000);
           const atts = (detail.attachments || []).filter(a => !a.is_inline);
           const bodyPart = body
             ? `\n【信件完整內文】\n${body}\n`
