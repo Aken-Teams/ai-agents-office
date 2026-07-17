@@ -120,6 +120,9 @@ export default function KMAssistantWidget() {
   const [results, setResults] = useState<KmDoc[]>([]);
   const [searchErr, setSearchErr] = useState('');
   const [searched, setSearched] = useState(false);
+  // Opt-in AI relevance ranking of the current results (one Haiku call, metadata-only).
+  const [ranks, setRanks] = useState<Record<string, { level: string; reason: string }>>({});
+  const [ranking, setRanking] = useState(false);
   const [detail, setDetail] = useState<{ doc: KmDoc; attachments: KmAttachment[] } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailErr, setDetailErr] = useState('');
@@ -140,6 +143,10 @@ export default function KMAssistantWidget() {
   const [streamText, setStreamText] = useState('');
   const [toolNote, setToolNote] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
+  // In-widget toast (replaces browser alert()).
+  const [toast, setToast] = useState('');
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 4000); return () => clearTimeout(t); }, [toast]);
+  const showToast = (msg: string) => setToast(msg);
 
   const authHeaders = (): Record<string, string> => {
     const token = localStorage.getItem('token');
@@ -163,7 +170,7 @@ export default function KMAssistantWidget() {
   async function runSearch() {
     const q = query.trim();
     if (!q || searching) return;
-    setSearching(true); setSearchErr(''); setSearched(true); setDetail(null); setResults([]);
+    setSearching(true); setSearchErr(''); setSearched(true); setDetail(null); setResults([]); setRanks({});
     try {
       // The endpoint STREAMS (keepalives while KM is slow, then a single data: event
       // with the result) — so broad terms complete instead of the proxy resetting.
@@ -226,13 +233,13 @@ export default function KMAssistantWidget() {
     try {
       const res = await fetch(`${API_BASE}/api/km-agent/document/${encodeURIComponent(id)}`, { headers: authHeaders() });
       const data = await res.json().catch(() => null);
-      if (!res.ok) { alert((data && data.error) || `無法開啟文件 #${id}`); return; }
+      if (!res.ok) { showToast((data && data.error) || `無法開啟文件 #${id}`); return; }
       const atts = toAttachments(data);
       const viewable = atts.find(a => { const e = ext(a.filename); return e === 'pdf' || IMG_EXTS.has(e); });
       if (viewable) await viewAttachment(id, viewable.filename, highlight);
       else if (atts[0]) await downloadAttachment(id, atts[0].filename);
-      else alert('這份文件沒有可開啟的附件。');
-    } catch { alert('開啟文件失敗，請稍後再試。'); }
+      else showToast('這份文件沒有可開啟的附件。');
+    } catch { showToast('開啟文件失敗，請稍後再試。'); }
     finally { setOpeningSource(''); }
   }
 
@@ -257,7 +264,7 @@ export default function KMAssistantWidget() {
     try {
       const url = isOffice ? await fetchAsPdfBlobUrl(docId, filename) : await fetchBlobUrl(docId, filename, false);
       setViewer({ docId, filename, url, kind, search, page });
-    } catch (err) { setViewer(null); alert((err as Error).message); }
+    } catch (err) { setViewer(null); showToast((err as Error).message); }
     finally { setViewerLoading(false); }
   }
 
@@ -287,12 +294,46 @@ export default function KMAssistantWidget() {
       const a = document.createElement('a');
       a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    } catch (err) { alert((err as Error).message); }
+    } catch (err) { showToast((err as Error).message); }
   }
 
   function closeViewer() {
     if (viewer?.url) URL.revokeObjectURL(viewer.url);
     setViewer(null);
+  }
+
+  async function rankResults() {
+    if (!results.length || ranking) return;
+    setRanking(true);
+    try {
+      // Streamed (keepalives while the model works, then a data event with {ranked}).
+      const res = await fetch(`${API_BASE}/api/km-agent/rank`, {
+        method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query.trim(), docs: results.map(d => ({ id: d.id, title: d.title, category: d.category })) }),
+      });
+      if (!res.ok || !res.body) { const d = await res.json().catch(() => null); showToast((d && d.error) || `AI 相關性判斷失敗（${res.status}）`); return; }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let payload: any = null;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop() || '';
+        for (const part of parts) {
+          const line = part.split('\n').find(l => l.startsWith('data:'));
+          if (line) { try { payload = JSON.parse(line.slice(5).trim()); } catch { /* skip */ } }
+        }
+      }
+      if (payload && Array.isArray(payload.ranked) && payload.ranked.length) {
+        const map: Record<string, { level: string; reason: string }> = {};
+        for (const r of payload.ranked) if (r && r.id) map[String(r.id)] = { level: String(r.level || ''), reason: String(r.reason || '') };
+        setRanks(map);
+      } else { showToast('AI 沒有回傳相關性結果，請稍後再試。'); }
+    } catch { showToast('AI 相關性判斷連線失敗，請稍後再試。'); }
+    finally { setRanking(false); }
   }
 
   const loadExplainedIds = () => {
@@ -391,6 +432,16 @@ export default function KMAssistantWidget() {
 
   return (
     <div className="absolute inset-0 bg-surface-container-high flex flex-col overflow-hidden">
+      {/* Toast (replaces browser alert) */}
+      {toast && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[140] max-w-[90%] animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-inverse-surface text-inverse-on-surface text-xs shadow-xl">
+            <span className="material-symbols-outlined text-base text-amber-300">info</span>
+            <span className="leading-snug">{toast}</span>
+            <button onClick={() => setToast('')} className="ml-1 shrink-0 opacity-70 hover:opacity-100"><span className="material-symbols-outlined text-base">close</span></button>
+          </div>
+        </div>
+      )}
       {/* Tab bar */}
       <div className="flex border-b border-outline-variant/10 shrink-0">
         {([{ id: 'docs' as Tab, icon: 'folder_open', label: '文件' }, { id: 'chat' as Tab, icon: 'chat', label: '對話' }]).map(tb => (
@@ -421,26 +472,44 @@ export default function KMAssistantWidget() {
                 {searching && <div className="text-sm text-on-surface-variant px-1 py-2 flex items-center gap-2"><span className="material-symbols-outlined animate-spin text-base">progress_activity</span>KM 搜尋中（可能較慢）…</div>}
                 {!searching && searched && !searchErr && results.length === 0 && <div className="text-sm text-on-surface-variant px-1 py-6 text-center">找不到相關文件，換個關鍵字試試。</div>}
                 {!searching && !searched && <div className="text-sm text-on-surface-variant/60 px-1 py-8 text-center">輸入關鍵字搜尋你有權限的 KM 文件。</div>}
-                <div className="space-y-1.5">
-                  {results.map(doc => (
-                    <button key={doc.id} onClick={() => openDoc(doc)}
-                      className="w-full text-left p-2.5 rounded-lg bg-surface-container hover:bg-surface-container-high transition-colors">
-                      <div className="flex items-start gap-2">
-                        <span className="material-symbols-outlined text-primary/70 text-lg shrink-0 mt-0.5">description</span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-sm font-medium text-on-surface truncate">{doc.title}</p>
-                            {explainedIds.has(doc.id) && (
-                              <span title="AI 已解讀過" className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-medium">
-                                <span className="material-symbols-outlined text-[12px]">smart_toy</span>AI
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-on-surface-variant/60 truncate">#{doc.id}{doc.category ? ` · ${doc.category}` : ''}</p>
-                        </div>
-                      </div>
+                {!searching && results.length > 0 && (
+                  <div className="flex items-center justify-between px-1 mb-1.5">
+                    <span className="text-[11px] text-on-surface-variant/50">{results.length} 筆結果{Object.keys(ranks).length > 0 ? '（依相關性排序）' : ''}</span>
+                    <button onClick={rankResults} disabled={ranking}
+                      className="inline-flex items-center gap-1 text-[11px] text-primary hover:bg-primary/10 rounded-lg px-2 py-1 disabled:opacity-50">
+                      <span className={`material-symbols-outlined text-sm ${ranking ? 'animate-spin' : ''}`}>{ranking ? 'progress_activity' : 'target'}</span>AI 判斷相關性
                     </button>
-                  ))}
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  {(Object.keys(ranks).length
+                    ? [...results].sort((a, b) => (({ '高': 0, '中': 1, '低': 2 } as any)[ranks[a.id]?.level] ?? 3) - (({ '高': 0, '中': 1, '低': 2 } as any)[ranks[b.id]?.level] ?? 3))
+                    : results
+                  ).map(doc => {
+                    const rk = ranks[doc.id];
+                    const rkCls = rk?.level === '高' ? 'bg-green-500/15 text-green-600' : rk?.level === '中' ? 'bg-amber-500/15 text-amber-600' : rk?.level === '低' ? 'bg-surface-container-highest text-on-surface-variant/60' : '';
+                    return (
+                      <button key={doc.id} onClick={() => openDoc(doc)}
+                        className="w-full text-left p-2.5 rounded-lg bg-surface-container hover:bg-primary/5 border border-transparent hover:border-primary/20 transition-colors">
+                        <div className="flex items-start gap-2">
+                          <span className="material-symbols-outlined text-primary/70 text-lg shrink-0 mt-0.5">description</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              {rk && <span title={rk.reason} className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold ${rkCls}`}>{rk.level}</span>}
+                              <p className="text-sm font-medium text-on-surface truncate">{doc.title}</p>
+                              {explainedIds.has(doc.id) && (
+                                <span title="AI 已解讀過" className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-medium">
+                                  <span className="material-symbols-outlined text-[12px]">smart_toy</span>AI
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-on-surface-variant/60 truncate">#{doc.id}{doc.category ? ` · ${doc.category}` : ''}</p>
+                            {rk?.reason && <p className="text-[10px] text-on-surface-variant/45 truncate">{rk.reason}</p>}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </>

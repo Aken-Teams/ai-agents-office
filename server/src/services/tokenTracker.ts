@@ -66,7 +66,7 @@ export async function getUserUsageSummary(
   return await dbAll(query, ...params);
 }
 
-export type UsageCategory = 'document' | 'team' | 'email';
+export type UsageCategory = 'document' | 'team' | 'email' | 'km';
 export interface DailyUsage {
   date: string;
   total_input: number;
@@ -89,7 +89,7 @@ export async function getUserUsageSummaryByCategory(
 ): Promise<Record<UsageCategory, DailyUsage[]>> {
   // Category is derived from a CASE; under sql_mode=only_full_group_by we must
   // GROUP BY the full expressions (not the aliases), so define it once.
-  const CATEGORY_EXPR = `CASE WHEN c.title = '信件助手' THEN 'email' WHEN tu.model LIKE 'team%' THEN 'team' ELSE 'document' END`;
+  const CATEGORY_EXPR = `CASE WHEN c.title = '信件助手' THEN 'email' WHEN c.title = 'KM 助手' THEN 'km' WHEN tu.model LIKE 'team%' THEN 'team' ELSE 'document' END`;
   let query = `
     SELECT
       DATE_FORMAT(tu.created_at, '%Y-%m-%d') as date,
@@ -108,7 +108,7 @@ export async function getUserUsageSummaryByCategory(
   query += ` GROUP BY DATE_FORMAT(tu.created_at, '%Y-%m-%d'), ${CATEGORY_EXPR} ORDER BY date DESC`;
 
   const rows = await dbAll<DailyUsage & { category: UsageCategory }>(query, ...params);
-  const out: Record<UsageCategory, DailyUsage[]> = { document: [], team: [], email: [] };
+  const out: Record<UsageCategory, DailyUsage[]> = { document: [], team: [], email: [], km: [] };
   for (const r of rows) {
     const { category, ...daily } = r;
     (out[category] ?? out.document).push(daily);
@@ -126,7 +126,7 @@ export async function getUserUsageRecords(
   from?: string,
   to?: string,
 ): Promise<Array<{ id: string; created_at: string; category: UsageCategory; input_tokens: number; output_tokens: number; cost: number }>> {
-  const CATEGORY_EXPR = `CASE WHEN c.title = '信件助手' THEN 'email' WHEN tu.model LIKE 'team%' THEN 'team' ELSE 'document' END`;
+  const CATEGORY_EXPR = `CASE WHEN c.title = '信件助手' THEN 'email' WHEN c.title = 'KM 助手' THEN 'km' WHEN tu.model LIKE 'team%' THEN 'team' ELSE 'document' END`;
   // Format created_at in SQL to a plain string (DB stores Taipei local time) so
   // mysql2's Date parsing + JSON serialization can't shift the displayed time.
   let query = `
@@ -152,7 +152,7 @@ export async function getUserCategoryCounts(
   userId: string,
   monthlyOnly = false,
 ): Promise<Record<UsageCategory, number>> {
-  const CATEGORY_EXPR = `CASE WHEN c.title = '信件助手' THEN 'email' WHEN tu.model LIKE 'team%' THEN 'team' ELSE 'document' END`;
+  const CATEGORY_EXPR = `CASE WHEN c.title = '信件助手' THEN 'email' WHEN c.title = 'KM 助手' THEN 'km' WHEN tu.model LIKE 'team%' THEN 'team' ELSE 'document' END`;
   let query = `
     SELECT ${CATEGORY_EXPR} as category, COUNT(*) as n
     FROM token_usage tu
@@ -167,7 +167,7 @@ export async function getUserCategoryCounts(
   }
   query += ` GROUP BY ${CATEGORY_EXPR}`;
   const rows = await dbAll<{ category: UsageCategory; n: number }>(query, ...params);
-  const out: Record<UsageCategory, number> = { document: 0, team: 0, email: 0 };
+  const out: Record<UsageCategory, number> = { document: 0, team: 0, email: 0, km: 0 };
   for (const r of rows) out[r.category] = Number(r.n);
   return out;
 }

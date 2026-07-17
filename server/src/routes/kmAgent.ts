@@ -320,6 +320,53 @@ router.get('/explained', async (req: Request, res: Response) => {
   res.json({ ids: rows.map(r => r.document_id) });
 });
 
+// ─── 文件 tab: opt-in "AI 判斷相關性" — one cheap Haiku call ranks the current
+// results by TITLE + 分類 (no reading full docs), so 边球 full-text matches sink. ───
+router.post('/rank', async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  if (!(await kmAgentEnabled(userId))) { res.status(403).json({ error: 'km_agent_disabled', message: '尚未開啟 KM 助手。' }); return; }
+  const usage = await checkUserUsageLimit(userId);
+  if (usage.exceeded) { res.status(403).json({ error: `本月用量已達上限 USD $${usage.limit.toFixed(2)}` }); return; }
+  const { query, docs } = req.body as { query?: string; docs?: { id: string; title: string; category?: string }[] };
+  if (!query?.trim() || !Array.isArray(docs) || !docs.length) { res.status(400).json({ error: 'query and docs are required' }); return; }
+
+  const list = docs.slice(0, 30).map((d, i) => `${i + 1}. [id=${d.id}] ${d.title}${d.category ? `｜分類：${d.category}` : ''}`).join('\n');
+  const prompt = `使用者在 KM 知識庫搜尋關鍵字「${query.trim()}」。下面是「全文比對」撈出的結果（有些可能只是內文剛好提到，主題其實無關）。請你**只依標題與分類路徑**判斷每一筆與「${query.trim()}」的主題相關性：
+- 高：標題／分類明確就是在講這個主題。
+- 中：同領域或部分相關。
+- 低：主題明顯無關，只是內文剛好出現這個詞。
+**只輸出 JSON 陣列**，格式：[{"id":"文件id","level":"高|中|低","reason":"15字內原因"}]，不要任何其他文字。
+
+搜尋結果：
+${list}`;
+
+  const conversationId = await getOrCreateKmConversation(userId);
+  // Stream keepalives while the model works so the dev proxy doesn't reset the
+  // (otherwise idle) request into a 500 (same fix as /search). Final event carries
+  // the ranked JSON; the client reads it off the stream.
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
+  const keepalive = setInterval(() => { try { res.write(': ka\n\n'); } catch { /* closed */ } }, 5000);
+  let out = '', inTok = 0, outTok = 0, model = '';
+  const { emitter, abort } = spawnClaude(prompt, '你是 KM 相關性評分器，只輸出 JSON 陣列、不要多餘文字。', {
+    userId, conversationId, sandboxSubdir: '_agents/km-rank', sessionId: uuidv4(), isResume: false,
+    customAllowedTools: [], maxTurns: 1, model: 'claude-haiku-4-5-20251001',
+  });
+  const finish = () => {
+    clearTimeout(timer); clearInterval(keepalive);
+    if (inTok || outTok) recordTokenUsage({ userId, conversationId, inputTokens: inTok, outputTokens: outTok, model: model || 'claude-haiku-4-5-20251001' }).catch(() => {});
+    let ranked: { id: string; level: string; reason?: string }[] = [];
+    try { const m = out.match(/\[[\s\S]*\]/); if (m) ranked = JSON.parse(m[0]); } catch { /* leave empty */ }
+    try { res.write(`data: ${JSON.stringify({ ranked })}\n\n`); res.end(); } catch { /* closed */ }
+  };
+  const timer = setTimeout(() => { try { abort(); } catch { /* ignore */ } finish(); }, 40_000);
+  res.on('close', () => { try { abort(); } catch { /* ignore */ } });
+  emitter.on('event', (ev: SSEEvent) => {
+    if (ev.type === 'text') out += ev.data as string;
+    else if (ev.type === 'usage') { const u = ev.data as { inputTokens: number; outputTokens: number; model: string }; inTok = u.inputTokens; outTok = u.outputTokens; model = u.model; }
+    else if (ev.type === 'done') finish();
+  });
+});
+
 // ─── Chat history (for the 對話 tab on open) ───
 router.get('/history', async (req: Request, res: Response) => {
   const conv = await dbGet<{ id: string }>("SELECT id FROM conversations WHERE user_id = ? AND category = 'km-agent' LIMIT 1", req.user!.userId);

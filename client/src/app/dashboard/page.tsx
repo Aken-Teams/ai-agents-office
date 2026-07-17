@@ -85,7 +85,7 @@ function DashboardContent() {
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [usage, setUsage] = useState<UsageTotal | null>(null);
-  const [catCounts, setCatCounts] = useState<{ document: number; team: number; email: number }>({ document: 0, team: 0, email: 0 });
+  const [catCounts, setCatCounts] = useState<{ document: number; team: number; email: number; km: number }>({ document: 0, team: 0, email: 0, km: 0 });
   const [usageLimit, setUsageLimit] = useState<number | null>(null);
   const [isBeta, setIsBeta] = useState(true);
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -206,7 +206,7 @@ function DashboardContent() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then(data => { setUsage(data.total); setCatCounts(data.categoryCounts ?? { document: 0, team: 0, email: 0 }); if (data.limit != null) setUsageLimit(data.limit); setIsBeta(data.isBeta ?? true); })
+      .then(data => { setUsage(data.total); setCatCounts(data.categoryCounts ?? { document: 0, team: 0, email: 0, km: 0 }); if (data.limit != null) setUsageLimit(data.limit); setIsBeta(data.isBeta ?? true); })
       .catch(console.error);
 
     fetch('/api/files', {
@@ -714,6 +714,7 @@ function DashboardContent() {
                 <div className="flex items-center justify-between gap-4 py-0.5"><span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[14px]">description</span>文件</span><span className="font-mono font-bold">{catCounts.document}</span></div>
                 <div className="flex items-center justify-between gap-4 py-0.5"><span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[14px]">groups</span>AI 團隊</span><span className="font-mono font-bold">{catCounts.team}</span></div>
                 <div className="flex items-center justify-between gap-4 py-0.5"><span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[14px]">mail</span>信件</span><span className="font-mono font-bold">{catCounts.email}</span></div>
+                <div className="flex items-center justify-between gap-4 py-0.5"><span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[14px]">menu_book</span>KM 助手</span><span className="font-mono font-bold">{catCounts.km}</span></div>
               </div>
             </div>
             <div className="w-px h-4 bg-outline-variant/20" />
