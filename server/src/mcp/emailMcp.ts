@@ -53,7 +53,7 @@ const DETAIL_MAX_CHARS = 6000;           // cap a single message body fed to the
 const ATT_MAX = 8;                       // attachments processed per email
 const ATT_MAX_BYTES = 10 * 1024 * 1024;  // skip files larger than 10MB
 const ATT_TEXT_MAX = 8000;               // per-attachment text budget
-const IMG_MAX_COUNT = 4;                  // vision images returned per call
+const IMG_MAX_COUNT = 6;                  // vision images returned per call
 const IMG_MAX_BYTES = 5 * 1024 * 1024;    // 5MB per image (vision payload cap)
 const IMG_DOWNLOAD_MAX = 25 * 1024 * 1024; // download images up to 25MB, then downscale
 const VISION_LONG_EDGE = 1568;            // Claude vision's optimal max long edge (px)
@@ -240,8 +240,9 @@ async function getMessage(messageId: string, includeImages: boolean): Promise<an
   if (!includeImages) return jsonText(summary);
   // Inline (CID) images embedded in the body → attach as vision blocks (large ones
   // are auto-downscaled so they're still analysed, not skipped).
+  const inlineImgAtts = atts.filter(x => x.is_inline && imageMimeFor(x.filename || '', x.content_type).startsWith('image/'));
   const images: ImgBlock[] = [];
-  for (const a of atts.filter(x => x.is_inline && imageMimeFor(x.filename || '', x.content_type).startsWith('image/'))) {
+  for (const a of inlineImgAtts) {
     if (images.length >= IMG_MAX_COUNT) break;
     if (!a.id || (a.size || 0) > IMG_DOWNLOAD_MAX) continue;
     const raw = await gwGetAttachmentBytes(messageId, a.id);
@@ -249,7 +250,14 @@ async function getMessage(messageId: string, includeImages: boolean): Promise<an
     const vi = await toVisionImage(raw, imageMimeFor(a.filename || '', a.content_type));
     if (vi) images.push(vi);
   }
-  return images.length ? textPlusImages({ ...summary, inline_images_attached: images.length }, images) : jsonText(summary);
+  if (!images.length) return jsonText(summary);
+  const capped = inlineImgAtts.length > images.length;
+  return textPlusImages({
+    ...summary,
+    inline_images_total: inlineImgAtts.length,
+    inline_images_attached: images.length,
+    ...(capped ? { images_note: `本信共有 ${inlineImgAtts.length} 張內嵌圖，只附上前 ${images.length} 張供你視覺判讀；其餘 ${inlineImgAtts.length - images.length} 張未附上——**請勿臆測未看到的圖是內容圖或簽名檔**，只就實際看到的圖描述。` } : {}),
+  }, images);
 }
 
 // ── email_get_attachments: file text (PDF/Word/Excel, injection-scanned) + IMAGE attachments as vision ──
