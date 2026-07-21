@@ -363,62 +363,6 @@ export default function AdminSecurity() {
           </div>
         </div>
 
-        {/* 信件 Gateway 限流閘門 — proof the rate-limit fix is absorbing bursts */}
-        {stats?.mailGateway && (
-          <div className="bg-surface-container rounded-lg overflow-hidden mb-4 md:mb-6">
-            <div className="px-4 md:px-6 py-3 md:py-4 bg-surface-container-high flex items-center gap-2 md:gap-3">
-              <span className="material-symbols-outlined text-primary text-base md:text-[24px]">mail_lock</span>
-              <span className="text-xs md:text-sm font-bold uppercase tracking-widest flex-1">信件 GATEWAY 限流閘門</span>
-              <span className="text-xs text-on-surface-variant/60">同時上限 {stats.mailGateway.max}</span>
-            </div>
-            <div className="p-4 md:p-6">
-              {/* Cumulative counters */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-                {[
-                  { label: '累計請求', v: stats.mailGateway.totalRequests, cls: 'text-on-surface' },
-                  { label: 'gateway 回 429', v: stats.mailGateway.rateLimited, cls: 'text-warning' },
-                  { label: '自動退避救回（無感）', v: stats.mailGateway.recovered, cls: 'text-success' },
-                  { label: '真的失敗到前端', v: stats.mailGateway.surfaced, cls: stats.mailGateway.surfaced > 0 ? 'text-error' : 'text-on-surface-variant/50' },
-                ].map((c, i) => (
-                  <div key={i} className="rounded-lg bg-surface-container-high p-3">
-                    <p className={`text-2xl font-headline font-bold ${c.cls}`}>{c.v}</p>
-                    <p className="text-[11px] text-on-surface-variant/70 mt-0.5">{c.label}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="text-[11px] text-on-surface-variant/60 mt-3">
-                目前在飛 {stats.mailGateway.active}／排隊 {stats.mailGateway.queued}（尖峰曾排 {stats.mailGateway.peakQueued}）。
-                <span className="text-success">「自動退避救回」代表 429 有發生、但使用者沒感覺</span>；「真的失敗到前端」應接近 0。
-              </p>
-
-              {/* Self-test: fire N concurrent gateway requests (one token = same server IP burst)
-                  through the gate, proving it queues the burst and serves everyone with 0 failures. */}
-              <div className="mt-4 pt-4 border-t border-outline-variant/10">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs font-medium text-on-surface-variant">壓測(模擬多人同時開)：</span>
-                  <input type="number" min={1} max={100} value={gwN} onChange={e => setGwN(Math.min(100, Math.max(1, parseInt(e.target.value) || 1)))}
-                    className="w-16 px-2 py-1 text-sm rounded bg-surface-container-high border border-outline-variant/20" />
-                  <span className="text-xs text-on-surface-variant/60">個併發 ×</span>
-                  <input type="number" min={1} max={20} value={gwRounds} onChange={e => setGwRounds(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
-                    className="w-14 px-2 py-1 text-sm rounded bg-surface-container-high border border-outline-variant/20" title="連續重複幾輪（測「持續速率」型的限流）" />
-                  <span className="text-xs text-on-surface-variant/60">輪(持續)</span>
-                  <button onClick={runGwTest} disabled={gwTesting}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider rounded hover:bg-primary/20 disabled:opacity-50">
-                    <span className={`material-symbols-outlined text-sm ${gwTesting ? 'animate-spin' : ''}`}>{gwTesting ? 'progress_activity' : 'bolt'}</span>
-                    經閘門壓測
-                  </button>
-                </div>
-                {gwTest && (gwTest.error
-                  ? <p className="mt-2 text-xs text-error">{gwTest.error}</p>
-                  : <p className="mt-2 text-xs px-2.5 py-2 rounded bg-success/5 border border-success/20 text-on-surface">
-                      <b className="text-success">經閘門</b>：{gwTest.total} 個請求({gwTest.n}併發×{gwTest.rounds}輪) → <b className="text-success">前端收到 429 {gwTest.rateLimitedResponses} 個</b>、成功 {gwTest.ok}；期間 gateway 實際回 429 <b>{gwTest.gateway429Hit}</b> 個(全被自動退避救回、使用者無感),峰值排隊 {gwTest.peakQueued},共 {(gwTest.totalMs / 1000).toFixed(1)}s。
-                    </p>)}
-                <p className="mt-1.5 text-[11px] text-on-surface-variant/50">模擬 N 個人同一秒打開信件助手。閘門會把爆量請求排隊、逐一送出,證明「前端收到 429 = 0、全部成功」。想測更兇就加大併發或輪數。</p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Workspace Scan + Audit Log */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
           {/* Workspace Disk Usage */}
@@ -655,6 +599,64 @@ export default function AdminSecurity() {
             </>
           )}
         </div>
+
+        {/* 信件 Gateway 限流閘門 — proof the rate-limit fix is absorbing bursts */}
+        {stats?.mailGateway && (
+          <div className="bg-surface-container rounded-lg overflow-hidden mb-4 md:mb-6">
+            <div className="px-4 md:px-6 py-3 md:py-4 bg-surface-container-high flex items-center gap-2 md:gap-3">
+              <span className="material-symbols-outlined text-primary text-base md:text-[24px]">mail_lock</span>
+              <span className="text-xs md:text-sm font-bold uppercase tracking-widest flex-1">信件 GATEWAY 限流閘門</span>
+              <span className="text-xs text-on-surface-variant/60">同時上限 {stats.mailGateway.max}</span>
+            </div>
+            <div className="p-4 md:p-6">
+              {/* Left: status + stats fill the row; right: the stress-test control (so the
+                  card doesn't leave a big empty right half like it did before). */}
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-6">
+                <div className="flex items-center gap-5 md:gap-7">
+                  <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg ${stats.mailGateway.surfaced > 0 ? 'bg-error/10' : 'bg-success/10'}`}>
+                    <span className={`material-symbols-outlined text-lg ${stats.mailGateway.surfaced > 0 ? 'text-error' : 'text-success'}`}>{stats.mailGateway.surfaced > 0 ? 'error' : 'check_circle'}</span>
+                    <span className={`text-sm font-bold whitespace-nowrap ${stats.mailGateway.surfaced > 0 ? 'text-error' : 'text-success'}`}>{stats.mailGateway.surfaced > 0 ? '有請求失敗' : '運作正常'}</span>
+                  </div>
+                  {[
+                    { label: '累計請求', v: stats.mailGateway.totalRequests, cls: 'text-on-surface' },
+                    { label: '退避救回', v: stats.mailGateway.recovered, cls: 'text-success' },
+                    { label: '失敗到前端', v: stats.mailGateway.surfaced, cls: stats.mailGateway.surfaced > 0 ? 'text-error' : 'text-on-surface' },
+                  ].map((c, i) => (
+                    <div key={i}>
+                      <p className={`text-2xl md:text-[28px] font-headline font-bold leading-none ${c.cls}`}>{c.v}</p>
+                      <p className="text-[11px] text-on-surface-variant mt-1.5 whitespace-nowrap">{c.label}</p>
+                    </div>
+                  ))}
+                </div>
+                {/* Stress test control — right-aligned on wide screens */}
+                <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                  <span className="text-xs text-on-surface-variant/70">壓測</span>
+                  <input type="number" min={1} max={100} value={gwN} onChange={e => setGwN(Math.min(100, Math.max(1, parseInt(e.target.value) || 1)))}
+                    className="w-20 pl-2.5 pr-1 py-1.5 text-sm rounded-lg bg-surface-container-high border border-outline-variant/20 focus:border-primary/40 outline-none" />
+                  <span className="text-xs text-on-surface-variant/70">人 ×</span>
+                  <input type="number" min={1} max={20} value={gwRounds} onChange={e => setGwRounds(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
+                    className="w-16 pl-2.5 pr-1 py-1.5 text-sm rounded-lg bg-surface-container-high border border-outline-variant/20 focus:border-primary/40 outline-none" title="連續重複幾輪（測「持續速率」型的限流）" />
+                  <span className="text-xs text-on-surface-variant/70">輪</span>
+                  <button onClick={runGwTest} disabled={gwTesting}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider rounded hover:bg-primary/20 disabled:opacity-50 transition-colors">
+                    <span className={`material-symbols-outlined text-sm ${gwTesting ? 'animate-spin' : ''}`}>{gwTesting ? 'progress_activity' : 'bolt'}</span>
+                    {gwTesting ? '壓測中' : '開始壓測'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Result / hint line — full width below, so nothing feels empty */}
+              {gwTest && !gwTest.error
+                ? <div className="mt-4 flex items-center gap-2 px-3.5 py-2.5 rounded-lg bg-success/5 border border-success/20">
+                    <span className="material-symbols-outlined text-success text-lg">task_alt</span>
+                    <p className="text-sm text-on-surface">模擬 {gwTest.n} 人同時 × {gwTest.rounds} 輪 → <b className="text-success">全部成功 {gwTest.ok}/{gwTest.total}</b>、前端 429 <b>{gwTest.rateLimitedResponses}</b> 個、峰值排隊 <b>{gwTest.peakQueued}</b>,共 {(gwTest.totalMs / 1000).toFixed(1)}s。</p>
+                  </div>
+                : gwTest?.error
+                ? <p className="mt-4 text-sm px-3.5 py-2.5 rounded-lg bg-error/5 border border-error/20 text-error">{gwTest.error}</p>
+                : <p className="mt-4 text-xs text-on-surface-variant/55 leading-relaxed">尖峰曾同時排隊 {stats.mailGateway.peakQueued} 個。「退避救回」= 被 gateway 擋 429 但自動重試成功、使用者無感;「失敗到前端」應維持 0。壓測會模擬 N 人同秒開信件助手,驗證閘門把爆量排隊、全部服務到。</p>}
+            </div>
+          </div>
+        )}
 
         {/* Security Architecture */}
         <div className="bg-surface-container rounded-lg overflow-hidden">
