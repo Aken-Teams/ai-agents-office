@@ -5,6 +5,7 @@
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto';
 import { config } from '../config.js';
 import { dbGet, dbRun } from '../db.js';
+import { gatewayFetch } from './mailGatewayLimit.js';
 
 const OUTLOOK_BASE = `${config.adApiUrl}/outlook`;
 
@@ -73,11 +74,11 @@ export async function authenticateOutlook(userId: string, username: string, pass
     return null;
   }
 
-  const res = await fetch(`${OUTLOOK_BASE}/auth`, {
+  const res = await gatewayFetch(`${OUTLOOK_BASE}/auth`, {
     method: 'POST',
     headers: { 'X-API-Key': config.adApiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
-  });
+  }, { timeoutMs: 30000 });
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');
@@ -160,9 +161,9 @@ export async function getMailToken(userId: string): Promise<string | null> {
  * Fetch email folders.
  */
 export async function fetchFolders(mailToken: string): Promise<OutlookFolder[]> {
-  const res = await fetch(`${OUTLOOK_BASE}/folders`, {
+  const res = await gatewayFetch(`${OUTLOOK_BASE}/folders`, {
     headers: { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${mailToken}` },
-  });
+  }, { timeoutMs: 30000 });
   if (!res.ok) {
     console.warn('[Outlook] fetchFolders failed:', res.status, await res.text().catch(() => ''));
     return [];
@@ -187,9 +188,9 @@ export async function fetchMessages(
   if (opts?.q) params.set('q', opts.q);
   if (opts?.startDate) params.set('start_date', opts.startDate);
   if (opts?.endDate) params.set('end_date', opts.endDate);
-  const res = await fetch(`${OUTLOOK_BASE}/messages?${params}`, {
+  const res = await gatewayFetch(`${OUTLOOK_BASE}/messages?${params}`, {
     headers: { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${mailToken}` },
-  });
+  }, { timeoutMs: 30000 });
   if (!res.ok) {
     console.warn('[Outlook] fetchMessages failed:', res.status, await res.text().catch(() => ''));
     return { messages: [], total: 0 };
@@ -214,7 +215,7 @@ export async function fetchMessageDetail(mailToken: string, messageId: string): 
       // API's own guidance is ~30s for non-attachment endpoints; a too-tight
       // timeout aborted attempt-after-attempt and the frontend proxy gave up
       // (ECONNRESET) before any retry could land. 30s lets attempt 1 succeed.
-      const res = await fetch(url, { headers, signal: AbortSignal.timeout(30000) });
+      const res = await gatewayFetch(url, { headers }, { timeoutMs: 30000 });
       if (!res.ok) {
         const bodyText = await res.text().catch(() => '');
         console.warn(`[Outlook] fetchMessageDetail ${res.status} (attempt ${attempt + 1}):`, bodyText.slice(0, 200));
@@ -259,10 +260,9 @@ export async function fetchAttachment(mailToken: string, messageId: string, atta
   // Timeout + never throw: a single slow/404/erroring attachment must not reject
   // the parallel CID resolution (which would 500 the whole email view).
   try {
-    const res = await fetch(url, {
+    const res = await gatewayFetch(url, {
       headers: { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${mailToken}` },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    }, { timeoutMs });
     if (!res.ok) {
       console.warn(`[Outlook][cid] attachment download ${res.status} for att=${attachmentId.slice(0, 24)}…`);
       return null;

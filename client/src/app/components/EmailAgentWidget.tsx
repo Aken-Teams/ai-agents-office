@@ -145,6 +145,8 @@ export default function EmailAgentWidget({ embedded = false, onStatus, prefNonce
   const [error, setError] = useState<string | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [loadingStage, setLoadingStage] = useState(0);
+  // After a while (peak / class burst), reassure the user instead of a dead spinner.
+  const [loadingBusy, setLoadingBusy] = useState(false);
   const [bubbleBounce, setBubbleBounce] = useState(false);
   const [hidden, setHidden] = useState(false);
   const [soundMuted, setSoundMuted] = useState(false);
@@ -204,13 +206,16 @@ export default function EmailAgentWidget({ embedded = false, onStatus, prefNonce
     return () => { setMounted(false); document.removeEventListener('click', onInteract); };
   }, []);
 
-  // Cycle through loading stage messages while loading
+  // Cycle through loading stage messages while loading; after ~10s (peak / class
+  // burst where the mail gateway is queuing many users) switch to a "busy, hang on"
+  // message so it never looks broken — the emails still arrive when the queue drains.
   useEffect(() => {
-    if (!initialLoading) return;
+    if (!initialLoading) { setLoadingBusy(false); return; }
     const timer = setInterval(() => {
       setLoadingStage(prev => (prev + 1) % 3);
     }, 3000);
-    return () => clearInterval(timer);
+    const busyTimer = setTimeout(() => setLoadingBusy(true), 10000);
+    return () => { clearInterval(timer); clearTimeout(busyTimer); };
   }, [initialLoading]);
 
   // Auto-scroll chat
@@ -1575,10 +1580,10 @@ export default function EmailAgentWidget({ embedded = false, onStatus, prefNonce
                         </div>
                       </div>
                       <p className="text-sm font-medium text-on-surface mb-1.5 transition-opacity duration-500">
-                        {['正在連線 Outlook 信箱...', '掃描最新信件中...', 'AI 正在分析信件內容...'][loadingStage]}
+                        {loadingBusy ? '多人同時使用中，正在為你載入…' : ['正在連線 Outlook 信箱...', '掃描最新信件中...', 'AI 正在分析信件內容...'][loadingStage]}
                       </p>
                       <p className="text-xs text-on-surface-variant/50">
-                        首次載入可能需要幾秒鐘
+                        {loadingBusy ? '尖峰時段（例如上課同時開）需要多等一下，信件仍在載入，請稍候' : '首次載入可能需要幾秒鐘'}
                       </p>
                       <div className="flex gap-1.5 mt-3">
                         {[0, 1, 2].map(i => (

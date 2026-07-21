@@ -48,7 +48,10 @@ function scheduleNextPoll(userId: string): void {
     }
     // Schedule next poll (self-rescheduling chain)
     scheduleNextPoll(userId);
-  }, POLL_INTERVAL);
+    // Jitter (±15s): with ~30 concurrent users, un-jittered polls all fire on the
+    // same 60s boundary and burst the mail gateway (→ 429). Spreading them flattens
+    // the load so the gateway rarely sees a spike.
+  }, POLL_INTERVAL + Math.floor((Math.random() - 0.5) * 30_000));
 }
 
 /**
