@@ -163,8 +163,8 @@ const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
 
 export default function Navbar() {
   const { user, token, logout, updateUser, hasPermission } = useAuth();
-  // 強茂官方範本：僅檢閱者(readonly)與管理者(admin)可見，一般 USER 看不到此卡片
-  const canSeePanjitTemplate = isPanjit && (user?.role === 'admin' || user?.role === 'readonly');
+  // 強茂官方範本：pro-panjit 部署下所有角色（含一般 USER）皆可使用
+  const canSeePanjitTemplate = isPanjit;
   const { locale, theme, setLocale, setTheme, t } = useTranslation();
   const pathname = usePathname();
   const router = useRouter();
