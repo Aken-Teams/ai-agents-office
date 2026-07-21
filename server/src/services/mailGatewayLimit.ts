@@ -24,10 +24,17 @@ let active = 0;
 const waiters: Array<() => void> = [];
 let cooldownUntil = 0; // epoch ms — new requests wait until here after a 429
 
+// Counters for the 安全與審計 dashboard — proof the gate is absorbing rate limits.
+let totalRequests = 0; // requests sent through the gate
+let rateLimited = 0;   // 429 responses received
+let recovered = 0;     // requests that hit ≥1 429 but succeeded on retry (user never saw it)
+let surfaced = 0;      // requests whose 429 outlived all retries (returned to caller)
+let peakQueued = 0;    // largest queue depth seen (burst indicator)
+
 function acquire(): Promise<void> {
   return new Promise((resolve) => {
     if (active < MAX_CONCURRENT) { active++; resolve(); }
-    else waiters.push(() => { active++; resolve(); });
+    else { waiters.push(() => { active++; resolve(); }); peakQueued = Math.max(peakQueued, waiters.length); }
   });
 }
 function release(): void {
@@ -49,19 +56,22 @@ export async function gatewayFetch(
   opts: { timeoutMs: number; retries?: number },
 ): Promise<Response> {
   const retries = opts.retries ?? 3;
+  totalRequests++;
   await acquire();
+  let hit429 = false;
   try {
     for (let attempt = 0; ; attempt++) {
       const wait = cooldownUntil - Date.now();
       if (wait > 0) await sleep(wait);
       const res = await fetch(url, { ...init, signal: AbortSignal.timeout(opts.timeoutMs) });
-      if (res.status !== 429) return res;
+      if (res.status !== 429) { if (hit429) recovered++; return res; }
       // Rate limited → back off collectively, then retry.
+      hit429 = true; rateLimited++;
       const ra = parseInt(res.headers.get('retry-after') || '', 10);
       const backoff = (Number.isFinite(ra) && ra > 0 ? ra * 1000 : Math.min(1000 * 2 ** attempt, 8000)) + Math.floor(Math.random() * 300);
       cooldownUntil = Math.max(cooldownUntil, Date.now() + backoff);
       console.warn(`[MailGateway] 429 rate-limited (attempt ${attempt + 1}/${retries + 1}), backing off ${backoff}ms`);
-      if (attempt >= retries) return res; // give up → caller handles the 429
+      if (attempt >= retries) { surfaced++; return res; } // give up → caller handles the 429
       await sleep(backoff);
     }
   } finally {
@@ -69,7 +79,17 @@ export async function gatewayFetch(
   }
 }
 
-/** For diagnostics/admin: current gate pressure. */
+/** For the 安全與審計 dashboard: live gate pressure + cumulative counters. */
 export function mailGatewayStats() {
-  return { active, queued: waiters.length, max: MAX_CONCURRENT, cooldownMs: Math.max(0, cooldownUntil - Date.now()) };
+  return {
+    max: MAX_CONCURRENT,
+    active,
+    queued: waiters.length,
+    peakQueued,
+    cooldownMs: Math.max(0, cooldownUntil - Date.now()),
+    totalRequests,
+    rateLimited,
+    recovered,
+    surfaced,
+  };
 }

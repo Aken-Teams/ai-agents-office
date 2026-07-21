@@ -9,6 +9,7 @@ import { loadSkills } from '../skills/loader.js';
 import { config, pricingMarkupSql } from '../config.js';
 import { applyWatermark, getWatermarkSettings, setWatermarkSettings } from '../services/watermark.js';
 import { getMailToken, fetchMessageDetail, resolveCidImages } from '../services/outlookApi.js';
+import { mailGatewayStats, gatewayFetch } from '../services/mailGatewayLimit.js';
 import { sendXlsx } from '../services/xlsxExport.js';
 import { buildSecurityReportDocx } from '../services/securityReport.js';
 import { getUserUsageLimitUsd, setUserUsageLimitUsd, getUserDisplayCost, getEffectiveUserLimit, getStorageQuotaGb, setStorageQuotaGb, getUploadQuotaMb, setUploadQuotaMb } from '../services/usageLimit.js';
@@ -844,6 +845,47 @@ router.get('/security/stats', async (_req: Request, res: Response) => {
     securityEventsCount,
     blockedThreats,
     systemUptime: Math.floor(process.uptime()),
+    mailGateway: mailGatewayStats(), // 信件 gateway 限流閘門即時狀態 + 累計計數
+  });
+});
+
+// POST /api/admin/security/mail-gateway/selftest { n } — fire N CONCURRENT gateway
+// requests (using this admin's own mail token) to reproduce the class-burst load
+// WITHOUT needing 30 AD accounts: the 429 limit is on the SERVER's outbound IP, so
+// one token × N concurrent hits the same limit as N users opening at once.
+router.post('/security/mail-gateway/selftest', async (req: Request, res: Response) => {
+  const n = Math.min(Math.max(parseInt(req.body?.n, 10) || 30, 1), 100);
+  // bypass=true → hit the gateway DIRECTLY (no gate) to reproduce the raw "no
+  // protection" behaviour, so the A/B contrast is visible in one place.
+  const bypass = req.body?.bypass === true;
+  const token = await getMailToken((req as any).user!.userId);
+  if (!token) { res.status(400).json({ error: '需要你自己的信箱 token（請用 AD 帳號登入且已授權信箱）。' }); return; }
+  const url = `${config.adApiUrl}/outlook/folders`;
+  const headers = { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${token}` };
+  const before = mailGatewayStats();
+  const t0 = Date.now();
+  const results = await Promise.all(Array.from({ length: n }, async () => {
+    const s = Date.now();
+    try {
+      const r = bypass
+        ? await fetch(url, { headers, signal: AbortSignal.timeout(30000) })  // no gate — raw gateway
+        : await gatewayFetch(url, { headers }, { timeoutMs: 30000 });
+      return { status: r.status, ms: Date.now() - s };
+    } catch (e) { return { status: 0, ms: Date.now() - s, error: (e as Error).message }; }
+  }));
+  const after = mailGatewayStats();
+  res.json({
+    n,
+    bypass,
+    totalMs: Date.now() - t0,
+    ok: results.filter(r => r.status === 200).length,
+    rateLimitedResponses: results.filter(r => r.status === 429).length, // in bypass: raw gateway 429; gated: 429 reaching caller (~0)
+    failed: results.filter(r => r.status === 0).length,
+    peakQueued: after.peakQueued,
+    // Deltas over the test window (gated mode only — bypass doesn't touch the gate):
+    gateway429Hit: after.rateLimited - before.rateLimited,       // 429s the gateway threw (then auto-retried)
+    gateway429Recovered: after.recovered - before.recovered,     // …auto-recovered (user無感)
+    gateway429Surfaced: after.surfaced - before.surfaced,        // …that outlived retries
   });
 });
 

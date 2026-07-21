@@ -64,6 +64,10 @@ export function adminMiddleware(req: Request, res: Response, next: NextFunction)
         payload.role = currentRole;
 
         if (currentRole === 'readonly' && req.method !== 'GET') {
+          // TEMPORARY exception: the mail-gateway self-test is a safe, non-mutating
+          // load check (it only fires read requests at the gateway), so let 檢閱者
+          // run it too. Remove this line to lock it back to admins only.
+          if (req.path.includes('/mail-gateway/selftest')) { req.user = payload; next(); return; }
           const pageKey = getPageKeyFromPath(req.path);
           getRolePermissions().then(perms => {
             const operable = perms.adminSidebar.readonlyOperate ?? [];

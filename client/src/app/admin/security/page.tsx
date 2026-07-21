@@ -13,6 +13,10 @@ interface AuditEntry {
   created_at: string;
 }
 
+interface MailGatewayStats {
+  max: number; active: number; queued: number; peakQueued: number; cooldownMs: number;
+  totalRequests: number; rateLimited: number; recovered: number; surfaced: number;
+}
 interface SecurityStats {
   totalAuditEntries: number;
   totalUsers: number;
@@ -22,6 +26,7 @@ interface SecurityStats {
   securityEventsCount: number;
   blockedThreats: number;
   systemUptime: number;
+  mailGateway?: MailGatewayStats;
 }
 
 interface SecurityEvent {
@@ -73,6 +78,26 @@ export default function AdminSecurity() {
   const [reportTo, setReportTo] = useState('');
   const [reportStage, setReportStage] = useState('');
   const [reportError, setReportError] = useState('');
+  // 信件 Gateway 壓測 (reproduces the class-burst without needing 30 AD accounts).
+  const [gwN, setGwN] = useState(30);
+  const [gwTesting, setGwTesting] = useState(false);
+  const [gwTest, setGwTest] = useState<any>(null);
+  async function runGwTest(bypass = false) {
+    if (!token || gwTesting) return;
+    setGwTesting(true); setGwTest(null);
+    try {
+      const r = await fetch('/api/admin/security/mail-gateway/selftest', {
+        method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ n: gwN, bypass }),
+      });
+      const d = await r.json();
+      setGwTest(r.ok ? d : { error: d.error || '測試失敗' });
+      // Refresh the cumulative counters so they don't stay stale at 0.
+      fetch('/api/admin/security/stats', { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => res.json()).then(setStats).catch(() => {});
+    } catch { setGwTest({ error: '連線失敗' }); }
+    finally { setGwTesting(false); }
+  }
 
   async function generateReport() {
     if (!token || exporting) return;
@@ -317,6 +342,69 @@ export default function AdminSecurity() {
             <p className="text-[10px] md:text-sm text-on-surface-variant mt-1 md:mt-2 font-mono">{t('admin.security.stats.filesGeneratedDesc', { count: stats?.totalConversations ?? 0 })}</p>
           </div>
         </div>
+
+        {/* 信件 Gateway 限流閘門 — proof the rate-limit fix is absorbing bursts */}
+        {stats?.mailGateway && (
+          <div className="bg-surface-container rounded-lg overflow-hidden mb-4 md:mb-6">
+            <div className="px-4 md:px-6 py-3 md:py-4 bg-surface-container-high flex items-center gap-2 md:gap-3">
+              <span className="material-symbols-outlined text-primary text-base md:text-[24px]">mail_lock</span>
+              <span className="text-xs md:text-sm font-bold uppercase tracking-widest flex-1">信件 GATEWAY 限流閘門</span>
+              <span className="text-xs text-on-surface-variant/60">同時上限 {stats.mailGateway.max}</span>
+            </div>
+            <div className="p-4 md:p-6">
+              {/* Cumulative counters */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+                {[
+                  { label: '累計請求', v: stats.mailGateway.totalRequests, cls: 'text-on-surface' },
+                  { label: 'gateway 回 429', v: stats.mailGateway.rateLimited, cls: 'text-warning' },
+                  { label: '自動退避救回（無感）', v: stats.mailGateway.recovered, cls: 'text-success' },
+                  { label: '真的失敗到前端', v: stats.mailGateway.surfaced, cls: stats.mailGateway.surfaced > 0 ? 'text-error' : 'text-on-surface-variant/50' },
+                ].map((c, i) => (
+                  <div key={i} className="rounded-lg bg-surface-container-high p-3">
+                    <p className={`text-2xl font-headline font-bold ${c.cls}`}>{c.v}</p>
+                    <p className="text-[11px] text-on-surface-variant/70 mt-0.5">{c.label}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-on-surface-variant/60 mt-3">
+                目前在飛 {stats.mailGateway.active}／排隊 {stats.mailGateway.queued}（尖峰曾排 {stats.mailGateway.peakQueued}）。
+                <span className="text-success">「自動退避救回」代表 429 有發生、但使用者沒感覺</span>；「真的失敗到前端」應接近 0。
+              </p>
+
+              {/* Self-test: fire N concurrent gateway requests (one token = same server IP burst).
+                  「經閘門」= our protected path; 「直打對照」= raw gateway to show the contrast. */}
+              <div className="mt-4 pt-4 border-t border-outline-variant/10">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-on-surface-variant">壓測(模擬多人同時開)：</span>
+                  <input type="number" min={1} max={100} value={gwN} onChange={e => setGwN(Math.min(100, Math.max(1, parseInt(e.target.value) || 1)))}
+                    className="w-16 px-2 py-1 text-sm rounded bg-surface-container-high border border-outline-variant/20" />
+                  <span className="text-xs text-on-surface-variant/60">個併發</span>
+                  <button onClick={() => runGwTest(false)} disabled={gwTesting}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider rounded hover:bg-primary/20 disabled:opacity-50">
+                    <span className={`material-symbols-outlined text-sm ${gwTesting ? 'animate-spin' : ''}`}>{gwTesting ? 'progress_activity' : 'bolt'}</span>
+                    經閘門壓測
+                  </button>
+                  <button onClick={() => runGwTest(true)} disabled={gwTesting} title="繞過閘門直接打 gateway，重現「沒有保護時」的原始行為"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-warning/10 text-warning text-xs font-bold uppercase tracking-wider rounded hover:bg-warning/20 disabled:opacity-50">
+                    <span className="material-symbols-outlined text-sm">warning</span>
+                    直打對照(不經閘門)
+                  </button>
+                </div>
+                {gwTest && (gwTest.error
+                  ? <p className="mt-2 text-xs text-error">{gwTest.error}</p>
+                  : gwTest.bypass
+                    ? <p className="mt-2 text-xs px-2.5 py-2 rounded bg-warning/5 border border-warning/20 text-on-surface">
+                        <b className="text-warning">直打(不經閘門)</b>：{gwTest.n} 個併發直接打 gateway → <b className="text-error">gateway 直接回 429 {gwTest.rateLimitedResponses} 個</b>、失敗 {gwTest.failed}、成功 {gwTest.ok}，共 {(gwTest.totalMs / 1000).toFixed(1)}s。
+                        <span className="text-on-surface-variant/70"> ← 這就是「沒有閘門」時客戶會遇到的(429 = 轉圈/報錯)。</span>
+                      </p>
+                    : <p className="mt-2 text-xs px-2.5 py-2 rounded bg-success/5 border border-success/20 text-on-surface">
+                        <b className="text-success">經閘門</b>：{gwTest.n} 個併發 → <b className="text-success">前端收到 429 {gwTest.rateLimitedResponses} 個</b>、成功 {gwTest.ok}；期間 gateway 實際回 429 <b>{gwTest.gateway429Hit}</b> 個(全被自動退避救回、使用者無感)，峰值排隊 {gwTest.peakQueued}，共 {(gwTest.totalMs / 1000).toFixed(1)}s。
+                      </p>)}
+                <p className="mt-1.5 text-[11px] text-on-surface-variant/50">用法:先「直打對照」看 gateway 原始會噴幾個 429 → 再「經閘門壓測」看前端收到 0 個。兩者一比就是閘門的價值。</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Workspace Scan + Audit Log */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
