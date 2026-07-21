@@ -64,14 +64,17 @@ export async function gatewayFetch(
       const wait = cooldownUntil - Date.now();
       if (wait > 0) await sleep(wait);
       const res = await fetch(url, { ...init, signal: AbortSignal.timeout(opts.timeoutMs) });
-      if (res.status !== 429) { if (hit429) recovered++; return res; }
-      // Rate limited → back off collectively, then retry.
-      hit429 = true; rateLimited++;
+      // Per the gateway spec: 429 = API-KEY rate limit (單位時間請求數超上限), 503 =
+      // mail server busy — BOTH carry Retry-After and the guidance is "依 Retry-After
+      // 延後重試,勿立即重打". Everything else (200/4xx/502) is returned to the caller.
+      if (res.status !== 429 && res.status !== 503) { if (hit429) recovered++; return res; }
+      hit429 = true;
+      if (res.status === 429) rateLimited++;
       const ra = parseInt(res.headers.get('retry-after') || '', 10);
       const backoff = (Number.isFinite(ra) && ra > 0 ? ra * 1000 : Math.min(1000 * 2 ** attempt, 8000)) + Math.floor(Math.random() * 300);
       cooldownUntil = Math.max(cooldownUntil, Date.now() + backoff);
-      console.warn(`[MailGateway] 429 rate-limited (attempt ${attempt + 1}/${retries + 1}), backing off ${backoff}ms`);
-      if (attempt >= retries) { surfaced++; return res; } // give up → caller handles the 429
+      console.warn(`[MailGateway] ${res.status} (attempt ${attempt + 1}/${retries + 1}), Retry-After backoff ${backoff}ms`);
+      if (attempt >= retries) { if (res.status === 429) surfaced++; return res; } // give up → caller handles it
       await sleep(backoff);
     }
   } finally {

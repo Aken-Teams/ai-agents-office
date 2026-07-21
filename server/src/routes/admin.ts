@@ -855,38 +855,48 @@ router.get('/security/stats', async (_req: Request, res: Response) => {
 // one token × N concurrent hits the same limit as N users opening at once.
 router.post('/security/mail-gateway/selftest', async (req: Request, res: Response) => {
   const n = Math.min(Math.max(parseInt(req.body?.n, 10) || 30, 1), 100);
-  // bypass=true → hit the gateway DIRECTLY (no gate) to reproduce the raw "no
-  // protection" behaviour, so the A/B contrast is visible in one place.
-  const bypass = req.body?.bypass === true;
+  const rounds = Math.min(Math.max(parseInt(req.body?.rounds, 10) || 1, 1), 20); // sustained: repeat the burst
   const token = await getMailToken((req as any).user!.userId);
   if (!token) { res.status(400).json({ error: '需要你自己的信箱 token（請用 AD 帳號登入且已授權信箱）。' }); return; }
-  const url = `${config.adApiUrl}/outlook/folders`;
+  // Hit the REAL list endpoint the poller uses (heavier than /folders → closer to the
+  // production load that trips the gateway).
+  const url = `${config.adApiUrl}/outlook/messages?folder=Inbox&limit=10&order=desc`;
   const headers = { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${token}` };
+  // Streamed keepalive so long tests (many rounds) don't get reset by the dev proxy.
+  res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
+  const keepalive = setInterval(() => { try { res.write(': ka\n\n'); } catch { /* closed */ } }, 5000);
   const before = mailGatewayStats();
   const t0 = Date.now();
-  const results = await Promise.all(Array.from({ length: n }, async () => {
-    const s = Date.now();
-    try {
-      const r = bypass
-        ? await fetch(url, { headers, signal: AbortSignal.timeout(30000) })  // no gate — raw gateway
-        : await gatewayFetch(url, { headers }, { timeoutMs: 30000 });
-      return { status: r.status, ms: Date.now() - s };
-    } catch (e) { return { status: 0, ms: Date.now() - s, error: (e as Error).message }; }
-  }));
+  const results: { status: number; ms: number }[] = [];
+  for (let round = 0; round < rounds; round++) {
+    const batch = await Promise.all(Array.from({ length: n }, async () => {
+      const s = Date.now();
+      try {
+        const r = await gatewayFetch(url, { headers }, { timeoutMs: 30000 });
+        return { status: r.status, ms: Date.now() - s };
+      } catch (e) { return { status: 0, ms: Date.now() - s }; }
+    }));
+    results.push(...batch);
+  }
   const after = mailGatewayStats();
-  res.json({
-    n,
-    bypass,
-    totalMs: Date.now() - t0,
-    ok: results.filter(r => r.status === 200).length,
-    rateLimitedResponses: results.filter(r => r.status === 429).length, // in bypass: raw gateway 429; gated: 429 reaching caller (~0)
-    failed: results.filter(r => r.status === 0).length,
-    peakQueued: after.peakQueued,
-    // Deltas over the test window (gated mode only — bypass doesn't touch the gate):
-    gateway429Hit: after.rateLimited - before.rateLimited,       // 429s the gateway threw (then auto-retried)
-    gateway429Recovered: after.recovered - before.recovered,     // …auto-recovered (user無感)
-    gateway429Surfaced: after.surfaced - before.surfaced,        // …that outlived retries
-  });
+  const total = n * rounds;
+  clearInterval(keepalive);
+  try {
+    res.write(`data: ${JSON.stringify({
+      type: 'done',
+      n, rounds, total,
+      totalMs: Date.now() - t0,
+      reqPerSec: +(total / Math.max(0.001, (Date.now() - t0) / 1000)).toFixed(1),
+      ok: results.filter(r => r.status === 200).length,
+      rateLimitedResponses: results.filter(r => r.status === 429).length,
+      failed: results.filter(r => r.status === 0).length,
+      peakQueued: after.peakQueued,
+      gateway429Hit: after.rateLimited - before.rateLimited,
+      gateway429Recovered: after.recovered - before.recovered,
+      gateway429Surfaced: after.surfaced - before.surfaced,
+    })}\n\n`);
+    res.end();
+  } catch { /* closed */ }
 });
 
 // GET /api/admin/security/workspace-scan — real filesystem scan

@@ -80,19 +80,39 @@ export default function AdminSecurity() {
   const [reportError, setReportError] = useState('');
   // 信件 Gateway 壓測 (reproduces the class-burst without needing 30 AD accounts).
   const [gwN, setGwN] = useState(30);
+  const [gwRounds, setGwRounds] = useState(1);
   const [gwTesting, setGwTesting] = useState(false);
   const [gwTest, setGwTest] = useState<any>(null);
-  async function runGwTest(bypass = false) {
+  // Read an SSE (data: {...}) stream, calling onEvent for each parsed event.
+  async function readSSE(res: Response, onEvent: (ev: any) => void) {
+    const reader = res.body!.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const parts = buf.split('\n\n');
+      buf = parts.pop() || '';
+      for (const part of parts) {
+        const line = part.split('\n').find(l => l.startsWith('data:'));
+        if (line) { try { onEvent(JSON.parse(line.slice(5).trim())); } catch { /* skip */ } }
+      }
+    }
+  }
+
+  async function runGwTest() {
     if (!token || gwTesting) return;
     setGwTesting(true); setGwTest(null);
     try {
       const r = await fetch('/api/admin/security/mail-gateway/selftest', {
         method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ n: gwN, bypass }),
+        body: JSON.stringify({ n: gwN, rounds: gwRounds }),
       });
-      const d = await r.json();
-      setGwTest(r.ok ? d : { error: d.error || '測試失敗' });
-      // Refresh the cumulative counters so they don't stay stale at 0.
+      if (!r.ok || !r.body) { const d = await r.json().catch(() => null); setGwTest({ error: (d && d.error) || `測試失敗（${r.status}）` }); return; }
+      let doneEv: any = null;
+      await readSSE(r, ev => { if (ev.type === 'done') doneEv = ev; });
+      setGwTest(doneEv || { error: '沒有回應' });
       fetch('/api/admin/security/stats', { headers: { Authorization: `Bearer ${token}` } })
         .then(res => res.json()).then(setStats).catch(() => {});
     } catch { setGwTest({ error: '連線失敗' }); }
@@ -371,36 +391,29 @@ export default function AdminSecurity() {
                 <span className="text-success">「自動退避救回」代表 429 有發生、但使用者沒感覺</span>；「真的失敗到前端」應接近 0。
               </p>
 
-              {/* Self-test: fire N concurrent gateway requests (one token = same server IP burst).
-                  「經閘門」= our protected path; 「直打對照」= raw gateway to show the contrast. */}
+              {/* Self-test: fire N concurrent gateway requests (one token = same server IP burst)
+                  through the gate, proving it queues the burst and serves everyone with 0 failures. */}
               <div className="mt-4 pt-4 border-t border-outline-variant/10">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-medium text-on-surface-variant">壓測(模擬多人同時開)：</span>
                   <input type="number" min={1} max={100} value={gwN} onChange={e => setGwN(Math.min(100, Math.max(1, parseInt(e.target.value) || 1)))}
                     className="w-16 px-2 py-1 text-sm rounded bg-surface-container-high border border-outline-variant/20" />
-                  <span className="text-xs text-on-surface-variant/60">個併發</span>
-                  <button onClick={() => runGwTest(false)} disabled={gwTesting}
+                  <span className="text-xs text-on-surface-variant/60">個併發 ×</span>
+                  <input type="number" min={1} max={20} value={gwRounds} onChange={e => setGwRounds(Math.min(20, Math.max(1, parseInt(e.target.value) || 1)))}
+                    className="w-14 px-2 py-1 text-sm rounded bg-surface-container-high border border-outline-variant/20" title="連續重複幾輪（測「持續速率」型的限流）" />
+                  <span className="text-xs text-on-surface-variant/60">輪(持續)</span>
+                  <button onClick={runGwTest} disabled={gwTesting}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider rounded hover:bg-primary/20 disabled:opacity-50">
                     <span className={`material-symbols-outlined text-sm ${gwTesting ? 'animate-spin' : ''}`}>{gwTesting ? 'progress_activity' : 'bolt'}</span>
                     經閘門壓測
                   </button>
-                  <button onClick={() => runGwTest(true)} disabled={gwTesting} title="繞過閘門直接打 gateway，重現「沒有保護時」的原始行為"
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-warning/10 text-warning text-xs font-bold uppercase tracking-wider rounded hover:bg-warning/20 disabled:opacity-50">
-                    <span className="material-symbols-outlined text-sm">warning</span>
-                    直打對照(不經閘門)
-                  </button>
                 </div>
                 {gwTest && (gwTest.error
                   ? <p className="mt-2 text-xs text-error">{gwTest.error}</p>
-                  : gwTest.bypass
-                    ? <p className="mt-2 text-xs px-2.5 py-2 rounded bg-warning/5 border border-warning/20 text-on-surface">
-                        <b className="text-warning">直打(不經閘門)</b>：{gwTest.n} 個併發直接打 gateway → <b className="text-error">gateway 直接回 429 {gwTest.rateLimitedResponses} 個</b>、失敗 {gwTest.failed}、成功 {gwTest.ok}，共 {(gwTest.totalMs / 1000).toFixed(1)}s。
-                        <span className="text-on-surface-variant/70"> ← 這就是「沒有閘門」時客戶會遇到的(429 = 轉圈/報錯)。</span>
-                      </p>
-                    : <p className="mt-2 text-xs px-2.5 py-2 rounded bg-success/5 border border-success/20 text-on-surface">
-                        <b className="text-success">經閘門</b>：{gwTest.n} 個併發 → <b className="text-success">前端收到 429 {gwTest.rateLimitedResponses} 個</b>、成功 {gwTest.ok}；期間 gateway 實際回 429 <b>{gwTest.gateway429Hit}</b> 個(全被自動退避救回、使用者無感)，峰值排隊 {gwTest.peakQueued}，共 {(gwTest.totalMs / 1000).toFixed(1)}s。
-                      </p>)}
-                <p className="mt-1.5 text-[11px] text-on-surface-variant/50">用法:先「直打對照」看 gateway 原始會噴幾個 429 → 再「經閘門壓測」看前端收到 0 個。兩者一比就是閘門的價值。</p>
+                  : <p className="mt-2 text-xs px-2.5 py-2 rounded bg-success/5 border border-success/20 text-on-surface">
+                      <b className="text-success">經閘門</b>：{gwTest.total} 個請求({gwTest.n}併發×{gwTest.rounds}輪) → <b className="text-success">前端收到 429 {gwTest.rateLimitedResponses} 個</b>、成功 {gwTest.ok}；期間 gateway 實際回 429 <b>{gwTest.gateway429Hit}</b> 個(全被自動退避救回、使用者無感),峰值排隊 {gwTest.peakQueued},共 {(gwTest.totalMs / 1000).toFixed(1)}s。
+                    </p>)}
+                <p className="mt-1.5 text-[11px] text-on-surface-variant/50">模擬 N 個人同一秒打開信件助手。閘門會把爆量請求排隊、逐一送出,證明「前端收到 429 = 0、全部成功」。想測更兇就加大併發或輪數。</p>
               </div>
             </div>
           </div>
