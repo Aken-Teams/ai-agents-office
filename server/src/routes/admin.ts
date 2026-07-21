@@ -867,19 +867,33 @@ router.post('/security/mail-gateway/selftest', async (req: Request, res: Respons
   const keepalive = setInterval(() => { try { res.write(': ka\n\n'); } catch { /* closed */ } }, 5000);
   const before = mailGatewayStats();
   const t0 = Date.now();
+  const total = n * rounds;
   const results: { status: number; ms: number }[] = [];
+  // Live progress: emit a throttled tick as each request completes, so a big test
+  // (e.g. 100×20 = 2000 reqs through a 10-wide gate → minutes) shows "X/total done"
+  // instead of a dead spinner that reads as "the app got slower / it's stuck".
+  let completed = 0, okCount = 0, limitedCount = 0, lastEmit = 0;
+  const emitProgress = (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastEmit < 500) return;
+    lastEmit = now;
+    const s = mailGatewayStats();
+    try { res.write(`data: ${JSON.stringify({ type: 'progress', done: completed, total, ok: okCount, rateLimited: limitedCount, active: s.active, queued: s.queued, elapsedMs: now - t0 })}\n\n`); } catch { /* closed */ }
+  };
+  emitProgress(true);
   for (let round = 0; round < rounds; round++) {
     const batch = await Promise.all(Array.from({ length: n }, async () => {
       const s = Date.now();
       try {
-        const r = await gatewayFetch(url, { headers }, { timeoutMs: 30000 });
+        const r = await gatewayFetch(url, { headers }, { timeoutMs: 45000 }); // match production GATEWAY_TIMEOUT_MS
+        completed++; if (r.status === 200) okCount++; else if (r.status === 429) limitedCount++;
+        emitProgress();
         return { status: r.status, ms: Date.now() - s };
-      } catch (e) { return { status: 0, ms: Date.now() - s }; }
+      } catch (e) { completed++; emitProgress(); return { status: 0, ms: Date.now() - s }; }
     }));
     results.push(...batch);
   }
   const after = mailGatewayStats();
-  const total = n * rounds;
   clearInterval(keepalive);
   try {
     res.write(`data: ${JSON.stringify({

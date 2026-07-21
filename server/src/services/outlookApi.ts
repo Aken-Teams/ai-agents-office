@@ -78,7 +78,7 @@ export async function authenticateOutlook(userId: string, username: string, pass
     method: 'POST',
     headers: { 'X-API-Key': config.adApiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
-  }, { timeoutMs: 30000 });
+  }, { timeoutMs: GATEWAY_TIMEOUT_MS });
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');
@@ -163,7 +163,7 @@ export async function getMailToken(userId: string): Promise<string | null> {
 export async function fetchFolders(mailToken: string): Promise<OutlookFolder[]> {
   const res = await gatewayFetch(`${OUTLOOK_BASE}/folders`, {
     headers: { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${mailToken}` },
-  }, { timeoutMs: 30000 });
+  }, { timeoutMs: GATEWAY_TIMEOUT_MS });
   if (!res.ok) {
     console.warn('[Outlook] fetchFolders failed:', res.status, await res.text().catch(() => ''));
     return [];
@@ -190,7 +190,7 @@ export async function fetchMessages(
   if (opts?.endDate) params.set('end_date', opts.endDate);
   const res = await gatewayFetch(`${OUTLOOK_BASE}/messages?${params}`, {
     headers: { 'X-API-Key': config.adApiKey, 'Authorization': `Bearer ${mailToken}` },
-  }, { timeoutMs: 30000 });
+  }, { timeoutMs: GATEWAY_TIMEOUT_MS });
   if (!res.ok) {
     console.warn('[Outlook] fetchMessages failed:', res.status, await res.text().catch(() => ''));
     return { messages: [], total: 0 };
@@ -215,7 +215,7 @@ export async function fetchMessageDetail(mailToken: string, messageId: string): 
       // API's own guidance is ~30s for non-attachment endpoints; a too-tight
       // timeout aborted attempt-after-attempt and the frontend proxy gave up
       // (ECONNRESET) before any retry could land. 30s lets attempt 1 succeed.
-      const res = await gatewayFetch(url, { headers }, { timeoutMs: 30000 });
+      const res = await gatewayFetch(url, { headers }, { timeoutMs: GATEWAY_TIMEOUT_MS });
       if (!res.ok) {
         const bodyText = await res.text().catch(() => '');
         console.warn(`[Outlook] fetchMessageDetail ${res.status} (attempt ${attempt + 1}):`, bodyText.slice(0, 200));
@@ -251,6 +251,11 @@ export async function fetchMessageDetail(mailToken: string, messageId: string): 
 // API's own guidance is a 60s client timeout for it. A too-tight value was
 // leaving mid-size inline images as broken boxes.
 const ATTACHMENT_TIMEOUT_MS = 60_000;
+
+// auth / folders / messages / detail. Raised 30s→45s: the mail gateway slows
+// noticeably under concurrent load (30 users opening at once), so give slow
+// responses more headroom before we abort — fewer spurious timeouts at peak.
+const GATEWAY_TIMEOUT_MS = 45_000;
 
 /**
  * Download a single attachment as a Buffer.

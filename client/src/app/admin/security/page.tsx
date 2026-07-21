@@ -111,7 +111,10 @@ export default function AdminSecurity() {
       });
       if (!r.ok || !r.body) { const d = await r.json().catch(() => null); setGwTest({ error: (d && d.error) || `測試失敗（${r.status}）` }); return; }
       let doneEv: any = null;
-      await readSSE(r, ev => { if (ev.type === 'done') doneEv = ev; });
+      await readSSE(r, ev => {
+        if (ev.type === 'progress') setGwTest({ running: true, ...ev });
+        else if (ev.type === 'done') doneEv = ev;
+      });
       setGwTest(doneEv || { error: '沒有回應' });
       fetch('/api/admin/security/stats', { headers: { Authorization: `Bearer ${token}` } })
         .then(res => res.json()).then(setStats).catch(() => {});
@@ -645,15 +648,36 @@ export default function AdminSecurity() {
                 </div>
               </div>
 
-              {/* Result / hint line — full width below, so nothing feels empty */}
-              {gwTest && !gwTest.error
-                ? <div className="mt-4 flex items-center gap-2 px-3.5 py-2.5 rounded-lg bg-success/5 border border-success/20">
-                    <span className="material-symbols-outlined text-success text-lg">task_alt</span>
-                    <p className="text-sm text-on-surface">模擬 {gwTest.n} 人同時 × {gwTest.rounds} 輪 → <b className="text-success">全部成功 {gwTest.ok}/{gwTest.total}</b>、前端 429 <b>{gwTest.rateLimitedResponses}</b> 個、峰值排隊 <b>{gwTest.peakQueued}</b>,共 {(gwTest.totalMs / 1000).toFixed(1)}s。</p>
+              {/* Result / progress / hint line — full width below, so nothing feels empty */}
+              {gwTest?.running
+                ? <div className="mt-4 px-3.5 py-2.5 rounded-lg bg-primary/5 border border-primary/20">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary text-lg animate-spin">progress_activity</span>
+                      <p className="text-sm text-on-surface flex-1">
+                        壓測進行中(閘門逐一放行,刻意排隊以保護 gateway)…已完成 <b className="text-primary">{gwTest.done}/{gwTest.total}</b>、成功 {gwTest.ok}、429 {gwTest.rateLimited}、目前排隊 {gwTest.queued},已 {(gwTest.elapsedMs / 1000).toFixed(0)}s。
+                      </p>
+                    </div>
+                    <div className="mt-2 h-1.5 rounded-full bg-surface-container-high overflow-hidden">
+                      <div className="h-full bg-primary transition-all duration-300" style={{ width: `${Math.min(100, Math.round((gwTest.done / Math.max(1, gwTest.total)) * 100))}%` }} />
+                    </div>
                   </div>
+                : gwTest && !gwTest.error
+                ? (() => {
+                    const failed = gwTest.failed ?? Math.max(0, gwTest.total - gwTest.ok - gwTest.rateLimitedResponses);
+                    const allOk = failed === 0 && gwTest.rateLimitedResponses === 0;
+                    return (
+                      <div className={`mt-4 flex items-start gap-2 px-3.5 py-2.5 rounded-lg border ${allOk ? 'bg-success/5 border-success/20' : 'bg-warning/5 border-warning/20'}`}>
+                        <span className={`material-symbols-outlined text-lg ${allOk ? 'text-success' : 'text-warning'}`}>{allOk ? 'task_alt' : 'info'}</span>
+                        <div className="text-sm text-on-surface">
+                          <p>模擬 {gwTest.n} 人同時 × {gwTest.rounds} 輪 → <b className={allOk ? 'text-success' : 'text-on-surface'}>成功 {gwTest.ok}/{gwTest.total}</b>{failed > 0 && <>、<b className="text-warning">逾時 {failed}</b></>}、被 gateway 擋 429 <b>{gwTest.rateLimitedResponses}</b> 個(全自動退避、前端無感)、峰值排隊 <b>{gwTest.peakQueued}</b>,共 {(gwTest.totalMs / 1000).toFixed(1)}s。</p>
+                          {failed > 0 && <p className="text-xs text-on-surface-variant/70 mt-1 leading-relaxed">「逾時」不是被限流,是 gateway 在 {gwTest.n} 人同一瞬間湧入時回應超過 30 秒而被中止 —— 反映 gateway 本身在高並發下較慢。真實情境每人輪詢已自動錯開(jitter),不會像壓測這樣同毫秒齊發,逾時會少很多。</p>}
+                        </div>
+                      </div>
+                    );
+                  })()
                 : gwTest?.error
                 ? <p className="mt-4 text-sm px-3.5 py-2.5 rounded-lg bg-error/5 border border-error/20 text-error">{gwTest.error}</p>
-                : <p className="mt-4 text-xs text-on-surface-variant/55 leading-relaxed">尖峰曾同時排隊 {stats.mailGateway.peakQueued} 個。「退避救回」= 被 gateway 擋 429 但自動重試成功、使用者無感;「失敗到前端」應維持 0。壓測會模擬 N 人同秒開信件助手,驗證閘門把爆量排隊、全部服務到。</p>}
+                : <p className="mt-4 text-xs text-on-surface-variant/55 leading-relaxed">尖峰曾同時排隊 {stats.mailGateway.peakQueued} 個。「退避救回」= 被 gateway 擋 429 但自動重試成功、使用者無感;「失敗到前端」應維持 0。日常情境約 30 人 × 1 輪即可;數字開很大是「極限壓測」,跑久是刻意排隊(非變慢)。</p>}
             </div>
           </div>
         )}
