@@ -15,6 +15,7 @@ import { useDocumentMode, FILE_GEN_SKILLS, FILE_TYPE_TO_LAYOUT } from '../hooks/
 import { useDocumentBlocks } from '../../editor/hooks/useDocumentBlocks';
 import DocumentCanvas from '../components/DocumentCanvas';
 import { calcCostUsd } from '../../../lib/pricing';
+import { useKmAvailable } from '../../components/DataSourceSelector';
 
 const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { ssr: false });
 const ChatEChart = dynamic(() => import('../../components/charts/ChatEChart'), { ssr: false });
@@ -548,6 +549,7 @@ function ChatContent() {
   // the agent may pull from to build the document. Sent as `dataSources` in the
   // request; the backend attaches the matching MCP (e.g. 'email' → email-mcp).
   const [selectedDataSources, setSelectedDataSources] = useState<string[]>([]);
+  const kmAvailable = useKmAvailable(); // hide KM data source when server has no KM_API_KEY
   const [dataSourceMenuOpen, setDataSourceMenuOpen] = useState(false);
   const [showRefPicker, setShowRefPicker] = useState(false);
   const refPickerRef = useRef<HTMLDivElement>(null);
@@ -2381,7 +2383,7 @@ function ChatContent() {
                         <p className="text-[10px] text-on-surface-variant/60 mt-0.5">勾選後，AI 產文件時可讀取這些來源</p>
                       </div>
                       <div className="max-h-48 overflow-y-auto">
-                        {DATA_SOURCES.map(ds => {
+                        {DATA_SOURCES.filter(ds => ds.id !== 'km' || kmAvailable).map(ds => {
                           const isSel = selectedDataSources.includes(ds.id);
                           return (
                             <button

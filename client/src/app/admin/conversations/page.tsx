@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm';
 import dynamic from 'next/dynamic';
 import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
+import { useKmAvailable } from '../../components/DataSourceSelector';
 
 const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { ssr: false });
 const ChatEChart = dynamic(() => import('../../components/charts/ChatEChart'), { ssr: false });
@@ -504,6 +505,7 @@ export default function AdminConversationsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState(''); // '' = 對話管理(全部); 'km-agent' = KM 助手
+  const kmAvailable = useKmAvailable(); // hide KM 助手 tab when server has no KM_API_KEY
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const limit = PAGE_SIZE;
@@ -580,8 +582,10 @@ export default function AdminConversationsPage() {
             className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${category === '' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}>對話管理</button>
           <Link href="/admin/teams" className="px-3.5 py-1.5 rounded-full text-sm text-on-surface-variant hover:bg-surface-container transition-colors no-underline">團隊協作</Link>
           <Link href="/admin/email-agent" className="px-3.5 py-1.5 rounded-full text-sm text-on-surface-variant hover:bg-surface-container transition-colors no-underline">信件助手</Link>
-          <button onClick={() => { setCategory('km-agent'); setPage(1); }}
-            className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${category === 'km-agent' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}>KM 助手</button>
+          {kmAvailable && (
+            <button onClick={() => { setCategory('km-agent'); setPage(1); }}
+              className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${category === 'km-agent' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}>KM 助手</button>
+          )}
         </div>
         {/* Search */}
         <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4 md:mb-6">

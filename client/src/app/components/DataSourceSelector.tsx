@@ -13,6 +13,39 @@
 
 import { useState, useEffect, useRef } from 'react';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+function authHeaders(): Record<string, string> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+// KM availability = server has KM configured (pro-panjit + KM_API_KEY). The
+// km-agent router 403s the whole thing when KM isn't deployed, so a 200 on the
+// (cheap, auth-only) preference endpoint means "KM is on". Cached for the session
+// since it's a deploy-level fact, not per-user. Removing KM_API_KEY alone → this
+// flips false → the KM data-source option disappears everywhere it's rendered.
+let kmAvailCache: boolean | null = null;
+let kmAvailPromise: Promise<boolean> | null = null;
+async function probeKmAvailable(): Promise<boolean> {
+  const res = await fetch(`${API_BASE}/api/km-agent/preference`, { headers: authHeaders() });
+  if (res.status === 200) return true;
+  if (res.status === 403) return false;
+  throw new Error('indeterminate'); // 401/5xx — don't cache, let it retry
+}
+export function useKmAvailable(): boolean {
+  const [avail, setAvail] = useState<boolean>(kmAvailCache ?? false);
+  useEffect(() => {
+    if (kmAvailCache !== null) { setAvail(kmAvailCache); return; }
+    if (!kmAvailPromise) kmAvailPromise = probeKmAvailable();
+    let alive = true;
+    kmAvailPromise
+      .then(v => { kmAvailCache = v; if (alive) setAvail(v); })
+      .catch(() => { kmAvailPromise = null; });
+    return () => { alive = false; };
+  }, []);
+  return avail;
+}
+
 export interface DataSource {
   id: string;
   label: string;
@@ -43,6 +76,7 @@ export function DataSourceSelector({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const kmAvailable = useKmAvailable();
   useEffect(() => {
     if (!open) return;
     const h = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
@@ -50,6 +84,8 @@ export function DataSourceSelector({
     return () => document.removeEventListener('mousedown', h);
   }, [open]);
 
+  // Hide KM when the server has no KM configured (KM_API_KEY removed → probe false).
+  const sources = DATA_SOURCES.filter(ds => ds.id !== 'km' || kmAvailable);
   const active = open || selected.length > 0;
   return (
     <div className="relative shrink-0" ref={ref}>
@@ -69,7 +105,7 @@ export function DataSourceSelector({
             <p className="text-[10px] text-on-surface-variant/60 mt-0.5">勾選後，AI 分析時可讀取這些來源</p>
           </div>
           <div className="max-h-48 overflow-y-auto">
-            {DATA_SOURCES.map(ds => {
+            {sources.map(ds => {
               const isSel = selected.includes(ds.id);
               return (
                 <button
