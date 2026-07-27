@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>操作手冊示意圖 — Email 資料源・多人同時使用</title>
+<style>
+  :root{
+    --ink:#1f2933; --sub:#52606d; --mute:#7b8794; --line:#e4e7eb;
+    --teal:#0f7b6c; --teal-bg:#e6f4f1; --teal-line:#8fcabf;
+    --blue:#1c6dd0; --blue-bg:#e8f1fc; --blue-line:#a8caf0;
+    --amber:#b26a00; --amber-bg:#fdf3e2; --amber-line:#eccb8f;
+    --red:#c0362c; --red-bg:#fbeceb; --green:#0f8a5f; --green-bg:#e7f6ef;
+    --panel:#f7f9fb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#eef1f4;color:var(--ink);
+    font-family:"Microsoft JhengHei","PingFang TC","Noto Sans TC",-apple-system,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased;padding:28px}
+  .hint{max-width:940px;margin:0 auto 20px;color:var(--mute);font-size:13px;text-align:center}
+  figure{max-width:940px;margin:0 auto 34px;background:#fff;border:1px solid var(--line);
+    border-radius:16px;padding:26px 30px 22px;box-shadow:0 1px 3px rgba(20,30,40,.05)}
+  figcaption{font-size:13px;color:var(--mute);margin-top:18px;text-align:center}
+  figcaption b{color:var(--teal)}
+  h2.fig-t{margin:0 0 4px;font-size:19px}
+  .fig-sub{margin:0 0 20px;font-size:13.5px;color:var(--sub);line-height:1.7}
+  /* svg icon */
+  .ic{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.7;
+    stroke-linecap:round;stroke-linejoin:round;display:inline-block;vertical-align:middle}
+  .ic-lg{width:30px;height:30px}
+  .ic-sm{width:16px;height:16px}
+  /* flow row */
+  .flow{display:flex;align-items:stretch;gap:0;justify-content:center;flex-wrap:wrap}
+  .step{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:18px 14px;text-align:center}
+  .step .n{width:26px;height:26px;border-radius:50%;background:var(--teal);color:#fff;
+    font-size:13px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px}
+  .step .ico{color:var(--teal);margin-bottom:8px;height:30px}
+  .step .t{font-weight:700;font-size:14.5px;margin-bottom:4px}
+  .step .d{font-size:12px;color:var(--sub);line-height:1.55}
+  .arrow{display:flex;align-items:center;justify-content:center;color:var(--teal-line);
+    font-size:24px;font-weight:700;padding:0 10px}
+  /* security props */
+  .props{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px}
+  .prop{display:flex;gap:12px;align-items:flex-start;background:var(--teal-bg);
+    border:1px solid var(--teal-line);border-radius:10px;padding:13px 15px}
+  .prop .k{color:var(--teal);flex-shrink:0;margin-top:1px}
+  .prop .t{font-weight:700;font-size:14px}
+  .prop .d{font-size:12px;color:var(--sub);margin-top:2px;line-height:1.5}
+  /* isolation */
+  .iso{display:flex;align-items:center;justify-content:center;gap:22px;flex-wrap:wrap}
+  .user{background:#fff;border:2px solid var(--blue-line);border-radius:12px;padding:14px 18px;text-align:center;min-width:128px}
+  .user .av{width:40px;height:40px;border-radius:50%;background:var(--blue-bg);color:var(--blue);
+    display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;margin-bottom:8px}
+  .mailbox{font-size:12px;color:var(--sub);margin-top:6px;line-height:1.5}
+  .lockcard{background:var(--teal);color:#fff;border-radius:10px;padding:16px 18px;text-align:center;font-size:12.5px;max-width:170px;line-height:1.6}
+  .lockcard .k{margin-bottom:6px}
+  .cross{color:var(--red);font-weight:700}
+  /* gate / queue */
+  .gate-wrap{display:flex;align-items:center;gap:16px;justify-content:center;flex-wrap:wrap}
+  .crowd{display:flex;flex-wrap:wrap;gap:6px;max-width:180px;justify-content:center}
+  .pin{width:22px;height:22px;border-radius:50%;background:var(--blue-bg);border:1px solid var(--blue-line);
+    display:flex;align-items:center;justify-content:center;color:var(--blue)}
+  .gate{background:var(--teal);color:#fff;border-radius:12px;padding:18px 16px;text-align:center;min-width:124px}
+  .gate .big{font-size:19px;font-weight:800;line-height:1.1}
+  .gate .lbl{font-size:11.5px;opacity:.92;margin-top:4px}
+  .queue{display:inline-flex;align-items:center;gap:7px;background:var(--amber-bg);border:1px dashed var(--amber-line);
+    border-radius:20px;padding:8px 16px;color:var(--amber);font-size:12.5px;font-weight:600}
+  .server{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 16px;text-align:center;min-width:120px;color:var(--teal)}
+  .server .lbl{font-size:12.5px;margin-top:6px;font-weight:600;color:var(--ink)}
+  .server .m{font-size:11px;color:var(--mute);margin-top:2px}
+  /* timeline */
+  .tl{display:flex;align-items:center;gap:0;flex-wrap:wrap;justify-content:center}
+  .tl .node{text-align:center;min-width:120px;padding:14px 10px;border-radius:10px;font-size:12.5px;line-height:1.5}
+  .tl .node .k{display:block;margin:0 auto 6px}
+  .tl .arrow2{color:var(--mute);font-size:20px;padding:0 8px}
+  .muted{color:var(--mute);font-size:12px}
+  /* phone mock */
+  .phone{width:330px;margin:0 auto;border:2px solid var(--line);border-radius:16px;overflow:hidden;background:#fff}
+  .phone .bar{background:var(--teal);color:#fff;padding:11px 14px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:9px}
+  .phone .body{padding:20px 16px}
+  .toast{background:var(--amber-bg);border:1px solid var(--amber-line);color:var(--amber);
+    border-radius:10px;padding:12px 14px;font-size:13px;display:flex;align-items:center;gap:10px}
+  .spin{width:16px;height:16px;border:2px solid var(--amber-line);border-top-color:var(--amber);border-radius:50%;flex-shrink:0}
+  .skl{height:12px;background:#eef1f4;border-radius:6px;margin:10px 0}
+  /* admin stat card */
+  .statcard{border:1px solid var(--line);border-radius:12px;padding:18px 20px;background:#fff}
+  .stat-row{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end}
+  .stat .v{font-size:26px;font-weight:800;line-height:1}
+  .stat .l{font-size:11.5px;color:var(--mute);margin-top:5px}
+  .ok-pill{display:inline-flex;align-items:center;gap:6px;background:var(--green-bg);color:var(--green);
+    font-weight:700;font-size:13px;padding:6px 13px;border-radius:20px}
+  .result{margin-top:14px;background:var(--green-bg);border:1px solid #b7e2cd;border-radius:10px;
+    padding:11px 14px;font-size:12.5px;color:var(--ink)}
+</style>
+</head>
+<body>
+
+<!-- ===== reusable line icons (feather-style) ===== -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M6 3h8l5 5v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M8 13h8M8 17h6"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8-8"/><path d="m15 6 3 3M17.5 3.5 20 6"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 20c.6-3.8 4-6 7.5-6s6.9 2.2 7.5 6"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M4 13h4l2 3h4l2-3h4"/><path d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-block" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></symbol>
+</svg>
+
+<p class="hint">↓ 每個白色卡片就是一張示意圖，直接框選截圖貼到 Word 對應的「圖 N」位置即可。</p>
+
+<!-- 圖1 -->
+<figure>
+  <h2 class="fig-t">功能① Email 當資料源 — 三步驟</h2>
+  <p class="fig-sub">在「產文件」或「AI 團隊」時勾選「我的信件」，AI 就能讀你自己的信件內容來產出文件。</p>
+  <div class="flow">
+    <div class="step"><div class="n">1</div><div class="ico"><svg class="ic ic-lg"><use href="#i-db"/></svg></div><div class="t">點「資料源」</div><div class="d">對話框 / 團隊工具列<br>的資料庫圖示</div></div>
+    <div class="arrow">›</div>
+    <div class="step"><div class="n">2</div><div class="ico"><svg class="ic ic-lg"><use href="#i-mail"/></svg></div><div class="t">勾「我的信件」</div><div class="d">授權這次執行<br>可讀你的信箱</div></div>
+    <div class="arrow">›</div>
+    <div class="step"><div class="n">3</div><div class="ico"><svg class="ic ic-lg"><use href="#i-file"/></svg></div><div class="t">輸入需求</div><div class="d">AI 讀信、整理，<br>產出 Word/PPT 等</div></div>
+  </div>
+  <figcaption>圖 1：Email 資料源 — <b>點資料源 → 勾我的信件 → AI 產文件</b></figcaption>
+</figure>
+
+<!-- 圖2 -->
+<figure>
+  <h2 class="fig-t">Email MCP 安全設計</h2>
+  <p class="fig-sub">系統以標準 MCP 連接器接信箱，四個原則確保安全：</p>
+  <div class="props">
+    <div class="prop"><span class="k"><svg class="ic"><use href="#i-key"/></svg></span><div><div class="t">本人權杖授權</div><div class="d">用「你本人的登入權杖」臨時授權，不共用帳號</div></div></div>
+    <div class="prop"><span class="k"><svg class="ic"><use href="#i-eye"/></svg></span><div><div class="t">只讀不改</div><div class="d">只讀取信件內容，不會寄信、刪信、改動任何資料</div></div></div>
+    <div class="prop"><span class="k"><svg class="ic"><use href="#i-clock"/></svg></span><div><div class="t">用完即收</div><div class="d">連線只在這次執行期間存在，跑完立即關閉</div></div></div>
+    <div class="prop"><span class="k"><svg class="ic"><use href="#i-shield"/></svg></span><div><div class="t">跨使用者隔離</div><div class="d">只碰得到你有權限的信，讀不到別人的信箱</div></div></div>
+  </div>
+  <figcaption>圖 2：MCP 安全設計 — <b>本人權杖・只讀・用完即收・跨使用者隔離</b></figcaption>
+</figure>
+
+<!-- 圖3 -->
+<figure>
+  <h2 class="fig-t">資料只走你本人權限</h2>
+  <p class="fig-sub">每個人授權的是自己的信箱，AI 不會、也無法讀到別人的信。</p>
+  <div class="iso">
+    <div class="user"><div class="av">A</div><div class="t">使用者 A</div><div class="mailbox" style="color:var(--green)"><svg class="ic ic-sm" style="color:var(--green)"><use href="#i-check"/></svg> 讀得到 A 的信</div></div>
+    <div class="lockcard"><div class="k"><svg class="ic ic-lg" style="color:#fff"><use href="#i-lock"/></svg></div>AI 執行時<br>只帶「本人權杖」</div>
+    <div class="user"><div class="av">B</div><div class="t">使用者 B</div><div class="mailbox cross"><svg class="ic ic-sm" style="color:var(--red)"><use href="#i-block"/></svg> A 讀不到 B 的信</div></div>
+  </div>
+  <figcaption>圖 3：資料隔離 — <b>A 只讀得到 A 的信，讀不到 B 的信</b></figcaption>
+</figure>
+
+<!-- 圖4 -->
+<figure>
+  <h2 class="fig-t">功能② 多人同時使用 — 排隊閘門</h2>
+  <p class="fig-sub">上課約 30 人同時開信件助手時，系統用「閘門」控制同時打信箱 API 的量，其餘自動排隊，避免一次灌爆。</p>
+  <div class="gate-wrap">
+    <div style="text-align:center">
+      <div class="crowd">
+        <span class="pin"><svg class="ic ic-sm"><use href="#i-user"/></svg></span><span class="pin"><svg class="ic ic-sm"><use href="#i-user"/></svg></span><span class="pin"><svg class="ic ic-sm"><use href="#i-user"/></svg></span><span class="pin"><svg class="ic ic-sm"><use href="#i-user"/></svg></span><span class="pin"><svg class="ic ic-sm"><use href="#i-user"/></svg></span>
+        <span class="pin"><svg class="ic ic-sm"><use href="#i-user"/></svg></span><span class="pin"><svg class="ic ic-sm"><use href="#i-user"/></svg></span><span class="pin"><svg class="ic ic-sm"><use href="#i-user"/></svg></span><span class="pin"><svg class="ic ic-sm"><use href="#i-user"/></svg></span><span class="pin"><svg class="ic ic-sm"><use href="#i-user"/></svg></span>
+        <span class="pin"><svg class="ic ic-sm"><use href="#i-user"/></svg></span><span class="pin"><svg class="ic ic-sm"><use href="#i-user"/></svg></span><span class="pin"><svg class="ic ic-sm"><use href="#i-user"/></svg></span><span class="pin"><svg class="ic ic-sm"><use href="#i-user"/></svg></span><span class="pin"><svg class="ic ic-sm"><use href="#i-user"/></svg></span>
+      </div>
+      <div class="muted" style="margin-top:8px">約 30 人同時湧入</div>
+    </div>
+    <div class="arrow">›</div>
+    <div class="gate"><div class="big">閘門</div><div class="lbl">一次放行上限 N 個</div></div>
+    <div class="arrow">›</div>
+    <div class="server"><svg class="ic ic-lg"><use href="#i-inbox"/></svg><div class="lbl">信箱 API</div><div class="m">穩定服務</div></div>
+  </div>
+  <div style="text-align:center;margin-top:14px"><span class="queue"><svg class="ic ic-sm" style="color:var(--amber)"><use href="#i-clock"/></svg> 其餘請求自動排隊，稍等即送出</span></div>
+  <figcaption>圖 4：排隊閘門 — <b>爆量請求排隊逐一送出，不再一次灌爆</b></figcaption>
+</figure>
+
+<!-- 圖5 -->
+<figure>
+  <h2 class="fig-t">被限流時 — 自動退避重試</h2>
+  <p class="fig-sub">萬一信箱 API 回「請求太多(429)」，系統會自動等一下再重試，多數情況使用者完全無感。</p>
+  <div class="tl">
+    <div class="node" style="background:var(--blue-bg);color:var(--blue)"><svg class="ic k"><use href="#i-send"/></svg>① 送出請求</div>
+    <div class="arrow2">›</div>
+    <div class="node" style="background:var(--red-bg);color:var(--red)"><svg class="ic k"><use href="#i-bolt"/></svg>② 被限流 429</div>
+    <div class="arrow2">›</div>
+    <div class="node" style="background:var(--amber-bg);color:var(--amber)"><svg class="ic k"><use href="#i-clock"/></svg>③ 自動等待<br>(依規範退避)</div>
+    <div class="arrow2">›</div>
+    <div class="node" style="background:var(--green-bg);color:var(--green)"><svg class="ic k"><use href="#i-check"/></svg>④ 重試成功<br>使用者無感</div>
+  </div>
+  <figcaption>圖 5：自動退避重試 — <b>429 → 等一下 → 重試成功，使用者不會看到錯誤</b></figcaption>
+</figure>
+
+<!-- 圖6 -->
+<figure>
+  <h2 class="fig-t">尖峰時，使用者看到的畫面</h2>
+  <p class="fig-sub">同時很多人使用、載入較久時，畫面會顯示友善提示，而不是無限轉圈或空白。</p>
+  <div class="phone">
+    <div class="bar"><svg class="ic ic-sm" style="color:#fff"><use href="#i-mail"/></svg> 信件助手</div>
+    <div class="body">
+      <div class="toast"><span class="spin"></span>多人同時使用中，正在為你載入…</div>
+      <div class="skl" style="width:90%"></div>
+      <div class="skl" style="width:75%"></div>
+      <div class="skl" style="width:82%"></div>
+    </div>
+  </div>
+  <figcaption>圖 6：尖峰提示 — <b>「多人同時使用中，正在為你載入…」，稍等即出信</b></figcaption>
+</figure>
+
+<!-- 圖7 -->
+<figure>
+  <h2 class="fig-t">（管理者）後台可自行驗證</h2>
+  <p class="fig-sub">後台〔安全審計 → 信件 Gateway 限流閘門〕可壓測，模擬多人同時開，當場看到結果。</p>
+  <div class="statcard">
+    <div style="margin-bottom:14px"><span class="ok-pill"><svg class="ic ic-sm" style="color:var(--green)"><use href="#i-check"/></svg> 運作正常</span></div>
+    <div class="stat-row">
+      <div class="stat"><div class="v">65</div><div class="l">累計請求</div></div>
+      <div class="stat"><div class="v" style="color:var(--green)">0</div><div class="l">退避救回</div></div>
+      <div class="stat"><div class="v">0</div><div class="l">失敗到前端</div></div>
+    </div>
+    <div class="result">壓測「模擬 30 人同時」→ <b style="color:var(--green)">成功 30/30</b>、前端 429 = 0、峰值排隊 20。</div>
+  </div>
+  <figcaption>圖 7：後台驗證 — <b>壓測「模擬 30 人同時」全部成功、失敗到前端 = 0</b></figcaption>
+</figure>
+
+</body>
+</html>

@@ -5,6 +5,12 @@ import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
 import { markupForDate, PRICING_MARKUP } from '../../../lib/pricing';
 
+// 報價單 logo — 可用 .env 的 NEXT_PUBLIC_QUOTE_LOGO 切換（例如 'jv-logo.png' 或
+// 'zh-logo.png'）。放在 public/ 底下、只取檔名避免路徑穿越。預設智合 zh-logo。
+const QUOTE_LOGO = (process.env.NEXT_PUBLIC_QUOTE_LOGO || 'zh-logo.png').replace(/[^\w.-]/g, '') || 'zh-logo.png';
+// 抬頭公司名跟著 logo 切換：jv-logo → 強合智慧；其餘（zh-logo）→ 智合科技。
+const QUOTE_COMPANY = QUOTE_LOGO === 'jv-logo.png' ? '強合智慧股份有限公司' : '智合科技股份有限公司';
+
 interface TokenSummary {
   totalInput: number;
   totalOutput: number;
@@ -145,7 +151,7 @@ export default function AdminTokens() {
       const [year, month] = quoteMonth.split('-');
       const quoteNo = `Q-${year}${month}-001`;
       const generatedAt = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
-      const logoDataUrl = await fetch('/zh-logo.png')
+      const logoDataUrl = await fetch(`/${QUOTE_LOGO}`)
         .then(r => r.blob())
         .then(b => new Promise<string>(res => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.readAsDataURL(b); }))
         .catch(() => '');
@@ -349,9 +355,9 @@ export default function AdminTokens() {
     </div>
     <div class="doc-right">
       <div class="company-block">
-        ${logoDataUrl ? `<img src="${logoDataUrl}" alt="智合科技" style="height:44px;display:block">` : ''}
+        ${logoDataUrl ? `<img src="${logoDataUrl}" alt="${QUOTE_COMPANY}" style="height:44px;display:block">` : ''}
         <div>
-          <div class="company-name">智合科技股份有限公司</div>
+          <div class="company-name">${QUOTE_COMPANY}</div>
           <div class="company-sub">AI Agents Office 服務部門</div>
         </div>
       </div>
