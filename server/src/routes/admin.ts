@@ -1694,7 +1694,8 @@ router.get('/quota-groups/:id/members', async (req: Request, res: Response) => {
   const members = await dbAll(`
     SELECT u.id, u.email, u.display_name, u.status, u.quota_override,
       COALESCE(SUM(t.input_tokens), 0) as total_input,
-      COALESCE(SUM(t.output_tokens), 0) as total_output
+      COALESCE(SUM(t.output_tokens), 0) as total_output,
+      COALESCE(SUM((t.input_tokens / 1000000 * 3 + t.output_tokens / 1000000 * 15) * ${pricingMarkupSql('t.created_at')}), 0) as cost
     FROM users u
     LEFT JOIN token_usage t ON t.user_id = u.id${monthFilter}
     WHERE u.quota_group_id = ?
