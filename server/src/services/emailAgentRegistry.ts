@@ -38,6 +38,14 @@ function scheduleNextPoll(userId: string): void {
   const conn = connections.get(userId);
   if (!conn) return;
 
+  // Pure-view (AI off) users don't need proactive background polling. They still
+  // get their inbox on connect (i.e. when they open the panel) and can refresh
+  // manually; skipping the recurring 60s poll for them removes the bulk of the
+  // fetchMessages load when most connected users haven't opted into AI. Toggling
+  // AI on reconnects the SSE (client re-registers with aiEnabled=true), which
+  // restarts this chain — so no live-update plumbing is needed here.
+  if (!conn.aiEnabled) return;
+
   conn.pollTimer = setTimeout(async () => {
     if (!connections.has(userId)) return;
     console.log(`[EmailAgent] Regular poll tick for user ${userId}`);
