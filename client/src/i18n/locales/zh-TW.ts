@@ -1173,6 +1173,7 @@ const zhTW = {
   'uploadAlert.statusSuspicious': '警告',
   'uploadAlert.statusError': '錯誤',
   'uploadAlert.statusQuota': '空間不足',
+  'uploadAlert.errorHint': '常見原因：單一檔案超過 20MB、一次超過 3 個檔或總量超過 40MB、PDF 超過 30 頁、檔案格式不支援，或網路暫時不穩。可縮小檔案、分批上傳後再試一次。',
   'uploadAlert.close': '我知道了',
 
   // Onboarding

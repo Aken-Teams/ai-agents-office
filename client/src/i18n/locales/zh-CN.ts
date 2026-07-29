@@ -1166,6 +1166,7 @@ const zhCN = {
   'uploadAlert.statusSuspicious': '警告',
   'uploadAlert.statusError': '错误',
   'uploadAlert.statusQuota': '空间不足',
+  'uploadAlert.errorHint': '常见原因：单一档案超过 20MB、一次超过 3 个档或总量超过 40MB、PDF 超过 30 页、档案格式不支持，或网络暂时不稳。可缩小档案、分批上传后再试一次。',
   'uploadAlert.close': '我知道了',
 
   // Onboarding

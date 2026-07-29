@@ -84,6 +84,9 @@ export default function UploadAlertModal({ items, onClose }: Props) {
                     </span>
                   </div>
                   <p className="text-sm text-on-surface-variant leading-relaxed">{item.detail}</p>
+                  {item.status === 'error' && (
+                    <p className="text-xs text-on-surface-variant/60 leading-relaxed mt-1.5">{t('uploadAlert.errorHint')}</p>
+                  )}
                 </div>
               </div>
             );

@@ -1146,6 +1146,7 @@ const en = {
   'uploadAlert.statusSuspicious': 'Warning',
   'uploadAlert.statusError': 'Error',
   'uploadAlert.statusQuota': 'No Space',
+  'uploadAlert.errorHint': 'Common causes: a single file over 20MB, more than 3 files or over 40MB total, a PDF over 30 pages, an unsupported format, or a brief network glitch. Try smaller files or upload in batches and retry.',
   'uploadAlert.close': 'Got it',
 
   // Onboarding
