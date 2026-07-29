@@ -187,9 +187,13 @@ function textPlusImages(obj: unknown, images: ImgBlock[]): { content: any[] } {
 // ── email_search: server-side subject/date search with query auto-recovery ──
 async function doSearch(args: Record<string, any>): Promise<any> {
   const folder = String(args.folder || 'Inbox');
-  const limit = String(Math.min(Number(args.limit) || 20, 50));
+  // Default 50, cap 200 (was 20/50 — too small when the user asks for "all"). The
+  // list is light metadata + ~200-char preview (~1.5KB/email), so 200 is ~300KB.
+  const limit = String(Math.min(Math.max(Number(args.limit) || 50, 1), 200));
+  const offset = Math.max(0, Number(args.offset) || 0); // page through more than one batch
   const run = async (q?: string) => {
     const p = new URLSearchParams({ folder, limit, order: 'desc' });
+    if (offset > 0) p.set('offset', String(offset));
     if (q) p.set('q', q);
     if (args.start_date) p.set('start_date', String(args.start_date));
     if (args.end_date) p.set('end_date', String(args.end_date));
@@ -353,15 +357,17 @@ const TOOLS = [
       + '\n【重要】要找某一封特定的信，用**最有辨識度的「短」關鍵字**（如「BPM」「差旅」「發票」；只給片段即可）。'
       + '**不要把整個很長的主旨貼進去搜**——超長又帶標點（【】、_、，、/）的字串容易比不中。也不要只用預設參數列最近幾封就說「找不到」。'
       + '（若查詢太長或有空格導致無結果，工具會自動退化成較短關鍵字重搜；但你一開始就用短關鍵字最準。）可搭配 start_date/end_date 限縮日期。'
+      + '\n【要「全部／所有信件」時】不要只用預設！請把 limit 開大（最多 200），若還不夠就用 offset 分頁（0、200、400…）一頁一頁取到取完為止；或先用 start_date/end_date 圈出期間再把該期間全部取回。**切勿只取一批就回報「只有 N 封」**。'
       + '\n找到後：用 email_get_message 看完整內文＋內嵌圖、email_get_attachments 讀附件檔內容＋附件圖。',
     inputSchema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: '主旨關鍵字，子字串比對 subject（不掃內文）。找特定信強烈建議帶；可只給片段。' },
+        query: { type: 'string', description: '主旨關鍵字，子字串比對 subject（不掃內文）。找特定信強烈建議帶；可只給片段。留空＝列出該資料夾最近的信。' },
         folder: { type: 'string', description: '資料夾，預設 Inbox（Inbox/SentItems/Drafts/DeletedItems/JunkEmail/Outbox）。' },
         start_date: { type: 'string', description: '起始日期 YYYY-MM-DD（含）。找較舊的信可用來限縮。' },
         end_date: { type: 'string', description: '結束日期 YYYY-MM-DD（含）' },
-        limit: { type: 'integer', description: '每頁筆數，預設 20、最大 50' },
+        limit: { type: 'integer', description: '每頁筆數，預設 50、最大 200。使用者要「全部」時請開到最大。' },
+        offset: { type: 'integer', description: '略過前 N 筆，用於分頁取更多（如已取 200 筆，下一頁 offset=200）。要取「全部」時逐頁遞增直到回傳筆數為 0。' },
       },
       additionalProperties: false,
     },
