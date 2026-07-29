@@ -121,14 +121,18 @@ export interface DownscaledImage {
 }
 
 const VISION_MIMES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
-const VISION_MAX_BYTES = 5 * 1024 * 1024; // Claude vision hard limit: 5MB per image
-const VISION_LONG_EDGE = 1568;            // ~optimal long edge for Claude vision
+const VISION_MAX_BYTES = 5 * 1024 * 1024;      // Claude vision hard limit: 5MB per image
+const VISION_LONG_EDGE = 1568;                 // ~optimal long edge for Claude vision (bigger doesn't improve accuracy)
+const VISION_PASSTHROUGH_BYTES = 512 * 1024;   // ≤512KB supported image → send as-is (small logos/icons)
 
 /**
- * Prepare an image buffer for Claude vision: small supported images pass through
- * untouched; large or unsupported ones (>5MB, bmp/tiff, etc.) are downscaled/
- * converted to a JPEG within the 5MB limit so they are STILL analysed rather than
- * skipped ("請它看就真的看"). Returns null only if it truly can't be made to fit.
+ * Prepare an image buffer for Claude vision. Small supported images (logos/icons,
+ * ≤512KB) pass through untouched; anything larger is downscaled to VISION_LONG_EDGE
+ * JPEG. Claude vision gains nothing above ~1568px, so sending multi-MB originals
+ * only bloats heap — each image is base64 (~1.33×), copied again into the stdin
+ * payload (×2), across up to N concurrent deep-reads. Downscaling cuts each image
+ * ~10× (a 5MB photo → ~300KB) with no loss of vision quality — this is the main
+ * lever against the Layer-2 memory burst. Returns null only if it truly can't fit.
  * sharp is imported lazily to keep this module cheap to load.
  */
 export async function downscaleImageForVision(
@@ -136,7 +140,9 @@ export async function downscaleImageForVision(
   mime: string,
 ): Promise<DownscaledImage | null> {
   const m = (mime || '').toLowerCase();
-  if (buf.length <= VISION_MAX_BYTES && VISION_MIMES.has(m)) {
+  // Tiny supported images: pass through (re-encoding a 20KB logo wastes CPU and
+  // could drop PNG transparency for no memory benefit).
+  if (buf.length <= VISION_PASSTHROUGH_BYTES && VISION_MIMES.has(m)) {
     return { base64: buf.toString('base64'), mediaType: m };
   }
   try {
@@ -152,6 +158,12 @@ export async function downscaleImageForVision(
     if (out.length > VISION_MAX_BYTES) return null;
     return { base64: out.toString('base64'), mediaType: 'image/jpeg' };
   } catch {
+    // sharp unavailable/failed: fall back to the OLD behaviour — send the original
+    // if it's a supported mime within the 5MB vision limit. Better to send a big
+    // image (and eat the memory) than to silently stop the AI from seeing it.
+    if (buf.length <= VISION_MAX_BYTES && VISION_MIMES.has(m)) {
+      return { base64: buf.toString('base64'), mediaType: m };
+    }
     return null;
   }
 }
