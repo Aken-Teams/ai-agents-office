@@ -7,7 +7,13 @@ import { pathToFileURL } from 'url';
 import { config } from '../config.js';
 import { getSandboxPath } from './sandbox.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
+import { acquireAuthSlot } from './claudeAuthGate.js';
 import type { SSEEvent } from '../types.js';
+
+// Max time to hold the auth gate for one spawn if it never produces output (the
+// exact hang we are preventing) — releases the gate so a stuck spawn cannot block
+// the queue. Warm spawns release far sooner, on their first output.
+const AUTH_WARMUP_TIMEOUT_MS = Math.max(1000, parseInt(process.env.AUTH_WARMUP_TIMEOUT_MS || '', 10) || 8000);
 
 /**
  * Translate known Claude CLI error messages to user-friendly Chinese.
@@ -445,12 +451,37 @@ export function spawnClaude(
 
   // Mutable reference so abort() always targets the active process
   let currentProc: ChildProcess | null = null;
+  // Session-plumbing recovery is allowed once per spawnClaude call (see close
+  // handler): a GC-ed --resume target or a colliding --session-id gets one clean
+  // restart with a fresh session before we ever consider failing / API fallback.
+  let sessionRecoveryAttempted = false;
+  // Set by abort(): if a spawn is still queued at the auth gate when the caller
+  // aborts, we must NOT spawn it afterwards (it would run orphaned/unmonitored).
+  let aborted = false;
 
   /**
-   * Inner spawn function — called once normally, and optionally a second time
-   * with API key authentication if the first attempt hits account quota limits.
+   * Inner spawn function — called once normally, and optionally again with a fresh
+   * session (session-plumbing recovery) or API-key auth (quota fallback).
+   *
+   * Acquires an AUTH-PHASE slot first (claudeAuthGate): only a limited number of
+   * CLIs may be in their startup/token-refresh window at once, which kills the
+   * OAuth refresh race (#1/#2). The slot is released the instant the CLI emits its
+   * first output (auth done, token persisted) or after AUTH_WARMUP_TIMEOUT_MS.
    */
-  function doSpawn(useApiKey: boolean) {
+  async function doSpawn(useApiKey: boolean) {
+    const authRelease = await acquireAuthSlot();
+    // The caller may have aborted while we waited in the auth queue — bail before
+    // spawning so we never leave an orphaned, unmonitored CLI running.
+    if (aborted) { try { authRelease(); } catch { /* ignore */ } return; }
+    let authReleased = false;
+    const releaseAuth = () => {
+      if (authReleased) return;
+      authReleased = true;
+      clearTimeout(authTimer);
+      try { authRelease(); } catch { /* ignore */ }
+    };
+    const authTimer = setTimeout(releaseAuth, AUTH_WARMUP_TIMEOUT_MS);
+
     // Clean environment to prevent nested Claude session detection
     // Remove Claude-related AND Anthropic API key vars (control auth explicitly)
     const cleanEnv = { ...process.env };
@@ -490,6 +521,7 @@ export function spawnClaude(
         env: cleanEnv,
       });
     } catch (error) {
+      releaseAuth();
       console.error('[Claude CLI] Spawn failed:', error);
       emitter.emit('event', {
         type: 'error',
@@ -548,6 +580,10 @@ export function spawnClaude(
 
     // Parse stream-json output line by line
     proc.stdout!.on('data', (data: Buffer) => {
+      // First output = auth succeeded and the (possibly refreshed) token is now
+      // persisted. Release the auth gate so the next queued spawn reuses the warm
+      // token instead of racing its own refresh.
+      releaseAuth();
       if (killedForOutput) return;
       const chunk = data.toString();
       stdoutBytes += chunk.length;
@@ -598,6 +634,7 @@ export function spawnClaude(
     // Process close — fires AFTER all stdio streams are drained (exit fires earlier,
     // potentially before stdout data is fully read, causing data loss race condition)
     proc.on('close', (code) => {
+      releaseAuth(); // safety: never leave the auth gate held after the process ends
       // Process any remaining buffered stdout data
       if (stdoutBuffer.trim()) {
         try {
@@ -608,6 +645,35 @@ export function spawnClaude(
       console.log(`[Claude CLI] ${logRole}/${logSkill} ${modeLabel} exited with code ${code}`);
       if (stderrBuffer) {
         console.error(`[Claude CLI] ${logRole}/${logSkill} stderr:\n${stderrBuffer.substring(0, 1000)}`);
+      }
+
+      // --- Session-plumbing recovery (before any fallback) ---
+      // Two transient session errors show up under concurrency, and neither is a
+      // real failure — they should restart cleanly rather than fail or bill the API:
+      //   #3 "No conversation found with session ID" — a --resume target session was
+      //      garbage-collected / never flushed by the CLI.
+      //   #4 "Session ID already in use" — a --session-id collided with a still-live
+      //      session from a racing/retrying spawn.
+      // Recover ONCE: drop --resume, start a brand-new --session-id, and tell the
+      // caller the new id so it can repoint its stored session.
+      if (!killedForOutput && code !== 0 && !inputTokens && !sessionRecoveryAttempted) {
+        const s = stderrBuffer.toLowerCase();
+        const resumeGone = /no conversation found with session id/.test(s);
+        const idInUse = /already in use/.test(s) && /session id/.test(s);
+        if (resumeGone || idInUse) {
+          sessionRecoveryAttempted = true;
+          const freshId = randomUUID();
+          const rIdx = args.indexOf('--resume');
+          if (rIdx !== -1) args.splice(rIdx, 2); // drop "--resume <id>"
+          const sidIdx = args.indexOf('--session-id');
+          if (sidIdx !== -1) args[sidIdx + 1] = freshId;
+          else args.push('--session-id', freshId);
+          console.log(`[Claude CLI] ${logRole}/${logSkill} session error (${resumeGone ? 'resume target GC-ed' : 'id already in use'}) — restarting with fresh session ${freshId}`);
+          // Let the orchestrator persist the new id so future turns resume the right one.
+          emitter.emit('event', { type: 'session_id', data: freshId } satisfies SSEEvent);
+          void doSpawn(useApiKey);
+          return;
+        }
       }
 
       // --- API Key Fallback ---
@@ -638,7 +704,7 @@ export function spawnClaude(
           // NEW-session spawn, swap in a fresh id; a --resume must keep its id.
           const sidIdx = args.indexOf('--session-id');
           if (sidIdx !== -1 && args[sidIdx + 1]) args[sidIdx + 1] = randomUUID();
-          doSpawn(true);
+          void doSpawn(true);
           return;
         }
         // Not a quota case — do NOT bill the paid API. Log loudly so a logged-out /
@@ -672,6 +738,7 @@ export function spawnClaude(
     });
 
     proc.on('error', (error) => {
+      releaseAuth(); // safety: release the auth gate if the process errors out
       console.error('[Claude CLI] Process error:', error);
       emitter.emit('event', {
         type: 'error',
@@ -685,11 +752,12 @@ export function spawnClaude(
   }
 
   // Start first attempt with account auth (or forced API key if explicitly set)
-  doSpawn(options.useApiKey || false);
+  void doSpawn(options.useApiKey || false);
 
   return {
     emitter,
     abort: () => {
+      aborted = true;
       try {
         if (currentProc) {
           if (process.platform === 'win32') {
