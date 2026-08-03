@@ -658,8 +658,13 @@ export function spawnClaude(
       // caller the new id so it can repoint its stored session.
       if (!killedForOutput && code !== 0 && !inputTokens && !sessionRecoveryAttempted) {
         const s = stderrBuffer.toLowerCase();
+        // Strings verified against the real CLI (v2.1.201): #3 emits exactly
+        // "No conversation found with session ID: <id>". #4's "already in use" could
+        // not be reproduced locally, so the match is kept broad to catch the
+        // production wording ("Session ID already in use") and any close variant —
+        // a false positive only costs one harmless fresh-session restart.
         const resumeGone = /no conversation found with session id/.test(s);
-        const idInUse = /already in use/.test(s) && /session id/.test(s);
+        const idInUse = /already in use/.test(s);
         if (resumeGone || idInUse) {
           sessionRecoveryAttempted = true;
           const freshId = randomUUID();
