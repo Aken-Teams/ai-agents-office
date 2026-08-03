@@ -618,22 +618,35 @@ export function spawnClaude(
       // API key — it has no token-expiry/refresh failure mode. This covers quota
       // limits, auth/token blips, and silent (empty-stderr) crashes alike.
       // Suppress error/usage/done for this failed attempt; the retry will emit them.
+      // API-key fallback policy (see config.apiKeyFallbackQuotaOnly). By default we
+      // overflow to the paid API ONLY when the account genuinely hit its rate/usage
+      // limit (5-hour window or monthly cap). We deliberately do NOT mask auth
+      // failures (logged-out account) or silent no-output blips with paid Opus calls:
+      // that broad fallback is exactly what silently ran up the bill AND hid a
+      // logged-out production account for weeks. Those now fail visibly so they get
+      // fixed at the source. Set API_KEY_FALLBACK_QUOTA_ONLY=false for the old behavior.
       if (!killedForOutput && !useApiKey && code !== 0 && !inputTokens && config.anthropicApiKey) {
-        const reason = isQuotaLimitError(stderrBuffer)
-          ? 'account quota exhausted'
-          : isAuthError(stderrBuffer)
-            ? 'account auth/token failure'
-            : 'no-output failure (likely OAuth token refresh blip)';
-        console.log(`[Claude CLI] ${logRole}/${logSkill} ${reason}, retrying with API key...`);
-        // The failed attempt may have already registered its --session-id with the
-        // CLI (session file written before it died), so reusing it on retry throws
-        // "Session ID <id> is already in use" — which is exactly what happens when
-        // several agents spawn at once (e.g. running multiple schedules). For a
-        // NEW-session spawn, swap in a fresh id; a --resume must keep its id.
-        const sidIdx = args.indexOf('--session-id');
-        if (sidIdx !== -1 && args[sidIdx + 1]) args[sidIdx + 1] = randomUUID();
-        doSpawn(true);
-        return;
+        const quotaHit = isQuotaLimitError(stderrBuffer);
+        const shouldFallback = quotaHit || !config.apiKeyFallbackQuotaOnly;
+        if (shouldFallback) {
+          const reason = quotaHit ? 'account rate/usage limit hit' : 'account failure (broad fallback enabled)';
+          console.log(`[Claude CLI] ${logRole}/${logSkill} ${reason}, overflowing to API key...`);
+          // The failed attempt may have already registered its --session-id with the
+          // CLI (session file written before it died), so reusing it on retry throws
+          // "Session ID <id> is already in use" — which is exactly what happens when
+          // several agents spawn at once (e.g. running multiple schedules). For a
+          // NEW-session spawn, swap in a fresh id; a --resume must keep its id.
+          const sidIdx = args.indexOf('--session-id');
+          if (sidIdx !== -1 && args[sidIdx + 1]) args[sidIdx + 1] = randomUUID();
+          doSpawn(true);
+          return;
+        }
+        // Not a quota case — do NOT bill the paid API. Log loudly so a logged-out /
+        // broken account is visible in the logs instead of silently masked.
+        const why = isAuthError(stderrBuffer)
+          ? 'account auth/token failure (login likely broken — NOT masking with paid API)'
+          : 'no-output failure (NOT masking with paid API; likely OAuth blip or account issue)';
+        console.warn(`[Claude CLI] ${logRole}/${logSkill} ${why}`);
       }
 
       if (!killedForOutput && code !== 0 && !inputTokens) {

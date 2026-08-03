@@ -630,6 +630,11 @@ export class Orchestrator {
         skillId: opts.skillId,
         customAllowedTools: skillDef?.allowedTools,
         customDisallowedTools: skillDef?.disallowedTools,
+        // Router runs on a fast, cheap model (Haiku by default): first token in
+        // ~1-2s instead of 10-30s on Opus, so it rarely hits the 90s timeout, and it
+        // consumes far less of the subscription's rate-limit budget. Override via
+        // ROUTER_MODEL (config.routerModel). Workers keep the account default model.
+        ...(opts.role === 'router' && config.routerModel ? { model: config.routerModel } : {}),
         // Email data source (MCP): attach ONLY to the rag-analyst — our dedicated
         // data-retrieval agent. It fetches the emails/attachments/images the user
         // needs and hands the data to doc-gen via the existing previous_step.md
