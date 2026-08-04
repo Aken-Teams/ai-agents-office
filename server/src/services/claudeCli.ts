@@ -8,6 +8,7 @@ import { config } from '../config.js';
 import { getSandboxPath } from './sandbox.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
 import { acquireAuthSlot } from './claudeAuthGate.js';
+import { logAiCall } from './aiCallLog.js';
 import type { SSEEvent } from '../types.js';
 
 // Max time to hold the auth gate for one spawn if it never produces output (the
@@ -468,7 +469,7 @@ export function spawnClaude(
    * OAuth refresh race (#1/#2). The slot is released the instant the CLI emits its
    * first output (auth done, token persisted) or after AUTH_WARMUP_TIMEOUT_MS.
    */
-  async function doSpawn(useApiKey: boolean) {
+  async function doSpawn(useApiKey: boolean, spawnReason: string = 'primary') {
     const authRelease = await acquireAuthSlot();
     // The caller may have aborted while we waited in the auth queue — bail before
     // spawning so we never leave an orphaned, unmonitored CLI running.
@@ -647,6 +648,24 @@ export function spawnClaude(
         console.error(`[Claude CLI] ${logRole}/${logSkill} stderr:\n${stderrBuffer.substring(0, 1000)}`);
       }
 
+      // Ledger: record THIS spawn attempt — account vs api_key (ground truth from
+      // useApiKey), which model, why it was spawned, and whether it produced output.
+      // Logged for every attempt, so an account failure that retries on the API key
+      // leaves two honest rows. Fire-and-forget; never affects the call.
+      logAiCall({
+        userId: options.userId,
+        conversationId: options.conversationId,
+        role: options.role || 'worker',
+        skillId: options.skillId,
+        model: model || null,
+        authMode: useApiKey ? 'api_key' : 'account',
+        reason: spawnReason,
+        inputTokens,
+        outputTokens,
+        exitCode: code,
+        success: inputTokens > 0,
+      });
+
       // --- Session-plumbing recovery (before any fallback) ---
       // Two transient session errors show up under concurrency, and neither is a
       // real failure — they should restart cleanly rather than fail or bill the API:
@@ -676,7 +695,7 @@ export function spawnClaude(
           console.log(`[Claude CLI] ${logRole}/${logSkill} session error (${resumeGone ? 'resume target GC-ed' : 'id already in use'}) — restarting with fresh session ${freshId}`);
           // Let the orchestrator persist the new id so future turns resume the right one.
           emitter.emit('event', { type: 'session_id', data: freshId } satisfies SSEEvent);
-          void doSpawn(useApiKey);
+          void doSpawn(useApiKey, `session-recovery:${resumeGone ? 'resume-gone' : 'id-in-use'}`);
           return;
         }
       }
@@ -709,7 +728,7 @@ export function spawnClaude(
           // NEW-session spawn, swap in a fresh id; a --resume must keep its id.
           const sidIdx = args.indexOf('--session-id');
           if (sidIdx !== -1 && args[sidIdx + 1]) args[sidIdx + 1] = randomUUID();
-          void doSpawn(true);
+          void doSpawn(true, reason);
           return;
         }
         // Not a quota case — do NOT bill the paid API. Log loudly so a logged-out /
@@ -757,7 +776,7 @@ export function spawnClaude(
   }
 
   // Start first attempt with account auth (or forced API key if explicitly set)
-  void doSpawn(options.useApiKey || false);
+  void doSpawn(options.useApiKey || false, options.useApiKey ? 'forced-api-key' : 'primary');
 
   return {
     emitter,
@@ -843,6 +862,9 @@ function processStreamEvent(
     } satisfies SSEEvent);
 
     const message = parsed.message as Record<string, unknown> | undefined;
+    // The real CLI carries the model on the assistant message (not always on the
+    // final 'result'), so capture it here to avoid null models in the ledger.
+    if (message?.model) tokens.setModel(message.model as string);
     const content = message?.content as Array<Record<string, unknown>> | undefined;
     if (content) {
       for (const block of content) {
@@ -884,7 +906,7 @@ function processStreamEvent(
     } satisfies SSEEvent);
   }
 
-  // System init — capture session_id
+  // System init — capture session_id and the model in effect for this run
   if (type === 'system' && parsed.subtype === 'init') {
     const sid = parsed.session_id as string | undefined;
     if (sid) {
@@ -893,6 +915,7 @@ function processStreamEvent(
         data: sid,
       } satisfies SSEEvent);
     }
+    if (parsed.model) tokens.setModel(parsed.model as string);
   }
 
   // Result message — only extract usage/model/session_id, NOT text
