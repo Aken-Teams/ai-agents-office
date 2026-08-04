@@ -10,6 +10,8 @@ import { markupForDate, PRICING_MARKUP } from '../../../lib/pricing';
 const QUOTE_LOGO = (process.env.NEXT_PUBLIC_QUOTE_LOGO || 'zh-logo.png').replace(/[^\w.-]/g, '') || 'zh-logo.png';
 // 抬頭公司名跟著 logo 切換：jv-logo → 強合智慧；其餘（zh-logo）→ 智合科技。
 const QUOTE_COMPANY = QUOTE_LOGO === 'jv-logo.png' ? '強合智慧股份有限公司' : '智合科技股份有限公司';
+// 報價單是否顯示「付款資訊」（銀行匯款帳號）區塊。目前隱藏；改回 true 即恢復顯示。
+const SHOW_PAYMENT_INFO = false;
 
 interface TokenSummary {
   totalInput: number;
@@ -450,7 +452,7 @@ export default function AdminTokens() {
 
   ${analyticsSectionHtml}
 
-  <div class="payment-section">
+  ${SHOW_PAYMENT_INFO ? `<div class="payment-section">
     <div class="payment-section-title">付款資訊</div>
     <table class="payment-table">
       <tr>
@@ -462,7 +464,7 @@ export default function AdminTokens() {
         <th>帳號</th><td>722100015701</td>
       </tr>
     </table>
-  </div>
+  </div>` : ''}
 
   <div class="sign-row">
     <div class="sign-block"><div class="sign-line"></div><div class="sign-label">確認簽章</div></div>

@@ -43,11 +43,13 @@ export const config = {
 
   // Claude CLI
   claudeCliPath: process.env.CLAUDE_CLI_PATH || 'claude',
-  // Router model — the Router only reads the request and emits [TASK] blocks, so a
-  // fast/cheap model is ideal: first token in ~1-2s (vs 10-30s on Opus) so it rarely
-  // hits the 90s timeout, and it barely touches the account's rate-limit budget.
-  // Override with ROUTER_MODEL (e.g. claude-sonnet-4-6 if routing quality drops).
-  routerModel: process.env.ROUTER_MODEL || 'claude-haiku-4-5-20251001',
+  // Router model — the Router reads the request and emits [TASK] blocks. Sonnet is
+  // the sweet spot: reliable [TASK] instruction-following (Haiku intermittently just
+  // acknowledges without emitting a [TASK] → "chatted but no file"), while still far
+  // cheaper/faster than Opus and light on the rate-limit budget. The earlier Haiku
+  // default was chosen for "speed" but the 90s timeouts were actually the OAuth race,
+  // not router latency. Override with ROUTER_MODEL if needed.
+  routerModel: process.env.ROUTER_MODEL || 'claude-sonnet-4-6',
   // Anthropic API Key — fallback when account quota is exhausted
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '',
   // API-key fallback policy. Default (true) = only overflow to the paid API when the
