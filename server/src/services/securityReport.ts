@@ -13,6 +13,7 @@ import fs from 'fs';
 import path from 'path';
 import { config } from '../config.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
+import { logAiCall } from './aiCallLog.js';
 import { dbAll, dbGet } from '../db.js';
 import { buildDocxBuffer, type DocxInput } from '../generators/generate-docx.js';
 
@@ -65,6 +66,8 @@ function spawnClaudeText(prompt: string, timeoutMs: number): Promise<string | nu
       let output = '';
       let stderrOutput = '';
       let stdoutBuffer = '';
+      let capturedModel: string | null = null;
+      let inTok = 0, outTok = 0;
 
       proc.stdout!.on('data', (data: Buffer) => {
         stdoutBuffer += data.toString();
@@ -74,12 +77,16 @@ function spawnClaudeText(prompt: string, timeoutMs: number): Promise<string | nu
           if (!line.trim()) continue;
           try {
             const parsed = JSON.parse(line);
+            if (parsed.type === 'system' && parsed.subtype === 'init' && parsed.model) capturedModel = parsed.model;
             if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta' && parsed.delta.text) {
               output += parsed.delta.text;
             } else if (parsed.type === 'assistant' && Array.isArray(parsed.message?.content)) {
+              if (parsed.message?.model) capturedModel = parsed.message.model;
               for (const block of parsed.message.content) if (block.type === 'text' && block.text) output += block.text;
-            } else if (parsed.type === 'result' && typeof parsed.result === 'string' && parsed.result && !output) {
-              output = parsed.result;
+            } else if (parsed.type === 'result') {
+              if (parsed.model) capturedModel = parsed.model;
+              if (parsed.usage) { inTok = parsed.usage.input_tokens || 0; outTok = parsed.usage.output_tokens || 0; }
+              if (typeof parsed.result === 'string' && parsed.result && !output) output = parsed.result;
             }
           } catch { /* skip malformed */ }
         }
@@ -104,6 +111,13 @@ function spawnClaudeText(prompt: string, timeoutMs: number): Promise<string | nu
 
       proc.on('exit', (code) => {
         clearTimeout(timeout);
+        logAiCall({
+          role: 'system', skillId: 'security-report',
+          model: capturedModel,
+          authMode: useApiKey ? 'api_key' : 'account',
+          reason: useApiKey ? 'account-quota-fallback' : 'primary',
+          inputTokens: inTok, outputTokens: outTok, exitCode: code, success: !!output,
+        });
         if (!useApiKey && code !== 0 && !output && isQuotaLimitError(stderrOutput) && config.anthropicApiKey) {
           console.log('[SecurityReport] account quota exhausted, retrying with API key...');
           doSpawn(true);

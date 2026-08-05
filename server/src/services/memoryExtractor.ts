@@ -213,7 +213,7 @@ function spawnExtractionClaude(prompt: string): Promise<string | null> {
 
     const cleanEnv = { ...process.env };
     for (const key of Object.keys(cleanEnv)) {
-      if (key.toUpperCase().startsWith('CLAUDE')) delete cleanEnv[key];
+      if (key.toUpperCase().startsWith('CLAUDE') || key === 'ANTHROPIC_API_KEY') delete cleanEnv[key];
     }
 
     let proc;

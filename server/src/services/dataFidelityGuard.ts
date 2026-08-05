@@ -20,6 +20,7 @@ import { extractText, getDocumentProxy } from 'unpdf';
 import { config } from '../config.js';
 import { dbAll } from '../db.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
+import { logAiCall } from './aiCallLog.js';
 import { agentRebuild, agentRegenerateInPlace } from './agentRebuilder.js';
 import type { DocumentBlock, GeneratedFile, SSEEvent } from '../types.js';
 
@@ -161,6 +162,13 @@ function runChecker(prompt: string): Promise<string | null> {
       const timer = setTimeout(() => { try { proc.kill(); } catch { /* ignore */ } cleanup(); resolve(output || null); }, CHECKER_TIMEOUT);
       proc.on('exit', code => {
         clearTimeout(timer);
+        logAiCall({
+          role: 'system', skillId: 'fidelity-guard',
+          model: 'claude-haiku-4-5-20251001',
+          authMode: useApiKey ? 'api_key' : 'account',
+          reason: useApiKey ? 'account-quota-fallback' : 'primary',
+          inputTokens: 0, outputTokens: 0, exitCode: code, success: !!output,
+        });
         if (!useApiKey && code !== 0 && !output && /quota|rate.?limit|overloaded/i.test(stderr) && config.anthropicApiKey) {
           doSpawn(true); return;
         }

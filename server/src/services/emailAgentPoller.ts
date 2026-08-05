@@ -11,6 +11,7 @@ import { getMailToken, fetchMessages, fetchMessageDetail, type OutlookMessage } 
 import { pushEvent, getLastSeenIds, updateLastSeenIds, markTaskActive, markTaskDone } from './emailAgentRegistry.js';
 import { buildEmailAgentMemoryContext } from './emailAgentMemory.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
+import { logAiCall } from './aiCallLog.js';
 import { acquireEmailSlot } from './emailAgentConcurrency.js';
 import { deepseekChat } from './deepseek.js';
 import { buildAttachmentContext } from './emailAttachmentReader.js';
@@ -159,6 +160,8 @@ async function spawnClaudeOneShot(prompt: string, timeoutMs: number, model?: str
       let stderrOutput = '';
       let stdoutBuffer = '';
       let rawLines = 0;
+      let capturedModel: string | null = null;
+      let inTok = 0, outTok = 0;
 
       proc.stdout!.on('data', (data: Buffer) => {
         stdoutBuffer += data.toString();
@@ -175,7 +178,10 @@ async function spawnClaudeOneShot(prompt: string, timeoutMs: number, model?: str
               if (delta?.type === 'text_delta' && delta.text) {
                 output += delta.text;
               }
+            } else if (parsed.type === 'system' && parsed.subtype === 'init') {
+              if (parsed.model) capturedModel = parsed.model;
             } else if (parsed.type === 'assistant') {
+              if (parsed.message?.model) capturedModel = parsed.message.model;
               const content = parsed.message?.content;
               if (Array.isArray(content)) {
                 for (const block of content) {
@@ -187,10 +193,12 @@ async function spawnClaudeOneShot(prompt: string, timeoutMs: number, model?: str
               if (typeof text === 'string' && text && !output) {
                 output = text;
               }
+              if (parsed.model) capturedModel = parsed.model;
               // Capture token usage from the final result event (was discarded).
-              if (usageOut && parsed.usage) {
-                usageOut.inTok = (parsed.usage.input_tokens || 0) + (parsed.usage.cache_read_input_tokens || 0) + (parsed.usage.cache_creation_input_tokens || 0);
-                usageOut.outTok = parsed.usage.output_tokens || 0;
+              if (parsed.usage) {
+                inTok = (parsed.usage.input_tokens || 0) + (parsed.usage.cache_read_input_tokens || 0) + (parsed.usage.cache_creation_input_tokens || 0);
+                outTok = parsed.usage.output_tokens || 0;
+                if (usageOut) { usageOut.inTok = inTok; usageOut.outTok = outTok; }
               }
             }
           } catch { /* skip malformed */ }
@@ -216,6 +224,17 @@ async function spawnClaudeOneShot(prompt: string, timeoutMs: number, model?: str
 
       proc.on('exit', (code) => {
         clearTimeout(timeout);
+
+        // Ledger: the email agent's deep-read (with attachments) runs on the account
+        // DEFAULT model (Opus) — record the REAL model captured from the stream, not
+        // the caller's label — and whether this attempt used the API key.
+        logAiCall({
+          role: 'system', skillId: 'email-agent',
+          model: capturedModel || model || null,
+          authMode: useApiKey ? 'api_key' : 'account',
+          reason: useApiKey ? 'account-quota-fallback' : 'primary',
+          inputTokens: inTok, outputTokens: outTok, exitCode: code, success: !!output,
+        });
 
         // API key fallback: quota hit + no output + API key available → retry
         if (!useApiKey && code !== 0 && !output
