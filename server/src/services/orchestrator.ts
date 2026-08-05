@@ -494,7 +494,20 @@ export class Orchestrator {
       data: { taskId, skillId: task.skillId, description: task.description.substring(0, 100) },
     });
 
-    const skill = getSkill(task.skillId);
+    let skill = getSkill(task.skillId);
+    if (!skill && this.uploadIds.length > 0) {
+      // Defensive: the Router sometimes hallucinates a skill name (e.g. 'claude-api')
+      // for "analyze my uploaded image/file". Rather than fail silently — leaving the
+      // upload unread — route to a real vision-capable analyst (they have the multimodal
+      // Read tool and can SEE images/PDFs directly).
+      const fallbackId = this.uploadIds.length > 1 ? 'rag-analyst' : 'data-analyst';
+      const fb = getSkill(fallbackId);
+      if (fb) {
+        console.warn(`[Orchestrator] Unknown skill '${task.skillId}' with ${this.uploadIds.length} upload(s) — routing to ${fallbackId}`);
+        skill = fb;
+        task.skillId = fallbackId;
+      }
+    }
     if (!skill) {
       const error = `Unknown skill: ${task.skillId}`;
       execution.status = 'failed';
