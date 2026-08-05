@@ -47,6 +47,7 @@ const NAV_GROUPS = [
     icon: 'settings',
     items: [
       { href: '/admin/security', permKey: 'security', labelKey: 'admin.sidebar.security' as const, icon: 'shield_with_heart' },
+      { href: '/admin/api-tracking', permKey: 'api-tracking', labelKey: 'admin.sidebar.apiTracking' as const, icon: 'query_stats', adminOnly: true },
       { href: '/admin/permissions', permKey: 'permissions', labelKey: 'admin.sidebar.permissions' as const, icon: 'admin_panel_settings', adminOnly: true },
       { href: '/admin/settings', permKey: 'settings', labelKey: 'admin.sidebar.settings' as const, icon: 'settings' },
     ],

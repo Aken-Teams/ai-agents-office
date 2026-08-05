@@ -690,6 +690,7 @@ const zhCN = {
   'admin.sidebar.tokens': 'Token 账本',
   'admin.sidebar.permissions': '权限管理',
   'admin.sidebar.security': '安全审计',
+  'admin.sidebar.apiTracking': 'API 追踪',
   'admin.sidebar.conversations': '对话管理',
   'admin.sidebar.teams': '团队协作',
   'admin.sidebar.reports': '回报记录',

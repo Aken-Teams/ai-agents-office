@@ -2696,4 +2696,51 @@ router.get('/line/message-quota', async (_req: Request, res: Response) => {
   }
 });
 
+// ── API-key usage tracking (ai_call_log) — ADMIN ONLY ────────────────────────
+// Ground-truth ledger of every Claude spawn: account (subscription, free) vs
+// api_key (billed), which model, and why the API key was used. Powers the admin
+// "API 追蹤" report so the daily API spend is fully explainable and attributable.
+router.get('/api-tracking/stats', async (req: Request, res: Response) => {
+  // Admin only — readonly reviewers must not see billing / API-key internals.
+  if ((req.user as { role?: string } | undefined)?.role !== 'admin') {
+    res.status(403).json({ error: 'Admin only' });
+    return;
+  }
+  const period = (req.query.period as string) || '30d';
+  const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
+  const since = `created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)`;
+  try {
+    const [byAuth, daily, byModel, bySkill, reasons, recentApiKey] = await Promise.all([
+      dbAll<{ auth_mode: string; calls: number; inTok: number; outTok: number }>(
+        `SELECT auth_mode, COUNT(*) calls, SUM(input_tokens) inTok, SUM(output_tokens) outTok
+         FROM ai_call_log WHERE ${since} GROUP BY auth_mode`),
+      dbAll<{ d: string; auth_mode: string; calls: number; outTok: number }>(
+        `SELECT DATE_FORMAT(created_at,'%Y-%m-%d') d, auth_mode, COUNT(*) calls, SUM(output_tokens) outTok
+         FROM ai_call_log WHERE ${since} GROUP BY d, auth_mode ORDER BY d ASC`),
+      dbAll<{ model: string | null; auth_mode: string; calls: number; outTok: number }>(
+        `SELECT model, auth_mode, COUNT(*) calls, SUM(output_tokens) outTok
+         FROM ai_call_log WHERE ${since} GROUP BY model, auth_mode ORDER BY outTok DESC`),
+      dbAll<{ skill_id: string | null; auth_mode: string; calls: number }>(
+        `SELECT skill_id, auth_mode, COUNT(*) calls
+         FROM ai_call_log WHERE ${since} GROUP BY skill_id, auth_mode ORDER BY calls DESC`),
+      dbAll<{ reason: string | null; calls: number }>(
+        `SELECT reason, COUNT(*) calls FROM ai_call_log
+         WHERE auth_mode='api_key' AND ${since} GROUP BY reason ORDER BY calls DESC`),
+      dbAll<{ created_at: string; skill_id: string | null; model: string | null; reason: string | null; input_tokens: number; output_tokens: number; success: number }>(
+        `SELECT created_at, skill_id, model, reason, input_tokens, output_tokens, success
+         FROM ai_call_log WHERE auth_mode='api_key' ORDER BY created_at DESC LIMIT 100`),
+    ]);
+    res.json({ period, days, byAuth, daily, byModel, bySkill, reasons, recentApiKey });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Ledger table may not exist yet (no Claude spawn since deploy) — return empty.
+    if (/doesn't exist|no such table|ER_NO_SUCH_TABLE/i.test(msg)) {
+      res.json({ period, days, byAuth: [], daily: [], byModel: [], bySkill: [], reasons: [], recentApiKey: [], empty: true });
+      return;
+    }
+    console.error('[api-tracking] query failed:', msg);
+    res.status(500).json({ error: 'query failed' });
+  }
+});
+
 export default router;

@@ -694,6 +694,7 @@ const zhTW = {
   'admin.sidebar.tokens': 'Token 帳本',
   'admin.sidebar.permissions': '權限管理',
   'admin.sidebar.security': '安全審計',
+  'admin.sidebar.apiTracking': 'API 追蹤',
   'admin.sidebar.conversations': '對話管理',
   'admin.sidebar.teams': '團隊協作',
   'admin.sidebar.reports': '回報紀錄',
