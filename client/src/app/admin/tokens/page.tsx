@@ -148,6 +148,16 @@ export default function AdminTokens() {
       const inputCost  = inputCostUSD  * fx;
       const outputCost = outputCostUSD * fx;
       const totalCost  = totalCostUSD  * fx;
+      // 先把每一列四捨五入成整數，再用「整數列」推導稅額與合計，
+      // 讓 服務小計 + 服務費 + 稅額 = 合計 完全對得起來（不會有 rounding drift）。
+      const TAX_RATE       = 0.05;
+      const inCostDisp     = Math.ceil(inputCost);                     // 輸入 line item
+      const outCostDisp    = Math.ceil(outputCost);                    // 輸出 line item
+      const subtotalDisp   = inCostDisp + outCostDisp;                 // 服務小計 = 兩個 line item 整數和
+      const serviceFeeDisp = Math.ceil(subtotalDisp * 0.2);           // 服務費 (20%)
+      const preTaxDisp     = subtotalDisp + serviceFeeDisp;           // 稅前
+      const taxAmount      = Math.ceil(preTaxDisp * TAX_RATE);         // 稅額 (5%)
+      const grandTotal     = preTaxDisp + taxAmount;                   // 合計 = 稅前 + 稅額
       const inputUnitPrice  = isTWD ? `NT$${(INPUT_RATE  * rate).toFixed(0)}/MTok` : `$${INPUT_RATE.toFixed(1)}/MTok`;
       const outputUnitPrice = isTWD ? `NT$${(OUTPUT_RATE * rate).toFixed(0)}/MTok` : `$${OUTPUT_RATE.toFixed(1)}/MTok`;
       const [year, month] = quoteMonth.split('-');
@@ -384,23 +394,23 @@ export default function AdminTokens() {
         <td class="desc"><strong>輸入 Token 使用費</strong><br><span style="font-size:12px;color:#888">Prompt / Input tokens</span></td>
         <td class="qty">${totalInput.toLocaleString()} tok</td>
         <td class="price">${inputUnitPrice}</td>
-        <td class="amount">${sym}${Math.ceil(inputCost).toLocaleString()}</td>
+        <td class="amount">${sym}${inCostDisp.toLocaleString()}</td>
       </tr>
       <tr>
         <td style="color:#bbb;font-size:12px">2</td>
         <td class="desc"><strong>輸出 Token 使用費</strong><br><span style="font-size:12px;color:#888">Completion / Output tokens</span></td>
         <td class="qty">${totalOutput.toLocaleString()} tok</td>
         <td class="price">${outputUnitPrice}</td>
-        <td class="amount">${sym}${Math.ceil(outputCost).toLocaleString()}</td>
+        <td class="amount">${sym}${outCostDisp.toLocaleString()}</td>
       </tr>
     </tbody>
   </table>
   <div class="subtotal-block">
     <table class="subtotal-table">
-      <tr><td class="s-label">服務小計</td><td class="s-value">${sym}${Math.ceil(inputCost + outputCost).toLocaleString()}</td></tr>
-      <tr><td class="s-label">服務費 (20%)</td><td class="s-value">${sym}${Math.ceil((inputCost + outputCost) * 0.2).toLocaleString()}</td></tr>
-      <tr><td class="s-label">稅額</td><td class="s-value">—</td></tr>
-      <tr class="total-row-final"><td class="s-label">合計 (${quoteCurrency})</td><td class="s-value">${sym}${Math.ceil(totalCost * 1.2).toLocaleString()}</td></tr>
+      <tr><td class="s-label">服務小計</td><td class="s-value">${sym}${subtotalDisp.toLocaleString()}</td></tr>
+      <tr><td class="s-label">服務費 (20%)</td><td class="s-value">${sym}${serviceFeeDisp.toLocaleString()}</td></tr>
+      <tr><td class="s-label">稅額 (5%)</td><td class="s-value">${sym}${taxAmount.toLocaleString()}</td></tr>
+      <tr class="total-row-final"><td class="s-label">合計 (${quoteCurrency})</td><td class="s-value">${sym}${grandTotal.toLocaleString()}</td></tr>
     </table>
   </div>` : ''}
 
@@ -421,10 +431,10 @@ export default function AdminTokens() {
     ${!quoteSections.summary ? `
     <div class="subtotal-block">
       <table class="subtotal-table">
-        <tr><td class="s-label">服務小計</td><td class="s-value">${sym}${Math.ceil(inputCost + outputCost).toLocaleString()}</td></tr>
-        <tr><td class="s-label">服務費 (20%)</td><td class="s-value">${sym}${Math.ceil((inputCost + outputCost) * 0.2).toLocaleString()}</td></tr>
-        <tr><td class="s-label">稅額</td><td class="s-value">—</td></tr>
-        <tr class="total-row-final"><td class="s-label">合計 (${quoteCurrency})</td><td class="s-value">${sym}${Math.ceil(totalCost * 1.2).toLocaleString()}</td></tr>
+        <tr><td class="s-label">服務小計</td><td class="s-value">${sym}${subtotalDisp.toLocaleString()}</td></tr>
+        <tr><td class="s-label">服務費 (20%)</td><td class="s-value">${sym}${serviceFeeDisp.toLocaleString()}</td></tr>
+        <tr><td class="s-label">稅額 (5%)</td><td class="s-value">${sym}${taxAmount.toLocaleString()}</td></tr>
+        <tr class="total-row-final"><td class="s-label">合計 (${quoteCurrency})</td><td class="s-value">${sym}${grandTotal.toLocaleString()}</td></tr>
       </table>
     </div>` : ''}
   </div>` : ''}
@@ -434,19 +444,23 @@ export default function AdminTokens() {
     <div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#0D9488;margin-bottom:14px">費用彙總</div>
     <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f0f0f0">
       <span style="font-size:13px;color:#555">輸入 Token（${inputUnitPrice}）</span>
-      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${Math.ceil(inputCost).toLocaleString()}</span>
+      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${inCostDisp.toLocaleString()}</span>
     </div>
     <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f0f0f0">
       <span style="font-size:13px;color:#555">輸出 Token（${outputUnitPrice}）</span>
-      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${Math.ceil(outputCost).toLocaleString()}</span>
+      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${outCostDisp.toLocaleString()}</span>
     </div>
     <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f0f0f0">
       <span style="font-size:13px;color:#555">服務費（20%）</span>
-      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${Math.ceil((inputCost + outputCost) * 0.2).toLocaleString()}</span>
+      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${serviceFeeDisp.toLocaleString()}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f0f0f0">
+      <span style="font-size:13px;color:#555">稅額（5%）</span>
+      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${taxAmount.toLocaleString()}</span>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:baseline;padding:14px 0 0;border-top:2px solid #0D9488;margin-top:6px">
       <span style="font-size:15px;font-weight:800;color:#111">合計（${quoteCurrency}）</span>
-      <span style="font-size:22px;font-weight:900;color:#0D9488;font-family:'Courier New',monospace">${sym}${Math.ceil(totalCost * 1.2).toLocaleString()}</span>
+      <span style="font-size:22px;font-weight:900;color:#0D9488;font-family:'Courier New',monospace">${sym}${grandTotal.toLocaleString()}</span>
     </div>
   </div>` : ''}
 
