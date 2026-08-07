@@ -23,6 +23,21 @@ const AUTH_WARMUP_TIMEOUT_MS = Math.max(1000, parseInt(process.env.AUTH_WARMUP_T
 function humanizeClaudeError(text: string): string | null {
   const t = text.trim();
 
+  // FRONTEND PRIVACY: any Claude usage / session / rate / capacity limit becomes a
+  // GENERIC "busy" message. This deliberately hides that we run on Claude auth — the
+  // raw CLI wording ("You've hit your session limit · resets 3:10pm") would reveal the
+  // provider AND a subscription-style reset time (which is volatile and unhelpful).
+  // Returned as a translated string → emitted as an 'error' event (not shown as chat
+  // content), so it never leaks into the visible response.
+  if (
+    /you[''’]ve (?:hit|reached) your \S* ?limit/i.test(t) ||
+    /(session|usage|weekly|monthly|5[\s-]?hour|hourly|daily)[\s-]?limit/i.test(t) ||
+    /resets?\s+\d{1,2}(?::\d{2})?\s*[ap]m/i.test(t) ||
+    (/(rate.?limit|too many requests|429|overloaded|over.?capacity|503|quota)/i.test(t) && t.length < 1500)
+  ) {
+    return 'AI 服務忙碌中，請稍後再試。';
+  }
+
   // "You've hit your limit · resets 4pm (Asia/Taipei)"
   const limitMatch = t.match(/You[''\u2019]ve hit your limit.*?resets?\s+(\d{1,2}(?::\d{2})?\s*[ap]m)(?:\s*\(([^)]+)\))?/i);
   if (limitMatch) {
@@ -66,16 +81,17 @@ function humanizeClaudeError(text: string): string | null {
 function isQuotaLimitError(text: string): boolean {
   if (!text) return false;
   const t = text.toLowerCase();
-  // Subscription usage limits (5-hour rolling / weekly / monthly). The exact wording
-  // varies across Claude Code CLI versions, so match the whole family \u2014 the earlier
-  // narrow patterns missed real 5-hour-limit errors and blocked the API-key overflow:
-  //   "you've hit/reached your limit", "usage limit reached", "reached your usage limit",
+  // Subscription usage limits (5-hour rolling / weekly / monthly). Real wording seen
+  // in production: "You've hit your session limit \u00b7 resets 3:10pm (Asia/Taipei)".
+  // Match the whole family loosely \u2014 narrow patterns kept blocking the API-key overflow:
+  //   "you've hit/reached your <session|usage|\u2026> limit", "\u2026limit \u00b7 resets 3:10pm",
   //   "limit will reset at 4pm", "5-hour limit reached", "weekly/monthly limit", etc.
-  if (/you[''\u2019]ve (hit|reached) your (usage )?limit/.test(t)) return true;
-  if (/(usage|weekly|monthly|5[\s-]?hour|hourly|daily)[\s-]?limit/.test(t)) return true;
-  if (/limit (reached|exceeded|will reset|resets)|reached your (usage )?limit|resets? (at|in) /.test(t)) return true;
-  // Rate limiting / capacity \u2014 the paid API has a separate window, so retrying helps.
-  if (/(rate.?limit|too many requests|429|overloaded|over.?capacity|503|quota)/.test(t) && t.length < 1200) return true;
+  if (/you[''\u2019]ve (hit|reached) your \S* ?limit\b/.test(t)) return true;         // your <word> limit
+  if (/(session|usage|weekly|monthly|5[\s-]?hour|hourly|daily|rate)[\s-]?limit\b/.test(t)) return true;
+  if (/\blimit\b/.test(t) && /reset|resets?\s+\d/.test(t)) return true;          // "limit \u2026 resets 3:10pm"
+  if (/resets?\s+\d{1,2}(:\d{2})?\s*[ap]m/.test(t)) return true;                 // "resets 3:10pm / 4pm"
+  // Rate limiting / capacity / explicit "limit reached" \u2014 paid API has its own window.
+  if (/(rate.?limit|too many requests|429|overloaded|over.?capacity|503|quota|limit reached|limit exceeded)/.test(t) && t.length < 1500) return true;
   return false;
 }
 

@@ -268,10 +268,13 @@ export class Orchestrator {
             }
           );
         } catch (retryErr) {
-          // Both attempts failed — bail out
+          // Both attempts failed — show a GENERIC message to the user. Never surface the
+          // raw error (it can reveal we run on Claude auth — e.g. session-limit wording).
           const errMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
-          allAssistantText += `\n\nRouter agent failed: ${errMsg}`;
-          this.sseWriter({ type: 'text', data: `\n\nRouter agent failed: ${errMsg}` });
+          console.warn(`[Orchestrator] Router failed (both attempts): ${errMsg}`);
+          const friendly = 'AI 服務忙碌中，請稍後再試。';
+          allAssistantText += friendly;
+          this.sseWriter({ type: 'text', data: friendly });
           break;
         }
       }
