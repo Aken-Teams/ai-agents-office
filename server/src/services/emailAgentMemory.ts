@@ -9,12 +9,16 @@ import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { config } from '../config.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
+import { acquireAuxAiSlot } from './auxAiConcurrency.js';
 
 const MAX_EMAIL_AGENT_MEMORIES = 30;
 const MAX_PER_EXTRACTION = 2;
 const EXTRACTION_TIMEOUT_MS = 20_000;
 
-function spawnExtractionClaude(prompt: string): Promise<string | null> {
+async function spawnExtractionClaude(prompt: string): Promise<string | null> {
+  // Auxiliary spawn — not covered by spawnClaude()'s AI_MAX_CONCURRENT gate, and
+  // the email-agent slot is held by the CALLER, not by this memory pass.
+  const releaseAux = await acquireAuxAiSlot();
   return new Promise((resolve) => {
     const resolvedCmd = resolveClaudeCliPath(config.claudeCliPath);
     const args = [
@@ -35,7 +39,7 @@ function spawnExtractionClaude(prompt: string): Promise<string | null> {
       proc = spawn(resolvedCmd.bin, [...resolvedCmd.prefix, ...args], {
         cwd: tmpDir, shell: false, stdio: ['pipe', 'pipe', 'pipe'], env: cleanEnv,
       });
-    } catch { resolve(null); return; }
+    } catch { releaseAux(); resolve(null); return; }
 
     proc.stdin!.write(prompt);
     proc.stdin!.end();
@@ -70,12 +74,20 @@ function spawnExtractionClaude(prompt: string): Promise<string | null> {
 
     const timeout = setTimeout(() => {
       try { proc.kill(); } catch {}
+      releaseAux();   // kill() may not land — never leave the slot held
       resolve(output || null);
     }, EXTRACTION_TIMEOUT_MS);
 
     proc.on('exit', () => {
       clearTimeout(timeout);
+      releaseAux();
       resolve(output || null);
+    });
+
+    proc.on('error', () => {
+      clearTimeout(timeout);
+      releaseAux();
+      resolve(null);
     });
   });
 }

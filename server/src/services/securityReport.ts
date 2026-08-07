@@ -13,6 +13,7 @@ import fs from 'fs';
 import path from 'path';
 import { config } from '../config.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
+import { acquireAuxAiSlot } from './auxAiConcurrency.js';
 import { logAiCall } from './aiCallLog.js';
 import { dbAll, dbGet } from '../db.js';
 import { buildDocxBuffer, type DocxInput } from '../generators/generate-docx.js';
@@ -25,7 +26,10 @@ function isQuotaLimitError(text: string): boolean {
 }
 
 /** Tool-less one-shot Claude spawn that returns plain text (no file tools). */
-function spawnClaudeText(prompt: string, timeoutMs: number): Promise<string | null> {
+async function spawnClaudeText(prompt: string, timeoutMs: number): Promise<string | null> {
+  // Auxiliary spawn — this local helper never goes through spawnClaude(), so the
+  // AI_MAX_CONCURRENT gate does not see it. Held across the api-key retry.
+  const releaseAux = await acquireAuxAiSlot();
   return new Promise<string | null>((resolve) => {
     const resolvedCmd = resolveClaudeCliPath(config.claudeCliPath);
     const args = [
@@ -56,6 +60,7 @@ function spawnClaudeText(prompt: string, timeoutMs: number): Promise<string | nu
       } catch (err) {
         console.error('[SecurityReport] spawn failed:', err);
         cleanup();
+        releaseAux();
         resolve(null);
         return;
       }
@@ -106,6 +111,7 @@ function spawnClaudeText(prompt: string, timeoutMs: number): Promise<string | nu
         try { proc.kill(); } catch {}
         console.warn(`[SecurityReport] Claude timed out after ${timeoutMs}ms (outputLen=${output.length})`);
         cleanup();
+        releaseAux();   // kill() may not land — never leave the slot held
         resolve(output || null);
       }, timeoutMs);
 
@@ -127,6 +133,7 @@ function spawnClaudeText(prompt: string, timeoutMs: number): Promise<string | nu
           console.error(`[SecurityReport] Claude exited code=${code}, stderr=${stderrOutput.substring(0, 500)}`);
         }
         cleanup();
+        releaseAux();
         resolve(output || null);
       });
     }

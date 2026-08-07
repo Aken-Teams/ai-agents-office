@@ -129,8 +129,18 @@ async function main() {
   app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error(`[Unhandled] ${req.method} ${req.path}:`, err);
     if (res.headersSent) { next(err); return; }
-    res.status(500).json({
-      error: '伺服器發生錯誤，請稍後再試。',
+    // Honour a status carried by the error before falling back to 500. Errors
+    // thrown by middleware are typed: express.json() raises PayloadTooLargeError
+    // with status 413, which a hardcoded 500 turned into "伺服器發生錯誤" and made
+    // an oversized upload look like a server fault instead of a client one.
+    const status = (err as { status?: number; statusCode?: number }).status
+      ?? (err as { status?: number; statusCode?: number }).statusCode
+      ?? 500;
+    const safeStatus = Number.isInteger(status) && status >= 400 && status <= 599 ? status : 500;
+    res.status(safeStatus).json({
+      error: safeStatus === 413
+        ? '上傳內容過大，請縮小後再試。'
+        : '伺服器發生錯誤，請稍後再試。',
       ...(config.nodeEnv !== 'production' ? { detail: err.message } : {}),
     });
   });

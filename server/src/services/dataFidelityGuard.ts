@@ -20,6 +20,7 @@ import { extractText, getDocumentProxy } from 'unpdf';
 import { config } from '../config.js';
 import { dbAll } from '../db.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
+import { acquireAuxAiSlot } from './auxAiConcurrency.js';
 import { logAiCall } from './aiCallLog.js';
 import { agentRebuild, agentRegenerateInPlace } from './agentRebuilder.js';
 import type { DocumentBlock, GeneratedFile, SSEEvent } from '../types.js';
@@ -116,7 +117,11 @@ export async function buildSourceText(userId: string, conversationId: string): P
 
 // ── Tool-less one-shot Claude call (stateless checker) ───────────────────────
 
-function runChecker(prompt: string): Promise<string | null> {
+async function runChecker(prompt: string): Promise<string | null> {
+  // Auxiliary spawn: bypasses spawnClaude()'s AI_MAX_CONCURRENT gate, so cap it
+  // here. Held across the api-key retry below (same logical job) and released
+  // exactly once at a terminal state.
+  const releaseAux = await acquireAuxAiSlot();
   return new Promise(resolve => {
     const resolved = resolveClaudeCliPath(config.claudeCliPath);
     const args = [
@@ -136,7 +141,7 @@ function runChecker(prompt: string): Promise<string | null> {
       let proc;
       try {
         proc = spawn(resolved.bin, [...resolved.prefix, ...args], { cwd: tmpDir, shell: false, stdio: ['pipe', 'pipe', 'pipe'], env });
-      } catch { cleanup(); resolve(null); return; }
+      } catch { cleanup(); releaseAux(); resolve(null); return; }
 
       proc.stdin!.write(prompt); proc.stdin!.end();
       let output = '', buffer = '', stderr = '';
@@ -159,7 +164,7 @@ function runChecker(prompt: string): Promise<string | null> {
         stderr += d.toString();
         if (stderr.length > MAX_STDERR) stderr = stderr.slice(-MAX_STDERR);
       });
-      const timer = setTimeout(() => { try { proc.kill(); } catch { /* ignore */ } cleanup(); resolve(output || null); }, CHECKER_TIMEOUT);
+      const timer = setTimeout(() => { try { proc.kill(); } catch { /* ignore */ } cleanup(); releaseAux(); resolve(output || null); }, CHECKER_TIMEOUT);
       proc.on('exit', code => {
         clearTimeout(timer);
         logAiCall({
@@ -170,9 +175,9 @@ function runChecker(prompt: string): Promise<string | null> {
           inputTokens: 0, outputTokens: 0, exitCode: code, success: !!output,
         });
         if (!useApiKey && code !== 0 && !output && /quota|rate.?limit|overloaded/i.test(stderr) && config.anthropicApiKey) {
-          doSpawn(true); return;
+          doSpawn(true); return;   // retry reuses the slot — do NOT release here
         }
-        cleanup(); resolve(output || null);
+        cleanup(); releaseAux(); resolve(output || null);
       });
     }
     doSpawn(false);

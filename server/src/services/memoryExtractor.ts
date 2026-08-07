@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { config } from '../config.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
+import { acquireAuxAiSlot } from './auxAiConcurrency.js';
 
 // Thresholds
 const MIN_MSGS_FOR_SUMMARY = 1;   // Summary: extract from any conversation
@@ -197,7 +198,11 @@ function parseExtractionResult(text: string): ExtractionResult | null {
   }
 }
 
-function spawnExtractionClaude(prompt: string): Promise<string | null> {
+async function spawnExtractionClaude(prompt: string): Promise<string | null> {
+  // Ungated, this is the worst pile-up path in the app: generate.ts fires it and
+  // forgets it after res.end(), so every finished generation launched a ~300MB CLI
+  // outside the AI_MAX_CONCURRENT cap. Queue here instead.
+  const releaseAux = await acquireAuxAiSlot();
   return new Promise((resolve) => {
     const resolvedCmd = resolveClaudeCliPath(config.claudeCliPath);
     const args = [
@@ -225,6 +230,7 @@ function spawnExtractionClaude(prompt: string): Promise<string | null> {
         env: cleanEnv,
       });
     } catch {
+      releaseAux();
       resolve(null);
       return;
     }
@@ -268,12 +274,24 @@ function spawnExtractionClaude(prompt: string): Promise<string | null> {
     const timeout = setTimeout(() => {
       try { proc.kill(); } catch { /* already dead */ }
       console.warn('[MemoryExtractor] Timed out');
+      // Release on the timeout path too: if kill() fails to land, 'exit' never
+      // fires and the slot would leak, shrinking the cap permanently.
+      releaseAux();
       resolve(null);
     }, EXTRACTION_TIMEOUT_MS);
 
     proc.on('exit', () => {
       clearTimeout(timeout);
+      releaseAux();
       resolve(output || null);
+    });
+
+    // spawn() reports async failures (e.g. ENOENT) here, not by throwing; without
+    // this the promise would sit on the slot until the timeout.
+    proc.on('error', () => {
+      clearTimeout(timeout);
+      releaseAux();
+      resolve(null);
     });
   });
 }
