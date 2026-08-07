@@ -51,8 +51,8 @@ export default function SlideBlockPreview({ data, type }: { data: Record<string,
         <>
           {title && <div className="text-xs font-bold text-on-surface truncate">{title}</div>}
           <div className="grid grid-cols-2 gap-1.5">
-            {data.left && <div className="text-[9px] text-on-surface-variant line-clamp-3">{typeof data.left === 'string' ? data.left : JSON.stringify(data.left).slice(0, 60)}</div>}
-            {data.right && <div className="text-[9px] text-on-surface-variant line-clamp-3">{typeof data.right === 'string' ? data.right : JSON.stringify(data.right).slice(0, 60)}</div>}
+            {!!data.left && <div className="text-[9px] text-on-surface-variant line-clamp-3">{typeof data.left === 'string' ? data.left : JSON.stringify(data.left).slice(0, 60)}</div>}
+            {!!data.right && <div className="text-[9px] text-on-surface-variant line-clamp-3">{typeof data.right === 'string' ? data.right : JSON.stringify(data.right).slice(0, 60)}</div>}
           </div>
         </>
       )}

@@ -44,7 +44,8 @@ const NAV_GROUPS = [
 ];
 
 // Flat list for mobile nav and permission checks
-const NAV_LINKS = NAV_GROUPS.flatMap(g => g.links);
+type NavLink = (typeof NAV_GROUPS)[number]['links'][number];
+const NAV_LINKS = NAV_GROUPS.flatMap<NavLink>(g => g.links);
 
 const DOC_TYPES = [
   { id: 'pptx-gen', labelKey: 'nav.docTypes.pptx.label' as const, descKey: 'nav.docTypes.pptx.desc' as const, icon: 'present_to_all', colorClass: 'text-warning' },
