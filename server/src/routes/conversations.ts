@@ -10,6 +10,22 @@ const router = Router();
 // All routes require authentication
 router.use(authMiddleware);
 
+// conversations.title is varchar(255). Without this check an over-long title
+// reached MySQL and came back as a truncation error, which the generic error
+// handler reported as a 500 — a server fault for what is really a bad request.
+const TITLE_MAX = 255;
+
+/** Returns a user-facing message when the title is unusable, or null when it's fine. */
+function titleError(title: unknown): string | null {
+  if (title === undefined || title === null) return null;   // optional on both routes
+  if (typeof title !== 'string') return '標題格式不正確。';
+  // Count code points, not UTF-16 units: varchar(255) counts CHARACTERS, so an
+  // emoji is 1 to MySQL but 2 to String.length — using .length would reject
+  // titles the column accepts.
+  if ([...title].length > TITLE_MAX) return `標題不可超過 ${TITLE_MAX} 個字元。`;
+  return null;
+}
+
 // GET /api/conversations
 router.get('/', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
@@ -24,6 +40,10 @@ router.get('/', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const { title, skillId, category, system_prompt, icon, team_id } = req.body;
+
+  const titleErr = titleError(title);
+  if (titleErr) { res.status(400).json({ error: titleErr }); return; }
+
   const id = uuidv4();
 
   const effectiveSkillId = skillId || null;
@@ -67,6 +87,9 @@ router.get('/:id', async (req: Request, res: Response) => {
 router.patch('/:id', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const { title, status, system_prompt, icon, skill_id, team_id } = req.body;
+
+  const titleErr = titleError(title);
+  if (titleErr) { res.status(400).json({ error: titleErr }); return; }
 
   const conversation = await dbGet<Conversation>(
     'SELECT * FROM conversations WHERE id = ? AND user_id = ?',
