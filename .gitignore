@@ -7,3 +7,6 @@ workspace/
 *.db
 *.sqlite
 *.sqlite3
+
+# runtime log from `pnpm run start`
+deploy.log
