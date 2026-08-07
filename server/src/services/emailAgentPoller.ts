@@ -263,6 +263,10 @@ async function spawnClaudeOneShot(prompt: string, timeoutMs: number, model?: str
   }
 }
 
+// Per-user in-flight guard for pollNewEmails (see wrapper). Maps userId → start ms.
+const pollInFlight = new Map<string, number>();
+const POLL_INFLIGHT_MAX_MS = 90_000; // stuck-poll self-heal window
+
 /**
  * Poll for new emails and push Layer 1 summaries to the user.
  * @param isInitial — true on first connect: always send recent unread as a welcome batch
@@ -270,6 +274,27 @@ async function spawnClaudeOneShot(prompt: string, timeoutMs: number, model?: str
  *   summaries and record NO tokens (the user hasn't opted in to Email Agents).
  */
 export async function pollNewEmails(userId: string, isInitial = false, aiEnabled = true): Promise<void> {
+  // HEAP GUARD: rapid disconnect/reconnect (tab reloads, flaky network) used to fire a
+  // fresh 50-email fetch on EVERY reconnect — piling up concurrent fetches (each copies
+  // 50 messages) in the heap faster than GC could reclaim them. Cap to ONE poll per user
+  // at a time; a poll stuck longer than POLL_INFLIGHT_MAX_MS self-heals so a hung gateway
+  // can't wedge the user's polls forever. A skipped reconnect still gets its data — the
+  // in-flight poll pushes to whatever connection is current when it finishes.
+  const nowMs = Date.now();
+  const started = pollInFlight.get(userId);
+  if (started && nowMs - started < POLL_INFLIGHT_MAX_MS) {
+    console.log(`[EmailAgent] Poll already in flight for ${userId} (${nowMs - started}ms) — skipping (initial=${isInitial})`);
+    return;
+  }
+  pollInFlight.set(userId, nowMs);
+  try {
+    await pollNewEmailsInner(userId, isInitial, aiEnabled);
+  } finally {
+    pollInFlight.delete(userId);
+  }
+}
+
+async function pollNewEmailsInner(userId: string, isInitial = false, aiEnabled = true): Promise<void> {
   let token = await getMailToken(userId);
 
   // On initial connect, the AD login may still be authenticating Outlook (fire-and-forget).

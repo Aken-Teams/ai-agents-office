@@ -64,8 +64,18 @@ function humanizeClaudeError(text: string): string | null {
  * that can be retried with an API key.
  */
 function isQuotaLimitError(text: string): boolean {
-  if (/you[''\u2019]ve hit your limit/i.test(text)) return true;
-  if (/rate.?limit|too many requests|429/i.test(text) && text.length < 500) return true;
+  if (!text) return false;
+  const t = text.toLowerCase();
+  // Subscription usage limits (5-hour rolling / weekly / monthly). The exact wording
+  // varies across Claude Code CLI versions, so match the whole family \u2014 the earlier
+  // narrow patterns missed real 5-hour-limit errors and blocked the API-key overflow:
+  //   "you've hit/reached your limit", "usage limit reached", "reached your usage limit",
+  //   "limit will reset at 4pm", "5-hour limit reached", "weekly/monthly limit", etc.
+  if (/you[''\u2019]ve (hit|reached) your (usage )?limit/.test(t)) return true;
+  if (/(usage|weekly|monthly|5[\s-]?hour|hourly|daily)[\s-]?limit/.test(t)) return true;
+  if (/limit (reached|exceeded|will reset|resets)|reached your (usage )?limit|resets? (at|in) /.test(t)) return true;
+  // Rate limiting / capacity \u2014 the paid API has a separate window, so retrying helps.
+  if (/(rate.?limit|too many requests|429|overloaded|over.?capacity|503|quota)/.test(t) && t.length < 1200) return true;
   return false;
 }
 
@@ -561,6 +571,10 @@ export function spawnClaude(
     let outputTokens = 0;
     let model = '';
     let stdoutBuffer = '';
+    // Bounded tail of raw stdout (last 4KB). Some CLI versions report a usage-limit
+    // hit via a stream-json result on STDOUT (not stderr); we scan this in the close
+    // handler so the API-key overflow fires on 5-hour-limit errors wherever they land.
+    let stdoutTail = '';
     // Output ceiling: a stuck agent (model in a loop / tool thrashing) can stream
     // output for its whole timeout (pptx timeout is 15 min), and the accumulation
     // downstream grows memory the whole time. Abort as runaway once total stdout
@@ -587,6 +601,8 @@ export function spawnClaude(
       releaseAuth();
       if (killedForOutput) return;
       const chunk = data.toString();
+      stdoutTail += chunk;
+      if (stdoutTail.length > 4096) stdoutTail = stdoutTail.slice(-4096);
       stdoutBytes += chunk.length;
       if (stdoutBytes > MAX_OUTPUT_BYTES) {
         killedForOutput = true;
@@ -716,7 +732,7 @@ export function spawnClaude(
       // logged-out production account for weeks. Those now fail visibly so they get
       // fixed at the source. Set API_KEY_FALLBACK_QUOTA_ONLY=false for the old behavior.
       if (!killedForOutput && !useApiKey && code !== 0 && !inputTokens && config.anthropicApiKey) {
-        const quotaHit = isQuotaLimitError(stderrBuffer);
+        const quotaHit = isQuotaLimitError(stderrBuffer) || isQuotaLimitError(stdoutTail);
         const shouldFallback = quotaHit || !config.apiKeyFallbackQuotaOnly;
         if (shouldFallback) {
           const reason = quotaHit ? 'account rate/usage limit hit' : 'account failure (broad fallback enabled)';
