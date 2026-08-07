@@ -10,6 +10,7 @@ import { config, pricingMarkupSql } from '../config.js';
 import { applyWatermark, getWatermarkSettings, setWatermarkSettings } from '../services/watermark.js';
 import { getMailToken, fetchMessageDetail, resolveCidImages } from '../services/outlookApi.js';
 import { mailGatewayStats, gatewayFetch } from '../services/mailGatewayLimit.js';
+import { getSystemPressure } from '../services/systemPressure.js';
 import { sendXlsx } from '../services/xlsxExport.js';
 import { buildSecurityReportDocx } from '../services/securityReport.js';
 import { getUserUsageLimitUsd, setUserUsageLimitUsd, getUserDisplayCost, getEffectiveUserLimit, getStorageQuotaGb, setStorageQuotaGb, getUploadQuotaMb, setUploadQuotaMb } from '../services/usageLimit.js';
@@ -40,6 +41,15 @@ router.get('/badge-counts', async (_req: Request, res: Response) => {
     quotaRequests = q?.n ?? 0;
   } catch { /* ignore */ }
   res.json({ reports, quotaRequests });
+});
+
+// ==================== System pressure ====================
+
+// GET /api/admin/system/pressure — live load for the top-bar indicator.
+// Synchronous and DB-free on purpose: the client polls this on an interval, so it
+// must never add load of its own to the thing it is measuring.
+router.get('/system/pressure', (_req: Request, res: Response) => {
+  res.json(getSystemPressure());
 });
 
 // ==================== Overview ====================

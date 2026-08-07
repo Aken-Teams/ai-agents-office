@@ -34,3 +34,8 @@ export async function acquireEmailSlot(): Promise<() => void> {
     if (next) next();
   };
 }
+
+/** Live occupancy, for the admin system-pressure indicator. */
+export function getEmailSlotStats(): { active: number; max: number; queued: number } {
+  return { active, max: MAX_CONCURRENT, queued: waiters.length };
+}

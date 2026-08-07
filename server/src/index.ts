@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { config, validateConfig } from './config.js';
+import { requestMetricsMiddleware } from './services/requestMetrics.js';
 import { initializeDatabase, dbGet } from './db.js';
 import { initOpsDb } from './opsDb.js';
 import { reportsRouter, adminReportsRouter } from './routes/reports.js';
@@ -77,6 +78,10 @@ async function main() {
   app.use('/webhook', rawBodyMiddleware);
 
   app.use(express.json({ limit: '1mb' }));
+
+  // Rolling in-flight/latency counters for the admin pressure indicator. Mounted
+  // before every route so nothing escapes the count, and it only reads a clock.
+  app.use(requestMetricsMiddleware);
 
   // LINE webhook (and other webhook integrations later) live under /webhook/*.
   app.use('/webhook', lineRoutes);

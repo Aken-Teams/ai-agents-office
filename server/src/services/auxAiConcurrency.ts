@@ -51,3 +51,8 @@ export async function acquireAuxAiSlot(): Promise<() => void> {
     if (next) next();
   };
 }
+
+/** Live occupancy, for the admin system-pressure indicator. */
+export function getAuxAiSlotStats(): { active: number; max: number; queued: number } {
+  return { active, max: MAX_CONCURRENT, queued: waiters.length };
+}

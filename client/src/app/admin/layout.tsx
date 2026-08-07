@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { AdminAuthProvider, useAdminAuth } from './components/AdminAuthProvider';
 import AdminSidebar from './components/AdminSidebar';
+import SystemPressureBar from './components/SystemPressureBar';
 import { I18nProvider } from '../../i18n';
 
 const ADMIN_SIDEBAR_KEY = 'admin-sidebar-collapsed';
@@ -36,6 +37,12 @@ function AdminShell({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen bg-surface-container-lowest">
         <AdminSidebar />
         <main className={`min-h-screen flex flex-col transition-all duration-300 pt-14 md:pt-0 ${collapsed ? 'md:ml-[68px]' : 'md:ml-64'}`}>
+          {/* Slim status strip above every admin page. Sticky so the indicator stays
+              visible while scrolling long tables. */}
+          <div className="sticky top-14 md:top-0 z-40 flex justify-end items-center h-9 px-3
+                          bg-surface-container-lowest/85 backdrop-blur-sm border-b border-outline-variant/10">
+            <SystemPressureBar />
+          </div>
           {children}
         </main>
       </div>
