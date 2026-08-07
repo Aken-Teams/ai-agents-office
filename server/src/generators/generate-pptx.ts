@@ -21,11 +21,18 @@
  * }
  */
 
-import PptxGenJSModule from 'pptxgenjs';
+import type PptxGenJSModule from 'pptxgenjs';
 import fs from 'fs';
+import { createRequire } from 'module';
+
+// pptxgenjs 4.x ships dist/pptxgen.es.js under the "import" condition but omits
+// "type": "module", so Node parses that ESM file as CJS and throws. Load the
+// package's CJS build explicitly instead of relying on the broken condition.
+const require = createRequire(import.meta.url);
+const PptxGenJSRaw = require('pptxgenjs') as typeof PptxGenJSModule;
 
 // Handle ESM/CJS interop - pptxgenjs may double-wrap the default export
-const PptxGenJS = (PptxGenJSModule as unknown as { default?: typeof PptxGenJSModule }).default || PptxGenJSModule;
+const PptxGenJS = (PptxGenJSRaw as unknown as { default?: typeof PptxGenJSModule }).default || PptxGenJSRaw;
 
 // ── Stat card colors (used for stats slide) ──────────────────
 const STAT_COLORS = ['2B6CB0', 'E84855', '38A169', 'D69E2E', '805AD5', 'DD6B20'];

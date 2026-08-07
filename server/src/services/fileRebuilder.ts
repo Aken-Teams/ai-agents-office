@@ -3,12 +3,19 @@ import fs from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import JSZip from 'jszip';
-import PptxGenJSModule from 'pptxgenjs';
+import type PptxGenJSModule from 'pptxgenjs';
+import { createRequire } from 'module';
 import { dbGet, dbRun } from '../db.js';
 import { normalizePptx } from './pptxNormalize.js';
 
+// pptxgenjs 4.x ships dist/pptxgen.es.js under the "import" condition but omits
+// "type": "module", so Node parses that ESM file as CJS and throws. Load the
+// package's CJS build explicitly instead of relying on the broken condition.
+const require = createRequire(import.meta.url);
+const PptxGenJSRaw = require('pptxgenjs') as typeof PptxGenJSModule;
+
 // pptxgenjs may double-wrap the default export (ESM/CJS interop)
-const PptxGenJS = (PptxGenJSModule as unknown as { default?: typeof PptxGenJSModule }).default || PptxGenJSModule;
+const PptxGenJS = (PptxGenJSRaw as unknown as { default?: typeof PptxGenJSModule }).default || PptxGenJSRaw;
 import { config } from '../config.js';
 import type { DocumentBlocksRecord, DocumentBlock, GeneratedFile } from '../types.js';
 
