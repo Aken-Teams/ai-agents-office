@@ -10,3 +10,6 @@ workspace/
 
 # runtime log from `pnpm run start`
 deploy.log
+
+# TypeScript incremental build cache
+*.tsbuildinfo
