@@ -16,7 +16,6 @@ import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs';
 import { spawnClaude } from './claudeCli.js';
-import { acquireAiSlot } from './aiConcurrency.js';
 import { deepseekChatStream } from './deepseek.js';
 import { truncateResultForRouter } from './taskParser.js';
 import { dbGet, dbAll, dbRun } from '../db.js';
@@ -259,9 +258,10 @@ async function runOneClaude(
   mcpEmailToken?: string,
   mcpKmOnBehalf?: string,
 ): Promise<{ text: string; inputTokens: number; outputTokens: number; model: string }> {
-  // Global gate: cap total heavy AI processes so the scheduler can't fan out
-  // dozens of Claude CLIs at once and exhaust host memory.
-  const release = await acquireAiSlot();
+  // The global cap that stops the scheduler fanning out dozens of Claude CLIs is
+  // now enforced inside spawnClaude itself. Taking a slot here as well would
+  // deadlock: AI_MAX_CONCURRENT callers would each hold one while waiting for
+  // another that can never free up.
   return new Promise(resolve => {
     let text = '';
     let inputTokens = 0, outputTokens = 0, model = '';
@@ -294,7 +294,6 @@ async function runOneClaude(
       if (finished) return;
       finished = true;
       clearTimeout(timer);
-      release();
       resolve({ text, inputTokens, outputTokens, model });
     };
     const timer = setTimeout(() => { try { abort(); } catch { /* ignore */ } finish(); }, timeoutMs);

@@ -10,7 +10,6 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { spawnClaude } from './claudeCli.js';
-import { acquireAiSlot } from './aiConcurrency.js';
 import { recordTokenUsage } from './tokenTracker.js';
 import { dbGet } from '../db.js';
 import type { SSEEvent } from '../types.js';
@@ -73,8 +72,9 @@ export async function generateFormalReport(opts: {
 
   const message = buildUserMessage(run.question, run.result || '', members);
 
-  // Global gate: share the system-wide heavy-AI cap (formal report = full model).
-  const release = await acquireAiSlot();
+  // The system-wide heavy-AI cap is enforced inside spawnClaude itself, so this
+  // must NOT take a slot too: holding one here while spawnClaude waits for another
+  // would deadlock once AI_MAX_CONCURRENT callers are in flight.
   const result = await new Promise<{ text: string; inputTokens: number; outputTokens: number; model: string }>(resolve => {
     let text = '';
     let inputTokens = 0, outputTokens = 0, model = '';
@@ -91,7 +91,6 @@ export async function generateFormalReport(opts: {
       if (finished) return;
       finished = true;
       clearTimeout(timer);
-      release();
       resolve({ text, inputTokens, outputTokens, model });
     };
     const timer = setTimeout(() => { try { abort(); } catch { /* ignore */ } finish(); }, REPORT_TIMEOUT_MS);

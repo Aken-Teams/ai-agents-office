@@ -8,6 +8,7 @@ import { config } from '../config.js';
 import { getSandboxPath } from './sandbox.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
 import { acquireAuthSlot } from './claudeAuthGate.js';
+import { acquireAiSlot } from './aiConcurrency.js';
 import { logAiCall } from './aiCallLog.js';
 import type { SSEEvent } from '../types.js';
 
@@ -486,6 +487,19 @@ export function spawnClaude(
   // aborts, we must NOT spawn it afterwards (it would run orphaned/unmonitored).
   let aborted = false;
 
+  // Global heavy-AI slot. Held for the WHOLE spawnClaude call — including the
+  // session-recovery and API-key-fallback retries, which are the same logical
+  // job — and released exactly once at a terminal state (done/error/abort).
+  // This is the single choke point that caps live Claude CLI processes: every
+  // caller of spawnClaude is gated here, so no call site can bypass the cap.
+  let aiRelease: (() => void) | null = null;
+  let aiReleased = false;
+  const releaseAi = () => {
+    if (aiReleased) return;
+    aiReleased = true;
+    try { aiRelease?.(); } catch { /* ignore */ }
+  };
+
   /**
    * Inner spawn function — called once normally, and optionally again with a fresh
    * session (session-plumbing recovery) or API-key auth (quota fallback).
@@ -496,6 +510,14 @@ export function spawnClaude(
    * first output (auth done, token persisted) or after AUTH_WARMUP_TIMEOUT_MS.
    */
   async function doSpawn(useApiKey: boolean, spawnReason: string = 'primary') {
+    // Take the global AI slot on the first attempt only; retries reuse it. Always
+    // acquired BEFORE the auth slot so both gates are taken in a consistent order
+    // and can never deadlock against each other.
+    if (!aiRelease && !aiReleased) {
+      aiRelease = await acquireAiSlot();
+      // The caller may have aborted while we queued for a slot.
+      if (aborted) { releaseAi(); return; }
+    }
     const authRelease = await acquireAuthSlot();
     // The caller may have aborted while we waited in the auth queue — bail before
     // spawning so we never leave an orphaned, unmonitored CLI running.
@@ -549,6 +571,7 @@ export function spawnClaude(
       });
     } catch (error) {
       releaseAuth();
+      releaseAi();
       console.error('[Claude CLI] Spawn failed:', error);
       emitter.emit('event', {
         type: 'error',
@@ -780,6 +803,10 @@ export function spawnClaude(
         } satisfies SSEEvent);
       }
 
+      // Terminal state — no retry was scheduled above, so hand the AI slot to
+      // whoever is queued behind us before emitting the final events.
+      releaseAi();
+
       // Emit final usage
       emitter.emit('event', {
         type: 'usage',
@@ -795,6 +822,7 @@ export function spawnClaude(
 
     proc.on('error', (error) => {
       releaseAuth(); // safety: release the auth gate if the process errors out
+      releaseAi();
       console.error('[Claude CLI] Process error:', error);
       emitter.emit('event', {
         type: 'error',
@@ -814,6 +842,9 @@ export function spawnClaude(
     emitter,
     abort: () => {
       aborted = true;
+      // If we never spawned (still queued at a gate) the close handler will never
+      // run, so release here; releaseAi() is idempotent when it already ran.
+      releaseAi();
       try {
         if (currentProc) {
           if (process.platform === 'win32') {

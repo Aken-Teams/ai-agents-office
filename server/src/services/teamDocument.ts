@@ -80,8 +80,8 @@ async function runDocAgent(opts: {
   const spec = FORMAT_MAP[format];
   const skill = getSkill(spec.skill);
   if (!skill) throw new Error(`找不到產生器：${spec.skill}`);
-  // Global gate: doc-gen (Claude CLI + python) is heavy — share the system-wide cap.
-  const release = await acquireAiSlot();
+  // Doc-gen (Claude CLI + python) is heavy, but the system-wide cap now lives
+  // inside spawnClaude — taking a slot here too would deadlock against it.
 
   // Headless: a throwaway sandbox keyed by a random id (no DB conversation).
   const pseudoConvId = `teamdoc-${uuidv4()}`;
@@ -97,8 +97,7 @@ async function runDocAgent(opts: {
     reportMd,
   ].join('\n');
 
-  try {
-    return await new Promise<{ buffer: Buffer; filename: string }>((resolve, reject) => {
+  return await new Promise<{ buffer: Buffer; filename: string }>((resolve, reject) => {
     let settled = false;
     const usage = { inTok: 0, outTok: 0, model: '' };
     const { emitter, abort } = spawnClaude(message, systemPrompt, {
@@ -160,10 +159,7 @@ async function runDocAgent(opts: {
         }
       }
     });
-    });
-  } finally {
-    release();
-  }
+  });
 }
 
 /** Start an async job that generates the document; returns a jobId to poll. */
