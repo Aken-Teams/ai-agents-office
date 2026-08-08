@@ -276,7 +276,9 @@ export default function ApiTrackingPage() {
   return (
     <>
       <header className="sticky top-0 h-14 md:h-16 bg-surface/80 backdrop-blur-xl flex justify-between items-center px-4 md:px-8 z-40 shadow-[0_1px_0_0_rgba(255,255,255,0.05)]">
-        <span className="text-base md:text-lg font-black text-on-surface font-headline truncate">API 追蹤 · 用量與計費來源</span>
+        <span className="text-base md:text-lg font-black text-on-surface font-headline truncate">
+          API 追蹤<span className="hidden sm:inline"> · 用量與計費來源</span>
+        </span>
         <div className="flex gap-1">
           {(['7d', '30d', '90d'] as const).map(p => (
             <button key={p} onClick={() => setPeriod(p)}
@@ -389,32 +391,55 @@ export default function ApiTrackingPage() {
               {(stats?.recentApiKey?.length ?? 0) === 0 ? (
                 <p className="text-sm text-on-surface-variant py-4 text-center">沒有 API key 呼叫記錄</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-on-surface-variant border-b border-outline-variant/20">
-                        <th className="py-2 pr-3 font-medium">時間</th>
-                        <th className="py-2 pr-3 font-medium">功能</th>
-                        <th className="py-2 pr-3 font-medium">模型</th>
-                        <th className="py-2 pr-3 font-medium">原因</th>
-                        <th className="py-2 pr-3 font-medium text-right">輸出 tokens</th>
-                        <th className="py-2 font-medium text-center">結果</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {stats?.recentApiKey?.map((r, i) => (
-                        <tr key={i} className="border-b border-outline-variant/10 last:border-0">
-                          <td className="py-2 pr-3 text-on-surface-variant whitespace-nowrap">{fmtTime(r.created_at)}</td>
-                          <td className="py-2 pr-3 text-on-surface">{labelSkill(r.skill_id)}</td>
-                          <td className="py-2 pr-3 font-mono text-xs text-on-surface-variant">{r.model || '—'}</td>
-                          <td className="py-2 pr-3 text-on-surface-variant">{labelReason(r.reason)}</td>
-                          <td className="py-2 pr-3 text-right tabular-nums text-on-surface">{num(r.output_tokens)}</td>
-                          <td className="py-2 text-center">{r.success ? <span className="text-[#3FBBC0]">✓</span> : <span className="text-on-surface-variant">✕</span>}</td>
+                <>
+                  {/* Mobile: stacked cards (a 6-column table squishes on phones) */}
+                  <div className="md:hidden space-y-2">
+                    {stats?.recentApiKey?.map((r, i) => (
+                      <div key={i} className="rounded-lg bg-surface-container-high p-3 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-on-surface font-medium">{labelSkill(r.skill_id)}</span>
+                          <span className="text-on-surface-variant text-xs shrink-0">{fmtTime(r.created_at)}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="font-mono text-on-surface-variant truncate">{r.model || '—'}</span>
+                          <span className="tabular-nums text-on-surface shrink-0">
+                            {num(r.output_tokens)} out{' '}
+                            {r.success ? <span className="text-[#3FBBC0]">✓</span> : <span className="text-on-surface-variant">✕</span>}
+                          </span>
+                        </div>
+                        <div className="text-xs text-on-surface-variant">{labelReason(r.reason)}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop: full table */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-on-surface-variant border-b border-outline-variant/20">
+                          <th className="py-2 pr-3 font-medium">時間</th>
+                          <th className="py-2 pr-3 font-medium">功能</th>
+                          <th className="py-2 pr-3 font-medium">模型</th>
+                          <th className="py-2 pr-3 font-medium">原因</th>
+                          <th className="py-2 pr-3 font-medium text-right">輸出 tokens</th>
+                          <th className="py-2 font-medium text-center">結果</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {stats?.recentApiKey?.map((r, i) => (
+                          <tr key={i} className="border-b border-outline-variant/10 last:border-0">
+                            <td className="py-2 pr-3 text-on-surface-variant whitespace-nowrap">{fmtTime(r.created_at)}</td>
+                            <td className="py-2 pr-3 text-on-surface whitespace-nowrap">{labelSkill(r.skill_id)}</td>
+                            <td className="py-2 pr-3 font-mono text-xs text-on-surface-variant">{r.model || '—'}</td>
+                            <td className="py-2 pr-3 text-on-surface-variant">{labelReason(r.reason)}</td>
+                            <td className="py-2 pr-3 text-right tabular-nums text-on-surface">{num(r.output_tokens)}</td>
+                            <td className="py-2 text-center">{r.success ? <span className="text-[#3FBBC0]">✓</span> : <span className="text-on-surface-variant">✕</span>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </Section>
 
