@@ -586,6 +586,11 @@ export function spawnClaude(
 
     currentProc = proc;
 
+    // Signal that the CLI process is now actually running (past the concurrency + auth
+    // queue). The orchestrator (re)starts the per-agent timeout from HERE, so queue-wait
+    // time never eats into the agent's own limit.
+    emitter.emit('event', { type: 'spawn_started', data: { useApiKey } } satisfies SSEEvent);
+
     // Write user message to stdin. With images, use a stream-json user message
     // carrying the prompt text plus the image attachments as base64 blocks.
     if (hasImages) {

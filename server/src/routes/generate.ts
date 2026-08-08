@@ -522,13 +522,17 @@ async function runUploadParsePreStep(opts: {
     // Allow the user to cancel during the parse step too.
     activeGenerations.set(conversationId, abort);
 
-    const timer = setTimeout(() => {
+    const onParseTimeout = () => {
       try { abort(); } catch { /* ignore */ }
       sseWrite({ type: 'task_failed', data: { taskId, skillId: 'data-analyst', error: 'parse timed out' } });
       finish(fail);
-    }, 180000);
+    };
+    // Queue wait must NOT count toward the limit: generous while queued for a slot, reset
+    // to the real 3-min limit once the CLI actually spawns ('spawn_started').
+    let timer = setTimeout(onParseTimeout, 10 * 60 * 1000);
 
     emitter.on('event', (event: SSEEvent) => {
+      if (event.type === 'spawn_started') { clearTimeout(timer); timer = setTimeout(onParseTimeout, 180000); return; }
       if (event.type === 'text') {
         text += event.data as string;
       } else if (event.type === 'tool_activity') {
@@ -618,13 +622,17 @@ async function runDataSourceRetrievalPreStep(opts: {
     });
     activeGenerations.set(conversationId, abort);
 
-    const timer = setTimeout(() => {
+    const onRetrieveTimeout = () => {
       try { abort(); } catch { /* ignore */ }
       sseWrite({ type: 'task_failed', data: { taskId, skillId: 'rag-analyst', error: 'data-source retrieval timed out' } });
       finish(fail);
-    }, 240000);
+    };
+    // Queue wait must NOT count toward the limit: generous while queued for a slot, reset
+    // to the real 4-min limit once the CLI actually spawns ('spawn_started').
+    let timer = setTimeout(onRetrieveTimeout, 10 * 60 * 1000);
 
     emitter.on('event', (event: SSEEvent) => {
+      if (event.type === 'spawn_started') { clearTimeout(timer); timer = setTimeout(onRetrieveTimeout, 240000); return; }
       if (event.type === 'text') {
         text += event.data as string;
       } else if (event.type === 'tool_activity') {

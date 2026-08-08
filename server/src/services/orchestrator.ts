@@ -673,14 +673,18 @@ export class Orchestrator {
       const timeoutMs = SKILL_TIMEOUT[opts.skillId] ?? DEFAULT_TASK_TIMEOUT_MS;
       let settled = false; // Guard against race between timeout and done event
 
-      const timeout = setTimeout(() => {
+      // The per-skill timeout must measure ONLY real run time, never queue wait. While a
+      // spawn is QUEUED for a concurrency slot (busy server) we hold a generous cap so it
+      // waits instead of failing; the moment the CLI actually spawns ('spawn_started') we
+      // restart with the real per-skill limit. So a long queue never triggers the agent
+      // timeout / "逾時重分配" — the user waits, but the task still runs and completes.
+      let timeout: ReturnType<typeof setTimeout>;
+      const fireTimeout = (queued: boolean) => {
         if (settled) return;
         settled = true;
-        console.warn(`[Orchestrator] Agent ${opts.skillId} timed out after ${timeoutMs / 1000}s`);
+        console.warn(`[Orchestrator] Agent ${opts.skillId} timed out (${queued ? 'still queued for a slot' : 'running'})`);
         abort();
-        // Remove abort fn
         this.activeAbortFns = this.activeAbortFns.filter(fn => fn !== abort);
-
         if (text.trim()) {
           // Agent produced partial output — use it (file may already be generated)
           console.log(`[Orchestrator] Agent ${opts.skillId} timed out but has partial output (${text.length} chars), using it`);
@@ -688,10 +692,22 @@ export class Orchestrator {
         } else {
           reject(new Error(`Agent ${opts.skillId} timed out after ${timeoutMs / 1000} seconds with no output`));
         }
-      }, timeoutMs);
+      };
+      // Queue phase: generous cap (a queued request should wait, not fail on a busy box).
+      const QUEUE_MAX_MS = 10 * 60 * 1000;
+      timeout = setTimeout(() => fireTimeout(true), QUEUE_MAX_MS);
 
       emitter.on('event', (event: SSEEvent) => {
         if (this.aborted || settled) return;
+
+        // CLI actually started (past the concurrency/auth queue) — restart the clock so
+        // the per-skill timeout counts real run time only. A retry/fallback re-spawns and
+        // fires this again, so each attempt gets a fresh full timeout.
+        if (event.type === 'spawn_started') {
+          clearTimeout(timeout);
+          timeout = setTimeout(() => fireTimeout(false), timeoutMs);
+          return;
+        }
 
         // Forward worker agent's streaming events to client (prefixed with taskId)
         if (taskId) {

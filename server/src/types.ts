@@ -75,6 +75,10 @@ export interface SSEEvent {
     | 'agent_status' | 'agent_stream' | 'router_plan'
     // Block editor events
     | 'blocks_ready' | 'skill_started'
+    // Emitted the instant the CLI process actually spawns (after the concurrency /
+    // auth queue). Lets the orchestrator start the agent timeout from REAL run start,
+    // so queue-wait time is never counted against the per-agent limit.
+    | 'spawn_started'
     // Data-fidelity verification (Phase C)
     | 'fidelity_check';
   data: unknown;
