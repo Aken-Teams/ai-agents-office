@@ -116,12 +116,12 @@ function isAuthError(text: string): boolean {
 
 /** Patterns that match system / infrastructure paths the user should never see. */
 const REDACT_PATTERNS: RegExp[] = [
-  // Unix home directories: /home/username/...
-  /\/home\/[a-zA-Z0-9_.-]+\/[^\s'"`)\]},]*/g,
-  // Root home: /root/...
-  /\/root\/[^\s'"`)\]},]*/g,
+  // Unix home directories: /home/username  (trailing path optional → also hides bare /home/petty)
+  /\/home\/[a-zA-Z0-9_.-]+(?:\/[^\s'"`)\]},]*)?/g,
+  // Root home: /root  (trailing path optional)
+  /\/root(?:\/[^\s'"`)\]},]*)?/g,
   // Windows user profiles: C:\Users\username\...
-  /[A-Z]:\\Users\\[a-zA-Z0-9_.-]+\\[^\s'"`)\]},]*/gi,
+  /[A-Z]:\\Users\\[a-zA-Z0-9_.-]+(?:\\[^\s'"`)\]},]*)?/gi,
   // Git-bash style drives: /d/github/... /c/Users/...
   /\/[a-z]\/(?:github|Users|home|projects?|repos?|src|code)\/[^\s'"`)\]},]*/gi,
   // .claude directories anywhere in a path
@@ -953,7 +953,10 @@ function processStreamEvent(
               tool: block.name as string,
               id: block.id as string,
               status: 'running',
-              input: block.input ? JSON.stringify(block.input).substring(0, 800) : undefined,
+              // Scrub absolute/system paths from the tool arguments before they reach
+              // the UI — a Glob/Read/Bash input like "/home/petty/ai-agents-office/…"
+              // would otherwise leak the server's directory layout in the activity feed.
+              input: block.input ? sanitizeOutput(JSON.stringify(block.input).substring(0, 800)) : undefined,
             },
           } satisfies SSEEvent);
         }
