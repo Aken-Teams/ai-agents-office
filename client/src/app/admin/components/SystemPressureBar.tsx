@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 const POLL_MS = 10_000;
 
@@ -17,10 +18,10 @@ interface Pressure {
   uptimeSec: number;
 }
 
-const LEVEL_STYLE: Record<Level, { dot: string; text: string; ring: string }> = {
-  low:    { dot: 'bg-emerald-500', text: 'text-on-surface-variant', ring: 'ring-emerald-500/20' },
-  medium: { dot: 'bg-amber-500',   text: 'text-amber-600',          ring: 'ring-amber-500/25' },
-  high:   { dot: 'bg-red-500',     text: 'text-red-600',            ring: 'ring-red-500/25' },
+const LEVEL_STYLE: Record<Level, { dot: string; text: string; ring: string; iconText: string }> = {
+  low:    { dot: 'bg-emerald-500', text: 'text-on-surface-variant', ring: 'ring-emerald-500/20', iconText: 'text-emerald-500' },
+  medium: { dot: 'bg-amber-500',   text: 'text-amber-600',          ring: 'ring-amber-500/25', iconText: 'text-amber-500' },
+  high:   { dot: 'bg-red-500',     text: 'text-red-600',            ring: 'ring-red-500/25', iconText: 'text-red-500' },
 };
 
 function fmtUptime(sec: number): string {
@@ -50,10 +51,28 @@ function GateRow({ label, s }: { label: string; s: SlotStats }) {
   );
 }
 
-export default function SystemPressureBar() {
+export default function SystemPressureBar({ compact = false }: { compact?: boolean }) {
   const [p, setP] = useState<Pressure | null>(null);
   const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // The popup renders in a PORTAL (document.body) with FIXED positioning so it escapes
+  // the sidebar's stacking/overflow context. From the left sidebar it flies out to the
+  // RIGHT of the button, vertically clamped so a tall popup near the sidebar bottom
+  // still fits on screen.
+  const openPopup = () => {
+    clearTimeout(closeTimer.current);
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) setPos({
+      left: Math.min(r.right + 8, window.innerWidth - 288 - 8),   // 288 = w-72; keep on screen
+      top: Math.max(8, Math.min(r.top, window.innerHeight - 430)),
+    });
+    setOpen(true);
+  };
+  const closeSoon = () => { closeTimer.current = setTimeout(() => setOpen(false), 120); };
 
   useEffect(() => {
     let cancelled = false;
@@ -91,46 +110,54 @@ export default function SystemPressureBar() {
   const style = LEVEL_STYLE[p.level];
 
   return (
-    <div className="relative">
+    <>
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setOpen(v => !v)}
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-        className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-headline
-                    hover:bg-surface-container transition-colors cursor-pointer ${style.text}`}
-        title="系統壓力"
+        onClick={() => (open ? setOpen(false) : openPopup())}
+        onMouseEnter={openPopup}
+        onMouseLeave={closeSoon}
+        className={`flex items-center gap-3 py-2 rounded-lg w-full text-sm transition-colors cursor-pointer
+                    text-on-surface-variant hover:text-on-surface hover:bg-surface-container/50
+                    ${compact ? 'justify-center px-0' : 'px-3'}`}
+        title={compact ? `系統壓力 · ${p.reason}` : undefined}
       >
-        <span className={`relative flex w-2 h-2`}>
+        <span className="relative flex items-center justify-center shrink-0">
+          <span className={`material-symbols-outlined text-[20px] ${style.iconText}`}>monitoring</span>
           {p.level === 'high' && (
-            <span className={`absolute inline-flex w-full h-full rounded-full opacity-60 animate-ping ${style.dot}`} />
+            <span className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full ${style.dot} animate-ping`} />
           )}
-          <span className={`relative inline-flex w-2 h-2 rounded-full ring-4 ${style.dot} ${style.ring}`} />
         </span>
-        <span className="hidden sm:inline">{p.reason}</span>
-        {failed && <span className="text-on-surface-variant/60 text-[11px]">(連線中斷)</span>}
+        {!compact && <span className="truncate">{p.reason}</span>}
+        {!compact && failed && <span className="text-on-surface-variant/60 text-[11px] shrink-0">(連線中斷)</span>}
       </button>
 
-      {open && (
+      {open && createPortal(
         <div
-          onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => setOpen(false)}
-          className="absolute right-0 top-full mt-1 w-72 z-50 rounded-xl border border-outline-variant/20
-                     bg-surface-dim shadow-lg p-3 text-xs font-headline"
+          onMouseEnter={() => clearTimeout(closeTimer.current)}
+          onMouseLeave={closeSoon}
+          style={{ position: 'fixed', top: pos.top, left: pos.left }}
+          className="w-72 z-[100] rounded-xl border border-outline-variant/20 overflow-hidden
+                     bg-surface-container-highest shadow-2xl text-xs font-headline"
         >
-          <div className="flex items-center justify-between mb-2">
-            <span className="font-medium text-on-surface">系統壓力</span>
-            <span className={`tabular-nums ${style.text}`}>{p.score}/100</span>
+          {/* Header bar — matches the admin card header style */}
+          <div className="flex items-center gap-2 px-4 py-3 bg-surface-container-high">
+            <span className="material-symbols-outlined text-primary text-[20px]">speed</span>
+            <span className="flex-1 text-sm font-bold text-on-surface">系統壓力</span>
+            <span className={`tabular-nums text-sm font-bold ${style.text}`}>
+              {p.score}<span className="text-on-surface-variant/50 text-[11px] font-normal">/100</span>
+            </span>
           </div>
 
-          <div className="text-[11px] text-on-surface-variant/70 mb-1">AI 併發閘門</div>
+          <div className="p-3">
+          <div className="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-wider mb-1">AI 併發閘門</div>
           <GateRow label="文件生成" s={p.gates.document} />
           <GateRow label="信件助手" s={p.gates.email} />
           <GateRow label="背景作業" s={p.gates.background} />
 
-          <div className="h-px bg-outline-variant/20 my-2" />
+          <div className="h-px bg-outline-variant/10 my-2.5" />
 
-          <div className="text-[11px] text-on-surface-variant/70 mb-1">請求</div>
+          <div className="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-wider mb-1">請求</div>
           <div className="flex items-center justify-between py-1">
             <span className="text-on-surface-variant">處理中</span>
             <span className="tabular-nums text-on-surface">
@@ -148,9 +175,9 @@ export default function SystemPressureBar() {
             </span>
           </div>
 
-          <div className="h-px bg-outline-variant/20 my-2" />
+          <div className="h-px bg-outline-variant/10 my-2.5" />
 
-          <div className="text-[11px] text-on-surface-variant/70 mb-1">伺服器</div>
+          <div className="text-[10px] font-bold text-on-surface-variant/60 uppercase tracking-wider mb-1">伺服器</div>
           <div className="flex items-center justify-between py-1">
             <span className="text-on-surface-variant">記憶體</span>
             <span className="tabular-nums text-on-surface">
@@ -168,8 +195,10 @@ export default function SystemPressureBar() {
             <span className="text-on-surface-variant">已運行</span>
             <span className="tabular-nums text-on-surface">{fmtUptime(p.uptimeSec)}</span>
           </div>
-        </div>
+          </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   );
 }

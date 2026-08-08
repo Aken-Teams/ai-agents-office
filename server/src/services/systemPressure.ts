@@ -75,9 +75,14 @@ export interface SystemPressure {
  * around 500ms, which is where users start calling it broken.
  */
 function latencyScore(p95: number): number {
-  if (p95 <= 100) return (p95 / 100) * 30;
-  if (p95 <= 500) return 30 + ((p95 - 100) / 400) * 50;
-  return Math.min(100, 80 + ((p95 - 500) / 500) * 20);
+  // Idle p95 on THIS stack is ~70ms because the DB is REMOTE (network round-trip),
+  // not the ~20ms of the original local-DB load test. Treat up to 70ms as healthy
+  // (score 0) so an idle server doesn't sit at a permanent 21/100; the busy/broken
+  // anchors (30 / 80) are preserved, just shifted past the remote-DB floor.
+  if (p95 <= 70) return 0;
+  if (p95 <= 170) return ((p95 - 70) / 100) * 30;        // 70→0, 170→30 (busy but ok)
+  if (p95 <= 550) return 30 + ((p95 - 170) / 380) * 50;  // 170→30, 550→80
+  return Math.min(100, 80 + ((p95 - 550) / 500) * 20);
 }
 
 /**
@@ -92,8 +97,10 @@ function gateScore(s: SlotStats): number {
 }
 
 function lagScore(ms: number): number {
-  if (ms <= 20) return (ms / 20) * 30;            // healthy
-  if (ms <= 100) return 30 + ((ms - 20) / 80) * 40;
+  // `ms` already has the 20ms sampling floor removed; a few ms of residual jitter at
+  // idle (GC, the 10s poll) is normal, so treat up to 15ms as healthy (score 0).
+  if (ms <= 15) return 0;
+  if (ms <= 100) return ((ms - 15) / 85) * 70;    // 15→0, 100→70
   return Math.min(100, 70 + ((ms - 100) / 200) * 30);
 }
 
@@ -109,11 +116,16 @@ export function getSystemPressure(): SystemPressure {
 
   const req = getRequestMetrics();
 
+  // With only a handful of requests, p95 is just "the slowest of a few" — dominated by
+  // cold-start warmup (DB connect, first route hit), not sustained load. Trust the
+  // latency signal only once there's enough traffic for the percentile to mean anything.
+  const latConfidence = Math.min(1, req.sampled / 20);
+
   const signals: Array<{ score: number; reason: string }> = [
     { score: gateScore(document),   reason: document.queued > 0 ? `文件生成排隊 ${document.queued} 件` : '文件生成忙碌' },
     { score: gateScore(email),      reason: email.queued > 0 ? `信件助手排隊 ${email.queued} 件` : '信件助手忙碌' },
     { score: gateScore(background), reason: background.queued > 0 ? `背景作業排隊 ${background.queued} 件` : '背景作業忙碌' },
-    { score: latencyScore(req.p95Ms), reason: `回應延遲 ${Math.round(req.p95Ms)}ms` },
+    { score: latencyScore(req.p95Ms) * latConfidence, reason: `回應延遲 ${Math.round(req.p95Ms)}ms` },
     { score: lagScore(lag),         reason: `事件循環延遲 ${lag}ms` },
     { score: heapPct,               reason: `記憶體使用 ${heapPct}%` },
   ];

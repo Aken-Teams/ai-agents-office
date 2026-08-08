@@ -45,10 +45,14 @@ router.get('/badge-counts', async (_req: Request, res: Response) => {
 
 // ==================== System pressure ====================
 
-// GET /api/admin/system/pressure — live load for the top-bar indicator.
-// Synchronous and DB-free on purpose: the client polls this on an interval, so it
-// must never add load of its own to the thing it is measuring.
-router.get('/system/pressure', (_req: Request, res: Response) => {
+// GET /api/admin/system/pressure — live load for the sidebar indicator. ADMIN ONLY
+// (檢閱者/readonly must not see infra/load internals). Synchronous and DB-free on
+// purpose: the client polls this on an interval, so it must never add load of its own.
+router.get('/system/pressure', (req: Request, res: Response) => {
+  if ((req.user as { role?: string } | undefined)?.role !== 'admin') {
+    res.status(403).json({ error: 'Admin only' });
+    return;
+  }
   res.json(getSystemPressure());
 });
 

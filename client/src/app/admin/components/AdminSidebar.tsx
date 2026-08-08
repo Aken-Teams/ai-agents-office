@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAdminAuth } from './AdminAuthProvider';
+import SystemPressureBar from './SystemPressureBar';
 import { useTranslation } from '../../../i18n';
 
 const deployMode = process.env.NEXT_PUBLIC_DEPLOY_MODE || 'pro-panjit';
@@ -243,6 +244,13 @@ export default function AdminSidebar() {
                 );
               })}
 
+              {/* System pressure — ADMIN ONLY */}
+              {!isReadonly && (
+                <div className="px-3 py-1 border-t border-outline-variant/10">
+                  <SystemPressureBar />
+                </div>
+              )}
+
               {/* Switch to User View */}
               <Link
                 href="/dashboard"
@@ -410,6 +418,9 @@ export default function AdminSidebar() {
 
       {/* Bottom */}
       <div className={`mt-auto pt-6 space-y-1 shrink-0 ${collapsed ? 'px-2' : 'px-4'}`}>
+        {/* System pressure — ADMIN ONLY (hidden from 檢閱者/readonly) */}
+        {!isReadonly && <SystemPressureBar compact={collapsed} />}
+
         {/* Switch to User View */}
         <Link
           href="/dashboard"
