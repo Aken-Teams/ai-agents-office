@@ -995,7 +995,7 @@ function EmailLoginForm({ onBack }: { onBack?: () => void }) {
           <label className="font-label text-sm uppercase tracking-widest text-on-surface-variant ml-1">{t('login.emailLabel')}</label>
           <input
             className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 text-on-surface py-3 px-4 text-base md:text-sm font-body rounded placeholder:text-outline"
-            type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="your@email.com" required
+            type="text" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} placeholder="帳號或 Email" required
           />
         </div>
         <div className="space-y-1.5">

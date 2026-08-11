@@ -376,8 +376,17 @@ router.post('/login', async (req: Request, res: Response) => {
       res.status(423).json({ error: `帳號已被暫時鎖定，請 ${mins} 分鐘後再試` }); return;
     }
 
-    const user = await dbGet<User>('SELECT * FROM users WHERE email = ?', email.toLowerCase().trim());
-    if (!user) { recordLoginFailure(email.toLowerCase().trim()); res.status(401).json({ error: '電子信箱或密碼錯誤' }); return; }
+    // Accept EITHER a full email OR a bare account (no @). A bare account resolves to
+    // the matching email by its local-part — so a student can log in with just
+    // "pe115001" instead of "pe115001@houe6.tw". SUBSTRING_INDEX matches the exact
+    // local-part (no LIKE wildcards → no wildcard-injection).
+    let user = await dbGet<User>('SELECT * FROM users WHERE email = ?', acct);
+    if (!user && !acct.includes('@')) {
+      user = await dbGet<User>(
+        'SELECT * FROM users WHERE SUBSTRING_INDEX(email, "@", 1) = ? ORDER BY created_at ASC LIMIT 1', acct,
+      );
+    }
+    if (!user) { recordLoginFailure(acct); res.status(401).json({ error: '帳號或密碼錯誤' }); return; }
 
     if (user.password_hash === OAUTH_NO_PASSWORD) {
       clearLoginFailures(email.toLowerCase().trim());
