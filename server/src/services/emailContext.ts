@@ -86,6 +86,24 @@ export function buildRetrieverSystemPrompt(opts: { email?: boolean; km?: boolean
   return EMAIL_RETRIEVER_SYSTEM_PROMPT;
 }
 
+/**
+ * Guidance injected when the user's message is about email BUT no email data source
+ * is active (they didn't tick 「我的信件」, or their mail token expired). We used to
+ * silently pre-fetch "recent 20" here — which made the agent answer "I can only read
+ * 20" or fabricate mail. Instead we now tell it plainly: there is NO mail data and NO
+ * mail tool this turn — do not invent anything, just guide the user to attach the
+ * data source. Retrieval only happens through the opt-in email data source (email-mcp).
+ */
+export const EMAIL_NO_DATASOURCE_GUIDANCE_NOTE = `
+
+[System — 信箱資料源未啟用]
+使用者的訊息提到信件／信箱／郵件，但本次「沒有」可用的信箱資料源（未勾選「我的信件」，或信箱連線已過期）。
+重要事實：系統這次「完全沒有」提供任何信件資料，你也「沒有」任何可以存取信箱的工具。
+你必須這樣做：
+- 絕對不要臆測、編造，或聲稱你「抓了幾封信」「看了最近 20 封」「信箱裡有什麼」。一個信件資料都沒有，不要給任何封數或內容。
+- 友善、簡短地引導使用者：「要讀取或分析你的信箱，請先點輸入框左側的『資料源』圖示、勾選『我的信件』後再送出。勾選後我就能依你的需求（例如某天、某段期間、某主旨）去實際搜尋整理。若你已勾選卻仍看到這訊息，可能是信箱連線過期，請重新用 AD 帳號登入。」
+- 引導完就結束，不要派工去檢索信件、也不要假裝已經在找。`;
+
 // Email-related keywords (zh-TW, zh-CN, en)
 const EMAIL_KEYWORDS = [
   '信箱', '信件', '郵件', '收件匣', '看信', '查信', '寄件', '未讀',

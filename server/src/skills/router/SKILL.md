@@ -126,14 +126,11 @@ These agents can render: interactive Recharts (bar/line/pie/radar/scatter), Merm
 - Any request that says "不需要檔案" / "在聊天中顯示" / "no file needed"
 - Any analysis request that does NOT mention pptx/docx/xlsx/pdf/slides/word/excel/powerpoint
 
-### Email Data（Outlook 信箱）
-When the user mentions email/信箱/郵件/信件/收件匣, the system automatically provides
-email data in the message context as `## Pre-fetched Email Data`.
-You do NOT need to route to a special email skill — the data is already available.
-Route based on what the user wants to **do** with the emails:
-- "看信" / "最近的信" → `[TASK:research]` 分析 context 中的 email 資料
-- "把信件整理成 PPT" → `[TASK:pptx-gen]` 使用 email 資料製作簡報
-- "信件趨勢分析" → `[TASK:research]` 分析 email 模式並產生圖表
+### Email Data（Outlook 信箱）— opt-in data source
+信箱是 **opt-in 資料源**，不會自動預抓。依你收到的 System note 判斷：
+- 若 context 有「資料源：使用者的 Outlook 信箱」的 System note（代表使用者已掛載「我的信件」）→ **信件檢索一律派 `[TASK:rag-analyst]`**（它才有信箱工具，能搜整個資料夾/舊信、依日期或主旨精確撈、讀附件與內嵌圖）。要用信件產文件就用 `[PIPELINE]`：先 `rag-analyst` 檢索、再接對應 doc-gen。
+- 若 context 有「信箱資料源未啟用」的 System note（使用者提到信件但沒掛資料源）→ **不要派工、不要臆測封數或內容**，直接友善引導使用者去輸入框左側「資料源」勾選「我的信件」後再送出。
+- 絕對不要自己宣稱「系統預抓了最近 N 封」——已經沒有這種自動預抓了。
 
 ### → Route to file generators (`pptx-gen`, `xlsx-gen`, `docx-gen`, `pdf-gen`, `slides-gen`, `webapp-gen`):
 - Explicit file format: "做一個 PPT" / "生成 Excel" / "create a Word doc" / "做 PDF 報告"
@@ -175,10 +172,9 @@ When the user asks for "互動" / "interactive" content without specifying forma
 | "做一個儀表板" | `webapp-gen` | Dashboard = webapp-gen |
 | "幫我做互動簡報" | `slides-gen` | Explicitly says "互動簡報" |
 | "做一個互動的" | offer choice | Ambiguous "互動" → ask slides vs webapp |
-| "幫我看最近的信" | `research` | Email data auto-injected, analyze it |
-| "信箱有什麼新信" | `research` | Email data auto-injected, analyze it |
-| "summarize today's emails" | `research` | Email data auto-injected, summarize |
-| "把收件匣的報告整理成 PPT" | `pptx-gen` | Email data auto-injected, make PPT |
+| "幫我看最近的信"（已掛信箱資料源） | `rag-analyst` | 有信箱工具才去撈，別自己臆測 |
+| "信箱有什麼新信"（未掛資料源） | 不派工·引導 | 引導使用者勾選「我的信件」資料源 |
+| "把收件匣的報告整理成 PPT"（已掛資料源） | `PIPELINE` | 先 `rag-analyst` 檢索、再 `pptx-gen` |
 
 **Default rule**: When ambiguous and no file format is mentioned, prefer `research` (with inline charts) over file generators. Users who want files will explicitly say so.
 

@@ -6,7 +6,7 @@ import { dbGet, dbAll, dbRun } from '../db.js';
 import { spawnClaude } from './claudeCli.js';
 import { parsePipelineBlocks, truncateResultForRouter } from './taskParser.js';
 import { getSkill, buildSystemPrompt, buildMemoryContext, buildCrossAssistantContext, getRouterSkill, buildRouterPrompt } from '../skills/loader.js';
-import { EMAIL_RETRIEVER_SYSTEM_PROMPT, buildRetrieverSystemPrompt } from './emailContext.js';
+import { EMAIL_RETRIEVER_SYSTEM_PROMPT, buildRetrieverSystemPrompt, EMAIL_NO_DATASOURCE_GUIDANCE_NOTE, messageNeedsEmail } from './emailContext.js';
 import { getUserUploadsForPrompt, getConversationFilesForPrompt } from './uploadContext.js';
 import { getSandboxPath } from './sandbox.js';
 import { parseInfographicDirective, renderInfographic } from './infographicService.js';
@@ -205,15 +205,13 @@ export class Orchestrator {
     //    mail, reads attachments + inline images, and hands data to doc-gen via the
     //    existing previous_step.md bridge. No pre-fetch → the agent pulls exactly what
     //    is needed (flexible, never capped at "recent 20").
-    //  • No data source → legacy keyword-triggered pre-fetch (back-compat, unchanged).
+    //  • No data source, but the user is asking about mail → DON'T silently pre-fetch
+    //    "recent 20" (that made the agent report a fake 20-cap / fabricate). Instead
+    //    guide them to attach the 「我的信件」 data source so retrieval is real + opt-in.
     if (this.mcpEmailToken) {
       messageWithFileContext += EMAIL_DATASOURCE_ROUTER_NOTE;
-    } else {
-      const { messageNeedsEmail, getEmailContextForPrompt } = await import('./emailContext.js');
-      if (messageNeedsEmail(message)) {
-        const emailCtx = await getEmailContextForPrompt(this.userId, message);
-        if (emailCtx) messageWithFileContext += emailCtx;
-      }
+    } else if (messageNeedsEmail(message)) {
+      messageWithFileContext += EMAIL_NO_DATASOURCE_GUIDANCE_NOTE;
     }
     // KM as a DATA SOURCE (same pattern as email; both can be attached at once):
     // route KM retrieval to rag-analyst, which holds the KM tools.
@@ -526,14 +524,12 @@ export class Orchestrator {
       task.description = this.attachPreviousStepData(task.skillId, task.description, this.lastDataOutput);
     }
 
-    // Inject email data when worker task mentions email keywords
-    {
-      const { messageNeedsEmail: needsEmail, getEmailContextForPrompt: getEmailCtx } = await import('./emailContext.js');
-      if (needsEmail(task.description)) {
-        const emailCtx = await getEmailCtx(this.userId, task.description);
-        if (emailCtx) task.description += emailCtx;
-      }
-    }
+    // NOTE: we deliberately do NOT inject the legacy "recent 20" email pre-fetch into
+    // worker tasks any more. When the email data source is attached, rag-analyst pulls
+    // exactly what's needed via its own email tools (email-mcp); when it isn't, the
+    // Router has already guided the user to attach it. The old unconditional pre-fetch
+    // polluted even the MCP flow (e.g. injecting "recent 20, oldest 7/14" into a task
+    // that was asking for 8/1's mail), so it's removed.
 
     // Build system prompt for this skill (with user upload context)
     // Use the actual agent CWD (including _agents/{skillId} subdirectory) for relative path calculation

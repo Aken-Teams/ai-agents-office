@@ -17,7 +17,7 @@ import { enforceDataFidelity } from '../services/dataFidelityGuard.js';
 import { normalizePptx } from '../services/pptxNormalize.js';
 import { getMailToken } from '../services/outlookApi.js';
 import { getKmOnBehalf } from '../services/kmApi.js';
-import { buildRetrieverSystemPrompt } from '../services/emailContext.js';
+import { buildRetrieverSystemPrompt, EMAIL_NO_DATASOURCE_GUIDANCE_NOTE, messageNeedsEmail } from '../services/emailContext.js';
 import path from 'path';
 import fs from 'fs';
 import { parseInfographicDirective, renderInfographic, compositeRegionMask, regionEditToFile } from '../services/infographicService.js';
@@ -723,12 +723,12 @@ async function handleDirect(
 
   // Email: when the "我的信件" data source is explicitly selected we run the
   // rag-analyst retrieval pre-step below (flexible — old mail + attachments + images).
-  // Only fall back to the legacy keyword pre-fetch (recent-list preview) when NO data
-  // source was selected, so the two mechanisms never compete.
+  // When it is NOT selected but the user is asking about mail, don't silently pre-fetch
+  // "recent 20" (that produced fake 20-cap answers / fabrication) — inject guidance that
+  // tells the agent to steer the user to attach the 「我的信件」 data source instead.
   let emailContext = '';
-  if (!mcpEmailToken) {
-    const { messageNeedsEmail, getEmailContextForPrompt } = await import('../services/emailContext.js');
-    if (messageNeedsEmail(sanitizedMessage)) emailContext = await getEmailContextForPrompt(userId, sanitizedMessage);
+  if (!mcpEmailToken && messageNeedsEmail(sanitizedMessage)) {
+    emailContext = EMAIL_NO_DATASOURCE_GUIDANCE_NOTE;
   }
 
   // Inject user-defined system_prompt (role description) for this assistant
