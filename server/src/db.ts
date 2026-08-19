@@ -468,6 +468,7 @@ export async function initializeDatabase(): Promise<void> {
         mail_token      TEXT NOT NULL,
         expires_at      DATETIME NOT NULL,
         credentials_enc TEXT,
+        mail_available  TINYINT(1) NOT NULL DEFAULT 1,
         created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -765,6 +766,13 @@ export async function initializeDatabase(): Promise<void> {
     // Migration: add last_overview column to email_agent_state
     try {
       await conn.query('ALTER TABLE email_agent_state ADD COLUMN last_overview TEXT DEFAULT NULL');
+    } catch { /* column already exists */ }
+
+    // Migration: some AD accounts (e.g. shared/service accounts) authenticate fine
+    // but have no Exchange mailbox — the gateway still issues a token, then 403s
+    // every mail call. Remember the flag so we can say so instead of "連線已過期".
+    try {
+      await conn.query('ALTER TABLE outlook_tokens ADD COLUMN mail_available TINYINT(1) NOT NULL DEFAULT 1');
     } catch { /* column already exists */ }
 
     // Migration: add credentials_enc column to outlook_tokens

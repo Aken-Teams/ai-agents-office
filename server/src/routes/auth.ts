@@ -939,7 +939,7 @@ router.post('/ad/login', async (req: Request, res: Response) => {
       console.log('[Outlook] AD login check — deployMode:', config.deployMode, 'adApiKey:', config.adApiKey ? 'SET' : 'EMPTY');
       if (config.deployMode === 'pro-panjit' && config.adApiKey) {
         import('../services/outlookApi.js').then(({ authenticateOutlook }) =>
-          authenticateOutlook(existing.id, username.trim(), password)
+          authenticateOutlook(existing.id, username.trim(), password, adDomain)
         ).catch(err => console.warn('[Outlook] Token acquisition failed:', err));
       }
       const user = await dbGet<{ email: string }>('SELECT email FROM users WHERE id = ?', existing.id);

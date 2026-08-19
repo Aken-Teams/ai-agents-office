@@ -4,7 +4,7 @@
  * Only active in DEPLOY_MODE=pro-panjit.
  */
 import { config } from '../config.js';
-import { getMailToken, fetchFolders, fetchMessages } from './outlookApi.js';
+import { isMailboxAvailable, getMailToken, fetchFolders, fetchMessages } from './outlookApi.js';
 
 /**
  * LEAN, focused system prompt for the email-RETRIEVAL agent (rag-analyst when it
@@ -133,6 +133,9 @@ export async function getEmailContextForPrompt(
     const mailToken = await getMailToken(userId);
     if (!mailToken) {
       return '\n\n## Outlook 信箱\nOutlook 信箱連線已過期，請重新用 AD 帳號登入以使用信箱功能。';
+    }
+    if (!await isMailboxAvailable(userId)) {
+      return '\n\n## Outlook 信箱\n此 AD 帳號沒有 Exchange 信箱權限（IT 未開通），無法讀取信件。';
     }
 
     const folders = await fetchFolders(mailToken);

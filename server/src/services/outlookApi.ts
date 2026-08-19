@@ -67,8 +67,8 @@ export interface OutlookMessage {
 /**
  * Authenticate with Outlook API and cache the mail_token + encrypted credentials in DB.
  */
-export async function authenticateOutlook(userId: string, username: string, password: string): Promise<string | null> {
-  console.log('[Outlook] Authenticating for user:', userId, 'username:', username);
+export async function authenticateOutlook(userId: string, username: string, password: string, domain?: string): Promise<string | null> {
+  console.log('[Outlook] Authenticating for user:', userId, 'username:', username, 'domain:', domain || '(default)');
   if (!config.adApiKey) {
     console.warn('[Outlook] No AD API key configured, skipping');
     return null;
@@ -77,7 +77,9 @@ export async function authenticateOutlook(userId: string, username: string, pass
   const res = await gatewayFetch(`${OUTLOOK_BASE}/auth`, {
     method: 'POST',
     headers: { 'X-API-Key': config.adApiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    // The gateway resolves the account against a single default domain unless one
+    // is given — PYNMAX/WXPJ/… accounts fail with "使用者名稱或密碼錯誤" without it.
+    body: JSON.stringify(domain ? { username, password, domain } : { username, password }),
   }, { timeoutMs: GATEWAY_TIMEOUT_MS });
 
   if (!res.ok) {
@@ -86,21 +88,28 @@ export async function authenticateOutlook(userId: string, username: string, pass
     return null;
   }
 
-  const data = await res.json() as { success: boolean; mail_token?: string };
+  const data = await res.json() as { success: boolean; mail_token?: string; mail_available?: boolean; message?: string };
   const mailToken = data.mail_token;
   if (!mailToken) return null;
+  // The gateway hands out a token even for accounts with no Exchange mailbox
+  // (LDAP-only), then 403s every mail call. Remember the flag so the UI can say
+  // so instead of claiming the connection expired.
+  const mailAvailable = data.mail_available !== false;
+  if (!mailAvailable) {
+    console.warn('[Outlook] Account has no Exchange mailbox (LDAP-only):', username, data.message || '');
+  }
 
   // Cache token with 55-minute TTL (API grants 1 hour)
   const d = new Date(Date.now() + 55 * 60_000);
   const pad = (n: number) => String(n).padStart(2, '0');
   const expiresAt = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
-  const credEnc = encrypt(JSON.stringify({ username, password }));
+  const credEnc = encrypt(JSON.stringify({ username, password, domain }));
 
   await dbRun(
-    `INSERT INTO outlook_tokens (user_id, mail_token, expires_at, credentials_enc) VALUES (?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE mail_token = VALUES(mail_token), expires_at = VALUES(expires_at), credentials_enc = VALUES(credentials_enc)`,
-    userId, mailToken, expiresAt, credEnc
+    `INSERT INTO outlook_tokens (user_id, mail_token, expires_at, credentials_enc, mail_available) VALUES (?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE mail_token = VALUES(mail_token), expires_at = VALUES(expires_at), credentials_enc = VALUES(credentials_enc), mail_available = VALUES(mail_available)`,
+    userId, mailToken, expiresAt, credEnc, mailAvailable ? 1 : 0
   );
   console.log('[Outlook] Token stored, expires_at:', expiresAt);
 
@@ -133,9 +142,13 @@ export async function getMailToken(userId: string): Promise<string | null> {
     }
     const promise = (async () => {
       try {
-        const { username, password } = JSON.parse(decrypt(row.credentials_enc!));
+        const { username, password, domain } = JSON.parse(decrypt(row.credentials_enc!));
+        // Rows written before the domain fix have no domain — fall back to the
+        // user's AD domain so a refresh does not silently drop them.
+        const adDomain = domain || (await dbGet<{ ad_domain: string | null }>(
+          'SELECT ad_domain FROM users WHERE id = ?', userId))?.ad_domain || undefined;
         console.log('[Outlook] Auto-refreshing token for user:', userId);
-        const newToken = await authenticateOutlook(userId, username, password);
+        const newToken = await authenticateOutlook(userId, username, password, adDomain);
         if (newToken) return newToken;
       } catch (err) {
         console.warn('[Outlook] Auto-refresh failed:', err);
@@ -155,6 +168,17 @@ export async function getMailToken(userId: string): Promise<string | null> {
     return null;
   }
   return row.mail_token;
+}
+
+/**
+ * Whether the user's AD account actually owns an Exchange mailbox. False means
+ * every mail call will 403 — the account exists, it just has no mailbox.
+ */
+export async function isMailboxAvailable(userId: string): Promise<boolean> {
+  const row = await dbGet<{ mail_available: number }>(
+    'SELECT mail_available FROM outlook_tokens WHERE user_id = ?', userId
+  );
+  return !row || row.mail_available !== 0;
 }
 
 /**
