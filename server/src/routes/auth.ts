@@ -39,6 +39,26 @@ async function getOrCreateDemoGroup(): Promise<string> {
   return id;
 }
 
+/**
+ * GET /api/auth/mode — which sign-in methods this deployment offers. Public.
+ *
+ * The web client reads this from NEXT_PUBLIC_DEPLOY_MODE at build time, but the
+ * Excel add-in is served from its own host and has to ask at runtime — otherwise
+ * it shows a PANJIT employee an email/password form that pro-panjit will reject
+ * with a bare "帳號或密碼錯誤". Exposes nothing sensitive: which login form to
+ * draw, and where the web app lives for first-time AD setup.
+ */
+router.get('/mode', (_req: Request, res: Response) => {
+  res.json({
+    deployMode: config.deployMode,
+    adLogin: config.deployMode === 'pro-panjit',
+    // Always offered, but pro-panjit restricts it to the whitelist — so the
+    // add-in shows it as the secondary tab rather than the default.
+    emailLogin: true,
+    webUrl: config.publicWebUrl,
+  });
+});
+
 router.post('/demo', async (req: Request, res: Response) => {
   if (config.deployMode !== 'pro-out') { res.status(403).json({ error: '此功能未開放' }); return; }
   const rawName = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
