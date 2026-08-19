@@ -10,6 +10,7 @@ import { resolveClaudeCliPath } from './resolveClaudeCli.js';
 import { acquireAuthSlot } from './claudeAuthGate.js';
 import { acquireAiSlot } from './aiConcurrency.js';
 import { logAiCall } from './aiCallLog.js';
+import { EXCEL_MCP_TOOL_NAMES } from './excelToolSpec.js';
 import type { SSEEvent } from '../types.js';
 
 // Max time to hold the auth gate for one spawn if it never produces output (the
@@ -174,6 +175,15 @@ export interface ClaudeCliOptions {
   // 員編 (X-On-Behalf-Of), so the agent can search/read KM documents the user is
   // permitted to see. May be combined with mcpEmailToken (both MCPs mount together).
   mcpKmOnBehalf?: string;
+  // Live-workbook MCP: when set, attach the excel-mcp stdio server carrying THIS
+  // run's bridge token, so the agent can read/write the workbook currently open in
+  // the user's Excel add-in. Unlike the data-source MCPs above, the tools execute
+  // on the USER'S machine via Office.js — see excelBridge.ts for the round trip.
+  mcpExcelRunToken?: string;
+  // Which workbook tools the connected add-in build can actually execute. A pane
+  // running older code must not be offered newer tools — see routes/excel.ts.
+  // Omit to offer all of them.
+  mcpExcelTools?: string[];
 }
 
 interface ClaudeResult {
@@ -366,7 +376,7 @@ export function spawnClaude(
   // Data-source MCPs: mount email-mcp and/or km-mcp, each carrying THIS run owner's
   // own credentials (mail JWT / 員編) so an agent can only ever reach the owner's
   // data — no cross-user access. Both can mount together.
-  if (options.mcpEmailToken || options.mcpKmOnBehalf) {
+  if (options.mcpEmailToken || options.mcpKmOnBehalf || options.mcpExcelRunToken) {
     const mcpConfigPath = path.join(sandboxPath, '.mcp-servers.json');
     // Portable dev↔prod: prefer the COMPILED .js (production `tsc` build) run with
     // plain node — no tsx, no source .ts needed. Fall back to the TS source via the
@@ -432,6 +442,28 @@ export function spawnClaude(
         'mcp__km__km_get_document',
         'mcp__km__km_get_attachment',
       );
+    }
+    if (options.mcpExcelRunToken) {
+      mcpServers.excel = {
+        command: process.execPath,
+        args: mcpSpawnArgs('excelMcp'),
+        env: {
+          NODE_PATH: nodePath,
+          MCP_EXCEL_RUN_TOKEN: options.mcpExcelRunToken,
+          // Loopback back into THIS Express process — the bridge lives in memory
+          // here (excelBridge.ts), so the subprocess has to come back over HTTP.
+          MCP_EXCEL_BRIDGE_URL: `http://127.0.0.1:${config.port}/internal/excel`,
+          // Empty = offer everything. The MCP filters its own tools/list on this,
+          // so an out-of-date task pane simply has fewer abilities rather than an
+          // agent that keeps calling tools the pane will reject.
+          MCP_EXCEL_CLIENT_TOOLS: (options.mcpExcelTools || []).join(','),
+          ...debugEnv('excel-mcp-debug.log'),
+        },
+      };
+      const offered = options.mcpExcelTools?.length
+        ? EXCEL_MCP_TOOL_NAMES.filter(n => options.mcpExcelTools!.includes(n.replace('mcp__excel__', '')))
+        : EXCEL_MCP_TOOL_NAMES;
+      mcpToolNames.push(...offered);
     }
     fs.writeFileSync(mcpConfigPath, JSON.stringify({ mcpServers }), 'utf-8');
     // --strict-mcp-config: use ONLY our config, ignore any global MCP servers.

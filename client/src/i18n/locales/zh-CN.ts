@@ -713,6 +713,7 @@ const zhCN = {
   'admin.analytics.title': '使用分析报表',
   'admin.analytics.period7d': '近 7 天',
   'admin.analytics.period30d': '近 30 天',
+  'admin.analytics.periodAll': '全部',
   'admin.analytics.totalConversations': '对话数',
   'admin.analytics.totalFiles': '生成文件',
   'admin.analytics.newUsers': '新增用户',

@@ -1851,10 +1851,25 @@ router.delete('/invite-codes/:id', async (req: Request, res: Response) => {
 
 // ==================== Analytics ====================
 
-// GET /api/admin/analytics/overview?period=7d|30d
+// GET /api/admin/analytics/overview?period=7d|30d|all
 router.get('/analytics/overview', async (req: Request, res: Response) => {
   const period = (req.query.period as string) || '30d';
-  const days = period === '7d' ? 7 : 30;
+  // 'all' → a huge window so every range-filtered query below captures everything
+  // without changing their SQL shape. The daily trend uses its own bounded span so
+  // the loop never runs 100000 times.
+  const days = period === '7d' ? 7 : period === 'all' ? 100000 : 30;
+  let trendDays = period === '7d' ? 7 : 30;
+  if (period === 'all') {
+    const earliest = await dbGet<{ d: string | null }>(`
+      SELECT DATE_FORMAT(LEAST(
+        COALESCE((SELECT MIN(created_at) FROM conversations), NOW()),
+        COALESCE((SELECT MIN(created_at) FROM generated_files), NOW())
+      ), '%Y-%m-%d') as d
+    `);
+    const first = earliest?.d ? new Date(earliest.d + 'T00:00:00') : new Date();
+    // days from the earliest record to today, inclusive; capped so the chart stays sane
+    trendDays = Math.min(Math.max(Math.floor((Date.now() - first.getTime()) / 86400000) + 1, 1), 400);
+  }
 
   // Conversation trend by day
   const convTrend = await dbAll<{ date: string; count: number }>(`
@@ -1879,7 +1894,7 @@ router.get('/analytics/overview', async (req: Request, res: Response) => {
   const fileMap = new Map(fileTrend.map(r => [r.date, r.count]));
   const trend = [];
   const now = new Date();
-  for (let i = days - 1; i >= 0; i--) {
+  for (let i = trendDays - 1; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -2013,7 +2028,7 @@ router.get('/analytics/monthly', async (req: Request, res: Response) => {
 // GET /api/admin/analytics/hot-topics?period=7d|30d&limit=15
 router.get('/analytics/hot-topics', async (req: Request, res: Response) => {
   const period = (req.query.period as string) || '7d';
-  const days = period === '7d' ? 7 : 30;
+  const days = period === '7d' ? 7 : period === 'all' ? 100000 : 30;
   const limit = Math.min(parseInt(req.query.limit as string) || 15, 50);
 
   const rows = await dbAll<{
@@ -2043,7 +2058,7 @@ router.get('/analytics/hot-topics', async (req: Request, res: Response) => {
 // GET /api/admin/analytics/top-users?period=7d|30d&limit=10
 router.get('/analytics/top-users', async (req: Request, res: Response) => {
   const period = (req.query.period as string) || '30d';
-  const days = period === '7d' ? 7 : 30;
+  const days = period === '7d' ? 7 : period === 'all' ? 100000 : 30;
   const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
 
   const rows = await dbAll<{
@@ -2072,7 +2087,8 @@ router.get('/analytics/top-users', async (req: Request, res: Response) => {
 // GET /api/admin/analytics/topic-analysis?period=7d|30d
 router.get('/analytics/topic-analysis', async (req: Request, res: Response) => {
   const period = (req.query?.period as string) || '7d';
-  const days = period === '7d' ? 7 : 30;
+  const days = period === '7d' ? 7 : period === 'all' ? 100000 : 30;
+  const periodLabel = period === 'all' ? '全部期間' : `近 ${days} 天`;
 
   if (!config.deepseekApiKey) {
     res.status(503).json({ error: 'DeepSeek API key not configured' });
@@ -2099,7 +2115,7 @@ router.get('/analytics/topic-analysis', async (req: Request, res: Response) => {
 
   const titleList = rows.map((r, i) => `${i + 1}. ${r.title}`).join('\n');
 
-  const prompt = `以下是一個 AI 文件生成平台近 ${days} 天內，使用者發起的對話標題列表（共 ${rows.length} 筆）。
+  const prompt = `以下是一個 AI 文件生成平台${periodLabel}內，使用者發起的對話標題列表（共 ${rows.length} 筆）。
 
 ${titleList}
 

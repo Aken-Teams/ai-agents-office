@@ -80,7 +80,11 @@ export interface SSEEvent {
     // so queue-wait time is never counted against the per-agent limit.
     | 'spawn_started'
     // Data-fidelity verification (Phase C)
-    | 'fidelity_check';
+    | 'fidelity_check'
+    // Excel add-in: a tool the AGENT wants run against the workbook open on the
+    // USER'S machine. Sent down the add-in's SSE; the add-in executes it via
+    // Office.js and POSTs the result back. See services/excelBridge.ts.
+    | 'tool_request';
   data: unknown;
 }
 

@@ -224,6 +224,10 @@ function TrendBars({ data, convLabel, fileLabel }: { data: TrendPoint[]; convLab
   if (!data.length) return null;
   const maxY = Math.max(...data.map(d => Math.max(d.conversations, d.files)), 1);
   const is30d = data.length > 10;
+  // With many days (e.g. the "全部" range) the rotated date labels overcrowd — show at
+  // most ~30 of them by thinning, but always keep the first and last.
+  const labelStep = Math.max(1, Math.ceil(data.length / 30));
+  const showLabel = (i: number) => i % labelStep === 0 || i === data.length - 1;
 
   return (
     <div>
@@ -248,9 +252,11 @@ function TrendBars({ data, convLabel, fileLabel }: { data: TrendPoint[]; convLab
         <div className="flex gap-0.5 mt-3 h-12">
           {data.map((v, i) => (
             <div key={i} className="flex-1 min-w-0 relative">
-              <span className="absolute top-0 left-1/2 -translate-x-1/2 origin-top -rotate-55 text-[11px] text-outline font-mono whitespace-nowrap">
-                {v.date.slice(5)}
-              </span>
+              {showLabel(i) && (
+                <span className="absolute top-0 left-1/2 -translate-x-1/2 origin-top -rotate-55 text-[11px] text-outline font-mono whitespace-nowrap">
+                  {v.date.slice(5)}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -367,7 +373,7 @@ function TopicAnalysisCard({ period, token }: { period: string; token: string })
 export default function AdminAnalytics() {
   const { token } = useAdminAuth();
   const { t } = useTranslation();
-  const [period, setPeriod] = useState<'7d' | '30d'>('7d');
+  const [period, setPeriod] = useState<'7d' | '30d' | 'all'>('7d');
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [topUsers, setTopUsers] = useState<TopUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -399,12 +405,12 @@ export default function AdminAnalytics() {
           {t('admin.analytics.title' as any)}
         </span>
         <div className="flex gap-1">
-          {(['7d', '30d'] as const).map(p => (
+          {(['7d', '30d', 'all'] as const).map(p => (
             <button key={p} onClick={() => setPeriod(p)}
-              className={`px-2 md:px-3 py-0.5 md:py-1 text-xs md:text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${p === '30d' ? 'hidden md:inline-flex' : ''} ${
+              className={`px-2 md:px-3 py-0.5 md:py-1 text-xs md:text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
                 period === p ? 'text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:text-on-surface'
               }`}>
-              {t(p === '7d' ? 'admin.analytics.period7d' as any : 'admin.analytics.period30d' as any)}
+              {t((p === '7d' ? 'admin.analytics.period7d' : p === '30d' ? 'admin.analytics.period30d' : 'admin.analytics.periodAll') as any)}
             </button>
           ))}
         </div>

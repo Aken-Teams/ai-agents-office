@@ -701,6 +701,7 @@ const en = {
   'admin.analytics.title': 'Usage Analytics',
   'admin.analytics.period7d': 'Last 7 Days',
   'admin.analytics.period30d': 'Last 30 Days',
+  'admin.analytics.periodAll': 'All Time',
   'admin.analytics.totalConversations': 'Conversations',
   'admin.analytics.totalFiles': 'Files Generated',
   'admin.analytics.newUsers': 'New Users',
