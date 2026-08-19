@@ -242,6 +242,64 @@ export const EXCEL_TOOLS: ExcelToolSpec[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'excel_create_pivot',
+    description:
+      '建立真正的樞紐分析表（使用者可以自己拖欄位、換維度、展開收合的那種活物件）。'
+      + 'rows／columns／values 裡填的是**來源資料標題列的欄位名稱**，不是儲存格位址。'
+      + '注意：如果使用者只是要一份「彙總好的表」，直接算完用 excel_write_range 寫進去更快也更好讀；'
+      + '只有他明確想要一個可以自己操作的樞紐時才用這個。',
+    destructive: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sheet: { type: 'string', description: '樞紐要放在哪張工作表' },
+        source_range: { type: 'string', description: "來源資料（含標題列），例如 '需求列表清單!A1:M36'" },
+        destination_cell: { type: 'string', description: "樞紐左上角放哪，例如 'A3'" },
+        name: { type: 'string', description: '樞紐名稱（同一份活頁簿不可重複）' },
+        rows: { type: 'array', items: { type: 'string' }, description: '放在「列」的欄位名稱' },
+        columns: { type: 'array', items: { type: 'string' }, description: '放在「欄」的欄位名稱' },
+        values: {
+          type: 'array',
+          description: '放在「值」的欄位與彙總方式',
+          items: {
+            type: 'object',
+            properties: {
+              field: { type: 'string' },
+              summarize_by: {
+                type: 'string',
+                enum: ['Sum', 'Count', 'Average', 'Max', 'Min', 'CountNumbers'],
+                description: '預設 Sum',
+              },
+            },
+            required: ['field'],
+            additionalProperties: false,
+          },
+        },
+        filters: { type: 'array', items: { type: 'string' }, description: '放在「篩選」的欄位名稱' },
+      },
+      required: ['sheet', 'source_range', 'destination_cell', 'name'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'excel_trace_precedents',
+    description:
+      '追一格公式是從哪些儲存格算出來的，回傳每個前導格的位址、目前的值和它自己的公式。'
+      + "mode='direct' 只看直接參照（預設）、mode='all' 會一路追到底（可跨工作表）。"
+      + '使用者問「這個數字怎麼來的」「為什麼是這個值」「這格在算什麼」時用它，'
+      + '不要自己讀公式然後用猜的推論。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sheet: { type: 'string' },
+        cell: { type: 'string', description: "單一儲存格，例如 'C42'" },
+        mode: { type: 'string', enum: ['direct', 'all'], description: '預設 direct' },
+      },
+      required: ['sheet', 'cell'],
+      additionalProperties: false,
+    },
+  },
 ];
 
 export const EXCEL_TOOL_NAMES = EXCEL_TOOLS.map(t => t.name);
@@ -317,5 +375,11 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
   if (name === 'excel_table_ops') {
     return `${TABLE_OP_LABEL[op] || op}：${args.sheet}${args.range ? `!${args.range}` : ''}`;
   }
+  if (name === 'excel_create_pivot') {
+    const rows = Array.isArray(args.rows) ? (args.rows as string[]).join('、') : '';
+    return `以 ${args.source_range} 在 ${args.sheet}!${args.destination_cell} 建立樞紐分析表`
+      + (rows ? `（列：${rows}）` : '');
+  }
+  if (name === 'excel_trace_precedents') return `追蹤 ${args.sheet}!${args.cell} 的公式來源`;
   return name;
 }
