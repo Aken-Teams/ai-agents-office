@@ -69,22 +69,39 @@ function OnboardingContent() {
 
   const currentStepType = steps[step];
 
-  // Auth check
+  // Auth check. Only a 401/403 means "not logged in" — a backend hiccup (5xx,
+  // restart, unreachable) is transient and gets retried instead of bouncing the
+  // user out of onboarding to the login screen.
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { router.replace('/login'); return; }
-    fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(data => {
-        if (!data.id) { router.replace('/login'); return; }
-        const terms = !!data.termsRequired;
-        const onboarding = !!data.onboardingRequired;
-        if (!terms && !onboarding) { router.replace('/dashboard'); return; }
-        setNeedsTerms(terms);
-        setNeedsOnboarding(onboarding);
-        setAuthChecked(true);
-      })
-      .catch(() => router.replace('/login'));
+    let cancelled = false;
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const check = () => {
+      fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+        .then(async r => {
+          if (r.status === 401 || r.status === 403) { router.replace('/login'); return; }
+          if (!r.ok) throw new Error(`auth/me failed: ${r.status}`);
+          const data = await r.json();
+          if (cancelled) return;
+          if (!data.id) { router.replace('/login'); return; }
+          const terms = !!data.termsRequired;
+          const onboarding = !!data.onboardingRequired;
+          if (!terms && !onboarding) { router.replace('/dashboard'); return; }
+          setNeedsTerms(terms);
+          setNeedsOnboarding(onboarding);
+          setAuthChecked(true);
+        })
+        .catch(() => {
+          if (cancelled || ++tries > 5) return; // give up quietly, stay on the spinner
+          timer = setTimeout(check, 2000 * tries);
+        });
+    };
+    check();
+
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, [router]);
 
   // Fetch TOS content when needed

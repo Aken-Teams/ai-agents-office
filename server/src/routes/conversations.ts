@@ -213,6 +213,8 @@ ${skillHint}${existingHint}
         temperature: 0.7,
         max_tokens: 500,
       }),
+      // Bound the call so a hung DeepSeek can't hold the request open forever.
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!dsRes.ok) {

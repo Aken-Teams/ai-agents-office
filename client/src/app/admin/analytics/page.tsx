@@ -373,7 +373,7 @@ function TopicAnalysisCard({ period, token }: { period: string; token: string })
 export default function AdminAnalytics() {
   const { token } = useAdminAuth();
   const { t } = useTranslation();
-  const [period, setPeriod] = useState<'7d' | '30d' | 'all'>('7d');
+  const [period, setPeriod] = useState<'7d' | '30d'>('7d');
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [topUsers, setTopUsers] = useState<TopUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -405,12 +405,12 @@ export default function AdminAnalytics() {
           {t('admin.analytics.title' as any)}
         </span>
         <div className="flex gap-1">
-          {(['7d', '30d', 'all'] as const).map(p => (
+          {(['7d', '30d'] as const).map(p => (
             <button key={p} onClick={() => setPeriod(p)}
               className={`px-2 md:px-3 py-0.5 md:py-1 text-xs md:text-sm font-bold uppercase tracking-wider cursor-pointer transition-colors ${
                 period === p ? 'text-primary border-b-2 border-primary' : 'text-on-surface-variant hover:text-on-surface'
               }`}>
-              {t((p === '7d' ? 'admin.analytics.period7d' : p === '30d' ? 'admin.analytics.period30d' : 'admin.analytics.periodAll') as any)}
+              {t((p === '7d' ? 'admin.analytics.period7d' : 'admin.analytics.period30d') as any)}
             </button>
           ))}
         </div>

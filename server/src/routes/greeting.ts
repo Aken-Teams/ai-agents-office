@@ -149,6 +149,11 @@ Write a warm, concise greeting (2-4 sentences max). Be human, natural, and carin
     abortController?.abort();
   });
 
+  // Hard cap: a hung DeepSeek (no response rather than an error) would otherwise
+  // hold this request, its socket and its keepalive timer open indefinitely —
+  // enough of them pile up into a server-wide problem. Bound it.
+  const hardStop = setTimeout(() => abortController?.abort(), 60_000);
+
   try {
     const response = await fetch('https://api.deepseek.com/chat/completions', {
       method: 'POST',
@@ -209,6 +214,7 @@ Write a warm, concise greeting (2-4 sentences max). Be human, natural, and carin
     }
   } finally {
     abortController = null;
+    clearTimeout(hardStop);
     clearInterval(keepalive);
     if (!aborted) {
       try {

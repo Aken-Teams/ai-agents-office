@@ -2132,28 +2132,38 @@ ${titleList}
 - 類型名稱使用繁體中文，清楚描述任務類型（如「財務報表分析」「簡報製作」「資料整理與計算」「競爭分析報告」等）
 - 只回傳 JSON，不加任何說明文字`;
 
-  const dsRes = await fetch('https://api.deepseek.com/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.deepseekApiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [{ role: 'user', content: prompt }],
-      response_format: { type: 'json_object' },
-      temperature: 0.3,
-    }),
-  });
+  // DeepSeek is optional garnish on this page — never let its outage surface as
+  // a server error: bound it with a timeout and answer 502 on any failure.
+  let dsRes: Awaited<ReturnType<typeof fetch>>;
+  try {
+    dsRes = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.deepseekApiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' },
+        temperature: 0.3,
+      }),
+      signal: AbortSignal.timeout(45_000),
+    });
+  } catch (err) {
+    console.error('DeepSeek request failed:', err);
+    res.status(502).json({ error: 'DeepSeek API unavailable' });
+    return;
+  }
 
   if (!dsRes.ok) {
-    const err = await dsRes.text();
+    const err = await dsRes.text().catch(() => '');
     console.error('DeepSeek error:', err);
     res.status(502).json({ error: 'DeepSeek API error' });
     return;
   }
 
-  const dsData = await dsRes.json() as { choices: Array<{ message: { content: string } }> };
+  const dsData = await dsRes.json().catch(() => ({})) as { choices?: Array<{ message: { content: string } }> };
   const content = dsData.choices?.[0]?.message?.content ?? '{}';
 
   try {

@@ -45,6 +45,19 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+/**
+ * Thrown only when the server itself says the token is invalid (401) or the
+ * account is blocked (403). Every other failure — network error, 502/503 while
+ * the backend restarts, an upstream AI provider taking a route down — is
+ * transient and must NOT clear the session.
+ */
+class AuthTokenError extends Error {
+  constructor() { super('Invalid token'); this.name = 'AuthTokenError'; }
+}
+
+// Backoff for retrying /api/auth/me after a transient failure (~30s total).
+const ME_RETRY_DELAYS = [1000, 2000, 4000, 8000, 15000];
+
 export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
@@ -65,26 +78,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return list.includes('*') || list.includes(key);
   }, [permissions]);
 
-  // Check stored token on mount
+  // Check stored token on mount.
+  //
+  // A backend hiccup is NOT an invalid token. Previously any failure here (5xx,
+  // a restart, an upstream like DeepSeek dragging the server down) deleted the
+  // stored JWT and logged everyone out — an unrelated subsystem could kick the
+  // whole platform to the login screen. Now only an explicit 401/403 from the
+  // server clears the token; transient failures keep the session and retry.
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
-    if (storedToken) {
-      setToken(storedToken);
-      fetchMe(storedToken).catch(() => {
-        localStorage.removeItem('token');
-        setToken(null);
-        setIsLoading(false);
+    if (!storedToken) { setIsLoading(false); return; }
+    setToken(storedToken);
+
+    let cancelled = false;
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let gaveUp = false;
+
+    const attemptFetch = () => {
+      if (cancelled) return;
+      fetchMe(storedToken).catch((err: unknown) => {
+        if (cancelled) return;
+        if (err instanceof AuthTokenError) {
+          // The server explicitly rejected the token (expired / suspended).
+          localStorage.removeItem('token');
+          setToken(null);
+          setIsLoading(false);
+          return;
+        }
+        // Transient: server down, 5xx, timeout. Keep the token, back off, retry.
+        attempt++;
+        if (attempt > ME_RETRY_DELAYS.length) {
+          // Stop blocking the UI, but keep the token — a reload (or the
+          // online/visible listeners below) restores the session once the
+          // backend is healthy again, with no re-login.
+          gaveUp = true;
+          setIsLoading(false);
+          return;
+        }
+        timer = setTimeout(attemptFetch, ME_RETRY_DELAYS[attempt - 1]);
       });
-    } else {
-      setIsLoading(false);
-    }
+    };
+    attemptFetch();
+
+    // Self-heal: when the tab comes back online / into view after we gave up,
+    // try once more instead of leaving the user stranded on a dead session.
+    const revive = () => {
+      if (cancelled || !gaveUp) return;
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      gaveUp = false;
+      attempt = 0;
+      setIsLoading(true);
+      attemptFetch();
+    };
+    window.addEventListener('online', revive);
+    document.addEventListener('visibilitychange', revive);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      window.removeEventListener('online', revive);
+      document.removeEventListener('visibilitychange', revive);
+    };
   }, []);
 
   async function fetchMe(t: string) {
-    const res = await fetch('/api/auth/me', {
-      headers: { Authorization: `Bearer ${t}` },
-    });
-    if (!res.ok) throw new Error('Invalid token');
+    let res: Response;
+    try {
+      res = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${t}` },
+      });
+    } catch {
+      throw new Error('auth/me unreachable'); // network error → transient
+    }
+    // Only these mean "this token is no longer valid".
+    if (res.status === 401 || res.status === 403) throw new AuthTokenError();
+    if (!res.ok) throw new Error(`auth/me failed: ${res.status}`); // 5xx → transient
     const data = await res.json();
     setUser(data);
     setIsLoading(false);

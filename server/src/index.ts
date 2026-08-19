@@ -31,6 +31,28 @@ import { pruneExpiredBuckets } from './services/line/rateLimit.js';
 import { startLineWorker, stopQueueSystem } from './services/queue.js';
 import { runLineJob } from './workers/lineMessageWorker.js';
 
+// Set once the HTTP server is listening. Before that, a crash is a startup
+// failure and must still be fatal (e.g. port in use) — silently "surviving" it
+// would leave a process that serves nothing.
+let serving = false;
+
+// A failure in ONE subsystem must never take down the whole server. Node's
+// default is to kill the process on an unhandled rejection, so a single stray
+// promise — a background poller, a hung third-party AI provider (DeepSeek,
+// Gemini…), a webhook handler — could end every user's session at once and
+// make it look like "the platform logged everyone out". Log loudly, keep
+// serving; requests that depended on the broken part still fail on their own.
+process.on('unhandledRejection', (reason) => {
+  console.error('[guard] Unhandled promise rejection (server kept alive):', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[guard] Uncaught exception:', err);
+  if (!serving) {
+    console.error('[guard] Crash during startup — exiting.');
+    process.exit(1);
+  }
+});
+
 async function main() {
   // Fail-fast on insecure security config (default JWT secret in production, etc.)
   validateConfig();
@@ -168,9 +190,17 @@ async function main() {
 
   // Start server
   const server = app.listen(config.port, () => {
+    serving = true;
     console.log(`AI Agents Office server running on http://localhost:${config.port}`);
     console.log(`Environment: ${config.nodeEnv}`);
     console.log(`Workspace: ${config.workspaceRoot}`);
+  });
+
+  // listen() errors (port in use, bad bind) arrive as an 'error' event, not an
+  // exception — keep those fatal so a dead server never masquerades as healthy.
+  server.on('error', (err) => {
+    console.error('HTTP server error:', err);
+    process.exit(1);
   });
 
   // Graceful shutdown — drain in-flight LINE jobs before closing so a restart

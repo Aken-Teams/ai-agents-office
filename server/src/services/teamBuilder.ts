@@ -47,6 +47,7 @@ export async function generateTeamSpec(topic: string): Promise<GeneratedSpec | n
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.deepseekApiKey}` },
       body: JSON.stringify({ model: 'deepseek-chat', messages: [{ role: 'user', content: prompt }], temperature: 0.7, max_tokens: 1800 }),
+      signal: AbortSignal.timeout(60_000),
     });
     if (!dsRes.ok) { console.error('[teamBuilder] generateTeamSpec DeepSeek error:', await dsRes.text()); return null; }
     const data = await dsRes.json() as { choices: Array<{ message: { content: string } }> };

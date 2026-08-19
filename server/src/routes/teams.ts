@@ -99,6 +99,7 @@ ${roster}
         temperature: 0.6,
         max_tokens: 1500,
       }),
+      signal: AbortSignal.timeout(60_000),
     });
     if (!dsRes.ok) { console.error('[teams] aiTune DeepSeek error:', await dsRes.text()); return null; }
     const data = await dsRes.json() as { choices: Array<{ message: { content: string } }> };
