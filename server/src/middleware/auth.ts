@@ -32,6 +32,14 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
         res.status(403).json({ error: '您的帳號已被停用，如有疑問請聯繫管理者', code: 'SUSPENDED' });
         return;
       }
+      // A query that succeeded and found nothing is not a DB hiccup — the
+      // account was deleted. Falling through used to let the request continue on
+      // a token whose user no longer exists, and it died further downstream as
+      // "伺服器發生錯誤", which reads as our fault rather than as the answer.
+      if (!user) {
+        res.status(401).json({ error: '這個帳號已經不存在了，請聯繫管理者', code: 'ACCOUNT_GONE' });
+        return;
+      }
       req.user = payload;
       next();
     })

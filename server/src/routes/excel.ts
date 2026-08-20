@@ -30,7 +30,7 @@ import {
   registerRun, closeRun, callWorkbookTool, resolveToolCall, runBelongsTo,
 } from '../services/excelBridge.js';
 import { EXCEL_TOOL_NAMES } from '../services/excelToolSpec.js';
-import { DATA_SOURCE_PROMPT } from '../services/excelContext.js';
+import { DATA_SOURCE_PROMPT, LOCALE_PROMPT, resolveLocale } from '../services/excelContext.js';
 import { getMailToken } from '../services/outlookApi.js';
 import { kmEnabledFor, getKmOnBehalf } from '../services/kmApi.js';
 import { config } from '../config.js';
@@ -190,10 +190,10 @@ router.get('/ping', async (req: Request, res: Response) => {
 // ─── The chat stream ───
 router.post('/chat', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { message, runId, sessionId, workbookName, workbookContext, selection, clientTools, dataSources, model: wantedModel, newConversation, workbookKey } = req.body as {
+  const { message, runId, sessionId, workbookName, workbookContext, selection, clientTools, dataSources, model: wantedModel, locale: wantedLocale, newConversation, workbookKey } = req.body as {
     message?: string; runId?: string; sessionId?: string;
     workbookName?: string; workbookContext?: string; selection?: string; clientTools?: string[];
-    model?: string; newConversation?: boolean; workbookKey?: string;
+    model?: string; locale?: string; newConversation?: boolean; workbookKey?: string;
     dataSources?: string[];
   };
 
@@ -301,11 +301,14 @@ router.post('/chat', async (req: Request, res: Response) => {
     write({ type: 'info', data: `這一輪可存取：${mounted.join('、')}` });
   }
 
+  const who = await dbGet<{ locale: string }>('SELECT locale FROM users WHERE id = ?', userId).catch(() => null);
+  const localeBlock = LOCALE_PROMPT(resolveLocale(wantedLocale, who?.locale));
+
   let text = '', inTok = 0, outTok = 0, model = '';
   const chosenModel = resolveModel(wantedModel);
-  const systemPrompt = mounted.length
+  const systemPrompt = (mounted.length
     ? EXCEL_ASSISTANT_SYSTEM_PROMPT + DATA_SOURCE_PROMPT(mounted)
-    : EXCEL_ASSISTANT_SYSTEM_PROMPT;
+    : EXCEL_ASSISTANT_SYSTEM_PROMPT) + localeBlock;
   const { emitter, abort } = spawnClaude(prompt, systemPrompt, {
     userId, conversationId,
     sandboxSubdir: '_agents/excel-addin',
