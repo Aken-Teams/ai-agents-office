@@ -21,7 +21,7 @@ import { checkUserUsageLimit } from '../services/usageLimit.js';
 import { analyzeInput, logSecurityEvent } from '../services/inputGuard.js';
 import { moderateTeamTopic } from '../services/contentSafety.js';
 import { getMailToken } from '../services/outlookApi.js';
-import { getKmOnBehalf } from '../services/kmApi.js';
+import { getKmOnBehalf, kmEnabledFor } from '../services/kmApi.js';
 import { computeNextRun, mysqlDateTime, runScheduleNow } from '../services/teamScheduler.js';
 import { generateTeamSpec, insertTeamWithAgents, type GeneratedAgent } from '../services/teamBuilder.js';
 import type { Conversation } from '../types.js';
@@ -393,9 +393,12 @@ router.post('/:id/run', async (req: Request, res: Response) => {
   }
   // "KM 知識庫" data source → resolve the user's 員編 (X-On-Behalf-Of) for km-mcp.
   let mcpKmOnBehalf: string | undefined;
-  if (kmDataSource) {
+  // Gated on the web surface as well as the key — see kmEnabledFor.
+  if (kmDataSource && kmEnabledFor('web')) {
     mcpKmOnBehalf = (await getKmOnBehalf(userId)) || undefined;
     console.log(`[teams] run km data-source: requested=true, onBehalfResolved=${!!mcpKmOnBehalf} (user=${userId})`);
+  } else if (kmDataSource) {
+    console.log('[teams] km data-source requested but KM is off for the web surface (KM_SURFACES)');
   }
 
   // Quota — reuse the same accounting as the web/LINE flow.

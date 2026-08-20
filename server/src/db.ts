@@ -367,6 +367,19 @@ export async function initializeDatabase(): Promise<void> {
     try {
       await conn.query("ALTER TABLE conversations ADD COLUMN category VARCHAR(20) NOT NULL DEFAULT 'document'");
     } catch { /* column already exists */ }
+    // Which workbook an Excel add-in conversation belongs to.
+    //
+    // Before this, getOrCreateExcelConversation matched on (user_id, category)
+    // alone, so every workbook a person ever opened shared ONE conversation row —
+    // three open files all writing into the same history, and no way to start
+    // fresh. Keyed by workbook, a file gets its own thread; NULL keeps every
+    // pre-existing row valid.
+    try {
+      await conn.query('ALTER TABLE conversations ADD COLUMN workbook_key VARCHAR(255) DEFAULT NULL');
+    } catch { /* column already exists */ }
+    try {
+      await conn.query('CREATE INDEX idx_conversations_workbook ON conversations (user_id, category, workbook_key)');
+    } catch { /* index already exists */ }
 
     // Add system_prompt and icon columns to conversations if not exists
     try {

@@ -93,6 +93,18 @@ export const config = {
   // per-user X-On-Behalf-Of (the user's AD 員編) → KM enforces per-user permission.
   kmApiBase: (process.env.KM_API_BASE || 'https://kmapi.panjit.com.tw').replace(/\/+$/, ''),
   kmApiKey: process.env.KM_API_KEY || '',
+  /**
+   * Which surfaces may use KM, comma separated: web, excel.
+   *
+   * Defaults to the add-in only. The customer decided KM is not part of the web
+   * app, but the MCP was finished and the Excel add-in wants it — and before
+   * this, setting KM_API_KEY switched KM on for BOTH. The key says "we can reach
+   * KM"; this says "and here is where that is allowed to show up".
+   *
+   * Set KM_SURFACES=web,excel to put it back on the web.
+   */
+  kmSurfaces: (process.env.KM_SURFACES || 'excel')
+    .split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
   // Whitelist: these emails can still use email/password login even in pro-panjit mode
   emailLoginWhitelist: (process.env.EMAIL_LOGIN_WHITELIST || 'admin@zhaoi.ai,aken1023@gmail.com').split(',').map(e => e.trim().toLowerCase()),
 

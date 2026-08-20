@@ -32,7 +32,7 @@ import {
 import { EXCEL_TOOL_NAMES } from '../services/excelToolSpec.js';
 import { DATA_SOURCE_PROMPT } from '../services/excelContext.js';
 import { getMailToken } from '../services/outlookApi.js';
-import { kmEnabled, getKmOnBehalf } from '../services/kmApi.js';
+import { kmEnabledFor, getKmOnBehalf } from '../services/kmApi.js';
 import { config } from '../config.js';
 import type { SSEEvent } from '../types.js';
 
@@ -41,7 +41,38 @@ router.use(authMiddleware);
 
 /** Model for the Excel agent — same reasoning as the KM assistant: reliable at
  *  multi-step MCP orchestration without Opus latency on a side panel. */
-const EXCEL_MODEL = 'claude-sonnet-4-6';
+// Measured, same account and same minute, on an identical reproduction:
+//   claude-sonnet-4-6   7.7 tokens/sec
+//   claude-opus-5      44.0 tokens/sec
+// Six times slower, and backwards from what the tiers imply. That gap is what
+// turned "build me a calendar" into a fifteen-minute run that hit the timeout —
+// not the prompt, and not the account's quota, both of which were investigated
+// first and cleared. Claude for Excel runs the same class of task on Opus 5.
+// Re-measure with tools/repro before assuming this is still the right choice.
+const EXCEL_MODEL = 'claude-opus-5';
+
+/**
+ * What the pane offers in its model picker.
+ *
+ * Server-side on purpose: local / self-hosted models land here as this
+ * deployment gains them, and the add-in picks them up without a reinstall —
+ * which matters because SharedRuntime means an add-in update needs everyone to
+ * quit Excel.
+ *
+ * `note` is the trade-off in the user's own terms, not a spec sheet. Someone
+ * choosing a model in a task pane wants to know "will this be slow" and "will
+ * this cost me", not the parameter count.
+ */
+const EXCEL_MODELS: { id: string; label: string; note: string; default?: boolean }[] = [
+  { id: 'claude-opus-5', label: 'Opus 5', note: '最聰明，做整份報表／版面設計用這個', default: true },
+  { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6', note: '省 token；簡單問答夠用，複雜任務會明顯變慢' },
+];
+
+/** Never trust a model id from the client — it is a string that reaches a spawn. */
+function resolveModel(requested?: string): string {
+  const hit = EXCEL_MODELS.find(m => m.id === requested);
+  return hit ? hit.id : EXCEL_MODEL;
+}
 
 /**
  * Turn budget. Each turn is potentially one network round trip to the user's
@@ -52,17 +83,66 @@ const EXCEL_MODEL = 'claude-sonnet-4-6';
 const EXCEL_MAX_TURNS = 24;
 
 /** Whole-run ceiling. Long because a destructive call can sit waiting on a human. */
-const RUN_TIMEOUT_MS = 600_000;
+const RUN_TIMEOUT_MS = 900_000;
 
-async function getOrCreateExcelConversation(userId: string): Promise<string> {
-  const existing = await dbGet<{ id: string }>(
-    "SELECT id FROM conversations WHERE user_id = ? AND category = 'excel-addin' LIMIT 1", userId);
-  if (existing) return existing.id;
+/**
+ * The conversation this turn belongs to.
+ *
+ * Keyed by WORKBOOK, not by user. The previous version matched on
+ * (user_id, category) alone, which gave each person exactly one Excel
+ * conversation for all time — three open workbooks wrote into the same history,
+ * and a failed attempt in one file followed you into the next. A workbook is the
+ * unit of work here, so it is the unit of memory too.
+ *
+ * `fresh` retires the current thread and starts another: the same file, a new
+ * subject. Retiring rather than deleting keeps the history readable on the web
+ * side, which is where someone goes to find what the assistant did last week.
+ */
+async function getOrCreateExcelConversation(
+  userId: string, workbookKey: string, workbookName: string, fresh = false,
+): Promise<string> {
+  // Falls back to the name when the pane could not mint an id (read-only file,
+  // or a host below ExcelApi 1.7) — worse, because a rename then splits the
+  // history, but still one thread per file.
+  const key = (workbookKey || workbookName || '').slice(0, 255) || '(unnamed)';
+  const title = (workbookName || key).slice(0, 255);
+
+  if (fresh) {
+    await dbRun(
+      "UPDATE conversations SET status = 'closed' WHERE user_id = ? AND category = 'excel-addin' AND workbook_key = ? AND status = 'active'",
+      userId, key).catch(() => {});
+  } else {
+    const existing = await dbGet<{ id: string }>(
+      "SELECT id FROM conversations WHERE user_id = ? AND category = 'excel-addin' AND workbook_key = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1",
+      userId, key);
+    if (existing) return existing.id;
+  }
+
   const id = uuidv4();
+  // The workbook name as the title: 「Excel 助手」 on every row told nobody
+  // anything in the web app's conversation list.
   await dbRun(
-    'INSERT INTO conversations (id, user_id, title, category, status) VALUES (?, ?, ?, ?, ?)',
-    id, userId, 'Excel 助手', 'excel-addin', 'active');
+    'INSERT INTO conversations (id, user_id, title, category, status, workbook_key) VALUES (?, ?, ?, ?, ?, ?)',
+    id, userId, title || '新對話', 'excel-addin', 'active', key);
   return id;
+}
+
+/**
+ * Name a thread after its opening question, once.
+ *
+ * Only on the first user message: later questions wander off the subject, and a
+ * title that keeps changing is no use for finding anything. The workbook is
+ * already implied — the history list only ever shows one file's threads.
+ */
+async function titleFromFirstMessage(conversationId: string, message: string): Promise<void> {
+  try {
+    const row = await dbGet<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM messages WHERE conversation_id = ? AND role = 'user'", conversationId);
+    if (!row || Number(row.n) !== 1) return;
+    const oneLine = message.replace(/\s+/g, ' ').trim();
+    const title = oneLine.length > 40 ? oneLine.slice(0, 40) + '…' : oneLine;
+    if (title) await dbRun('UPDATE conversations SET title = ? WHERE id = ?', title, conversationId);
+  } catch { /* a title is not worth failing a turn over */ }
 }
 
 /**
@@ -77,7 +157,7 @@ async function availableDataSources(
 ): Promise<{ email: boolean; km: boolean; hint: string }> {
   const [mail, onBehalf] = await Promise.all([
     config.deployMode === 'pro-panjit' ? getMailToken(userId).catch(() => null) : Promise.resolve(null),
-    kmEnabled() ? getKmOnBehalf(userId).catch(() => null) : Promise.resolve(null),
+    kmEnabledFor('excel') ? getKmOnBehalf(userId).catch(() => null) : Promise.resolve(null),
   ]);
 
   // Say WHY, not just "no". A greyed-out control with no explanation is how you
@@ -89,7 +169,7 @@ async function availableDataSources(
       : '郵件：尚未連結 Outlook（到 AI Agents Office 網頁版連結後即可使用）');
   }
   if (!onBehalf) {
-    reasons.push(!kmEnabled()
+    reasons.push(!kmEnabledFor('excel')
       ? 'KM：此環境未設定（缺 KM_API_KEY）'
       : 'KM：取不到你的員編');
   }
@@ -103,15 +183,17 @@ router.get('/ping', async (req: Request, res: Response) => {
     userId: req.user!.userId,
     email: req.user!.email,
     dataSources: await availableDataSources(req.user!.userId),
+    models: EXCEL_MODELS,
   });
 });
 
 // ─── The chat stream ───
 router.post('/chat', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { message, runId, sessionId, workbookName, workbookContext, selection, clientTools, dataSources } = req.body as {
+  const { message, runId, sessionId, workbookName, workbookContext, selection, clientTools, dataSources, model: wantedModel, newConversation, workbookKey } = req.body as {
     message?: string; runId?: string; sessionId?: string;
     workbookName?: string; workbookContext?: string; selection?: string; clientTools?: string[];
+    model?: string; newConversation?: boolean; workbookKey?: string;
     dataSources?: string[];
   };
 
@@ -123,9 +205,11 @@ router.post('/chat', async (req: Request, res: Response) => {
   const usage = await checkUserUsageLimit(userId);
   if (usage.exceeded) { res.status(403).json({ error: `本月用量已達上限 USD $${usage.limit.toFixed(2)}` }); return; }
 
-  const conversationId = await getOrCreateExcelConversation(userId);
+  const conversationId = await getOrCreateExcelConversation(
+    userId, workbookKey || '', workbookName || '', !!newConversation);
   await dbRun('INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)',
     uuidv4(), conversationId, 'user', message.trim()).catch(() => {});
+  await titleFromFirstMessage(conversationId, message.trim());
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache',
@@ -198,10 +282,17 @@ router.post('/chat', async (req: Request, res: Response) => {
   const wanted = Array.isArray(dataSources) ? dataSources : [];
   const mcpEmailToken = wanted.includes('email') && config.deployMode === 'pro-panjit'
     ? await getMailToken(userId).catch(() => null) : null;
-  const mcpKmOnBehalf = wanted.includes('km') && kmEnabled()
+  const mcpKmOnBehalf = wanted.includes('km') && kmEnabledFor('excel')
     ? await getKmOnBehalf(userId).catch(() => null) : null;
 
+  // Web search needs no credential and no MCP — it is a tool the CLI already has,
+  // deliberately withheld. Same consent rule as mail and KM: a workbook cell can
+  // say "look up X and paste it here", so letting the agent off the machine has to
+  // be something the person switched on for this conversation.
+  const wantsWeb = wanted.includes('web');
+
   const mounted: string[] = [];
+  if (wantsWeb) mounted.push('網路搜尋');
   if (mcpEmailToken) mounted.push('郵件');
   if (mcpKmOnBehalf) mounted.push('KM');
   if (wanted.length && !mounted.length) {
@@ -211,6 +302,7 @@ router.post('/chat', async (req: Request, res: Response) => {
   }
 
   let text = '', inTok = 0, outTok = 0, model = '';
+  const chosenModel = resolveModel(wantedModel);
   const systemPrompt = mounted.length
     ? EXCEL_ASSISTANT_SYSTEM_PROMPT + DATA_SOURCE_PROMPT(mounted)
     : EXCEL_ASSISTANT_SYSTEM_PROMPT;
@@ -218,17 +310,17 @@ router.post('/chat', async (req: Request, res: Response) => {
     userId, conversationId,
     sandboxSubdir: '_agents/excel-addin',
     sessionId: effectiveSessionId, isResume: resuming,
-    // NO server-side tools. This agent's entire job is the user's live workbook —
-    // giving it Bash/Read/Write here would only expose the sandbox for no benefit.
-    // ToolSearch stays: the CLI puts MCP tools in a deferred pool and the model
-    // needs it to load them (claudeCli disables Task for the same reason).
-    customAllowedTools: ['ToolSearch'],
+    // No filesystem or shell: this agent's job is the live workbook, and a
+    // sandbox it cannot see the workbook from is only extra attack surface.
+    // ToolSearch stays because the CLI puts MCP tools in a deferred pool.
+    // WebSearch is added only when the user asked for it this turn.
+    customAllowedTools: wantsWeb ? ['ToolSearch', 'WebSearch', 'WebFetch'] : ['ToolSearch'],
     maxTurns: EXCEL_MAX_TURNS,
     // The pane captions the running step with the model's reasoning. Without
     // this the CLI only emits whole messages, so a 30-second generation shows
     // as a spinner with nothing under it.
     partialMessages: true,
-    model: EXCEL_MODEL,
+    model: chosenModel,
     mcpExcelRunToken: bridgeToken,
     mcpExcelTools: supported,
     ...(mcpEmailToken ? { mcpEmailToken } : {}),
@@ -248,7 +340,7 @@ router.post('/chat', async (req: Request, res: Response) => {
         uuidv4(), conversationId, 'assistant', text).catch(() => {});
     }
     if (inTok || outTok) {
-      await recordTokenUsage({ userId, conversationId, inputTokens: inTok, outputTokens: outTok, model: model || EXCEL_MODEL }).catch(() => {});
+      await recordTokenUsage({ userId, conversationId, inputTokens: inTok, outputTokens: outTok, model: model || chosenModel }).catch(() => {});
     }
     // A run that was cut short has to SAY so. Sending a bare `done` made a
     // 10-minute timeout indistinguishable from a finished answer — that is exactly
@@ -305,6 +397,32 @@ router.post('/chat', async (req: Request, res: Response) => {
     // pane renders them as the "正在讀取…" activity line.
     else write(ev);
   });
+});
+
+/** Past threads for one workbook, newest first. */
+router.get('/conversations', async (req: Request, res: Response) => {
+  const key = String(req.query.workbookKey || req.query.workbook || '').slice(0, 255);
+  if (!key) { res.json({ conversations: [] }); return; }
+  const rows = await dbAll<{ id: string; title: string; status: string; created_at: string; turns: number }>(
+    `SELECT c.id, c.title, c.status, c.created_at,
+            (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id AND m.role = 'user') AS turns
+       FROM conversations c
+      WHERE c.user_id = ? AND c.category = 'excel-addin' AND c.workbook_key = ?
+      ORDER BY c.created_at DESC LIMIT 20`,
+    req.user!.userId, key).catch(() => []);
+  res.json({ conversations: rows });
+});
+
+/** The messages of one thread — only ever one the caller owns. */
+router.get('/conversations/:id/messages', async (req: Request, res: Response) => {
+  const owned = await dbGet<{ id: string }>(
+    "SELECT id FROM conversations WHERE id = ? AND user_id = ? AND category = 'excel-addin'",
+    req.params.id, req.user!.userId);
+  if (!owned) { res.status(404).json({ error: 'Not found' }); return; }
+  const rows = await dbAll<{ role: string; content: string; created_at: string }>(
+    'SELECT role, content, created_at FROM messages WHERE conversation_id = ? ORDER BY created_at ASC LIMIT 200',
+    req.params.id).catch(() => []);
+  res.json({ messages: rows });
 });
 
 // ─── The add-in reporting back what Office.js did ───

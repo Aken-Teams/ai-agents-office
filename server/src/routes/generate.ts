@@ -16,7 +16,7 @@ import { Orchestrator } from '../services/orchestrator.js';
 import { enforceDataFidelity } from '../services/dataFidelityGuard.js';
 import { normalizePptx } from '../services/pptxNormalize.js';
 import { getMailToken } from '../services/outlookApi.js';
-import { getKmOnBehalf } from '../services/kmApi.js';
+import { getKmOnBehalf, kmEnabledFor } from '../services/kmApi.js';
 import { buildRetrieverSystemPrompt, EMAIL_NO_DATASOURCE_GUIDANCE_NOTE, messageNeedsEmail } from '../services/emailContext.js';
 import path from 'path';
 import fs from 'fs';
@@ -308,8 +308,12 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
   }
   // KM data source: resolve the user's 員編 (X-On-Behalf-Of) for km-mcp. May be
   // combined with email. Both flow through the same rag-analyst retriever path.
+  // kmEnabledFor('web'), not kmEnabled(): a KM key means this deployment can
+  // REACH km, not that the web app is meant to offer it. This is one of three
+  // web entry points — the KM tab and the AI team are the others — and gating
+  // only the tab would have left this one open the moment a key was configured.
   let mcpKmOnBehalf: string | undefined;
-  if (Array.isArray(dataSources) && dataSources.includes('km')) {
+  if (Array.isArray(dataSources) && dataSources.includes('km') && kmEnabledFor('web')) {
     mcpKmOnBehalf = (await getKmOnBehalf(userId)) || undefined;
   }
 

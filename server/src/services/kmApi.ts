@@ -10,9 +10,25 @@
 import { config } from '../config.js';
 import { dbGet } from '../db.js';
 
-/** True when KM is usable in this deployment (pro-panjit + a system API key set). */
+/**
+ * True when this deployment can reach KM at all: pro-panjit, with a system key.
+ *
+ * Capability, not permission — ask kmEnabledFor() before exposing KM to a user.
+ */
 export function kmEnabled(): boolean {
   return config.deployMode === 'pro-panjit' && !!config.kmApiKey;
+}
+
+/**
+ * True when KM may be used from a particular surface.
+ *
+ * The two questions are genuinely separate: whether the deployment holds a KM
+ * key, and whether a given product is meant to offer KM. Conflating them meant
+ * the Excel add-in could not have KM without the web app also getting it, which
+ * is the opposite of what was agreed.
+ */
+export function kmEnabledFor(surface: 'web' | 'excel'): boolean {
+  return kmEnabled() && config.kmSurfaces.includes(surface);
 }
 
 /**

@@ -21,15 +21,16 @@ import { spawnClaude } from '../services/claudeCli.js';
 import { recordTokenUsage } from '../services/tokenTracker.js';
 import { checkUserUsageLimit } from '../services/usageLimit.js';
 import { KM_ASSISTANT_SYSTEM_PROMPT } from '../services/emailContext.js';
-import { kmEnabled, getKmOnBehalf, kmSearch, kmGetDocument, kmFetchAttachment } from '../services/kmApi.js';
+import { kmEnabledFor, getKmOnBehalf, kmSearch, kmGetDocument, kmFetchAttachment } from '../services/kmApi.js';
 import type { SSEEvent } from '../types.js';
 
 const router = Router();
 router.use(authMiddleware);
 
-// Gate: only in pro-panjit AND when a KM system key is configured.
+// Gate: pro-panjit, a KM system key, AND 'web' listed in KM_SURFACES. The web
+// app is off by default — see config.kmSurfaces.
 router.use((_req: Request, res: Response, next) => {
-  if (!kmEnabled()) {
+  if (!kmEnabledFor('web')) {
     res.status(403).json({ error: 'KM not available in this deployment' });
     return;
   }
