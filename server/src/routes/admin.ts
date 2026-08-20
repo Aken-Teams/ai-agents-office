@@ -21,7 +21,8 @@ import { setLineUserDisabled } from '../services/line/userMapping.js';
 import { getQuotaNotifyRecipients, setQuotaNotifyRecipients, buildQuotaRequestEmail, type QuotaNotifyRecipient } from '../services/quotaNotify.js';
 import { sendGatewayMail, resolveAdEmail, isGatewayMailConfigured } from '../services/gatewayMail.js';
 import { auxChat, auxLlmAvailable, parseJsonLoose } from '../services/auxLlm.js';
-import { costUsdSql } from '../services/tokenTracker.js';
+import { costUsdSql, ratesForModel } from '../services/tokenTracker.js';
+import { auxLlmBreakerState } from '../services/auxLlm.js';
 
 const router = Router();
 router.use(adminMiddleware);
@@ -2776,12 +2777,25 @@ router.get('/api-tracking/stats', async (req: Request, res: Response) => {
         `SELECT DATE_FORMAT(created_at,'%Y-%m-%d') d, auth_mode, COUNT(*) calls, SUM(success) ok
          FROM ai_call_log WHERE ${since} AND ${aux} GROUP BY d, auth_mode ORDER BY d ASC`),
     ]);
-    res.json({ period, days, byAuth, daily, byModel, bySkill, reasons, recentApiKey, auxByProvider, auxFailures, auxByFeature, auxDaily });
+    // Every provider this deployment is CONFIGURED to use, whether or not it was
+    // called in the window. A provider with no rows is itself information —
+    // "DeepSeek never got asked because on-prem answered everything" and
+    // "DeepSeek is not set up at all" look identical if the card just vanishes.
+    // Carries each one's live billing rate and breaker state, so the panel can
+    // say what a call there would cost and whether it is currently skipped.
+    const auxConfigured = auxLlmBreakerState().map(p => ({
+      provider: p.provider,
+      model: p.model,
+      skipping: p.skipping,
+      rates: ratesForModel(p.model),
+    }));
+
+    res.json({ period, days, byAuth, daily, byModel, bySkill, reasons, recentApiKey, auxByProvider, auxFailures, auxByFeature, auxDaily, auxConfigured });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // Ledger table may not exist yet (no Claude spawn since deploy) — return empty.
     if (/doesn't exist|no such table|ER_NO_SUCH_TABLE/i.test(msg)) {
-      res.json({ period, days, byAuth: [], daily: [], byModel: [], bySkill: [], reasons: [], recentApiKey: [], auxByProvider: [], auxFailures: [], auxByFeature: [], auxDaily: [], empty: true });
+      res.json({ period, days, byAuth: [], daily: [], byModel: [], bySkill: [], reasons: [], recentApiKey: [], auxByProvider: [], auxFailures: [], auxByFeature: [], auxDaily: [], auxConfigured: [], empty: true });
       return;
     }
     console.error('[api-tracking] query failed:', msg);

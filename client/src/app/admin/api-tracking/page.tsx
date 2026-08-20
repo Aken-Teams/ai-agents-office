@@ -16,10 +16,15 @@ interface RecentRow { created_at: string; skill_id: string | null; model: string
 interface AuxProviderRow { auth_mode: string; model: string | null; calls: number; ok: number; inTok: number; outTok: number }
 interface AuxFailureRow { auth_mode: string; reason: string | null; calls: number }
 interface AuxFeatureRow { skill_id: string | null; auth_mode: string; calls: number; ok: number }
+/** A provider this deployment is set up to use — listed even with zero calls. */
+interface AuxConfiguredRow {
+  provider: string; model: string; skipping: boolean;
+  rates: { inputPerMTok: number; outputPerMTok: number };
+}
 interface Stats {
   period: string; days: number; empty?: boolean;
   byAuth: AuthRow[]; daily: DailyRow[]; byModel: ModelRow[]; bySkill: SkillRow[]; reasons: ReasonRow[]; recentApiKey: RecentRow[];
-  auxByProvider?: AuxProviderRow[]; auxFailures?: AuxFailureRow[]; auxByFeature?: AuxFeatureRow[];
+  auxByProvider?: AuxProviderRow[]; auxFailures?: AuxFailureRow[]; auxByFeature?: AuxFeatureRow[]; auxConfigured?: AuxConfiguredRow[];
 }
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
@@ -35,9 +40,22 @@ const SKILL_LABELS: Record<string, string> = {
   'role-prompt': '角色描述生成', 'doc-narration': '文件旁白', 'topic-analysis': '主題分析',
 };
 
-const PROVIDER_LABELS: Record<string, { name: string; note: string; tone: string }> = {
-  local: { name: '地端模型', note: '無 token 費用', tone: 'text-[#3FBBC0]' },
-  deepseek: { name: 'DeepSeek API', note: '計費（低單價）', tone: 'text-[#F0A84B]' },
+const PROVIDER_LABELS: Record<string, { name: string; tone: string }> = {
+  local: { name: '地端模型', tone: 'text-[#3FBBC0]' },
+  deepseek: { name: 'DeepSeek API', tone: 'text-[#F0A84B]' },
+};
+
+/**
+ * What a call to this provider costs the customer, from the LIVE rate rather
+ * than a hardcoded caption. The on-prem lane is currently priced as Claude while
+ * its reliability is unproven, so a fixed "無 token 費用" label would be a lie the
+ * moment that policy flips either way.
+ */
+const billingNote = (rates?: { inputPerMTok: number; outputPerMTok: number }) => {
+  if (!rates) return '';
+  if (!rates.inputPerMTok && !rates.outputPerMTok) return '不計費';
+  if (rates.inputPerMTok === 3 && rates.outputPerMTok === 15) return '照 Claude 計價';
+  return `$${rates.inputPerMTok} / $${rates.outputPerMTok} 每 M tokens`;
 };
 /** A failure reason a person can act on, not a stack trace. */
 const labelAuxReason = (r: string | null) => {
@@ -293,9 +311,22 @@ export default function ApiTrackingPage() {
   }
   const modelArr = [...modelMap.entries()].sort((a, b) => (b[1].account + b[1].apiKey) - (a[1].account + a[1].apiKey));
 
-  // Busiest aux provider/model first — the one carrying the traffic is the one
-  // whose reliability actually matters.
-  const auxRows = [...(stats?.auxByProvider || [])].sort((a, b) => Number(b.calls) - Number(a.calls));
+  // One card per CONFIGURED provider, busiest first — a provider that was never
+  // called still gets a card, because "on-prem answered everything so DeepSeek
+  // was never needed" is the good news this panel exists to show, and it is
+  // indistinguishable from "DeepSeek isn't set up" if the card disappears.
+  const auxRows = (stats?.auxConfigured || []).map(cfg => {
+    const used = (stats?.auxByProvider || []).find(r => r.auth_mode === cfg.provider);
+    return {
+      provider: cfg.provider,
+      model: cfg.model,
+      skipping: cfg.skipping,
+      rates: cfg.rates,
+      calls: Number(used?.calls || 0),
+      ok: Number(used?.ok || 0),
+      outTok: Number(used?.outTok || 0),
+    };
+  }).sort((a, b) => b.calls - a.calls);
 
   // Skills merged (total calls per skill)
   const skillMap = new Map<string, number>();
@@ -480,40 +511,52 @@ export default function ApiTrackingPage() {
             <Section title="地端 / DeepSeek · 穩定性" icon="dns">
               {!auxRows.length ? (
                 <div className="text-sm text-on-surface-variant py-4">
-                  這段期間沒有地端或 DeepSeek 呼叫紀錄。
+                  這個部署沒有設定地端或 DeepSeek（LLM_BASE_URL / DEEPSEEK_API_KEY）。
                 </div>
               ) : (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-5">
                     {auxRows.map(r => {
-                      const meta = PROVIDER_LABELS[r.auth_mode] || { name: r.auth_mode, note: '', tone: 'text-on-surface' };
-                      const calls = Number(r.calls || 0);
-                      const ok = Number(r.ok || 0);
-                      const rate = calls ? (ok / calls) * 100 : 0;
+                      const meta = PROVIDER_LABELS[r.provider] || { name: r.provider, tone: 'text-on-surface' };
+                      const rate = r.calls ? (r.ok / r.calls) * 100 : 0;
                       // Green only when it is genuinely dependable; amber is a
                       // warning that the fallback is carrying real traffic.
                       const tone = rate >= 98 ? 'text-[#3FBBC0]' : rate >= 90 ? 'text-[#F0A84B]' : 'text-error';
                       return (
-                        <div key={`${r.auth_mode}-${r.model}`} className="bg-surface-container-high rounded-lg p-4">
-                          <div className="flex items-baseline gap-2 mb-1">
+                        <div key={`${r.provider}-${r.model}`} className="bg-surface-container-high rounded-lg p-4">
+                          <div className="flex items-baseline gap-2 mb-1 flex-wrap">
                             <span className={`text-sm font-bold ${meta.tone}`}>{meta.name}</span>
-                            <span className="text-[11px] text-on-surface-variant">{meta.note}</span>
+                            <span className="text-[11px] text-on-surface-variant">{billingNote(r.rates)}</span>
+                            {r.skipping && (
+                              <span className="text-[11px] text-error bg-error/10 px-1.5 py-0.5 rounded">連續失敗，暫時停用中</span>
+                            )}
                           </div>
-                          <div className="font-mono text-[11px] text-on-surface-variant mb-3 truncate" title={r.model || ''}>{r.model || '—'}</div>
-                          <div className="flex items-end gap-4">
-                            <div>
-                              <div className={`text-3xl font-bold tabular-nums ${tone}`}>{rate.toFixed(1)}%</div>
-                              <div className="text-[11px] text-on-surface-variant">成功率</div>
+                          <div className="font-mono text-[11px] text-on-surface-variant mb-3 truncate" title={r.model}>{r.model}</div>
+                          {r.calls === 0 ? (
+                            // Not a failure — most often it means the tier above it
+                            // handled everything, which is exactly what we want.
+                            <div className="text-sm text-on-surface-variant py-2">
+                              期間內未被呼叫
+                              <span className="text-[11px] block mt-0.5 text-on-surface-variant/70">
+                                {r.provider === 'deepseek' ? '地端已接下全部工作，沒有輪到備援' : '尚未有紀錄'}
+                              </span>
                             </div>
-                            <div className="text-sm text-on-surface-variant pb-1">
-                              {num(ok)} / {num(calls)} 次成功
-                              {calls - ok > 0 && <span className="text-error"> · {num(calls - ok)} 次失敗</span>}
+                          ) : (
+                            <div className="flex items-end gap-4">
+                              <div>
+                                <div className={`text-3xl font-bold tabular-nums ${tone}`}>{rate.toFixed(1)}%</div>
+                                <div className="text-[11px] text-on-surface-variant">成功率</div>
+                              </div>
+                              <div className="text-sm text-on-surface-variant pb-1">
+                                {num(r.ok)} / {num(r.calls)} 次成功
+                                {r.calls - r.ok > 0 && <span className="text-error"> · {num(r.calls - r.ok)} 次失敗</span>}
+                              </div>
+                              <div className="ml-auto text-right pb-1">
+                                <div className="text-sm tabular-nums text-on-surface">{num(r.outTok)}</div>
+                                <div className="text-[11px] text-on-surface-variant">輸出 tokens</div>
+                              </div>
                             </div>
-                            <div className="ml-auto text-right pb-1">
-                              <div className="text-sm tabular-nums text-on-surface">{num(Number(r.outTok || 0))}</div>
-                              <div className="text-[11px] text-on-surface-variant">輸出 tokens</div>
-                            </div>
-                          </div>
+                          )}
                         </div>
                       );
                     })}
