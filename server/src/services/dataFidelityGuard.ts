@@ -55,6 +55,41 @@ function extractPptxText(buf: Buffer): Promise<string> {
   });
 }
 
+/**
+ * One cell as text, and NEVER throws.
+ *
+ * exceljs's `cell.text` getter blows up on a merged cell whose master is empty
+ * ("Cannot read properties of null (reading 'toString')" from MergeValue) — and
+ * a merged title bar over a table is how half the spreadsheets people upload are
+ * laid out. One such cell used to abort the whole workbook read, which returned
+ * "" and silently turned OFF the fidelity check for that document. A guard that
+ * quietly stops guarding is worse than one that fails loudly.
+ */
+function xlsxCellText(cell: ExcelJS.Cell): string {
+  try {
+    // Dates first: exceljs renders them as "Thu Aug 20 2026 08:00:00 GMT+0800",
+    // while the generated document will say 2026-08-20. This text is what the
+    // checker compares against, so the tidier form makes a real match likelier.
+    if (cell.value instanceof Date) return cell.value.toISOString().slice(0, 10);
+    const t = cell.text;
+    if (t != null && t !== '') return String(t);
+  } catch { /* merged-with-empty-master — read the raw value instead */ }
+  try {
+    const v = cell.value as unknown;
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v);
+    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    const o = v as Record<string, unknown>;
+    if (Array.isArray(o.richText)) return (o.richText as { text?: string }[]).map(r => r.text ?? '').join('');
+    if ('result' in o) return o.result == null ? '' : String(o.result);   // formula → its computed value
+    if ('text' in o) return String(o.text ?? '');                          // hyperlink
+    if ('error' in o) return String(o.error ?? '');                        // #REF! etc — keep it visible
+    return '';
+  } catch {
+    return '';
+  }
+}
+
 export async function extractFileText(filePath: string): Promise<string> {
   const e = extByName(filePath);
   if (!fs.existsSync(filePath)) return '';
@@ -68,7 +103,10 @@ export async function extractFileText(filePath: string): Promise<string> {
         lines.push(`# ${sheet.name}`);
         sheet.eachRow(row => {
           const cells: string[] = [];
-          row.eachCell({ includeEmpty: false }, cell => cells.push(String(cell.text ?? '')));
+          row.eachCell({ includeEmpty: false }, cell => {
+            const t = xlsxCellText(cell);
+            if (t) cells.push(t);
+          });
           if (cells.length) lines.push(cells.join('\t'));
         });
       });
@@ -105,12 +143,23 @@ export async function buildSourceText(userId: string, conversationId: string): P
      WHERE user_id = ? AND conversation_id = ? AND scan_status IN ('clean','suspicious')
      ORDER BY created_at ASC`, userId, conversationId);
   const chunks: string[] = [];
+  const unreadable: string[] = [];
   for (const u of uploads) {
     const abs = path.isAbsolute(u.storage_path)
       ? u.storage_path
       : path.join(config.workspaceRoot, u.storage_path);
     const text = await extractFileText(abs);
     if (text.trim()) chunks.push(`=== ${u.original_name} ===\n${text}`);
+    else unreadable.push(u.original_name);
+  }
+  // Say it out loud. An upload we cannot read means the generated document goes
+  // out WITHOUT the fabrication check that is the whole point of this module,
+  // and the only trace of that used to be one warn line about a stack trace.
+  if (unreadable.length) {
+    console.warn(
+      `[FidelityGuard] ${unreadable.length}/${uploads.length} upload(s) produced no text — ` +
+      `the fidelity check cannot verify against them: ${unreadable.join(', ')}`,
+    );
   }
   return chunks.join('\n\n').slice(0, MAX_SOURCE_CHARS);
 }
