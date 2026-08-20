@@ -21,6 +21,7 @@ import { setLineUserDisabled } from '../services/line/userMapping.js';
 import { getQuotaNotifyRecipients, setQuotaNotifyRecipients, buildQuotaRequestEmail, type QuotaNotifyRecipient } from '../services/quotaNotify.js';
 import { sendGatewayMail, resolveAdEmail, isGatewayMailConfigured } from '../services/gatewayMail.js';
 import { auxChat, auxLlmAvailable, parseJsonLoose } from '../services/auxLlm.js';
+import { costUsdSql } from '../services/tokenTracker.js';
 
 const router = Router();
 router.use(adminMiddleware);
@@ -254,7 +255,7 @@ router.get('/users', async (req: Request, res: Response) => {
     LEFT JOIN (
       SELECT user_id, SUM(input_tokens + output_tokens) as total_tokens,
         SUM(input_tokens) as total_input, SUM(output_tokens) as total_output,
-        SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}) as cost
+        SUM(${costUsdSql()} * ${pricingMarkupSql('created_at')}) as cost
       FROM token_usage GROUP BY user_id
     ) t ON t.user_id = u.id
     LEFT JOIN (
@@ -322,7 +323,7 @@ router.get('/users/:id', async (req: Request, res: Response) => {
       COALESCE(SUM(input_tokens), 0) as total_input,
       COALESCE(SUM(output_tokens), 0) as total_output,
       COUNT(*) as invocation_count,
-      COALESCE(SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}), 0) as total_cost
+      COALESCE(SUM(${costUsdSql()} * ${pricingMarkupSql('created_at')}), 0) as total_cost
     FROM token_usage WHERE user_id = ?
   `, userId);
 
@@ -567,7 +568,7 @@ router.get('/tokens/summary', async (req: Request, res: Response) => {
       COALESCE(SUM(input_tokens), 0) as total_input,
       COALESCE(SUM(output_tokens), 0) as total_output,
       COUNT(*) as total_invocations,
-      COALESCE(SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}), 0) as est_cost
+      COALESCE(SUM(${costUsdSql()} * ${pricingMarkupSql('created_at')}), 0) as est_cost
     FROM token_usage
     ${where}
   `, ...params);
@@ -686,7 +687,7 @@ router.get('/tokens/by-user', async (req: Request, res: Response) => {
       u.id, u.email, u.display_name,
       SUM(tu.input_tokens) as total_input,
       SUM(tu.output_tokens) as total_output,
-      SUM((tu.input_tokens / 1000000 * 3 + tu.output_tokens / 1000000 * 15) * ${pricingMarkupSql('tu.created_at')}) as cost,
+      SUM(${costUsdSql('tu')} * ${pricingMarkupSql('tu.created_at')}) as cost,
       COUNT(*) as invocation_count
     FROM token_usage tu
     JOIN users u ON u.id = tu.user_id
@@ -1281,7 +1282,7 @@ router.get('/conversations', async (req: Request, res: Response) => {
     LEFT JOIN users u ON u.id = c.user_id
     LEFT JOIN (
       SELECT conversation_id, SUM(input_tokens) as total_input, SUM(output_tokens) as total_output,
-        SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}) as cost
+        SUM(${costUsdSql()} * ${pricingMarkupSql('created_at')}) as cost
       FROM token_usage GROUP BY conversation_id
     ) t ON t.conversation_id = c.id
     LEFT JOIN (
@@ -1566,7 +1567,7 @@ router.get('/conversations/:id', async (req: Request, res: Response) => {
       COALESCE(SUM(input_tokens), 0) as total_input,
       COALESCE(SUM(output_tokens), 0) as total_output,
       COUNT(*) as call_count,
-      COALESCE(SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}), 0) as cost
+      COALESCE(SUM(${costUsdSql()} * ${pricingMarkupSql('created_at')}), 0) as cost
     FROM token_usage WHERE conversation_id = ?
   `, convId);
 
@@ -1710,7 +1711,7 @@ router.get('/quota-groups/:id/members', async (req: Request, res: Response) => {
     SELECT u.id, u.email, u.display_name, u.status, u.quota_override,
       COALESCE(SUM(t.input_tokens), 0) as total_input,
       COALESCE(SUM(t.output_tokens), 0) as total_output,
-      COALESCE(SUM((t.input_tokens / 1000000 * 3 + t.output_tokens / 1000000 * 15) * ${pricingMarkupSql('t.created_at')}), 0) as cost
+      COALESCE(SUM(${costUsdSql('t')} * ${pricingMarkupSql('t.created_at')}), 0) as cost
     FROM users u
     LEFT JOIN token_usage t ON t.user_id = u.id${monthFilter}
     WHERE u.quota_group_id = ?
@@ -2141,7 +2142,7 @@ ${titleList}
   // of output tokens mid-JSON is what put "Failed to parse" on this card. The
   // prompt now caps examples at 2 as well — belt and braces, since parseJsonLoose
   // can only recover a truncated tail, not invent the part that never arrived.
-  const aux = await auxChat(prompt, { temperature: 0.3, maxTokens: 3000, timeoutMs: 45_000, jsonMode: true, feature: 'topic-analysis' });
+  const aux = await auxChat(prompt, { temperature: 0.3, maxTokens: 3000, timeoutMs: 45_000, jsonMode: true, feature: 'topic-analysis', billTo: { userId: req.user!.userId } });
   if (!aux) {
     res.status(502).json({ error: 'Topic analysis unavailable (no aux LLM answered)' });
     return;
@@ -2175,7 +2176,7 @@ router.get('/tokens/monthly-summary', async (req: Request, res: Response) => {
       SUM(tu.input_tokens)  AS input_tokens,
       SUM(tu.output_tokens) AS output_tokens,
       SUM(tu.input_tokens + tu.output_tokens) AS total_tokens,
-      COALESCE(SUM((tu.input_tokens / 1000000 * 3 + tu.output_tokens / 1000000 * 15) * ${pricingMarkupSql('tu.created_at')}), 0) AS cost,
+      COALESCE(SUM(${costUsdSql('tu')} * ${pricingMarkupSql('tu.created_at')}), 0) AS cost,
       COUNT(DISTINCT tu.conversation_id) AS conversations,
       COUNT(*) AS sessions
     FROM token_usage tu
@@ -2638,7 +2639,7 @@ router.get('/line/users', async (_req: Request, res: Response) => {
      LEFT JOIN quota_groups qg ON qg.id = u.quota_group_id
      LEFT JOIN (
        SELECT user_id, SUM(input_tokens) AS in_tok, SUM(output_tokens) AS out_tok,
-              SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}) AS cost
+              SUM(${costUsdSql()} * ${pricingMarkupSql('created_at')}) AS cost
        FROM token_usage${monthFilter} GROUP BY user_id
      ) tu ON tu.user_id = u.id
      ORDER BY (lu.last_message_at IS NULL), lu.last_message_at DESC`,

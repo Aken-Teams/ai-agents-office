@@ -27,7 +27,7 @@ export interface GeneratedSpec { title: string; icon: string; agents: GeneratedA
  * Ask the aux LLM to design a whole team (title + icon + 3–5 specialist agents)
  * from a free-form scenario. Returns null on any failure.
  */
-export async function generateTeamSpec(topic: string): Promise<GeneratedSpec | null> {
+export async function generateTeamSpec(topic: string, userId?: string): Promise<GeneratedSpec | null> {
   if (!auxLlmAvailable()) return null;
   const prompt = `你是 AI 團隊設計師。使用者描述了一個情境/議題，請設計一個 3–5 人、分工互補的 AI 助手團隊來協作處理它。
 
@@ -54,7 +54,7 @@ export async function generateTeamSpec(topic: string): Promise<GeneratedSpec | n
 要求：3–5 個 agent，角色彼此分工互補、緊貼此情境。`;
 
   try {
-    const aux = await auxChat(prompt, { temperature: 0.7, maxTokens: 1800, timeoutMs: 60_000, feature: 'team-builder' });
+    const aux = await auxChat(prompt, { temperature: 0.7, maxTokens: 1800, timeoutMs: 60_000, feature: 'team-builder', ...(userId ? { billTo: { userId } } : {}) });
     if (!aux) return null;
     const obj = parseJsonLoose<any>(aux.text);
     if (!obj || !Array.isArray(obj.agents)) return null;
@@ -109,7 +109,7 @@ export async function createCustomTeam(
   topic: string,
 ): Promise<{ teamId: string; title: string; memberCount: number } | null> {
   if (!auxLlmAvailable()) return null;
-  const spec = await generateTeamSpec(topic);
+  const spec = await generateTeamSpec(topic, userId);
   if (!spec) return null;
   const teamId = await insertTeamWithAgents(userId, {
     title: spec.title, icon: spec.icon, templateKey: 'custom', topic, agents: spec.agents,

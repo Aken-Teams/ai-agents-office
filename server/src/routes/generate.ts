@@ -226,10 +226,12 @@ router.post('/:conversationId', async (req: Request, res: Response) => {
   // cross-user access). Tell the moderator so "列出我的信件" isn't mistaken for
   // data exfiltration — own-mailbox access is legitimate personal productivity.
   const emailDataSource = Array.isArray(dataSources) && dataSources.includes('email');
-  const safetyVerdict = await moderateAiRequest(message, '無法回答這個問題',
-    emailDataSource
+  const safetyVerdict = await moderateAiRequest(message, '無法回答這個問題', {
+    userId,
+    ...(emailDataSource
       ? { contextNote: '使用者已在對話中選取「我的信件」資料源。系統只會用其本人的授權 Token 讀取「他自己」的 Outlook 信箱（不可能存取他人信箱）。因此「查詢／列出／整理／摘要自己的信件」是被授權的正當操作，不屬於竊取機密或危害他人。' }
-      : undefined);
+      : {}),
+  });
   if (!safetyVerdict.allowed) {
     logSecurityEvent(userId, 'blocked_request', 'high', `chat blocked (category=${safetyVerdict.category})`, message);
     res.status(403).json({ error: safetyVerdict.reason, code: 'CONTENT_BLOCKED' }); return;

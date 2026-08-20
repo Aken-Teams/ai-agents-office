@@ -167,6 +167,7 @@ Write a warm, concise greeting (2-4 sentences max). Be human, natural, and carin
     temperature: 0.7,
     timeoutMs: 60_000,
     feature: 'greeting',
+    billTo: { userId },
     signal: clientGone.signal,
   });
 

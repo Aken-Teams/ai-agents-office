@@ -149,6 +149,12 @@ export async function initializeDatabase(): Promise<void> {
         output_tokens   INT NOT NULL DEFAULT 0,
         model           VARCHAR(100),
         duration_ms     INT,
+        -- USD per 1M tokens for the engine that actually served this call,
+        -- stamped at write time so an old invoice never moves when a provider
+        -- changes its price list. NULL = pre-2026-08 row, billed at Claude rates.
+        -- See ratesForModel() / costUsdSql() in services/tokenTracker.ts.
+        input_rate      DECIMAL(10,4),
+        output_rate     DECIMAL(10,4),
         created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_usage_user (user_id),
         INDEX idx_usage_created (created_at),
@@ -796,6 +802,18 @@ export async function initializeDatabase(): Promise<void> {
     // Migration: add credentials_enc column to outlook_tokens
     try {
       await conn.query('ALTER TABLE outlook_tokens ADD COLUMN credentials_enc TEXT DEFAULT NULL');
+    } catch { /* column already exists */ }
+
+    // Migration: per-row price list. Everything used to be billed at Claude
+    // Sonnet rates regardless of which engine ran it, which over-charged DeepSeek
+    // work ~10x and would have charged for free on-prem inference. Existing rows
+    // stay NULL on purpose — they were invoiced at the Sonnet rate and must not
+    // change now.
+    try {
+      await conn.query('ALTER TABLE token_usage ADD COLUMN input_rate DECIMAL(10,4) DEFAULT NULL');
+    } catch { /* column already exists */ }
+    try {
+      await conn.query('ALTER TABLE token_usage ADD COLUMN output_rate DECIMAL(10,4) DEFAULT NULL');
     } catch { /* column already exists */ }
 
     // Migration: remember WHY mail is unavailable, not just that it is. The

@@ -57,7 +57,7 @@ router.post('/:fileId/narration', async (req: Request, res: Response) => {
   blocks = blocks.filter(Boolean).sort((a, b) => a.order - b.order).slice(0, 40); // cap long docs
   if (!blocks.length) { res.status(404).json({ error: '沒有可播報的內容' }); return; }
 
-  const narrations = await generateNarration(blocks, record.doc_type || file.file_type);
+  const narrations = await generateNarration(blocks, record.doc_type || file.file_type, userId);
   if (!narrations) { res.status(502).json({ error: '播報稿產生失敗，請稍後再試' }); return; }
 
   const segments = blocks.map((b, i) => ({
@@ -394,7 +394,7 @@ router.post('/:fileId/rebuild', async (req: Request, res: Response) => {
   // Content safety on the user's free-text style/edit instruction (this route
   // previously had no guard at all). Skip when empty (plain rebuild).
   if (instruction) {
-    const v = await moderateAiRequest(instruction, '無法處理這個編輯需求');
+    const v = await moderateAiRequest(instruction, '無法處理這個編輯需求', { userId });
     if (!v.allowed) {
       logSecurityEvent(userId, 'blocked_request', 'high', `block-rebuild blocked (category=${v.category})`, instruction);
       res.status(403).json({ error: v.reason }); return;
@@ -521,7 +521,7 @@ router.post('/:fileId/regenerate/:blockId', async (req: Request, res: Response) 
 
   // Content safety — the block edit / Q&A instruction is user free-text reaching
   // an LLM with no prior guard. Refuse crime / system-internals probing / etc.
-  const safety = await moderateAiRequest(instruction, answerOnly ? '無法回答這個問題' : '無法處理這個編輯需求');
+  const safety = await moderateAiRequest(instruction, answerOnly ? '無法回答這個問題' : '無法處理這個編輯需求', { userId });
   if (!safety.allowed) {
     logSecurityEvent(userId, 'blocked_request', 'high', `block-regen blocked (category=${safety.category})`, instruction);
     res.status(403).json({ error: safety.reason });

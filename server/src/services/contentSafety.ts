@@ -87,7 +87,7 @@ export function screenTopicLocally(topic: string): { category: string } | null {
 /* ============================================================
    Layer 2 — LLM classifier (semantic catch-all)
    ============================================================ */
-async function classifyWithLlm(topic: string, contextNote?: string): Promise<ModerationResult | null> {
+async function classifyWithLlm(topic: string, contextNote?: string, userId?: string): Promise<ModerationResult | null> {
   if (!auxLlmAvailable()) return null; // nothing configured → skip (caller fails open)
 
   const prompt = `你是內容安全審查員，負責判斷使用者描述的「AI 助手團隊」情境是否可被允許。
@@ -115,7 +115,7 @@ ${contextNote ? `\n【本次額外情境（系統提供，可信）】${contextN
     // inside a chat turn, and a stalled classifier must not become the reason a
     // message feels slow. On timeout we fail open; the regex layer above has
     // already screened the blatant cases.
-    const aux = await auxChat(prompt, { temperature: 0, maxTokens: 60, timeoutMs: 8000, feature: 'content-safety' });
+    const aux = await auxChat(prompt, { temperature: 0, maxTokens: 60, timeoutMs: 8000, feature: 'content-safety', ...(userId ? { billTo: { userId } } : {}) });
     if (!aux) return null;
     const obj = parseJsonLoose<{ allowed?: boolean; category?: string }>(aux.text);
     if (!obj || typeof obj.allowed !== 'boolean') return null;
@@ -139,7 +139,7 @@ ${contextNote ? `\n【本次額外情境（系統提供，可信）】${contextN
 export async function moderateTeamTopic(
   topic: string,
   refusalLead?: string,
-  opts?: { contextNote?: string },
+  opts?: { contextNote?: string; userId?: string },
 ): Promise<ModerationResult> {
   const clean = (topic || '').trim();
   if (!clean) return { allowed: true };
@@ -147,7 +147,7 @@ export async function moderateTeamTopic(
   const local = screenTopicLocally(clean);
   if (local) return { allowed: false, category: local.category, reason: teamRefusalMessage(refusalLead) };
 
-  const llm = await classifyWithLlm(clean, opts?.contextNote);
+  const llm = await classifyWithLlm(clean, opts?.contextNote, opts?.userId);
   if (llm && !llm.allowed) return { allowed: false, category: llm.category, reason: teamRefusalMessage(refusalLead) };
 
   return { allowed: true };

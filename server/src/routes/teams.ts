@@ -26,6 +26,7 @@ import { computeNextRun, mysqlDateTime, runScheduleNow } from '../services/teamS
 import { generateTeamSpec, insertTeamWithAgents, type GeneratedAgent } from '../services/teamBuilder.js';
 import type { Conversation } from '../types.js';
 import { auxChat, auxLlmAvailable, parseJsonLoose } from '../services/auxLlm.js';
+import { costUsdSql } from '../services/tokenTracker.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -75,7 +76,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  * failure (caller falls back to the base prompts). Kept to a single call +
  * bounded max_tokens so team creation stays cheap.
  */
-async function aiTuneRolePrompts(agents: TeamAgentTemplate[], topic: string): Promise<string[] | null> {
+async function aiTuneRolePrompts(agents: TeamAgentTemplate[], topic: string, userId: string): Promise<string[] | null> {
   if (!auxLlmAvailable()) return null;
   const roster = agents.map((a, i) => `${i + 1}. ${a.name}：${a.rolePrompt}`).join('\n');
   const prompt = `你是 AI 團隊角色設定器。下面是一個團隊的成員與其通用角色描述。請依「議題」把每位成員的角色描述改寫得更貼合此議題、更具體可用。
@@ -91,7 +92,7 @@ ${roster}
 - 不要加任何說明文字或 markdown，只輸出純 JSON 陣列`;
 
   try {
-    const aux = await auxChat(prompt, { temperature: 0.6, maxTokens: 1500, timeoutMs: 60_000, feature: 'role-prompt' });
+    const aux = await auxChat(prompt, { temperature: 0.6, maxTokens: 1500, timeoutMs: 60_000, feature: 'role-prompt', billTo: { userId } });
     if (!aux) return null;
     const arr = parseJsonLoose<string[]>(aux.text);
     if (!Array.isArray(arr) || arr.length !== agents.length) return null;
@@ -115,7 +116,7 @@ router.post('/', async (req: Request, res: Response) => {
   // stealing secrets, harassment, or harming other users. Runs whenever the user
   // supplied a free-form scenario (custom build, or template + topic tuning).
   if (cleanTopic) {
-    const verdict = await moderateTeamTopic(cleanTopic, '無法建立這個團隊');
+    const verdict = await moderateTeamTopic(cleanTopic, '無法建立這個團隊', { userId });
     if (!verdict.allowed) {
       logSecurityEvent(userId, 'blocked_request', 'high', `team-build blocked (category=${verdict.category})`, cleanTopic);
       res.status(403).json({ error: verdict.reason });
@@ -129,7 +130,7 @@ router.post('/', async (req: Request, res: Response) => {
   if (custom) {
     if (!cleanTopic) { res.status(400).json({ error: '請先描述你的情境' }); return; }
     if (!auxLlmAvailable()) { res.status(503).json({ error: 'AI 服務未設定' }); return; }
-    const spec = await generateTeamSpec(cleanTopic);
+    const spec = await generateTeamSpec(cleanTopic, userId);
     if (!spec) { res.status(502).json({ error: 'AI 團隊生成失敗，請重試或改用範本' }); return; }
     teamTitle = spec.title; teamIcon = spec.icon; templateKey = 'custom'; agents = spec.agents; aiTuned = true;
   } else {
@@ -137,7 +138,7 @@ router.post('/', async (req: Request, res: Response) => {
     if (!template) { res.status(400).json({ error: 'Unknown templateId' }); return; }
     teamTitle = cleanTopic || template.title; teamIcon = template.icon; templateKey = template.id;
     let tuned: string[] | null = null;
-    if (aiTune && cleanTopic) tuned = await aiTuneRolePrompts(template.agents, cleanTopic);
+    if (aiTune && cleanTopic) tuned = await aiTuneRolePrompts(template.agents, cleanTopic, userId);
     aiTuned = !!tuned;
     agents = template.agents.map((a, i) => ({
       name: a.name, icon: a.icon, skillId: a.skillId,
@@ -196,7 +197,7 @@ router.get('/:id/runs', async (req: Request, res: Response) => {
   );
   const agg = await dbGet<{ count: number; in_tok: number; out_tok: number; cost: number }>(
     `SELECT COUNT(*) AS count, COALESCE(SUM(input_tokens), 0) AS in_tok, COALESCE(SUM(output_tokens), 0) AS out_tok,
-            COALESCE(SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}), 0) AS cost
+            COALESCE(SUM(${costUsdSql()} * ${pricingMarkupSql('created_at')}), 0) AS cost
      FROM team_runs WHERE team_id = ? AND user_id = ?`,
     req.params.id, userId,
   );
@@ -360,10 +361,12 @@ router.post('/:id/run', async (req: Request, res: Response) => {
   // …plus content safety: refuse crime / hacking / secret-theft / harassment /
   // harming the system or other users (the same gate as team creation). Runs
   // before the SSE stream starts so a plain JSON error can still be returned.
-  const verdict = await moderateTeamTopic(message.trim(), '無法回答這個問題',
-    (emailDataSource || kmDataSource)
+  const verdict = await moderateTeamTopic(message.trim(), '無法回答這個問題', {
+    userId,
+    ...((emailDataSource || kmDataSource)
       ? { contextNote: '使用者已在對話中選取資料源（「我的信件」／「KM 知識庫」）。系統只會以其本人身分讀取「他自己」有權限的資料（信箱用本人 Token、KM 用本人員編判權限，不可能存取他人資料）。因此「查詢／列出／整理／摘要自己有權限的信件或文件」是被授權的正當操作，不屬於竊取機密或危害他人。' }
-      : undefined);
+      : {}),
+  });
   if (!verdict.allowed) {
     logSecurityEvent(userId, 'blocked_request', 'high', `team-run blocked (category=${verdict.category})`, message);
     res.status(403).json({ error: verdict.reason });
@@ -465,7 +468,7 @@ router.post('/:id/schedules', async (req: Request, res: Response) => {
 
   // Content safety — vet the scheduled question up front so every future run is
   // pre-approved (the scheduler runs it headless, with no chance to refuse).
-  const verdict = await moderateTeamTopic(question.trim(), '無法建立這個排程');
+  const verdict = await moderateTeamTopic(question.trim(), '無法建立這個排程', { userId });
   if (!verdict.allowed) {
     logSecurityEvent(userId, 'blocked_request', 'high', `team-schedule blocked (category=${verdict.category})`, question);
     res.status(403).json({ error: verdict.reason });
@@ -532,7 +535,7 @@ router.put('/:id/schedules/:sid', async (req: Request, res: Response) => {
   const docStyle = docFmt && typeof docStylePrompt === 'string' ? docStylePrompt.slice(0, 2000) : null;
 
   // Re-vet the (possibly changed) question so every future headless run is pre-approved.
-  const verdict = await moderateTeamTopic(question.trim(), '無法更新這個排程');
+  const verdict = await moderateTeamTopic(question.trim(), '無法更新這個排程', { userId });
   if (!verdict.allowed) {
     logSecurityEvent(userId, 'blocked_request', 'high', `team-schedule edit blocked (category=${verdict.category})`, question);
     res.status(403).json({ error: verdict.reason });

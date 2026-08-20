@@ -30,7 +30,7 @@ const DOC_TYPE_LABEL: Record<string, string> = { pptx: '簡報', pdf: 'PDF 文�
  * Generate one broadcast narration line per block. Returns an array the same
  * length as `blocks`, or null if narration could not be produced.
  */
-export async function generateNarration(blocks: DocumentBlock[], docType: string): Promise<string[] | null> {
+export async function generateNarration(blocks: DocumentBlock[], docType: string, userId?: string): Promise<string[] | null> {
   if (!auxLlmAvailable()) return null;
   if (!blocks.length) return null;
 
@@ -46,7 +46,7 @@ export async function generateNarration(blocks: DocumentBlock[], docType: string
 ${pages}`;
 
   try {
-    const aux = await auxChat(prompt, { temperature: 0.4, maxTokens: 2400, timeoutMs: 45_000, feature: 'doc-narration' });
+    const aux = await auxChat(prompt, { temperature: 0.4, maxTokens: 2400, timeoutMs: 45_000, feature: 'doc-narration', ...(userId ? { billTo: { userId } } : {}) });
     if (!aux) return null;
     const arr = parseJsonLoose<string[]>(aux.text);
     if (!Array.isArray(arr)) return null;

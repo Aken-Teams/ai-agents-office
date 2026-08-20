@@ -29,6 +29,7 @@
  */
 import { config } from '../config.js';
 import { logAiCall } from './aiCallLog.js';
+import { recordTokenUsage } from './tokenTracker.js';
 
 /**
  * Where a call came from, so the admin report can say "the email briefing is
@@ -40,15 +41,28 @@ export type AuxFeature =
   | 'content-safety' | 'team-builder' | 'role-prompt' | 'doc-narration' | 'topic-analysis';
 
 /**
+ * Who this call is for, when it should appear on someone's usage.
+ *
+ * Optional because two callers already write their own aggregate rows
+ * (emailAgentPoller sums a whole briefing; teamRun sums a whole run) and a
+ * second row here would double-bill them. Everyone else passes it — those
+ * features used to write nothing at all, which is how an AI-team debate could
+ * quietly drain a DeepSeek balance with no line item anywhere to explain it.
+ */
+export interface AuxBillTo { userId: string; conversationId?: string | null }
+
+/**
  * Record one attempt against one provider — including the failures, which is the
  * entire point: a success rate you can only compute from the calls that worked
  * is not a success rate. Fire-and-forget; never blocks or throws.
  */
 function logAttempt(
   p: Provider, feature: AuxFeature | undefined, ok: boolean,
-  inTok: number, outTok: number, reason: string,
+  inTok: number, outTok: number, reason: string, billTo?: AuxBillTo,
 ): void {
   logAiCall({
+    userId: billTo?.userId,
+    conversationId: billTo?.conversationId ?? undefined,
     skillId: feature,
     model: p.model,
     authMode: p.name,
@@ -58,6 +72,20 @@ function logAttempt(
     exitCode: null,
     success: ok,
   });
+
+  // Usage is what the caller was actually served, so only a successful attempt
+  // is billed — a provider that timed out cost the user nothing and produced
+  // nothing. The rate comes from the model name (see ratesForModel): on-prem is
+  // free, DeepSeek is priced as DeepSeek, Claude as Claude.
+  if (ok && billTo && (inTok || outTok)) {
+    recordTokenUsage({
+      userId: billTo.userId,
+      conversationId: billTo.conversationId ?? null,
+      inputTokens: inTok,
+      outputTokens: outTok,
+      model: p.model,
+    }).catch(err => console.warn('[auxLlm] usage record failed:', err));
+  }
 }
 
 export interface AuxLlmResult {
@@ -110,7 +138,7 @@ function providers(tier: AuxTier = 'fast'): Provider[] {
       name: 'deepseek',
       url: 'https://api.deepseek.com/chat/completions',
       apiKey: config.deepseekApiKey,
-      model: 'deepseek-chat',
+      model: config.deepseekModel,
       attemptTimeoutMs: 60_000,
     });
   }
@@ -260,7 +288,7 @@ export async function auxChat(
   prompt: string,
   opts?: {
     system?: string; maxTokens?: number; temperature?: number; timeoutMs?: number;
-    jsonMode?: boolean; tier?: AuxTier; feature?: AuxFeature;
+    jsonMode?: boolean; tier?: AuxTier; feature?: AuxFeature; billTo?: AuxBillTo;
   },
 ): Promise<AuxLlmResult | null> {
   const messages: Array<{ role: string; content: string }> = [];
@@ -297,7 +325,7 @@ export async function auxChat(
       if (!res.ok) {
         console.error(`[auxLlm] ${p.name} (${p.model}) HTTP ${res.status}:`, (await res.text().catch(() => '')).slice(0, 300));
         noteFailure(p.name, `HTTP ${res.status}`);
-        logAttempt(p, opts?.feature, false, 0, 0, `HTTP ${res.status}`);
+        logAttempt(p, opts?.feature, false, 0, 0, `HTTP ${res.status}`, opts?.billTo);
         continue;
       }
       const data = await res.json() as {
@@ -309,11 +337,11 @@ export async function auxChat(
       const outTok = data.usage?.completion_tokens ?? 0;
       if (!text) {
         noteFailure(p.name, 'empty answer');
-        logAttempt(p, opts?.feature, false, inTok, outTok, 'empty answer');
+        logAttempt(p, opts?.feature, false, inTok, outTok, 'empty answer', opts?.billTo);
         continue;
       }
       noteSuccess(p.name);
-      logAttempt(p, opts?.feature, true, inTok, outTok, 'ok');
+      logAttempt(p, opts?.feature, true, inTok, outTok, 'ok', opts?.billTo);
       return { text, inTok, outTok, model: p.model, provider: p.name };
     } catch (e) {
       const why = e instanceof Error ? e.message : String(e);
@@ -321,7 +349,7 @@ export async function auxChat(
       noteFailure(p.name, why);
       // "aborted due to timeout" is the interesting one — it means the box was
       // alive but too slow, which is a different decision from "it was down".
-      logAttempt(p, opts?.feature, false, 0, 0, /timeout|abort/i.test(why) ? 'timeout' : why.slice(0, 120));
+      logAttempt(p, opts?.feature, false, 0, 0, /timeout|abort/i.test(why) ? 'timeout' : why.slice(0, 120), opts?.billTo);
     }
   }
   return null;
@@ -346,6 +374,7 @@ export async function auxChatStream(opts: {
   firstTokenTimeoutMs?: number;
   tier?: AuxTier;
   feature?: AuxFeature;
+  billTo?: AuxBillTo;
   /** Caller's own stop signal — e.g. the reader closed the page. Ends the chain. */
   signal?: AbortSignal;
 }): Promise<AuxLlmResult | null> {
@@ -395,7 +424,7 @@ export async function auxChatStream(opts: {
         clearTimers();
         console.error(`[auxLlm] ${p.name} stream HTTP ${res.status}:`, (await res.text().catch(() => '')).slice(0, 300));
         noteFailure(p.name, `stream HTTP ${res.status}`);
-        logAttempt(p, opts.feature, false, 0, 0, `HTTP ${res.status}`);
+        logAttempt(p, opts.feature, false, 0, 0, `HTTP ${res.status}`, opts.billTo);
         continue;
       }
 
@@ -434,11 +463,11 @@ export async function auxChatStream(opts: {
       clearTimers();
       if (!text.trim()) {
         noteFailure(p.name, 'empty stream');
-        logAttempt(p, opts.feature, false, inTok, outTok, 'empty stream');
+        logAttempt(p, opts.feature, false, inTok, outTok, 'empty stream', opts.billTo);
         continue;
       }
       noteSuccess(p.name);
-      logAttempt(p, opts.feature, true, inTok, outTok, 'ok');
+      logAttempt(p, opts.feature, true, inTok, outTok, 'ok', opts.billTo);
       return { text: text.trim(), inTok, outTok, model: p.model, provider: p.name };
     } catch (e) {
       clearTimers();
@@ -452,7 +481,8 @@ export async function auxChatStream(opts: {
       // A stream that died after saying something is a partial success: the user
       // got an answer. Log it as such, with the reason, so the rate is honest.
       logAttempt(p, opts.feature, !!partial, inTok, outTok,
-        partial ? 'partial (stream cut)' : (/timeout|abort/i.test(why) ? 'timeout' : why.slice(0, 120)));
+        partial ? 'partial (stream cut)' : (/timeout|abort/i.test(why) ? 'timeout' : why.slice(0, 120)),
+        opts.billTo);
       if (partial) return { text: partial, inTok, outTok, model: p.model, provider: p.name };
     }
   }

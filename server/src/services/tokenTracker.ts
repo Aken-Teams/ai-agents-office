@@ -11,11 +11,98 @@ interface TokenUsageRecord {
   durationMs?: number;
 }
 
+/**
+ * What a million tokens actually cost us, per engine, in USD.
+ *
+ * Until 2026-08 every row was priced as if it were Claude Sonnet, whatever
+ * actually ran it — so DeepSeek work was invoiced at ~10x its real cost, and
+ * on-prem work (which costs nothing) would have been invoiced too. Charging for
+ * what really happened means knowing the real rate of the engine that answered.
+ *
+ * The rate is stored ON THE ROW at write time (see recordTokenUsage), never
+ * looked up later: providers change their prices, and an old invoice must not
+ * move when they do. Rows written before this existed have NULL rates and keep
+ * the Sonnet numbers, so no past invoice changes retroactively.
+ */
+export interface ModelRates { inputPerMTok: number; outputPerMTok: number }
+
+const CLAUDE_RATES: ModelRates = { inputPerMTok: 3, outputPerMTok: 15 };
+
+/**
+ * DeepSeek's published rate for the id we send. Overridable because DeepSeek
+ * revises pricing (and retires model ids) several times a year — check a real
+ * invoice before trusting these defaults.
+ */
+const DEEPSEEK_RATES: ModelRates = {
+  inputPerMTok: parseFloat(process.env.DEEPSEEK_INPUT_USD_PER_MTOK || '') || 0.28,
+  outputPerMTok: parseFloat(process.env.DEEPSEEK_OUTPUT_USD_PER_MTOK || '') || 0.42,
+};
+
+/**
+ * On-prem inference costs nothing per token — but it is NOT free to the customer
+ * yet, and deliberately so.
+ *
+ * The on-prem box is new and its reliability is still being measured (see the
+ * 地端/DeepSeek 穩定性 panel in the admin API report). Until it proves it can
+ * carry the work, a call that lands there is one Claude would otherwise have
+ * done, so it is priced as Claude. If the box turns out to be flaky, the work
+ * silently falls through to DeepSeek/Claude anyway and the price is right either
+ * way; if it proves solid, this is the single switch that makes it free:
+ *
+ *     LOCAL_LLM_BILLING=free
+ */
+const LOCAL_RATES: ModelRates = (process.env.LOCAL_LLM_BILLING || '').toLowerCase() === 'free'
+  ? { inputPerMTok: 0, outputPerMTok: 0 }
+  : CLAUDE_RATES;
+
+/**
+ * Price list for the engine named in `model`. Unknown names fall back to the
+ * Claude rate, which is the safe direction: a new engine is over-billed and
+ * noticed, rather than under-billed and silently absorbed.
+ */
+export function ratesForModel(model?: string | null): ModelRates {
+  const raw = (model || '').toLowerCase();
+  if (!raw) return CLAUDE_RATES;
+  // Composite labels ("team-run:local") name the PRODUCT before the colon and the
+  // ENGINE after it. The product half has to survive because the usage page
+  // groups on `model LIKE 'team%'`; the engine half is what sets the price. A run
+  // whose rounds were served by different engines writes one row per engine.
+  const engine = raw.includes(':') ? raw.slice(raw.indexOf(':') + 1) : raw;
+  if (engine === 'local' || engine.startsWith('mlx-community/') || engine.startsWith('local/')) return LOCAL_RATES;
+  if (engine.startsWith('deepseek')) return DEEPSEEK_RATES;
+  return CLAUDE_RATES;
+}
+
+/**
+ * The engine half of a model name, for building composite labels.
+ * "mlx-community/Qwen3-…" → 'local'; "deepseek-chat" → 'deepseek'; else 'claude'.
+ */
+export function engineOf(model?: string | null): 'local' | 'deepseek' | 'claude' {
+  const m = (model || '').toLowerCase();
+  if (m.startsWith('mlx-community/') || m.startsWith('local/')) return 'local';
+  if (m.startsWith('deepseek')) return 'deepseek';
+  return 'claude';
+}
+
+/**
+ * The cost expression, for any query that sums money.
+ *
+ * One definition, used everywhere, so the dashboard, the usage page, the quota
+ * check and the invoice can never disagree. COALESCE keeps pre-2026-08 rows on
+ * the Sonnet rate they were billed at.
+ */
+export function costUsdSql(tableAlias = ''): string {
+  const p = tableAlias ? `${tableAlias}.` : '';
+  return `(${p}input_tokens / 1000000 * COALESCE(${p}input_rate, ${CLAUDE_RATES.inputPerMTok})` +
+         ` + ${p}output_tokens / 1000000 * COALESCE(${p}output_rate, ${CLAUDE_RATES.outputPerMTok}))`;
+}
+
 export async function recordTokenUsage(record: TokenUsageRecord): Promise<string> {
   const id = uuidv4();
+  const rates = ratesForModel(record.model);
   await dbRun(
-    `INSERT INTO token_usage (id, user_id, conversation_id, input_tokens, output_tokens, model, duration_ms)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO token_usage (id, user_id, conversation_id, input_tokens, output_tokens, model, duration_ms, input_rate, output_rate)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     record.userId,
     record.conversationId,
@@ -23,6 +110,8 @@ export async function recordTokenUsage(record: TokenUsageRecord): Promise<string
     record.outputTokens,
     record.model || null,
     record.durationMs || null,
+    rates.inputPerMTok,
+    rates.outputPerMTok,
   );
   return id;
 }
@@ -46,7 +135,7 @@ export async function getUserUsageSummary(
       SUM(input_tokens) as total_input,
       SUM(output_tokens) as total_output,
       COUNT(*) as invocation_count,
-      COALESCE(SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}), 0) as cost
+      COALESCE(SUM(${costUsdSql()} * ${pricingMarkupSql('created_at')}), 0) as cost
     FROM token_usage
     WHERE user_id = ?
   `;
@@ -97,7 +186,7 @@ export async function getUserUsageSummaryByCategory(
       SUM(tu.input_tokens) as total_input,
       SUM(tu.output_tokens) as total_output,
       COUNT(*) as invocation_count,
-      COALESCE(SUM((tu.input_tokens / 1000000 * 3 + tu.output_tokens / 1000000 * 15) * ${pricingMarkupSql('tu.created_at')}), 0) as cost
+      COALESCE(SUM(${costUsdSql('tu')} * ${pricingMarkupSql('tu.created_at')}), 0) as cost
     FROM token_usage tu
     LEFT JOIN conversations c ON c.id = tu.conversation_id
     WHERE tu.user_id = ?
@@ -132,7 +221,7 @@ export async function getUserUsageRecords(
   let query = `
     SELECT tu.id, DATE_FORMAT(tu.created_at, '%Y-%m-%d %H:%i:%s') as created_at, ${CATEGORY_EXPR} as category,
       tu.input_tokens, tu.output_tokens,
-      (tu.input_tokens / 1000000 * 3 + tu.output_tokens / 1000000 * 15) * ${pricingMarkupSql('tu.created_at')} as cost
+      ${costUsdSql('tu')} * ${pricingMarkupSql('tu.created_at')} as cost
     FROM token_usage tu
     LEFT JOIN conversations c ON c.id = tu.conversation_id
     WHERE tu.user_id = ?`;
@@ -182,7 +271,7 @@ export async function getUserTotalUsage(userId: string, monthlyOnly = false): Pr
     COALESCE(SUM(input_tokens), 0) as total_input,
     COALESCE(SUM(output_tokens), 0) as total_output,
     COUNT(*) as total_invocations,
-    COALESCE(SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}), 0) as cost
+    COALESCE(SUM(${costUsdSql()} * ${pricingMarkupSql('created_at')}), 0) as cost
   FROM token_usage
   WHERE user_id = ?`;
   const params: unknown[] = [userId];

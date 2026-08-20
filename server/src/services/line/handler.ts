@@ -364,7 +364,7 @@ async function runConversation(lineUser: LineUserRow, message: string): Promise<
 
   // Content safety — refuse crime / hacking / secret-theft / harassment / harm /
   // probing this system's own internals (same gate as web chat + team flows).
-  const safety = await moderateAiRequest(message, '無法回答這個問題');
+  const safety = await moderateAiRequest(message, '無法回答這個問題', { userId: lineUser.internal_user_id });
   if (!safety.allowed) {
     logSecurityEvent(userId, 'blocked_request', 'high', `LINE chat blocked (category=${safety.category})`, message);
     await pushMessage(lineUserId, [{ type: 'text', text: `🚫 ${safety.reason}` }]);
@@ -554,7 +554,7 @@ async function runTeamForLine(
 
   // Content safety — same gate as team creation: refuse crime / hacking /
   // secret-theft / harassment / harming the system or other users.
-  const verdict = await moderateTeamTopic(message, '無法回答這個問題');
+  const verdict = await moderateTeamTopic(message, '無法回答這個問題', { userId: lineUser.internal_user_id });
   if (!verdict.allowed) {
     logSecurityEvent(userId, 'blocked_request', 'high', `LINE team-run blocked (category=${verdict.category})`, message);
     await pushMessage(lineUserId, [{ type: 'text', text: `🚫 ${verdict.reason}` }]);

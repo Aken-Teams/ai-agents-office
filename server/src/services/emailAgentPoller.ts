@@ -627,27 +627,42 @@ ${emailList}
   // batch. The CLI is a full agent runtime (~100s of MB each); under many
   // concurrent users those spawns were a major source of host-memory pressure.
   // The Haiku CLI stays as the last resort when every aux provider is down.
-  let l1Model = 'claude-haiku-4-5-20251001';
+  // Tokens PER ENGINE, not one lump: a 50-mail briefing is ten batches, and a
+  // slow on-prem box means some run locally (free) and the rest fall back to
+  // Haiku (billed). Labelling the whole briefing with whichever engine happened
+  // to answer last would bill free work as Claude, or Claude work as free.
+  const perEngine = new Map<string, { inTok: number; outTok: number }>();
+  const addUsage = (model: string, inTok: number, outTok: number) => {
+    if (!inTok && !outTok) return;
+    const e = perEngine.get(model) || { inTok: 0, outTok: 0 };
+    e.inTok += inTok; e.outTok += outTok;
+    perEngine.set(model, e);
+  };
   async function batchWorker() {
     for (let my = nextBatch++; my < batchDescs.length; my = nextBatch++) {
       const aux = await auxChat(batchDescs[my].prompt, { maxTokens: 1200, timeoutMs: LAYER1_TIMEOUT, feature: 'email-summary' });
       if (aux) {
         outputs[my] = aux.text;
         l1InTok += aux.inTok; l1OutTok += aux.outTok;
-        l1Model = aux.model;
+        addUsage(aux.model, aux.inTok, aux.outTok);
       } else {
         const u = { inTok: 0, outTok: 0 };
         outputs[my] = await spawnClaudeOneShot(batchDescs[my].prompt, LAYER1_TIMEOUT, 'claude-haiku-4-5-20251001', undefined, u);
         l1InTok += u.inTok; l1OutTok += u.outTok;
+        addUsage('claude-haiku-4-5-20251001', u.inTok, u.outTok);
       }
     }
   }
   await Promise.all(Array.from({ length: Math.min(LAYER1_CONCURRENCY, batchDescs.length) }, batchWorker));
 
-  // Record Layer 1 token usage (one row for the whole batch of emails).
-  if (l1InTok || l1OutTok) {
+  // Record Layer 1 token usage — one row per engine that did work.
+  if (perEngine.size) {
     getEmailAgentConversationId(userId)
-      .then(convId => recordTokenUsage({ userId, conversationId: convId, inputTokens: scaleEmailAgentTokens(l1InTok), outputTokens: scaleEmailAgentTokens(l1OutTok), model: l1Model }))
+      .then(convId => Promise.all([...perEngine].map(([model, u]) => recordTokenUsage({
+        userId, conversationId: convId,
+        inputTokens: scaleEmailAgentTokens(u.inTok), outputTokens: scaleEmailAgentTokens(u.outTok),
+        model,
+      }))))
       .catch(() => {});
   }
 

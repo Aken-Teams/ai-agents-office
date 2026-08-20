@@ -1,5 +1,6 @@
 import { dbGet, dbRun } from '../db.js';
 import { config, pricingMarkupSql } from '../config.js';
+import { costUsdSql } from './tokenTracker.js';
 
 /**
  * Get the global per-user usage limit in display dollars (x10 markup).
@@ -28,7 +29,7 @@ export async function setUserUsageLimitUsd(value: number): Promise<void> {
 export async function getUserDisplayCost(userId: string): Promise<number> {
   // Cost is computed per record at the markup in effect at each row's timestamp
   // (×10 before 2026-07-07 16:00, ×5 after), so it matches every other billing view.
-  let query = `SELECT COALESCE(SUM((input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15) * ${pricingMarkupSql('created_at')}), 0) AS cost FROM token_usage WHERE user_id = ?`;
+  let query = `SELECT COALESCE(SUM(${costUsdSql()} * ${pricingMarkupSql('created_at')}), 0) AS cost FROM token_usage WHERE user_id = ?`;
   const params: unknown[] = [userId];
 
   if (!config.isBeta) {

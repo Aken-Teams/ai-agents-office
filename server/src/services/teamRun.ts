@@ -19,7 +19,7 @@ import { spawnClaude } from './claudeCli.js';
 import { auxChatStream, type AuxFeature } from './auxLlm.js';
 import { truncateResultForRouter } from './taskParser.js';
 import { dbGet, dbAll, dbRun } from '../db.js';
-import { recordTokenUsage } from './tokenTracker.js';
+import { recordTokenUsage, engineOf } from './tokenTracker.js';
 import { getUserPersonaContext } from './personalization.js';
 import { buildRetrieverSystemPrompt } from './emailContext.js';
 import { config } from '../config.js';
@@ -372,7 +372,7 @@ async function runTextAgent(
   return runOneClaude(userId, conversationId, sandboxSubdir, message, systemPrompt, timeoutMs, onText);
 }
 
-interface MemberResult { member: MemberRow; text: string; inputTokens: number; outputTokens: number }
+interface MemberResult { member: MemberRow; text: string; inputTokens: number; outputTokens: number; model: string }
 
 export interface TeamRunResult { runId: string; result: string; inputTokens: number; outputTokens: number; model: string }
 
@@ -474,7 +474,7 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
         type: 'member_done',
         data: { memberId: member.id, status: ok ? 'done' : 'failed', tokens: { inputTokens: r.inputTokens, outputTokens: r.outputTokens } },
       });
-      return { member, text: r.text.trim(), inputTokens: r.inputTokens, outputTokens: r.outputTokens } as MemberResult;
+      return { member, text: r.text.trim(), inputTokens: r.inputTokens, outputTokens: r.outputTokens, model: r.model } as MemberResult;
     }));
     results.push(...batchResults);
   }
@@ -482,6 +482,8 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
   // ── Round 2: discussion — members see each other's findings and react ───
   const round2: Record<string, string> = {};
   let round2In = 0, round2Out = 0;
+  // Per-call so each engine is billed at its own rate (see the recording below).
+  const round2Usage: { model: string; inputTokens: number; outputTokens: number }[] = [];
   writer({ type: 'discussion_start' });
   for (let i = 0; i < members.length; i += MEMBER_CONCURRENCY) {
     const batch = members.slice(i, i + MEMBER_CONCURRENCY);
@@ -501,6 +503,7 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
       );
       round2[member.id] = r.text.trim();
       round2In += r.inputTokens; round2Out += r.outputTokens;
+      round2Usage.push({ model: r.model, inputTokens: r.inputTokens, outputTokens: r.outputTokens });
       writer({ type: 'member_done', data: { memberId: member.id, status: r.text.trim() ? 'done' : 'failed', tokens: { inputTokens: r.inputTokens, outputTokens: r.outputTokens } } });
     }));
   }
@@ -588,10 +591,26 @@ ${findingsBlock}${sourcesBlock}
     finalText, JSON.stringify(memberOutputs), totalIn, totalOut, 'done', runId,
   );
 
-  if (totalIn > 0 || totalOut > 0) {
-    // Always label 'team-run' so usage stays categorised as "AI 團隊" regardless of
-    // which provider produced the synthesis (CLI model vs deepseek-chat).
-    await recordTokenUsage({ userId, conversationId: null, inputTokens: totalIn, outputTokens: totalOut, model: 'team-run' });
+  // Bill each engine at its own rate. A run mixes them by design — round 1 is
+  // always Claude (it needs tools), while round 2 and the synthesis usually run
+  // on the on-prem box. Summing them into one 'team-run' row priced everything as
+  // Claude, so free local work was invoiced at Claude rates. Rows stay under a
+  // 'team-run…' label because the usage page groups the AI-團隊 category on it.
+  const perEngine = new Map<string, { inTok: number; outTok: number }>();
+  const addUsage = (model: string | undefined, inTok: number, outTok: number) => {
+    if (!inTok && !outTok) return;
+    const engine = engineOf(model);
+    const label = engine === 'claude' ? 'team-run' : `team-run:${engine}`;
+    const e = perEngine.get(label) || { inTok: 0, outTok: 0 };
+    e.inTok += inTok; e.outTok += outTok;
+    perEngine.set(label, e);
+  };
+  for (const r of results) addUsage(r.model, r.inputTokens, r.outputTokens);          // round 1
+  for (const r of round2Usage) addUsage(r.model, r.inputTokens, r.outputTokens);      // round 2
+  addUsage(synth.model, synth.inputTokens, synth.outputTokens);                       // synthesis
+
+  for (const [label, u] of perEngine) {
+    await recordTokenUsage({ userId, conversationId: null, inputTokens: u.inTok, outputTokens: u.outTok, model: label });
   }
 
   // ── Update rolling shared memory (Phase 3) — no extra LLM call ───────────

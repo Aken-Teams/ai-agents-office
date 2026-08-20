@@ -106,6 +106,12 @@ export const config = {
   localLlmModel: process.env.LLM_MODEL || 'mlx-community/Qwen3-VL-30B-A3B-Instruct-4bit',
   localLlmModelQuality: process.env.LLM_MODEL_QUALITY || process.env.LLM_MODEL || 'mlx-community/Qwen3-VL-30B-A3B-Instruct-4bit',
 
+  // The DeepSeek model id we send. Kept in config because DeepSeek retires ids:
+  // "deepseek-chat" is what this deployment has always used, but their 2026-07-24
+  // notice lists it as deprecated in favour of the V4 series. Verify against a
+  // live key before trusting the fallback — an unknown id fails the whole call.
+  deepseekModel: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+
   // AD (Active Directory) integration — pro-panjit only
   adApiUrl: process.env.AD_API_URL || 'https://apigw.panjit.com.tw/ldap/api/v1',
   adApiKey: process.env.AD_API_KEY || process.env.AD_API || '',
