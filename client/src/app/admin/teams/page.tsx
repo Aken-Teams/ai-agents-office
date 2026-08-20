@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import TeamMarkdown from '../../components/TeamMarkdown';
 import { useAdminAuth } from '../components/AdminAuthProvider';
+import { agentIcon } from '../../components/agentIcon';
 
 interface TeamRow {
   id: string; title: string; topic: string | null; icon: string | null; created_at: string;
@@ -118,7 +119,7 @@ export default function AdminTeamsPage() {
                     return (
                       <div key={m.memberId} className="border border-outline-variant/30 rounded-xl overflow-hidden bg-surface-container-lowest">
                         <button onClick={() => setOpenMember(open ? null : m.memberId)} className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-surface-container/40 transition-colors">
-                          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-[18px] text-primary">{m.icon || 'person'}</span></div>
+                          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-[18px] text-primary">{agentIcon(m.icon, 'person')}</span></div>
                           <span className="text-sm font-semibold text-on-surface flex-1 min-w-0 truncate">{m.name}</span>
                           <span className={`material-symbols-outlined text-[18px] text-on-surface-variant transition-transform shrink-0 ${open ? 'rotate-180' : ''}`}>expand_more</span>
                         </button>
@@ -163,7 +164,7 @@ export default function AdminTeamsPage() {
               <div className="flex flex-col md:flex-row md:items-start gap-3">
                 <div className="flex items-start gap-3 flex-1 min-w-0">
                   <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-primary text-[24px]">{team.team.icon || 'groups'}</span>
+                    <span className="material-symbols-outlined text-primary text-[24px]">{agentIcon(team.team.icon, 'groups')}</span>
                   </div>
                   <div className="flex-1 min-w-0">
                     <h2 className="text-lg font-bold text-on-surface">{team.team.title}</h2>
@@ -207,7 +208,7 @@ export default function AdminTeamsPage() {
                     <div key={m.id} className="bg-surface-container-lowest border border-outline-variant/30 hover:border-primary/40 rounded-xl p-4 transition-colors flex flex-col">
                       <div className="flex items-center gap-2 mb-2">
                         <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                          <span className="material-symbols-outlined text-[18px] text-primary">{m.icon || 'person'}</span>
+                          <span className="material-symbols-outlined text-[18px] text-primary">{agentIcon(m.icon, 'person')}</span>
                         </div>
                         <span className="text-sm font-semibold text-on-surface flex-1 min-w-0 truncate">{m.title}</span>
                       </div>
@@ -293,7 +294,7 @@ export default function AdminTeamsPage() {
                   <tr key={t.id} onClick={() => openTeam(t.id)} className="hover:bg-surface-container/40 cursor-pointer">
                     <td className="py-3 px-4">
                       <div className="font-medium text-on-surface flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary text-[18px]">{t.icon || 'groups'}</span>
+                        <span className="material-symbols-outlined text-primary text-[18px]">{agentIcon(t.icon, 'groups')}</span>
                         <span className="truncate max-w-[260px]">{t.title}</span>
                       </div>
                       {t.topic && <div className="text-xs text-on-surface-variant truncate max-w-[320px] mt-0.5">{t.topic}</div>}
@@ -321,7 +322,7 @@ export default function AdminTeamsPage() {
               className="bg-surface-container rounded-lg p-3 active:bg-surface-container-high transition-colors cursor-pointer">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-primary text-[20px]">{t.icon || 'groups'}</span>
+                  <span className="material-symbols-outlined text-primary text-[20px]">{agentIcon(t.icon, 'groups')}</span>
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-on-surface truncate">{t.title}</p>

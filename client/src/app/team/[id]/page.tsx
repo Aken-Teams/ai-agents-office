@@ -22,6 +22,7 @@ import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 import TeamMarkdown from '../../components/TeamMarkdown';
 import Tooltip from '../../components/Tooltip';
 import { markupForDate } from '../../../lib/pricing';
+import { agentIcon } from '../../components/agentIcon';
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
 
@@ -758,7 +759,7 @@ function TeamRunContent() {
             <span className="material-symbols-outlined">arrow_back</span>
           </Link>
           <div className="w-11 h-11 rounded-xl cyber-gradient flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-on-primary text-xl">{team.icon || 'groups'}</span>
+            <span className="material-symbols-outlined text-on-primary text-xl">{agentIcon(team.icon, 'groups')}</span>
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="font-headline text-xl md:text-2xl font-bold text-on-surface truncate">{team.title} · 團隊協作</h1>
@@ -972,7 +973,7 @@ function TeamRunContent() {
               <div key={id} className="flex flex-col bg-surface-container rounded-2xl border border-outline-variant/10 overflow-hidden">
                 <div className="flex items-center gap-2 p-3 border-b border-outline-variant/10">
                   <div className="w-8 h-8 rounded-lg cyber-gradient flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-on-primary text-base">{m.icon || 'smart_toy'}</span>
+                    <span className="material-symbols-outlined text-on-primary text-base">{agentIcon(m.icon)}</span>
                   </div>
                   <span className="text-sm font-bold text-on-surface truncate flex-1">{m.name}</span>
                   <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full ${meta.cls}`}>
@@ -980,7 +981,7 @@ function TeamRunContent() {
                     {meta.label}
                   </span>
                   {m.text && (
-                    <button onClick={() => setExpanded({ title: m.name, icon: m.icon || 'smart_toy', text: m.text + (m.text2 ? `\n\n---\n\n**回應其他成員**\n\n${m.text2}` : '') })}
+                    <button onClick={() => setExpanded({ title: m.name, icon: agentIcon(m.icon), text: m.text + (m.text2 ? `\n\n---\n\n**回應其他成員**\n\n${m.text2}` : '') })}
                       className="w-5 h-5 flex items-center justify-center rounded text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer shrink-0" title="放大檢視">
                       <span className="material-symbols-outlined text-[14px]">open_in_full</span>
                     </button>
@@ -1011,7 +1012,7 @@ function TeamRunContent() {
                       )}
                     </div>
                     {m.text && (
-                      <button onClick={() => setExpanded({ title: m.name, icon: m.icon || 'smart_toy', text: m.text + (m.text2 ? `\n\n---\n\n**回應其他成員**\n\n${m.text2}` : '') })}
+                      <button onClick={() => setExpanded({ title: m.name, icon: agentIcon(m.icon), text: m.text + (m.text2 ? `\n\n---\n\n**回應其他成員**\n\n${m.text2}` : '') })}
                         className="md:hidden relative w-full flex items-center justify-center gap-1 py-2 text-xs font-bold text-primary border-t border-outline-variant/10 bg-surface-container cursor-pointer">
                         <span className="pointer-events-none absolute -top-7 inset-x-0 h-7 bg-gradient-to-t from-surface-container to-transparent" />
                         查看完整分析<span className="material-symbols-outlined text-[15px]">open_in_full</span>

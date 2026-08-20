@@ -9,6 +9,7 @@ import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
 import HelpButton from '../components/HelpButton';
+import { agentIcon } from '../components/agentIcon';
 
 const PAGE_SIZE = 6;
 
@@ -323,7 +324,7 @@ function AssistantEditModal({
   const { t } = useTranslation();
   const nameRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(conversation?.title || '');
-  const [icon, setIcon] = useState(conversation?.icon || 'smart_toy');
+  const [icon, setIcon] = useState(agentIcon(conversation?.icon));
   const [systemPrompt, setSystemPrompt] = useState(conversation?.system_prompt || '');
   const [skillId, setSkillId] = useState(conversation?.skill_id || '');
   const [generating, setGenerating] = useState(false);
@@ -1211,7 +1212,7 @@ function TeamAddMemberModal({ team, token, standalone, onCreateNew, onDone, onCa
               const sel = picked.has(c.id);
               return (
                 <button key={c.id} onClick={() => toggle(c.id)} className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-colors cursor-pointer text-left ${sel ? 'border-primary bg-primary/5' : 'border-outline-variant/15 bg-surface-container hover:border-primary/30'}`}>
-                  <div className="w-8 h-8 rounded-lg cyber-gradient flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-on-primary text-base">{c.icon || 'smart_toy'}</span></div>
+                  <div className="w-8 h-8 rounded-lg cyber-gradient flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-on-primary text-base">{agentIcon(c.icon)}</span></div>
                   <span className="flex-1 text-sm text-on-surface truncate">{c.title}</span>
                   <span className={`material-symbols-outlined ${sel ? 'text-primary' : 'text-outline-variant'}`}>{sel ? 'check_circle' : 'radio_button_unchecked'}</span>
                 </button>
@@ -1512,7 +1513,7 @@ function AssistantContent() {
   // muted = standalone assistant (no team) → stays GREY (colour is reserved for
   // team roles, so a coloured card always means "belongs to a team").
   const renderMemberCard = (conv: AssistantConversation, index: number, muted = false) => {
-    const cardIcon = conv.icon || 'smart_toy';
+    const cardIcon = agentIcon(conv.icon);
     const color = roleColor(index);
     const skillIcon = conv.skill_id ? (SKILL_ICON_MAP[conv.skill_id] || 'bolt') : 'psychology';
     const skillLabel = conv.skill_id ? getSkillName(conv.skill_id) : (t('assistant.memoryActive' as any) || '自由對話');
@@ -1718,7 +1719,7 @@ function AssistantContent() {
                   <div className={`flex flex-col sm:flex-row sm:items-center gap-3 ${collapsed ? '' : 'mb-4'}`}>
                     <button onClick={() => toggleTeam(team.id)} className="group flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer w-full">
                       <div className="w-11 h-11 rounded-xl cyber-gradient flex items-center justify-center shrink-0">
-                        <span className="material-symbols-outlined text-on-primary text-xl">{team.icon || 'groups'}</span>
+                        <span className="material-symbols-outlined text-on-primary text-xl">{agentIcon(team.icon, 'groups')}</span>
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
@@ -1734,7 +1735,7 @@ function AssistantContent() {
                           <div key={m.id} title={m.title}
                             className={`w-7 h-7 rounded-full border-2 border-surface-container flex items-center justify-center ${mi === 0 ? '' : '-ml-2'}`}
                             style={{ backgroundColor: roleColor(mi) + '29', color: roleColor(mi) }}>
-                            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>{m.icon || 'smart_toy'}</span>
+                            <span className="material-symbols-outlined" style={{ fontSize: 13 }}>{agentIcon(m.icon)}</span>
                           </div>
                         ))}
                         {members.length > 5 && <span className="ml-1.5 text-xs text-on-surface-variant font-mono">+{members.length - 5}</span>}

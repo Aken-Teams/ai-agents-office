@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { dbRun } from '../db.js';
 import { config } from '../config.js';
 import { auxChat, auxLlmAvailable, parseJsonLoose } from './auxLlm.js';
+import { AGENT_ICONS, safeAgentIcon } from '../data/agentIcons.js';
 
 /**
  * Skills an AI-designed team member may hold.
@@ -43,12 +44,15 @@ export async function generateTeamSpec(topic: string, userId?: string): Promise<
 - **不要設計純產出型角色**（如「簡報設計師」「文件排版師」「文件生成員」）。那種角色面對議題本身無話可說，只會回一句「這超出我的專業」，讓整個團隊看起來壞掉。文件是團隊得出結論「之後」才產生的，不需要派人。
 - 每位成員要有**不同的分析切入角度**（例如：找證據的、算數字的、評估風險的、挑戰假設的、把結論轉成行動建議的），而不是同一件事講五遍。
 
+icon 只能從下面這份清單挑（**不可自創**，不在清單上的一律無效）：
+${AGENT_ICONS.join(', ')}
+
 只輸出一個 JSON 物件（不要任何說明、不要 markdown）：
 {
   "title": "團隊名稱（簡短，4-10字）",
-  "icon": "一個 Google Material Symbols 名稱（小寫底線，如 favorite, psychology, public, insights）",
+  "icon": "上面清單中的一個",
   "agents": [
-    { "name": "角色名稱", "icon": "Material Symbols 名稱", "rolePrompt": "此角色的定位、專長與工作方式（繁體中文 60-140字）", "skillId": "research" 或 null }
+    { "name": "角色名稱", "icon": "上面清單中的一個", "rolePrompt": "此角色的定位、專長與工作方式（繁體中文 60-140字）", "skillId": "research" 或 null }
   ]
 }
 要求：3–5 個 agent，角色彼此分工互補、緊貼此情境。`;
@@ -60,14 +64,14 @@ export async function generateTeamSpec(topic: string, userId?: string): Promise<
     if (!obj || !Array.isArray(obj.agents)) return null;
     const agents: GeneratedAgent[] = obj.agents.slice(0, 5).map((a: any) => ({
       name: String(a?.name || '助手').slice(0, 40),
-      icon: typeof a?.icon === 'string' && a.icon.trim() ? a.icon.trim() : 'smart_toy',
+      icon: safeAgentIcon(a?.icon),
       rolePrompt: String(a?.rolePrompt || a?.name || '').slice(0, 600),
       skillId: CUSTOM_SKILLS.includes(a?.skillId) ? a.skillId : null,
     })).filter((a: GeneratedAgent) => a.name && a.rolePrompt);
     if (agents.length < 1) return null;
     return {
       title: String(obj.title || topic).slice(0, 60),
-      icon: typeof obj.icon === 'string' && obj.icon.trim() ? obj.icon.trim() : 'groups',
+      icon: safeAgentIcon(obj.icon, 'groups'),
       agents,
     };
   } catch (err) {
