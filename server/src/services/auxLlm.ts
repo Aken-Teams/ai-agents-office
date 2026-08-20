@@ -95,6 +95,19 @@ export interface AuxLlmResult {
   /** The model that actually answered — record this, never a guess. */
   model: string;
   provider: ProviderName;
+  /**
+   * The answer stopped because it ran out of output budget, not because it was
+   * finished. Detected by comparing tokens used against the cap we asked for:
+   * this gateway returns finish_reason 'stop' even when it truncated (verified —
+   * a 2000-token cap came back with exactly 2000 tokens and "stop"), so the
+   * field every OpenAI client trusts is useless here.
+   */
+  truncated: boolean;
+}
+
+/** Did the answer stop because it hit the ceiling rather than finishing? */
+function hitCap(outTok: number, maxTokens: number): boolean {
+  return outTok > 0 && outTok >= maxTokens;
 }
 
 type ProviderName = 'local' | 'deepseek';
@@ -340,9 +353,13 @@ export async function auxChat(
         logAttempt(p, opts?.feature, false, inTok, outTok, 'empty answer', opts?.billTo);
         continue;
       }
+      const truncated = hitCap(outTok, maxTokens);
+      if (truncated) {
+        console.warn(`[auxLlm] ${p.name} (${p.model}) answer hit the ${maxTokens}-token ceiling for ${opts?.feature || 'unknown'} — it was cut off mid-answer`);
+      }
       noteSuccess(p.name);
-      logAttempt(p, opts?.feature, true, inTok, outTok, 'ok', opts?.billTo);
-      return { text, inTok, outTok, model: p.model, provider: p.name };
+      logAttempt(p, opts?.feature, true, inTok, outTok, truncated ? 'ok (truncated)' : 'ok', opts?.billTo);
+      return { text, inTok, outTok, model: p.model, provider: p.name, truncated };
     } catch (e) {
       const why = e instanceof Error ? e.message : String(e);
       console.error(`[auxLlm] ${p.name} (${p.model}) failed:`, why);
@@ -391,6 +408,10 @@ export async function auxChatStream(opts: {
     if (breakerOpen(p.name)) continue;
     let text = '';
     let inTok = 0, outTok = 0;
+    // Long-form answers are what this path is for (a team synthesis someone
+    // reads), so give it real room — a 27B writing a full report lands around
+    // 2.5k tokens, and running out mid-sentence is the worst possible ending.
+    const maxTokens = Math.max(opts.maxTokens ?? 4096, p.name === 'local' ? 1500 : 0);
     const controller = new AbortController();
     const onCallerAbort = () => controller.abort();
     opts.signal?.addEventListener('abort', onCallerAbort, { once: true });
@@ -414,7 +435,7 @@ export async function auxChatStream(opts: {
           model: p.model,
           messages,
           temperature: opts.temperature ?? 0.4,
-          max_tokens: Math.max(opts.maxTokens ?? 4096, p.name === 'local' ? 1500 : 0),
+          max_tokens: maxTokens,
           stream: true,
           stream_options: { include_usage: true },
         }),
@@ -466,14 +487,18 @@ export async function auxChatStream(opts: {
         logAttempt(p, opts.feature, false, inTok, outTok, 'empty stream', opts.billTo);
         continue;
       }
+      const truncated = hitCap(outTok, maxTokens);
+      if (truncated) {
+        console.warn(`[auxLlm] ${p.name} (${p.model}) stream hit the ${maxTokens}-token ceiling for ${opts.feature || 'unknown'} — the answer is cut off`);
+      }
       noteSuccess(p.name);
-      logAttempt(p, opts.feature, true, inTok, outTok, 'ok', opts.billTo);
-      return { text: text.trim(), inTok, outTok, model: p.model, provider: p.name };
+      logAttempt(p, opts.feature, true, inTok, outTok, truncated ? 'ok (truncated)' : 'ok', opts.billTo);
+      return { text: text.trim(), inTok, outTok, model: p.model, provider: p.name, truncated };
     } catch (e) {
       clearTimers();
       // The caller walked away. Not the provider's fault, so it must not count
       // toward the breaker or the success rate — the reader left, the box didn't fail.
-      if (opts.signal?.aborted) return text.trim() ? { text: text.trim(), inTok, outTok, model: p.model, provider: p.name } : null;
+      if (opts.signal?.aborted) return text.trim() ? { text: text.trim(), inTok, outTok, model: p.model, provider: p.name, truncated: false } : null;
       const why = e instanceof Error ? e.message : String(e);
       console.error(`[auxLlm] ${p.name} stream failed:`, why);
       noteFailure(p.name, why);
@@ -483,7 +508,7 @@ export async function auxChatStream(opts: {
       logAttempt(p, opts.feature, !!partial, inTok, outTok,
         partial ? 'partial (stream cut)' : (/timeout|abort/i.test(why) ? 'timeout' : why.slice(0, 120)),
         opts.billTo);
-      if (partial) return { text: partial, inTok, outTok, model: p.model, provider: p.name };
+      if (partial) return { text: partial, inTok, outTok, model: p.model, provider: p.name, truncated: true };
     }
   }
   return null;

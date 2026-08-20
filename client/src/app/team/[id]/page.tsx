@@ -45,6 +45,8 @@ interface MemberStream {
    *  is indistinguishable from a crash. */
   activity?: string;
   startedAt?: number;
+  /** Round 1 came back empty but the discussion round saved it. */
+  recovered?: boolean;
 }
 
 const STATUS_META: Record<MemberStatus, { label: string; cls: string; icon: string; spin?: boolean }> = {
@@ -599,6 +601,12 @@ function TeamRunContent() {
       case 'member_activity':
         setMembers(prev => prev[d.memberId] ? { ...prev, [d.memberId]: { ...prev[d.memberId], activity: d.label } } : prev);
         break;
+      case 'discussion_start':
+        // Round 2 is tool-free, so no tool activity will arrive for it — say what
+        // it is doing, and restart the clock so the elapsed time is this round's.
+        setMembers(prev => Object.fromEntries(Object.entries(prev).map(([id, m]) =>
+          [id, m.status === 'done' || m.status === 'failed' ? { ...m, activity: undefined } : m])));
+        break;
       case 'member_stream':
         setMembers(prev => {
           const m = prev[d.memberId];
@@ -609,10 +617,24 @@ function TeamRunContent() {
         });
         break;
       case 'member_round2':
-        setMembers(prev => prev[d.memberId] ? { ...prev, [d.memberId]: { ...prev[d.memberId], inRound2: true, status: 'responding' } } : prev);
+        setMembers(prev => prev[d.memberId] ? {
+          ...prev,
+          [d.memberId]: { ...prev[d.memberId], inRound2: true, status: 'responding', activity: '參考其他成員的分析中', startedAt: Date.now() },
+        } : prev);
         break;
       case 'member_done':
-        setMembers(prev => prev[d.memberId] ? { ...prev, [d.memberId]: { ...prev[d.memberId], status: d.status === 'failed' ? 'failed' : 'done' } } : prev);
+        // Finished means finished: drop the activity line and stop the clock, or
+        // the card keeps claiming it is "searching the web" long after it stopped.
+        setMembers(prev => prev[d.memberId] ? {
+          ...prev,
+          [d.memberId]: {
+            ...prev[d.memberId],
+            status: d.status === 'failed' ? 'failed' : 'done',
+            recovered: !!d.recovered,
+            activity: undefined,
+            startedAt: undefined,
+          },
+        } : prev);
         break;
       case 'email_retrieval':
         setEmailRetrieval(prev => d.status === 'running'
@@ -968,7 +990,11 @@ function TeamRunContent() {
           {memberOrder.map(id => {
             const m = members[id];
             if (!m) return null;
-            const meta = STATUS_META[m.status];
+            // A member rescued by the discussion round is "done", but say how it
+            // got there — otherwise the earlier 失敗 badge looks like a lie.
+            const meta = m.recovered && m.status === 'done'
+              ? { ...STATUS_META.done, label: '第一輪逾時，討論補上' }
+              : STATUS_META[m.status];
             return (
               <div key={id} className="flex flex-col bg-surface-container rounded-2xl border border-outline-variant/10 overflow-hidden">
                 <div className="flex items-center gap-2 p-3 border-b border-outline-variant/10">
@@ -995,13 +1021,20 @@ function TeamRunContent() {
                     <div className="p-3 text-xs text-on-surface-variant leading-relaxed max-h-40 overflow-hidden md:max-h-72 md:overflow-y-auto min-h-[56px]">
                       {m.text
                         ? <TeamMarkdown>{m.text}</TeamMarkdown>
-                        : (
-                          <span className="inline-flex items-center gap-1.5 text-outline italic">
-                            <span className="material-symbols-outlined text-[13px] animate-spin">progress_activity</span>
-                            {m.activity || '分析中'}
-                            {m.startedAt ? `（已 ${Math.max(0, Math.round((now - m.startedAt) / 1000))} 秒）` : '…'}
-                          </span>
-                        )}
+                        : m.status === 'failed'
+                          // No spinner, no ticking clock: this one is over. The
+                          // run itself carries on with the members that answered.
+                          ? <span className="inline-flex items-center gap-1.5 text-error/80">
+                              <span className="material-symbols-outlined text-[13px]">error</span>
+                              這位成員沒有產出（逾時或中斷），其餘成員的分析仍會納入統整
+                            </span>
+                          : (m.status === 'running' || m.status === 'responding') ? (
+                            <span className="inline-flex items-center gap-1.5 text-outline italic">
+                              <span className="material-symbols-outlined text-[13px] animate-spin">progress_activity</span>
+                              {m.activity || '分析中'}
+                              {m.startedAt ? `（已 ${Math.max(0, Math.round((now - m.startedAt) / 1000))} 秒）` : '…'}
+                            </span>
+                          ) : null}
                       {m.text2 && (
                         <div className="mt-3 rounded-lg bg-tertiary/5 border border-tertiary/15 p-2.5">
                           <div className="flex items-center gap-1 text-[11px] font-bold text-tertiary mb-1.5">
