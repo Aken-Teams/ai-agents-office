@@ -5,6 +5,10 @@ dist/
 .env.local
 workspace/
 *.db
+# SQLite side files. `*.db` alone does not match them, which is how data.db-wal
+# (4MB) and data.db-shm ended up committed after the move to MySQL.
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 

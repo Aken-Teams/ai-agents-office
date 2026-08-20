@@ -1102,7 +1102,7 @@ const zhTW = {
   'admin.skills.filter.agent': '輔助代理',
   'admin.skills.filter.mcp': 'MCP',
   'admin.skills.hero.loaded': '{count} 個 Skills 已載入',
-  'admin.skills.hero.summary': '包含 {generatorCount} 個文件生成器與 {agentCount} 個輔助代理',
+  'admin.skills.hero.summary': '包含 {generatorCount} 個文件生成器、{agentCount} 個輔助代理與 {mcpCount} 個 MCP',
   'admin.skills.tag.docGen': '文件生成',
   'admin.skills.tag.systemCore': '系統核心',
   'admin.skills.tag.assistantAgent': '輔助代理',
@@ -1119,10 +1119,23 @@ const zhTW = {
   'admin.skills.architecture.pipelineTitle': '管線處理',
   'admin.skills.architecture.pipelineDesc': '支援多步驟串連與並行任務，自動彙整結果',
   'admin.skills.tag.dataSource': '資料來源',
-  'admin.skills.emailMcp.name': 'Email MCP (Outlook)',
-  'admin.skills.emailMcp.description': '自動偵測郵件相關對話，注入 Outlook 信箱資料。不需綁定特定 Skill，任何助手提到信箱關鍵字即自動啟用。',
-  'admin.skills.emailMcp.type': '資料注入',
-  'admin.skills.emailMcp.autoInject': '關鍵字觸發',
+  // MCP cards stay in English in every locale — these are infrastructure names
+  // (tool ids, transport, credentials) that the people reading this page use in
+  // English anyway, and translating them made the same server look like two
+  // different things across locales.
+  'admin.skills.mcp.kind.dataSource': 'Data Source',
+  'admin.skills.mcp.kind.liveWorkbook': 'Live Workbook',
+  'admin.skills.mcp.activation.userSelected': 'User-selected',
+  'admin.skills.mcp.activation.alwaysOn': 'Built into the add-in',
+  'admin.skills.mcp.tools': '{count} tools',
+  'admin.skills.mcp.surface.web': 'Web app',
+  'admin.skills.mcp.surface.excel': 'Excel add-in',
+  'admin.skills.mcp.email.name': 'Outlook Email (Data Source)',
+  'admin.skills.mcp.email.description': 'Document-generating agents can read Outlook mail through MCP tools once the user turns it on from the "Data Source" menu beside the chat input. Bound to the mail credential of whoever is signed in — their own mailbox only, no cross-user access.',
+  'admin.skills.mcp.km.name': 'KM Knowledge Base (Data Source)',
+  'admin.skills.mcp.km.description': 'Once enabled, agents can search KM documents and attachments over MCP. Queries run on behalf of the signed-in AD employee id, so only documents that person may already see are returned.',
+  'admin.skills.mcp.excel.name': 'Excel Live Workbook',
+  'admin.skills.mcp.excel.description': 'Not a data source: these tools drive the workbook the user has open right now — read ranges, write, format, charts, pivot tables. The add-in runs them through Office.js, anything that changes content asks for confirmation first, and each run is bound to a one-time run token that reaches only that user\'s own workbook.',
 
   // Admin Conversations
   'admin.conversations.title': '用戶對話管理',

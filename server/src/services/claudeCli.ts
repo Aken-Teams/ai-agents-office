@@ -11,6 +11,7 @@ import { acquireAuthSlot } from './claudeAuthGate.js';
 import { acquireAiSlot } from './aiConcurrency.js';
 import { logAiCall } from './aiCallLog.js';
 import { EXCEL_MCP_TOOL_NAMES } from './excelToolSpec.js';
+import { EMAIL_MCP_TOOL_NAMES, KM_MCP_TOOL_NAMES } from './mcpRegistry.js';
 import type { SSEEvent } from '../types.js';
 
 // Max time to hold the auth gate for one spawn if it never produces output (the
@@ -429,12 +430,7 @@ export function spawnClaude(
           ...debugEnv('email-mcp-debug.log'),
         },
       };
-      mcpToolNames.push(
-        'mcp__email__email_list_folders',
-        'mcp__email__email_search',
-        'mcp__email__email_get_message',
-        'mcp__email__email_get_attachments',
-      );
+      mcpToolNames.push(...EMAIL_MCP_TOOL_NAMES);
     }
     if (options.mcpKmOnBehalf) {
       mcpServers.km = {
@@ -448,11 +444,7 @@ export function spawnClaude(
           ...debugEnv('km-mcp-debug.log'),
         },
       };
-      mcpToolNames.push(
-        'mcp__km__km_search',
-        'mcp__km__km_get_document',
-        'mcp__km__km_get_attachment',
-      );
+      mcpToolNames.push(...KM_MCP_TOOL_NAMES);
     }
     if (options.mcpExcelRunToken) {
       mcpServers.excel = {

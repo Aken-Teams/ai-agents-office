@@ -482,6 +482,11 @@ export async function initializeDatabase(): Promise<void> {
         expires_at      DATETIME NOT NULL,
         credentials_enc TEXT,
         mail_available  TINYINT(1) NOT NULL DEFAULT 1,
+        -- WHY mail_available is false, classified at sign-in: the gateway's three
+        -- causes each need a different person (that plant's IT / this platform's
+        -- admin / just retry later). See classifyMailUnavailable in outlookApi.ts.
+        mail_status_code    VARCHAR(32) DEFAULT NULL,
+        mail_status_message TEXT DEFAULT NULL,
         created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -791,6 +796,16 @@ export async function initializeDatabase(): Promise<void> {
     // Migration: add credentials_enc column to outlook_tokens
     try {
       await conn.query('ALTER TABLE outlook_tokens ADD COLUMN credentials_enc TEXT DEFAULT NULL');
+    } catch { /* column already exists */ }
+
+    // Migration: remember WHY mail is unavailable, not just that it is. The
+    // gateway's three causes need three different people; a single generic
+    // "請洽 IT" message misdirected two of them.
+    try {
+      await conn.query('ALTER TABLE outlook_tokens ADD COLUMN mail_status_code VARCHAR(32) DEFAULT NULL');
+    } catch { /* column already exists */ }
+    try {
+      await conn.query('ALTER TABLE outlook_tokens ADD COLUMN mail_status_message TEXT DEFAULT NULL');
     } catch { /* column already exists */ }
 
     // Migration: widen email_id + switch to case-sensitive collation (utf8mb4_bin)

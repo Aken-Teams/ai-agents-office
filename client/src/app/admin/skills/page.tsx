@@ -3,10 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
-
-const DEPLOY_MODE_FEATURES: Record<string, string[]> = {
-  'pro-panjit': ['email-mcp'],
-};
+import type { TranslationKey } from '../../../i18n/types';
 
 interface Skill {
   id: string;
@@ -15,6 +12,36 @@ interface Skill {
   fileType: string | null;
   role: string;
 }
+
+/**
+ * An MCP server this deployment can mount, as reported by /api/skills/mcp.
+ * Which ones exist is a server-side question (does this box hold the key, is the
+ * surface wired up) — the page used to guess from deployMode and consequently
+ * never showed the Excel add-in's MCP at all.
+ */
+interface McpSource {
+  id: string;
+  kind: 'data-source' | 'live-workbook';
+  surfaces: ('web' | 'excel')[];
+  toolCount: number;
+  activation: 'user-selected' | 'always-on';
+}
+
+/** Presentation per MCP: a glyph, and which i18n strings describe it. */
+const MCP_CARDS: Record<string, { icon: string; color: string; bg: string; nameKey: TranslationKey; descKey: TranslationKey }> = {
+  'email-mcp': {
+    icon: 'mail', color: 'text-tertiary', bg: 'bg-tertiary/10',
+    nameKey: 'admin.skills.mcp.email.name', descKey: 'admin.skills.mcp.email.description',
+  },
+  'km-mcp': {
+    icon: 'menu_book', color: 'text-secondary', bg: 'bg-secondary/10',
+    nameKey: 'admin.skills.mcp.km.name', descKey: 'admin.skills.mcp.km.description',
+  },
+  'excel-mcp': {
+    icon: 'table_chart', color: 'text-success', bg: 'bg-success/10',
+    nameKey: 'admin.skills.mcp.excel.name', descKey: 'admin.skills.mcp.excel.description',
+  },
+};
 
 const FILE_TYPE_LABELS: Record<string, string> = {
   pptx: 'PowerPoint (.pptx)',
@@ -28,8 +55,8 @@ export default function AdminSkillsPage() {
   const { token } = useAdminAuth();
   const { t } = useTranslation();
   const [skills, setSkills] = useState<Skill[]>([]);
+  const [mcpSources, setMcpSources] = useState<McpSource[]>([]);
   const [filter, setFilter] = useState<'all' | 'generator' | 'agent' | 'mcp'>('all');
-  const [deployMode, setDeployMode] = useState<string>('');
 
   const SKILL_META: Record<string, { icon: string; iconColor: string; bgColor: string; tag: string; tagColor: string }> = {
     'pptx-gen': { icon: 'present_to_all', iconColor: 'text-warning', bgColor: 'bg-warning/10', tag: t('admin.skills.tag.docGen'), tagColor: 'text-primary' },
@@ -60,11 +87,10 @@ export default function AdminSkillsPage() {
       .then(setSkills)
       .catch(console.error);
 
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || '';
-    fetch(`${apiBase}/api/health`)
+    fetch('/api/skills/mcp', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
-      .then(data => { if (data.deployMode) setDeployMode(data.deployMode); })
-      .catch(() => {});
+      .then(d => setMcpSources(Array.isArray(d) ? d : []))
+      .catch(console.error);
   }, [token]);
 
   const generators = skills.filter(s => s.fileType && s.role !== 'router');
@@ -73,7 +99,8 @@ export default function AdminSkillsPage() {
   const filtered = filter === 'all' ? skills
     : filter === 'generator' ? generators
     : filter === 'agent' ? agents
-    : []; // 'mcp' — the data-source card is rendered separately below, not from `skills`
+    : []; // 'mcp' — MCP cards come from mcpSources, not from `skills`
+  const shownMcp = filter === 'all' || filter === 'mcp' ? mcpSources : [];
 
   return (
     <>
@@ -104,9 +131,7 @@ export default function AdminSkillsPage() {
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none" />
           <div className="relative z-10">
             {(() => {
-              const extraMcp = deployMode === 'pro-panjit' ? 1 : 0;
-              const totalCount = skills.length + extraMcp;
-              const agentTotal = agents.length + extraMcp;
+              const totalCount = skills.length + mcpSources.length;
               return (
                 <>
                   <h3 className="text-lg md:text-2xl font-headline font-bold text-on-surface mb-1 md:mb-2">
@@ -119,7 +144,7 @@ export default function AdminSkillsPage() {
                     )}
                   </h3>
                   <p className="text-xs md:text-sm text-on-surface-variant">
-                    {t('admin.skills.hero.summary', { generatorCount: generators.length, agentCount: agentTotal })}
+                    {t('admin.skills.hero.summary', { generatorCount: generators.length, agentCount: agents.length, mcpCount: mcpSources.length })}
                   </p>
                 </>
               );
@@ -174,42 +199,63 @@ export default function AdminSkillsPage() {
               </div>
             );
           })}
-          {/* Email MCP — display-only card for pro-panjit */}
-          {deployMode === 'pro-panjit' && (filter === 'all' || filter === 'mcp') && (
-            <div className="group bg-surface-container hover:bg-surface-container-high transition-all duration-300 p-4 md:p-6 rounded-lg border border-transparent hover:border-primary/10 flex flex-col justify-between">
-              <div>
-                <div className="flex justify-between items-start mb-3 md:mb-5">
-                  <div className="w-10 h-10 md:w-12 md:h-12 rounded flex items-center justify-center bg-tertiary/10">
-                    <span className="material-symbols-outlined text-2xl md:text-3xl text-tertiary">mail</span>
+          {/* MCP servers — display-only cards, driven by what the server reports */}
+          {shownMcp.map(mcp => {
+            // An MCP this build has no copy for still gets a card (bare id, no
+            // blurb) rather than vanishing — a silently missing one is exactly
+            // how the Excel MCP went unnoticed here for months.
+            const card = MCP_CARDS[mcp.id];
+            const glyph = card || { icon: 'hub', color: 'text-primary', bg: 'bg-primary/10' };
+            return (
+              <div
+                key={mcp.id}
+                className="group bg-surface-container hover:bg-surface-container-high transition-all duration-300 p-4 md:p-6 rounded-lg border border-transparent hover:border-primary/10 flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex justify-between items-start mb-3 md:mb-5">
+                    <div className={`w-10 h-10 md:w-12 md:h-12 rounded flex items-center justify-center ${glyph.bg}`}>
+                      <span className={`material-symbols-outlined text-2xl md:text-3xl ${glyph.color}`}>{glyph.icon}</span>
+                    </div>
+                    <span className={`px-2 py-0.5 bg-surface-container-highest text-xs md:text-sm font-bold tracking-widest uppercase ${glyph.color}`}>
+                      {t(mcp.kind === 'live-workbook' ? 'admin.skills.mcp.kind.liveWorkbook' : 'admin.skills.mcp.kind.dataSource')}
+                    </span>
                   </div>
-                  <span className="px-2 py-0.5 bg-surface-container-highest text-xs md:text-sm font-bold tracking-widest uppercase text-tertiary">
-                    資料源
+                  <h3 className="text-base md:text-xl font-headline font-semibold text-on-surface mb-1">
+                    {card ? t(card.nameKey) : mcp.id}
+                  </h3>
+                  <p className="text-xs md:text-sm text-on-surface-variant mb-2 md:mb-3 font-medium">
+                    ID: <span className="font-mono text-primary/80">{mcp.id}</span>
+                  </p>
+                  {card && (
+                    <p className="text-xs md:text-sm text-on-surface-variant/80 mb-3 md:mb-4 leading-relaxed">
+                      {t(card.descKey)}
+                    </p>
+                  )}
+                  {/* Where it can be switched on — the same MCP is not offered on
+                      every surface (KM is Excel-only by customer decision). */}
+                  <div className="flex flex-wrap gap-1.5 mb-4 md:mb-6">
+                    {mcp.surfaces.map(s => (
+                      <span key={s} className="px-2 py-0.5 rounded-full bg-surface-container-highest text-[11px] md:text-xs text-on-surface-variant">
+                        {t(s === 'web' ? 'admin.skills.mcp.surface.web' : 'admin.skills.mcp.surface.excel')}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-xs md:text-sm text-on-surface-variant bg-surface-container-low p-2.5 md:p-3 rounded">
+                  <span className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-xs md:text-sm">hub</span>
+                    {t('admin.skills.mcp.tools', { count: mcp.toolCount })}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-xs md:text-sm">check_circle</span>
+                    {t(mcp.activation === 'always-on' ? 'admin.skills.mcp.activation.alwaysOn' : 'admin.skills.mcp.activation.userSelected')}
                   </span>
                 </div>
-                <h3 className="text-base md:text-xl font-headline font-semibold text-on-surface mb-1">
-                  Outlook Email (Data Source)
-                </h3>
-                <p className="text-xs md:text-sm text-on-surface-variant mb-2 md:mb-3 font-medium">
-                  ID: <span className="font-mono text-primary/80">email-mcp</span>
-                </p>
-                <p className="text-xs md:text-sm text-on-surface-variant/80 mb-4 md:mb-6 leading-relaxed">
-                  MCP data source. Once the user enables it from the &quot;Data Source&quot; menu next to the chat input, document-generating agents can read Outlook email through MCP tools. Bound to the signed-in user&apos;s mail token — reads only their own mailbox, no cross-user access.
-                </p>
               </div>
-              <div className="flex items-center justify-between text-xs md:text-sm text-on-surface-variant bg-surface-container-low p-2.5 md:p-3 rounded">
-                <span className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-xs md:text-sm">hub</span>
-                  Data Source (MCP)
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-xs md:text-sm">check_circle</span>
-                  User-selected
-                </span>
-              </div>
-            </div>
-          )}
+            );
+          })}
 
-          {filtered.length === 0 && deployMode !== 'pro-panjit' && (
+          {filtered.length === 0 && shownMcp.length === 0 && (
             <div className="col-span-full py-12 text-center text-on-surface-variant">{t('admin.skills.empty')}</div>
           )}
         </section>

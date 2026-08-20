@@ -7,7 +7,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { config } from '../config.js';
-import { getMailToken, isMailboxAvailable, fetchMessages, fetchMessageDetail, type OutlookMessage } from './outlookApi.js';
+import { getMailToken, getMailboxStatus, fetchMessages, fetchMessageDetail, type OutlookMessage } from './outlookApi.js';
 import { pushEvent, getLastSeenIds, updateLastSeenIds, markTaskActive, markTaskDone } from './emailAgentRegistry.js';
 import { buildEmailAgentMemoryContext } from './emailAgentMemory.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
@@ -318,8 +318,9 @@ async function pollNewEmailsInner(userId: string, isInitial = false, aiEnabled =
     return;
   }
 
-  if (!await isMailboxAvailable(userId)) {
-    pushEvent(userId, { type: 'error', data: { code: 'no_mailbox', message: '此 AD 帳號沒有 Exchange 信箱權限，無法使用信件功能，請洽 IT 開通' } });
+  const mailbox = await getMailboxStatus(userId);
+  if (!mailbox.available) {
+    pushEvent(userId, { type: 'error', data: { code: mailbox.code, message: mailbox.message } });
     return;
   }
 

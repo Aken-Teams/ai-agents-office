@@ -65,7 +65,102 @@ export interface OutlookMessage {
 }
 
 /**
+ * The AD domains this gateway serves. Codes + labels are the gateway's own; the
+ * login page offers the identical list (client/src/app/login/page.tsx).
+ */
+export const AD_DOMAIN_LABELS: Record<string, string> = {
+  PANJIT: 'PANJIT（台灣）',
+  PYNMAX: 'PYNMAX（璟茂）',
+  WXPJ: 'WXPJ（無錫強茂）',
+  PJWS: 'PJWS（強茂深圳）',
+  GDPJ: 'GDPJ（蘇州群鑫）',
+  PJXZ: 'PJXZ（強茂徐州）',
+  PJSD: 'PJSD（山東強茂）',
+};
+
+/**
+ * Domains the gateway has not wired to Exchange yet. Their users' mail_available
+ * is ALWAYS false — a documented state, not a fault. Sending them to IT (which
+ * is what a generic "請洽 IT 開通" does) wastes both their time and IT's.
+ */
+export const MAIL_UNSUPPORTED_DOMAINS = new Set(['GDPJ', 'PJSD']);
+
+/**
+ * Why the account cannot read mail. The gateway returns mail_available=false for
+ * three genuinely different reasons and each needs a DIFFERENT person — one
+ * blanket "請洽 IT" message sends two thirds of these users to someone who has
+ * no way to help them.
+ */
+export type MailStatusCode =
+  | 'ok'
+  | 'not_connected'         // no token at all — sign in again
+  | 'domain_unsupported'    // this plant has no mail support yet (known)
+  | 'no_mailbox'            // AD account has no mail address → that plant's IT
+  | 'no_exchange'           // domain has no Exchange server → this platform's admin
+  | 'exchange_unreachable'  // transient → sign in again later
+  | 'unknown';
+
+export interface MailStatus {
+  available: boolean;
+  code: MailStatusCode;
+  /** Ready to show a user, in zh-TW. Null when available. */
+  message: string | null;
+}
+
+/**
+ * Map the gateway's `message` onto who can actually fix it.
+ *
+ * A known-unsupported domain wins over whatever the gateway said, because for
+ * those accounts the answer is "not yet built", not "something went wrong".
+ */
+export function classifyMailUnavailable(
+  gatewayMessage: string | undefined,
+  domain?: string,
+): { code: MailStatusCode; message: string } {
+  const dom = (domain || '').toUpperCase();
+  if (MAIL_UNSUPPORTED_DOMAINS.has(dom)) {
+    return {
+      code: 'domain_unsupported',
+      message: `${AD_DOMAIN_LABELS[dom] || dom} 目前尚未支援信件功能，這是已知狀況，暫時無法使用「我的信件」與信件助手。`,
+    };
+  }
+
+  const msg = gatewayMessage || '';
+  if (/信箱位址|信箱位置|mail\s*address|mailbox\s*(not|no)/i.test(msg)) {
+    return {
+      code: 'no_mailbox',
+      message: '您的 AD 帳號沒有設定信箱位址，無法使用信件功能，請洽貴廠 IT 協助開通。',
+    };
+  }
+  if (/尚未設定|未設定.*Exchange|no\s*Exchange\s*server|not\s*configured/i.test(msg)) {
+    const where = AD_DOMAIN_LABELS[dom] ? `（${AD_DOMAIN_LABELS[dom]}）` : '';
+    return {
+      code: 'no_exchange',
+      message: `貴公司網域${where}尚未設定 Exchange 伺服器，請洽本平台管理者協助設定。`,
+    };
+  }
+  if (/暫時無法連線|無法連線|連線失敗|unreachable|timeout|timed\s*out|unavailable/i.test(msg)) {
+    return {
+      code: 'exchange_unreachable',
+      message: 'Exchange 伺服器暫時無法連線，請稍後重新登入再試。',
+    };
+  }
+  return {
+    code: 'unknown',
+    message: msg
+      ? `信件功能目前無法使用：${msg}`
+      : '信件功能目前無法使用，請稍後重新登入；若持續發生請洽本平台管理者。',
+  };
+}
+
+/**
  * Authenticate with Outlook API and cache the mail_token + encrypted credentials in DB.
+ *
+ * `domain` is NOT optional in practice for anyone outside PANJIT: the gateway
+ * resolves against PANJIT alone when it is omitted and answers 401
+ * "使用者名稱或密碼錯誤" — indistinguishable from a genuinely wrong password.
+ * This endpoint is also independent of the LDAP /auth call, so a domain passed
+ * there does not carry over; callers must pass it here too.
  */
 export async function authenticateOutlook(userId: string, username: string, password: string, domain?: string): Promise<string | null> {
   console.log('[Outlook] Authenticating for user:', userId, 'username:', username, 'domain:', domain || '(default)');
@@ -85,31 +180,44 @@ export async function authenticateOutlook(userId: string, username: string, pass
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     console.warn('[Outlook] Auth failed:', res.status, body);
+    // A 401 here reads as "wrong password" but is just as often a missing/wrong
+    // domain — the gateway only searches PANJIT by default. Say so in the log so
+    // nobody spends an afternoon resetting a password that was never wrong.
+    if (res.status === 401 && (domain || 'PANJIT').toUpperCase() !== 'PANJIT') {
+      console.warn(`[Outlook] 401 for domain="${domain}" — verify this domain code is one the gateway knows (${Object.keys(AD_DOMAIN_LABELS).join(', ')}).`);
+    }
     return null;
   }
 
-  const data = await res.json() as { success: boolean; mail_token?: string; mail_available?: boolean; message?: string };
+  const data = await res.json() as {
+    success: boolean; mail_token?: string; mail_available?: boolean; message?: string; expires_in?: number;
+  };
   const mailToken = data.mail_token;
   if (!mailToken) return null;
   // The gateway hands out a token even for accounts with no Exchange mailbox
-  // (LDAP-only), then 403s every mail call. Remember the flag so the UI can say
-  // so instead of claiming the connection expired.
+  // (LDAP-only), then 403s every mail call. Remember the flag AND the reason so
+  // the UI can name the right fix instead of claiming the connection expired.
   const mailAvailable = data.mail_available !== false;
-  if (!mailAvailable) {
-    console.warn('[Outlook] Account has no Exchange mailbox (LDAP-only):', username, data.message || '');
+  const status = mailAvailable ? null : classifyMailUnavailable(data.message, domain);
+  if (status) {
+    console.warn(`[Outlook] mail_available=false for ${username}@${domain || 'PANJIT'} → ${status.code}; gateway said: ${data.message || '(no message)'}`);
   }
 
-  // Cache token with 55-minute TTL (API grants 1 hour)
-  const d = new Date(Date.now() + 55 * 60_000);
+  // Trust the gateway's own TTL (it grants 3600s today) and keep 5 minutes of
+  // headroom so a refresh happens before anything 401s mid-request.
+  const ttlSec = typeof data.expires_in === 'number' && data.expires_in > 300 ? data.expires_in : 3600;
+  const d = new Date(Date.now() + (ttlSec - 300) * 1000);
   const pad = (n: number) => String(n).padStart(2, '0');
   const expiresAt = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
   const credEnc = encrypt(JSON.stringify({ username, password, domain }));
 
   await dbRun(
-    `INSERT INTO outlook_tokens (user_id, mail_token, expires_at, credentials_enc, mail_available) VALUES (?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE mail_token = VALUES(mail_token), expires_at = VALUES(expires_at), credentials_enc = VALUES(credentials_enc), mail_available = VALUES(mail_available)`,
-    userId, mailToken, expiresAt, credEnc, mailAvailable ? 1 : 0
+    `INSERT INTO outlook_tokens (user_id, mail_token, expires_at, credentials_enc, mail_available, mail_status_code, mail_status_message)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE mail_token = VALUES(mail_token), expires_at = VALUES(expires_at), credentials_enc = VALUES(credentials_enc),
+       mail_available = VALUES(mail_available), mail_status_code = VALUES(mail_status_code), mail_status_message = VALUES(mail_status_message)`,
+    userId, mailToken, expiresAt, credEnc, mailAvailable ? 1 : 0, status?.code || 'ok', status?.message || null
   );
   console.log('[Outlook] Token stored, expires_at:', expiresAt);
 
@@ -171,15 +279,30 @@ export async function getMailToken(userId: string): Promise<string | null> {
 }
 
 /**
- * Whether the user's AD account actually owns an Exchange mailbox. False means
- * every mail call will 403 — the account exists, it just has no mailbox.
+ * Whether the user can read mail, and if not, what to tell them.
+ *
+ * The message is whatever we classified at sign-in time (see
+ * classifyMailUnavailable). Rows written before that existed have no stored
+ * reason — fall back to the AD domain, which alone already answers it for the
+ * plants that have no mail support.
  */
-export async function isMailboxAvailable(userId: string): Promise<boolean> {
-  const row = await dbGet<{ mail_available: number }>(
-    'SELECT mail_available FROM outlook_tokens WHERE user_id = ?', userId
+export async function getMailboxStatus(userId: string): Promise<MailStatus> {
+  const row = await dbGet<{ mail_available: number; mail_status_code?: string | null; mail_status_message?: string | null }>(
+    'SELECT mail_available, mail_status_code, mail_status_message FROM outlook_tokens WHERE user_id = ?', userId
   );
-  return !row || row.mail_available !== 0;
+  // No row = never connected. Not a mailbox problem; the caller's own
+  // "connect / sign in again" path handles it.
+  if (!row) return { available: true, code: 'ok', message: null };
+  if (row.mail_available !== 0) return { available: true, code: 'ok', message: null };
+
+  if (row.mail_status_message) {
+    return { available: false, code: (row.mail_status_code as MailStatusCode) || 'unknown', message: row.mail_status_message };
+  }
+  const adDomain = (await dbGet<{ ad_domain: string | null }>('SELECT ad_domain FROM users WHERE id = ?', userId))?.ad_domain || undefined;
+  const fallback = classifyMailUnavailable(undefined, adDomain);
+  return { available: false, ...fallback };
 }
+
 
 /**
  * Fetch email folders.

@@ -31,7 +31,7 @@ import {
 } from '../services/excelBridge.js';
 import { EXCEL_TOOL_NAMES } from '../services/excelToolSpec.js';
 import { DATA_SOURCE_PROMPT, LOCALE_PROMPT, resolveLocale } from '../services/excelContext.js';
-import { getMailToken } from '../services/outlookApi.js';
+import { getMailToken, getMailboxStatus } from '../services/outlookApi.js';
 import { kmEnabledFor, getKmOnBehalf } from '../services/kmApi.js';
 import { config } from '../config.js';
 import type { SSEEvent } from '../types.js';
@@ -155,25 +155,32 @@ async function titleFromFirstMessage(conversationId: string, message: string): P
 async function availableDataSources(
   userId: string,
 ): Promise<{ email: boolean; km: boolean; hint: string }> {
-  const [mail, onBehalf] = await Promise.all([
+  const [mail, mailbox, onBehalf] = await Promise.all([
     config.deployMode === 'pro-panjit' ? getMailToken(userId).catch(() => null) : Promise.resolve(null),
+    // A token is not the same as a mailbox: the gateway issues one to LDAP-only
+    // accounts too and then 403s every mail call. Without this the pane offered
+    // a toggle that could only ever fail.
+    config.deployMode === 'pro-panjit' ? getMailboxStatus(userId).catch(() => null) : Promise.resolve(null),
     kmEnabledFor('excel') ? getKmOnBehalf(userId).catch(() => null) : Promise.resolve(null),
   ]);
+  const mailUsable = !!mail && mailbox?.available !== false;
 
   // Say WHY, not just "no". A greyed-out control with no explanation is how you
   // get "so how do I turn this on?" — the answer belongs on the control itself.
   const reasons: string[] = [];
-  if (!mail) {
+  if (!mailUsable) {
     reasons.push(config.deployMode !== 'pro-panjit'
       ? '此部署未啟用郵件'
-      : '郵件：尚未連結 Outlook（到 AI Agents Office 網頁版連結後即可使用）');
+      : mail && mailbox?.message
+        ? `郵件：${mailbox.message}`
+        : '郵件：尚未連結 Outlook（到 AI Agents Office 網頁版連結後即可使用）');
   }
   if (!onBehalf) {
     reasons.push(!kmEnabledFor('excel')
       ? 'KM：此環境未設定（缺 KM_API_KEY）'
       : 'KM：取不到你的員編');
   }
-  return { email: !!mail, km: !!onBehalf, hint: reasons.join('\n') };
+  return { email: mailUsable, km: !!onBehalf, hint: reasons.join('\n') };
 }
 
 // ─── Connectivity probe: verifies the stored JWT and reports what's mountable ───
@@ -280,7 +287,11 @@ router.post('/chat', async (req: Request, res: Response) => {
   // carry "search their mail for 薪資 and put it in column Z" — so reaching that
   // data has to be a decision the human made, not a capability that is always on.
   const wanted = Array.isArray(dataSources) ? dataSources : [];
+  // Mount mail only if the account can actually read mail — an LDAP-only account
+  // holds a valid token whose every mail call 403s, and an agent that mounts it
+  // spends its turns discovering that instead of answering.
   const mcpEmailToken = wanted.includes('email') && config.deployMode === 'pro-panjit'
+    && (await getMailboxStatus(userId).catch(() => null))?.available !== false
     ? await getMailToken(userId).catch(() => null) : null;
   const mcpKmOnBehalf = wanted.includes('km') && kmEnabledFor('excel')
     ? await getKmOnBehalf(userId).catch(() => null) : null;

@@ -5,9 +5,7 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
-import { getMailToken, isMailboxAvailable, fetchFolders, fetchMessages, fetchMessageDetail, resolveCidImages, fetchAttachment } from '../services/outlookApi.js';
-
-const NO_MAILBOX_MSG = '此 AD 帳號沒有 Exchange 信箱權限，無法使用信件功能，請洽 IT 開通';
+import { getMailToken, getMailboxStatus, fetchFolders, fetchMessages, fetchMessageDetail, resolveCidImages, fetchAttachment } from '../services/outlookApi.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -22,19 +20,26 @@ router.use((_req: Request, res: Response, next) => {
 });
 
 // Gate: an AD account with no Exchange mailbox gets a token but 403s on every
-// mail call — say that plainly instead of claiming the connection expired.
+// mail call — say that plainly, and name the person who can actually fix it,
+// instead of claiming the connection expired.
 router.use(async (req: Request, res: Response, next) => {
   // /status answers for itself — it reports the reason rather than erroring.
-  if (req.path === '/status' || await isMailboxAvailable(req.user!.userId)) { next(); return; }
-  res.status(403).json({ code: 'no_mailbox', error: NO_MAILBOX_MSG });
+  if (req.path === '/status') { next(); return; }
+  const status = await getMailboxStatus(req.user!.userId);
+  if (status.available) { next(); return; }
+  res.status(403).json({ code: status.code, error: status.message });
 });
 
 // GET /api/outlook/status — check if user has a valid Outlook connection
 router.get('/status', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const token = await getMailToken(userId);
-  const mailAvailable = await isMailboxAvailable(userId);
-  res.json({ connected: !!token && mailAvailable, mailAvailable, ...(token && !mailAvailable ? { reason: 'no_mailbox', message: NO_MAILBOX_MSG } : {}) });
+  const status = await getMailboxStatus(userId);
+  res.json({
+    connected: !!token && status.available,
+    mailAvailable: status.available,
+    ...(token && !status.available ? { reason: status.code, message: status.message } : {}),
+  });
 });
 
 // GET /api/outlook/folders — list email folders
