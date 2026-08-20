@@ -26,7 +26,17 @@ export interface AiCallRecord {
   role?: string;
   skillId?: string;
   model?: string | null;
-  authMode: 'account' | 'api_key';
+  /**
+   * Which engine served this call, and therefore who pays for it:
+   *   account  — Anthropic subscription (no API bill)
+   *   api_key  — Anthropic API key (billed per token)
+   *   local    — the on-prem gateway (no bill at all)
+   *   deepseek — DeepSeek's API (billed, cheaply)
+   * The admin report keeps the first two separate from the last two: the
+   * account-vs-key split answers "explain the Anthropic invoice", while
+   * local/deepseek answer "is the free lane reliable enough to keep using".
+   */
+  authMode: 'account' | 'api_key' | 'local' | 'deepseek';
   reason?: string;          // 'primary' | fallback reason | 'session-recovery:...'
   inputTokens: number;
   outputTokens: number;

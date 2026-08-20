@@ -630,7 +630,7 @@ ${emailList}
   let l1Model = 'claude-haiku-4-5-20251001';
   async function batchWorker() {
     for (let my = nextBatch++; my < batchDescs.length; my = nextBatch++) {
-      const aux = await auxChat(batchDescs[my].prompt, { maxTokens: 1200, timeoutMs: LAYER1_TIMEOUT });
+      const aux = await auxChat(batchDescs[my].prompt, { maxTokens: 1200, timeoutMs: LAYER1_TIMEOUT, feature: 'email-summary' });
       if (aux) {
         outputs[my] = aux.text;
         l1InTok += aux.inTok; l1OutTok += aux.outTok;

@@ -115,7 +115,7 @@ ${contextNote ? `\n【本次額外情境（系統提供，可信）】${contextN
     // inside a chat turn, and a stalled classifier must not become the reason a
     // message feels slow. On timeout we fail open; the regex layer above has
     // already screened the blatant cases.
-    const aux = await auxChat(prompt, { temperature: 0, maxTokens: 60, timeoutMs: 8000 });
+    const aux = await auxChat(prompt, { temperature: 0, maxTokens: 60, timeoutMs: 8000, feature: 'content-safety' });
     if (!aux) return null;
     const obj = parseJsonLoose<{ allowed?: boolean; category?: string }>(aux.text);
     if (!obj || typeof obj.allowed !== 'boolean') return null;

@@ -54,7 +54,7 @@ export async function generateTeamSpec(topic: string): Promise<GeneratedSpec | n
 要求：3–5 個 agent，角色彼此分工互補、緊貼此情境。`;
 
   try {
-    const aux = await auxChat(prompt, { temperature: 0.7, maxTokens: 1800, timeoutMs: 60_000 });
+    const aux = await auxChat(prompt, { temperature: 0.7, maxTokens: 1800, timeoutMs: 60_000, feature: 'team-builder' });
     if (!aux) return null;
     const obj = parseJsonLoose<any>(aux.text);
     if (!obj || !Array.isArray(obj.agents)) return null;

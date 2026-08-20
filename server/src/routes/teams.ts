@@ -91,7 +91,7 @@ ${roster}
 - 不要加任何說明文字或 markdown，只輸出純 JSON 陣列`;
 
   try {
-    const aux = await auxChat(prompt, { temperature: 0.6, maxTokens: 1500, timeoutMs: 60_000 });
+    const aux = await auxChat(prompt, { temperature: 0.6, maxTokens: 1500, timeoutMs: 60_000, feature: 'role-prompt' });
     if (!aux) return null;
     const arr = parseJsonLoose<string[]>(aux.text);
     if (!Array.isArray(arr) || arr.length !== agents.length) return null;

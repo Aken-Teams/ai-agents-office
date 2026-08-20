@@ -2141,7 +2141,7 @@ ${titleList}
   // of output tokens mid-JSON is what put "Failed to parse" on this card. The
   // prompt now caps examples at 2 as well — belt and braces, since parseJsonLoose
   // can only recover a truncated tail, not invent the part that never arrived.
-  const aux = await auxChat(prompt, { temperature: 0.3, maxTokens: 3000, timeoutMs: 45_000, jsonMode: true });
+  const aux = await auxChat(prompt, { temperature: 0.3, maxTokens: 3000, timeoutMs: 45_000, jsonMode: true, feature: 'topic-analysis' });
   if (!aux) {
     res.status(502).json({ error: 'Topic analysis unavailable (no aux LLM answered)' });
     return;
@@ -2733,33 +2733,54 @@ router.get('/api-tracking/stats', async (req: Request, res: Response) => {
   const period = (req.query.period as string) || '30d';
   const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
   const since = `created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)`;
+  // The account-vs-key views answer "explain the Anthropic bill", so they must
+  // only count Anthropic calls. Aux providers (on-prem / DeepSeek) would
+  // otherwise dilute that split into meaninglessness — they get their own block.
+  const anthropic = `auth_mode IN ('account','api_key')`;
+  const aux = `auth_mode IN ('local','deepseek')`;
   try {
-    const [byAuth, daily, byModel, bySkill, reasons, recentApiKey] = await Promise.all([
+    const [byAuth, daily, byModel, bySkill, reasons, recentApiKey, auxByProvider, auxFailures, auxByFeature, auxDaily] = await Promise.all([
       dbAll<{ auth_mode: string; calls: number; inTok: number; outTok: number }>(
         `SELECT auth_mode, COUNT(*) calls, SUM(input_tokens) inTok, SUM(output_tokens) outTok
-         FROM ai_call_log WHERE ${since} GROUP BY auth_mode`),
+         FROM ai_call_log WHERE ${since} AND ${anthropic} GROUP BY auth_mode`),
       dbAll<{ d: string; auth_mode: string; calls: number; outTok: number }>(
         `SELECT DATE_FORMAT(created_at,'%Y-%m-%d') d, auth_mode, COUNT(*) calls, SUM(output_tokens) outTok
-         FROM ai_call_log WHERE ${since} GROUP BY d, auth_mode ORDER BY d ASC`),
+         FROM ai_call_log WHERE ${since} AND ${anthropic} GROUP BY d, auth_mode ORDER BY d ASC`),
       dbAll<{ model: string | null; auth_mode: string; calls: number; outTok: number }>(
         `SELECT model, auth_mode, COUNT(*) calls, SUM(output_tokens) outTok
-         FROM ai_call_log WHERE ${since} GROUP BY model, auth_mode ORDER BY outTok DESC`),
+         FROM ai_call_log WHERE ${since} AND ${anthropic} GROUP BY model, auth_mode ORDER BY outTok DESC`),
       dbAll<{ skill_id: string | null; auth_mode: string; calls: number }>(
         `SELECT skill_id, auth_mode, COUNT(*) calls
-         FROM ai_call_log WHERE ${since} GROUP BY skill_id, auth_mode ORDER BY calls DESC`),
+         FROM ai_call_log WHERE ${since} AND ${anthropic} GROUP BY skill_id, auth_mode ORDER BY calls DESC`),
       dbAll<{ reason: string | null; calls: number }>(
         `SELECT reason, COUNT(*) calls FROM ai_call_log
          WHERE auth_mode='api_key' AND ${since} GROUP BY reason ORDER BY calls DESC`),
       dbAll<{ created_at: string; skill_id: string | null; model: string | null; reason: string | null; input_tokens: number; output_tokens: number; success: number }>(
         `SELECT created_at, skill_id, model, reason, input_tokens, output_tokens, success
          FROM ai_call_log WHERE auth_mode='api_key' ORDER BY created_at DESC LIMIT 100`),
+
+      // ── The free/cheap lane: is it reliable enough to keep sending work to? ──
+      dbAll<{ auth_mode: string; model: string | null; calls: number; ok: number; inTok: number; outTok: number }>(
+        `SELECT auth_mode, model, COUNT(*) calls, SUM(success) ok, SUM(input_tokens) inTok, SUM(output_tokens) outTok
+         FROM ai_call_log WHERE ${since} AND ${aux} GROUP BY auth_mode, model ORDER BY calls DESC`),
+      // WHY it failed matters more than how often: "timeout" says the box is
+      // overloaded (tune the model), "HTTP 401" says a key died (go fix it).
+      dbAll<{ auth_mode: string; reason: string | null; calls: number }>(
+        `SELECT auth_mode, reason, COUNT(*) calls FROM ai_call_log
+         WHERE ${since} AND ${aux} AND success = 0 GROUP BY auth_mode, reason ORDER BY calls DESC LIMIT 20`),
+      dbAll<{ skill_id: string | null; auth_mode: string; calls: number; ok: number }>(
+        `SELECT skill_id, auth_mode, COUNT(*) calls, SUM(success) ok
+         FROM ai_call_log WHERE ${since} AND ${aux} GROUP BY skill_id, auth_mode ORDER BY calls DESC`),
+      dbAll<{ d: string; auth_mode: string; calls: number; ok: number }>(
+        `SELECT DATE_FORMAT(created_at,'%Y-%m-%d') d, auth_mode, COUNT(*) calls, SUM(success) ok
+         FROM ai_call_log WHERE ${since} AND ${aux} GROUP BY d, auth_mode ORDER BY d ASC`),
     ]);
-    res.json({ period, days, byAuth, daily, byModel, bySkill, reasons, recentApiKey });
+    res.json({ period, days, byAuth, daily, byModel, bySkill, reasons, recentApiKey, auxByProvider, auxFailures, auxByFeature, auxDaily });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // Ledger table may not exist yet (no Claude spawn since deploy) — return empty.
     if (/doesn't exist|no such table|ER_NO_SUCH_TABLE/i.test(msg)) {
-      res.json({ period, days, byAuth: [], daily: [], byModel: [], bySkill: [], reasons: [], recentApiKey: [], empty: true });
+      res.json({ period, days, byAuth: [], daily: [], byModel: [], bySkill: [], reasons: [], recentApiKey: [], auxByProvider: [], auxFailures: [], auxByFeature: [], auxDaily: [], empty: true });
       return;
     }
     console.error('[api-tracking] query failed:', msg);

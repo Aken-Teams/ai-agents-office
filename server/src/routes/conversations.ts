@@ -203,7 +203,7 @@ ${skillHint}${existingHint}
 
   // Tool-free text — runs on the aux chain (on-prem first, DeepSeek second),
   // which bounds each attempt and skips a provider that keeps failing.
-  const aux = await auxChat(prompt, { temperature: 0.7, maxTokens: 500, timeoutMs: 30_000 });
+  const aux = await auxChat(prompt, { temperature: 0.7, maxTokens: 500, timeoutMs: 30_000, feature: 'role-prompt' });
   if (!aux) {
     res.status(502).json({ error: 'AI service unavailable' });
     return;

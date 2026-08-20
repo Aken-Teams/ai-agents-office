@@ -46,7 +46,7 @@ export async function generateNarration(blocks: DocumentBlock[], docType: string
 ${pages}`;
 
   try {
-    const aux = await auxChat(prompt, { temperature: 0.4, maxTokens: 2400, timeoutMs: 45_000 });
+    const aux = await auxChat(prompt, { temperature: 0.4, maxTokens: 2400, timeoutMs: 45_000, feature: 'doc-narration' });
     if (!aux) return null;
     const arr = parseJsonLoose<string[]>(aux.text);
     if (!Array.isArray(arr)) return null;

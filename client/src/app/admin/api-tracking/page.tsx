@@ -11,9 +11,15 @@ interface ModelRow { model: string | null; auth_mode: string; calls: number; out
 interface SkillRow { skill_id: string | null; auth_mode: string; calls: number }
 interface ReasonRow { reason: string | null; calls: number }
 interface RecentRow { created_at: string; skill_id: string | null; model: string | null; reason: string | null; input_tokens: number; output_tokens: number; success: number }
+/** The non-Anthropic lane: on-prem gateway and DeepSeek. Tracked separately
+ *  because the question about it is reliability, not "explain the invoice". */
+interface AuxProviderRow { auth_mode: string; model: string | null; calls: number; ok: number; inTok: number; outTok: number }
+interface AuxFailureRow { auth_mode: string; reason: string | null; calls: number }
+interface AuxFeatureRow { skill_id: string | null; auth_mode: string; calls: number; ok: number }
 interface Stats {
   period: string; days: number; empty?: boolean;
   byAuth: AuthRow[]; daily: DailyRow[]; byModel: ModelRow[]; bySkill: SkillRow[]; reasons: ReasonRow[]; recentApiKey: RecentRow[];
+  auxByProvider?: AuxProviderRow[]; auxFailures?: AuxFailureRow[]; auxByFeature?: AuxFeatureRow[];
 }
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
@@ -23,6 +29,25 @@ const SKILL_LABELS: Record<string, string> = {
   'pdf-gen': 'PDF 生成', 'slides-gen': '投影片', 'webapp-gen': '網頁應用', 'data-analyst': '資料分析',
   research: '研究調查', 'rag-analyst': 'RAG 分析', 'email-agent': '信件助手', 'security-report': '資安報告',
   'fidelity-guard': '誠實度校驗',
+  // Aux-LLM features (auxLlm.ts AuxFeature)
+  'email-summary': '信件摘要', 'team-discussion': '團隊討論', 'team-synthesis': '團隊統整',
+  greeting: '登入問候語', 'content-safety': '內容安全審查', 'team-builder': 'AI 團隊生成',
+  'role-prompt': '角色描述生成', 'doc-narration': '文件旁白', 'topic-analysis': '主題分析',
+};
+
+const PROVIDER_LABELS: Record<string, { name: string; note: string; tone: string }> = {
+  local: { name: '地端模型', note: '無 token 費用', tone: 'text-[#3FBBC0]' },
+  deepseek: { name: 'DeepSeek API', note: '計費（低單價）', tone: 'text-[#F0A84B]' },
+};
+/** A failure reason a person can act on, not a stack trace. */
+const labelAuxReason = (r: string | null) => {
+  if (!r) return '—';
+  if (r === 'timeout') return '逾時（機器太慢／卡住）';
+  if (r === 'empty answer' || r === 'empty stream') return '回傳空白';
+  if (r === 'partial (stream cut)') return '串流中斷（已有部分內容）';
+  if (r.startsWith('HTTP 401') || r.startsWith('HTTP 403')) return `${r}（金鑰無效／無權限）`;
+  if (r.startsWith('HTTP 5')) return `${r}（服務端錯誤）`;
+  return r;
 };
 const labelSkill = (s: string | null) => s ? (SKILL_LABELS[s] ?? s) : '—';
 const labelReason = (r: string | null) => {
@@ -268,6 +293,10 @@ export default function ApiTrackingPage() {
   }
   const modelArr = [...modelMap.entries()].sort((a, b) => (b[1].account + b[1].apiKey) - (a[1].account + a[1].apiKey));
 
+  // Busiest aux provider/model first — the one carrying the traffic is the one
+  // whose reliability actually matters.
+  const auxRows = [...(stats?.auxByProvider || [])].sort((a, b) => Number(b.calls) - Number(a.calls));
+
   // Skills merged (total calls per skill)
   const skillMap = new Map<string, number>();
   for (const r of stats?.bySkill || []) { const k = r.skill_id || '—'; skillMap.set(k, (skillMap.get(k) || 0) + Number(r.calls)); }
@@ -438,6 +467,98 @@ export default function ApiTrackingPage() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                </>
+              )}
+            </Section>
+
+            {/* ── Aux LLM lane: on-prem + DeepSeek ─────────────────────────
+                Separate from everything above on purpose. The account-vs-key
+                split explains the Anthropic invoice; this answers a different
+                question — is the free lane dependable enough to keep routing
+                work to it, and when it is not, why. */}
+            <Section title="地端 / DeepSeek · 穩定性" icon="dns">
+              {!auxRows.length ? (
+                <div className="text-sm text-on-surface-variant py-4">
+                  這段期間沒有地端或 DeepSeek 呼叫紀錄。
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-5">
+                    {auxRows.map(r => {
+                      const meta = PROVIDER_LABELS[r.auth_mode] || { name: r.auth_mode, note: '', tone: 'text-on-surface' };
+                      const calls = Number(r.calls || 0);
+                      const ok = Number(r.ok || 0);
+                      const rate = calls ? (ok / calls) * 100 : 0;
+                      // Green only when it is genuinely dependable; amber is a
+                      // warning that the fallback is carrying real traffic.
+                      const tone = rate >= 98 ? 'text-[#3FBBC0]' : rate >= 90 ? 'text-[#F0A84B]' : 'text-error';
+                      return (
+                        <div key={`${r.auth_mode}-${r.model}`} className="bg-surface-container-high rounded-lg p-4">
+                          <div className="flex items-baseline gap-2 mb-1">
+                            <span className={`text-sm font-bold ${meta.tone}`}>{meta.name}</span>
+                            <span className="text-[11px] text-on-surface-variant">{meta.note}</span>
+                          </div>
+                          <div className="font-mono text-[11px] text-on-surface-variant mb-3 truncate" title={r.model || ''}>{r.model || '—'}</div>
+                          <div className="flex items-end gap-4">
+                            <div>
+                              <div className={`text-3xl font-bold tabular-nums ${tone}`}>{rate.toFixed(1)}%</div>
+                              <div className="text-[11px] text-on-surface-variant">成功率</div>
+                            </div>
+                            <div className="text-sm text-on-surface-variant pb-1">
+                              {num(ok)} / {num(calls)} 次成功
+                              {calls - ok > 0 && <span className="text-error"> · {num(calls - ok)} 次失敗</span>}
+                            </div>
+                            <div className="ml-auto text-right pb-1">
+                              <div className="text-sm tabular-nums text-on-surface">{num(Number(r.outTok || 0))}</div>
+                              <div className="text-[11px] text-on-surface-variant">輸出 tokens</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <div className="text-xs font-bold text-on-surface-variant mb-2">失敗原因</div>
+                      {!stats?.auxFailures?.length ? (
+                        <div className="text-sm text-[#3FBBC0]">期間內沒有任何失敗</div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {stats.auxFailures.map((f, i) => (
+                            <div key={i} className="flex items-center gap-2 text-sm">
+                              <span className={`text-[11px] px-1.5 py-0.5 rounded ${(PROVIDER_LABELS[f.auth_mode]?.tone) || ''} bg-surface-container-high`}>
+                                {PROVIDER_LABELS[f.auth_mode]?.name || f.auth_mode}
+                              </span>
+                              <span className="text-on-surface-variant flex-1 truncate">{labelAuxReason(f.reason)}</span>
+                              <span className="tabular-nums text-error">{f.calls} 次</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="text-xs font-bold text-on-surface-variant mb-2">各功能成功率</div>
+                      <div className="space-y-1.5">
+                        {(stats?.auxByFeature || []).map((f, i) => {
+                          const calls = Number(f.calls || 0);
+                          const ok = Number(f.ok || 0);
+                          const rate = calls ? Math.round((ok / calls) * 100) : 0;
+                          return (
+                            <div key={i} className="flex items-center gap-2 text-sm">
+                              <span className="text-on-surface flex-1 truncate">{labelSkill(f.skill_id)}</span>
+                              <span className="text-[11px] text-on-surface-variant">{PROVIDER_LABELS[f.auth_mode]?.name || f.auth_mode}</span>
+                              <span className={`tabular-nums ${rate >= 98 ? 'text-[#3FBBC0]' : rate >= 90 ? 'text-[#F0A84B]' : 'text-error'}`}>
+                                {rate}%
+                              </span>
+                              <span className="text-[11px] text-on-surface-variant tabular-nums w-12 text-right">{num(calls)} 次</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 </>
               )}

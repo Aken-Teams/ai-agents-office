@@ -166,6 +166,7 @@ Write a warm, concise greeting (2-4 sentences max). Be human, natural, and carin
     maxTokens: 300,
     temperature: 0.7,
     timeoutMs: 60_000,
+    feature: 'greeting',
     signal: clientGone.signal,
   });
 

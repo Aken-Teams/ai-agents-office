@@ -28,6 +28,37 @@
  *     trips, every one of them predictable after the first.
  */
 import { config } from '../config.js';
+import { logAiCall } from './aiCallLog.js';
+
+/**
+ * Where a call came from, so the admin report can say "the email briefing is
+ * what keeps timing out" rather than just "something failed 12 times".
+ * Recorded in ai_call_log.skill_id, alongside the existing per-skill counts.
+ */
+export type AuxFeature =
+  | 'email-summary' | 'team-discussion' | 'team-synthesis' | 'greeting'
+  | 'content-safety' | 'team-builder' | 'role-prompt' | 'doc-narration' | 'topic-analysis';
+
+/**
+ * Record one attempt against one provider — including the failures, which is the
+ * entire point: a success rate you can only compute from the calls that worked
+ * is not a success rate. Fire-and-forget; never blocks or throws.
+ */
+function logAttempt(
+  p: Provider, feature: AuxFeature | undefined, ok: boolean,
+  inTok: number, outTok: number, reason: string,
+): void {
+  logAiCall({
+    skillId: feature,
+    model: p.model,
+    authMode: p.name,
+    reason,
+    inputTokens: inTok,
+    outputTokens: outTok,
+    exitCode: null,
+    success: ok,
+  });
+}
 
 export interface AuxLlmResult {
   text: string;
@@ -227,7 +258,10 @@ export function parseJsonLoose<T = unknown>(text: string): T | null {
  */
 export async function auxChat(
   prompt: string,
-  opts?: { system?: string; maxTokens?: number; temperature?: number; timeoutMs?: number; jsonMode?: boolean; tier?: AuxTier },
+  opts?: {
+    system?: string; maxTokens?: number; temperature?: number; timeoutMs?: number;
+    jsonMode?: boolean; tier?: AuxTier; feature?: AuxFeature;
+  },
 ): Promise<AuxLlmResult | null> {
   const messages: Array<{ role: string; content: string }> = [];
   if (opts?.system) messages.push({ role: 'system', content: opts.system });
@@ -263,6 +297,7 @@ export async function auxChat(
       if (!res.ok) {
         console.error(`[auxLlm] ${p.name} (${p.model}) HTTP ${res.status}:`, (await res.text().catch(() => '')).slice(0, 300));
         noteFailure(p.name, `HTTP ${res.status}`);
+        logAttempt(p, opts?.feature, false, 0, 0, `HTTP ${res.status}`);
         continue;
       }
       const data = await res.json() as {
@@ -270,22 +305,23 @@ export async function auxChat(
         usage?: { prompt_tokens?: number; completion_tokens?: number };
       };
       const text = extractText(data.choices?.[0]?.message);
+      const inTok = data.usage?.prompt_tokens ?? 0;
+      const outTok = data.usage?.completion_tokens ?? 0;
       if (!text) {
         noteFailure(p.name, 'empty answer');
+        logAttempt(p, opts?.feature, false, inTok, outTok, 'empty answer');
         continue;
       }
       noteSuccess(p.name);
-      return {
-        text,
-        inTok: data.usage?.prompt_tokens ?? 0,
-        outTok: data.usage?.completion_tokens ?? 0,
-        model: p.model,
-        provider: p.name,
-      };
+      logAttempt(p, opts?.feature, true, inTok, outTok, 'ok');
+      return { text, inTok, outTok, model: p.model, provider: p.name };
     } catch (e) {
       const why = e instanceof Error ? e.message : String(e);
       console.error(`[auxLlm] ${p.name} (${p.model}) failed:`, why);
       noteFailure(p.name, why);
+      // "aborted due to timeout" is the interesting one — it means the box was
+      // alive but too slow, which is a different decision from "it was down".
+      logAttempt(p, opts?.feature, false, 0, 0, /timeout|abort/i.test(why) ? 'timeout' : why.slice(0, 120));
     }
   }
   return null;
@@ -309,6 +345,7 @@ export async function auxChatStream(opts: {
   /** Silence budget before giving up on a provider. Free to abort: nothing shown yet. */
   firstTokenTimeoutMs?: number;
   tier?: AuxTier;
+  feature?: AuxFeature;
   /** Caller's own stop signal — e.g. the reader closed the page. Ends the chain. */
   signal?: AbortSignal;
 }): Promise<AuxLlmResult | null> {
@@ -358,6 +395,7 @@ export async function auxChatStream(opts: {
         clearTimers();
         console.error(`[auxLlm] ${p.name} stream HTTP ${res.status}:`, (await res.text().catch(() => '')).slice(0, 300));
         noteFailure(p.name, `stream HTTP ${res.status}`);
+        logAttempt(p, opts.feature, false, 0, 0, `HTTP ${res.status}`);
         continue;
       }
 
@@ -396,20 +434,26 @@ export async function auxChatStream(opts: {
       clearTimers();
       if (!text.trim()) {
         noteFailure(p.name, 'empty stream');
+        logAttempt(p, opts.feature, false, inTok, outTok, 'empty stream');
         continue;
       }
       noteSuccess(p.name);
+      logAttempt(p, opts.feature, true, inTok, outTok, 'ok');
       return { text: text.trim(), inTok, outTok, model: p.model, provider: p.name };
     } catch (e) {
       clearTimers();
       // The caller walked away. Not the provider's fault, so it must not count
-      // toward the breaker, and there is nobody left to serve by trying again.
+      // toward the breaker or the success rate — the reader left, the box didn't fail.
       if (opts.signal?.aborted) return text.trim() ? { text: text.trim(), inTok, outTok, model: p.model, provider: p.name } : null;
       const why = e instanceof Error ? e.message : String(e);
       console.error(`[auxLlm] ${p.name} stream failed:`, why);
       noteFailure(p.name, why);
-      // Already on screen — retrying elsewhere would duplicate it for the user.
-      if (text.trim()) return { text: text.trim(), inTok, outTok, model: p.model, provider: p.name };
+      const partial = text.trim();
+      // A stream that died after saying something is a partial success: the user
+      // got an answer. Log it as such, with the reason, so the rate is honest.
+      logAttempt(p, opts.feature, !!partial, inTok, outTok,
+        partial ? 'partial (stream cut)' : (/timeout|abort/i.test(why) ? 'timeout' : why.slice(0, 120)));
+      if (partial) return { text: partial, inTok, outTok, model: p.model, provider: p.name };
     }
   }
   return null;

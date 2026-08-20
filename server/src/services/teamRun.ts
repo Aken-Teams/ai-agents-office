@@ -16,7 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs';
 import { spawnClaude } from './claudeCli.js';
-import { auxChatStream } from './auxLlm.js';
+import { auxChatStream, type AuxFeature } from './auxLlm.js';
 import { truncateResultForRouter } from './taskParser.js';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { recordTokenUsage } from './tokenTracker.js';
@@ -362,11 +362,12 @@ async function runTextAgent(
   systemPrompt: string,
   timeoutMs: number,
   onText: (chunk: string) => void,
+  feature: AuxFeature = 'team-synthesis',
 ): Promise<{ text: string; inputTokens: number; outputTokens: number; model: string }> {
   // Quality tier: this text is the deliverable a person reads, so it is worth a
   // bigger local model — and worth falling through to the CLI when that model is
   // too slow, rather than shipping a weaker synthesis to save a few cents.
-  const aux = await auxChatStream({ system: systemPrompt, user: message, onText, maxTokens: 8000, timeoutMs, tier: 'quality' });
+  const aux = await auxChatStream({ system: systemPrompt, user: message, onText, maxTokens: 8000, timeoutMs, tier: 'quality', feature });
   if (aux) return { text: aux.text, inputTokens: aux.inTok, outputTokens: aux.outTok, model: aux.model };
   return runOneClaude(userId, conversationId, sandboxSubdir, message, systemPrompt, timeoutMs, onText);
 }
@@ -496,6 +497,7 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
       const r = await runTextAgent(
         userId, member.id, `_team/${member.id}`, question, buildDiscussionSystemPrompt(member, own, peers, hasData), MEMBER_TIMEOUT_MS,
         chunk => writer({ type: 'member_stream', data: { memberId: member.id, content: chunk } }),
+        'team-discussion',
       );
       round2[member.id] = r.text.trim();
       round2In += r.inputTokens; round2Out += r.outputTokens;
