@@ -19,7 +19,7 @@ import { spawnClaude } from './claudeCli.js';
 import { auxChatStream, type AuxFeature } from './auxLlm.js';
 import { truncateResultForRouter } from './taskParser.js';
 import { dbGet, dbAll, dbRun } from '../db.js';
-import { recordTokenUsage, engineOf } from './tokenTracker.js';
+import { recordTokenUsage, engineOf, rawCostUsd } from './tokenTracker.js';
 import { getUserPersonaContext } from './personalization.js';
 import { buildRetrieverSystemPrompt } from './emailContext.js';
 import { config } from '../config.js';
@@ -586,11 +586,6 @@ ${findingsBlock}${sourcesBlock}
     memberId: r.member.id, name: r.member.title, icon: r.member.icon,
     text: r.text, text2: round2[r.member.id] || '',
   }));
-  await dbRun(
-    'UPDATE team_runs SET result = ?, member_outputs = ?, input_tokens = ?, output_tokens = ?, status = ? WHERE id = ?',
-    finalText, JSON.stringify(memberOutputs), totalIn, totalOut, 'done', runId,
-  );
-
   // Bill each engine at its own rate. A run mixes them by design — round 1 is
   // always Claude (it needs tools), while round 2 and the synthesis usually run
   // on the on-prem box. Summing them into one 'team-run' row priced everything as
@@ -609,9 +604,19 @@ ${findingsBlock}${sourcesBlock}
   for (const r of round2Usage) addUsage(r.model, r.inputTokens, r.outputTokens);      // round 2
   addUsage(synth.model, synth.inputTokens, synth.outputTokens);                       // synthesis
 
+  let runCostUsd = 0;
   for (const [label, u] of perEngine) {
+    runCostUsd += rawCostUsd(label, u.inTok, u.outTok);
     await recordTokenUsage({ userId, conversationId: null, inputTokens: u.inTok, outputTokens: u.outTok, model: label });
   }
+
+  // Persist the run WITH its true cost. team_runs keeps only token totals, and a
+  // mixed-engine run cannot be priced from those afterwards — so the number is
+  // computed here, once, while we still know which engine did what.
+  await dbRun(
+    'UPDATE team_runs SET result = ?, member_outputs = ?, input_tokens = ?, output_tokens = ?, cost_usd = ?, status = ? WHERE id = ?',
+    finalText, JSON.stringify(memberOutputs), totalIn, totalOut, runCostUsd, 'done', runId,
+  );
 
   // ── Update rolling shared memory (Phase 3) — no extra LLM call ───────────
   const distilled = `【議題】${question}\n【結論】${truncateResultForRouter(finalText, 700)}`;

@@ -690,6 +690,12 @@ export async function initializeDatabase(): Promise<void> {
         member_outputs  LONGTEXT,
         input_tokens    INT NOT NULL DEFAULT 0,
         output_tokens   INT NOT NULL DEFAULT 0,
+        -- Raw USD (before markup) for this run, summed across the engines that
+        -- served it. A run mixes them — round 1 on Claude, round 2 + synthesis
+        -- usually on-prem — so a single token count cannot be priced after the
+        -- fact; it is computed at completion and kept. NULL = pre-2026-08 run,
+        -- displayed at the Claude estimate it has always shown.
+        cost_usd        DECIMAL(12,6) DEFAULT NULL,
         status          VARCHAR(20) NOT NULL DEFAULT 'running',
         share_token     VARCHAR(32) DEFAULT NULL,
         report_md       LONGTEXT DEFAULT NULL,
@@ -802,6 +808,13 @@ export async function initializeDatabase(): Promise<void> {
     // Migration: add credentials_enc column to outlook_tokens
     try {
       await conn.query('ALTER TABLE outlook_tokens ADD COLUMN credentials_enc TEXT DEFAULT NULL');
+    } catch { /* column already exists */ }
+
+    // Migration: a team run's real cost, priced per engine at completion.
+    // team_runs only stores token totals, and those cannot be priced later
+    // because one run is served by several engines at different rates.
+    try {
+      await conn.query('ALTER TABLE team_runs ADD COLUMN cost_usd DECIMAL(12,6) DEFAULT NULL');
     } catch { /* column already exists */ }
 
     // Migration: per-row price list. Everything used to be billed at Claude

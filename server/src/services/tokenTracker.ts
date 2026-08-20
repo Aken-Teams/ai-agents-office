@@ -84,6 +84,12 @@ export function engineOf(model?: string | null): 'local' | 'deepseek' | 'claude'
   return 'claude';
 }
 
+/** Raw USD (before markup) for tokens served by `model`. */
+export function rawCostUsd(model: string | null | undefined, inputTokens: number, outputTokens: number): number {
+  const r = ratesForModel(model);
+  return inputTokens / 1_000_000 * r.inputPerMTok + outputTokens / 1_000_000 * r.outputPerMTok;
+}
+
 /**
  * The cost expression, for any query that sums money.
  *

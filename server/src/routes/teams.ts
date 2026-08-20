@@ -26,7 +26,6 @@ import { computeNextRun, mysqlDateTime, runScheduleNow } from '../services/teamS
 import { generateTeamSpec, insertTeamWithAgents, type GeneratedAgent } from '../services/teamBuilder.js';
 import type { Conversation } from '../types.js';
 import { auxChat, auxLlmAvailable, parseJsonLoose } from '../services/auxLlm.js';
-import { costUsdSql } from '../services/tokenTracker.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -195,9 +194,15 @@ router.get('/:id/runs', async (req: Request, res: Response) => {
      FROM team_runs WHERE team_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 30`,
     req.params.id, userId,
   );
+  // team_runs has no per-token rate columns (a run mixes engines), so its cost is
+  // the figure stamped on the row at completion. Runs from before that existed
+  // fall back to the Claude estimate they have always displayed — this view must
+  // not silently restate history.
   const agg = await dbGet<{ count: number; in_tok: number; out_tok: number; cost: number }>(
     `SELECT COUNT(*) AS count, COALESCE(SUM(input_tokens), 0) AS in_tok, COALESCE(SUM(output_tokens), 0) AS out_tok,
-            COALESCE(SUM(${costUsdSql()} * ${pricingMarkupSql('created_at')}), 0) AS cost
+            COALESCE(SUM(
+              COALESCE(cost_usd, input_tokens / 1000000 * 3 + output_tokens / 1000000 * 15)
+              * ${pricingMarkupSql('created_at')}), 0) AS cost
      FROM team_runs WHERE team_id = ? AND user_id = ?`,
     req.params.id, userId,
   );
