@@ -2131,12 +2131,17 @@ ${titleList}
 要求：
 - categories 最多 6 個，按數量降序排列
 - 類型名稱使用繁體中文，清楚描述任務類型（如「財務報表分析」「簡報製作」「資料整理與計算」「競爭分析報告」等）
+- **每個類型的 examples 最多 2 筆**，不要列出更多
 - 只回傳 JSON，不加任何說明文字`;
 
   // This is optional garnish on the analytics page — never let a provider outage
   // surface as a server error. auxLlm bounds each attempt and walks the chain
   // (on-prem → DeepSeek) itself; a null means everything was unreachable.
-  const aux = await auxChat(prompt, { temperature: 0.3, maxTokens: 1500, timeoutMs: 45_000, jsonMode: true });
+  // 3000, not 1500: with 40 titles the model writes a long answer, and running out
+  // of output tokens mid-JSON is what put "Failed to parse" on this card. The
+  // prompt now caps examples at 2 as well — belt and braces, since parseJsonLoose
+  // can only recover a truncated tail, not invent the part that never arrived.
+  const aux = await auxChat(prompt, { temperature: 0.3, maxTokens: 3000, timeoutMs: 45_000, jsonMode: true });
   if (!aux) {
     res.status(502).json({ error: 'Topic analysis unavailable (no aux LLM answered)' });
     return;

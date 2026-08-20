@@ -48,11 +48,7 @@ ${pages}`;
   try {
     const aux = await auxChat(prompt, { temperature: 0.4, maxTokens: 2400, timeoutMs: 45_000 });
     if (!aux) return null;
-    // A JSON ARRAY, not an object — parseJsonLoose looks for braces, so take the
-    // outermost brackets here and strip any ```json fence the model added.
-    const text = aux.text.replace(/```(?:json)?/gi, '').trim();
-    const bracketed = text.slice(text.indexOf('['), text.lastIndexOf(']') + 1);
-    const arr = JSON.parse(bracketed);
+    const arr = parseJsonLoose<string[]>(aux.text);
     if (!Array.isArray(arr)) return null;
     // Always return exactly one line per block: fall back to raw text if the
     // model returned fewer items than pages.

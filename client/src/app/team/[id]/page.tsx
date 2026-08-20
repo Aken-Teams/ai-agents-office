@@ -37,7 +37,14 @@ interface RunRow { id: string; question: string; result: string | null; member_o
 interface TeamTotal { count: number; inputTokens: number; outputTokens: number; costUsd: number }
 
 type MemberStatus = 'pending' | 'running' | 'responding' | 'done' | 'failed';
-interface MemberStream { name: string; icon: string | null; status: MemberStatus; text: string; text2: string; inRound2: boolean }
+interface MemberStream {
+  name: string; icon: string | null; status: MemberStatus; text: string; text2: string; inRound2: boolean;
+  /** What it is doing right now ("搜尋網路資料中"), and since when — a member can
+   *  research for minutes before writing a word, and a bare spinner in that gap
+   *  is indistinguishable from a crash. */
+  activity?: string;
+  startedAt?: number;
+}
 
 const STATUS_META: Record<MemberStatus, { label: string; cls: string; icon: string; spin?: boolean }> = {
   pending:    { label: '等待中', cls: 'text-on-surface-variant bg-surface-container-high', icon: 'schedule' },
@@ -276,6 +283,14 @@ function TeamRunContent() {
   const [emailRetrievalOpen, setEmailRetrievalOpen] = useState(true);
   const [synthesis, setSynthesis] = useState('');
   const [synthRunning, setSynthRunning] = useState(false);
+  // Ticks only while a run is in flight — it exists so a silent member card can
+  // show how long it has been silent for.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [running]);
   const [totals, setTotals] = useState<{ inputTokens: number; outputTokens: number; costUsd: number } | null>(null);
   const [history, setHistory] = useState<RunRow[]>([]);
   const [total, setTotal] = useState<TeamTotal | null>(null);
@@ -570,7 +585,18 @@ function TeamRunContent() {
     const d = ev.data || {};
     switch (ev.type) {
       case 'member_status':
-        setMembers(prev => prev[d.memberId] ? { ...prev, [d.memberId]: { ...prev[d.memberId], status: d.status } } : prev);
+        setMembers(prev => prev[d.memberId] ? {
+          ...prev,
+          [d.memberId]: {
+            ...prev[d.memberId],
+            status: d.status,
+            // Start the clock when it actually starts, not when the run did.
+            ...(d.status === 'running' ? { startedAt: Date.now(), activity: '準備中' } : {}),
+          },
+        } : prev);
+        break;
+      case 'member_activity':
+        setMembers(prev => prev[d.memberId] ? { ...prev, [d.memberId]: { ...prev[d.memberId], activity: d.label } } : prev);
         break;
       case 'member_stream':
         setMembers(prev => {
@@ -968,7 +994,13 @@ function TeamRunContent() {
                     <div className="p-3 text-xs text-on-surface-variant leading-relaxed max-h-40 overflow-hidden md:max-h-72 md:overflow-y-auto min-h-[56px]">
                       {m.text
                         ? <TeamMarkdown>{m.text}</TeamMarkdown>
-                        : <span className="text-outline italic">分析中…</span>}
+                        : (
+                          <span className="inline-flex items-center gap-1.5 text-outline italic">
+                            <span className="material-symbols-outlined text-[13px] animate-spin">progress_activity</span>
+                            {m.activity || '分析中'}
+                            {m.startedAt ? `（已 ${Math.max(0, Math.round((now - m.startedAt) / 1000))} 秒）` : '…'}
+                          </span>
+                        )}
                       {m.text2 && (
                         <div className="mt-3 rounded-lg bg-tertiary/5 border border-tertiary/15 p-2.5">
                           <div className="flex items-center gap-1 text-[11px] font-bold text-tertiary mb-1.5">

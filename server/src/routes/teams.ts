@@ -93,9 +93,7 @@ ${roster}
   try {
     const aux = await auxChat(prompt, { temperature: 0.6, maxTokens: 1500, timeoutMs: 60_000 });
     if (!aux) return null;
-    // A JSON ARRAY — take the outermost brackets and drop any ```json fence.
-    const text = aux.text.replace(/```(?:json)?/gi, '').trim();
-    const arr = JSON.parse(text.slice(text.indexOf('['), text.lastIndexOf(']') + 1));
+    const arr = parseJsonLoose<string[]>(aux.text);
     if (!Array.isArray(arr) || arr.length !== agents.length) return null;
     if (!arr.every(s => typeof s === 'string' && s.trim())) return null;
     return arr.map(s => String(s).trim());

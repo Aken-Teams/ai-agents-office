@@ -200,7 +200,9 @@ function dataSourceInstruction(hasFile: boolean, webEnabled: boolean): string {
 /** Keep a member inside its role + protect system IP. Appended to member prompts. */
 function roleScopeGuard(roleTitle: string): string {
   return `\n\n【角色與守則（務必遵守）】
-- 你只在自己的專業角色「${roleTitle}」與本團隊主題範圍內回答。若使用者的要求超出你的角色或團隊專業（例如要你教寫程式、寫詩、閒聊，或詢問與主題無關的事），請用一兩句話禮貌說明這超出你的角色範圍，把焦點帶回團隊能提供的專業分析，不要照著做。
+- **只有當使用者的要求與「整個團隊的主題」完全無關時**（例如要你教寫程式、寫詩、閒聊、算命），才用一兩句話禮貌說明這超出團隊範圍，並把焦點帶回團隊能提供的分析。
+- **議題只要落在團隊主題內，你就一定要提出實質分析，不可以推說「這超出我的角色」而交白卷。** 你是被指派來處理這個議題的，即使議題偏向別位成員的專長，也要從你自己的角度找出能貢獻的切入點——例如你擅長整理與呈現，就從「這件事該怎麼判斷、該記錄哪些資訊、下一步該問什麼」切入。使用者看到的是每位成員的分析並排在一起，一句「我不懂這個」對他毫無價值，也讓整個團隊看起來壞掉了。
+- 若你確實不具備該領域的判斷力（如醫療、法律等專業判斷），就明確標示「這不是專業意見、請洽專業人士」，但**仍要給出你角度內的具體內容**，不要只留一句免責聲明。
 - ${SYSTEM_IP_GUARD}`;
 }
 
@@ -245,6 +247,24 @@ ${peersBlock || '（無）'}
 排版：粗體請節制，只標少數關鍵詞；最重要的 1–2 個結論用 ==重點== 高亮標示。${roleScopeGuard(member.title)}`;
 }
 
+/**
+ * Tool name → what to tell the user. Only the tools a team member can actually
+ * hold appear here; anything else stays silent rather than leaking an internal
+ * name onto the screen.
+ */
+const ACTIVITY_LABELS: Record<string, string> = {
+  WebSearch: '搜尋網路資料中',
+  WebFetch: '讀取網頁內容中',
+  Read: '閱讀資料中',
+  mcp__email__email_search: '檢索信件中',
+  mcp__email__email_get_message: '讀取信件內容中',
+  mcp__email__email_get_attachments: '讀取信件附件中',
+  mcp__email__email_list_folders: '檢索信件中',
+  mcp__km__km_search: '檢索 KM 知識庫中',
+  mcp__km__km_get_document: '讀取 KM 文件中',
+  mcp__km__km_get_attachment: '讀取 KM 附件中',
+};
+
 async function runOneClaude(
   userId: string,
   conversationId: string,
@@ -257,6 +277,8 @@ async function runOneClaude(
   images?: { media_type: string; data: string }[],
   mcpEmailToken?: string,
   mcpKmOnBehalf?: string,
+  /** What the agent is doing right now, for the card that would otherwise sit blank. */
+  onActivity?: (label: string) => void,
 ): Promise<{ text: string; inputTokens: number; outputTokens: number; model: string }> {
   // The global cap that stops the scheduler fanning out dozens of Claude CLIs is
   // now enforced inside spawnClaude itself. Taking a slot here as well would
@@ -302,6 +324,16 @@ async function runOneClaude(
       if (ev.type === 'text' && typeof ev.data === 'string') {
         text += ev.data;
         onText(ev.data);
+      } else if (ev.type === 'tool_activity' && onActivity) {
+        // A round-1 member can web-search for minutes before it writes a word.
+        // Without this its card shows a spinner and nothing else, which reads as
+        // "hung" rather than "working" — the single most common thing people ask
+        // about while a run is in flight.
+        const d = ev.data as { tool?: string; status?: string };
+        const label = ACTIVITY_LABELS[d?.tool || ''];
+        if (label && d.status !== 'completed') onActivity(label);
+      } else if (ev.type === 'thinking') {
+        onActivity?.('思考中');
       } else if (ev.type === 'usage') {
         const u = ev.data as { inputTokens?: number; outputTokens?: number; model?: string };
         inputTokens = u.inputTokens ?? 0;
@@ -433,6 +465,8 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
         chunk => writer({ type: 'member_stream', data: { memberId: member.id, content: chunk } }),
         webEnabled, // web only when enabled (off by default once a file is provided)
         teamImages, // vision blocks so each member can actually see uploaded images
+        undefined, undefined,
+        label => writer({ type: 'member_activity', data: { memberId: member.id, label } }),
       );
       const ok = !!r.text.trim();
       writer({

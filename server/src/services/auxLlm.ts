@@ -153,18 +153,70 @@ function extractText(message: { content?: string; reasoning?: string } | undefin
 }
 
 /**
+ * Close a JSON value that was cut off mid-write.
+ *
+ * Hitting max_tokens is the normal way a local model fails at structured output:
+ * the JSON is perfectly well-formed right up to the point where it stops. Rather
+ * than throw the whole answer away, cut back to the last complete element and
+ * close whatever is still open — six categories minus the last one beats an
+ * error banner. Returns null when the text is not salvageable that way.
+ */
+function repairTruncatedJson(s: string): string | null {
+  const stack: string[] = [];
+  let inStr = false, esc = false;
+  // Where we could cut, plus what was still open AT that point (not at the end).
+  let cutAt = -1;
+  let cutStack: string[] = [];
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') { inStr = true; continue; }
+    else if (c === '{') stack.push('}');
+    else if (c === '[') stack.push(']');
+    else if (c === '}' || c === ']') {
+      stack.pop();
+      cutAt = i + 1; cutStack = [...stack];       // just after a complete value
+    } else if (c === ',') {
+      cutAt = i; cutStack = [...stack];           // just before the next one starts
+    }
+  }
+  if (!stack.length || cutAt <= 0) return null;   // complete already, or nothing usable
+  return s.slice(0, cutAt) + cutStack.reverse().join('');
+}
+
+/**
  * Parse JSON out of a model's answer.
  *
  * Local models wrap JSON in ```json fences even when told not to, and even when
  * asked with response_format json_object — verified against this gateway. A bare
  * JSON.parse fails on output that is otherwise perfectly good, so take the
- * outermost braces and ignore the decoration.
+ * outermost brackets, ignore the decoration, and repair a truncated tail.
+ * Handles objects and arrays alike.
  */
 export function parseJsonLoose<T = unknown>(text: string): T | null {
   if (!text) return null;
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) return null;
-  try { return JSON.parse(match[0]) as T; } catch { return null; }
+  const stripped = text.replace(/```(?:json)?/gi, '');
+  // Start at whichever opener comes first, so an array answer parses too.
+  const objAt = stripped.indexOf('{');
+  const arrAt = stripped.indexOf('[');
+  const start = objAt === -1 ? arrAt : arrAt === -1 ? objAt : Math.min(objAt, arrAt);
+  if (start === -1) return null;
+  const end = Math.max(stripped.lastIndexOf('}'), stripped.lastIndexOf(']'));
+  const candidate = stripped.slice(start, end > start ? end + 1 : undefined);
+
+  try { return JSON.parse(candidate) as T; } catch { /* fall through to repair */ }
+  const repaired = repairTruncatedJson(candidate);
+  if (!repaired) return null;
+  try {
+    const value = JSON.parse(repaired) as T;
+    console.warn('[auxLlm] answer was truncated mid-JSON — recovered the complete part');
+    return value;
+  } catch { return null; }
 }
 
 // ── The calls ──────────────────────────────────────────────────────────────

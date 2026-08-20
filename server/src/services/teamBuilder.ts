@@ -10,7 +10,15 @@ import { dbRun } from '../db.js';
 import { config } from '../config.js';
 import { auxChat, auxLlmAvailable, parseJsonLoose } from './auxLlm.js';
 
-export const CUSTOM_SKILLS = ['research', 'data-analyst', 'reviewer', 'pptx-gen', 'docx-gen'];
+/**
+ * Skills an AI-designed team member may hold.
+ *
+ * Document generators are deliberately absent: a team run is analysis →
+ * discussion → synthesis, and a "簡報設計師" asked about a sick dog has nothing to
+ * contribute but an apology. Documents are produced from the team's conclusions
+ * afterwards (teamDocument.ts), which needs no member of its own.
+ */
+export const CUSTOM_SKILLS = ['research', 'data-analyst', 'reviewer'];
 
 export interface GeneratedAgent { name: string; icon: string; rolePrompt: string; skillId: string | null }
 export interface GeneratedSpec { title: string; icon: string; agents: GeneratedAgent[] }
@@ -29,9 +37,11 @@ export async function generateTeamSpec(topic: string): Promise<GeneratedSpec | n
 - "research"：網路研究、資料蒐集
 - "data-analyst"：數據/量化分析
 - "reviewer"：審閱、校訂、把關
-- "pptx-gen"：簡報產出
-- "docx-gen"：文件產出
 - null：一般分析、策略、規劃
+
+**每位成員都必須能對「這個情境本身」提出實質分析。**團隊運作的方式是：每位成員各自分析同一個議題 → 互相參考後補充 → 最後統整成結論。所以：
+- **不要設計純產出型角色**（如「簡報設計師」「文件排版師」「文件生成員」）。那種角色面對議題本身無話可說，只會回一句「這超出我的專業」，讓整個團隊看起來壞掉。文件是團隊得出結論「之後」才產生的，不需要派人。
+- 每位成員要有**不同的分析切入角度**（例如：找證據的、算數字的、評估風險的、挑戰假設的、把結論轉成行動建議的），而不是同一件事講五遍。
 
 只輸出一個 JSON 物件（不要任何說明、不要 markdown）：
 {
