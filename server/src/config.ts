@@ -86,6 +86,26 @@ export const config = {
   // for any per-record / invoice cost so pre-switch usage stays ×10.
   pricingMarkup: (process.env.DEPLOY_MODE || 'pro-panjit') === 'pro-out' ? 2 : 5,
 
+  // Private on-prem LLM (OpenAI-compatible). The FIRST choice for tool-free text
+  // work — summaries, synthesis, classification — because it bills nothing per
+  // token. DeepSeek stays configured as the backup; see services/auxLlm.ts.
+  localLlmBaseUrl: (process.env.LLM_BASE_URL || '').replace(/\/+$/, ''),
+  localLlmApiKey: process.env.LLM_API_KEY || '',
+  // Default model, chosen by measurement against the real email-summary prompt:
+  // ~5s per batch, valid JSON every run, kept 簡體 mail in 繁體 output, and
+  // refused an "IGNORE ALL PREVIOUS INSTRUCTIONS" line planted in a mail preview
+  // (it even flagged that mail as tampered with). 30B total but only 3B active,
+  // which is why it costs a fraction of the dense 27Bs — those needed 30-80s for
+  // the same work on the same box, past any timeout worth waiting out.
+  //
+  // ONE model by default, on purpose: the box holds a single model in memory and
+  // swapping costs tens of seconds, so splitting our own traffic across two
+  // models would make both slower. LLM_MODEL_QUALITY exists for when a
+  // deployment deliberately wants a heavier model for long-form synthesis and
+  // will accept the swap cost.
+  localLlmModel: process.env.LLM_MODEL || 'mlx-community/Qwen3-VL-30B-A3B-Instruct-4bit',
+  localLlmModelQuality: process.env.LLM_MODEL_QUALITY || process.env.LLM_MODEL || 'mlx-community/Qwen3-VL-30B-A3B-Instruct-4bit',
+
   // AD (Active Directory) integration — pro-panjit only
   adApiUrl: process.env.AD_API_URL || 'https://apigw.panjit.com.tw/ldap/api/v1',
   adApiKey: process.env.AD_API_KEY || process.env.AD_API || '',

@@ -11,11 +11,12 @@
  * Defense in depth:
  *   1. A deterministic local blocklist (zh + en) — zero latency, catches the
  *      blatant cases even if the LLM layer is unavailable.
- *   2. An LLM classifier (DeepSeek) — catches paraphrased / keyword-evading
+ *   2. An LLM classifier (aux LLM: on-prem first, DeepSeek second) — catches
  *      intent the regex misses. Fail-open ONLY after the local layer passed.
  */
 
 import { config } from '../config.js';
+import { auxChat, auxLlmAvailable, parseJsonLoose } from './auxLlm.js';
 
 export interface ModerationResult {
   allowed: boolean;
@@ -87,7 +88,7 @@ export function screenTopicLocally(topic: string): { category: string } | null {
    Layer 2 — LLM classifier (semantic catch-all)
    ============================================================ */
 async function classifyWithLlm(topic: string, contextNote?: string): Promise<ModerationResult | null> {
-  if (!config.deepseekApiKey) return null; // no key → skip (caller fails open)
+  if (!auxLlmAvailable()) return null; // nothing configured → skip (caller fails open)
 
   const prompt = `你是內容安全審查員，負責判斷使用者描述的「AI 助手團隊」情境是否可被允許。
 
@@ -110,25 +111,14 @@ ${contextNote ? `\n【本次額外情境（系統提供，可信）】${contextN
 {"allowed": true 或 false, "category": "若拒絕，從 crime_violence/hacking/steal_secrets/harassment/harm_others 擇一，否則 safe"}`;
 
   try {
-    const dsRes = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.deepseekApiKey}` },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0,
-        max_tokens: 60,
-      }),
-      // Bound the wait so a slow/hung DeepSeek never stalls a chat turn — on
-      // timeout we fail open (the local blocklist has already screened blatant cases).
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!dsRes.ok) { console.error('[contentSafety] classify DeepSeek error:', await dsRes.text()); return null; }
-    const data = await dsRes.json() as { choices: Array<{ message: { content: string } }> };
-    let text = (data.choices?.[0]?.message?.content || '').trim();
-    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    const obj = JSON.parse(text) as { allowed?: boolean; category?: string };
-    if (typeof obj.allowed !== 'boolean') return null;
+    // 8s is the TOTAL for the whole provider chain, not per provider — this sits
+    // inside a chat turn, and a stalled classifier must not become the reason a
+    // message feels slow. On timeout we fail open; the regex layer above has
+    // already screened the blatant cases.
+    const aux = await auxChat(prompt, { temperature: 0, maxTokens: 60, timeoutMs: 8000 });
+    if (!aux) return null;
+    const obj = parseJsonLoose<{ allowed?: boolean; category?: string }>(aux.text);
+    if (!obj || typeof obj.allowed !== 'boolean') return null;
     if (obj.allowed) return { allowed: true };
     return { allowed: false, category: obj.category || 'unsafe' };
   } catch (err) {

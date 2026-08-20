@@ -16,7 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs';
 import { spawnClaude } from './claudeCli.js';
-import { deepseekChatStream } from './deepseek.js';
+import { auxChatStream } from './auxLlm.js';
 import { truncateResultForRouter } from './taskParser.js';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { recordTokenUsage } from './tokenTracker.js';
@@ -316,10 +316,11 @@ async function runOneClaude(
 
 /**
  * Run a TOOL-FREE reasoning task (round-2 discussion, coordinator synthesis) on
- * DeepSeek via a plain HTTP call instead of spawning a `claude` CLI. The CLI is a
- * full agent runtime (~100s of MB per process); these steps only read text and
- * write text — no tools — so they don't need it. Streams deltas through onText so
- * the live UI is unchanged. Falls back to the CLI when DeepSeek isn't configured.
+ * the aux LLM — on-prem first, DeepSeek second — via a plain HTTP call instead of
+ * spawning a `claude` CLI. The CLI is a full agent runtime (~100s of MB per
+ * process); these steps only read text and write text, so they don't need it.
+ * Streams deltas through onText so the live UI is unchanged. Falls back to the
+ * CLI when every aux provider is unavailable.
  */
 async function runTextAgent(
   userId: string,
@@ -330,8 +331,11 @@ async function runTextAgent(
   timeoutMs: number,
   onText: (chunk: string) => void,
 ): Promise<{ text: string; inputTokens: number; outputTokens: number; model: string }> {
-  const ds = await deepseekChatStream({ system: systemPrompt, user: message, onText, maxTokens: 8000, timeoutMs });
-  if (ds) return { text: ds.text, inputTokens: ds.inTok, outputTokens: ds.outTok, model: 'deepseek-chat' };
+  // Quality tier: this text is the deliverable a person reads, so it is worth a
+  // bigger local model — and worth falling through to the CLI when that model is
+  // too slow, rather than shipping a weaker synthesis to save a few cents.
+  const aux = await auxChatStream({ system: systemPrompt, user: message, onText, maxTokens: 8000, timeoutMs, tier: 'quality' });
+  if (aux) return { text: aux.text, inputTokens: aux.inTok, outputTokens: aux.outTok, model: aux.model };
   return runOneClaude(userId, conversationId, sandboxSubdir, message, systemPrompt, timeoutMs, onText);
 }
 
@@ -454,7 +458,7 @@ export async function runTeam(opts: { userId: string; teamId: string; question: 
         .join('\n\n');
       writer({ type: 'member_status', data: { memberId: member.id, status: 'responding' } });
       writer({ type: 'member_round2', data: { memberId: member.id } });
-      // Round-2 is tool-free reasoning → runs on DeepSeek (no CLI process).
+      // Round-2 is tool-free reasoning → aux LLM (on-prem → DeepSeek → CLI).
       const r = await runTextAgent(
         userId, member.id, `_team/${member.id}`, question, buildDiscussionSystemPrompt(member, own, peers, hasData), MEMBER_TIMEOUT_MS,
         chunk => writer({ type: 'member_stream', data: { memberId: member.id, content: chunk } }),
@@ -524,7 +528,7 @@ ${findingsBlock}${sourcesBlock}
 
 請整合以上分析，輸出最終結論與建議。`;
 
-  // Synthesis is tool-free reasoning → runs on DeepSeek (no CLI process).
+  // Synthesis is tool-free reasoning → aux LLM (on-prem → DeepSeek → CLI).
   const synth = await runTextAgent(
     userId, teamId, `_team/_coordinator`, synthMessage, synthSystem, SYNTH_TIMEOUT_MS,
     chunk => writer({ type: 'synthesis_stream', data: { content: chunk } }),

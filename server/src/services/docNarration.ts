@@ -3,12 +3,13 @@
  * into natural spoken-broadcast script lines, one per page/section, so the
  * frontend can read them aloud (browser TTS) while following along page-by-page.
  *
- * Uses DeepSeek (cheap) in a single call for the whole document. Returns one
+ * Uses the aux LLM (on-prem first) in a single call for the whole document. Returns one
  * narration string per block, aligned to block order. Null on failure → caller
  * surfaces a friendly error.
  */
 import { config } from '../config.js';
 import type { DocumentBlock } from '../types.js';
+import { auxChat, auxLlmAvailable, parseJsonLoose } from './auxLlm.js';
 
 /** Pull readable text out of a block's data (titles, bullets, quotes, etc.). */
 function blockToText(block: DocumentBlock): string {
@@ -30,7 +31,7 @@ const DOC_TYPE_LABEL: Record<string, string> = { pptx: '簡報', pdf: 'PDF 文�
  * length as `blocks`, or null if narration could not be produced.
  */
 export async function generateNarration(blocks: DocumentBlock[], docType: string): Promise<string[] | null> {
-  if (!config.deepseekApiKey) return null;
+  if (!auxLlmAvailable()) return null;
   if (!blocks.length) return null;
 
   const docLabel = DOC_TYPE_LABEL[docType] || '文件';
@@ -45,22 +46,13 @@ export async function generateNarration(blocks: DocumentBlock[], docType: string
 ${pages}`;
 
   try {
-    const res = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.deepseekApiKey}` },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.4,
-        max_tokens: 2400,
-      }),
-      signal: AbortSignal.timeout(45000),
-    });
-    if (!res.ok) { console.error('[docNarration] DeepSeek error:', await res.text()); return null; }
-    const data = await res.json() as { choices: Array<{ message: { content: string } }> };
-    let text = (data.choices?.[0]?.message?.content || '').trim();
-    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    const arr = JSON.parse(text);
+    const aux = await auxChat(prompt, { temperature: 0.4, maxTokens: 2400, timeoutMs: 45_000 });
+    if (!aux) return null;
+    // A JSON ARRAY, not an object — parseJsonLoose looks for braces, so take the
+    // outermost brackets here and strip any ```json fence the model added.
+    const text = aux.text.replace(/```(?:json)?/gi, '').trim();
+    const bracketed = text.slice(text.indexOf('['), text.lastIndexOf(']') + 1);
+    const arr = JSON.parse(bracketed);
     if (!Array.isArray(arr)) return null;
     // Always return exactly one line per block: fall back to raw text if the
     // model returned fewer items than pages.

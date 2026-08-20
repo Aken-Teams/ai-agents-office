@@ -20,6 +20,7 @@ import { getMessageQuotaStatus } from '../services/line/client.js';
 import { setLineUserDisabled } from '../services/line/userMapping.js';
 import { getQuotaNotifyRecipients, setQuotaNotifyRecipients, buildQuotaRequestEmail, type QuotaNotifyRecipient } from '../services/quotaNotify.js';
 import { sendGatewayMail, resolveAdEmail, isGatewayMailConfigured } from '../services/gatewayMail.js';
+import { auxChat, auxLlmAvailable, parseJsonLoose } from '../services/auxLlm.js';
 
 const router = Router();
 router.use(adminMiddleware);
@@ -2090,8 +2091,8 @@ router.get('/analytics/topic-analysis', async (req: Request, res: Response) => {
   const days = period === '7d' ? 7 : period === 'all' ? 100000 : 30;
   const periodLabel = period === 'all' ? '全部期間' : `近 ${days} 天`;
 
-  if (!config.deepseekApiKey) {
-    res.status(503).json({ error: 'DeepSeek API key not configured' });
+  if (!auxLlmAvailable()) {
+    res.status(503).json({ error: 'No aux LLM configured (LLM_BASE_URL or DEEPSEEK_API_KEY)' });
     return;
   }
 
@@ -2132,46 +2133,24 @@ ${titleList}
 - 類型名稱使用繁體中文，清楚描述任務類型（如「財務報表分析」「簡報製作」「資料整理與計算」「競爭分析報告」等）
 - 只回傳 JSON，不加任何說明文字`;
 
-  // DeepSeek is optional garnish on this page — never let its outage surface as
-  // a server error: bound it with a timeout and answer 502 on any failure.
-  let dsRes: Awaited<ReturnType<typeof fetch>>;
-  try {
-    dsRes = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.deepseekApiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [{ role: 'user', content: prompt }],
-        response_format: { type: 'json_object' },
-        temperature: 0.3,
-      }),
-      signal: AbortSignal.timeout(45_000),
-    });
-  } catch (err) {
-    console.error('DeepSeek request failed:', err);
-    res.status(502).json({ error: 'DeepSeek API unavailable' });
+  // This is optional garnish on the analytics page — never let a provider outage
+  // surface as a server error. auxLlm bounds each attempt and walks the chain
+  // (on-prem → DeepSeek) itself; a null means everything was unreachable.
+  const aux = await auxChat(prompt, { temperature: 0.3, maxTokens: 1500, timeoutMs: 45_000, jsonMode: true });
+  if (!aux) {
+    res.status(502).json({ error: 'Topic analysis unavailable (no aux LLM answered)' });
     return;
   }
 
-  if (!dsRes.ok) {
-    const err = await dsRes.text().catch(() => '');
-    console.error('DeepSeek error:', err);
-    res.status(502).json({ error: 'DeepSeek API error' });
+  // Local models fence their JSON in ```json even when asked for json_object, so
+  // parse loosely rather than 502 on output that is otherwise perfectly good.
+  const parsed = parseJsonLoose(aux.text);
+  if (!parsed) {
+    console.error(`[topic-analysis] unparseable answer from ${aux.provider}/${aux.model}:`, aux.text.slice(0, 300));
+    res.status(502).json({ error: 'Failed to parse topic analysis response' });
     return;
   }
-
-  const dsData = await dsRes.json().catch(() => ({})) as { choices?: Array<{ message: { content: string } }> };
-  const content = dsData.choices?.[0]?.message?.content ?? '{}';
-
-  try {
-    const parsed = JSON.parse(content);
-    res.json(parsed);
-  } catch {
-    res.status(502).json({ error: 'Failed to parse DeepSeek response' });
-  }
+  res.json(parsed);
 });
 
 // GET /api/admin/tokens/monthly-summary?from=YYYY-MM&to=YYYY-MM

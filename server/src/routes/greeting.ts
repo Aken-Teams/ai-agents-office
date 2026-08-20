@@ -1,14 +1,12 @@
 import { Router, Request, Response } from 'express';
-import fs from 'fs';
-import path from 'path';
 import { authMiddleware } from '../middleware/auth.js';
 import { dbAll, dbGet } from '../db.js';
-import { config } from '../config.js';
+import { auxChatStream } from '../services/auxLlm.js';
 
 const router = Router();
 router.use(authMiddleware);
 
-// GET /api/greeting — SSE stream a personalized AI greeting via DeepSeek
+// GET /api/greeting — SSE stream a personalized AI greeting via the aux LLM
 router.get('/', async (req: Request, res: Response) => {
 
   console.log('[Greeting] Request received');
@@ -127,102 +125,64 @@ Write a warm, concise greeting (2-4 sentences max). Be human, natural, and carin
 - Do NOT use markdown formatting (no **, #, -, etc.), just plain text with line breaks
 - Do NOT repeat their conversation titles verbatim, paraphrase naturally${announcementSection}`;
 
+  // ONE writer for this response, and it stops for good once the stream is
+  // finished or the client has gone.
+  //
+  // Node reports a write-after-end ASYNCHRONOUSLY — as an error event, not a
+  // throw — so wrapping res.write() in try/catch cannot save you; the only fix is
+  // not to write. The old code ended the response on an API error and then let
+  // `finally` write `done` on the way out, which crashed the process with
+  // ERR_STREAM_WRITE_AFTER_END every time a provider answered 401.
+  let closed = false;
+  const send = (payload: unknown) => {
+    if (closed) return;
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  };
   const keepalive = setInterval(() => {
-    try { res.write(': keepalive\n\n'); } catch { /* closed */ }
+    if (!closed) res.write(': keepalive\n\n');
   }, 10000);
-
-  // Check for API key
-  if (!config.deepseekApiKey) {
-    console.error('[Greeting] DEEPSEEK_API_KEY not configured');
+  const finish = () => {
+    if (closed) return;
+    closed = true;
     clearInterval(keepalive);
-    res.write(`data: ${JSON.stringify({ type: 'error', data: 'AI greeting service not configured' })}\n\n`);
     res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
     res.end();
-    return;
-  }
+  };
 
-  let aborted = false;
-  let abortController: AbortController | null = new AbortController();
-
+  const clientGone = new AbortController();
   req.on('close', () => {
-    aborted = true;
-    abortController?.abort();
+    // The reader left. Stop generating for them, and never write again.
+    closed = true;
+    clearInterval(keepalive);
+    clientGone.abort();
   });
 
-  // Hard cap: a hung DeepSeek (no response rather than an error) would otherwise
-  // hold this request, its socket and its keepalive timer open indefinitely —
-  // enough of them pile up into a server-wide problem. Bound it.
-  const hardStop = setTimeout(() => abortController?.abort(), 60_000);
+  // A greeting runs on the aux LLM chain (on-prem first, DeepSeek second). It
+  // deliberately has no Claude CLI fallback: this is a hello, not a deliverable,
+  // and it is not worth an agent spawn.
+  const aux = await auxChatStream({
+    user: prompt,
+    onText: (delta) => send({ type: 'text_delta', data: delta }),
+    maxTokens: 300,
+    temperature: 0.7,
+    timeoutMs: 60_000,
+    signal: clientGone.signal,
+  });
 
-  try {
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.deepseekApiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [{ role: 'user', content: prompt }],
-        stream: true,
-        max_tokens: 300,
-        temperature: 0.7,
-      }),
-      signal: abortController.signal,
+  if (!aux) {
+    // Every provider is down. Greet them anyway — a warm generic line reads far
+    // better than telling someone their greeting service is broken.
+    console.warn('[Greeting] No aux LLM answered — falling back to a static greeting');
+    send({
+      type: 'text_delta',
+      data: locale === 'en'
+        ? `Welcome back, ${userName}!\n\nWhat would you like to work on today?`
+        : locale === 'zh-CN'
+          ? `${userName}，欢迎回来！\n\n今天想处理什么呢？`
+          : `${userName}，歡迎回來！\n\n今天想處理什麼呢？`,
     });
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      console.error(`[Greeting] DeepSeek API error ${response.status}: ${errText}`);
-      clearInterval(keepalive);
-      res.write(`data: ${JSON.stringify({ type: 'error', data: 'AI 問候服務暫時無法使用' })}\n\n`);
-      res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
-      res.end();
-      return;
-    }
-
-    const reader = response.body as any;
-    if (!reader) throw new Error('No response body');
-
-    // Node fetch returns a ReadableStream; read it as chunks
-    let buffer = '';
-    for await (const chunk of reader) {
-      if (aborted) break;
-      buffer += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString();
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data: ')) continue;
-        const data = trimmed.slice(6);
-        if (data === '[DONE]') continue;
-
-        try {
-          const parsed = JSON.parse(data);
-          const delta = parsed.choices?.[0]?.delta?.content;
-          if (delta) {
-            res.write(`data: ${JSON.stringify({ type: 'text_delta', data: delta })}\n\n`);
-          }
-        } catch { /* skip malformed */ }
-      }
-    }
-  } catch (err: any) {
-    if (!aborted) {
-      console.error(`[Greeting] DeepSeek call failed: ${err.message}`);
-      res.write(`data: ${JSON.stringify({ type: 'error', data: 'AI 問候服務暫時無法使用' })}\n\n`);
-    }
-  } finally {
-    abortController = null;
-    clearTimeout(hardStop);
-    clearInterval(keepalive);
-    if (!aborted) {
-      try {
-        res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
-        res.end();
-      } catch { /* already closed */ }
-    }
   }
+  finish();
 });
 
 export default router;

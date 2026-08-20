@@ -25,6 +25,7 @@ import { getKmOnBehalf, kmEnabledFor } from '../services/kmApi.js';
 import { computeNextRun, mysqlDateTime, runScheduleNow } from '../services/teamScheduler.js';
 import { generateTeamSpec, insertTeamWithAgents, type GeneratedAgent } from '../services/teamBuilder.js';
 import type { Conversation } from '../types.js';
+import { auxChat, auxLlmAvailable, parseJsonLoose } from '../services/auxLlm.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -75,7 +76,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  * bounded max_tokens so team creation stays cheap.
  */
 async function aiTuneRolePrompts(agents: TeamAgentTemplate[], topic: string): Promise<string[] | null> {
-  if (!config.deepseekApiKey) return null;
+  if (!auxLlmAvailable()) return null;
   const roster = agents.map((a, i) => `${i + 1}. ${a.name}：${a.rolePrompt}`).join('\n');
   const prompt = `你是 AI 團隊角色設定器。下面是一個團隊的成員與其通用角色描述。請依「議題」把每位成員的角色描述改寫得更貼合此議題、更具體可用。
 
@@ -90,23 +91,11 @@ ${roster}
 - 不要加任何說明文字或 markdown，只輸出純 JSON 陣列`;
 
   try {
-    const dsRes = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.deepseekApiKey}` },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.6,
-        max_tokens: 1500,
-      }),
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (!dsRes.ok) { console.error('[teams] aiTune DeepSeek error:', await dsRes.text()); return null; }
-    const data = await dsRes.json() as { choices: Array<{ message: { content: string } }> };
-    let text = (data.choices?.[0]?.message?.content || '').trim();
-    // Strip ```json fences if present.
-    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    const arr = JSON.parse(text);
+    const aux = await auxChat(prompt, { temperature: 0.6, maxTokens: 1500, timeoutMs: 60_000 });
+    if (!aux) return null;
+    // A JSON ARRAY — take the outermost brackets and drop any ```json fence.
+    const text = aux.text.replace(/```(?:json)?/gi, '').trim();
+    const arr = JSON.parse(text.slice(text.indexOf('['), text.lastIndexOf(']') + 1));
     if (!Array.isArray(arr) || arr.length !== agents.length) return null;
     if (!arr.every(s => typeof s === 'string' && s.trim())) return null;
     return arr.map(s => String(s).trim());
@@ -141,7 +130,7 @@ router.post('/', async (req: Request, res: Response) => {
 
   if (custom) {
     if (!cleanTopic) { res.status(400).json({ error: '請先描述你的情境' }); return; }
-    if (!config.deepseekApiKey) { res.status(503).json({ error: 'AI 服務未設定' }); return; }
+    if (!auxLlmAvailable()) { res.status(503).json({ error: 'AI 服務未設定' }); return; }
     const spec = await generateTeamSpec(cleanTopic);
     if (!spec) { res.status(502).json({ error: 'AI 團隊生成失敗，請重試或改用範本' }); return; }
     teamTitle = spec.title; teamIcon = spec.icon; templateKey = 'custom'; agents = spec.agents; aiTuned = true;

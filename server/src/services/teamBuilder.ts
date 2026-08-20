@@ -8,6 +8,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { dbRun } from '../db.js';
 import { config } from '../config.js';
+import { auxChat, auxLlmAvailable, parseJsonLoose } from './auxLlm.js';
 
 export const CUSTOM_SKILLS = ['research', 'data-analyst', 'reviewer', 'pptx-gen', 'docx-gen'];
 
@@ -15,11 +16,11 @@ export interface GeneratedAgent { name: string; icon: string; rolePrompt: string
 export interface GeneratedSpec { title: string; icon: string; agents: GeneratedAgent[] }
 
 /**
- * Ask DeepSeek to design a whole team (title + icon + 3–5 specialist agents)
+ * Ask the aux LLM to design a whole team (title + icon + 3–5 specialist agents)
  * from a free-form scenario. Returns null on any failure.
  */
 export async function generateTeamSpec(topic: string): Promise<GeneratedSpec | null> {
-  if (!config.deepseekApiKey) return null;
+  if (!auxLlmAvailable()) return null;
   const prompt = `你是 AI 團隊設計師。使用者描述了一個情境/議題，請設計一個 3–5 人、分工互補的 AI 助手團隊來協作處理它。
 
 情境：${topic}
@@ -43,17 +44,9 @@ export async function generateTeamSpec(topic: string): Promise<GeneratedSpec | n
 要求：3–5 個 agent，角色彼此分工互補、緊貼此情境。`;
 
   try {
-    const dsRes = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${config.deepseekApiKey}` },
-      body: JSON.stringify({ model: 'deepseek-chat', messages: [{ role: 'user', content: prompt }], temperature: 0.7, max_tokens: 1800 }),
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (!dsRes.ok) { console.error('[teamBuilder] generateTeamSpec DeepSeek error:', await dsRes.text()); return null; }
-    const data = await dsRes.json() as { choices: Array<{ message: { content: string } }> };
-    let text = (data.choices?.[0]?.message?.content || '').trim();
-    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-    const obj = JSON.parse(text);
+    const aux = await auxChat(prompt, { temperature: 0.7, maxTokens: 1800, timeoutMs: 60_000 });
+    if (!aux) return null;
+    const obj = parseJsonLoose<any>(aux.text);
     if (!obj || !Array.isArray(obj.agents)) return null;
     const agents: GeneratedAgent[] = obj.agents.slice(0, 5).map((a: any) => ({
       name: String(a?.name || '助手').slice(0, 40),
@@ -105,7 +98,7 @@ export async function createCustomTeam(
   userId: string,
   topic: string,
 ): Promise<{ teamId: string; title: string; memberCount: number } | null> {
-  if (!config.deepseekApiKey) return null;
+  if (!auxLlmAvailable()) return null;
   const spec = await generateTeamSpec(topic);
   if (!spec) return null;
   const teamId = await insertTeamWithAgents(userId, {

@@ -4,6 +4,7 @@ import { dbGet, dbAll, dbRun } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { config } from '../config.js';
 import type { Conversation, Message } from '../types.js';
+import { auxChat, auxLlmAvailable, parseJsonLoose } from '../services/auxLlm.js';
 
 const router = Router();
 
@@ -175,7 +176,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
 // POST /api/conversations/generate-role — generate role description via DeepSeek
 router.post('/generate-role', async (req: Request, res: Response) => {
-  if (!config.deepseekApiKey) {
+  if (!auxLlmAvailable()) {
     res.status(503).json({ error: 'AI service not configured' });
     return;
   }
@@ -200,36 +201,14 @@ ${skillHint}${existingHint}
 - 語氣專業但友善
 - ${langHint}`;
 
-  try {
-    const dsRes = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.deepseekApiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-        max_tokens: 500,
-      }),
-      // Bound the call so a hung DeepSeek can't hold the request open forever.
-      signal: AbortSignal.timeout(30_000),
-    });
-
-    if (!dsRes.ok) {
-      console.error('DeepSeek error:', await dsRes.text());
-      res.status(502).json({ error: 'AI service error' });
-      return;
-    }
-
-    const data = await dsRes.json() as { choices: Array<{ message: { content: string } }> };
-    const text = data.choices?.[0]?.message?.content?.trim() || '';
-    res.json({ text });
-  } catch (err) {
-    console.error('DeepSeek request failed:', err);
+  // Tool-free text — runs on the aux chain (on-prem first, DeepSeek second),
+  // which bounds each attempt and skips a provider that keeps failing.
+  const aux = await auxChat(prompt, { temperature: 0.7, maxTokens: 500, timeoutMs: 30_000 });
+  if (!aux) {
     res.status(502).json({ error: 'AI service unavailable' });
+    return;
   }
+  res.json({ text: aux.text });
 });
 
 export default router;

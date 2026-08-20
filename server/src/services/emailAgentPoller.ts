@@ -13,7 +13,7 @@ import { buildEmailAgentMemoryContext } from './emailAgentMemory.js';
 import { resolveClaudeCliPath } from './resolveClaudeCli.js';
 import { logAiCall } from './aiCallLog.js';
 import { acquireEmailSlot } from './emailAgentConcurrency.js';
-import { deepseekChat } from './deepseek.js';
+import { auxChat } from './auxLlm.js';
 import { buildAttachmentContext } from './emailAttachmentReader.js';
 import { htmlToText, extractCurrentMessage } from './emailContentUtils.js';
 import { dbAll, dbGet, dbRun } from '../db.js';
@@ -58,7 +58,12 @@ export async function getEmailAgentConversationId(userId: string): Promise<strin
   return id;
 }
 
-const LAYER1_TIMEOUT = 25_000; // 25s for batch summary
+// 45s for a batch summary. Was 25s when this only ever ran on DeepSeek; the
+// on-prem 27B needs ~17s for a five-mail batch and ~29s on a slow one, so 25s
+// was aborting work that was about to succeed and falling back to a paid CLI.
+// A genuinely wedged box does NOT cost 45s per batch — auxLlm's breaker skips it
+// after three failures.
+const LAYER1_TIMEOUT = 45_000;
 const LAYER2_TIMEOUT = 60_000; // 60s for deep analysis
 
 export interface EmailSummary {
@@ -617,17 +622,19 @@ ${emailList}
   const outputs: (string | null)[] = new Array(batchDescs.length).fill(null);
   let l1InTok = 0, l1OutTok = 0;
   let nextBatch = 0;
-  // Layer 1 is a pure text task (no tools) — run it on DeepSeek via a plain HTTP
-  // call instead of spawning a `claude` CLI per batch. The CLI is a full agent
-  // runtime (~100s of MB each); under many concurrent users those spawns were a
-  // major source of host-memory pressure. DeepSeek here is just a fetch → almost
-  // no local memory. Falls back to the Haiku CLI when DeepSeek isn't configured.
+  // Layer 1 is a pure text task (no tools) — run it over HTTP on the aux LLM
+  // (on-prem first, DeepSeek second) instead of spawning a `claude` CLI per
+  // batch. The CLI is a full agent runtime (~100s of MB each); under many
+  // concurrent users those spawns were a major source of host-memory pressure.
+  // The Haiku CLI stays as the last resort when every aux provider is down.
+  let l1Model = 'claude-haiku-4-5-20251001';
   async function batchWorker() {
     for (let my = nextBatch++; my < batchDescs.length; my = nextBatch++) {
-      const ds = await deepseekChat(batchDescs[my].prompt, { maxTokens: 1200, timeoutMs: LAYER1_TIMEOUT });
-      if (ds) {
-        outputs[my] = ds.text;
-        l1InTok += ds.inTok; l1OutTok += ds.outTok;
+      const aux = await auxChat(batchDescs[my].prompt, { maxTokens: 1200, timeoutMs: LAYER1_TIMEOUT });
+      if (aux) {
+        outputs[my] = aux.text;
+        l1InTok += aux.inTok; l1OutTok += aux.outTok;
+        l1Model = aux.model;
       } else {
         const u = { inTok: 0, outTok: 0 };
         outputs[my] = await spawnClaudeOneShot(batchDescs[my].prompt, LAYER1_TIMEOUT, 'claude-haiku-4-5-20251001', undefined, u);
@@ -639,7 +646,6 @@ ${emailList}
 
   // Record Layer 1 token usage (one row for the whole batch of emails).
   if (l1InTok || l1OutTok) {
-    const l1Model = config.deepseekApiKey ? 'deepseek-chat' : 'claude-haiku-4-5-20251001';
     getEmailAgentConversationId(userId)
       .then(convId => recordTokenUsage({ userId, conversationId: convId, inputTokens: scaleEmailAgentTokens(l1InTok), outputTokens: scaleEmailAgentTokens(l1OutTok), model: l1Model }))
       .catch(() => {});
