@@ -11,6 +11,8 @@ import { checkUserUsageLimit, getUserUsageLimitUsd, getStorageQuotaGb, getUpload
 import { getRolePermissions } from '../services/rolePermissions.js';
 import { isEmailEnabled, sendVerificationCode, sendPasswordResetEmail } from '../services/email.js';
 import type { User } from '../types.js';
+// Type only — outlookApi itself is loaded lazily below, as it was before.
+import type { OutlookAuthResult } from '../services/outlookApi.js';
 
 const OAUTH_NO_PASSWORD = 'OAUTH_NO_PASSWORD';
 const googleClient = config.googleClientId ? new OAuth2Client(config.googleClientId) : null;
@@ -844,6 +846,46 @@ interface AdUser {
   domain: string;
 }
 
+/**
+ * Mail tokens fetched during a first-time AD sign-in, waiting for the user row.
+ *
+ * We only hold the AD password at /ad/login. A brand-new user does not get a row
+ * until they finish /ad/register (or /ad/claim/verify) a few screens later, and
+ * by then the password is gone — which is why first-time users used to end up
+ * with no mail at all until their SECOND login, with nothing on screen to
+ * explain it. So we ask the gateway at login and park the answer here.
+ *
+ * What is parked is the gateway's token plus AES-encrypted credentials (the same
+ * blob that goes in the DB) — never a plaintext password, and never anything the
+ * browser sees. A restart in between just loses it and the user is back to the
+ * old second-login behaviour.
+ */
+const pendingMailTokens = new Map<string, { result: Promise<OutlookAuthResult | null>; at: number }>();
+const PENDING_MAIL_TTL_MS = 30 * 60_000; // matches the ad_session JWT lifetime
+
+const pendingMailKey = (adUsername: string, adDomain: string) => `${adDomain.toUpperCase()}:${adUsername.toLowerCase()}`;
+
+function stashPendingMailToken(key: string, result: Promise<OutlookAuthResult | null>): void {
+  const cutoff = Date.now() - PENDING_MAIL_TTL_MS;
+  for (const [k, v] of pendingMailTokens) if (v.at < cutoff) pendingMailTokens.delete(k);
+  pendingMailTokens.set(key, { result, at: Date.now() });
+}
+
+/** Attach a parked mail token to the user row that now exists. Never throws. */
+async function claimPendingMailToken(userId: string, key: string): Promise<void> {
+  const entry = pendingMailTokens.get(key);
+  if (!entry) return;
+  pendingMailTokens.delete(key);
+  try {
+    const result = await entry.result;
+    if (!result) return;
+    const { persistOutlookToken } = await import('../services/outlookApi.js');
+    await persistOutlookToken(userId, result);
+  } catch (err) {
+    console.warn('[Outlook] Could not store first-login mail token:', err);
+  }
+}
+
 async function callAdAuth(username: string, password: string, domain?: string): Promise<AdUser | null> {
   try {
     const body: Record<string, string> = { username, password };
@@ -949,6 +991,22 @@ router.post('/ad/login', async (req: Request, res: Response) => {
     }
 
     // First-time AD login — issue a short-lived session token for the wizard
+    // First-time user: no row to key a mail token on yet, but this request is the
+    // only place we hold the password. Ask now, park the promise, and let
+    // /ad/register or /ad/claim/verify file it once the row exists. Not awaited —
+    // the gateway takes a second or two and nothing here needs the answer.
+    if (config.deployMode === 'pro-panjit' && config.adApiKey) {
+      stashPendingMailToken(
+        pendingMailKey(adUsername, adDomain),
+        import('../services/outlookApi.js')
+          .then(({ requestOutlookToken }) => requestOutlookToken(username.trim(), password, adDomain))
+          .catch(err => {
+            console.warn('[Outlook] First-login token request failed:', err);
+            return null;
+          }),
+      );
+    }
+
     const adSessionToken = jwt.sign(
       { adUsername, adDomain, displayName: fullAdUser.displayName, mail, department: fullAdUser.department, type: 'ad_session' },
       config.jwtSecret,
@@ -1002,6 +1060,8 @@ router.post('/ad/register', async (req: Request, res: Response) => {
       id, email, 'AD_NO_PASSWORD', finalDisplayName, 'user', 'active', 'ad', adUsername, adDomain, 1
     );
     await dbRun('UPDATE users SET last_login_at = NOW() WHERE id = ?', id);
+    // The row exists now — file the mail token fetched back at /ad/login.
+    void claimPendingMailToken(id, pendingMailKey(adUsername, adDomain));
 
     const token = jwt.sign({ userId: id, email, role: 'user' }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
     res.json({ token, user: { id, email, displayName: finalDisplayName, role: 'user' } });
@@ -1118,6 +1178,8 @@ router.post('/ad/claim/verify', async (req: Request, res: Response) => {
       adUsername, adDomain, 'ad', displayName || null, newEmail, user.id
     );
     await dbRun('DELETE FROM ad_claim_tokens WHERE id = ?', record.id);
+    // Inheriting an old account is also a first AD login — same parked token.
+    void claimPendingMailToken(user.id, pendingMailKey(adUsername, adDomain));
 
     const token = jwt.sign({ userId: user.id, email: newEmail, role: user.role || 'user' }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
     res.json({ token, user: { id: user.id, email: newEmail, displayName: displayName || null, role: user.role || 'user' } });

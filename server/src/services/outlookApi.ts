@@ -163,7 +163,33 @@ export function classifyMailUnavailable(
  * there does not carry over; callers must pass it here too.
  */
 export async function authenticateOutlook(userId: string, username: string, password: string, domain?: string): Promise<string | null> {
-  console.log('[Outlook] Authenticating for user:', userId, 'username:', username, 'domain:', domain || '(default)');
+  const result = await requestOutlookToken(username, password, domain, userId);
+  if (!result) return null;
+  await persistOutlookToken(userId, result);
+  return result.mailToken;
+}
+
+/**
+ * A mail token that has been fetched but not yet filed against a user.
+ *
+ * The two halves are separate because of first-time AD sign-in: we hold the
+ * password at /ad/login, but the user row that outlook_tokens keys on does not
+ * exist until they finish registering (or inheriting) a few screens later. Ask
+ * the gateway while we can, store it once there is somewhere to put it.
+ */
+export interface OutlookAuthResult {
+  mailToken: string;
+  mailAvailable: boolean;
+  status: { code: MailStatusCode; message: string } | null;
+  expiresAt: string;
+  credEnc: string;
+}
+
+/** Ask the gateway for a mail token. Stores nothing. */
+export async function requestOutlookToken(
+  username: string, password: string, domain?: string, forUser = '(new user)',
+): Promise<OutlookAuthResult | null> {
+  console.log('[Outlook] Authenticating for user:', forUser, 'username:', username, 'domain:', domain || '(default)');
   if (!config.adApiKey) {
     console.warn('[Outlook] No AD API key configured, skipping');
     return null;
@@ -212,16 +238,19 @@ export async function authenticateOutlook(userId: string, username: string, pass
 
   const credEnc = encrypt(JSON.stringify({ username, password, domain }));
 
+  return { mailToken, mailAvailable, status, expiresAt, credEnc };
+}
+
+/** File an already-fetched token against a user. */
+export async function persistOutlookToken(userId: string, r: OutlookAuthResult): Promise<void> {
   await dbRun(
     `INSERT INTO outlook_tokens (user_id, mail_token, expires_at, credentials_enc, mail_available, mail_status_code, mail_status_message)
      VALUES (?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE mail_token = VALUES(mail_token), expires_at = VALUES(expires_at), credentials_enc = VALUES(credentials_enc),
        mail_available = VALUES(mail_available), mail_status_code = VALUES(mail_status_code), mail_status_message = VALUES(mail_status_message)`,
-    userId, mailToken, expiresAt, credEnc, mailAvailable ? 1 : 0, status?.code || 'ok', status?.message || null
+    userId, r.mailToken, r.expiresAt, r.credEnc, r.mailAvailable ? 1 : 0, r.status?.code || 'ok', r.status?.message || null
   );
-  console.log('[Outlook] Token stored, expires_at:', expiresAt);
-
-  return mailToken;
+  console.log('[Outlook] Token stored for', userId, 'expires_at:', r.expiresAt);
 }
 
 // Prevent concurrent refresh for the same user
