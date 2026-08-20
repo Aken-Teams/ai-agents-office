@@ -25,7 +25,7 @@
  */
 import crypto from 'crypto';
 import type { SSEEvent } from '../types.js';
-import { describeToolCall, isDestructiveTool } from './excelToolSpec.js';
+import { describeToolCall, describeToolMeta, isDestructiveTool, toolRisk } from './excelToolSpec.js';
 
 /**
  * How long a single tool call may wait for the add-in.
@@ -39,6 +39,13 @@ const CALL_TIMEOUT_MS = 120_000;
 
 /** Reads have no human in the loop, so they fail fast. */
 const READ_TIMEOUT_MS = 45_000;
+/**
+ * Calls that are waiting on a PERSON to read something and decide. Neither of the
+ * other two limits fits: 45s is not long enough to weigh two options, and even the
+ * 120s write limit assumes someone is already looking at the screen. Kept well
+ * under RUN_TIMEOUT_MS so a slow answer still leaves the agent time to act on it.
+ */
+const HUMAN_TIMEOUT_MS = 240_000;
 
 export interface ToolRequestEvent {
   callId: string;
@@ -48,6 +55,10 @@ export interface ToolRequestEvent {
   needsConfirm: boolean;
   /** One line describing the call, shown in the confirmation dialog. */
   summary: string;
+  /** Small print under the action: how it will be done. May be ''. */
+  meta: string;
+  /** 'high' = destroys data the undo button cannot restore. Drives the red card. */
+  risk: 'high' | 'normal';
 }
 
 export interface ToolCallResult {
@@ -138,6 +149,8 @@ export function callWorkbookTool(
   const callId = crypto.randomUUID();
   const needsConfirm = isDestructiveTool(tool, args);
   const summary = describeToolCall(tool, args);
+  const meta = describeToolMeta(tool, args);
+  const risk = toolRisk(tool, args);
 
   return new Promise<ToolCallResult>(resolve => {
     const timer = setTimeout(() => {
@@ -148,11 +161,13 @@ export function callWorkbookTool(
           ? '等待使用者確認逾時，這次寫入沒有執行。'
           : 'Excel 端未在時限內回應，可能是範圍太大或活頁簿正在忙。試著縮小範圍再讀一次。',
       });
-    }, needsConfirm ? CALL_TIMEOUT_MS : READ_TIMEOUT_MS);
+    }, tool === 'excel_ask_user' ? HUMAN_TIMEOUT_MS
+      : needsConfirm ? CALL_TIMEOUT_MS
+        : READ_TIMEOUT_MS);
 
     run.pending.set(callId, { resolve, timer, tool });
 
-    const payload: ToolRequestEvent = { callId, tool, args, needsConfirm, summary };
+    const payload: ToolRequestEvent = { callId, tool, args, needsConfirm, summary, meta, risk };
     run.write({ type: 'tool_request', data: payload });
   });
 }

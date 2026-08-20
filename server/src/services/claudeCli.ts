@@ -166,6 +166,10 @@ export interface ClaudeCliOptions {
   useApiKey?: boolean;                 // Internal: force API key auth (set by retry logic)
   model?: string;                      // Override default model (e.g. 'claude-haiku-4-5-20251001' for fast edits)
   maxTurns?: number;                   // Cap tool-loop turns (e.g. bounded WebSearch for team members)
+  // Emit content_block_delta events (text_delta / thinking_delta) instead of only
+  // whole assistant messages. Opt-in per caller: it multiplies event volume, and
+  // only a UI that shows live reasoning has any use for it. See the excel route.
+  partialMessages?: boolean;
   images?: { media_type: string; data: string }[];  // base64 image blocks delivered via stream-json input (vision)
   // Data-source MCP: when set, attach the email-mcp stdio server carrying THIS
   // user's Outlook mail JWT, so the agent can pull the user's own mail (search /
@@ -332,6 +336,13 @@ export function spawnClaude(
     '--output-format', 'stream-json',  // Structured streaming output
     '--verbose',
   ];
+
+  // Live reasoning: without this the CLI only emits complete assistant messages,
+  // so thinking_delta never arrives and a long generation is indistinguishable
+  // from a hang. hasStreamedText already handles the resulting duplication.
+  if (options.partialMessages) {
+    args.push('--include-partial-messages');
+  }
 
   // Model override: use a faster model for lightweight tasks (e.g. block edits)
   if (options.model) {
@@ -667,6 +678,8 @@ export function spawnClaude(
       addOutputTokens: (n: number) => { outputTokens += n; },
       setModel: (m: string) => { model = m; },
       hasStreamedText: false,
+      activeToolChars: 0,
+      lastReportedChars: 0,
     };
 
     // Parse stream-json output line by line
@@ -758,6 +771,18 @@ export function spawnClaude(
         success: inputTokens > 0,
       });
 
+      // --- Killed on purpose ---
+      // abort() taskkills the process, which lands here looking EXACTLY like a hard
+      // failure: exit code 1, empty stderr, zero tokens. Everything below this point
+      // diagnoses a failed run, so without this the run-timeout and pane-close paths
+      // both got reported as "no-output failure ... likely OAuth blip or account
+      // issue" — a wrong answer that sent us auditing a perfectly healthy account.
+      // The three guards below now also check `aborted`; this line explains the exit
+      // in the log instead of leaving it silent.
+      if (aborted) {
+        console.log(`[Claude CLI] ${logRole}/${logSkill} aborted by caller (run timeout or client disconnect) — not a failure`);
+      }
+
       // --- Session-plumbing recovery (before any fallback) ---
       // Two transient session errors show up under concurrency, and neither is a
       // real failure — they should restart cleanly rather than fail or bill the API:
@@ -767,7 +792,7 @@ export function spawnClaude(
       //      session from a racing/retrying spawn.
       // Recover ONCE: drop --resume, start a brand-new --session-id, and tell the
       // caller the new id so it can repoint its stored session.
-      if (!killedForOutput && code !== 0 && !inputTokens && !sessionRecoveryAttempted) {
+      if (!killedForOutput && !aborted && code !== 0 && !inputTokens && !sessionRecoveryAttempted) {
         const s = stderrBuffer.toLowerCase();
         // Strings verified against the real CLI (v2.1.201): #3 emits exactly
         // "No conversation found with session ID: <id>". #4's "already in use" could
@@ -807,7 +832,7 @@ export function spawnClaude(
       // that broad fallback is exactly what silently ran up the bill AND hid a
       // logged-out production account for weeks. Those now fail visibly so they get
       // fixed at the source. Set API_KEY_FALLBACK_QUOTA_ONLY=false for the old behavior.
-      if (!killedForOutput && !useApiKey && code !== 0 && !inputTokens && config.anthropicApiKey) {
+      if (!killedForOutput && !aborted && !useApiKey && code !== 0 && !inputTokens && config.anthropicApiKey) {
         const quotaHit = isQuotaLimitError(stderrBuffer) || isQuotaLimitError(stdoutTail);
         const shouldFallback = quotaHit || !config.apiKeyFallbackQuotaOnly;
         if (shouldFallback) {
@@ -831,7 +856,7 @@ export function spawnClaude(
         console.warn(`[Claude CLI] ${logRole}/${logSkill} ${why}`);
       }
 
-      if (!killedForOutput && code !== 0 && !inputTokens) {
+      if (!killedForOutput && !aborted && code !== 0 && !inputTokens) {
         console.error(`[Claude CLI] ${logRole}/${logSkill} FAILED: code=${code}, inputTokens=0, stderr=${stderrBuffer.substring(0, 500)}`);
         const fallback = 'AI 處理程序發生非預期錯誤，請稍後再試。';
         emitter.emit('event', {
@@ -903,6 +928,12 @@ interface TokenAccumulator {
   addOutputTokens: (n: number) => void;
   setModel: (m: string) => void;
   hasStreamedText: boolean; // True if text was streamed via content_block_delta (avoid duplication)
+  // Which tool the model is currently WRITING the arguments for, and how much of
+  // that JSON has arrived. Composing a long tool call (a whole script, say) is
+  // pure generation time with no other signal — this is what makes it visible.
+  activeTool?: string;
+  activeToolChars?: number;
+  lastReportedChars?: number;
 }
 
 /**
@@ -915,10 +946,29 @@ function processStreamEvent(
 ): void {
   const type = parsed.type as string;
 
+  // Partial-message events arrive WRAPPED: the CLI emits
+  //   {"type":"stream_event","event":{"type":"content_block_delta", ...}}
+  // not a bare content_block_delta. Verified directly against the installed CLI:
+  // a one-line prompt produced 6 stream_event frames and zero top-level
+  // content_block_* frames.
+  //
+  // Without this unwrap every delta handler below is unreachable, which is
+  // exactly what happened — live text, thinking captions and tool-writing
+  // progress were all silently dead, and the first thing the server ever saw was
+  // the finished assistant message. Only Excel passes --include-partial-messages,
+  // so this is inert for every other caller.
+  if (type === 'stream_event' && parsed.event && typeof parsed.event === 'object') {
+    processStreamEvent(parsed.event as Record<string, unknown>, emitter, tokens);
+    return;
+  }
+
   // Content block start — detect tool_use early for real-time tracking
   if (type === 'content_block_start') {
     const block = parsed.content_block as Record<string, unknown> | undefined;
     if (block?.type === 'tool_use') {
+      tokens.activeTool = block.name as string;
+      tokens.activeToolChars = 0;
+      tokens.lastReportedChars = 0;
       emitter.emit('event', {
         type: 'tool_activity',
         data: {
@@ -942,6 +992,19 @@ function processStreamEvent(
         type: translated ? 'error' : 'text',
         data: safeText,
       } satisfies SSEEvent);
+    }
+    // Tool arguments streaming in. Reported every ~200 characters rather than on
+    // every delta: the pane only needs a growing number, and one SSE frame per
+    // token would be a lot of traffic for a progress line.
+    if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+      tokens.activeToolChars = (tokens.activeToolChars || 0) + (delta.partial_json as string).length;
+      if (tokens.activeToolChars - (tokens.lastReportedChars || 0) >= 200) {
+        tokens.lastReportedChars = tokens.activeToolChars;
+        emitter.emit('event', {
+          type: 'tool_activity',
+          data: { tool: tokens.activeTool, status: 'writing', chars: tokens.activeToolChars },
+        } satisfies SSEEvent);
+      }
     }
     if (delta?.type === 'thinking_delta' && delta.thinking) {
       emitter.emit('event', {

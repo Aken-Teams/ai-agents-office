@@ -109,9 +109,9 @@ router.get('/ping', async (req: Request, res: Response) => {
 // ─── The chat stream ───
 router.post('/chat', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { message, runId, sessionId, workbookName, workbookContext, clientTools, dataSources } = req.body as {
+  const { message, runId, sessionId, workbookName, workbookContext, selection, clientTools, dataSources } = req.body as {
     message?: string; runId?: string; sessionId?: string;
-    workbookName?: string; workbookContext?: string; clientTools?: string[];
+    workbookName?: string; workbookContext?: string; selection?: string; clientTools?: string[];
     dataSources?: string[];
   };
 
@@ -172,6 +172,18 @@ router.post('/chat', async (req: Request, res: Response) => {
       + '<workbook_overview>\n' + workbookContext.slice(0, OVERVIEW_CAP) + '\n</workbook_overview>',
     );
   }
+  // Where the user was pointing when they asked. Placed AFTER the overview and
+  // immediately before the question, because that is the reading order that makes
+  // it obviously about this message rather than about the session: 「這裡怪怪的」
+  // only means something next to the range it was said about.
+  const SELECTION_CAP = 2000;
+  if (selection) {
+    parts.push(
+      '使用者在問這句話的時候，正選著下面這個範圍。他多半沒辦法用文字說清楚是哪一欄哪一格——'
+      + '這就是他指的地方，優先從這裡看起：\n'
+      + '<user_selection>\n' + selection.slice(0, SELECTION_CAP) + '\n</user_selection>',
+    );
+  }
   parts.push(message.trim());
   const prompt = parts.join('\n\n');
 
@@ -212,6 +224,10 @@ router.post('/chat', async (req: Request, res: Response) => {
     // needs it to load them (claudeCli disables Task for the same reason).
     customAllowedTools: ['ToolSearch'],
     maxTurns: EXCEL_MAX_TURNS,
+    // The pane captions the running step with the model's reasoning. Without
+    // this the CLI only emits whole messages, so a 30-second generation shows
+    // as a spinner with nothing under it.
+    partialMessages: true,
     model: EXCEL_MODEL,
     mcpExcelRunToken: bridgeToken,
     mcpExcelTools: supported,
@@ -220,6 +236,8 @@ router.post('/chat', async (req: Request, res: Response) => {
   });
 
   let finished = false;
+  /** Set when WE stop the run (not the model finishing), so `done` can explain itself. */
+  let stopReason: string | null = null;
   const finish = async () => {
     if (finished) return;
     finished = true;
@@ -232,11 +250,26 @@ router.post('/chat', async (req: Request, res: Response) => {
     if (inTok || outTok) {
       await recordTokenUsage({ userId, conversationId, inputTokens: inTok, outputTokens: outTok, model: model || EXCEL_MODEL }).catch(() => {});
     }
-    write({ type: 'done', data: { sessionId: effectiveSessionId } });
+    // A run that was cut short has to SAY so. Sending a bare `done` made a
+    // 10-minute timeout indistinguishable from a finished answer — that is exactly
+    // what 「跑一半就沒跑出來」 looked like from the pane.
+    if (stopReason === 'timeout') {
+      write({
+        type: 'error',
+        data: `已經跑到 ${Math.round(RUN_TIMEOUT_MS / 60000)} 分鐘的上限，先停在這裡——上面是已經完成的部分。`
+          + '把工作拆小一點再問一次通常就過得去。',
+      });
+    }
+    write({ type: 'done', data: { sessionId: effectiveSessionId, stopReason } });
     try { res.end(); } catch { /* closed */ }
   };
 
-  const timer = setTimeout(() => { try { abort(); } catch { /* ignore */ } void finish(); }, RUN_TIMEOUT_MS);
+  // Deliberate stop, so `finish` can tell the user WHY the answer ends here.
+  const timer = setTimeout(() => {
+    stopReason = 'timeout';
+    try { abort(); } catch { /* ignore */ }
+    void finish();
+  }, RUN_TIMEOUT_MS);
 
   // Task pane closed / Excel quit / network dropped: kill the CLI and fail every
   // in-flight tool call, so nothing sits waiting on a browser that is gone.
@@ -247,7 +280,21 @@ router.post('/chat', async (req: Request, res: Response) => {
     finished = true;
   });
 
+  // Where does the wall-clock actually go?
+  //
+  // A turn can sit for a minute with the pane showing 「思考中」 and nothing to
+  // explain it. This logs only the gaps longer than 3s, with the event type that
+  // finally broke each one, so the answer is a log line instead of a guess:
+  // a long gap followed by `text` means time-to-first-token on an oversized
+  // prompt; followed by `tool_activity` means the model was composing a call.
+  let lastEventAt = Date.now();
   emitter.on('event', (ev: SSEEvent) => {
+    const gap = Date.now() - lastEventAt;
+    lastEventAt = Date.now();
+    if (gap > 3000) {
+      console.log(`[excel] gap ${(gap / 1000).toFixed(1)}s → ${ev.type}`
+        + (ev.type === 'tool_activity' ? ` ${JSON.stringify(ev.data)}` : ''));
+    }
     if (ev.type === 'text') { text += ev.data as string; write(ev); }
     else if (ev.type === 'usage') {
       const u = ev.data as { inputTokens: number; outputTokens: number; model: string };
