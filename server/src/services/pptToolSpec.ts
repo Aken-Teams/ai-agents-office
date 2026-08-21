@@ -62,6 +62,14 @@ const SLIDE_ARG = {
   },
 };
 
+/** Position and size only — the canvas note is already in GEOMETRY above. */
+const GEOMETRY_BLOCK = {
+  left: { type: 'number', description: '左邊界（點）。不給的話用內文區的左邊界 38。' },
+  top: { type: 'number', description: '上邊界（點）。不給的話用內文區的上緣 124。' },
+  width: { type: 'number', description: '總寬度（點）。不給的話用內文區寬度 884。' },
+  height: { type: 'number', description: '高度（點）。' },
+};
+
 const GEOMETRY = {
   left: { type: 'number', description: `左邊界（點，從投影片左緣算）。${CANVAS}` },
   top: { type: 'number', description: '上邊界（點，從投影片上緣算）。' },
@@ -212,8 +220,24 @@ export const PPT_TOOLS: PptToolSpec[] = [
         right: { type: 'array', items: { type: 'string' }, description: 'two_column／compare 的右欄內容。' },
         left_title: { type: 'string', description: '左欄小標，例如「現況」。' },
         right_title: { type: 'string', description: '右欄小標，例如「建議做法」。' },
+        eyebrow: {
+          type: 'string',
+          description:
+            '標題上方的小字，通常是章節編號和名稱，例如「04　AI AGENTS」。'
+            + '**每一張內容頁都應該給**——這是觀眾判斷「講到哪了」的唯一線索，'
+            + '也是讓十張投影片看起來像同一份簡報的關鍵之一。'
+            + 'section 版型的話這裡放章節編號（例如「04」），會變成左邊那個大數字。',
+        },
+        page: { type: 'string', description: '右上角的頁碼標記，例如「P.03」。' },
         footer: { type: 'string', description: '頁尾註記，例如資料來源。' },
         append: { type: 'boolean', description: '是否先新增一張投影片，預設 true。' },
+        chrome: {
+          type: 'boolean',
+          description:
+            '是否套用共用骨架（頂部色條、眉標、標題、標題下短線），預設 true。'
+            + '除非使用者要一張完全自訂的投影片，否則**不要關掉**——'
+            + '骨架就是整份簡報看起來一致的原因。',
+        },
         ...SLIDE_ARG,
         ...THEME_ARG,
       },
@@ -406,6 +430,98 @@ export const PPT_TOOLS: PptToolSpec[] = [
     },
   },
 
+  {
+    name: 'ppt_add_cards',
+    description:
+      '在投影片上排一列（或多列）卡片。**這是把投影片做得像樣的主力工具。**'
+      + '\n\n【為什麼重要】拆解一份手工做的精美簡報，每張投影片有 17 到 47 個圖形；'
+      + '只放標題加條列的話大概 5 個。差距就在這裡——內容做成卡片，不是做成一段文字。'
+      + '而且**完全不花時間**：40 個圖形和 5 個圖形是同一批送出、同一次來回。'
+      + '\n\n【兩種樣式】'
+      + '\n· `bar="left"`：寬卡片，左側一條 5pt 色條。適合**由上往下讀**的清單——'
+      + '議程、發現、建議事項。搭配 number 和 note 就是標準的目錄頁。'
+      + '\n· `bar="top"`：窄卡片，頂部一條色條。適合**由左往右讀**的並列項目——'
+      + '流程的五個階段、四大支柱。搭配 arrows=true 會在卡片之間加箭頭。'
+      + '\n\n【怎麼用】每張卡給 title（一句話）和 text（補充，可省略）。'
+      + '顏色會自動循環主色／次色／強調色，不用自己指定。'
+      + '\n\n【什麼時候該用】只要內容是**三到六個並列的項目**就用這個，不要用條列。'
+      + '條列頁一頁只能講一件事，卡片可以讓五件事同時被看見而且有結構。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        cards: {
+          type: 'array',
+          description: '1 到 8 張卡片。',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: '卡片標題，一句話。' },
+              text: { type: 'string', description: '補充說明，可省略。要短。' },
+              number: { type: 'string', description: '編號徽章，例如「01」。目錄頁用。' },
+              note: { type: 'string', description: '右側註記，例如「P.03」。只有 bar="left" 會顯示。' },
+              color: { type: 'string', description: '這張卡的色條顏色。不給就自動循環。' },
+              fill: { type: 'string', description: '這張卡的底色。不給就用配色的預設。' },
+            },
+          },
+        },
+        bar: { type: 'string', enum: ['left', 'top'], description: '色條位置。不給的話 3 張以下用 left、4 張以上用 top。' },
+        columns: { type: 'number', description: '一列幾張。不給就自動。' },
+        arrows: { type: 'boolean', description: '卡片之間加箭頭（流程用）。只有 bar="top" 有效。' },
+        gutter: { type: 'number', description: '卡片間距（點），預設 24。' },
+        row_gap: { type: 'number', description: '多列時的列間距（點），預設 18。' },
+        size: { type: 'number', description: '卡片標題字級，預設 14。' },
+        small: { type: 'number', description: '卡片內文字級，預設 11.5。' },
+        ...GEOMETRY_BLOCK,
+        // After the spread on purpose: here `height` is ONE CARD's height, not
+        // the block's, and that is the more useful description of the two.
+        height: { type: 'number', description: '單張卡片的高度（點）。left 預設 68、top 預設 92。' },
+        ...SLIDE_ARG,
+        ...THEME_ARG,
+      },
+      required: ['cards'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'ppt_add_chart',
+    description:
+      '畫一張圖表放進投影片：直條、橫條、折線、區域、圓餅、甜甜圈。'
+      + '\n\n【三個以上可比較的數字就該畫成圖】「營收成長 23%」是一句話，'
+      + '四季的營收放成長條圖是一眼就懂的形狀。簡報比文件更需要這件事。'
+      + '\n\n【限制，要老實告訴使用者】PowerPoint 的 API **沒有建立圖表的方法**，'
+      + '所以這裡畫的是 SVG 向量圖。好處是投影不會糊，而且使用者可以按右鍵'
+      + '「轉換為圖形」把每一根長條變成可以編輯的物件。'
+      + '**但它不是 PowerPoint 的圖表物件，沒有連結的資料表**——'
+      + '要改數字就再呼叫一次重新產生，不能在 PowerPoint 裡開資料表編輯。'
+      + '你在回覆裡提到這張圖時要講清楚這件事，不要讓使用者以為可以雙擊編輯資料。'
+      + '\n\n【它會放在目前選取的投影片上】跟圖片一樣，Common API 沒辦法指定投影片。'
+      + '\n\n【單一系列給一維陣列，多系列給二維】values: [10,20,30] 或 [[10,20],[30,40]]。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['column', 'bar', 'line', 'area', 'pie', 'donut'],
+          description:
+            'column 直條（比大小，最常用）、bar 橫條（分類名稱長的時候用）、'
+            + 'line 折線（看趨勢）、area 區域、pie 圓餅（看佔比，最多 5 項）、'
+            + 'donut 甜甜圈（可在中間放一個關鍵數字）。預設 column。',
+        },
+        title: { type: 'string', description: '圖表標題。' },
+        categories: { type: 'array', items: { type: 'string' }, description: 'X 軸分類，例如 ["Q1","Q2","Q3"]。' },
+        values: { type: 'array', description: '數值。單系列給 [10,20,30]，多系列給 [[10,20],[30,40]]。' },
+        series: { type: 'array', items: { type: 'string' }, description: '多系列時每個系列的名稱，會做成圖例。' },
+        colors: { type: 'array', items: { type: 'string' }, description: '每個系列的顏色。不給就用配色。' },
+        data_labels: { type: 'boolean', description: '長條上是否標數字，預設 true。' },
+        center: { type: 'string', description: 'donut 中間的大字，例如「70%」。' },
+        center_label: { type: 'string', description: 'donut 中間大字底下的說明。' },
+        ...GEOMETRY_BLOCK,
+        ...THEME_ARG,
+      },
+      required: ['values'],
+      additionalProperties: false,
+    },
+  },
   // ── Pictures ───────────────────────────────────────────────────────────────
   {
     name: 'ppt_add_diagram',
@@ -613,6 +729,14 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
     const kind = /^\s*(\w+)/.exec(String(args.code || ''));
     return `插入${kind ? kind[1] : ''}圖表`;
   }
+  if (name === 'ppt_add_cards') {
+    const n = Array.isArray(args.cards) ? args.cards.length : 0;
+    return `在${where(args)}排 ${n} 張卡片`;
+  }
+  if (name === 'ppt_add_chart') {
+    const kind = { column: '直條', bar: '橫條', line: '折線', area: '區域', pie: '圓餅', donut: '甜甜圈' }[String(args.type || 'column')] || '';
+    return `插入${kind}圖` + (args.title ? `：${args.title}` : '');
+  }
   if (name === 'ppt_add_image') return '插入圖片';
   if (name === 'ppt_ask_user') return String(args.question || '請你決定一件事');
   if (name === 'ppt_read_attachment') return '看你貼的圖';
@@ -640,6 +764,7 @@ export function describeToolMeta(name: string, args: Record<string, unknown>): s
   } else if (name === 'ppt_apply_theme' && args.all === true) {
     parts.push('包含使用者自己放的物件，復原鍵拿不回來');
   } else if (name.startsWith('ppt_add') || name === 'ppt_build_slide') {
+    // Cards and charts are additions, which is the one case undo really covers.
     // The one case the undo button genuinely covers, so it is worth saying.
     parts.push('新增的物件可以用復原鍵移除');
   }
