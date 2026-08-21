@@ -32,7 +32,7 @@ import {
 import {
   registerRun, closeRun, callWorkbookTool, resolveToolCall, runBelongsTo,
 } from '../services/excelBridge.js';
-import { WORD_TOOL_NAMES } from '../services/wordToolSpec.js';
+import { WORD_TOOL_NAMES, WORD_SERVER_TOOLS } from '../services/wordToolSpec.js';
 import { getMailToken, getMailboxStatus } from '../services/outlookApi.js';
 import { kmEnabledFor, getKmOnBehalf } from '../services/kmApi.js';
 import { config } from '../config.js';
@@ -276,7 +276,16 @@ router.post('/chat', async (req: Request, res: Response) => {
   const write = (event: SSEEvent) => { try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* closed */ } };
   const keepalive = setInterval(() => { try { res.write(': keepalive\n\n'); } catch { /* closed */ } }, 10000);
 
-  const bridgeToken = registerRun(runId, userId, write);
+  // The ids go to the run so word_read_file can be answered here rather than
+  // being sent down to Word and back for text this process already holds.
+  // Resolved against THIS user before the run is registered: ids come from the
+  // client, and one that belongs to somebody else — or expired an hour ago —
+  // must drop out here rather than reach the store.
+  const uploaded: StoredAttachment[] = (Array.isArray(fileIds) ? fileIds.slice(0, 8) : [])
+    .map((id) => getAttachment(userId, String(id)))
+    .filter((f): f is StoredAttachment => !!f);
+
+  const bridgeToken = registerRun(runId, userId, write, uploaded.map((f) => f.id));
 
   // Version skew guard. The manifest uses SharedRuntime with lifetime="long", so
   // reopening the task pane does NOT reload its JavaScript — only quitting Word
@@ -287,9 +296,11 @@ router.post('/chat', async (req: Request, res: Response) => {
   // leaves word_tracked_changes and word_comment out of its list, so the model
   // never sees them and never promises the user a revision it cannot make.
   const supported = Array.isArray(clientTools) && clientTools.length
-    ? WORD_TOOL_NAMES.filter(n => clientTools.includes(n))
+    // Server-answered tools are never in the pane's list — it does not run them —
+    // so they have to be added back or the model would never see them.
+    ? WORD_TOOL_NAMES.filter(n => clientTools.includes(n) || WORD_SERVER_TOOLS.includes(n))
     : WORD_TOOL_NAMES;
-  const missing = WORD_TOOL_NAMES.filter(n => !supported.includes(n));
+  const missing = WORD_TOOL_NAMES.filter(n => !supported.includes(n) && !WORD_SERVER_TOOLS.includes(n));
   // Only shout when the pane is genuinely BEHIND. Missing exactly the two 1.4
   // tools is an old Word, not an old pane, and telling that person to restart
   // would send them round a loop that cannot end.
@@ -342,11 +353,17 @@ router.post('/chat', async (req: Request, res: Response) => {
   // Resolved against THIS user before the run starts: ids come from the client,
   // and one that belongs to somebody else — or expired — must drop out here
   // rather than reach the store.
-  const uploaded: StoredAttachment[] = (Array.isArray(fileIds) ? fileIds.slice(0, 8) : [])
-    .map((id) => getAttachment(userId, String(id)))
-    .filter((f): f is StoredAttachment => !!f);
-  if (uploaded.length) parts.push(describeAttachments(uploaded));
-  else if (Array.isArray(fileIds) && fileIds.length) {
+  // A manifest, not the contents. A 200 000 character PDF pushed into the prompt
+  // would crowd out the document the person actually wants written, so the model
+  // is told what it has and reads the parts it needs.
+  if (uploaded.length) {
+    parts.push(
+      `使用者這則訊息上傳了 ${uploaded.length} 個檔案：\n${describeAttachments(uploaded)}\n`
+      + `用 word_read_file 讀（index 從 1 到 ${uploaded.length}，長檔案用 part 一段一段拿）。`
+      + '他多半是要你**依這些檔案產出一份 Word 文件**——讀完就直接動手寫進文件，'
+      + '不要只把內容複述一遍。',
+    );
+  } else if (Array.isArray(fileIds) && fileIds.length) {
     write({ type: 'error', data: '附加的檔案已經過期了。請重新上傳一次。' });
   }
 

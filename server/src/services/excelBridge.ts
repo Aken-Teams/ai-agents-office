@@ -119,7 +119,7 @@ interface ExcelRun {
   closed: boolean;
   /**
    * Ids of files uploaded with this turn, in the order the user attached them.
-   * excel_read_file is answered from these WITHOUT going to the add-in — the
+   * {excel,word}_read_file is answered from these WITHOUT going to the add-in — the
    * text was extracted here, so the pane has nothing to contribute and a round
    * trip to it would only add latency and a way to fail.
    */
@@ -202,7 +202,7 @@ export function callWorkbookTool(
   // the run outright, which takes `files` with it. So closing the task pane mid-
   // answer does cut off a half-read PDF. Worth revisiting if that shows up in
   // practice — it would mean keeping the file list alive past the SSE drop.
-  if (tool === 'excel_read_file') {
+  if (tool === 'excel_read_file' || tool === 'word_read_file') {
     const r = readAttachmentPart(
       run.userId, run.files, Number(args.index ?? 1), Number(args.part ?? 1));
     return Promise.resolve(r);

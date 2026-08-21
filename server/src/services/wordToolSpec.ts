@@ -633,6 +633,23 @@ export const WORD_TOOLS: WordToolSpec[] = [
     },
   },
   {
+    name: 'word_read_file',
+    description:
+      '讀取使用者這則訊息上傳的檔案。訊息開頭會列出有哪些檔案、各自幾個字、分成幾段。'
+      + '\n\nindex 是那份清單的編號（1 起算）。長檔案會分段，用 part 一段一段拿——'
+      + '不要一次把整份 200 頁的 PDF 讀進來，先讀第一段看它在講什麼，需要再往下拿。'
+      + '\n\n使用者上傳檔案多半是要你**依它產出一份 Word 文件**，'
+      + '所以讀完就直接動手寫，不要只把內容複述一遍給他看。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        index: { type: 'number', description: '第幾個檔案（1 起算），預設 1。' },
+        part: { type: 'number', description: '第幾段，預設 1。清單會告訴你共有幾段。' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'word_ask_user',
     description:
       '需要使用者在幾個具體做法之間選一個時，用這個工具問，不要用文字列出「1. … 2. …」再問「你要哪個」。'
@@ -655,6 +672,18 @@ export const WORD_TOOLS: WordToolSpec[] = [
 ];
 
 export const WORD_TOOL_NAMES = WORD_TOOLS.map(t => t.name);
+
+/**
+ * Answered by the SERVER, not by the pane.
+ *
+ * The file's text was extracted here when it was uploaded, so the add-in has
+ * nothing to contribute — sending the call down to Word and back would add a
+ * round trip and a way to fail, for no information. See excelBridge.
+ *
+ * Which also means it must survive the clientTools filter: the pane never
+ * declares it, because the pane never runs it.
+ */
+export const WORD_SERVER_TOOLS = ['word_read_file'];
 
 export const WORD_MCP_TOOL_NAMES = WORD_TOOL_NAMES.map(n => `mcp__word__${n}`);
 
