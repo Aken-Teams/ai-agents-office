@@ -36,6 +36,10 @@ import { WORD_TOOL_NAMES } from '../services/wordToolSpec.js';
 import { getMailToken, getMailboxStatus } from '../services/outlookApi.js';
 import { kmEnabledFor, getKmOnBehalf } from '../services/kmApi.js';
 import { config } from '../config.js';
+import multer from 'multer';
+import {
+  addAttachment, getAttachment, describeAttachments, type StoredAttachment,
+} from '../services/excelAttachments.js';
 import type { SSEEvent } from '../types.js';
 
 const router = Router();
@@ -188,6 +192,46 @@ router.get('/ping', async (req: Request, res: Response) => {
   });
 });
 
+// ─── Files the person attached to the next question ───
+//
+// Same store, same parser, same limits as Excel's — services/excelAttachments.ts
+// is not Excel-specific despite the name, and a person attaching last year's
+// report should not find the button behaves differently depending on which
+// Office app they happen to be in.
+const uploadToMemory = multer({ storage: multer.memoryStorage() });
+
+router.post('/attachments', (req: Request, res: Response) => {
+  uploadToMemory.array('files', 5)(req, res, async (err: unknown) => {
+    if (err) {
+      const m = err as { code?: string; message?: string };
+      res.status(400).json({
+        error: m.code === 'LIMIT_FILE_SIZE' ? '檔案太大。' : (m.message || '檔案上傳失敗。'),
+      });
+      return;
+    }
+    const files = ((req as Request & { files?: Express.Multer.File[] }).files) || [];
+    if (!files.length) { res.status(400).json({ error: '沒有收到檔案。' }); return; }
+
+    // The same result shape Excel's endpoint answers with. The pane parses one
+    // format, so these two must not drift apart.
+    const accepted: { id: string; filename: string; chars: number; blocked: boolean }[] = [];
+    const rejected: { filename: string; reason: string }[] = [];
+    for (const f of files) {
+      // Multer/busboy parses multipart filenames as latin1, which mangles
+      // Chinese. Same fix routes/uploads.ts carries, for the same reason.
+      const raw = f.originalname || 'file';
+      const filename = /[^\u0000-\u00ff]/.test(raw) ? raw : Buffer.from(raw, 'latin1').toString('utf8');
+      const r = await addAttachment(req.user!.userId, filename, f.buffer);
+      if (r.ok) {
+        accepted.push({ id: r.file.id, filename, chars: r.file.text.length, blocked: r.file.blocked });
+      } else {
+        rejected.push({ filename, reason: r.reason });
+      }
+    }
+    res.json({ accepted, rejected });
+  });
+});
+
 // ─── The chat stream ───
 router.post('/chat', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
@@ -197,7 +241,7 @@ router.post('/chat', async (req: Request, res: Response) => {
     // The pane sends host-neutral names. The workbook* aliases are what an older
     // pane sends — SharedRuntime pins its JavaScript until Word is quit, so a
     // stale pane is the normal case for a while after every update, not an edge.
-    documentName, documentContext, documentKey,
+    documentName, documentContext, documentKey, attachments, fileIds,
     workbookName, workbookContext, workbookKey,
   } = req.body as {
     message?: string; runId?: string; sessionId?: string;
@@ -205,7 +249,7 @@ router.post('/chat', async (req: Request, res: Response) => {
     workbookName?: string; workbookContext?: string; workbookKey?: string;
     selection?: string; clientTools?: string[];
     model?: string; locale?: string; newConversation?: boolean;
-    dataSources?: string[];
+    dataSources?: string[]; attachments?: number; fileIds?: string[];
   };
 
   const docName = documentName || workbookName || '';
@@ -292,6 +336,20 @@ router.post('/chat', async (req: Request, res: Response) => {
       + '<user_selection>\n' + selection.slice(0, SELECTION_CAP) + '\n</user_selection>',
     );
   }
+  // Attached files go in AFTER the document overview and BEFORE the question,
+  // for the same reason the selection does: reading order is what makes it
+  // obvious they belong to this message rather than to the session.
+  // Resolved against THIS user before the run starts: ids come from the client,
+  // and one that belongs to somebody else — or expired — must drop out here
+  // rather than reach the store.
+  const uploaded: StoredAttachment[] = (Array.isArray(fileIds) ? fileIds.slice(0, 8) : [])
+    .map((id) => getAttachment(userId, String(id)))
+    .filter((f): f is StoredAttachment => !!f);
+  if (uploaded.length) parts.push(describeAttachments(uploaded));
+  else if (Array.isArray(fileIds) && fileIds.length) {
+    write({ type: 'error', data: '附加的檔案已經過期了。請重新上傳一次。' });
+  }
+
   parts.push(message.trim());
   const prompt = parts.join('\n\n');
 

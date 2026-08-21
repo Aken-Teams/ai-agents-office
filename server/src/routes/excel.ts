@@ -29,11 +29,16 @@ import { EXCEL_ASSISTANT_SYSTEM_PROMPT } from '../services/excelContext.js';
 import {
   registerRun, closeRun, callWorkbookTool, resolveToolCall, runBelongsTo,
 } from '../services/excelBridge.js';
-import { EXCEL_TOOL_NAMES } from '../services/excelToolSpec.js';
+import { EXCEL_TOOL_NAMES, EXCEL_SERVER_TOOLS } from '../services/excelToolSpec.js';
 import { DATA_SOURCE_PROMPT, LOCALE_PROMPT, resolveLocale } from '../services/excelContext.js';
 import { getMailToken, getMailboxStatus } from '../services/outlookApi.js';
 import { kmEnabledFor, getKmOnBehalf } from '../services/kmApi.js';
 import { config } from '../config.js';
+import multer from 'multer';
+import {
+  addAttachment, getAttachment, describeAttachments, type StoredAttachment,
+} from '../services/excelAttachments.js';
+import { isReadableFile } from '../services/fileTextExtract.js';
 import type { SSEEvent } from '../types.js';
 
 const router = Router();
@@ -197,13 +202,15 @@ router.get('/ping', async (req: Request, res: Response) => {
 // ─── The chat stream ───
 router.post('/chat', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { message, runId, sessionId, selection, clientTools, dataSources, model: wantedModel, locale: wantedLocale, newConversation, attachments } = req.body as {
+  const { message, runId, sessionId, selection, clientTools, dataSources, model: wantedModel, locale: wantedLocale, newConversation, attachments, fileIds } = req.body as {
     message?: string; runId?: string; sessionId?: string;
     selection?: string; clientTools?: string[];
     model?: string; locale?: string; newConversation?: boolean;
     dataSources?: string[];
     /** How many images the pane is holding for this message — a count, not the images. */
     attachments?: number;
+    /** Ids from POST /attachments: files already uploaded, parsed and scanned. */
+    fileIds?: string[];
   };
 
   /**
@@ -246,7 +253,14 @@ router.post('/chat', async (req: Request, res: Response) => {
   const write = (event: SSEEvent) => { try { res.write(`data: ${JSON.stringify(event)}\n\n`); } catch { /* closed */ } };
   const keepalive = setInterval(() => { try { res.write(': keepalive\n\n'); } catch { /* closed */ } }, 10000);
 
-  const bridgeToken = registerRun(runId, userId, write);
+  // Resolved against this user before the run starts: ids come from the client,
+  // and one that belongs to somebody else — or expired an hour ago — must drop
+  // out here rather than reach the store.
+  const uploaded: StoredAttachment[] = (Array.isArray(fileIds) ? fileIds.slice(0, 8) : [])
+    .map(id => getAttachment(userId, String(id)))
+    .filter((f): f is StoredAttachment => !!f);
+
+  const bridgeToken = registerRun(runId, userId, write, uploaded.map(f => f.id));
 
   // Version skew guard. The add-in's manifest uses SharedRuntime with
   // lifetime="long", so reopening the task pane does NOT reload its JavaScript —
@@ -255,7 +269,7 @@ router.post('/chat', async (req: Request, res: Response) => {
   // turns retrying "未知的工具". So: only advertise what THIS pane can execute,
   // and tell the user plainly what they're missing and how to fix it.
   const supported = Array.isArray(clientTools) && clientTools.length
-    ? EXCEL_TOOL_NAMES.filter(n => clientTools.includes(n))
+    ? EXCEL_TOOL_NAMES.filter(n => clientTools.includes(n) || EXCEL_SERVER_TOOLS.includes(n))
     : EXCEL_TOOL_NAMES;
   const missing = EXCEL_TOOL_NAMES.filter(n => !supported.includes(n));
   if (missing.length) {
@@ -300,6 +314,17 @@ router.post('/chat', async (req: Request, res: Response) => {
   // hands them over only when the model calls excel_read_attachment — so an image
   // it never asks about never leaves the user's machine, and there is exactly one
   // path by which pixels reach a model instead of two.
+  // Uploaded files are announced the same way, and for the same reason: a 200 000
+  // character PDF pushed into the prompt would crowd out the workbook the person
+  // actually wants changed. The model reads what it needs, in parts.
+  if (uploaded.length) {
+    parts.push(
+      `使用者這則訊息上傳了 ${uploaded.length} 個檔案：\n${describeAttachments(uploaded)}\n`
+      + `用 excel_read_file 讀（index 從 1 到 ${uploaded.length}，長檔案用 part 一段一段拿）。`
+      + '他多半是要你把裡面的東西整理成 Excel——讀完就直接寫進工作表，不要只把內容複述一遍。',
+    );
+  }
+
   const attachCount = Number.isFinite(Number(attachments)) ? Math.max(0, Math.min(8, Number(attachments))) : 0;
   if (attachCount) {
     parts.push(
@@ -491,6 +516,89 @@ router.post('/tool-result', (req: Request, res: Response) => {
   // Not an error: a result arriving after its own timeout fired is the normal
   // shape of a slow workbook. Say so plainly so the pane can drop it quietly.
   res.json({ delivered });
+});
+
+// ─── File uploads ───
+
+/** 25MB. A PDF nobody would call small is about 10; a scanned one is bigger. */
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+const MAX_UPLOAD_FILES = 5;
+
+/**
+ * Memory storage, deliberately.
+ *
+ * The other upload path in this server writes to a temp directory because those
+ * files are the user's documents and they keep them. These are not: they exist
+ * to be parsed into text for one conversation and then forgotten. Never touching
+ * the disk means no retention question, no cleanup job, and no backup that has
+ * quietly accumulated other people's spreadsheets.
+ */
+const uploadToMemory = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: MAX_UPLOAD_FILES },
+  fileFilter: (_req, file, cb) => {
+    // Multipart filenames arrive latin1-decoded from busboy, which mangles
+    // Chinese names. Only the extension is checked here and extensions are
+    // ASCII, so it survives; the display name is repaired below.
+    if (!isReadableFile(file.originalname)) {
+      cb(new Error(`不支援這種檔案：${file.originalname}`));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+/** Undo busboy's latin1 read of a UTF-8 filename. Chars above 255 mean it is already fine. */
+function repairFilename(name: string): string {
+  try {
+    if (/^[\x00-\x7F]*$/.test(name)) return name;
+    for (let i = 0; i < name.length; i++) if (name.charCodeAt(i) > 255) return name;
+    const fixed = Buffer.from(name, 'latin1').toString('utf8');
+    return fixed.includes('�') ? name : fixed;
+  } catch {
+    return name;
+  }
+}
+
+/**
+ * Upload files for the next message.
+ *
+ * Parsed and scanned NOW rather than when the model asks, so the person finds
+ * out immediately that their scanned PDF has no text layer — while they are
+ * still looking at the file they just picked, not thirty seconds into an answer
+ * that turns out to be about nothing.
+ */
+router.post('/attachments', (req: Request, res: Response) => {
+  uploadToMemory.array('files', MAX_UPLOAD_FILES)(req, res, async (err: unknown) => {
+    if (err) {
+      const m = err as { code?: string; message?: string };
+      const msg = m.code === 'LIMIT_FILE_SIZE'
+        ? `單一檔案不可超過 ${MAX_UPLOAD_BYTES / 1024 / 1024}MB`
+        : m.code === 'LIMIT_FILE_COUNT'
+          ? `一次最多 ${MAX_UPLOAD_FILES} 個檔案`
+          : (m.message || '上傳失敗');
+      res.status(400).json({ error: msg });
+      return;
+    }
+
+    const files = (req.files as Express.Multer.File[] | undefined) || [];
+    if (!files.length) { res.status(400).json({ error: '沒有收到檔案' }); return; }
+
+    const accepted: { id: string; filename: string; chars: number; blocked: boolean }[] = [];
+    const rejected: { filename: string; reason: string }[] = [];
+    for (const f of files) {
+      const filename = repairFilename(f.originalname);
+      const r = await addAttachment(req.user!.userId, filename, f.buffer);
+      if (r.ok) {
+        accepted.push({
+          id: r.file.id, filename, chars: r.file.text.length, blocked: r.file.blocked,
+        });
+      } else {
+        rejected.push({ filename, reason: r.reason });
+      }
+    }
+    res.json({ accepted, rejected });
+  });
 });
 
 // ─── Internal: excel-mcp subprocess → bridge (loopback only) ───

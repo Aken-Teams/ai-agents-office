@@ -24,6 +24,7 @@
  * else's Excel even if it asks to.
  */
 import crypto from 'crypto';
+import { readAttachmentPart } from './excelAttachments.js';
 import type { SSEEvent } from '../types.js';
 import * as excelSpec from './excelToolSpec.js';
 import * as wordSpec from './wordToolSpec.js';
@@ -116,6 +117,13 @@ interface ExcelRun {
   write: (event: SSEEvent) => void;
   pending: Map<string, PendingCall>;
   closed: boolean;
+  /**
+   * Ids of files uploaded with this turn, in the order the user attached them.
+   * excel_read_file is answered from these WITHOUT going to the add-in — the
+   * text was extracted here, so the pane has nothing to contribute and a round
+   * trip to it would only add latency and a way to fail.
+   */
+  files: string[];
 }
 
 const runs = new Map<string, ExcelRun>();
@@ -132,9 +140,10 @@ export function registerRun(
   runId: string,
   userId: string,
   write: (event: SSEEvent) => void,
+  files: string[] = [],
 ): string {
   const token = crypto.randomBytes(32).toString('hex');
-  runs.set(runId, { runId, userId, write, pending: new Map(), closed: false });
+  runs.set(runId, { runId, userId, write, pending: new Map(), closed: false, files });
   tokenToRun.set(token, runId);
   return token;
 }
@@ -181,6 +190,22 @@ export function callWorkbookTool(
   if (!run || run.closed) {
     const n = nounFor(tool);
     return Promise.resolve({ ok: false, error: `${n.app} 連線已結束，無法存取${n.file}。` });
+  }
+
+  // Answered here, never forwarded. An uploaded file was parsed on this side —
+  // the add-in has never seen its bytes — so sending the call down the SSE
+  // connection would be asking the pane about something it does not have. No
+  // callId, no timer, no confirmation: reading a file the user just handed over
+  // is not an act on their workbook.
+  //
+  // It still sits below the closed-run check above, and has to: closeRun deletes
+  // the run outright, which takes `files` with it. So closing the task pane mid-
+  // answer does cut off a half-read PDF. Worth revisiting if that shows up in
+  // practice — it would mean keeping the file list alive past the SSE drop.
+  if (tool === 'excel_read_file') {
+    const r = readAttachmentPart(
+      run.userId, run.files, Number(args.index ?? 1), Number(args.part ?? 1));
+    return Promise.resolve(r);
   }
 
   const callId = crypto.randomUUID();

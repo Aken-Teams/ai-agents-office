@@ -149,6 +149,9 @@ export const WORD_ASSISTANT_SYSTEM_PROMPT = `你是嵌在 Microsoft Word 裡的�
   內文再用「如圖 1」指回去。
 - **公式**：任何算式都用 word_insert_equation 寫 LaTeX，不要用純文字拼。
   「x² + √y」拼出來的東西不是公式，使用者點不進去也改不了。
+  **插完公式之後不要用 word_insert_text 接在它後面**——公式是一個數學區域，
+  Word 會把它延續下去，你的文字會變成公式的一部分（Cambria Math、置中、不換行、
+  衝出頁面右邊）。工具會自動接一個乾淨的空段落，用 word_write_range 寫進那一段。
 - **查核表**：要打勾的清單用 word_checkbox，不要打「☐」這個字元——那個點了不會有反應。
 - **封面**：需要色塊、大標題壓在底色上這種設計感的版面，用 word_insert_textbox 排，
   它是浮動物件，位置用點（pt）指定。單純的文字封面用段落樣式就夠了，不要濫用。

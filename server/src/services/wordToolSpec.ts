@@ -401,8 +401,12 @@ export const WORD_TOOLS: WordToolSpec[] = [
       + '求和積分 \\sum \\int（含上下限）、希臘字母、矩陣 \\begin{pmatrix}、'
       + '括號 \\left( \\right)、函數 \\sin \\log \\lim、重音 \\bar \\hat \\vec、'
       + '文字 \\text{}。認不得的指令會原樣顯示，不會整個失敗。'
-      + '\n\n公式獨立成行並置中。真正夾在句子中間的行內公式目前做不到，'
-      + '要在句中提到符號就直接寫那個字元。',
+      + '\n\n【插完公式之後最重要的一件事】公式是一個「數學區域」，Word 會把它延續到下一段。'
+      + '所以**不要用 word_insert_text 接在公式段落後面**——你的文字會變成公式的一部分：'
+      + '字型變成 Cambria Math、被置中、而且不會自動換行，整段衝出頁面右邊。'
+      + '\n\n這個工具會自動在公式後面接一個乾淨的空段落，回傳訊息會提醒你。'
+      + '接下來的內容用 word_write_range 寫進那一段。'
+      + '\n\n真正夾在句子中間的行內公式目前做不到，要在句中提到符號就直接寫那個字元。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -535,6 +539,14 @@ export const WORD_TOOLS: WordToolSpec[] = [
         line_spacing: { type: 'number', description: '行距（點）。' },
         space_after: { type: 'number', description: '段後距（點）。用它做留白，不要用空白段落。' },
         style_body: { type: 'string', description: '內文段落要套的樣式，通常不用給。' },
+        repair_math: {
+          type: 'boolean',
+          description:
+            '把被公式「吃進去」的段落救回來。文字如果落在數學區域裡，會是 Cambria Math、'
+            + '置中、而且不會換行所以衝出頁面——那不是對齊問題，設對齊救不回來。'
+            + '看到文件裡有段落超出右邊界或莫名置中就開這個。'
+            + '它要把每段的原始格式拉過來檢查，比較慢，所以預設關閉。',
+        },
         ...PARAGRAPH_RANGE,
       },
       additionalProperties: false,
