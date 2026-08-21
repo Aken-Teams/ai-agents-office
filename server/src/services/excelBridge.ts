@@ -25,7 +25,32 @@
  */
 import crypto from 'crypto';
 import type { SSEEvent } from '../types.js';
-import { describeToolCall, describeToolMeta, isDestructiveTool, toolRisk } from './excelToolSpec.js';
+import * as excelSpec from './excelToolSpec.js';
+import * as wordSpec from './wordToolSpec.js';
+
+/**
+ * Which host's rules apply to this call.
+ *
+ * The tool names carry it: every Excel tool is `excel_*` and every Word tool is
+ * `word_*`, so nothing has to be threaded through the MCP subprocess, the
+ * loopback endpoint, or the run token. That matters because those three were
+ * built when there was one host, and a `host` parameter on each of them would be
+ * three more places to keep in step for no gain.
+ *
+ * The pieces that differ are exactly the four that decide what the CONFIRMATION
+ * CARD says and whether there is one — which is the whole reason the bridge
+ * needs to know at all.
+ */
+function specFor(tool: string) {
+  return tool.startsWith('word_') ? wordSpec : excelSpec;
+}
+
+/** 活頁簿 or 文件, for the messages that reach the user. */
+function nounFor(tool: string): { app: string; file: string } {
+  return tool.startsWith('word_')
+    ? { app: 'Word', file: '文件' }
+    : { app: 'Excel', file: '活頁簿' };
+}
 
 /**
  * How long a single tool call may wait for the add-in.
@@ -118,7 +143,8 @@ export function closeRun(runId: string): void {
   run.closed = true;
   for (const [callId, pending] of run.pending) {
     clearTimeout(pending.timer);
-    pending.resolve({ ok: false, error: '使用者已關閉 Excel 增益集，無法再存取活頁簿。' });
+    const n = nounFor(pending.tool);
+    pending.resolve({ ok: false, error: `使用者已關閉 ${n.app} 增益集，無法再存取${n.file}。` });
     run.pending.delete(callId);
   }
   runs.delete(runId);
@@ -143,14 +169,17 @@ export function callWorkbookTool(
   const runId = tokenToRun.get(token);
   const run = runId ? runs.get(runId) : undefined;
   if (!run || run.closed) {
-    return Promise.resolve({ ok: false, error: 'Excel 連線已結束，無法存取活頁簿。' });
+    const n = nounFor(tool);
+    return Promise.resolve({ ok: false, error: `${n.app} 連線已結束，無法存取${n.file}。` });
   }
 
   const callId = crypto.randomUUID();
-  const needsConfirm = isDestructiveTool(tool, args);
-  const summary = describeToolCall(tool, args);
-  const meta = describeToolMeta(tool, args);
-  const risk = toolRisk(tool, args);
+  const spec = specFor(tool);
+  const noun = nounFor(tool);
+  const needsConfirm = spec.isDestructiveTool(tool, args);
+  const summary = spec.describeToolCall(tool, args);
+  const meta = spec.describeToolMeta(tool, args);
+  const risk = spec.toolRisk(tool, args);
 
   return new Promise<ToolCallResult>(resolve => {
     const timer = setTimeout(() => {
@@ -158,10 +187,10 @@ export function callWorkbookTool(
       resolve({
         ok: false,
         error: needsConfirm
-          ? '等待使用者確認逾時，這次寫入沒有執行。'
-          : 'Excel 端未在時限內回應，可能是範圍太大或活頁簿正在忙。試著縮小範圍再讀一次。',
+          ? '等待使用者確認逾時，這次修改沒有執行。'
+          : `${noun.app} 端未在時限內回應，可能是範圍太大或${noun.file}正在忙。試著縮小範圍再試一次。`,
       });
-    }, tool === 'excel_ask_user' ? HUMAN_TIMEOUT_MS
+    }, tool.endsWith('_ask_user') ? HUMAN_TIMEOUT_MS
       : needsConfirm ? CALL_TIMEOUT_MS
         : READ_TIMEOUT_MS);
 

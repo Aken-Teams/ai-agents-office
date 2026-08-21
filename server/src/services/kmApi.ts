@@ -27,7 +27,7 @@ export function kmEnabled(): boolean {
  * the Excel add-in could not have KM without the web app also getting it, which
  * is the opposite of what was agreed.
  */
-export function kmEnabledFor(surface: 'web' | 'excel'): boolean {
+export function kmEnabledFor(surface: 'web' | 'excel' | 'word'): boolean {
   return kmEnabled() && config.kmSurfaces.includes(surface);
 }
 

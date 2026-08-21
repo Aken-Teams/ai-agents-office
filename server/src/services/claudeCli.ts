@@ -11,6 +11,7 @@ import { acquireAuthSlot } from './claudeAuthGate.js';
 import { acquireAiSlot } from './aiConcurrency.js';
 import { logAiCall } from './aiCallLog.js';
 import { EXCEL_MCP_TOOL_NAMES } from './excelToolSpec.js';
+import { WORD_MCP_TOOL_NAMES } from './wordToolSpec.js';
 import { EMAIL_MCP_TOOL_NAMES, KM_MCP_TOOL_NAMES } from './mcpRegistry.js';
 import type { SSEEvent } from '../types.js';
 
@@ -189,6 +190,11 @@ export interface ClaudeCliOptions {
   // running older code must not be offered newer tools — see routes/excel.ts.
   // Omit to offer all of them.
   mcpExcelTools?: string[];
+  // The Word twin of the two above: word-mcp, carrying THIS run's bridge token,
+  // so the agent can read and rewrite the document open in the user's Word.
+  // Same registry, same loopback, different tool spec — see routes/word.ts.
+  mcpWordRunToken?: string;
+  mcpWordTools?: string[];
 }
 
 interface ClaudeResult {
@@ -388,7 +394,7 @@ export function spawnClaude(
   // Data-source MCPs: mount email-mcp and/or km-mcp, each carrying THIS run owner's
   // own credentials (mail JWT / 員編) so an agent can only ever reach the owner's
   // data — no cross-user access. Both can mount together.
-  if (options.mcpEmailToken || options.mcpKmOnBehalf || options.mcpExcelRunToken) {
+  if (options.mcpEmailToken || options.mcpKmOnBehalf || options.mcpExcelRunToken || options.mcpWordRunToken) {
     const mcpConfigPath = path.join(sandboxPath, '.mcp-servers.json');
     // Portable dev↔prod: prefer the COMPILED .js (production `tsc` build) run with
     // plain node — no tsx, no source .ts needed. Fall back to the TS source via the
@@ -467,6 +473,29 @@ export function spawnClaude(
         ? EXCEL_MCP_TOOL_NAMES.filter(n => options.mcpExcelTools!.includes(n.replace('mcp__excel__', '')))
         : EXCEL_MCP_TOOL_NAMES;
       mcpToolNames.push(...offered);
+    }
+    if (options.mcpWordRunToken) {
+      mcpServers.word = {
+        command: process.execPath,
+        args: mcpSpawnArgs('wordMcp'),
+        env: {
+          NODE_PATH: nodePath,
+          MCP_WORD_RUN_TOKEN: options.mcpWordRunToken,
+          // Loopback back into THIS Express process — the bridge lives in memory
+          // here (excelBridge.ts, shared by both hosts), so the subprocess has to
+          // come back over HTTP.
+          MCP_WORD_BRIDGE_URL: `http://127.0.0.1:${config.port}/internal/word`,
+          // Empty = offer everything. The MCP filters its own tools/list on this,
+          // so an out-of-date task pane — or a Word below WordApi 1.4 — simply has
+          // fewer abilities rather than an agent calling tools it will be refused.
+          MCP_WORD_CLIENT_TOOLS: (options.mcpWordTools || []).join(','),
+          ...debugEnv('word-mcp-debug.log'),
+        },
+      };
+      const offeredWord = options.mcpWordTools?.length
+        ? WORD_MCP_TOOL_NAMES.filter(n => options.mcpWordTools!.includes(n.replace('mcp__word__', '')))
+        : WORD_MCP_TOOL_NAMES;
+      mcpToolNames.push(...offeredWord);
     }
     fs.writeFileSync(mcpConfigPath, JSON.stringify({ mcpServers }), 'utf-8');
     // --strict-mcp-config: use ONLY our config, ignore any global MCP servers.
