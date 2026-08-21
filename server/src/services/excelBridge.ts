@@ -28,13 +28,14 @@ import { readAttachmentPart } from './excelAttachments.js';
 import type { SSEEvent } from '../types.js';
 import * as excelSpec from './excelToolSpec.js';
 import * as wordSpec from './wordToolSpec.js';
+import * as pptSpec from './pptToolSpec.js';
 
 /**
  * Which host's rules apply to this call.
  *
- * The tool names carry it: every Excel tool is `excel_*` and every Word tool is
- * `word_*`, so nothing has to be threaded through the MCP subprocess, the
- * loopback endpoint, or the run token. That matters because those three were
+ * The tool names carry it: every Excel tool is `excel_*`, every Word tool is
+ * `word_*` and every PowerPoint tool is `ppt_*`, so nothing has to be threaded
+ * through the MCP subprocess, the loopback endpoint, or the run token. That matters because those three were
  * built when there was one host, and a `host` parameter on each of them would be
  * three more places to keep in step for no gain.
  *
@@ -43,14 +44,16 @@ import * as wordSpec from './wordToolSpec.js';
  * needs to know at all.
  */
 function specFor(tool: string) {
-  return tool.startsWith('word_') ? wordSpec : excelSpec;
+  if (tool.startsWith('word_')) return wordSpec;
+  if (tool.startsWith('ppt_')) return pptSpec;
+  return excelSpec;
 }
 
-/** 活頁簿 or 文件, for the messages that reach the user. */
+/** 活頁簿 / 文件 / 簡報, for the messages that reach the user. */
 function nounFor(tool: string): { app: string; file: string } {
-  return tool.startsWith('word_')
-    ? { app: 'Word', file: '文件' }
-    : { app: 'Excel', file: '活頁簿' };
+  if (tool.startsWith('word_')) return { app: 'Word', file: '文件' };
+  if (tool.startsWith('ppt_')) return { app: 'PowerPoint', file: '簡報' };
+  return { app: 'Excel', file: '活頁簿' };
 }
 
 /**
@@ -202,7 +205,7 @@ export function callWorkbookTool(
   // the run outright, which takes `files` with it. So closing the task pane mid-
   // answer does cut off a half-read PDF. Worth revisiting if that shows up in
   // practice — it would mean keeping the file list alive past the SSE drop.
-  if (tool === 'excel_read_file' || tool === 'word_read_file') {
+  if (tool === 'excel_read_file' || tool === 'word_read_file' || tool === 'ppt_read_file') {
     const r = readAttachmentPart(
       run.userId, run.files, Number(args.index ?? 1), Number(args.part ?? 1));
     return Promise.resolve(r);

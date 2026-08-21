@@ -12,6 +12,7 @@ import { acquireAiSlot } from './aiConcurrency.js';
 import { logAiCall } from './aiCallLog.js';
 import { EXCEL_MCP_TOOL_NAMES } from './excelToolSpec.js';
 import { WORD_MCP_TOOL_NAMES } from './wordToolSpec.js';
+import { PPT_MCP_TOOL_NAMES } from './pptToolSpec.js';
 import { EMAIL_MCP_TOOL_NAMES, KM_MCP_TOOL_NAMES } from './mcpRegistry.js';
 import type { SSEEvent } from '../types.js';
 
@@ -195,6 +196,11 @@ export interface ClaudeCliOptions {
   // Same registry, same loopback, different tool spec — see routes/word.ts.
   mcpWordRunToken?: string;
   mcpWordTools?: string[];
+  // The PowerPoint twin of the two above: ppt-mcp, carrying THIS run's bridge
+  // token, so the agent can read and rebuild the deck open in the user's
+  // PowerPoint. Same registry, same loopback, different tool spec.
+  mcpPptRunToken?: string;
+  mcpPptTools?: string[];
 }
 
 interface ClaudeResult {
@@ -394,7 +400,8 @@ export function spawnClaude(
   // Data-source MCPs: mount email-mcp and/or km-mcp, each carrying THIS run owner's
   // own credentials (mail JWT / 員編) so an agent can only ever reach the owner's
   // data — no cross-user access. Both can mount together.
-  if (options.mcpEmailToken || options.mcpKmOnBehalf || options.mcpExcelRunToken || options.mcpWordRunToken) {
+  if (options.mcpEmailToken || options.mcpKmOnBehalf || options.mcpExcelRunToken
+    || options.mcpWordRunToken || options.mcpPptRunToken) {
     const mcpConfigPath = path.join(sandboxPath, '.mcp-servers.json');
     // Portable dev↔prod: prefer the COMPILED .js (production `tsc` build) run with
     // plain node — no tsx, no source .ts needed. Fall back to the TS source via the
@@ -496,6 +503,30 @@ export function spawnClaude(
         ? WORD_MCP_TOOL_NAMES.filter(n => options.mcpWordTools!.includes(n.replace('mcp__word__', '')))
         : WORD_MCP_TOOL_NAMES;
       mcpToolNames.push(...offeredWord);
+    }
+    if (options.mcpPptRunToken) {
+      mcpServers.ppt = {
+        command: process.execPath,
+        args: mcpSpawnArgs('pptMcp'),
+        env: {
+          NODE_PATH: nodePath,
+          MCP_PPT_RUN_TOKEN: options.mcpPptRunToken,
+          // Loopback back into THIS Express process — the bridge lives in memory
+          // here (excelBridge.ts, shared by all three hosts), so the subprocess
+          // has to come back over HTTP.
+          MCP_PPT_BRIDGE_URL: `http://127.0.0.1:${config.port}/internal/ppt`,
+          // Empty = offer everything. This filter carries more weight for
+          // PowerPoint than for the other two: pictures need ImageCoercion 1.1
+          // (Office 2021), so on an older build the pane leaves the diagram and
+          // image tools out and the model never promises a chart it cannot draw.
+          MCP_PPT_CLIENT_TOOLS: (options.mcpPptTools || []).join(','),
+          ...debugEnv('ppt-mcp-debug.log'),
+        },
+      };
+      const offeredPpt = options.mcpPptTools?.length
+        ? PPT_MCP_TOOL_NAMES.filter(n => options.mcpPptTools!.includes(n.replace('mcp__ppt__', '')))
+        : PPT_MCP_TOOL_NAMES;
+      mcpToolNames.push(...offeredPpt);
     }
     fs.writeFileSync(mcpConfigPath, JSON.stringify({ mcpServers }), 'utf-8');
     // --strict-mcp-config: use ONLY our config, ignore any global MCP servers.

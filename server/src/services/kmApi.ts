@@ -27,7 +27,10 @@ export function kmEnabled(): boolean {
  * the Excel add-in could not have KM without the web app also getting it, which
  * is the opposite of what was agreed.
  */
-export function kmEnabledFor(surface: 'web' | 'excel' | 'word'): boolean {
+// 'ppt' joins the union but NOT the default: config.kmSurfaces defaults to
+// 'excel' alone, so a deployment has to name PowerPoint in KM_SURFACES before
+// a deck can reach KM. Widening the type is not the same as granting access.
+export function kmEnabledFor(surface: 'web' | 'excel' | 'word' | 'ppt'): boolean {
   return kmEnabled() && config.kmSurfaces.includes(surface);
 }
 

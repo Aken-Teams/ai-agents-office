@@ -25,6 +25,7 @@ import teamRoutes from './routes/teams.js';
 import publicShareRoutes from './routes/publicShare.js';
 import excelRoutes, { excelInternalRoutes } from './routes/excel.js';
 import wordRoutes, { wordInternalRoutes } from './routes/word.js';
+import pptRoutes, { pptInternalRoutes } from './routes/ppt.js';
 import lineRoutes from './routes/line.js';
 import { rawBodyMiddleware } from './middleware/rawBody.js';
 import { loadLineSettings } from './services/lineSettings.js';
@@ -148,12 +149,15 @@ async function main() {
   app.use('/api/km-agent', kmAgentRoutes);
   app.use('/api/excel', excelRoutes);
   app.use('/api/word', wordRoutes);
+  app.use('/api/ppt', pptRoutes);
   // Loopback-only: the excel-mcp subprocess calling back into the bridge. Not
   // behind authMiddleware by design — it authenticates with a per-run token and
   // rejects any non-127.0.0.1 caller. See routes/excel.ts.
   app.use('/internal/excel', excelInternalRoutes);
   // Same loopback + run-token rule as Excel's. See routes/word.ts.
   app.use('/internal/word', wordInternalRoutes);
+  // Same loopback + run-token rule again. See routes/ppt.ts.
+  app.use('/internal/ppt', pptInternalRoutes);
   app.use('/api/blocks', blockRoutes);
   app.use('/api/teams', teamRoutes);
   app.use('/api/public', publicShareRoutes);
