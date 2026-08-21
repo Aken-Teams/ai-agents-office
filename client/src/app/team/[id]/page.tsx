@@ -250,9 +250,9 @@ function fillReportWindow(w: Window, html: string): void {
 
 function TeamRunContent() {
   const { token, user } = useAuth();
-  // Scheduling: everyone in non-panjit; ADMIN ONLY in pro-panjit for now
-  // (reviewers hidden pending some details before the production rollout).
-  const canSchedule = !isPanjit || user?.role === 'admin';
+  // Scheduling: everyone in non-panjit; admins AND reviewers in pro-panjit.
+  // Reviewers were held back during the rollout and are now included.
+  const canSchedule = !isPanjit || user?.role === 'admin' || user?.role === 'readonly';
   const router = useRouter();
   const params = useParams();
   const teamId = String(params.id);

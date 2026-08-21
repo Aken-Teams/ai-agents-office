@@ -41,9 +41,10 @@ function SchedulesContent() {
   const teamId = String(params.id);
   const sidebarMargin = useSidebarMargin();
 
-  // In pro-panjit, only reviewers/admins may schedule — bounce everyone else back
-  // to the team (wait until the user is loaded so we don't redirect prematurely).
-  const canSchedule = !isPanjit || user?.role === 'admin';
+  // In pro-panjit, only admins and reviewers may schedule — bounce everyone else
+  // back to the team (wait until the user is loaded so we don't redirect
+  // prematurely). Keep this in step with the same check on the team page.
+  const canSchedule = !isPanjit || user?.role === 'admin' || user?.role === 'readonly';
   useEffect(() => {
     if (user && !canSchedule) router.replace(`/team/${teamId}`);
   }, [router, teamId, user, canSchedule]);
