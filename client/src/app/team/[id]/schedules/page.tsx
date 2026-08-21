@@ -61,7 +61,18 @@ function SchedulesContent() {
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     const q = sp.get('q');
-    if (q && q.trim()) { setPrefillQuestion(q); setPrefillHasFiles(sp.get('hasFiles') === '1'); setCreateOpen(true); }
+    if (!q || !q.trim()) return;
+    setPrefillQuestion(q);
+    setPrefillHasFiles(sp.get('hasFiles') === '1');
+    setCreateOpen(true);
+    // Consume the parameter. Left in the URL it re-fires on every return to this
+    // page — close the dialog, come back, and it is open again, which reads as
+    // the app popping a dialog at you unprompted. replaceState keeps the history
+    // entry (Back still goes to the team) while making the intent one-shot.
+    sp.delete('q');
+    sp.delete('hasFiles');
+    const rest = sp.toString();
+    window.history.replaceState(null, '', rest ? `${window.location.pathname}?${rest}` : window.location.pathname);
   }, []);
   const [delTarget, setDelTarget] = useState<Schedule | null>(null);
   const [editTarget, setEditTarget] = useState<Schedule | null>(null);

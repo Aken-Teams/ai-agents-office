@@ -296,6 +296,11 @@ function TeamRunContent() {
   }, [running]);
   const [totals, setTotals] = useState<{ inputTokens: number; outputTokens: number; costUsd: number } | null>(null);
   const [history, setHistory] = useState<RunRow[]>([]);
+  // History splits by origin: a scheduled run is something the system produced
+  // and mailed out, a manual one is something you asked for just now. Mixed
+  // together, a daily schedule buries everything you did by hand within a week.
+  const [historyTab, setHistoryTab] = useState<'manual' | 'scheduled'>('manual');
+  const [historyPage, setHistoryPage] = useState(1);
   const [total, setTotal] = useState<TeamTotal | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [runDeleteTarget, setRunDeleteTarget] = useState<RunRow | null>(null);
@@ -794,12 +799,18 @@ function TeamRunContent() {
             </span>
           )}
           {canSchedule && (() => {
-            // Carry the topic you're analysing (input, else the active run's question)
-            // into the schedule so it's pre-filled — no need to re-type it.
-            const scheduleQ = (question.trim() || (activeRunId ? history.find(r => r.id === activeRunId)?.question : '') || '').trim();
+            const activeRun = activeRunId ? history.find(r => r.id === activeRunId) : null;
+            // Pre-fill the topic ONLY when there is a manual analysis to schedule.
+            // Opening the run that a schedule already produced — or browsing the
+            // scheduled tab — and being met with "create a new schedule?" is
+            // backwards: you went there to check the existing one, not to make
+            // another. In that case the button is plain navigation.
+            const viewingScheduledRun = !!activeRun?.schedule_id || historyTab === 'scheduled';
+            const scheduleQ = viewingScheduledRun
+              ? ''
+              : (question.trim() || activeRun?.question || '').trim();
             // Flag file-backed analyses so the schedule modal can block them — a
             // schedule re-runs the topic text only and can't carry uploaded files.
-            const activeRun = activeRunId ? history.find(r => r.id === activeRunId) : null;
             const hasFiles = attachedFiles.length > 0 || !!(activeRun?.attachments && activeRun.attachments !== '[]' && activeRun.attachments !== 'null');
             const params = new URLSearchParams();
             if (scheduleQ) params.set('q', scheduleQ);
@@ -1109,11 +1120,38 @@ function TeamRunContent() {
 
         {/* ── History ── */}
         <div className={mobileTab === 'history' ? '' : 'hidden lg:block'}>
-        {history.length > 0 && (
+        {history.length > 0 && (() => {
+          const manualRuns = history.filter(r => !r.schedule_id);
+          const scheduledRuns = history.filter(r => r.schedule_id);
+          const rows = historyTab === 'scheduled' ? scheduledRuns : manualRuns;
+          const PAGE_SIZE = 10;
+          const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+          // Clamp rather than reset: deleting the last row on page 3 should land
+          // you on page 2, not throw you back to the top of the list.
+          const page = Math.min(historyPage, pageCount);
+          const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+          return (
           <div className="mt-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3">歷史協作</h3>
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">歷史協作</h3>
+              <div className="flex gap-1 p-0.5 bg-surface-container rounded-lg">
+                {([['manual', '個人詢問', manualRuns.length], ['scheduled', '排程寄信', scheduledRuns.length]] as const).map(([key, label, count]) => (
+                  <button key={key} onClick={() => { setHistoryTab(key); setHistoryPage(1); }}
+                    className={`px-3 py-1 rounded-md text-xs font-bold transition-colors cursor-pointer ${
+                      historyTab === key ? 'bg-surface text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
+                    }`}>
+                    {label}（{count}）
+                  </button>
+                ))}
+              </div>
+            </div>
+            {pageRows.length === 0 ? (
+              <div className="py-8 text-center text-sm text-on-surface-variant/60">
+                {historyTab === 'scheduled' ? '這個團隊還沒有排程執行的紀錄' : '這個團隊還沒有手動提問的紀錄'}
+              </div>
+            ) : (
             <div className="space-y-2">
-              {history.map(run => (
+              {pageRows.map(run => (
                 <div key={run.id}
                   className="w-full flex items-center gap-2 p-3 rounded-xl border border-outline-variant/15 bg-surface-container hover:border-primary/40 transition-colors">
                   <button onClick={() => { loadPastRun(run); setMobileTab('work'); }} className="flex items-center gap-3 flex-1 min-w-0 text-left cursor-pointer">
@@ -1166,8 +1204,26 @@ function TeamRunContent() {
                 </div>
               ))}
             </div>
+            )}
+            {pageCount > 1 && (
+              <div className="flex items-center justify-center gap-2 mt-3">
+                <button onClick={() => setHistoryPage(p => Math.max(1, p - 1))} disabled={page <= 1}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high disabled:opacity-30 disabled:cursor-default cursor-pointer">
+                  <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+                </button>
+                <span className="text-xs text-on-surface-variant tabular-nums">
+                  {page} / {pageCount}
+                  <span className="text-on-surface-variant/50">（共 {rows.length} 筆）</span>
+                </span>
+                <button onClick={() => setHistoryPage(p => Math.min(pageCount, p + 1))} disabled={page >= pageCount}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high disabled:opacity-30 disabled:cursor-default cursor-pointer">
+                  <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                </button>
+              </div>
+            )}
           </div>
-        )}
+          );
+        })()}
         </div>{/* ── end history ── */}
       </main>
     </div>
