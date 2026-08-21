@@ -49,13 +49,16 @@ const BATCH_TIMEOUT_MS = 60_000;
 /** Narrate one slice of the document. Returns null if this batch failed. */
 async function narrateBatch(
   batch: DocumentBlock[], firstPage: number, totalPages: number, docLabel: string, userId?: string,
-): Promise<string[] | null> {
-  const pages = batch.map((b, i) => `第${firstPage + i}頁：${blockToText(b) || '（無文字內容）'}`).join('\n');
-  const prompt = `你是專業的簡報主播，要把一份${docLabel}做成語音導覽。這份文件共 ${totalPages} 頁，以下是其中第 ${firstPage} 到 ${firstPage + batch.length - 1} 頁，請為「每一頁」產生一段自然、口語、適合朗讀的繁體中文旁白：
+): Promise<Map<number, string> | null> {
+  const lastPage = firstPage + batch.length - 1;
+  const pages = batch.map((b, i) => `第${firstPage + i}頁：${blockToText(b) || '（這一頁沒有文字，可能是封面、章節分隔或純圖片）'}`).join('\n');
+  const keys = batch.map((_, i) => `"${firstPage + i}": "…"`).join(', ');
+  const prompt = `你是專業的簡報主播，要把一份${docLabel}做成語音導覽。這份文件共 ${totalPages} 頁，以下是其中第 ${firstPage} 到 ${lastPage} 頁，請為「每一頁」產生一段自然、口語、適合朗讀的繁體中文旁白：
 - 每頁 1～3 句，像主播在介紹這一頁的重點，流暢、不生硬。
 - 不要念出條列符號（•、-）、也不要說「標題」「副標題」「第N頁」等結構字眼，直接講內容。
 - 數字、公司名、重點照著內容講，**不要新增內容裡沒有的資訊**。
-- 只輸出一個 JSON 字串陣列，長度必須剛好是 ${batch.length}、順序對應上面的頁次，不要任何說明或 markdown。
+- **每一頁都要有旁白，一頁都不能跳過。** 封面就介紹這份${docLabel}的主題（例如「這份報告要談的是⋯⋯」）；目錄就簡短說明接下來會依序談哪些重點；章節分隔頁就說即將進入哪個主題；純圖片或沒有文字的頁面，就用一句話帶過（例如「這一頁以圖表呈現前面提到的內容」）。
+- 只輸出一個 JSON 物件，**key 是頁碼數字字串、value 是那一頁的旁白**，不要任何說明或 markdown。這一批必須剛好包含這些 key：{ ${keys} }
 
 每頁內容：
 ${pages}`;
@@ -69,8 +72,20 @@ ${pages}`;
     ...(userId ? { billTo: { userId } } : {}),
   });
   if (!aux) return null;
-  const arr = parseJsonLoose<string[]>(aux.text);
-  return Array.isArray(arr) ? arr.map(s => String(s ?? '').trim()) : null;
+  // Keyed by page number, NOT by position. With an array, a model that decides a
+  // cover page needs no narration returns 7 items for 8 pages — and every line
+  // after it silently shifts up one, so page 1 gets read the summary of page 2.
+  // That is exactly what "the narration talks about the wrong slide" looks like,
+  // and nothing in the output reveals it. A key cannot slide.
+  const obj = parseJsonLoose<Record<string, unknown>>(aux.text);
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+  const out = new Map<number, string>();
+  for (const [k, v] of Object.entries(obj)) {
+    const page = parseInt(k.replace(/[^0-9]/g, ''), 10);
+    const text = String(v ?? '').trim();
+    if (Number.isFinite(page) && text) out.set(page, text);
+  }
+  return out.size ? out : null;
 }
 
 /**
@@ -91,7 +106,8 @@ export async function generateNarration(blocks: DocumentBlock[], docType: string
     batches.push({ start: i, blocks: blocks.slice(i, i + PAGES_PER_CALL) });
   }
 
-  const results: (string[] | null)[] = new Array(batches.length).fill(null);
+  // One map per batch, keyed by real page number — merged by page, never by index.
+  const results: (Map<number, string> | null)[] = new Array(batches.length).fill(null);
   let next = 0;
   async function worker() {
     for (let my = next++; my < batches.length; my = next++) {
@@ -111,8 +127,15 @@ export async function generateNarration(blocks: DocumentBlock[], docType: string
     console.warn(`[docNarration] ${batches.length - ok}/${batches.length} batches failed — those pages fall back to their own text`);
   }
 
-  return blocks.map((b, i) => {
-    const line = results[Math.floor(i / PAGES_PER_CALL)]?.[i % PAGES_PER_CALL] || '';
-    return line || blockToText(b).slice(0, 120) || `第 ${i + 1} 頁`;
-  });
+  // Merge by page number. A page the model skipped simply has no entry and falls
+  // back to its own text — it can no longer drag every later page out of step.
+  const byPage = new Map<number, string>();
+  for (const m of results) if (m) for (const [page, text] of m) byPage.set(page, text);
+
+  const missing = blocks.map((_, i) => i + 1).filter(p => !byPage.has(p));
+  if (missing.length) {
+    console.warn(`[docNarration] no narration for page(s) ${missing.join(', ')} — using their own text`);
+  }
+
+  return blocks.map((b, i) => byPage.get(i + 1) || blockToText(b).slice(0, 120) || `第 ${i + 1} 頁`);
 }
