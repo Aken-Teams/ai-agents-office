@@ -2,6 +2,10 @@ import { NextRequest } from 'next/server';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
+// Same reason as the email-agent events proxy: a generation stream must never be
+// handed to the fetch cache, which would try to buffer the whole body.
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 
 // 127.0.0.1 (not "localhost"): Node 18+ resolves localhost to ::1 (IPv6) first,
 // but the Express backend listens on IPv4 → fetch to localhost fails. Pin IPv4.
@@ -17,6 +21,9 @@ export async function GET(
     headers: {
       Authorization: req.headers.get('Authorization') || '',
     },
+    // Propagate the browser's disconnect upstream — see the email-agent events
+    // proxy for what an abandoned connection costs.
+    signal: req.signal,
   });
   const text = await backendRes.text();
   return new Response(text, {
@@ -41,6 +48,7 @@ export async function POST(
       Authorization: req.headers.get('Authorization') || '',
     },
     body,
+    signal: req.signal,
   });
 
   if (!backendRes.ok || !backendRes.body) {

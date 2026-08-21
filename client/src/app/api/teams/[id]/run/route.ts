@@ -6,6 +6,9 @@ import { NextRequest } from 'next/server';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
+// Never let the fetch cache try to buffer a run that streams for minutes.
+export const fetchCache = 'force-no-store';
+export const revalidate = 0;
 
 // 127.0.0.1 (not "localhost"): Node 18+ resolves localhost to ::1 (IPv6) first,
 // but the Express backend listens on IPv4 → fetch to localhost fails. Pin IPv4.
@@ -25,6 +28,7 @@ export async function POST(
       Authorization: req.headers.get('Authorization') || '',
     },
     body,
+    signal: req.signal,
   });
 
   if (!backendRes.ok || !backendRes.body) {

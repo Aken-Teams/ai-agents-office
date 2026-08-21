@@ -357,7 +357,7 @@ export async function fetchMessages(
   limit: number = 20,
   offset: number = 0,
   opts?: { q?: string; startDate?: string; endDate?: string },
-): Promise<{ messages: OutlookMessage[]; total: number }> {
+): Promise<{ messages: OutlookMessage[]; total: number; ok: boolean }> {
   const params = new URLSearchParams({ folder, limit: String(limit), order: 'desc' });
   if (offset > 0) params.set('offset', String(offset));
   // Server-side filters (EWS-side, fast). q matches subject only.
@@ -369,10 +369,13 @@ export async function fetchMessages(
   }, { timeoutMs: GATEWAY_TIMEOUT_MS });
   if (!res.ok) {
     console.warn('[Outlook] fetchMessages failed:', res.status, await res.text().catch(() => ''));
-    return { messages: [], total: 0 };
+    // `ok: false` matters: an empty array from a FAILED call used to be
+    // indistinguishable from a genuinely empty inbox, so a gateway outage was
+    // about to be reported to the user as "you have no mail".
+    return { messages: [], total: 0, ok: false };
   }
   const data = await res.json() as { messages?: OutlookMessage[]; total?: number };
-  return { messages: data.messages || [], total: data.total ?? (data.messages?.length || 0) };
+  return { messages: data.messages || [], total: data.total ?? (data.messages?.length || 0), ok: true };
 }
 
 /**

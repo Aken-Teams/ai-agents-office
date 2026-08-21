@@ -329,9 +329,21 @@ async function pollNewEmailsInner(userId: string, isInitial = false, aiEnabled =
     return;
   }
 
-  const { messages: rawMessages, total } = await fetchMessages(token, 'Inbox', 50, 0);
+  const { messages: rawMessages, total, ok } = await fetchMessages(token, 'Inbox', 50, 0);
   if (!rawMessages.length) {
-    console.log(`[EmailAgent] No messages returned for user ${userId} (initial=${isInitial})`);
+    // Returning silently left the widget spinning on "多人同時使用中，正在為你
+    // 載入…" forever, because the only thing that ends its loading state is an
+    // event. An empty inbox is a perfectly normal answer — say so, and say the
+    // OTHER thing when the gateway simply could not be reached.
+    console.log(`[EmailAgent] No messages for user ${userId} (initial=${isInitial}, gatewayOk=${ok})`);
+    if (ok) {
+      pushEvent(userId, { type: 'new_emails', data: { emails: [], totalUnread: 0, overview: '' } });
+    } else {
+      pushEvent(userId, {
+        type: 'error',
+        data: { code: 'mail_unreachable', message: '目前讀不到信箱資料，稍後會自動重試。' },
+      });
+    }
     return;
   }
   // Sort newest first — don't rely on API ordering
