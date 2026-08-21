@@ -1093,6 +1093,24 @@ function processStreamEvent(
     } satisfies SSEEvent);
   }
 
+  // Hit the turn cap.
+  //
+  // Nothing used to handle this subtype, and the consequence was ugly: the CLI
+  // emits this, exits with code 1, and the exit path cannot tell a turn cap from
+  // a crash — same code, same empty stderr. So a long document build stopped
+  // dead half-way with no explanation anywhere, and the obvious reading was "the
+  // add-in is broken". It was doing exactly what it was told.
+  //
+  // Emitted as an error so it reaches the pane and lands in the transcript,
+  // where the person can see the run ended for a reason and ask for the rest.
+  if (type === 'result' && typeof parsed.subtype === 'string' && parsed.subtype.startsWith('error_max_turns')) {
+    emitter.emit('event', {
+      type: 'error',
+      data: '這一輪的工具呼叫次數到達上限，先停在這裡——已經做完的部分都在檔案裡。'
+        + '再說一次「接著做」就會從這裡繼續，或把工作拆小一點。',
+    } satisfies SSEEvent);
+  }
+
   // System init — capture session_id and the model in effect for this run
   if (type === 'system' && parsed.subtype === 'init') {
     const sid = parsed.session_id as string | undefined;

@@ -67,14 +67,21 @@ function resolveModel(requested?: string): string {
 }
 
 /**
- * Turn budget. Each turn is potentially a network round trip to the user's Word.
+ * Turn budget.
  *
- * Higher than Excel's 24 because prose work is legitimately more iterative: a
- * chapter rewrite is read → rewrite → read the next → rewrite, one paragraph
- * range at a time, and each of those is a turn. Still a "stop thrashing" guard,
- * just set where a real task fits under it.
+ * Was 32, which was measured against the wrong task. A rewrite is a handful of
+ * turns; AUTHORING is not. 「幫我出一份數學測驗卷」 is a cover, a contents page,
+ * then forty questions each needing an insert_text and an insert_equation, and
+ * the CLI spends turns of its own on internal bookkeeping between them. That run
+ * hit the cap around question seven — and because nothing handled the CLI's
+ * error_max_turns signal, it looked exactly like a crash: exit code 1, empty
+ * stderr, a document that stops mid-sentence.
+ *
+ * So: high enough that a whole document fits under it, and left as a guard
+ * against a genuinely looping agent rather than as a budget. RUN_TIMEOUT_MS is
+ * the backstop that actually binds.
  */
-const WORD_MAX_TURNS = 32;
+const WORD_MAX_TURNS = 160;
 
 /** Whole-run ceiling. Long because a destructive call can sit waiting on a human. */
 const RUN_TIMEOUT_MS = 900_000;

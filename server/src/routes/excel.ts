@@ -197,12 +197,33 @@ router.get('/ping', async (req: Request, res: Response) => {
 // ─── The chat stream ───
 router.post('/chat', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { message, runId, sessionId, workbookName, workbookContext, selection, clientTools, dataSources, model: wantedModel, locale: wantedLocale, newConversation, workbookKey } = req.body as {
+  const { message, runId, sessionId, selection, clientTools, dataSources, model: wantedModel, locale: wantedLocale, newConversation, attachments } = req.body as {
     message?: string; runId?: string; sessionId?: string;
-    workbookName?: string; workbookContext?: string; selection?: string; clientTools?: string[];
-    model?: string; locale?: string; newConversation?: boolean; workbookKey?: string;
+    selection?: string; clientTools?: string[];
+    model?: string; locale?: string; newConversation?: boolean;
     dataSources?: string[];
+    /** How many images the pane is holding for this message — a count, not the images. */
+    attachments?: number;
   };
+
+  /**
+   * The pane renamed these when it grew a second host: what used to be
+   * workbookName / workbookContext / workbookKey is now documentName /
+   * documentContext / documentKey, because Word sends the same three. This route
+   * still read the old names, so it was silently receiving NONE of them — the
+   * overview prefetch below never arrived (costing the 7-9s round trip it exists
+   * to avoid), and the conversation key fell through to '(unnamed)', which
+   * quietly merged every workbook a person opened into one thread.
+   *
+   * Both spellings are accepted rather than just the new one, and that is not
+   * belt-and-braces: the manifest pins the pane's JavaScript for as long as Excel
+   * stays open, so someone who updates the add-in without quitting Excel is still
+   * sending the old names right now.
+   */
+  const body = req.body as Record<string, unknown>;
+  const documentName = String(body.documentName ?? body.workbookName ?? '');
+  const documentContext = String(body.documentContext ?? body.workbookContext ?? '');
+  const documentKey = String(body.documentKey ?? body.workbookKey ?? '');
 
   if (!message?.trim()) { res.status(400).json({ error: 'Message is required' }); return; }
   // The add-in generates the runId so it can address tool results immediately,
@@ -213,7 +234,7 @@ router.post('/chat', async (req: Request, res: Response) => {
   if (usage.exceeded) { res.status(403).json({ error: `本月用量已達上限 USD $${usage.limit.toFixed(2)}` }); return; }
 
   const conversationId = await getOrCreateExcelConversation(
-    userId, workbookKey || '', workbookName || '', !!newConversation);
+    userId, documentKey, documentName, !!newConversation);
   await dbRun('INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)',
     uuidv4(), conversationId, 'user', message.trim()).catch(() => {});
   await titleFromFirstMessage(conversationId, message.trim());
@@ -256,11 +277,11 @@ router.post('/chat', async (req: Request, res: Response) => {
   // already had in hand. Capped so a pathological workbook can't blow the prompt.
   const OVERVIEW_CAP = 12000;
   const parts: string[] = [];
-  if (workbookName) parts.push(`（使用者目前開啟的活頁簿：${workbookName}）`);
-  if (workbookContext) {
+  if (documentName) parts.push(`（使用者目前開啟的活頁簿：${documentName}）`);
+  if (documentContext) {
     parts.push(
       '以下是這份活頁簿的最新結構概覽，已經幫你讀好了，不需要再呼叫 excel_get_overview：\n'
-      + '<workbook_overview>\n' + workbookContext.slice(0, OVERVIEW_CAP) + '\n</workbook_overview>',
+      + '<workbook_overview>\n' + documentContext.slice(0, OVERVIEW_CAP) + '\n</workbook_overview>',
     );
   }
   // Where the user was pointing when they asked. Placed AFTER the overview and
@@ -273,6 +294,17 @@ router.post('/chat', async (req: Request, res: Response) => {
       '使用者在問這句話的時候，正選著下面這個範圍。他多半沒辦法用文字說清楚是哪一欄哪一格——'
       + '這就是他指的地方，優先從這裡看起：\n'
       + '<user_selection>\n' + selection.slice(0, SELECTION_CAP) + '\n</user_selection>',
+    );
+  }
+  // Attached images are announced, not embedded. The pane keeps the bytes and
+  // hands them over only when the model calls excel_read_attachment — so an image
+  // it never asks about never leaves the user's machine, and there is exactly one
+  // path by which pixels reach a model instead of two.
+  const attachCount = Number.isFinite(Number(attachments)) ? Math.max(0, Math.min(8, Number(attachments))) : 0;
+  if (attachCount) {
+    parts.push(
+      `使用者在這則訊息附了 ${attachCount} 張圖片。用 excel_read_attachment 看（index 從 1 到 ${attachCount}）。`
+      + '多半那張圖就是他要問的東西本身——先看過再回答，不要先問他圖裡是什麼。',
     );
   }
   parts.push(message.trim());
@@ -441,13 +473,21 @@ router.get('/conversations/:id/messages', async (req: Request, res: Response) =>
 
 // ─── The add-in reporting back what Office.js did ───
 router.post('/tool-result', (req: Request, res: Response) => {
-  const { runId, callId, ok, content, error } = req.body as {
+  const { runId, callId, ok, content, error, image } = req.body as {
     runId?: string; callId?: string; ok?: boolean; content?: string; error?: string;
+    image?: { mimeType?: string; data?: string };
   };
   if (!runId || !callId) { res.status(400).json({ error: 'runId and callId are required' }); return; }
   if (!runBelongsTo(runId, req.user!.userId)) { res.status(403).json({ error: 'Not your run' }); return; }
 
-  const delivered = resolveToolCall(runId, callId, { ok: ok !== false, content, error });
+  // Shape-checked rather than trusted: this is JSON from the pane, and it ends
+  // up as a base64 payload handed to the model. A malformed one should be a
+  // missing picture, not a broken tool result.
+  const pic = image && typeof image.data === 'string' && typeof image.mimeType === 'string'
+    && /^image\/(png|jpeg|gif|webp)$/.test(image.mimeType)
+    ? { mimeType: image.mimeType, data: image.data }
+    : undefined;
+  const delivered = resolveToolCall(runId, callId, { ok: ok !== false, content, error, image: pic });
   // Not an error: a result arriving after its own timeout fired is the normal
   // shape of a slow workbook. Say so plainly so the pane can drop it quietly.
   res.json({ delivered });

@@ -91,6 +91,16 @@ export interface ToolCallResult {
   /** Tool output as text (CSV for reads) — goes straight back to the model. */
   content?: string;
   error?: string;
+  /**
+   * Pixels, for the two tools that answer with a picture (a shape on a sheet, or
+   * an image the user pasted into the chat). Carried through this bridge
+   * untouched; excel-mcp is what turns it into an MCP image block, which is the
+   * only thing that actually puts it in front of the model.
+   *
+   * The add-in shrinks before sending, so what arrives here is already sized for
+   * a model rather than for a screen.
+   */
+  image?: { mimeType: string; data: string };
 }
 
 interface PendingCall {

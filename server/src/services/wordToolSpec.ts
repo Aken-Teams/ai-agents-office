@@ -53,12 +53,30 @@ const PARAGRAPH_RANGE = {
   to: { type: 'number', description: '結束段落編號（含）。省略代表只有 from 那一段。' },
 };
 
-const TRACK_FLAG = {
+/**
+ * Tracking is the default only where there is a before-and-after to compare.
+ *
+ * Writing a document from scratch with change tracking on produces a report that
+ * is entirely red and underlined with a column of revision balloons beside it —
+ * every word is an "insertion", and the reader has to accept two hundred changes
+ * they were never given a chance to disagree with before they can read it.
+ */
+const TRACK_REWRITE = {
   track: {
     type: 'boolean',
     description:
-      '是否以追蹤修訂寫入，預設 true。除非使用者明確說「直接改就好、不要修訂」，'
-      + '否則不要設成 false——追蹤修訂是使用者逐條檢查你的改動的唯一方式。',
+      '是否以追蹤修訂寫入，預設 true。這個工具動的是既有內容，使用者需要逐條比對，'
+      + '所以除非他明確說「直接改就好、不要修訂」，否則不要設成 false。',
+  },
+};
+
+const TRACK_NEW = {
+  track: {
+    type: 'boolean',
+    description:
+      '是否以追蹤修訂寫入，**預設 false**。這個工具加的是新內容，沒有「原本長怎樣」可以比對，'
+      + '標成修訂只會讓整份文件變成紅色底線。只有在你是「補上使用者原本漏掉的東西、'
+      + '而他可能想拒絕」的情況才設成 true。',
   },
 };
 
@@ -146,7 +164,7 @@ export const WORD_TOOLS: WordToolSpec[] = [
           type: 'string',
           description: '一句話說明這段程式要做什麼，會顯示在使用者的確認視窗上。用使用者的語言寫。',
         },
-        ...TRACK_FLAG,
+        ...TRACK_REWRITE,
       },
       required: ['code'],
       additionalProperties: false,
@@ -166,7 +184,7 @@ export const WORD_TOOLS: WordToolSpec[] = [
         ...PARAGRAPH_RANGE,
         text: { type: 'string', description: '新內容。用 \\n 分段。' },
         paragraphs: { type: 'array', items: { type: 'string' }, description: '新內容，一個元素一段。給了這個就忽略 text。' },
-        ...TRACK_FLAG,
+        ...TRACK_REWRITE,
       },
       required: ['from'],
       additionalProperties: false,
@@ -188,7 +206,7 @@ export const WORD_TOOLS: WordToolSpec[] = [
         text: { type: 'string', description: '要插入的內容。用 \\n 分段。' },
         paragraphs: { type: 'array', items: { type: 'string' }, description: '要插入的內容，一個元素一段。' },
         style: { type: 'string', description: '套用在插入內容上的樣式，例如 Heading1、Heading2、Normal、Quote。' },
-        ...TRACK_FLAG,
+        ...TRACK_NEW,
       },
       additionalProperties: false,
     },
@@ -200,7 +218,7 @@ export const WORD_TOOLS: WordToolSpec[] = [
       + '它會保留樣式而且讀起來是一次修訂而不是「刪掉再重打」。',
     inputSchema: {
       type: 'object',
-      properties: { ...PARAGRAPH_RANGE, ...TRACK_FLAG },
+      properties: { ...PARAGRAPH_RANGE, ...TRACK_REWRITE },
       required: ['from'],
       additionalProperties: false,
     },
@@ -268,7 +286,7 @@ export const WORD_TOOLS: WordToolSpec[] = [
         paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
         header: { type: 'boolean', description: '第一列是否為表頭，預設 true。' },
         style: { type: 'string', description: '表格樣式，預設 GridTable4_Accent1。' },
-        ...TRACK_FLAG,
+        ...TRACK_NEW,
       },
       required: ['values'],
       additionalProperties: false,
@@ -277,16 +295,247 @@ export const WORD_TOOLS: WordToolSpec[] = [
   {
     name: 'word_insert_toc',
     description:
-      '插入目錄。Word 的目錄是「欄位」而不是文字，所以插入後要由使用者按一次「更新目錄」'
-      + '才會列出項目——這是 Word 本來的行為，回傳訊息會提醒使用者，你不用再解釋一次，'
-      + '更不要因為看不到項目就以為失敗而重試。'
-      + '\n\n目錄只收錄套了 Heading 樣式的段落，所以先用 word_format_range 把標題階層整理好。',
+      '插入目錄。項目插入當下就看得到（它會帶著已經算好的結果進去），'
+      + '只有**頁碼**要等使用者按一次「參考資料 → 更新目錄」才會出現，'
+      + '因為 Office.js 讀不到分頁資訊。回傳訊息會講這件事，你不用再解釋一次。'
+      + '\n\n它會自己加上「目錄」這個標題，**不要自己先插一個**，否則會出現兩個。'
+      + '\n\n目錄只收錄套了 Heading 樣式的段落。沒有任何標題時它會直接失敗並告訴你——'
+      + '先用 word_format_range 把各章節標題設成 Heading1／Heading2，再插目錄。',
     inputSchema: {
       type: 'object',
       properties: {
         at: { type: 'string', enum: ['after', 'before'], description: '相對於 paragraph 的位置。' },
         paragraph: { type: 'number', description: '基準段落編號。省略就插在文件開頭。' },
-        ...TRACK_FLAG,
+        ...TRACK_NEW,
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'word_header_footer',
+    description:
+      '設定頁首或頁尾，可以放文字、也可以放頁碼。'
+      + '\n\n頁碼是 Word 的欄位：page_number="page" 只放數字，"x_of_y" 放「第 X 頁，共 Y 頁」。'
+      + '插進去當下第一頁就看得到，其餘頁 Word 重新分頁時自己算——不要因為只看到「1」就以為壞了。'
+      + '\n\n【超過三頁的文件一定要做這件事】沒有頁碼的報告列印出來散了就排不回去。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        where: { type: 'string', enum: ['header', 'footer'], description: '預設 footer。' },
+        text: { type: 'string', description: '要放的文字，例如公司名稱或文件標題。' },
+        page_number: { type: 'string', enum: ['page', 'x_of_y'], description: '要放頁碼就給這個。' },
+        alignment: { type: 'string', enum: ['left', 'center', 'right'], description: '預設置中。' },
+        clear: { type: 'boolean', description: 'true = 清空頁首／頁尾。' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'word_insert_break',
+    description:
+      '插入分頁符號或分節符號。'
+      + '\n\n【做封面就是用這個】封面寫完之後插一個分頁，正文才會從新的一頁開始。'
+      + '用連打好幾個空白段落把內容擠到下一頁是文件排版最常見也最脆弱的錯誤——'
+      + '之後只要有人改一個字，整份就跑掉了。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['page', 'line', 'section', 'section_continuous'],
+          description: '預設 page。要讓某一段開始有不同的頁首頁尾才用 section。',
+        },
+        paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
+        at: { type: 'string', enum: ['after', 'before'], description: '預設 after。' },
+        ...TRACK_NEW,
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'word_insert_chart',
+    description:
+      '把一組數字畫成圖表插進文件：column（直條）、bar（橫條）、line（折線）、pie（圓餅）。'
+      + '\n\n【什麼時候該用】報告裡出現三個以上可以比較的數字時。'
+      + '「北中南三區的銷售」「四季的變化」「各項佔比」——寫成一段文字讀者要自己在腦中畫圖，給圖就不用。'
+      + '\n\n【限制，要老實跟使用者說】Word 的增益集 API 沒有原生圖表物件，所以這是一張**圖片**：'
+      + '插進去之後不能在 Word 裡點開改數字，數字變了要重新產生一張。'
+      + '需要會跟資料連動的圖表，那是 Excel 的工作。'
+      + '\n\n配一個 caption，圖才有編號可以在內文引用。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['column', 'bar', 'line', 'pie'], description: '預設 column。' },
+        title: { type: 'string', description: '圖表標題。' },
+        categories: { type: 'array', items: { type: 'string' }, description: 'X 軸（或圓餅的分類）名稱。' },
+        series: {
+          type: 'array',
+          description: '數列。每個 values 的長度要跟 categories 一樣。圓餅圖只能有一個。',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              values: { type: 'array', items: { type: 'number' } },
+            },
+            required: ['values'],
+          },
+        },
+        values: { type: 'array', items: { type: 'number' }, description: '只有一個數列時的簡寫。' },
+        caption: { type: 'string', description: '圖說，例如「圖 1　各季營收」。會套用內建的標號樣式。' },
+        paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
+        at: { type: 'string', enum: ['after', 'before'], description: '預設 after。' },
+        ...TRACK_NEW,
+      },
+      required: ['categories'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'word_insert_equation',
+    description:
+      '插入數學公式，用 LaTeX 寫。'
+      + '\n\n【重要】插進去的是**真正的 Word 公式物件**，不是圖片也不是文字——'
+      + '使用者可以點進去繼續編輯、可以搜尋、縮放不會糊。所以文件裡任何算式都用這個，'
+      + '不要用純文字拼「x^2 + sqrt(y)」，那不是公式，那是公式的描述。'
+      + '\n\n支援常用的 LaTeX：分數 \\frac、上下標 ^ _、根號 \\sqrt、'
+      + '求和積分 \\sum \\int（含上下限）、希臘字母、矩陣 \\begin{pmatrix}、'
+      + '括號 \\left( \\right)、函數 \\sin \\log \\lim、重音 \\bar \\hat \\vec、'
+      + '文字 \\text{}。認不得的指令會原樣顯示，不會整個失敗。'
+      + '\n\n公式獨立成行並置中。真正夾在句子中間的行內公式目前做不到，'
+      + '要在句中提到符號就直接寫那個字元。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        latex: { type: 'string', description: 'LaTeX 原始碼，不用加 $ 或 $$。' },
+        display: { type: 'boolean', description: '是否置中獨立成行，預設 true。' },
+        paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
+        at: { type: 'string', enum: ['after', 'before'], description: '預設 after。' },
+        ...TRACK_NEW,
+      },
+      required: ['latex'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'word_checkbox',
+    description:
+      '產生、讀取或勾選核取方塊。'
+      + '\n\n【什麼時候該用】做查核表、SOP、點檢單、簽核清單的時候。'
+      + '插進去的是 Word 真正的核取方塊控制項——使用者點一下就能勾，狀態會存進檔案，'
+      + '不是打「☐」這個字元（那個點了不會有反應）。'
+      + '\n\nop="insert" 一次給整串項目；op="list" 看目前哪些勾了、哪些沒勾；'
+      + 'op="set" 改某一項的狀態。'
+      + '\n\n「這份點檢單還有哪幾項沒做」用 op="list" 就答得出來。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        op: { type: 'string', enum: ['insert', 'list', 'set'], description: '預設 insert。' },
+        items: { type: 'array', items: { type: 'string' }, description: 'op=insert 時的項目文字。' },
+        index: { type: 'number', description: 'op=set 時要改第幾個（用 op="list" 看編號）。' },
+        checked: { type: 'boolean', description: 'op=set 時要勾還是取消，預設勾。' },
+        paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
+        at: { type: 'string', enum: ['after', 'before'], description: '預設 after。' },
+        ...TRACK_NEW,
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'word_insert_link',
+    description:
+      '加超連結。可以把文件裡既有的文字變成連結（給 find），也可以插入一段新的連結文字。'
+      + '\n\n報告寫了參考資料、規範編號、網頁出處，就把它們做成連結。'
+      + '只接受 http/https/mailto——文件可能來自外部，不該把裡面隨便一個字串變成可點的目標。'
+      + '\n\n注意：不要把 KM 或郵件系統的內部網址寫進文件，那些需要憑證才打得開。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        op: { type: 'string', enum: ['add', 'list'], description: '預設 add。' },
+        url: { type: 'string', description: '目標網址。' },
+        find: { type: 'string', description: '要變成連結的既有文字。給了就忽略 text。' },
+        text: { type: 'string', description: '要插入的連結文字。省略就用網址本身。' },
+        match_case: { type: 'boolean', description: 'find 是否區分大小寫。' },
+        paragraph: { type: 'number', description: '基準段落編號。' },
+        at: { type: 'string', enum: ['after', 'before'], description: '預設 after。' },
+        ...TRACK_NEW,
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'word_page_design',
+    description:
+      '整份文件的外觀：浮水印、頁面框線、頁面底色。'
+      + '\n\n浮水印最常用——「機密」「草稿」「僅供內部參閱」會出現在每一頁的文字後面。'
+      + '\n\n【注意】框線和底色要重寫整份內文才做得到（Word 把它們放在增益集碰不到的地方），'
+      + '所以那兩個會跳確認視窗。浮水印只動頁首，不受影響。'
+      + '一次呼叫可以同時設定多項，不要分好幾次呼叫。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        watermark: { type: 'string', description: '浮水印文字，例如「機密」。' },
+        watermark_color: { type: 'string', description: '浮水印顏色，#RRGGBB，預設淺灰。' },
+        border: { type: 'string', enum: ['single', 'double', 'thick', 'dashed', 'dotted'], description: '頁面框線樣式。' },
+        border_color: { type: 'string', description: '框線顏色，#RRGGBB。' },
+        border_width: { type: 'number', description: '框線粗細（1/8 pt 為單位），預設 12＝1.5pt。' },
+        page_color: { type: 'string', description: '頁面底色，#RRGGBB。列印預設不會印出來。' },
+      },
+      additionalProperties: false,
+    },
+    destructive: true,
+  },
+  {
+    name: 'word_insert_textbox',
+    description:
+      '插入浮動的文字方塊，可以指定位置、大小、底色、字色。'
+      + '\n\n【做設計感的封面就是用這個】滿版色塊配大標題、側邊的引言框、'
+      + '角落的文件編號——這些是文字方塊，不是段落。'
+      + '\n\n單位是**點（pt）**，從頁面左上角算起。A4 是 595 × 842 pt，Letter 是 612 × 792 pt。'
+      + '所以滿版橫幅大概是 left=0, top=0, width=595, height=200。'
+      + '\n\n它是浮動物件，使用者可以直接拖曳和改字。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: '方塊裡的文字。' },
+        left: { type: 'number', description: '左邊距離（pt），預設 0。' },
+        top: { type: 'number', description: '上方距離（pt），預設 0。' },
+        width: { type: 'number', description: '寬（pt），預設 400。' },
+        height: { type: 'number', description: '高（pt），預設 100。' },
+        fill: { type: 'string', description: '底色，#RRGGBB 或顏色名稱。' },
+        transparency: { type: 'number', description: '底色透明度，0（不透明）到 1（全透明）。' },
+        font_color: { type: 'string', description: '文字顏色，#RRGGBB。' },
+        font_size: { type: 'number', description: '字級（pt）。' },
+        font: { type: 'string', description: '字型名稱。' },
+        bold: { type: 'boolean' },
+        name: { type: 'string', description: '物件名稱，方便之後辨識。' },
+        paragraph: { type: 'number', description: '錨定的段落編號。省略就錨在文件開頭。' },
+        ...TRACK_NEW,
+      },
+      required: ['text'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'word_normalize_layout',
+    description:
+      '把整份文件的內文段落統一成同一套排版：對齊、縮排、行距、段後距。'
+      + '\n\n【寫完一份文件的最後一定要做這件事】排版會漂。'
+      + '接在置中段落後面插入的段落會繼承置中，公式段落本來就是置中的、'
+      + '它後面的也會跟著，而你一題一題寫的時候看不到整份文件長什麼樣。'
+      + '結果就是一頁裡有幾段莫名其妙置中——讀者不會覺得「這幾段對齊錯了」，'
+      + '他會覺得這份文件沒有人校對過。'
+      + '\n\n它不會動標題、圖說、目錄、清單和公式段落——那些的對齊是刻意的。'
+      + '\n\n中文公文常見的設定：alignment="justify"、first_line_indent=24（兩個字）。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        alignment: { type: 'string', enum: ['left', 'center', 'right', 'justify'], description: '內文對齊，預設 left。' },
+        first_line_indent: { type: 'number', description: '首行縮排（點）。中文公文常用 24。' },
+        left_indent: { type: 'number', description: '左縮排（點），預設 0。' },
+        line_spacing: { type: 'number', description: '行距（點）。' },
+        space_after: { type: 'number', description: '段後距（點）。用它做留白，不要用空白段落。' },
+        style_body: { type: 'string', description: '內文段落要套的樣式，通常不用給。' },
+        ...PARAGRAPH_RANGE,
       },
       additionalProperties: false,
     },
@@ -303,7 +552,7 @@ export const WORD_TOOLS: WordToolSpec[] = [
         replace: { type: 'string', description: '要換成的文字。' },
         match_case: { type: 'boolean', description: '是否區分大小寫。' },
         whole_word: { type: 'boolean', description: '是否只比對整個字詞。' },
-        ...TRACK_FLAG,
+        ...TRACK_REWRITE,
       },
       required: ['find', 'replace'],
       additionalProperties: false,
@@ -457,6 +706,9 @@ const TRACK_OP_LABEL: Record<string, string> = {
   reject_all: '拒絕全部修訂',
 };
 
+/** Mirrors hosts/word.js — the tools that edit what was already there. */
+const TRACKED_BY_DEFAULT = new Set(['word_write_range', 'word_replace_all', 'word_delete_range']);
+
 export function describeToolCall(name: string, args: Record<string, unknown>): string {
   if (name === 'word_get_overview') return '讀取文件結構';
   if (name === 'word_get_selection') return '讀取目前選取的段落';
@@ -482,6 +734,44 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
     return `插入 ${rows} 列的表格`;
   }
   if (name === 'word_insert_toc') return '插入目錄';
+  if (name === 'word_normalize_layout') return '統一內文的排版';
+  if (name === 'word_insert_equation') return `插入公式：${String(args.latex || '').slice(0, 60)}`;
+  if (name === 'word_checkbox') {
+    const op = String(args.op || 'insert');
+    if (op === 'list') return '讀取核取方塊狀態';
+    if (op === 'set') return `${args.checked === false ? '取消勾選' : '勾選'}第 ${args.index} 項`;
+    const n = Array.isArray(args.items) ? args.items.length : 0;
+    return `插入 ${n} 個核取方塊`;
+  }
+  if (name === 'word_insert_link') {
+    if (String(args.op || 'add') === 'list') return '讀取文件裡的超連結';
+    return args.find ? `把「${args.find}」設成連往 ${args.url} 的連結` : `插入連往 ${args.url} 的連結`;
+  }
+  if (name === 'word_page_design') {
+    const parts: string[] = [];
+    if (args.watermark) parts.push(`浮水印「${args.watermark}」`);
+    if (args.border) parts.push('頁面框線');
+    if (args.page_color) parts.push('頁面底色');
+    return `設定${parts.join('、') || '版面'}`;
+  }
+  if (name === 'word_insert_textbox') {
+    return `插入文字方塊：${String(args.text || '').slice(0, 40)}`;
+  }
+  if (name === 'word_header_footer') {
+    const side = String(args.where || 'footer') === 'header' ? '頁首' : '頁尾';
+    if (args.clear) return `清空${side}`;
+    return `設定${side}` + (args.page_number ? '（含頁碼）' : '');
+  }
+  if (name === 'word_insert_break') {
+    const k = String(args.type || 'page');
+    const label = k === 'page' ? '插入分頁符號' : k === 'line' ? '插入換行符號' : '插入分節符號';
+    return label + (args.paragraph ? `（段落 ${args.paragraph} 之後）` : '');
+  }
+  if (name === 'word_insert_chart') {
+    const kind = { column: '直條', bar: '橫條', line: '折線', pie: '圓餅' }[String(args.type || 'column')] || '';
+    const n = Array.isArray(args.categories) ? args.categories.length : 0;
+    return `插入${kind}圖` + (args.title ? `：${args.title}` : `（${n} 個分類）`);
+  }
   if (name === 'word_replace_all') return `把全文的「${args.find}」換成「${args.replace}」`;
   if (name === 'word_tracked_changes') return TRACK_OP_LABEL[String(args.op || '')] || String(args.op || '');
   if (name === 'word_comment') {
@@ -510,13 +800,19 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
  */
 export function describeToolMeta(name: string, args: Record<string, unknown>): string {
   const parts: string[] = [];
+  if (name === 'word_page_design' && (args.border || args.page_color)) {
+    parts.push('會重寫整份內文以套用版面設定');
+  }
   if (name === 'word_run_script') {
     const lines = String(args.code || '').split('\n').length;
     parts.push(String(args.mode || '') === 'write' ? '執行程式並修改文件' : '執行程式讀取內容');
     parts.push(`${lines} 行`);
   }
-  if (WORD_TOOLS.some(t => t.name === name && t.destructive) || name === 'word_insert_text') {
-    parts.push(args.track === false ? '直接寫入，不標記為修訂' : '以追蹤修訂寫入，可逐條接受或拒絕');
+  // Only say it when it is true. A footnote claiming "可逐條接受或拒絕" on a call
+  // that writes directly is worse than no footnote.
+  const tracked = TRACKED_BY_DEFAULT.has(name) ? args.track !== false : args.track === true;
+  if (WORD_TOOLS.some(t => t.name === name && t.destructive) || name.startsWith('word_insert')) {
+    parts.push(tracked ? '以追蹤修訂寫入，可逐條接受或拒絕' : '直接寫入，不標記為修訂');
   }
   return parts.join(' · ');
 }
