@@ -92,7 +92,13 @@ async function runDocAgent(opts: {
   const message = [
     `請根據以下「團隊分析報告」的內容，製作一份專業的${spec.label}。`,
     stylePrompt?.trim() ? `\n風格要求：${stylePrompt.trim()}` : '',
-    '\n內容必須忠於下面的報告，不要新增報告裡沒有的資料或數字。\n',
+    '',
+    '【資料來源鐵則】',
+    '- 這份文件的內容**只能來自下方的報告**。你的工作是「把這份報告做成文件」，不是「重新研究這個題目」。',
+    '- **不要上網查資料**，也不要用你自己既有的知識補充報告裡沒有的數字、公司名、日期或事件。',
+    '- 報告沒寫到但版面看起來需要的欄位，寧可留白或寫「報告未提供」，也不要自己補。',
+    '- 團隊已經查證過這些內容，使用者收到的文件必須和他在畫面上看到的團隊結論一致；一旦你另外查了別的資料，兩邊就對不起來了。',
+    '',
     '===== 報告內容 =====',
     reportMd,
   ].join('\n');
@@ -106,6 +112,13 @@ async function runDocAgent(opts: {
       role: 'worker',
       skillId: spec.skill,
       sandboxSubdir: `_agents/${spec.skill}`,
+      // No WebSearch/WebFetch. The default worker toolset includes them, and the
+      // generator skills are written to research their topic — so this agent went
+      // and looked things up on its own, and the emailed file ended up carrying
+      // numbers the team never saw. Telling it not to in the prompt is not enough
+      // when the tool is sitting right there. It keeps Bash/Write/Read because
+      // that is how it runs the generator script and writes the output file.
+      customAllowedTools: ['Bash', 'Write', 'Read'],
     });
 
     const cleanup = () => {
