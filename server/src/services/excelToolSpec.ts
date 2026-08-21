@@ -319,6 +319,64 @@ export const EXCEL_TOOLS: ExcelToolSpec[] = [
     },
   },
   {
+    name: 'excel_clean_data',
+    description:
+      '資料清理：去重、統一寫法、補空白、拆欄、併欄。'
+      + '\n\n【匯出來的原始資料要先過這一關】。這些事用 excel_run_script 也做得到，'
+      + '但這支工具會先算好「會刪掉幾列、會改幾格」再讓使用者確認，'
+      + 'script 的確認視窗只能給他看一段程式碼，他看不出來你要動什麼。'
+      + '\n\nop：'
+      + '\n· dedupe 去掉重複的資料列。key_columns 指定只看哪幾欄算重複（例如只看訂單編號）；'
+      + '不指定就是整列一模一樣才算。比對時會忽略頭尾空白。'
+      + '範圍裡有公式會被拒絕——搬動資料列會讓相對參照指到別的列。'
+      + '\n· normalize 統一寫法：去空白、全形轉半形、大小寫、文字數字轉成真數字（1,234 / (500) / 12%）、'
+      + '文字日期轉成真日期（含民國年 113/1/5）。【使用者抱怨「加總是 0」「排序怪怪的」通常就是這個】——'
+      + '那些格子是文字不是數字。'
+      + '\n· fill 補空白：method=down 承接上一列的值（合併儲存格匯出的資料就長這樣），'
+      + 'method=value 填固定值。'
+      + '\n· split 拆欄：range 要同時含來源欄和放結果的欄，例如 B2:D50 是把 B 用分隔符號拆進 B、C、D。'
+      + '先用 excel_get_overview 確認右邊那幾欄是空的。'
+      + '\n· merge_columns 併欄：把 range 各欄併進最左邊那一欄，空的欄會跳過不留連續分隔符號。'
+      + '\n\n全部都只改一個矩形、不插入也不刪除整列整欄，所以使用者按「復原上一步」可以完整退回。',
+    destructive: true,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        op: { type: 'string', enum: ['dedupe', 'normalize', 'fill', 'split', 'merge_columns'] },
+        sheet: { type: 'string' },
+        range: { type: 'string', description: "要清理的範圍，例如 'A1:F500'。省略則整張表的已使用範圍。" },
+        has_headers: { type: 'boolean', description: '第一列是不是標題列，預設 true（標題列不會被動到）' },
+        columns: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'normalize / fill 用：只處理範圍內第幾欄（0 起算）。不給就是全部。',
+        },
+        key_columns: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'dedupe 用：以哪幾欄判斷重複（0 起算，相對於 range）。不給就是比對整列。',
+        },
+        trim: { type: 'boolean', description: 'normalize 用：去頭尾空白並壓縮中間連續空白，預設 true' },
+        collapse_spaces: { type: 'boolean', description: 'normalize 用，預設 true' },
+        half_width: { type: 'boolean', description: 'normalize 用：全形英數符號轉半形' },
+        letter_case: { type: 'string', enum: ['none', 'upper', 'lower'], description: 'normalize 用，預設 none' },
+        to_number: { type: 'boolean', description: 'normalize 用：像數字的文字轉成數字。前導零的代號與 15 位以上數字會保留為文字。' },
+        to_date: { type: 'boolean', description: 'normalize 用：像日期的文字轉成日期（y/m/d、y-m-d、民國年）' },
+        method: { type: 'string', enum: ['down', 'value'], description: 'fill 用，預設 down' },
+        fill_value: { description: 'fill + method=value 用：要填什麼，預設 0' },
+        delimiter: { type: 'string', description: "split 用：分隔符號，預設 ','" },
+        separator: { type: 'string', description: "merge_columns 用：接起來時中間放什麼，預設 ''" },
+        keep_source: {
+          type: 'boolean',
+          description: 'split：來源欄保持原樣，結果從右邊一欄開始放（預設 false＝像 Excel 的資料剖析那樣取代來源）。'
+            + 'merge_columns：併完之後保留原本各欄（預設 false＝清掉）。',
+        },
+      },
+      required: ['op', 'sheet'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'excel_table_ops',
     description:
       '排序、篩選、建立 Excel 表格物件、凍結窗格、設定條件式格式（色階／資料橫條／highlight）。'
@@ -521,6 +579,10 @@ const TABLE_OP_LABEL: Record<string, string> = {
   sort: '排序', autofilter: '套用篩選', create_table: '建立表格',
   freeze_panes: '凍結窗格', conditional_format: '設定條件式格式',
 };
+const CLEAN_OP_LABEL: Record<string, string> = {
+  dedupe: '去除重複資料列', normalize: '統一資料寫法', fill: '補上空白格',
+  split: '把一欄拆成多欄', merge_columns: '把多欄併成一欄',
+};
 
 /**
  * One human-readable line describing what a call is about to do. Shown in the
@@ -583,6 +645,13 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
   }
   if (name === 'excel_table_ops') {
     return `${TABLE_OP_LABEL[op] || op}：${args.sheet}${args.range ? `!${args.range}` : ''}`;
+  }
+  if (name === 'excel_clean_data') {
+    // Deliberately no counts here. The add-in inspects the range before drawing
+    // the card and writes the real numbers — 「會刪掉 37 列重複資料」 — onto it;
+    // guessing them from the arguments alone would put a number on the card that
+    // nothing verified.
+    return `${CLEAN_OP_LABEL[op] || op}：${args.sheet}${args.range ? `!${args.range}` : '（整張表）'}`;
   }
   if (name === 'excel_create_pivot') {
     const rows = Array.isArray(args.rows) ? (args.rows as string[]).join('、') : '';

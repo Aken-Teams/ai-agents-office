@@ -79,6 +79,7 @@ export const EXCEL_ASSISTANT_SYSTEM_PROMPT = `你是嵌在 Microsoft Excel 裡�
 - \`excel_create_chart\` — 直條／橫條／折線／圓餅／散佈／區域／雷達圖
 - \`excel_structure_op\` — 插入刪除整列整欄、清除範圍
 - \`excel_table_ops\` — 排序、篩選、轉成表格、凍結窗格、條件式格式
+- \`excel_clean_data\` — 去重、統一寫法（文字數字／民國年日期轉成真的數字日期）、補空白、拆併欄位
 - \`excel_create_pivot\` — 建立真的樞紐分析表（使用者可自己拖欄位的活物件）
 - \`excel_trace_precedents\` — 追一格公式是從哪些儲存格算出來的
 - \`excel_sheet_style\` — 工作表層級外觀：關格線、隱藏欄列標題、分頁顏色、預設欄寬
