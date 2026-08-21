@@ -16,6 +16,8 @@ import { useDocumentBlocks } from '../../editor/hooks/useDocumentBlocks';
 import DocumentCanvas from '../components/DocumentCanvas';
 import { calcCostUsd } from '../../../lib/pricing';
 import { useKmAvailable } from '../../components/DataSourceSelector';
+import { filenameFromResponse } from '../../components/downloadName';
+import CopyButton from '../../components/CopyButton';
 
 const ChatChart = dynamic(() => import('../../components/charts/ChatChart'), { ssr: false });
 const ChatEChart = dynamic(() => import('../../components/charts/ChatEChart'), { ssr: false });
@@ -1489,7 +1491,10 @@ function ChatContent() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename;
+      // The server decides the name — it is the only side that knows this is
+      // version 4 and should therefore save as "…_v4.html". Passing our own
+      // `filename` here would overwrite that and make every version look alike.
+      a.download = filenameFromResponse(res) || filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -1816,6 +1821,15 @@ function ChatContent() {
                             </div>
                           </details>
                         )}
+                        {/* Bottom-right of the bubble, after the sources, so it
+                            never sits between the answer and its citations.
+                            Copies the ANSWER only: the [CHOICES] block is
+                            interaction scaffolding and is stripped the same way
+                            it is for display, and the text is taken as markdown
+                            so tables and headings survive the paste. */}
+                        <div className="flex justify-end mt-1.5">
+                          <CopyButton getText={() => parseChoices(msg.content).text} />
+                        </div>
                       </div>
                     )}
                   </div>

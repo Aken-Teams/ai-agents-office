@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { dbGet, dbAll } from '../db.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { getFileDownloadPath, deleteFile, getFileVersions, extractPptxShapes, registerNewFiles, snapshotExistingFiles, getExistingFilePaths } from '../services/fileManager.js';
+import { getFileForDownload, downloadFilename, getFileDownloadPath, deleteFile, getFileVersions, extractPptxShapes, registerNewFiles, snapshotExistingFiles, getExistingFilePaths } from '../services/fileManager.js';
 import { convertOfficeFile } from '../services/filePreview.js';
 import { applyWatermark, getWatermarkSettings } from '../services/watermark.js';
 import { config } from '../config.js';
@@ -150,16 +150,25 @@ router.get('/', async (req: Request, res: Response) => {
 // GET /api/files/:id/download
 router.get('/:id/download', async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const filePath = await getFileDownloadPath(userId, req.params.id as string);
+  const found = await getFileForDownload(userId, req.params.id as string);
 
-  if (!filePath) { res.status(404).json({ error: 'File not found' }); return; }
+  if (!found) { res.status(404).json({ error: 'File not found' }); return; }
 
-  const filename = path.basename(filePath);
+  const filePath = found.fullPath;
+  // Name it after the ORIGINAL filename plus its version, not after the file on
+  // disk: old versions are stored as "foo.v3.html", which is our storage detail,
+  // and the current version has no marker at all — so every download of a file
+  // that had been revised arrived looking identical to the others.
+  const filename = downloadFilename(found.file.filename, found.file.version);
 
   try {
     const watermarked = await applyWatermark(filePath);
     if (watermarked) {
-      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+      // RFC 5987: a bare percent-encoded `filename=` is not decoded by browsers,
+      // so a Chinese name arrived as %E5%BC%B7%E8%8C%82…. `filename*` is the form
+      // that carries UTF-8, with an ASCII `filename` kept for old clients.
+      res.setHeader('Content-Disposition',
+        `attachment; filename="${filename.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
       res.setHeader('Content-Length', watermarked.length);
       res.end(watermarked); return;
     }

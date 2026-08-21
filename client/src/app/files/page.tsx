@@ -7,6 +7,7 @@ import { I18nProvider, useTranslation } from '../../i18n';
 import Navbar from '../components/Navbar';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
 import HelpButton from '../components/HelpButton';
+import { filenameFromResponse } from '../components/downloadName';
 
 interface FileItem {
   id: string;
@@ -682,7 +683,7 @@ function FilesContent() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename;
+      a.download = filenameFromResponse(res) || filename;
       document.body.appendChild(a);
       a.click();
       a.remove();

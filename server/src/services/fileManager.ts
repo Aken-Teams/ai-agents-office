@@ -197,6 +197,41 @@ export async function getFileDownloadPath(userId: string, fileId: string): Promi
 }
 
 /**
+ * The name a downloaded file should carry, version included:
+ * "asn-auto-fill-tool.html" v4 → "asn-auto-fill-tool_v4.html".
+ *
+ * Every version used to arrive as the same "asn-auto-fill-tool.html", so a
+ * folder of downloads was indistinguishable copies — and the browser silently
+ * renames collisions to (1), (2)…, which says nothing about WHICH version each
+ * one is. The number belongs in the name, before the extension so the file still
+ * opens in the right application.
+ *
+ * v1 is left bare: most files never get a second version, and "_v1" on every
+ * download would be noise for the common case.
+ */
+export function downloadFilename(originalName: string, version?: number | null): string {
+  const v = Number(version) || 1;
+  if (v <= 1) return originalName;
+  const i = originalName.lastIndexOf('.');
+  return i > 0
+    ? `${originalName.slice(0, i)}_v${v}${originalName.slice(i)}`
+    : `${originalName}_v${v}`;
+}
+
+/** File row plus the disk path, for callers that need both (e.g. download naming). */
+export async function getFileForDownload(
+  userId: string, fileId: string,
+): Promise<{ file: GeneratedFile; fullPath: string } | null> {
+  const file = await dbGet<GeneratedFile>(
+    'SELECT * FROM generated_files WHERE id = ? AND user_id = ?', fileId, userId);
+  if (!file) return null;
+  const fullPath = path.join(config.workspaceRoot, file.file_path);
+  if (!validateFilePath(userId, fullPath)) return null;
+  if (!fs.existsSync(fullPath)) return null;
+  return { file, fullPath };
+}
+
+/**
  * Get all versions of a file (same filename + conversation).
  */
 export async function getFileVersions(userId: string, fileId: string): Promise<GeneratedFile[]> {
