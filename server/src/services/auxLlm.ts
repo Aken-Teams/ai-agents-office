@@ -167,6 +167,16 @@ export function auxLlmAvailable(): boolean {
 // Three consecutive failures is not bad luck, it is a broken box or a revoked
 // key. Stop asking for a while.
 
+/**
+ * How much of the remaining budget one attempt may spend while a fallback still
+ * exists. 60/40 rather than 50/50 because the first provider is the one we
+ * actually want to answer — the reserve only has to be enough for the backup to
+ * get a real try, not an equal one.
+ */
+const FIRST_ATTEMPT_SHARE = 0.6;
+/** Never shrink an attempt below this; a 2-second slice helps nobody. */
+const MIN_ATTEMPT_MS = 5_000;
+
 const BREAKER_THRESHOLD = 3;
 const BREAKER_COOLDOWN_MS = 5 * 60_000;
 const breakers = new Map<ProviderName, { failures: number; openedAt: number }>();
@@ -314,14 +324,32 @@ export async function auxChat(
   // stalls. Each attempt gets whatever is left, capped by its own ceiling.
   const deadline = opts?.timeoutMs ? Date.now() + opts.timeoutMs : null;
 
-  for (const p of providers(opts?.tier)) {
-    if (breakerOpen(p.name)) continue;
+  // Skip tripped providers up front so we know how many fallbacks are really
+  // behind the one we are about to try.
+  const chain = providers(opts?.tier).filter(p => !breakerOpen(p.name));
+
+  for (let i = 0; i < chain.length; i++) {
+    const p = chain[i];
     const remaining = deadline ? deadline - Date.now() : p.attemptTimeoutMs;
     if (remaining <= 250) break; // not enough left to be worth a round trip
     // Thinking models spend output tokens on reasoning before they answer; too
     // small a cap returns finish_reason=length with EMPTY content.
     const maxTokens = Math.max(opts?.maxTokens ?? 1024, p.name === 'local' ? 1500 : 0);
-    const budget = Math.min(remaining, p.attemptTimeoutMs);
+    // Hold budget back for the providers behind this one. Without this, an
+    // attempt is capped only by min(remaining, its own ceiling) — so a caller
+    // whose total budget happens to equal the first provider's ceiling gives it
+    // everything, and the fallback is unreachable BY CONSTRUCTION rather than by
+    // circumstance. That is not a hypothetical: the narration job asked for 45s,
+    // the on-prem ceiling is 45s, the model was alive but slow, and DeepSeek was
+    // never called once. A provider that is merely slow must not be able to
+    // starve the one that would have answered.
+    const budget = Math.min(
+      i < chain.length - 1
+        ? Math.max(Math.floor(remaining * FIRST_ATTEMPT_SHARE), MIN_ATTEMPT_MS)
+        : remaining,
+      p.attemptTimeoutMs,
+      remaining,
+    );
     try {
       const res = await fetch(p.url, {
         method: 'POST',

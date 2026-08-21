@@ -46,7 +46,12 @@ export async function generateNarration(blocks: DocumentBlock[], docType: string
 ${pages}`;
 
   try {
-    const aux = await auxChat(prompt, { temperature: 0.4, maxTokens: 2400, timeoutMs: 45_000, feature: 'doc-narration', ...(userId ? { billTo: { userId } } : {}) });
+    // 45s was the on-prem model's own per-attempt ceiling, so this job could
+    // never reach the DeepSeek fallback. It is also simply too little: narrating
+    // a 40-page document is one call producing ~2.4k tokens, which the 30B needs
+    // roughly a minute for. 120s gives the first model room to finish AND leaves
+    // a real slice for the backup (auxChat reserves it — see FIRST_ATTEMPT_SHARE).
+    const aux = await auxChat(prompt, { temperature: 0.4, maxTokens: 2400, timeoutMs: 120_000, feature: 'doc-narration', ...(userId ? { billTo: { userId } } : {}) });
     if (!aux) return null;
     const arr = parseJsonLoose<string[]>(aux.text);
     if (!Array.isArray(arr)) return null;
