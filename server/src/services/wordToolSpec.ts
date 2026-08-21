@@ -286,6 +286,31 @@ export const WORD_TOOLS: WordToolSpec[] = [
         paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
         header: { type: 'boolean', description: '第一列是否為表頭，預設 true。' },
         style: { type: 'string', description: '表格樣式，預設 GridTable4_Accent1。' },
+        align: {
+          type: 'array',
+          items: { type: 'string', enum: ['left', 'center', 'right'] },
+          description:
+            '每一欄的對齊，順序同欄位。**有數字的欄一定要 right**——'
+            + '金額、數量、單價靠左看起來就不像正式文件。'
+            + '例如 ["left","left","right","center","right","right"]。',
+        },
+        widths: {
+          type: 'array',
+          items: { type: 'number' },
+          description:
+            '每一欄的寬度（點），順序同欄位。A4 內文總寬約 450 點。'
+            + '品名規格要寬、數量單位要窄，不給的話 Word 會平均分配，看起來很鬆散。',
+        },
+        total_rows: {
+          type: 'number',
+          description:
+            '最後幾列是合計列。會填深底白字粗體，讓讀者要找的那個數字最顯眼。'
+            + '報價單的「小計／稅／總計」就填 3。',
+        },
+        total_fill: { type: 'string', description: '合計列底色，預設 #1F3864。' },
+        total_color: { type: 'string', description: '合計列文字色，預設白色。' },
+        banded: { type: 'boolean', description: '是否隔列上色。資料多的時候好讀，正式報價單通常關掉。' },
+        first_column: { type: 'boolean', description: '第一欄是否強調。' },
         ...TRACK_NEW,
       },
       required: ['values'],
@@ -331,6 +356,131 @@ export const WORD_TOOLS: WordToolSpec[] = [
     },
   },
   {
+    name: 'word_insert_layout',
+    description:
+      '把兩到四個區塊**並排**在同一行。'
+      + '\n\n【這是做出「像範本」的關鍵】其他工具都只會往下寫，'
+      + '所以「客戶資料 | 報價資訊」這種左右並排的版面做不出來，'
+      + '只能擠成一張四欄表或八行堆疊——字都對，版面是錯的。'
+      + '\n\n用途：報價單／合約的雙欄資訊、信頭（公司名靠左、地址靠右）、'
+      + '兩案對照、文末的簽核欄。'
+      + '\n\npanel=true 會加上淡底色和細框線，就是範本上那種方框的樣子；'
+      + '不加就是純版面用的無框格線（做信頭用這個）。'
+      + '\n\n每一欄可以放 fields（標籤／內容）或 text（純文字，可用 \\n 分行）。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        columns: {
+          type: 'array',
+          description: '2 到 4 欄。每欄可有 title、fields（物件）或 rows（陣列）或 text。',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: '這一欄的小標，例如「客戶資料」。' },
+              fields: { type: 'object', additionalProperties: { type: 'string' } },
+              rows: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
+              text: { type: 'string', description: '純文字內容，可用 \\n 分行。' },
+              align: { type: 'string', enum: ['left', 'center', 'right'], description: 'text 的對齊；信頭的地址那欄用 right。' },
+            },
+          },
+        },
+        widths: { type: 'array', items: { type: 'number' }, description: '每欄寬度（點）。A4 內文總寬約 450。' },
+        panel: { type: 'boolean', description: '是否加底色和框線，預設 false。資訊方塊用 true，信頭用 false。' },
+        panel_fill: { type: 'string', description: '底色，預設 #F2F6FA。' },
+        size: { type: 'number', description: '基準字級，預設 10。' },
+        tab: { type: 'number', description: '標籤欄寬（點），預設 72。' },
+        font: { type: 'string' },
+        paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
+        at: { type: 'string', enum: ['after', 'before'] },
+        track: { type: 'boolean', description: '預設 false。' },
+      },
+      required: ['columns'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'word_insert_block',
+    description:
+      '插入一個**有版式的區塊**，而不是一段文字。字級和顏色由區塊種類決定，你不用挑。'
+      + '\n\n【為什麼需要這個】只用 word_insert_text 的話，一頁上只會有「標題、章節、內文」三級，'
+      + '做出來就是大文字配小文字。真正的商務文件不是這樣：一張報價單上有公司名、英文名、地址、'
+      + '文件名、欄位標籤、欄位內容、專案行——七種處理，沒有一種是標題也沒有一種是內文。'
+      + '\n\n四種區塊：'
+      + '\n· **fields**（預設）：標籤／內容清單，用定位點對齊。'
+      + '「客戶名稱　強合科技」「報價日期　2026-07-24」這種。標籤深藍、內容灰。'
+      + '\n· **kv**：同樣是成對資訊，但排成兩欄表格。超過六七列就用這個。'
+      + '\n· **note**：附註區塊，字更小、縮排、左邊有一條色線。用在說明、但書、注意事項。'
+      + '\n· **lead**：章節標題底下的一句前言，比內文大、比標題輕。'
+      + '\n· **rule**：一條橫線。信頭底下那條線就是這個，用 color 和 size 控制。'
+      + '\n\n插完不要再用 word_format_range 改它的字級——那正是版面亂掉的來源。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: ['fields', 'kv', 'note', 'lead', 'rule'], description: '預設 fields。' },
+        title: { type: 'string', description: 'fields 和 kv 的小標題，例如「客戶資料」。' },
+        fields: {
+          type: 'object',
+          description: 'fields／kv 的內容，鍵是標籤、值是內容。',
+          additionalProperties: { type: 'string' },
+        },
+        rows: {
+          type: 'array',
+          description: '同 fields，但用陣列保留順序：[["客戶名稱","強合科技"],…]。',
+          items: { type: 'array', items: { type: 'string' } },
+        },
+        text: { type: 'string', description: 'note 和 lead 的內容。note 可以用 \\n 分行。' },
+        thickness: { type: 'number', description: 'rule 的線粗（點），預設 1.5。1.5 是細線，3 以上就變成粗黑條了。' },
+        size: { type: 'number', description: '基準字級（點），預設 10。區塊內各層會依它調整。' },
+        tab: { type: 'number', description: 'fields 的標籤欄寬（點），預設 96。標籤長就調大。' },
+        table_style: { type: 'string', description: 'kv 的表格樣式。' },
+        font: { type: 'string', description: '字型，預設微軟正黑體。' },
+        paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
+        at: { type: 'string', enum: ['after', 'before'], description: '預設 after。' },
+        track: { type: 'boolean', description: '預設 false。' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'word_insert_cover',
+    description:
+      '做一頁封面，並自動接上分頁符號讓正文從第二頁開始。'
+      + '\n\n【要做封面就用這個，不要自己組】自己用 word_insert_text 打標題和副標題，'
+      + '做出來會是幾行大字浮在一整頁空白裡——那看起來像沒做完，不像封面。'
+      + '\n\n三種版面，選跟文件性質相符的：'
+      + '\n· **report**（預設）：大標題 + 副標 + 一張「文件資訊」表。'
+      + '寫 PRD、規格書、分析報告用這個。meta 放文件版本、建立日期、文件狀態、負責人這類欄位。'
+      + '\n· **form**：標題、副標、列印時間，全部置中而且字都小。'
+      + '彙整表、點檢表、申請書用這個。'
+      + '\n· **letterhead**：公司抬頭 + 置中的文件名 + 客戶／案件資訊。'
+      + '報價單、通知函、對外文件用這個，company 和 address 要給。'
+      + '\n\n字級和顏色由版面決定，**不要再套 word_format_range 把封面放大**——'
+      + '一頁上只有一個大字級、其餘都小，是這幾種版面共通的做法。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        layout: { type: 'string', enum: ['report', 'form', 'letterhead'], description: '預設 report。' },
+        title: { type: 'string', description: '文件名稱。letterhead 版面下若在 6 個字以內會自動加寬字距。' },
+        subtitle: { type: 'string', description: '副標題或英文名稱。' },
+        note: { type: 'string', description: 'form 版面的小字，例如「列印時間：民國 115 年 7 月 31 日」。' },
+        company: { type: 'string', description: 'letterhead 版面的公司名稱。' },
+        company_en: { type: 'string', description: 'letterhead 版面的公司英文名。' },
+        address: { type: 'string', description: 'letterhead 版面的地址與聯絡方式，會靠右。' },
+        meta: {
+          type: 'object',
+          description:
+            'report 版面的文件資訊表，鍵是欄位名、值是內容。'
+            + '例如 {"文件版本":"v1.0","建立日期":"2026-08-21","文件狀態":"草稿"}。',
+          additionalProperties: { type: 'string' },
+        },
+        table_style: { type: 'string', description: '資訊表的樣式，預設 GridTable4_Accent1。' },
+        font: { type: 'string', description: '字型，預設微軟正黑體。' },
+      },
+      required: ['title'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'word_insert_break',
     description:
       '插入分頁符號或分節符號。'
@@ -349,6 +499,37 @@ export const WORD_TOOLS: WordToolSpec[] = [
         at: { type: 'string', enum: ['after', 'before'], description: '預設 after。' },
         ...TRACK_NEW,
       },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'word_insert_diagram',
+    description:
+      '用 mermaid 語法畫圖並插進文件：流程圖、循序圖、甘特圖、狀態圖、類別圖、圓餅圖、心智圖等。'
+      + '\n\n【什麼時候該用】文件裡出現「流程」「架構」「步驟」「誰跟誰互動」「時程」的時候。'
+      + '這些用文字描述讀者要自己在腦中畫一次，給圖就不用。'
+      + '規格書的系統架構、SOP 的作業流程、專案的時程，都該有圖。'
+      + '\n\n跟 word_insert_chart 的差別：那個畫**數字**（長條、折線、圓餅），'
+      + '這個畫**關係**（誰接到誰、先做什麼後做什麼）。'
+      + '\n\n語法範例：'
+      + '\n`flowchart TD` / `A[收料] --> B{檢驗}` / `B -->|合格| C[入庫]` / `B -->|不合格| D[退回]`'
+      + '\n`sequenceDiagram` / `使用者->>系統: 送出申請` / `系統-->>使用者: 回覆結果`'
+      + '\n\n【限制，要老實說】插進去的是**圖片**，使用者不能在 Word 裡拖動節點；'
+      + '要改內容就改語法重新產生一張。'
+      + '\n\n配一個 caption，圖才有編號可以在內文引用。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        code: { type: 'string', description: 'mermaid 原始碼，不要包 ``` 圍欄。' },
+        caption: { type: 'string', description: '圖說，例如「圖 2　收料檢驗流程」。' },
+        width: { type: 'number', description: '寬度（點）。不給就縮到內文寬度 450 點。' },
+        theme: { type: 'string', enum: ['default', 'neutral', 'dark', 'forest', 'base'], description: '預設 default。文件多半用 default 或 neutral。' },
+        font: { type: 'string', description: '圖裡的字型。預設是微軟正黑體，中文才不會變成方框。' },
+        paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
+        at: { type: 'string', enum: ['after', 'before'], description: '預設 after。' },
+        track: { type: 'boolean', description: '預設 false。' },
+      },
+      required: ['code'],
       additionalProperties: false,
     },
   },
@@ -559,7 +740,9 @@ export const WORD_TOOLS: WordToolSpec[] = [
       + 'formal（公文體，標楷體、置中標題、首行縮排兩字）、'
       + 'modern（商務簡潔，微軟正黑體、靠左、藍色章節標題）、'
       + 'academic（學術論文，新細明體、雙倍行距、兩端對齊）、'
-      + 'compact（緊湊，字小、間距密，適合表格多的文件）。'
+      + 'compact（緊湊，字小、間距密，適合表格多的文件）、'
+      + 'spec（規格書，Word 原生藍色標題階層，寫 PRD 和技術文件用）、'
+      + 'business（商務表單，深藍標題配小字內文，報價單、彙整表、對外文件用）。'
       + '\n\n【每份文件的最後一定要跑這個】'
       + '你一段一段寫的時候看不到整份長什麼樣，所以這個標題挑 16pt、下一個挑 14pt，'
       + '每個決定分開看都合理，合起來就是忽大忽小。'
@@ -571,7 +754,7 @@ export const WORD_TOOLS: WordToolSpec[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        theme: { type: 'string', enum: ['formal', 'modern', 'academic', 'compact'], description: '預設 modern。' },
+        theme: { type: 'string', enum: ['formal', 'modern', 'academic', 'compact', 'spec', 'business'], description: '預設 modern。' },
         font: { type: 'string', description: '覆寫字型。不給就用該樣式的預設中文字型。' },
         body_align: { type: 'string', enum: ['left', 'center', 'right', 'justify'], description: '覆寫內文對齊。' },
         first_line_indent: { type: 'number', description: '覆寫首行縮排（點）。中文公文是 24。' },
@@ -855,6 +1038,18 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
     return `插入 ${rows} 列的表格`;
   }
   if (name === 'word_insert_toc') return '插入目錄';
+  if (name === 'word_insert_layout') {
+    const n = Array.isArray(args.columns) ? args.columns.length : 0;
+    return `把 ${n} 個區塊並排`;
+  }
+  if (name === 'word_insert_block') {
+    const k = { fields: '標籤清單', kv: '資訊表', note: '附註區塊', lead: '前言句' }[String(args.kind || 'fields')] || '區塊';
+    return `插入${k}` + (args.title ? `：${args.title}` : '');
+  }
+  if (name === 'word_insert_cover') {
+    const kind = { report: '報告封面', form: '表單抬頭', letterhead: '公司信頭' }[String(args.layout || 'report')] || '封面';
+    return `建立${kind}：${String(args.title || '').slice(0, 30)}`;
+  }
   if (name === 'word_read_attachment') return '查看你附上的圖片';
   if (name === 'word_insert_attachment') {
     return `把你附的第 ${args.index || 1} 張圖插進文件` + (args.caption ? `：${args.caption}` : '');
@@ -894,6 +1089,10 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
     const k = String(args.type || 'page');
     const label = k === 'page' ? '插入分頁符號' : k === 'line' ? '插入換行符號' : '插入分節符號';
     return label + (args.paragraph ? `（段落 ${args.paragraph} 之後）` : '');
+  }
+  if (name === 'word_insert_diagram') {
+    const kind = /^\s*(\w+)/.exec(String(args.code || ''));
+    return `插入${kind ? kind[1] : ''}圖表` + (args.caption ? `：${args.caption}` : '');
   }
   if (name === 'word_insert_chart') {
     const kind = { column: '直條', bar: '橫條', line: '折線', pie: '圓餅' }[String(args.type || 'column')] || '';
