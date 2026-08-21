@@ -367,6 +367,18 @@ router.post('/chat', async (req: Request, res: Response) => {
     write({ type: 'error', data: '附加的檔案已經過期了。請重新上傳一次。' });
   }
 
+  // Images the person pasted. The pane holds the bytes; this is only the count,
+  // and word_read_attachment is what actually fetches one — same design as
+  // Excel's, so a screenshot behaves the same in both hosts.
+  const imageCount = Number.isFinite(Number(attachments))
+    ? Math.max(0, Math.min(8, Number(attachments))) : 0;
+  if (imageCount) {
+    parts.push(
+      `使用者在這則訊息附了 ${imageCount} 張圖片。用 word_read_attachment 看（index 從 1 到 ${imageCount}）。`
+      + '多半那張圖就是他要問的東西本身——先看過再回答，不要先問他圖裡是什麼。',
+    );
+  }
+
   parts.push(message.trim());
   const prompt = parts.join('\n\n');
 
@@ -521,13 +533,21 @@ router.get('/conversations/:id/messages', async (req: Request, res: Response) =>
 
 // ─── The add-in reporting back what Office.js did ───
 router.post('/tool-result', (req: Request, res: Response) => {
-  const { runId, callId, ok, content, error } = req.body as {
+  const { runId, callId, ok, content, error, image } = req.body as {
     runId?: string; callId?: string; ok?: boolean; content?: string; error?: string;
+    image?: { mimeType?: string; data?: string };
   };
   if (!runId || !callId) { res.status(400).json({ error: 'runId and callId are required' }); return; }
   if (!runBelongsTo(runId, req.user!.userId)) { res.status(403).json({ error: 'Not your run' }); return; }
 
-  const delivered = resolveToolCall(runId, callId, { ok: ok !== false, content, error });
+  // Shape-checked rather than trusted: this is JSON from the pane, and it ends
+  // up as a base64 payload handed to the model. A malformed one should be a
+  // missing picture, not a broken tool result.
+  const pic = image && typeof image.data === 'string' && typeof image.mimeType === 'string'
+    && /^image\/(png|jpeg|gif|webp)$/.test(image.mimeType)
+    ? { mimeType: image.mimeType, data: image.data }
+    : undefined;
+  const delivered = resolveToolCall(runId, callId, { ok: ok !== false, content, error, image: pic });
   // Not an error: a result arriving after its own timeout fired is the normal
   // shape of a slow document. Say so plainly so the pane can drop it quietly.
   res.json({ delivered });

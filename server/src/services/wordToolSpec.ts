@@ -633,6 +633,59 @@ export const WORD_TOOLS: WordToolSpec[] = [
     },
   },
   {
+    name: 'word_read_attachment',
+    description:
+      '看使用者這則訊息附上的圖片。'
+      + '\n\n【訊息說有附圖，就先呼叫這個再回答】——那張圖多半就是他要問的東西本身，'
+      + '常見的是「照這張截圖的格式做一份文件」「這張表幫我打成 Word 的表格」。'
+      + '\n\n不要先問他圖裡是什麼，你自己看得到。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        index: { type: 'number', description: '第幾張圖（1 起算），預設 1。' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'word_insert_attachment',
+    description:
+      '把使用者這則訊息附上的圖片**插進文件裡**。'
+      + '\n\n跟 word_read_attachment 的差別：那個是你看，這個是放進去。'
+      + '使用者附一張圖給你，多半不只是要你看——「照這張圖做一份文件」通常也包含'
+      + '「把這張圖放在該放的位置」。所以先用 word_read_attachment 看懂它是什麼，'
+      + '再決定它該放在哪一段之後，然後用這個插進去。'
+      + '\n\n配一個 caption，圖才有編號可以在內文引用。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        index: { type: 'number', description: '第幾張圖（1 起算），預設 1。' },
+        paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
+        at: { type: 'string', enum: ['after', 'before'], description: '預設 after。' },
+        width: { type: 'number', description: '寬度（點）。不給就用圖片原本的大小。內文寬度大約是 450 點。' },
+        caption: { type: 'string', description: '圖說，例如「圖 1　系統架構」。會套用內建的標號樣式。' },
+        track: { type: 'boolean', description: '預設 false。' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'word_read_image',
+    description:
+      '看**文件裡本來就有的**圖片內容——插在內文裡的截圖、示意圖、貼進來的圖表。'
+      + 'word_get_overview 會告訴你這份文件有幾張圖，但看不到內容，要內容就用這個。'
+      + '\n\n跟 word_read_attachment 的差別：那個是使用者這則訊息附上的圖，這個是檔案裡的圖。'
+      + '\n\n【只有在需要的時候才呼叫】使用者沒問到那張圖、而你要做的事也跟它無關，'
+      + '就不要自己去看——每一張都是一次來回，而且圖很佔上下文。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        index: { type: 'number', description: '第幾張圖（1 起算，順序同 word_get_overview），預設 1。' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'word_read_file',
     description:
       '讀取使用者這則訊息上傳的檔案。訊息開頭會列出有哪些檔案、各自幾個字、分成幾段。'
@@ -802,6 +855,12 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
     return `插入 ${rows} 列的表格`;
   }
   if (name === 'word_insert_toc') return '插入目錄';
+  if (name === 'word_read_attachment') return '查看你附上的圖片';
+  if (name === 'word_insert_attachment') {
+    return `把你附的第 ${args.index || 1} 張圖插進文件` + (args.caption ? `：${args.caption}` : '');
+  }
+  if (name === 'word_read_image') return `讀取文件裡的第 ${args.index || 1} 張圖片`;
+  if (name === 'word_read_file') return `讀取你上傳的檔案${args.index ? `（第 ${args.index} 個）` : ''}`;
   if (name === 'word_normalize_layout') return '統一內文的排版';
   if (name === 'word_apply_theme') return `套用「${String(args.theme || 'modern')}」文件樣式`;
   if (name === 'word_insert_equation') return `插入公式：${String(args.latex || '').slice(0, 60)}`;
