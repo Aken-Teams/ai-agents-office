@@ -407,7 +407,7 @@ export const WORD_TOOLS: WordToolSpec[] = [
       type: 'object',
       properties: {
         latex: { type: 'string', description: 'LaTeX 原始碼，不用加 $ 或 $$。' },
-        display: { type: 'boolean', description: '是否置中獨立成行，預設 true。' },
+        align: { type: 'string', enum: ['left', 'center'], description: '公式段落的對齊，**預設 left**——跟著內文走。只有整份文件的算式都獨立置中時才用 center，混著用會讓版面看起來像沒校對過。' },
         paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
         at: { type: 'string', enum: ['after', 'before'], description: '預設 after。' },
         ...TRACK_NEW,
@@ -536,6 +536,33 @@ export const WORD_TOOLS: WordToolSpec[] = [
         space_after: { type: 'number', description: '段後距（點）。用它做留白，不要用空白段落。' },
         style_body: { type: 'string', description: '內文段落要套的樣式，通常不用給。' },
         ...PARAGRAPH_RANGE,
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'word_apply_theme',
+    description:
+      '把整份文件套成同一套字型、字級、顏色和間距。四種：'
+      + 'formal（公文體，標楷體、置中標題、首行縮排兩字）、'
+      + 'modern（商務簡潔，微軟正黑體、靠左、藍色章節標題）、'
+      + 'academic（學術論文，新細明體、雙倍行距、兩端對齊）、'
+      + 'compact（緊湊，字小、間距密，適合表格多的文件）。'
+      + '\n\n【每份文件的最後一定要跑這個】'
+      + '你一段一段寫的時候看不到整份長什麼樣，所以這個標題挑 16pt、下一個挑 14pt，'
+      + '每個決定分開看都合理，合起來就是忽大忽小。'
+      + '這個工具是「不要再一段一段決定」，而是最後一次把規則講給每一段聽。'
+      + '\n\n**所以不要用 word_format_range 去設字型和字級**，那正是不一致的來源。'
+      + 'word_format_range 是用來設樣式階層（Heading1/2）和個別強調的，不是用來排版的。'
+      + '\n\n它跟 word_normalize_layout 的差別：這個管字型字級顏色，那個只管對齊縮排。'
+      + '兩個都跑，先跑這個。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        theme: { type: 'string', enum: ['formal', 'modern', 'academic', 'compact'], description: '預設 modern。' },
+        font: { type: 'string', description: '覆寫字型。不給就用該樣式的預設中文字型。' },
+        body_align: { type: 'string', enum: ['left', 'center', 'right', 'justify'], description: '覆寫內文對齊。' },
+        first_line_indent: { type: 'number', description: '覆寫首行縮排（點）。中文公文是 24。' },
       },
       additionalProperties: false,
     },
@@ -735,6 +762,7 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
   }
   if (name === 'word_insert_toc') return '插入目錄';
   if (name === 'word_normalize_layout') return '統一內文的排版';
+  if (name === 'word_apply_theme') return `套用「${String(args.theme || 'modern')}」文件樣式`;
   if (name === 'word_insert_equation') return `插入公式：${String(args.latex || '').slice(0, 60)}`;
   if (name === 'word_checkbox') {
     const op = String(args.op || 'insert');
