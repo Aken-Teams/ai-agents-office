@@ -12,6 +12,7 @@ import Navbar from '../components/Navbar';
 import { DataSourceSelector } from '../components/DataSourceSelector';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
 import HelpButton from '../components/HelpButton';
+import { extractPastedFiles } from '../../lib/clipboardFiles';
 
 interface Conversation {
   id: string;
@@ -93,7 +94,7 @@ function DashboardContent() {
   const [selectedDataSources, setSelectedDataSources] = useState<string[]>([]);
   const toggleDataSource = (id: string) => setSelectedDataSources(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   const [creating, setCreating] = useState(false);
-  const [smartAttached, setSmartAttached] = useState<Array<{ id: string; name: string; uploading?: boolean }>>([]);
+  const [smartAttached, setSmartAttached] = useState<Array<{ id: string; name: string; uploading?: boolean; previewUrl?: string }>>([]);
   const [uploadAlerts, setUploadAlerts] = useState<UploadAlertItem[]>([]);
   const smartFileRef = useRef<HTMLInputElement>(null);
   const mobileFileRef = useRef<HTMLInputElement>(null);
@@ -264,17 +265,25 @@ function DashboardContent() {
   async function handleSmartSubmit() {
     if (!smartInput.trim()) return;
     await createConversation(undefined, smartInput.trim());
-    setSmartAttached([]);
+    setSmartAttached(prev => {
+      for (const f of prev) if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+      return [];
+    });
   }
 
-  async function handleSmartFileAttach(fileList: FileList | null) {
+  async function handleSmartFileAttach(fileList: FileList | File[] | null) {
     if (!fileList || fileList.length === 0 || !token) return;
     const filesArr = Array.from(fileList);
 
-    const placeholders = filesArr.map(f => ({
+    // Thumbnails for images (pasted screenshots especially). The server returns
+    // uploads in the order they were sent, so index alignment holds.
+    const previews = filesArr.map(f => (f.type.startsWith('image/') ? URL.createObjectURL(f) : undefined));
+
+    const placeholders = filesArr.map((f, i) => ({
       id: `tmp-${Date.now()}-${f.name}`,
       name: f.name,
       uploading: true,
+      previewUrl: previews[i],
     }));
     setSmartAttached(prev => [...prev, ...placeholders]);
 
@@ -293,13 +302,15 @@ function DashboardContent() {
           status: data.code === 'UPLOAD_QUOTA_EXCEEDED' ? 'quota' : 'error',
           detail: data.error || t('chat.error.uploadFailed'),
         }]);
+        for (const u of previews) if (u) URL.revokeObjectURL(u);
         setSmartAttached(prev => prev.filter(f => !f.uploading));
         return;
       }
       const allUploads = data.uploads || [];
       const uploaded = allUploads
+        .map((u: any, i: number) => ({ id: u.id, name: u.originalName, uploading: false, previewUrl: previews[i], scanStatus: u.scanStatus }))
         .filter((u: any) => u.scanStatus !== 'rejected')
-        .map((u: any) => ({ id: u.id, name: u.originalName, uploading: false }));
+        .map(({ scanStatus, ...u }: any) => u);
       // Show modal for rejected/suspicious files
       const alertItems: UploadAlertItem[] = allUploads
         .filter((u: any) => u.scanStatus === 'rejected' || u.scanStatus === 'suspicious')
@@ -311,9 +322,19 @@ function DashboardContent() {
       if (alertItems.length > 0) setUploadAlerts(alertItems);
       setSmartAttached(prev => [...prev.filter(f => !f.uploading), ...uploaded]);
     } catch {
+      for (const u of previews) if (u) URL.revokeObjectURL(u);
       setSmartAttached(prev => prev.filter(f => !f.uploading));
       setUploadAlerts([{ fileName: '', status: 'error', detail: t('chat.error.uploadRetry') }]);
     }
+  }
+
+  /** Ctrl+V a screenshot / copied file into the composer. Text pastes fall through. */
+  function handleSmartPaste(e: React.ClipboardEvent) {
+    if (creating) return;
+    const files = extractPastedFiles(e.clipboardData);
+    if (files.length === 0) return;
+    e.preventDefault();
+    handleSmartFileAttach(files);
   }
 
   async function handleQuotaRequest() {
@@ -647,13 +668,16 @@ function DashboardContent() {
                 <div key={file.id} className="flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-primary/10 border border-primary/20 text-primary">
                   {file.uploading ? (
                     <span className="material-symbols-outlined text-xs animate-spin">progress_activity</span>
+                  ) : file.previewUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={file.previewUrl} alt="" className="w-5 h-5 rounded object-cover border border-outline-variant/20" />
                   ) : (
                     <span className="material-symbols-outlined text-xs">attach_file</span>
                   )}
                   <span className="max-w-[100px] truncate">{file.name}</span>
                   {!file.uploading && (
                     <button
-                      onClick={() => setSmartAttached(prev => prev.filter(f => f.id !== file.id))}
+                      onClick={() => { if (file.previewUrl) URL.revokeObjectURL(file.previewUrl); setSmartAttached(prev => prev.filter(f => f.id !== file.id)); }}
                       className="cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-xs">close</span>
@@ -678,6 +702,7 @@ function DashboardContent() {
                 className="w-full bg-surface-container border-none focus:ring-1 focus:ring-primary/30 rounded-2xl py-3 px-4 text-sm text-on-surface placeholder:text-outline font-body resize-none min-h-[90px] max-h-[120px] leading-snug"
                 value={smartInput}
                 onChange={e => setSmartInput(e.target.value)}
+                onPaste={handleSmartPaste}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                     e.preventDefault();
@@ -811,13 +836,16 @@ function DashboardContent() {
                     <div key={file.id} className="flex items-center gap-1.5 px-2.5 py-1 rounded text-sm bg-primary/10 border border-primary/20 text-primary">
                       {file.uploading ? (
                         <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                      ) : file.previewUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={file.previewUrl} alt="" className="w-6 h-6 rounded object-cover border border-outline-variant/20" />
                       ) : (
                         <span className="material-symbols-outlined text-sm">attach_file</span>
                       )}
                       <span className="max-w-[120px] truncate">{file.name}</span>
                       {!file.uploading && (
                         <button
-                          onClick={() => setSmartAttached(prev => prev.filter(f => f.id !== file.id))}
+                          onClick={() => { if (file.previewUrl) URL.revokeObjectURL(file.previewUrl); setSmartAttached(prev => prev.filter(f => f.id !== file.id)); }}
                           className="hover:text-error transition-colors cursor-pointer ml-0.5"
                         >
                           <span className="material-symbols-outlined text-sm">close</span>
@@ -854,6 +882,7 @@ function DashboardContent() {
                   className="w-full bg-transparent border-none focus:ring-0 py-3 pl-[5.5rem] pr-14 text-sm text-on-surface placeholder:text-outline font-body resize-none min-h-[80px] max-h-[160px] min-[1920px]:min-h-[140px] min-[1920px]:max-h-[240px]"
                   value={smartInput}
                   onChange={e => setSmartInput(e.target.value)}
+                  onPaste={handleSmartPaste}
                   onKeyDown={e => {
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                       e.preventDefault();

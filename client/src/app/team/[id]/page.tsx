@@ -22,6 +22,7 @@ import { useSidebarMargin } from '../../hooks/useSidebarCollapsed';
 import TeamMarkdown from '../../components/TeamMarkdown';
 import Tooltip from '../../components/Tooltip';
 import { markupForDate } from '../../../lib/pricing';
+import { extractPastedFiles } from '../../../lib/clipboardFiles';
 import { agentIcon } from '../../components/agentIcon';
 
 const SSE_BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
@@ -503,7 +504,7 @@ function TeamRunContent() {
     });
   }, []);
 
-  const handleAttach = useCallback(async (fileList: FileList | null) => {
+  const handleAttach = useCallback(async (fileList: FileList | File[] | null) => {
     if (!fileList || !fileList.length || !token) return;
     const warns: string[] = [];
     // Images over 5MB are skipped by the team's vision reader — warn up front
@@ -539,6 +540,15 @@ function TeamRunContent() {
       setUploadingFile(false);
     }
   }, [token]);
+
+  /** Ctrl+V a screenshot / copied file into the question box. Text pastes fall through. */
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    if (running || uploadingFile) return;
+    const files = extractPastedFiles(e.clipboardData);
+    if (!files.length) return;
+    e.preventDefault();
+    handleAttach(files);
+  }, [running, uploadingFile, handleAttach]);
 
   const handleRun = useCallback(async () => {
     if (!question.trim() || running || !token) return;
@@ -911,6 +921,7 @@ function TeamRunContent() {
             <textarea
               value={question}
               onChange={e => setQuestion(e.target.value)}
+              onPaste={handlePaste}
               onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleRun(); } }}
               disabled={running}
               placeholder="輸入要這個團隊一起分析的議題或問題…"

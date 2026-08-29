@@ -15,6 +15,7 @@ import { useDocumentMode, FILE_GEN_SKILLS, FILE_TYPE_TO_LAYOUT } from '../hooks/
 import { useDocumentBlocks } from '../../editor/hooks/useDocumentBlocks';
 import DocumentCanvas from '../components/DocumentCanvas';
 import { calcCostUsd } from '../../../lib/pricing';
+import { extractPastedFiles } from '../../../lib/clipboardFiles';
 import { useKmAvailable } from '../../components/DataSourceSelector';
 import { filenameFromResponse } from '../../components/downloadName';
 import CopyButton from '../../components/CopyButton';
@@ -86,6 +87,8 @@ interface AttachedFile {
   scanStatus: string;
   scanDetail?: string;
   uploading?: boolean;
+  /** Local blob URL for pasted/attached images, so the chip can show a thumbnail. */
+  previewUrl?: string;
 }
 
 interface ToolActivity {
@@ -979,7 +982,10 @@ function ChatContent() {
     setLastUsage(null);
     setPanelCollapsed(false);
     setAgentTasks([]);
-    setAttachedFiles([]);
+    setAttachedFiles(prev => {
+      for (const f of prev) if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+      return [];
+    });
     setLatestFiles([]);
     setSelectedRefs([]);
     fileGenInRoundRef.current = false;
@@ -1395,18 +1401,23 @@ function ChatContent() {
     }).catch(() => {});
   }
 
-  async function handleFileAttach(fileList: FileList | null) {
+  async function handleFileAttach(fileList: FileList | File[] | null) {
     if (!fileList || fileList.length === 0 || !token) return;
     const filesArr = Array.from(fileList);
 
+    // Thumbnails for images (pasted screenshots especially) — index-aligned with
+    // filesArr, and the server returns uploads in the same order.
+    const previews = filesArr.map(f => (f.type.startsWith('image/') ? URL.createObjectURL(f) : undefined));
+
     // Add placeholder chips
-    const placeholders: AttachedFile[] = filesArr.map(f => ({
+    const placeholders: AttachedFile[] = filesArr.map((f, i) => ({
       id: `tmp-${Date.now()}-${f.name}`,
       originalName: f.name,
       fileType: f.name.split('.').pop() || '',
       fileSize: f.size,
       scanStatus: 'pending',
       uploading: true,
+      previewUrl: previews[i],
     }));
     setAttachedFiles(prev => [...prev, ...placeholders]);
 
@@ -1428,12 +1439,13 @@ function ChatContent() {
           status: data.code === 'UPLOAD_QUOTA_EXCEEDED' ? 'quota' : 'error',
           detail: data.error || t('chat.error.uploadFailed'),
         }]);
+        for (const u of previews) if (u) URL.revokeObjectURL(u);
         setAttachedFiles(prev => prev.filter(f => !f.uploading));
         return;
       }
 
       // Replace placeholders with real results
-      const uploaded: AttachedFile[] = (data.uploads || []).map((u: any) => ({
+      const uploaded: AttachedFile[] = (data.uploads || []).map((u: any, i: number) => ({
         id: u.id,
         originalName: u.originalName,
         fileType: u.fileType,
@@ -1441,6 +1453,7 @@ function ChatContent() {
         scanStatus: u.scanStatus,
         scanDetail: u.scanDetail,
         uploading: false,
+        previewUrl: previews[i],
       }));
 
       // Remove placeholders, add real ones
@@ -1465,13 +1478,45 @@ function ChatContent() {
       }
     } catch (err) {
       console.error('Upload error:', err);
+      for (const u of previews) if (u) URL.revokeObjectURL(u);
       setAttachedFiles(prev => prev.filter(f => !f.uploading));
       setUploadAlerts([{ fileName: '', status: 'error', detail: t('chat.error.uploadRetry') }]);
     }
   }
 
+  /**
+   * Ctrl+V in the composer: attach screenshots / copied files straight from the
+   * clipboard. Plain-text pastes fall through to the browser untouched.
+   */
+  function handleComposerPaste(e: React.ClipboardEvent) {
+    if (streaming) return;
+    const files = extractPastedFiles(e.clipboardData);
+    if (files.length === 0) return;
+    e.preventDefault();
+    handleFileAttach(files);
+  }
+
+  // Same thing for a paste with nothing focused — the user clicked on the page
+  // and hit Ctrl+V without landing in the textarea first. Fields that handle
+  // their own paste (including the composer above) are skipped.
+  const composerPasteRef = useRef(handleComposerPaste);
+  composerPasteRef.current = handleComposerPaste;
+  useEffect(() => {
+    function onWindowPaste(e: ClipboardEvent) {
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      composerPasteRef.current(e as unknown as React.ClipboardEvent);
+    }
+    window.addEventListener('paste', onWindowPaste);
+    return () => window.removeEventListener('paste', onWindowPaste);
+  }, []);
+
   function removeAttachedFile(fileId: string) {
-    setAttachedFiles(prev => prev.filter(f => f.id !== fileId));
+    setAttachedFiles(prev => {
+      const target = prev.find(f => f.id === fileId);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter(f => f.id !== fileId);
+    });
     // Optionally delete from server — but keep it since user may want it later
   }
 
@@ -2335,6 +2380,9 @@ function ChatContent() {
                         <span className="material-symbols-outlined text-xs md:text-sm animate-spin">progress_activity</span>
                       ) : file.scanStatus === 'rejected' ? (
                         <span className="material-symbols-outlined text-xs md:text-sm">gpp_bad</span>
+                      ) : file.previewUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={file.previewUrl} alt="" className="w-5 h-5 md:w-6 md:h-6 rounded object-cover border border-outline-variant/20" />
                       ) : (
                         <span className="material-symbols-outlined text-xs md:text-sm">attach_file</span>
                       )}
@@ -2466,6 +2514,7 @@ function ChatContent() {
                   className="bg-transparent border-none focus:ring-0 text-base md:text-sm flex-1 text-on-surface placeholder:text-outline/50 font-body resize-none min-h-[36px] md:min-h-[40px] max-h-[100px] md:max-h-[120px]"
                   value={input}
                   onChange={e => setInput(e.target.value)}
+                  onPaste={handleComposerPaste}
                   onKeyDown={e => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
