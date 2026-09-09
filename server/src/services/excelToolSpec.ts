@@ -222,25 +222,46 @@ export const EXCEL_TOOLS: ExcelToolSpec[] = [
   {
     name: 'excel_compare_source',
     description:
-      '把目前這份活頁簿的一段範圍，跟使用者上傳的另一份檔案逐格比對，'
-      + '結果寫成一張比對工作表（差異列、差異欄、兩邊的值，以及每筆差異在活頁簿裡的位置）。'
-      + '\n\n【要比對兩份檔案就用這個，不要自己算】'
+      '逐格比對兩份資料，結果寫成一張比對工作表'
+      + '（差異列、差異欄、兩邊的值，以及每筆差異在活頁簿裡的位置）。'
+      + '\n\n**兩種用法：**'
+      + '\n1. **同一份活頁簿裡的兩張工作表**——帶 compare_with_sheet。'
+      + '例如「一月」對「二月」、「本版」對「上版」。不需要上傳任何東西。'
+      + '\n2. **跟使用者上傳的另一份檔案比**——不帶 compare_with_sheet，改用 file_index 指定第幾個檔案。'
+      + '\n\n使用者說「比較這兩張表」「跟上個月差在哪」的時候，'
+      + '八成是第 1 種。先用 excel_get_overview 看有哪些工作表，不要預設一定要他上傳檔案。'
+      + '\n\n【要比對就用這個，不要自己算】'
       + '不要用 excel_read_file 把來源讀出來、再自己在腦中比對後用 excel_write_range 寫結果。'
       + '那條路你得把幾百列數字原樣搬過來一次，抄錯一個數字沒有人會發現，'
       + '而報表看起來一樣有把握。這支工具兩邊都讀真正的資料，比對是算出來的。'
+      + '（同理，也不要用 excel_run_script 自己寫比對程式。）'
       + '\n\n【一定要給 key_column】除非資料真的沒有唯一鍵。'
       + '沒有鍵就只能依列的先後順序對，這時候任一邊多一列或少一列，'
       + '後面每一列都會被判成不同——技術上沒錯，但完全沒用。'
       + '先用 excel_read_range 或 excel_get_overview 看一下標題列，挑那個唯一鍵。'
-      + '\n\n來源檔只會被讀取，不會被修改，也不會被打開。'
-      + '\n\n來源必須是 Excel、CSV 或 TSV——那是唯一有列與欄的格式。'
-      + 'PDF 和 Word 沒有格狀結構，那種要理解內容請改用 excel_read_file。',
+      + '\n\n兩邊都只會被讀取。上傳的來源檔不會被修改，也不會被打開；'
+      + '拿來對照的那張工作表也只是讀，不會被動到。'
+      + '\n\n上傳的來源檔必須是 Excel、CSV 或 TSV——那是唯一有列與欄的格式。'
+      + 'PDF 和 Word 沒有格狀結構，那種要理解內容請改用 excel_read_file。'
+      + '（比對同活頁簿的兩張工作表沒有這個限制。）',
     inputSchema: {
       type: 'object',
       properties: {
-        sheet: { type: 'string', description: '目前活頁簿要拿來比對的工作表名稱。' },
-        range: { type: 'string', description: 'A1 範圍，例如 A1:H200。省略就用整張表的使用範圍。' },
-        file_index: { type: 'number', description: '拿第幾個上傳的檔案當來源（1 起算），預設 1。' },
+        sheet: { type: 'string', description: '要比對的工作表名稱（比對結果裡的左邊那一側）。' },
+        range: { type: 'string', description: 'sheet 的 A1 範圍，例如 A1:H200。省略就用整張表的使用範圍。' },
+        compare_with_sheet: {
+          type: 'string',
+          description: '拿同一份活頁簿裡的**另一張工作表**來對照（比對結果裡的右邊那一側）。'
+            + '給了這個就不需要上傳檔案，file_index 與 source_sheet 也會被忽略。',
+        },
+        compare_with_range: {
+          type: 'string',
+          description: 'compare_with_sheet 的 A1 範圍。省略就用整張表的使用範圍。',
+        },
+        file_index: {
+          type: 'number',
+          description: '拿第幾個上傳的檔案當對照（1 起算），預設 1。只在沒帶 compare_with_sheet 時才會用到。',
+        },
         source_sheet: { type: 'string', description: '來源檔裡的哪一張工作表。省略就用資料最多的那張。' },
         key_column: {
           type: 'string',
@@ -777,10 +798,12 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
   if (name === 'excel_read_file') return `讀取你上傳的第 ${args.index ?? 1} 個檔案`;
   if (name === 'excel_compare_source') {
     const out = String(args.output_sheet || '').trim();
+    const other = String(args.compare_with_sheet || '').trim();
     const where = `${args.sheet ?? ''}${args.range ? `!${args.range}` : ''}`;
+    const against = other ? `工作表「${other}」` : '上傳的檔案';
     return out
-      ? `比對 ${where} 與上傳的檔案，結果覆寫工作表「${out}」`
-      : `比對 ${where} 與上傳的檔案，結果寫進一張新的工作表`;
+      ? `比對 ${where} 與${against}，結果覆寫工作表「${out}」`
+      : `比對 ${where} 與${against}，結果寫進一張新的工作表`;
   }
   if (name === 'excel_read_image') return `讀取 ${args.sheet} 上的圖片${args.name ? `「${args.name}」` : ''}`;
   if (name === 'excel_read_attachment') return '查看你附上的圖片';

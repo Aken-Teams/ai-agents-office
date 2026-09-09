@@ -52,6 +52,30 @@ export function isReadableFile(name: string): boolean {
  * than as prose: the model is going to rebuild a table from this, and a layout
  * that already looks like a table is one it does not have to reverse-engineer.
  */
+/**
+ * One spreadsheet cell as text.
+ *
+ * Exists for the date case. exceljs parses a date cell into a JS Date, and its
+ * own `.text` then renders that with Date#toString — so a cell showing 2024/1/1
+ * came out as 「Mon Jan 01 2024 08:00:00 GMT+0800 (台北標準時間)」. That is wrong
+ * for every reader of this text: the model sees a wall of timezone noise instead
+ * of a date, and excel_compare_source, which diffs this against what Excel hands
+ * back for the same cell (the serial 45292), reported EVERY dated row as a
+ * difference. ISO instead — unambiguous, sorts correctly, and both sides of a
+ * comparison can recognise it.
+ *
+ * The time is kept only when there is one. A pure date carrying 00:00:00 reads
+ * as false precision, and it would not match the same date written plainly.
+ */
+function cellToText(cell: { text?: string; value?: unknown }): string {
+  const v = cell.value;
+  if (v instanceof Date) {
+    const iso = v.toISOString();
+    return iso.endsWith('T00:00:00.000Z') ? iso.slice(0, 10) : iso.slice(0, 19).replace('T', ' ');
+  }
+  return String(cell.text ?? '');
+}
+
 export async function extractTextFromBuffer(buf: Buffer, e: string): Promise<string> {
   if (e === 'pdf') {
     const pdf = await getDocumentProxy(new Uint8Array(buf));
@@ -70,7 +94,7 @@ export async function extractTextFromBuffer(buf: Buffer, e: string): Promise<str
       lines.push(`# ${sheet.name}`);
       sheet.eachRow(row => {
         const cells: string[] = [];
-        row.eachCell({ includeEmpty: false }, cell => cells.push(String(cell.text ?? '')));
+        row.eachCell({ includeEmpty: false }, cell => cells.push(cellToText(cell)));
         if (cells.length) lines.push(cells.join('\t'));
       });
     });
