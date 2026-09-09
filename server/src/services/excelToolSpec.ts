@@ -220,6 +220,47 @@ export const EXCEL_TOOLS: ExcelToolSpec[] = [
     },
   },
   {
+    name: 'excel_compare_source',
+    description:
+      '把目前這份活頁簿的一段範圍，跟使用者上傳的另一份檔案逐格比對，'
+      + '結果寫成一張比對工作表（差異列、差異欄、兩邊的值，以及每筆差異在活頁簿裡的位置）。'
+      + '\n\n【要比對兩份檔案就用這個，不要自己算】'
+      + '不要用 excel_read_file 把來源讀出來、再自己在腦中比對後用 excel_write_range 寫結果。'
+      + '那條路你得把幾百列數字原樣搬過來一次，抄錯一個數字沒有人會發現，'
+      + '而報表看起來一樣有把握。這支工具兩邊都讀真正的資料，比對是算出來的。'
+      + '\n\n【一定要給 key_column】除非資料真的沒有唯一鍵。'
+      + '沒有鍵就只能依列的先後順序對，這時候任一邊多一列或少一列，'
+      + '後面每一列都會被判成不同——技術上沒錯，但完全沒用。'
+      + '先用 excel_read_range 或 excel_get_overview 看一下標題列，挑那個唯一鍵。'
+      + '\n\n來源檔只會被讀取，不會被修改，也不會被打開。'
+      + '\n\n來源必須是 Excel、CSV 或 TSV——那是唯一有列與欄的格式。'
+      + 'PDF 和 Word 沒有格狀結構，那種要理解內容請改用 excel_read_file。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sheet: { type: 'string', description: '目前活頁簿要拿來比對的工作表名稱。' },
+        range: { type: 'string', description: 'A1 範圍，例如 A1:H200。省略就用整張表的使用範圍。' },
+        file_index: { type: 'number', description: '拿第幾個上傳的檔案當來源（1 起算），預設 1。' },
+        source_sheet: { type: 'string', description: '來源檔裡的哪一張工作表。省略就用資料最多的那張。' },
+        key_column: {
+          type: 'string',
+          description: '對應列用的鍵欄位：標題文字（例如「客戶代號」）或 0 起算的欄位序號。'
+            + '強烈建議給——沒有它就只能依列的順序對。',
+        },
+        headers: { type: 'boolean', description: '第一列是不是標題列，預設 true。' },
+        ignore_case: { type: 'boolean', description: '英文大小寫不同算不算差異，預設 false（算）。' },
+        tolerance: { type: 'number', description: '數值容差，差距在這之內視為相同。預設 0。' },
+        output_sheet: {
+          type: 'string',
+          description: '結果要寫到哪張工作表。**省略就開一張新的**（建議）。'
+            + '指定一張已經存在的表會蓋掉它原本的內容，那會跳確認視窗。',
+        },
+      },
+      required: ['sheet'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'excel_read_image',
     description:
       '看工作表上「貼著的」圖片或圖案的內容（不是圖表）。'
@@ -626,6 +667,11 @@ export function isDestructiveTool(name: string, args: Record<string, unknown> = 
   const op = String(args.op || '');
   if (name === 'excel_manage_sheet') return op === 'delete' || op === 'rename';
   if (name === 'excel_table_ops') return op === 'sort';
+  // Writing the report to a NEW sheet destroys nothing, so it runs straight
+  // through — that is the whole point of the confirmation being rare. Naming an
+  // existing sheet means overwriting whatever is on it, which is a write like
+  // any other and gets asked about.
+  if (name === 'excel_compare_source') return !!String(args.output_sheet || '').trim();
   if (name === 'excel_run_script') {
     // Declaration AND verification. The model declares `mode`, but we also scan the
     // code independently: a call that says `read` while assigning to .values still
@@ -729,6 +775,13 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
       + (rows ? `（列：${rows}）` : '');
   }
   if (name === 'excel_read_file') return `讀取你上傳的第 ${args.index ?? 1} 個檔案`;
+  if (name === 'excel_compare_source') {
+    const out = String(args.output_sheet || '').trim();
+    const where = `${args.sheet ?? ''}${args.range ? `!${args.range}` : ''}`;
+    return out
+      ? `比對 ${where} 與上傳的檔案，結果覆寫工作表「${out}」`
+      : `比對 ${where} 與上傳的檔案，結果寫進一張新的工作表`;
+  }
   if (name === 'excel_read_image') return `讀取 ${args.sheet} 上的圖片${args.name ? `「${args.name}」` : ''}`;
   if (name === 'excel_read_attachment') return '查看你附上的圖片';
   if (name === 'excel_ask_user') return String(args.question || '請你決定一件事');

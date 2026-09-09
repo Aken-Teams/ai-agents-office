@@ -601,6 +601,43 @@ router.post('/attachments', (req: Request, res: Response) => {
   });
 });
 
+/**
+ * GET /api/excel/attachments/:id/text — hand the PANE the parsed text of a file.
+ *
+ * ── Why the pane needs this, when the model already has excel_read_file ──
+ * excel_compare_source diffs the open workbook against an uploaded file, and a
+ * diff has to be computed from the real bytes on both sides. Routing the source
+ * through the model instead — read the file, retype the rows into a tool call —
+ * puts a language model in the middle of a numeric comparison, which is the one
+ * place it must never be: AC-40 asks for correct difference values, and a
+ * transcription is not a comparison. So the pane fetches the source itself and
+ * the diff is arithmetic on both sides.
+ *
+ * Same auth as everything else on this router, and getAttachment already refuses
+ * an id that is not this user's — so a stolen id from another session is a 404
+ * here, not a leak.
+ *
+ * A blocked file is refused outright. The scanner flagged it as an attempt to
+ * steer the agent, and a comparison sheet built from it would put that content
+ * into the workbook and into the reply — the long way round to the same place
+ * the scanner exists to prevent.
+ */
+router.get('/attachments/:id/text', (req: Request, res: Response) => {
+  const file = getAttachment(req.user!.userId, String(req.params.id || ''));
+  if (!file) { res.status(404).json({ error: '這個檔案已經過期或不存在。' }); return; }
+  if (file.blocked) {
+    res.status(403).json({
+      error: `「${file.filename}」的內容被安全掃描擋下了（${file.flags.join('、')}），不能用來比對。`,
+    });
+    return;
+  }
+  if (!file.text) {
+    res.status(422).json({ error: `「${file.filename}」沒有可讀的文字內容，沒辦法拿來比對。` });
+    return;
+  }
+  res.json({ filename: file.filename, ext: file.ext, text: file.text });
+});
+
 // ─── Internal: excel-mcp subprocess → bridge (loopback only) ───
 const internalRouter = Router();
 

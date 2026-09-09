@@ -114,9 +114,14 @@ export const PPT_TOOLS: PptToolSpec[] = [
   {
     name: 'ppt_get_overview',
     description:
-      '讀這份簡報的結構：有幾張投影片、每張的標題和物件數量。'
+      '讀這份簡報的結構：有幾張投影片、每張的標題和物件數量，'
+      + '外加**可用的版面配置清單（含 master_id / layout_id）**與**這份簡報已經在用的顏色**。'
       + '\n\n**動任何東西之前先呼叫這個。** 你不知道現在有幾張投影片、'
-      + '也不知道使用者是要你從頭做還是接著改，猜錯的話會把東西加到錯的地方。',
+      + '也不知道使用者是要你從頭做還是接著改，猜錯的話會把東西加到錯的地方。'
+      + '\n\n【要沿用簡報既有的風格，就靠這個工具的輸出】'
+      + 'master_id 與 layout_id 只有這裡拿得到，沒讀過就只能用預設版面，'
+      + '做出來的頁面會跟簡報裡原有的頁面對不起來。'
+      + '顏色同理：輸出裡列出的就是這份簡報實際在用的配色，新增內容請直接沿用，不要另外套一組。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -154,13 +159,16 @@ export const PPT_TOOLS: PptToolSpec[] = [
       + '\n2. **沒有搬移投影片的 API**。做好了就不能重新排序。'
       + '\n\n所以請**照最終順序由前往後建立**，不要想著之後再調。'
       + '\n\n多數情況你應該用 ppt_build_slide 而不是這個——那個會直接做出排好版的投影片，'
-      + '這個只給你一張空白的。',
+      + '這個只給你一張空白的。'
+      + '\n\n【要沿用簡報既有的版面】先呼叫 ppt_get_overview，它會列出這份簡報的母片與版面配置，'
+      + '把其中一組 master_id + layout_id 帶進來，新投影片就會長得跟原有的頁面一致；'
+      + '兩個都不給就會落到預設版面。',
     inputSchema: {
       type: 'object',
       properties: {
         count: { type: 'number', description: '要加幾張，預設 1。' },
-        layout_id: { type: 'string', description: '版面配置 ID。要跟 master_id 一起給，否則會失敗。' },
-        master_id: { type: 'string', description: '投影片母片 ID。' },
+        layout_id: { type: 'string', description: '版面配置 ID，**從 ppt_get_overview 的輸出取得**。要跟 master_id 一起給，否則會失敗。' },
+        master_id: { type: 'string', description: '投影片母片 ID，同樣來自 ppt_get_overview。' },
       },
       additionalProperties: false,
     },
