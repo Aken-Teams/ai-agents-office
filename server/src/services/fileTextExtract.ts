@@ -45,14 +45,6 @@ export function isReadableFile(name: string): boolean {
   return TEXT_EXTS.has(e) || IMAGE_EXTS.has(e) || DOC_EXTS.has(e);
 }
 
-/**
- * Extract text. Throws `unsupported` for anything not in the sets above —
- * callers decide whether that is an error or a file to skip.
- *
- * Spreadsheets come out tab-separated with a `# 工作表名` line per sheet rather
- * than as prose: the model is going to rebuild a table from this, and a layout
- * that already looks like a table is one it does not have to reverse-engineer.
- */
 /** Slide/notes files sort as text, so slide10 lands between slide1 and slide2. */
 const slideNumber = (name: string) => Number((name.match(/(\d+)\.xml$/) || [])[1] || 0);
 
@@ -142,6 +134,14 @@ function cellToText(cell: { text?: string; value?: unknown }): string {
   return String(cell.text ?? '');
 }
 
+/**
+ * Extract text. Throws `unsupported` for anything not in the sets above —
+ * callers decide whether that is an error or a file to skip.
+ *
+ * Spreadsheets come out tab-separated with a `# 工作表名` line per sheet rather
+ * than as prose: the model is going to rebuild a table from this, and a layout
+ * that already looks like a table is one it does not have to reverse-engineer.
+ */
 export async function extractTextFromBuffer(buf: Buffer, e: string): Promise<string> {
   if (e === 'pdf') {
     const pdf = await getDocumentProxy(new Uint8Array(buf));
