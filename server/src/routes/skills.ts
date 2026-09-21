@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth.js';
-import { loadSkills } from '../skills/loader.js';
+import { loadSkills, skillsForHost } from '../skills/loader.js';
 import { listMcpSources } from '../services/mcpRegistry.js';
 
 const router = Router();
@@ -16,8 +16,14 @@ router.get('/mcp', (_req: Request, res: Response) => {
 });
 
 // GET /api/skills — List available skills (public metadata only, no system prompts)
-router.get('/', (_req: Request, res: Response) => {
-  const skills = loadSkills();
+//
+// `?host=excel|word|ppt` narrows the list to skills that declare that surface.
+// Without it the answer is every skill, which is what the web app wants and
+// what this route always returned. See skillsForHost for why a skill has to opt
+// in rather than out.
+router.get('/', (req: Request, res: Response) => {
+  const host = String(req.query.host || '').toLowerCase();
+  const skills = host ? skillsForHost(host) : loadSkills();
 
   const publicSkills = skills.map(s => ({
     id: s.id,

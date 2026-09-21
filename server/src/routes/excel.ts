@@ -22,6 +22,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { authMiddleware } from '../middleware/auth.js';
 import { templateForAudit } from './promptTemplates.js';
+import { skillsForHost } from '../skills/loader.js';
 import { dbGet, dbRun, dbAll } from '../db.js';
 import { spawnClaude } from '../services/claudeCli.js';
 import { recordTokenUsage } from '../services/tokenTracker.js';
@@ -380,9 +381,37 @@ router.post('/chat', async (req: Request, res: Response) => {
 
   let text = '', inTok = 0, outTok = 0, model = '';
   const chosenModel = resolveModel(wantedModel);
+    /**
+   * 使用技能 (PRD 3.1): the person picked a specialist for this turn.
+   *
+   * Appended to the host prompt rather than replacing it. The host prompt is
+   * what makes the agent able to drive this document at all — the tool
+   * contract, the confirmation rules, the citation format — and a skill that
+   * replaced it would be an agent with expertise and no hands. A skill adds
+   * judgement on top: which numbers matter, what order to do things in.
+   *
+   * Resolved through skillsForHost, so an id that is real but belongs to
+   * another surface is ignored rather than honoured — otherwise the web
+   * app's file generators would be reachable from a task pane by id.
+   */
+  const wantedSkill = String((req.body as Record<string, unknown>).skillId || '').trim();
+  const skill = wantedSkill
+    ? skillsForHost('excel').find(sk => sk.id === wantedSkill)
+    : undefined;
+  if (wantedSkill && !skill) {
+    write({ type: 'info', data: '找不到指定的技能，這一輪改由 AI 自動判斷。' });
+  } else if (skill) {
+    write({ type: 'info', data: `這一輪使用技能：${skill.name}` });
+  }
+
   const systemPrompt = (mounted.length
     ? EXCEL_ASSISTANT_SYSTEM_PROMPT + DATA_SOURCE_PROMPT(mounted)
-    : EXCEL_ASSISTANT_SYSTEM_PROMPT) + localeBlock;
+    : EXCEL_ASSISTANT_SYSTEM_PROMPT) + localeBlock
+    + (skill ? `
+
+## 這一輪指定的專業技能：${skill.name}
+${skill.systemPrompt}
+` : '');
   const { emitter, abort } = spawnClaude(prompt, systemPrompt, {
     userId, conversationId,
     sandboxSubdir: '_agents/excel-addin',

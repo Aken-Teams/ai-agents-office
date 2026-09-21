@@ -109,6 +109,23 @@ export function loadSkills(): SkillDefinition[] {
 
       const deployModes = Array.isArray(data.deployModes) ? data.deployModes : undefined;
 
+      /**
+       * Which surfaces this skill belongs on.
+       *
+       * Defaults to web-only, and that default is doing real work: every skill
+       * written so far GENERATES A NEW FILE — pptx-gen, docx-gen, xlsx-gen — and
+       * the add-ins do the opposite, editing the document already open. Offering
+       * 「PowerPoint Generator」 inside Excel would not be a cosmetic mistake; the
+       * person would pick it and get a download instead of a changed workbook.
+       *
+       * So an add-in skill has to say so: `hosts: [excel]` in its frontmatter.
+       * Opting in beats opting out here — a skill author who forgets the field
+       * gets the old behaviour, not a skill loose in three task panes.
+       */
+      const hosts = Array.isArray(data.hosts) && data.hosts.length
+        ? data.hosts.map((h: unknown) => String(h).toLowerCase())
+        : ['web'];
+
       // Skip skills restricted to other deploy modes
       if (deployModes && deployModes.length > 0 && !deployModes.includes(config.deployMode)) {
         continue;
@@ -125,6 +142,7 @@ export function loadSkills(): SkillDefinition[] {
         allowedTools: Array.isArray(data.allowedTools) ? data.allowedTools : undefined,
         disallowedTools: Array.isArray(data.disallowedTools) ? data.disallowedTools : undefined,
         deployModes,
+        hosts,
       });
     } catch (error) {
       console.error(`Failed to load skill ${entry.name}:`, error);
@@ -141,6 +159,19 @@ export function loadSkills(): SkillDefinition[] {
 /** Invalidate skill cache (for hot-reloading in dev). */
 export function invalidateSkillCache(): void {
   _skillsCache = null;
+}
+
+/**
+ * Skills a given surface may offer.
+ *
+ * A router is orchestration machinery, not something a person picks off a menu,
+ * so it never appears — the add-in's 使用技能 list is 「which specialist should
+ * handle this」, and 「the thing that decides which specialist」 is not an answer
+ * to that question.
+ */
+export function skillsForHost(host: string): SkillDefinition[] {
+  const want = String(host || '').toLowerCase();
+  return loadSkills().filter(s => s.role !== 'router' && (s.hosts || ['web']).includes(want));
 }
 
 /**

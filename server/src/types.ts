@@ -124,6 +124,11 @@ export interface SkillDefinition {
   allowedTools?: string[];
   disallowedTools?: string[];
   deployModes?: string[];
+  /**
+   * Which surfaces may offer this skill: 'web' and/or the add-in hosts
+   * ('excel' | 'word' | 'ppt'). Absent means web only — see loadSkills.
+   */
+  hosts?: string[];
 }
 
 // --- Multi-agent orchestration types ---
