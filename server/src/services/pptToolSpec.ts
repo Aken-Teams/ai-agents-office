@@ -502,11 +502,13 @@ export const PPT_TOOLS: PptToolSpec[] = [
       + '**但它不是 PowerPoint 的圖表物件，沒有連結的資料表**——'
       + '要改數字就再呼叫一次重新產生，不能在 PowerPoint 裡開資料表編輯。'
       + '你在回覆裡提到這張圖時要講清楚這件事，不要讓使用者以為可以雙擊編輯資料。'
-      + '\n\n【它會放在目前選取的投影片上】跟圖片一樣，Common API 沒辦法指定投影片。'
+      + '\n\n【用 slide 指定放在哪一張】省略的話放在**最後一張**，也就是你剛做好的那張。'
+      + '做一整套簡報時每張圖都要帶上它自己的 slide，否則整份的圖會疊在同一張上。'
       + '\n\n【單一系列給一維陣列，多系列給二維】values: [10,20,30] 或 [[10,20],[30,40]]。',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SLIDE_ARG,
         type: {
           type: 'string',
           enum: ['column', 'bar', 'line', 'area', 'pie', 'donut'],
@@ -542,11 +544,11 @@ export const PPT_TOOLS: PptToolSpec[] = [
       + '\n\n語法範例：'
       + '\n`flowchart LR` / `A[需求訪談] --> B[系統設計]` / `B --> C{可行?}` / `C -->|是| D[開發]`'
       + '\n`sequenceDiagram` / `使用者->>系統: 送出申請` / `系統-->>使用者: 回覆結果`'
-      + '\n\n【它會放在目前選取的投影片上】Common API 沒辦法指定投影片，'
-      + '所以要先確定使用者在對的那一張，或剛建好那一張。',
+      + '\n\n【用 slide 指定放在哪一張】省略的話放在**最後一張**，也就是你剛做好的那張。',
     inputSchema: {
       type: 'object',
       properties: {
+        ...SLIDE_ARG,
         code: { type: 'string', description: 'mermaid 原始碼，不要包 ``` 圍欄。' },
         ...GEOMETRY,
         raster: { type: 'boolean', description: '設 true 強制用點陣圖而不是 SVG。一般不需要。' },
@@ -565,6 +567,7 @@ export const PPT_TOOLS: PptToolSpec[] = [
     inputSchema: {
       type: 'object',
       properties: {
+        ...SLIDE_ARG,
         data: { type: 'string', description: 'base64 圖片資料（不含 data: 前綴也可以）。' },
         natural_width: { type: 'number', description: '原始寬度，用來算比例。' },
         natural_height: { type: 'number', description: '原始高度。' },
