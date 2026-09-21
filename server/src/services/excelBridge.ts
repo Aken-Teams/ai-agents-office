@@ -25,6 +25,7 @@
  */
 import crypto from 'crypto';
 import { readAttachmentPart } from './excelAttachments.js';
+import { createHandoff } from '../routes/handoffs.js';
 import type { SSEEvent } from '../types.js';
 import * as excelSpec from './excelToolSpec.js';
 import * as wordSpec from './wordToolSpec.js';
@@ -127,6 +128,8 @@ interface ExcelRun {
    * trip to it would only add latency and a way to fail.
    */
   files: string[];
+  /** The open document's name, so a handoff can say where it came from. */
+  documentName: string;
 }
 
 const runs = new Map<string, ExcelRun>();
@@ -144,9 +147,12 @@ export function registerRun(
   userId: string,
   write: (event: SSEEvent) => void,
   files: string[] = [],
+  documentName = '',
 ): string {
   const token = crypto.randomBytes(32).toString('hex');
-  runs.set(runId, { runId, userId, write, pending: new Map(), closed: false, files });
+  runs.set(runId, {
+    runId, userId, write, pending: new Map(), closed: false, files, documentName,
+  });
   tokenToRun.set(token, runId);
   return token;
 }
@@ -209,6 +215,33 @@ export function callWorkbookTool(
     const r = readAttachmentPart(
       run.userId, run.files, Number(args.index ?? 1), Number(args.part ?? 1));
     return Promise.resolve(r);
+  }
+
+  /**
+   * Packing a handoff is also answered here.
+   *
+   * It writes a row to this server and touches no document at all — the parcel
+   * is content the agent has already worked out, not an act on the workbook. So
+   * there is nothing for the pane to do, no confirmation to show (nothing can be
+   * lost), and a round trip to it would only add a way to fail.
+   */
+  if (tool.endsWith('_create_handoff')) {
+    return createHandoff({
+      userId: run.userId,
+      sourceHost: tool.split('_')[0],
+      sourceName: run.documentName,
+      target: String(args.target ?? ''),
+      title: String(args.title ?? ''),
+      payload: String(args.content ?? ''),
+    }).then((r) => (r.ok
+      ? {
+        ok: true,
+        content: `已備妥交接包（${r.id.slice(0, 8)}）。`
+          + `請使用者開啟 ${args.target === 'word' ? 'Word 文件' : 'PowerPoint 簡報'}`
+          + '並打開 JVision 助手，側邊欄頂端就會出現這筆分析，按「接受」即可在那份檔案裡生成。'
+          + ' 24 小時內有效。',
+      }
+      : { ok: false, error: r.error }));
   }
 
   const callId = crypto.randomUUID();

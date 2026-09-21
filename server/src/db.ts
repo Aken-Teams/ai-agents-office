@@ -364,6 +364,39 @@ export async function initializeDatabase(): Promise<void> {
       await conn.query('ALTER TABLE messages ADD COLUMN prompt_template_id VARCHAR(36) DEFAULT NULL');
     } catch { /* column already exists */ }
 
+    /**
+     * 跨增益集交接包 — Excel's analysis, waiting for Word or PowerPoint. PRD 3.5.
+     *
+     * ── Why this exists as stored state at all ──
+     * Office add-ins cannot drive one another: Excel's pane has no way to open
+     * PowerPoint, and PowerPoint's pane cannot reach back into a workbook. So
+     * the handover is a parcel left on the server. Excel packs it, the person
+     * opens the other app themselves, and that pane finds the parcel waiting.
+     *
+     * ── Why it expires ──
+     * PRD 3.5 says 24 hours, and the reason is that the parcel holds real
+     * numbers out of somebody's workbook. A handover nobody collected is data
+     * sitting where it has no further purpose; `sweepHandoffs` deletes rather
+     * than marks, so 「expired」 is not a row anyone can still read.
+     */
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS handoffs (
+        id          VARCHAR(36) PRIMARY KEY,
+        user_id     VARCHAR(36) NOT NULL,
+        source_host VARCHAR(16) NOT NULL,
+        source_name VARCHAR(255) NOT NULL,
+        target      VARCHAR(16) NOT NULL,
+        title       VARCHAR(255) NOT NULL,
+        payload     MEDIUMTEXT NOT NULL,
+        created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        expires_at  DATETIME NOT NULL,
+        consumed_at DATETIME DEFAULT NULL,
+        INDEX idx_handoffs_user_target (user_id, target),
+        INDEX idx_handoffs_expires (expires_at),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS user_memories (
         id                     VARCHAR(36) PRIMARY KEY,

@@ -13,6 +13,7 @@ import fileRoutes from './routes/files.js';
 import usageRoutes from './routes/usage.js';
 import skillRoutes from './routes/skills.js';
 import promptTemplateRoutes from './routes/promptTemplates.js';
+import handoffRoutes from './routes/handoffs.js';
 import adminRoutes from './routes/admin.js';
 import uploadRoutes from './routes/uploads.js';
 import shareRoutes from './routes/share.js';
@@ -141,6 +142,7 @@ async function main() {
   app.use('/api/usage', usageRoutes);
   app.use('/api/skills', skillRoutes);
   app.use('/api/prompt-templates', promptTemplateRoutes);
+  app.use('/api/handoffs', handoffRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/uploads', uploadRoutes);
   app.use('/api/share', shareRoutes);

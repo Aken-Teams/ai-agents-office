@@ -292,6 +292,38 @@ export const EXCEL_TOOLS: ExcelToolSpec[] = [
     },
   },
   {
+    name: 'excel_create_handoff',
+    description:
+      '把這次的分析打包，交給 PowerPoint 或 Word 增益集，讓使用者在那份簡報／文件裡接著生成。'
+      + '\n\n【什麼時候用】使用者說「幫我做成簡報」「寫成報告」「把這些做成投影片」的時候。'
+      + '\n\n**Office 不允許從 Excel 驅動 PowerPoint**，所以你不能直接做出簡報。'
+      + '這支工具會把內容存在平台上（24 小時有效），使用者自己開啟 PowerPoint 並打開側邊欄，'
+      + '那邊會出現這筆分析讓他接受，再由那個增益集在他當下開著的檔案裡原生生成——'
+      + '這樣才能沿用那份簡報既有的版面配置與主題色。'
+      + '\n\n【content 要寫什麼】那邊的 agent 看不到這份活頁簿，**它只看得到你寫進去的東西**。'
+      + '所以要自成一份完整的材料：'
+      + '\n・結論：三到五句，講清楚這份資料說明了什麼'
+      + '\n・關鍵數據：用 markdown 表格，數字要完整不要只寫「成長很多」'
+      + '\n・圖表建議：哪幾組數據值得畫、畫成什麼類型、為什麼'
+      + '\n・原始位置：每個數字來自哪個儲存格，寫成 [[工作表!C42]] 的格式'
+      + '\n\n不要把整張工作表倒進去。挑出真正要講的那幾個數字，'
+      + '那邊的人要的是一份簡報，不是一份原始資料。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        target: {
+          type: 'string',
+          enum: ['ppt', 'word'],
+          description: 'ppt＝做成簡報，word＝寫成報告。使用者沒講清楚就用 excel_ask_user 問。',
+        },
+        title: { type: 'string', description: '這份分析的標題，會顯示在對方的側邊欄上。' },
+        content: { type: 'string', description: '要交接過去的完整內容（markdown）。見上面的說明。' },
+      },
+      required: ['target', 'content'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'excel_read_image',
     description:
       '看工作表上「貼著的」圖片或圖案的內容（不是圖表）。'
@@ -636,7 +668,7 @@ export const EXCEL_TOOL_NAMES = EXCEL_TOOLS.map(t => t.name);
  * pane, so filtering them by what the pane supports would hide a working tool
  * from every user whose add-in predates it.
  */
-export const EXCEL_SERVER_TOOLS = ['excel_read_file'];
+export const EXCEL_SERVER_TOOLS = ['excel_read_file', 'excel_create_handoff'];
 
 /** MCP tool names as the CLI sees them — must match --allowedTools entries. */
 export const EXCEL_MCP_TOOL_NAMES = EXCEL_TOOL_NAMES.map(n => `mcp__excel__${n}`);
@@ -806,6 +838,9 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
       + (rows ? `（列：${rows}）` : '');
   }
   if (name === 'excel_read_file') return `讀取你上傳的第 ${args.index ?? 1} 個檔案`;
+  if (name === 'excel_create_handoff') {
+    return args.target === 'word' ? '打包成 Word 報告的交接' : '打包成 PowerPoint 簡報的交接';
+  }
   if (name === 'excel_compare_source') {
     const out = String(args.output_sheet || '').trim();
     const other = String(args.compare_with_sheet || '').trim();

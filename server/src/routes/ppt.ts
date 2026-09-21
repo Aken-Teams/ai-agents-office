@@ -290,7 +290,7 @@ router.post('/chat', async (req: Request, res: Response) => {
     .map((id) => getAttachment(userId, String(id)))
     .filter((f): f is StoredAttachment => !!f);
 
-  const bridgeToken = registerRun(runId, userId, write, uploaded.map((f) => f.id));
+  const bridgeToken = registerRun(runId, userId, write, uploaded.map((f) => f.id), documentName);
 
   // Version skew guard. The manifest uses SharedRuntime with lifetime="long", so
   // reopening the task pane does NOT reload its JavaScript — only quitting PowerPoint
