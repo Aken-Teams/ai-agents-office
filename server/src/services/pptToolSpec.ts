@@ -222,17 +222,27 @@ export const PPT_TOOLS: PptToolSpec[] = [
     name: 'ppt_build_slide',
     description:
       '**一次做好一整張排版完成的投影片。這應該是你最常用的工具。**'
+      + '\n\n【一頁就一次呼叫】kpi、callout、footband 都是這個工具的參數。'
+      + '把它們寫進同一次呼叫，版面會自己把高度分配好，上中下三層剛好填滿。'
+      + '分成三次呼叫的話，每一次都要你自己算 top——算出來的落差就變成'
+      + '使用者看到的那幾塊空白（「一頁 PPT 這樣也太少東西了」就是這麼來的）。'
+      + '\nppt_add_kpi / ppt_add_callout 留給「事後補一個到既有的頁面上」用。'
       + '\n\n【為什麼不要用 ppt_add_text 慢慢拼】一張投影片用基本工具拼要五六次呼叫，'
       + '每次都是一趟來回，而且每次的座標都是你自己編的——'
       + '結果就是兩張投影片的標題差了 4 點，看起來很不專業但沒人說得出哪裡怪。'
       + '這個工具用同一套格線，所以每張投影片都對得起來。'
       + '\n\n【七種版型】'
       + '\n· **title**：封面。滿版主色底、置中大標。整份只用一次。'
-      + '\n· **section**：章節分隔頁。用來把長簡報切成段落，觀眾才知道講到哪。'
+      + '\n· **section**：章節分隔頁，**整頁滿版**。用來把長簡報切成段落。'
+      + '一律給 eyebrow（段落編號 01/02/03）、title（段落名稱）、body（一句話說這段要講什麼）。'
+      + '**要嘛每一段都有，要嘛一張都不要放**——有些有有些沒有，觀眾會以為自己漏看了一頁。'
       + '\n· **bullets**：標題＋條列。最常用的內容頁。'
       + '\n· **two_column**：雙欄並排。左右各一組條列，適合「現況／建議」。'
       + '\n· **compare**：雙欄對照，兩邊各有底色方框。適合方案 A／方案 B。'
-      + '\n· **statement**：一個大數字或一句話，超大字置中。用在關鍵結論。'
+      + '\n· **statement**：一個大數字，超大字置中。用在關鍵結論。'
+      + '\n　**數字不能單獨出現**——只有「逾 80%」的一頁是問答題，不是論點。'
+      + '必須三件到齊：eyebrow（在講哪一段）＋ title（數字）＋ body（一句話說它代表什麼），'
+      + '出處寫在 footer。缺一個就會變成使用者說的「不明所以的大數字」。'
       + '\n· **quote**：引言，帶引號裝飾和署名。'
       + '\n\n【預設會新增一張投影片】不想新增、要在現有的那張上面做，就給 slide 或 append=false。'
       + '\n\n【條列寫法】body 給陣列，一項一句，**一項不要超過兩行**。'
@@ -265,6 +275,33 @@ export const PPT_TOOLS: PptToolSpec[] = [
         },
         page: { type: 'string', description: '右上角的頁碼標記，例如「P.03」。' },
         footer: { type: 'string', description: '頁尾註記，例如資料來源。' },
+        kpi: {
+          type: 'array',
+          description:
+            '在內容上方放一排數據卡（大數字＋標籤＋小註），最多 5 個，三到四個最好看。'
+            + '\n**寫在這裡，不要另外呼叫 ppt_add_kpi。** 放在這裡的話，'
+            + '版面會自己把剩下的高度分配給下面的內容；'
+            + '另外呼叫的話你要自己算 top，算出來的落差就是使用者看到的那塊空白。',
+          items: {
+            type: 'object',
+            properties: {
+              value: { type: 'string', description: '大數字，例如「65%」「$37B」。' },
+              label: { type: 'string', description: '這個數字是什麼。' },
+              note: { type: 'string', description: '小字註解，來源或比較基準。' },
+              color: { type: 'string' },
+            },
+            required: ['value'],
+            additionalProperties: false,
+          },
+        },
+        callout: {
+          type: 'string',
+          description:
+            '一句結論，放在這一頁的最底下（淺色底、左邊一條色帶）。'
+            + '\n這一頁的數字講「發生了什麼」，這句講「所以呢」。**只寫一句**，'
+            + '變成條列就等於把內容換個顏色再講一次。'
+            + '\n同樣**寫在這裡，不要另外呼叫 ppt_add_callout**——理由跟 kpi 一樣。',
+        },
         footband: {
           type: 'boolean',
           description:
