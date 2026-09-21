@@ -24,7 +24,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { authMiddleware } from '../middleware/auth.js';
 import { dbAll, dbGet, dbRun } from '../db.js';
-import { logSecurityEvent } from '../services/inputGuard.js';
+import { analyzeInput, logSecurityEvent } from '../services/inputGuard.js';
 
 const router = Router();
 router.use(authMiddleware);
@@ -77,6 +77,47 @@ async function mine(userId: string, id: string): Promise<PromptTemplate | undefi
 
 const clean = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max);
 
+/**
+ * Scan a template before it is stored.
+ *
+ * ── The risk this closes, which is about PERSISTENCE ──
+ * Text injected into a workbook by an outsider is normally a one-shot: it
+ * influences a single turn, the confirmation gate stops the damage, and it is
+ * gone. Saving a template breaks that. The intended way to make one is to ask
+ * the agent to write up the procedure it just carried out and save its reply —
+ * and the agent producing that reply has been reading the workbook. Adversarial
+ * text in the file can shape what it writes, the person skims it and saves it
+ * because they believe they authored it, and a one-shot becomes something that
+ * replays every month with their trust attached.
+ *
+ * So the same scanner that guards uploaded files guards this. analyzeInput
+ * rather than the file variant: this is prose, capped well below the length
+ * limit, and there is no filename to judge.
+ *
+ * ── Why blocking here does not fight legitimate use ──
+ * The detectors look for injection MECHANICS — <system> tags, 「ignore previous
+ * instructions」, unicode obfuscation, base64 payloads, path traversal, and the
+ * =CMD/=EXEC formula family. None of them fire on 「幫我刪掉重複的列」, which is a
+ * destructive request and a perfectly ordinary thing to save. A template that
+ * trips this is not a blunt instruction; it is one carrying machinery.
+ */
+function screen(userId: string, name: string, content: string): string | null {
+  const r = analyzeInput(content);
+  if (r.blocked) {
+    logSecurityEvent(userId, 'prompt_injection', 'high',
+      `常用指令「${name}」被判定為注入嘗試（${r.flags.join(', ')}）`, content.slice(0, 2000));
+    return '這則常用指令裡有看起來像是要操控 AI 的內容，沒有存起來。'
+      + '如果這是你從對話裡複製下來的，請先確認那段文字不是從檔案內容來的。';
+  }
+  // Below the block threshold but above the warning one: worth a record, not
+  // worth refusing. A person's own saved text is theirs to write.
+  if (!r.safe) {
+    logSecurityEvent(userId, 'prompt_injection', 'low',
+      `常用指令「${name}」有可疑樣式但未達阻擋門檻（${r.flags.join(', ')}）`);
+  }
+  return null;
+}
+
 /** GET /api/prompt-templates — the caller's own, newest first. */
 router.get('/', async (req: Request, res: Response) => {
   const rows = await dbAll<PromptTemplate>(
@@ -94,6 +135,8 @@ router.post('/', async (req: Request, res: Response) => {
   const content = clean(req.body?.content, MAX_CONTENT);
   if (!name) { res.status(400).json({ error: '請給這則常用指令一個名稱。' }); return; }
   if (!content) { res.status(400).json({ error: '常用指令的內容不能是空的。' }); return; }
+  const refused = screen(userId, name, content);
+  if (refused) { res.status(400).json({ error: refused }); return; }
 
   const max = await limitFor(userId);
   const count = await dbGet<{ n: number }>(
@@ -120,6 +163,11 @@ router.patch('/:id', async (req: Request, res: Response) => {
   const name = req.body?.name === undefined ? row.name : clean(req.body.name, MAX_NAME);
   const content = req.body?.content === undefined ? row.content : clean(req.body.content, MAX_CONTENT);
   if (!name || !content) { res.status(400).json({ error: '名稱和內容都不能是空的。' }); return; }
+  // Re-scanned on edit, not only on create: the content can be replaced
+  // wholesale here, and a check that only runs at birth is a check with a
+  // documented way round it.
+  const refusedEdit = screen(userId, name, content);
+  if (refusedEdit) { res.status(400).json({ error: refusedEdit }); return; }
 
   await dbRun(
     'UPDATE prompt_templates SET name = ?, content = ?, updated_at = NOW() WHERE id = ? AND user_id = ?',
