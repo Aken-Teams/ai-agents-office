@@ -507,7 +507,22 @@ ${skill.systemPrompt}
 
 /** Past threads for one workbook, newest first. */
 router.get('/conversations', async (req: Request, res: Response) => {
-  const key = String(req.query.workbookKey || req.query.workbook || '').slice(0, 255);
+  // `documentKey` FIRST, because that is what the pane actually sends.
+  //
+  // This route was left reading the old spelling when the pane renamed
+  // workbookName/workbookKey to documentName/documentKey for Word and PowerPoint
+  // — word.ts and ppt.ts were updated, excel.ts was not. So the key was always
+  // empty, the guard below returned an empty list, and 「這份活頁簿還沒有對話紀錄」
+  // appeared for every workbook no matter how much history it had. The rows were
+  // in the table the whole time; nothing could ever reach them.
+  //
+  // The old spellings stay accepted for the same reason the POST route accepts
+  // them: the manifest pins the pane's JavaScript for as long as Excel stays
+  // open, so somebody who updates the add-in without quitting Excel is still
+  // sending the old names right now.
+  const key = String(
+    req.query.documentKey || req.query.workbookKey || req.query.workbook || '',
+  ).slice(0, 255);
   if (!key) { res.json({ conversations: [] }); return; }
   const rows = await dbAll<{ id: string; title: string; status: string; created_at: string; turns: number }>(
     `SELECT c.id, c.title, c.status, c.created_at,
