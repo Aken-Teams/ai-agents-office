@@ -109,17 +109,33 @@ const FILL = {
 const LOOK_ARG = {
   look: {
     type: 'string',
-    enum: ['business', 'editorial', 'minimal', 'soft', 'bold', 'tech'],
+    enum: ['business', 'editorial', 'literary', 'minimal', 'soft', 'bold', 'tech',
+      'academic', 'dashboard', 'courseware', 'handmade', 'whiteboard', 'eink'],
     description:
       '版式（跟配色是兩回事：配色決定顏色，版式決定長相）。'
       + '\n- business 企業：雙色頂條、短底線、方角卡片。對外提案、給主管看。'
       + '\n- editorial 雜誌：沒有色條，標題大而不粗，下面一條細滿版線。偏文青、像報導。'
+      + '\n- literary 文青：暖色紙張滿版、明體標題、細框線，**完全沒有企業色**。'
+      + '使用者講「文青」「有質感」「不要那麼商務」就是這個。'
       + '\n- minimal 極簡：沒有任何裝飾，只有字跟留白。內容夠強的時候最好看。'
       + '\n- soft 柔和：圓角、標題置中、色條短而圓。內部分享、教學、輕鬆場合。'
       + '\n- bold 大字：標題很大，左上角一塊實色。只有一個重點、要講得用力。'
-      + '\n- tech 科技：深色底、細線、單色。技術簡報、資料儀表板。'
+      + '\n- tech 科技：深色底、細線、單色。技術簡報。'
+      + '\n- academic 學術：整頁細框、密集分欄、編號分明。口試、技術審查、內部評審。'
+      + '\n- dashboard 儀表板：左側整條色柱、點陣底。數據回顧、月結報告。'
+      + '\n- courseware 教材：大字、圓角、步驟分明。教學、內訓、說明會。'
+      + '\n- handmade 手作：**紙紋底＋手繪框線**。暖色、鬆一點的場合。'
+      + '\n- whiteboard 白板：接近全白、**手繪線條**、沒有色塊。邊講邊畫的內容。'
+      + '\n- eink 電子紙：**紙紋**、明體、純灰階。長文、報告、要被讀而不是被看的。'
+      + '\n\n最後三個的紋理與手繪筆觸是在增益集裡用 SVG 算出來的，不是 AI 生圖——'
+      + '**在 PowerPoint 裡按右鍵「轉換為圖形」之後還是可以編輯**。'
+      + '需要 Office 2021 以上，舊版會自動退回沒有紋理的樣子。'
       + '\n**整份簡報只選一次，之後每一次呼叫都帶同一個值。**'
-      + '換版式等於換一份簡報，中途換會非常明顯。預設 business。',
+      + '換版式等於換一份簡報，中途換會非常明顯。預設 business。'
+      + '\n\n**每個版式都自帶配色。** 不指定 theme 的話會用該版式原本設計的那一組——'
+      + 'literary 與 handmade 配暖紙、editorial/minimal/whiteboard/eink 配墨黑、'
+      + 'soft 配莫蘭迪、courseware 配清新綠。'
+      + '選了風格又硬套企業藍，就是使用者說「文青一點」結果拿到藍配紅的原因。',
   },
 };
 
