@@ -21,6 +21,7 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { authMiddleware } from '../middleware/auth.js';
+import { templateForAudit } from './promptTemplates.js';
 import { dbGet, dbRun, dbAll } from '../db.js';
 import { spawnClaude } from '../services/claudeCli.js';
 import { recordTokenUsage } from '../services/tokenTracker.js';
@@ -242,8 +243,13 @@ router.post('/chat', async (req: Request, res: Response) => {
 
   const conversationId = await getOrCreateExcelConversation(
     userId, documentKey, documentName, !!newConversation);
-  await dbRun('INSERT INTO messages (id, conversation_id, role, content) VALUES (?, ?, ?, ?)',
-    uuidv4(), conversationId, 'user', message.trim()).catch(() => {});
+  // PRD 3.5 asks the audit log to name the 常用指令 a turn was started from.
+  // Resolved server-side rather than trusted: a forged id records nothing rather
+  // than attributing this turn to a stranger's template.
+  const appliedTemplate = await templateForAudit(userId, (req.body as Record<string, unknown>).promptTemplateId);
+  await dbRun(
+    'INSERT INTO messages (id, conversation_id, role, content, prompt_template_id) VALUES (?, ?, ?, ?, ?)',
+    uuidv4(), conversationId, 'user', message.trim(), appliedTemplate).catch(() => {});
   await titleFromFirstMessage(conversationId, message.trim());
 
   res.writeHead(200, {

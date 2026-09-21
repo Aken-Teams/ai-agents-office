@@ -319,6 +319,51 @@ export async function initializeDatabase(): Promise<void> {
       console.log('[DB] Migrated announcements: active_days → start_date/end_date');
     }
 
+    /**
+     * 個人常用指令 — a person's own saved prompts. PRD 3.5.
+     *
+     * ── Why this is NOT the skills table ──
+     * A skill carries tools, connectors, a knowledge-base scope and a
+     * may-skip-confirmation flag; creating one is granting a permission, which is
+     * why only 強合 IT can. A prompt template is TEXT. Applying one can do nothing
+     * its owner could not already do by typing the same words, which is what lets
+     * an ordinary user create them freely. Keeping them in separate tables keeps
+     * that distinction structural rather than a rule someone has to remember.
+     *
+     * ── Owner-only, with no way to widen it ──
+     * There is no `shared`, `visibility` or `team_id` column, and that absence is
+     * the design (AC-43): every query in routes/promptTemplates.ts filters on
+     * user_id, and there is no schema on which a sharing feature could be bolted
+     * on by accident. Sharing, exporting and publishing are not withheld in the
+     * UI — they have nowhere to live.
+     */
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS prompt_templates (
+        id         VARCHAR(36) PRIMARY KEY,
+        user_id    VARCHAR(36) NOT NULL,
+        name       VARCHAR(60) NOT NULL,
+        content    TEXT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_prompt_templates_user (user_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Per-account override of the 50-template default. Null means "use the
+    // system setting", so raising the default later lifts everyone who has not
+    // been given a number of their own.
+    try {
+      await conn.query('ALTER TABLE users ADD COLUMN prompt_template_limit INT DEFAULT NULL');
+    } catch { /* column already exists */ }
+
+    // Which template a conversation turn was started from. Nullable because
+    // most turns are typed from scratch; PRD 3.5 requires the ones that were not
+    // to be auditable.
+    try {
+      await conn.query('ALTER TABLE messages ADD COLUMN prompt_template_id VARCHAR(36) DEFAULT NULL');
+    } catch { /* column already exists */ }
+
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS user_memories (
         id                     VARCHAR(36) PRIMARY KEY,
