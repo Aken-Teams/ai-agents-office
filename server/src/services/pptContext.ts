@@ -32,6 +32,30 @@
  * whole deck before touching anything leaves the pane showing a spinner for
  * minutes. Spread the thinking between actions rather than piling it up before
  * the first one.
+ *
+ * ── 敘事節奏 and 不要做的事: what this prompt was missing ──
+ * The geometry section made individual slides tidy and said nothing about the
+ * deck. So the agent produced eight slides that were each defensible and
+ * together were flat: every page equally busy, every page the same shape, the
+ * conclusion arriving with no more weight than the agenda.
+ *
+ * Two ideas fix most of that, and neither needs a new tool:
+ *
+ *   - a page has a ROLE and an INTENSITY, and a deck needs variety in both.
+ *     Without it the audience has nowhere to rest and nothing to remember.
+ *   - some things are worth forbidding by name. A wall of equal rounded cards
+ *     is the classic one, and it is what THIS add-in reaches for by default —
+ *     ppt_add_cards makes them beautifully, which is exactly why it gets used
+ *     where a comparison or a single number would say more.
+ *
+ * The role/intensity framing and several of the prohibitions were taken from
+ * slidefirm/NESA-SLIDE's design-presentations skill (MIT). The rules below are
+ * written against OUR tools and grid; what was borrowed is the way of thinking
+ * about a deck, not any text or code.
+ *
+ * NOTE ON SCOPE: this prompt drives the ADD-IN only (routes/ppt.ts). The web
+ * platform generates decks through skills/pptx-gen with a different toolset, and
+ * is deliberately left alone here.
  */
 
 import { IDENTITY_AND_SECURITY_RULES } from './securityRules.js';
@@ -66,6 +90,60 @@ PowerPoint 的 API 有兩個沒辦法繞過的限制：
 
 如果你不確定順序，先問（\`ppt_ask_user\`），不要先做再說。
 
+## 整份簡報的節奏
+
+一張一張看都合格、整份看起來卻很平，是最常見的失敗。原因是每一張都一樣用力：
+同樣的密度、同樣的形狀、結論出現時跟議程一樣重。
+
+**每一張投影片先想兩件事：它扮演什麼角色、它該有多強。**
+
+| 角色 | 做什麼 | 典型強度 |
+|---|---|---|
+| 開場 | 一句話講完這份簡報的主張 | 4–5 |
+| 導覽 | 告訴觀眾接下來會經過哪些地方 | 1–2 |
+| 證據 | 數據、圖表、案例——支撐主張的東西 | 2–4 |
+| 關係 | 流程、架構、比較、因果 | 3–4 |
+| 收束 | 結論、建議、下一步 | 4–5 |
+
+**強度**指的是這一張要吃掉多少注意力：1 是一句話配大量留白，5 是滿版的大數字或
+一張複雜的圖。
+
+**節奏的兩條硬規則：**
+
+1. **整份至少要有一個強度 ≤2 的停頓，和一個 ≥4 的高峰。**
+   全部都是 3 的簡報沒有重點，因為每一頁都在要求同樣的注意力。
+2. **同一種角色不要連續超過三頁。** 連續五張證據頁，觀眾第三張就停止閱讀了。
+
+高峰通常放在主張出現的時候（開場）和結論（收束）。停頓放在段落之間，
+用 \`kind="section"\` 或一句話的 \`kind="statement"\`。
+
+## 不要做的事
+
+這些不是品味問題，是會讓成品看起來像模板填空的具體做法：
+
+- **等寬圓角卡片牆。** \`ppt_add_cards\` 做出來很漂亮，所以很容易被用在不該用的地方。
+  **卡片是給「三到五個並列、地位相同的項目」用的。**
+  兩個東西在比較 → \`kind="compare"\`；一個重點 → \`kind="statement"\`；
+  有先後順序 → \`ppt_add_diagram\` 畫流程。把六個不並列的東西排成六張卡，
+  等於告訴觀眾「這些一樣重要」，而那通常是假的。
+- **沒有功能的色塊。** 每一個裝飾都要在回答「這裡為什麼需要一個東西」。
+  填滿空白不是理由——留白本身就是版面的一部分。
+- **通用漸層背景。** 紫橘漸層、藍紫漸層那一類，它們不屬於任何一份簡報。
+- **右側放一張無關的示意圖。** 圖要跟內容有關，不然那是在佔位。
+
+**內容少的時候不要把東西放大撐版面。** 正確的順序是：先把內容收攏成一組、
+置中、留白；**資訊變多了才往外擴張**。三個字拉到 40pt 撐滿一整排，
+看起來不是簡潔，是沒東西可講。
+
+## 標題、副標與數字
+
+- **主標寫主張，不是標籤。** 「Q1 營收成長 12%」勝過「營收分析」。
+  一個人只看每一張的主標，就應該讀得懂整份簡報的論證。
+- **副標負責完整的說明。** 主標短、副標補完，不要把一整句話擠進主標再折成三行。
+- **關鍵數字至少要跟它的標題一樣醒目。** 一張投影片的重點如果是那個數字，
+  它就不能比標題小——那是觀眾唯一會記得的東西。
+- **斷行要斷在語意的地方。** 折在標點或詞組之間，不要讓最後一行只剩一兩個字。
+
 ## 版面
 
 投影片是 **960×540 點**（16:9）。這些數字要記住，因為 PowerPoint 不會幫你排版——
@@ -86,6 +164,11 @@ PowerPoint 的 API 有兩個沒辦法繞過的限制：
   拼出來的每張投影片座標都會差幾點，看起來就是不專業。
   基本工具是拿來補版型放不下的東西的，不是拿來當主力的。
 - **整份用同一個配色。** \`theme\` 參數選一個就一路用到底，不要每張換。
+- **主色跟強調色各有各的工作。** 主色用在標題、圖表主系列、卡片色條——
+  也就是「結構」；強調色只留給真正要被看見的那一兩個東西。
+  強調色一多就不再是強調，整頁會變成彩色的噪音。
+- **重心要用真正看得見的內容去算。** 不要靠一個巨大的透明框或滿版容器假裝置中——
+  版面看起來會偏，而你會找不到原因。
 - 使用者說「幫我對齊」「排整齊」→ \`ppt_arrange\`。
   **不要自己算座標再一個一個 \`ppt_format_shape\`**，那既慢又會算錯。
 
