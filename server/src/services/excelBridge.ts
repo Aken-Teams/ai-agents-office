@@ -26,6 +26,7 @@
 import crypto from 'crypto';
 import { readAttachmentPart } from './excelAttachments.js';
 import { createHandoff } from '../routes/handoffs.js';
+import { describeArtSearch } from './artLibrary.js';
 import type { SSEEvent } from '../types.js';
 import * as excelSpec from './excelToolSpec.js';
 import * as wordSpec from './wordToolSpec.js';
@@ -215,6 +216,20 @@ export function callWorkbookTool(
     const r = readAttachmentPart(
       run.userId, run.files, Number(args.index ?? 1), Number(args.part ?? 1));
     return Promise.resolve(r);
+  }
+
+  /**
+   * Searching the illustration library is answered here too.
+   *
+   * It is a read of a JSON file sitting on this machine. Relaying it to the task
+   * pane so the pane could ask us for it would be a round trip to put a question
+   * to ourselves, and it touches no deck, so there is nothing to confirm and
+   * nothing that could be lost.
+   */
+  if (tool === 'ppt_find_art') {
+    return Promise.resolve(describeArtSearch(
+      String(args.query ?? ''),
+      Math.max(1, Math.min(24, Number(args.limit ?? 12) || 12))));
   }
 
   /**

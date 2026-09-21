@@ -40,9 +40,30 @@ export interface PromptTemplate {
   user_id: string;
   name: string;
   content: string;
+  host: string;
   created_at: string;
   updated_at: string;
 }
+
+/**
+ * Which product a template is for.
+ *
+ * ── Why this is not just a tag ──
+ * The add-ins share one account and one store, so without a scope a person
+ * editing a deck is shown 「把這份活頁簿裡的廠區欄位…」 — an instruction that
+ * cannot possibly run here. One wrong row is enough to make the whole list read
+ * as not-for-me, and a list nobody trusts is a list nobody opens.
+ *
+ * 'all' is a real choice, not a fallback: 「用條列式回我，每點一句」 is worth
+ * having everywhere. It is also what rows created before this column existed
+ * became, because we did not record where they came from and inventing an answer
+ * would be worse than admitting it.
+ */
+const HOSTS = new Set(['excel', 'word', 'ppt', 'web', 'all']);
+const hostOf = (v: unknown, fallback = 'all') => {
+  const h = String(v ?? '').trim().toLowerCase();
+  return HOSTS.has(h) ? h : fallback;
+};
 
 async function limitFor(userId: string): Promise<number> {
   const row = await dbGet<{ prompt_template_limit: number | null }>(
@@ -118,13 +139,23 @@ function screen(userId: string, name: string, content: string): string | null {
   return null;
 }
 
-/** GET /api/prompt-templates — the caller's own, newest first. */
+/**
+ * GET /api/prompt-templates — the caller's own, newest first.
+ *
+ * `?host=ppt` narrows to what can actually run in PowerPoint: that product's own
+ * templates plus the ones marked 'all'. Without the parameter everything comes
+ * back, which is what the web app wants — it is the one surface where every
+ * template is legible, because it is where they can all be managed.
+ */
 router.get('/', async (req: Request, res: Response) => {
+  const want = String(req.query.host ?? '').trim().toLowerCase();
+  const scoped = HOSTS.has(want) && want !== 'all';
   const rows = await dbAll<PromptTemplate>(
-    `SELECT id, name, content, created_at, updated_at
-       FROM prompt_templates WHERE user_id = ?
+    `SELECT id, name, content, host, created_at, updated_at
+       FROM prompt_templates
+      WHERE user_id = ?${scoped ? " AND (host = ? OR host = 'all')" : ''}
       ORDER BY updated_at DESC`,
-    req.user!.userId);
+    ...(scoped ? [req.user!.userId, want] : [req.user!.userId]));
   res.json({ templates: rows, max: await limitFor(req.user!.userId) });
 });
 
@@ -147,11 +178,15 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   const id = uuidv4();
+  // Defaults to 'all' rather than to the caller's product: a template created
+  // through an API that did not say where it came from is, as far as we know,
+  // general. Every add-in does say.
+  const host = hostOf(req.body?.host);
   await dbRun(
-    `INSERT INTO prompt_templates (id, user_id, name, content, created_at, updated_at)
-     VALUES (?, ?, ?, ?, NOW(), NOW())`,
-    id, userId, name, content);
-  res.status(201).json({ id, name, content });
+    `INSERT INTO prompt_templates (id, user_id, name, content, host, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, NOW(), NOW())`,
+    id, userId, name, content, host);
+  res.status(201).json({ id, name, content, host });
 });
 
 /** PATCH /api/prompt-templates/:id — rename or rewrite. */
@@ -169,10 +204,14 @@ router.patch('/:id', async (req: Request, res: Response) => {
   const refusedEdit = screen(userId, name, content);
   if (refusedEdit) { res.status(400).json({ error: refusedEdit }); return; }
 
+  // Re-scoping is an edit like any other — it is how somebody fixes a row that
+  // predates the column, or promotes an Excel procedure to a general one.
+  const host = req.body?.host === undefined ? row.host : hostOf(req.body.host, row.host);
   await dbRun(
-    'UPDATE prompt_templates SET name = ?, content = ?, updated_at = NOW() WHERE id = ? AND user_id = ?',
-    name, content, row.id, userId);
-  res.json({ id: row.id, name, content });
+    `UPDATE prompt_templates SET name = ?, content = ?, host = ?, updated_at = NOW()
+      WHERE id = ? AND user_id = ?`,
+    name, content, host, row.id, userId);
+  res.json({ id: row.id, name, content, host });
 });
 
 /** DELETE /api/prompt-templates/:id */

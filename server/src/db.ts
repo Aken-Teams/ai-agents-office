@@ -350,6 +350,21 @@ export async function initializeDatabase(): Promise<void> {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    /**
+     * Which product a template belongs to.
+     *
+     * Seeing an Excel procedure offered while you are editing a deck is not a
+     * cosmetic annoyance — it makes the whole list read as not-for-you, and a
+     * list nobody trusts is a list nobody opens. 'all' is the general case and
+     * the default, which is also what every row created before this column
+     * existed becomes: we did not record where those came from and guessing
+     * would be worse than saying so.
+     */
+    try {
+      await conn.query(
+        "ALTER TABLE prompt_templates ADD COLUMN host VARCHAR(12) NOT NULL DEFAULT 'all'");
+    } catch { /* column already exists */ }
+
     // Per-account override of the 50-template default. Null means "use the
     // system setting", so raising the default later lifts everyone who has not
     // been given a number of their own.

@@ -99,13 +99,40 @@ const FILL = {
   line: { type: 'boolean', description: '設 false 代表不要外框。' },
 };
 
+/**
+ * The structural knob, next to the colour one.
+ *
+ * Kept separate from `theme` because a look and a palette are independent
+ * choices — 極簡 works in orange and in navy — and fusing them would need thirty
+ * enum values to say what six and five say apart.
+ */
+const LOOK_ARG = {
+  look: {
+    type: 'string',
+    enum: ['business', 'editorial', 'minimal', 'soft', 'bold', 'tech'],
+    description:
+      '版式（跟配色是兩回事：配色決定顏色，版式決定長相）。'
+      + '\n- business 企業：雙色頂條、短底線、方角卡片。對外提案、給主管看。'
+      + '\n- editorial 雜誌：沒有色條，標題大而不粗，下面一條細滿版線。偏文青、像報導。'
+      + '\n- minimal 極簡：沒有任何裝飾，只有字跟留白。內容夠強的時候最好看。'
+      + '\n- soft 柔和：圓角、標題置中、色條短而圓。內部分享、教學、輕鬆場合。'
+      + '\n- bold 大字：標題很大，左上角一塊實色。只有一個重點、要講得用力。'
+      + '\n- tech 科技：深色底、細線、單色。技術簡報、資料儀表板。'
+      + '\n**整份簡報只選一次，之後每一次呼叫都帶同一個值。**'
+      + '換版式等於換一份簡報，中途換會非常明顯。預設 business。',
+  },
+};
+
 const THEME_ARG = {
   theme: {
     type: 'string',
-    enum: ['corporate', 'slate', 'fresh', 'warm', 'night'],
+    enum: ['corporate', 'slate', 'fresh', 'warm', 'night', 'linen', 'muted', 'mono'],
     description:
-      '配色：corporate 企業藍、slate 沉穩灰、fresh 清新綠、warm 暖橘、night 深色。'
-      + '**整份簡報要用同一個**，不要每張換一個。預設 corporate。',
+      '配色：corporate 企業藍、slate 沉穩灰、fresh 清新綠、warm 暖橘、night 深色、'
+      + 'linen 亞麻暖紙、muted 莫蘭迪、mono 墨黑。'
+      + '\n**整份簡報要用同一個**，不要每張換一個。'
+      + '\n**不確定就不要給這個參數**——每個 look 都自帶設計好的配色，'
+      + '硬指定反而會把風格拆掉一半。',
   },
 };
 
@@ -238,6 +265,14 @@ export const PPT_TOOLS: PptToolSpec[] = [
         },
         page: { type: 'string', description: '右上角的頁碼標記，例如「P.03」。' },
         footer: { type: 'string', description: '頁尾註記，例如資料來源。' },
+        footband: {
+          type: 'boolean',
+          description:
+            '把頁尾做成**滿版深色帶**（而不是一行小灰字）。'
+            + '\n內容偏少、下半頁會空的時候請打開：深色帶會給版面一個「地板」，'
+            + '內容就不會浮在投影片中間。頁碼也會自動移到帶子的右邊。'
+            + '\n整份簡報請一致——要嘛每頁都有，要嘛都沒有。',
+        },
         append: { type: 'boolean', description: '是否先新增一張投影片，預設 true。' },
         chrome: {
           type: 'boolean',
@@ -248,6 +283,7 @@ export const PPT_TOOLS: PptToolSpec[] = [
         },
         ...SLIDE_ARG,
         ...THEME_ARG,
+        ...LOOK_ARG,
       },
       additionalProperties: false,
     },
@@ -366,15 +402,27 @@ export const PPT_TOOLS: PptToolSpec[] = [
   },
   {
     name: 'ppt_delete_shape',
-    description: '刪掉某個物件。編號來自 ppt_read_slide。復原鍵拿不回來。',
+    description:
+      '刪掉投影片上的物件。編號來自 ppt_read_slide。復原鍵拿不回來。'
+      + '\n\n**要刪很多個就一次給完，不要一個一個刪。** 刪除每次都會跳出確認卡，'
+      + '分成八次呼叫就是八張確認卡要使用者按八次「允許」——'
+      + '按到第三次就沒人在看內容了，那個確認等於白做。'
+      + '\n- 刪幾個指定的：`shapes: [3, 5, 8]`'
+      + '\n- 整張清空重做：`all: true`'
+      + '\n\n編號會在刪除後位移，但這個工具內部會處理，你照 ppt_read_slide 讀到的編號給就好。',
     destructive: true,
     inputSchema: {
       type: 'object',
       properties: {
-        shape: { type: 'number', description: '物件編號。' },
+        shapes: {
+          type: 'array',
+          items: { type: 'number' },
+          description: '要刪的物件編號，一次給完。',
+        },
+        shape: { type: 'number', description: '只刪一個的時候用。' },
+        all: { type: 'boolean', description: '清空這張投影片上的所有物件。要重做一整張的時候用。' },
         ...SLIDE_ARG,
       },
-      required: ['shape'],
       additionalProperties: false,
     },
   },
@@ -485,8 +533,77 @@ export const PPT_TOOLS: PptToolSpec[] = [
         height: { type: 'number', description: '單張卡片的高度（點）。left 預設 68、top 預設 92。' },
         ...SLIDE_ARG,
         ...THEME_ARG,
+        ...LOOK_ARG,
       },
       required: ['cards'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'ppt_add_kpi',
+    description:
+      '一排數據卡：大數字 + 標籤 + 小註，每張卡頂一條自己的色條。'
+      + '\n\n【這是讓版面「有東西」最快的方法】一頁只有圖表和文字，下半部就會空。'
+      + '把三到四個關鍵數字排成一列放在圖表上方或下方，版面立刻有上下層次，'
+      + '而且那幾個數字本來就是觀眾要記的。'
+      + '\n\n跟 ppt_add_cards 的差別：卡片裝**一句話**，數據卡裝**一個數字**。'
+      + '要放句子用 ppt_add_cards，要放 65%、$37B、5.1 個月 這種就用這個。'
+      + '\n\n最多 5 個，三到四個最好看。每張會自動配不同顏色——'
+      + '一排同色是表格，一排不同色才是儀表板。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...SLIDE_ARG,
+        items: {
+          type: 'array',
+          description: '每個數據卡。value 是那個數字，label 是它是什麼，note 是來源或比較基準。',
+          items: {
+            type: 'object',
+            properties: {
+              value: { type: 'string', description: '大數字，例如「65%」「$37B」「5.1 個月」。' },
+              label: { type: 'string', description: '這個數字是什麼，例如「組織已導入 GenAI」。' },
+              note: { type: 'string', description: '小字註解，例如資料來源或比較基準。' },
+              color: { type: 'string', description: '這張卡的色條顏色，省略就自動配。' },
+            },
+            required: ['value'],
+            additionalProperties: false,
+          },
+        },
+        top: { type: 'number', description: '這一列的 y 座標，預設 124（內文區頂端）。' },
+        left: { type: 'number' },
+        width: { type: 'number' },
+        height: { type: 'number', description: '卡片高度，預設 101。' },
+        ...THEME_ARG,
+        ...LOOK_ARG,
+      },
+      required: ['items'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'ppt_add_callout',
+    description:
+      '一句結論，放在淺色底的框裡，左邊一條色帶。'
+      + '\n\n【一頁的數字講「發生了什麼」，這個講「所以呢」】'
+      + '好的簡報幾乎每一頁都有一句這樣的話。它同時做兩件事：把結論講明白，'
+      + '以及給版面第三層——內容就不會浮在投影片中間。'
+      + '\n\n**只寫一句**。變成條列就等於把內容換個顏色再講一次，那樣整頁就沒有結論了。'
+      + '預設放在 y=430，也就是內文區的底部。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...SLIDE_ARG,
+        text: { type: 'string', description: '那句結論。' },
+        label: { type: 'string', description: '前面的小標，例如「洞察」「重點」「風險」。可省略。' },
+        top: { type: 'number', description: '預設 430（內文區底部）。' },
+        left: { type: 'number' },
+        width: { type: 'number' },
+        height: { type: 'number', description: '預設 46。字多就加高。' },
+        color: { type: 'string' },
+        ...THEME_ARG,
+        ...LOOK_ARG,
+      },
+      required: ['text'],
       additionalProperties: false,
     },
   },
@@ -533,6 +650,84 @@ export const PPT_TOOLS: PptToolSpec[] = [
     },
   },
   // ── Pictures ───────────────────────────────────────────────────────────────
+  {
+    name: 'ppt_find_art',
+    description:
+      '在內建的插畫庫裡找圖（417 張扁平風格向量插畫，46 個主題分類）。'
+      + '\n\n【插畫跟照片解決的是不同問題】'
+      + '\n照片必須**跟內容有關**才成立。一張倉庫照放在講倉儲吞吐量的頁面上很好，'
+      + '放在講「流程優化」的頁面上就只是一張假裝成論點的倉庫照——'
+      + '簡報看起來像模板，通常就是這個原因。'
+      + '\n插畫不會有這個問題。它讀起來像圖解的親切版本：填得滿版面、給得了氣氛、'
+      + '而且沒有人會把它誤認成證據。所以**照片會變成填充物的那些頁面，就改用插畫**。'
+      + '\n\n【怎麼用】先用這個找，拿到網址之後用 `ppt_add_photo` 放上去，'
+      + 'mode 用 `side` 或 `block`。插畫是透明背景的向量圖，**不要拿來當 hero 滿版底圖**。'
+      + '\n\n【分類是英文的】用 data analytics、teamwork、security、nature 這種字去找。'
+      + '找不到就不要硬塞——一張不相干的插畫比留白更糟。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: '主題關鍵字，英文。例如 data analytics、teamwork、cloud、education。',
+        },
+        limit: { type: 'number', description: '最多回幾筆，預設 12。' },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'ppt_add_photo',
+    description:
+      '從網址抓一張照片放到投影片上，並且**幫你排好版**（不是單純貼上去）。'
+      + '\n\n【三種模式是三種不同的用途】'
+      + '\n- `hero`：滿版背景照 + 壓在上面的深色遮罩 + 白色大標。'
+      + '開場、章節首頁用這個。這是「一頁滿版」最直接的做法。'
+      + '\n- `side`：照片佔右邊（或左邊）40% 的滿高直欄，文字放另外 60%。'
+      + '雜誌式的分割，一般內容頁套上去就會變得像有設計過。'
+      + '\n- `block`：照片放在內文區裡面。給「照片本身就是證據」的那種頁面。'
+      + '\n\n【去哪裡找圖】Unsplash 是免費可商用的：`https://images.unsplash.com/photo-xxxxx`。'
+      + '裁切參數不用你加——這個工具會依照模式自己改寫 w/h/fit，你給照片網址就好。'
+      + '\n\n【什麼時候不要用】題目純技術、純財務的時候不要硬塞風景照。'
+      + '一張跟內容無關的美圖會讓整頁看起來像模板，不是像簡報。'
+      + '那種情況用 `ppt_add_chart`、`ppt_add_diagram`、`ppt_add_kpi` 更專業。'
+      + '\n\n【抓不到圖是正常的】圖片主機要允許跨來源讀取，公司內網的檔案通常不允許。'
+      + '失敗的話不要一直換網址重試，直接請使用者把圖片拖進對話框，改用 ppt_insert_attachment。',
+    destructive: false,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ...SLIDE_ARG,
+        url: { type: 'string', description: '圖片的直接網址（http/https）。' },
+        mode: {
+          type: 'string',
+          enum: ['hero', 'side', 'block'],
+          description: 'hero 滿版背景／side 側欄 40%／block 放在內文區。預設 block。',
+        },
+        position: {
+          type: 'string',
+          enum: ['right', 'left'],
+          description: 'side 模式下照片在哪一邊，預設 right。連續兩頁都用 side 就左右交替。',
+        },
+        title: { type: 'string', description: 'hero 的大標，或 side 模式下放在文字那半邊的標題。' },
+        subtitle: { type: 'string' },
+        eyebrow: { type: 'string', description: 'hero 大標上面的小字。' },
+        caption: { type: 'string', description: '圖說。照片有出處的時候寫。' },
+        scrim: {
+          type: 'number',
+          description:
+            'hero 的遮罩濃度，0～0.9，預設 0.45。'
+            + '照片很亮或很花的時候調高到 0.6，否則白字會讀不到。',
+        },
+        ...GEOMETRY_BLOCK,
+        ...THEME_ARG,
+        ...LOOK_ARG,
+      },
+      required: ['url'],
+      additionalProperties: false,
+    },
+  },
   {
     name: 'ppt_add_diagram',
     description:
@@ -706,6 +901,16 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 export function describeToolCall(name: string, args: Record<string, unknown>): string {
+  if (name === 'ppt_add_kpi') {
+    const n = Array.isArray(args.items) ? args.items.length : 0;
+    return `放上 ${n} 個數據卡`;
+  }
+  if (name === 'ppt_add_callout') return '放上一句結論';
+  if (name === 'ppt_find_art') return `找插畫：${String(args.query || '')}`;
+  if (name === 'ppt_add_photo') {
+    const m = String(args.mode || 'block');
+    return m === 'hero' ? '放上滿版背景照' : m === 'side' ? '放上側欄照片' : '插入照片';
+  }
   if (name === 'ppt_get_overview') return '讀取簡報結構';
   if (name === 'ppt_read_slide') return `讀取${where(args)}的內容`;
   if (name === 'ppt_get_selection') return '讀取目前選取的投影片';
@@ -727,7 +932,13 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
   if (name === 'ppt_add_line') return `在${where(args)}畫一條線`;
   if (name === 'ppt_set_text') return `改寫${where(args)}第 ${args.shape} 個物件的文字`;
   if (name === 'ppt_format_shape') return `調整${where(args)}第 ${args.shape} 個物件`;
-  if (name === 'ppt_delete_shape') return `刪除${where(args)}第 ${args.shape} 個物件`;
+  if (name === 'ppt_delete_shape') {
+    if (args.all === true) return `清空${where(args)}上的所有物件`;
+    const list: number[] = Array.isArray(args.shapes) ? args.shapes : [];
+    const n = list.length + (args.shape === undefined ? 0 : 1);
+    if (n > 1) return `刪除${where(args)}的 ${n} 個物件`;
+    return `刪除${where(args)}第 ${list[0] ?? args.shape} 個物件`;
+  }
   if (name === 'ppt_arrange') {
     const how = ARRANGE_LABEL[String(args.how || '')] || String(args.how || '');
     const n = Array.isArray(args.shapes) ? args.shapes.length : 0;
