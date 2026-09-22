@@ -762,7 +762,7 @@ export const PPT_TOOLS: PptToolSpec[] = [
         type: {
           type: 'string',
           enum: ['column', 'bar', 'line', 'area', 'pie', 'donut',
-            'waterfall', 'funnel', 'radar', 'timeline'],
+            'waterfall', 'funnel', 'radar', 'timeline', 'map'],
           description:
             'column 直條（比大小，最常用）、bar 橫條（分類名稱長的時候用）、'
             + 'line 折線（看趨勢）、area 區域、pie 圓餅（看佔比，最多 5 項）、'
@@ -778,7 +778,13 @@ export const PPT_TOOLS: PptToolSpec[] = [
             + '\n- **radar 雷達**：一個對象在好幾個面向上的強弱，或兩個對象比較。'
             + '至少三個面向，最多畫三個系列。'
             + '注意：雷達圖上不同軸之間的面積是不能互相比較的，只拿來看輪廓。'
-            + '\n- **timeline 時間軸**：事件照時間排。用 `events` 而不是 categories/values：'
+            + '@NL@- **map 地圖**：地區填色圖。內建世界（161 國）、中國（33 省）、台灣（18 縣市）。'
+      + '用 `map` 選哪一份、`categories` 給地區名、`values` 給數字。'
+      + '世界地圖用英文名（China、Taiwan、United States of America），'
+      + '中國和台灣用中文名（广东、台北）。'
+      + '@NL@　**地圖只回答「哪裡多、哪裡少」。** 沒有人能從深淺讀出精確數字，'
+      + '所以要比排名就用 `bar`，地圖是給「分布」用的。'
+      + '沒給值的地區會畫成最淺色（代表沒有資料），不會消失。'      + '\n- **timeline 時間軸**：事件照時間排。用 `events` 而不是 categories/values：'
             + '`[{ at: 2024, label: "試點", note: "兩條產線", highlight: true }]`。'
             + '`at` 給數字就照實際間隔放（三月兩件、十一月一件的疏密才是重點），'
             + '給文字就平均排開。',
@@ -797,6 +803,11 @@ export const PPT_TOOLS: PptToolSpec[] = [
             required: ['at', 'label'],
             additionalProperties: false,
           },
+        },
+        map: {
+          type: 'string',
+          enum: ['world', 'china', 'taiwan'],
+          description: 'map 專用：要哪一份地圖。預設 world。',
         },
         total: {
           type: 'array',
@@ -1190,6 +1201,7 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
   if (name === 'ppt_add_chart') {
     const kind = { column: '直條', bar: '橫條', line: '折線', area: '區域', pie: '圓餅',
       donut: '甜甜圈', waterfall: '瀑布', funnel: '漏斗', radar: '雷達', timeline: '時間軸',
+      map: '地圖',
     }[String(args.type || 'column')] || '';
     return `插入${kind}圖` + (args.title ? `：${args.title}` : '');
   }
