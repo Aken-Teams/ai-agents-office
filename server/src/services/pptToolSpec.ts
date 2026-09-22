@@ -318,6 +318,24 @@ export const PPT_TOOLS: PptToolSpec[] = [
             + '變成條列就等於把內容換個顏色再講一次。'
             + '\n同樣**寫在這裡，不要另外呼叫 ppt_add_callout**——理由跟 kpi 一樣。',
         },
+        cover: {
+          type: 'string',
+          enum: ['panel', 'split', 'stack', 'triptych', 'bleed', 'band', 'plain', 'paper'],
+          description:
+            '封面的構圖（只有 kind="title" 有用）。不給的話用版式預設的那一種。'
+            + '\n- panel 左右：左邊整條色塊＋跨出頁面的圓形，右邊放標題'
+            + '\n- split 左右：白底、左緣一條窄色邊，字全部靠左'
+            + '\n- stack 上下：上面三分之二是色塊，字在下面，一條色條跨過交界'
+            + '\n- triptych 三欄：三條同色系直欄，標題橫跨過去'
+            + '\n- bleed 滿版：整頁一個顏色，字置中'
+            + '\n- band 中央：淺色頁面上一塊圓角深色板'
+            + '\n- plain 極簡：只有字'
+            + '\n- paper 紙張：暖色紙滿版＋細框線'
+            + '\n\n**封面值得多花一點力氣。** 它只被看一次、沒有前後文可以對照，'
+            + '而且決定了使用者對整份簡報的第一印象。'
+            + '\n主題適合的話，用 `ppt_generate_image`（mode: "hero"）或 `ppt_add_photo` '
+            + '做一張滿版背景，再把標題壓在上面——那是所有做法裡最有份量的一種。',
+        },
         footband: {
           type: 'boolean',
           description:
