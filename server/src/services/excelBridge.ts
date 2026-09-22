@@ -27,7 +27,7 @@ import crypto from 'crypto';
 import { readAttachmentPart } from './excelAttachments.js';
 import { createHandoff } from '../routes/handoffs.js';
 import { describeArtSearch } from './artLibrary.js';
-import { composeImagePrompt } from './imagePrompt.js';
+import { composeImagePrompt, stepsFor } from './imagePrompt.js';
 import { generateImage } from './modelGateway.js';
 import type { SSEEvent } from '../types.js';
 import * as excelSpec from './excelToolSpec.js';
@@ -268,10 +268,9 @@ export function callWorkbookTool(
     if (!spec.prompt.trim() || !String(args.subject ?? '').trim()) {
       return Promise.resolve({ ok: false, error: 'subject 是必要的（這張圖要畫什麼，英文）。' });
     }
-    // 8–12 steps is the working range: 1024×576 at 8 steps measured 15 seconds
-    // and looks finished. 24 steps takes nearly four times as long for detail a
-    // background does not need.
-    const steps = args.quality === true ? 24 : 10;
+    // Depends on what is being drawn — see stepsFor. A background is finished
+    // at 10; an illustration at 10 is still a smudge.
+    const steps = stepsFor(String(args.style ?? ''), args.quality === true, String(args.mode ?? 'hero'));
     return generateImage({
       userId: run.userId,
       prompt: spec.prompt,

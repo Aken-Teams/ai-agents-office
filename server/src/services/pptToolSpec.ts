@@ -265,7 +265,13 @@ export const PPT_TOOLS: PptToolSpec[] = [
       + '「這兩個維度交叉之後有四種情況」用這個——優先順序、風險、自製或外購。'
       + '用 `items: [{ title, text }]`（四個，左上、右上、左下、右下）'
       + '加上 `x_axis` / `y_axis`。**軸名一定要給**，沒有軸名就只是四個方塊，不是矩陣。'
-      + '\n· **zigzag**：圖文交錯。三到四段，色塊左右交錯排。'
+      + '\n· **feature**：大圖配小卡。左邊一張大圖，右邊二到四張小卡。'
+      + '一個東西是主角、其餘是關於它的資訊時用這個——產品、據點、案例。'
+      + '圖的網址給 `image`，卡片給 `items: [{ title, text }]`。'
+      + '\n· **list_image**：圖文列表。每一列一張小圖＋一段字，二到四列。'
+      + '「五種產品」「四個部門」這種每一項都需要一張臉或一個圖示的內容。'
+      + '這個版型只排出圖片的框並**回傳每一格的座標**，'
+      + '再用 `ppt_add_photo`（mode: "block"）一張一張填進去。'      + '\n· **zigzag**：圖文交錯。三到四段，色塊左右交錯排。'
       + '步驟、要點、三件事用這個比 bullets 有節奏。用 `items: [{ title, text, number }]`。'      + '\n· **quote**：引言，帶引號裝飾和署名。'
       + '\n\n【沒有章節分隔頁，也沒有單一大數字頁——這是刻意拿掉的】'
       + '看報告的人是一路往下讀的。中間插一頁滿版深色的「01 資本與成本」、'
@@ -283,7 +289,7 @@ export const PPT_TOOLS: PptToolSpec[] = [
         kind: {
           type: 'string',
           enum: ['title', 'bullets', 'two_column', 'compare',
-            'quote', 'timeline', 'quadrant', 'zigzag'],
+            'quote', 'timeline', 'quadrant', 'zigzag', 'feature', 'list_image'],
           description: '版型，預設 bullets。',
         },
         title: { type: 'string', description: '主標題。' },
@@ -364,7 +370,8 @@ export const PPT_TOOLS: PptToolSpec[] = [
         },
         cover: {
           type: 'string',
-          enum: ['panel', 'split', 'stack', 'triptych', 'bleed', 'band', 'plain', 'paper'],
+          enum: ['panel', 'split', 'stack', 'triptych', 'bleed', 'band', 'plain', 'paper',
+            'imageLeft', 'imageRight', 'imageTop'],
           description:
             '封面的構圖（只有 kind="title" 有用）。'
             + '\n**做封面的時候這個參數一定要給。** 不給就會落到版式的預設值，而同一個版式的預設永遠是同一種——'
@@ -378,10 +385,22 @@ export const PPT_TOOLS: PptToolSpec[] = [
             + '\n- band 中央：淺色頁面上一塊圓角深色板'
             + '\n- plain 極簡：只有字'
             + '\n- paper 紙張：暖色紙滿版＋細框線'
+            + '\n- **imageLeft / imageRight 左右**：圖片佔一側 40%，另一側放字'
+            + '\n- **imageTop 上下**：圖片是上方 208 點的一條帶，字在下面'
+            + '\n\n**圖片佔一部分通常比滿版好看。** 整頁鋪滿一張圖再把標題壓上去，'
+            + '除非那張圖極為精彩，否則只是一個「背景」，衝擊感反而更低。'
             + '\n\n**封面值得多花一點力氣。** 它只被看一次、沒有前後文可以對照，'
             + '而且決定了使用者對整份簡報的第一印象。'
             + '\n主題適合的話，用 `ppt_generate_image`（mode: "hero"）或 `ppt_add_photo` '
             + '做一張滿版背景，再把標題壓在上面——那是所有做法裡最有份量的一種。',
+        },
+        image: {
+          type: 'string',
+          description:
+            '圖片網址（來自 ppt_generate_image 或 ppt_find_art）。'
+            + 'cover 選 imageLeft / imageRight / imageTop，或 kind 是 feature 的時候有用——'
+            + '圖會被放進那個版型的圖片區塊，**保持原比例置中**，版面繞著它排。'
+            + '\n插畫不會被拉變形，所以框給大一點沒關係，它只會用到自己需要的那塊。',
         },
         footband: {
           type: 'boolean',
@@ -762,7 +781,8 @@ export const PPT_TOOLS: PptToolSpec[] = [
         type: {
           type: 'string',
           enum: ['column', 'bar', 'line', 'area', 'pie', 'donut',
-            'waterfall', 'funnel', 'radar', 'timeline', 'map'],
+            'waterfall', 'funnel', 'radar', 'timeline', 'map',
+            'scatter', 'stacked', 'stacked100', 'box'],
           description:
             'column 直條（比大小，最常用）、bar 橫條（分類名稱長的時候用）、'
             + 'line 折線（看趨勢）、area 區域、pie 圓餅（看佔比，最多 5 項）、'
@@ -778,7 +798,20 @@ export const PPT_TOOLS: PptToolSpec[] = [
             + '\n- **radar 雷達**：一個對象在好幾個面向上的強弱，或兩個對象比較。'
             + '至少三個面向，最多畫三個系列。'
             + '注意：雷達圖上不同軸之間的面積是不能互相比較的，只拿來看輪廓。'
-            + '\n- **map 地圖**：地區填色圖。內建世界（161 國）、中國（33 省）、台灣（18 縣市）。'
+            + '\n- **scatter 散佈**：兩個數字有沒有關係。「規模越大、成熟度越高」這種主張，'
+      + '只有它表達得出來，而且它誠實——點散成一團就是沒有關係，句子不會這樣承認。'
+      + '用 `points: [{ x, y, label, group }]`，**`x_axis` 和 `y_axis` 一定要給**，'
+      + '不然就只是兩個沒有名字的數字。'
+      + '\n- **stacked 堆疊長條**：總量在變，組成也在變。並排長條看得出各自高低、'
+      + '看不出總和——讀者得在腦中把三根加起來。堆疊把總和變成柱高、組成變成柱裡的分段。'
+      + '`stacked100` 是百分比堆疊，每根等高、只看組成；'
+      + '**總量本身有意義的時候不要用它**，那會把成長藏起來。'
+      + '\n- **box 箱型圖**：每一組的分布，不只是平均。兩間廠交期平均一樣，'
+      + '一間穩定五到七天、一間在兩天和二十天之間擺盪——長條圖把它們畫成一樣高，'
+      + '而變異通常才是會議真正要談的事。給每組原始數值 `values: [[...], [...]]`，'
+      + '四分位和離群值會自己算。'
+      + '　**但多數聽眾看不懂箱型圖。** 場合夠技術、或分布本身就是結論才用；'
+      + '只是要比四個數字就用長條圖——簡報要的是被看懂，不是正確。'      + '\n- **map 地圖**：地區填色圖。內建世界（161 國）、中國（33 省）、台灣（18 縣市）。'
       + '用 `map` 選哪一份、`categories` 給地區名、`values` 給數字。'
       + '世界地圖用英文名（China、Taiwan、United States of America），'
       + '中國和台灣用中文名（广东、台北）。'
@@ -808,6 +841,17 @@ export const PPT_TOOLS: PptToolSpec[] = [
             required: ['at', 'label'],
             additionalProperties: false,
           },
+        },
+        points: {
+          type: 'array',
+          description: 'scatter 專用：`[{ x, y, label, group }]`。',
+          items: { type: 'object', additionalProperties: true },
+        },
+        boxes: {
+          type: 'array',
+          description: 'box 專用，資料已經算好的時候用：'
+            + '`[{ label, min, q1, median, q3, max, outliers }]`。有原始數值就直接給 values。',
+          items: { type: 'object', additionalProperties: true },
         },
         map: {
           type: 'string',
@@ -1206,7 +1250,7 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
   if (name === 'ppt_add_chart') {
     const kind = { column: '直條', bar: '橫條', line: '折線', area: '區域', pie: '圓餅',
       donut: '甜甜圈', waterfall: '瀑布', funnel: '漏斗', radar: '雷達', timeline: '時間軸',
-      map: '地圖',
+      map: '地圖', scatter: '散佈', stacked: '堆疊', stacked100: '百分比堆疊', box: '箱型',
     }[String(args.type || 'column')] || '';
     return `插入${kind}圖` + (args.title ? `：${args.title}` : '');
   }

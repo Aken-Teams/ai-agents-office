@@ -70,6 +70,27 @@ const PALETTE: Record<string, string> = {
 };
 
 /**
+ * The same families, said for a subject rather than a ground.
+ *
+ * No 「airy」, no 「plenty of light」, no 「gentle daylight」 — those are the words
+ * that turned a factory illustration into a pale wash. A drawing gets its hues
+ * named and its saturation left alone.
+ */
+const SUBJECT_PALETTE: Record<string, string> = {
+  corporate: 'deep blue, steel blue and warm grey',
+  slate: 'slate grey, blue-grey and muted amber',
+  fresh: 'forest green, sage and cream',
+  warm: 'burnt orange, clay and deep teal',
+  night: 'deep navy, electric blue and cyan on a light ground',
+  linen: 'sage green, terracotta and warm cream',
+  muted: 'dusty blue, warm taupe and soft rose',
+  mono: 'charcoal, mid grey and one warm brown',
+  teal: 'teal, aqua and warm sand',
+  sky: 'cornflower blue, sky blue and soft coral',
+  amber: 'amber, ochre and deep brown',
+};
+
+/**
  * The look's visual register.
  *
  * Kept separate from the palette because they are independent: 手作 in navy and
@@ -139,6 +160,36 @@ export const STYLE_NAMES = Object.keys(STYLE);
  */
 const MOOD_FLOOR = 'soft even lighting, calm and welcoming, pleasant, clean, '
   + 'nothing ominous';
+
+/**
+ * Two jobs a generated image can have, and they want opposite things.
+ *
+ * ── The mistake this separates out ──
+ * Everything here was written for BACKGROUNDS: airy, low contrast, soft even
+ * light, because a hero image has a dark scrim and a headline going on top of
+ * it. Then the same instructions were handed to a flat illustration of an
+ * assembly line, and produced a drawing so pale it disappeared at thumbnail
+ * size. Both complaints — 「有點可怕」 and 「這 2 張圖我認為不行」 — came from the
+ * same place: one set of lighting rules applied to two different jobs.
+ *
+ * A SUBJECT is a picture of something, looked at directly, often small. It needs
+ * solid fills and a clear silhouette. A GROUND sits under type and needs to get
+ * out of the way. The style names which one it is, because a flat vector
+ * illustration is never a background and a colour field is never a subject.
+ */
+const SUBJECT_STYLES = new Set(['flat', 'handdrawn', 'isometric']);
+
+/**
+ * What a subject illustration needs that a background must not have.
+ *
+ * Saturated, solid, high contrast — the qualities that make the bundled
+ * Storyset illustrations readable at 150 points wide. 「白底」 is stated
+ * explicitly so the drawing has an edge: an illustration that fades into its
+ * own background has no silhouette, and silhouette is the whole of what a small
+ * picture communicates.
+ */
+const SUBJECT_TONE = 'solid saturated fills, clear bold shapes, strong silhouette, '
+  + 'high contrast, clean white background, centred subject';
 
 /**
  * Where the words are going to sit.
@@ -225,24 +276,56 @@ export interface ComposedPrompt {
 
 export function composeImagePrompt(req: ImageRequest): ComposedPrompt {
   const mode = COMPOSITION[String(req.mode || '').toLowerCase()] ? String(req.mode).toLowerCase() : 'hero';
-  const subject = String(req.subject || '').trim().slice(0, 300);
+  const subjectText = String(req.subject || '').trim().slice(0, 300);
 
   // The medium is named before the look's register, because when the two
   // disagree — 「flat vector」 against 「editorial photography」 — the model follows
   // whichever came first, and the caller asking for a flat illustration meant it.
-  const style = STYLE[String(req.style || '').toLowerCase()] || STYLE.abstract;
+  const styleName = String(req.style || '').toLowerCase();
+  const style = STYLE[styleName] || STYLE.abstract;
+
+  /**
+   * Ground or subject — decided by the style AND the slot.
+   *
+   * ── The gap this closes ──
+   * The first split looked only at the style, so a PHOTOGRAPH dropped into a
+   * `feature` panel still got the background treatment: airy palette, soft even
+   * light, and a composition told to leave a corner empty for a headline that
+   * was never going to be there. It came back pale for the same reason the
+   * illustrations did — the rules written for something sitting under type were
+   * applied to something meant to be looked at.
+   *
+   * A drawing is always a subject: nobody puts a flat vector illustration behind
+   * a headline. Everything else is a subject unless it is filling a hero, which
+   * is the one slot that genuinely is the ground.
+   */
+  const drawing = SUBJECT_STYLES.has(styleName);
+  const ground = !drawing && mode === 'hero';
+  const subject = !ground;
   const register = REGISTER[String(req.look || '').toLowerCase()] || REGISTER.business;
   const parts = [
-    subject,
+    subjectText,
     style,
     // The register carries the look's mood, but not its medium: saying
     // 「editorial photography」 after 「flat vector illustration」 puts the two in a
     // fight the caller did not ask for.
     register.replace(/(editorial )?photograph(y|ic),?\s*/gi, ''),
-    PALETTE[String(req.theme || '').toLowerCase()] || PALETTE.corporate,
-    COMPOSITION[mode],
+    // The airy palette wording is background guidance too. A subject gets the
+    // hues without the brightness push, or it comes back as a pastel ghost.
+    subject
+      ? (SUBJECT_PALETTE[String(req.theme || '').toLowerCase()] || SUBJECT_PALETTE.corporate)
+      : (PALETTE[String(req.theme || '').toLowerCase()] || PALETTE.corporate),
+    // A subject does not need a hole left in it for a headline; that instruction
+    // pushes the drawing into one corner of its own frame.
+    subject ? 'the subject fills the frame' : COMPOSITION[mode],
   ];
-  parts.push(MOOD_FLOOR);
+  /**
+   * A drawing has no lighting, so lighting guidance bleaches it out. A
+   * photograph does have lighting — it just needs the calm version without the
+   * instruction to stay out of the way, because in a panel it IS the way.
+   */
+  parts.push(drawing ? SUBJECT_TONE : MOOD_FLOOR);
+  if (subject && !drawing) parts.push('the subject clearly readable, good contrast');
   if (req.mood) parts.push(String(req.mood).trim().slice(0, 120));
   // Said last as well as excluded in the negative. Belt and braces, because this
   // is the one failure with no cure downstream.
@@ -257,6 +340,27 @@ export function composeImagePrompt(req: ImageRequest): ComposedPrompt {
     ? NEGATIVE
     : `${NEGATIVE}, photograph, photorealistic, 3d render, depth of field`;
   return { prompt, negative, size, seed: seedFor(`${prompt}|${size}`) };
+}
+
+/**
+ * How many denoising steps this picture needs.
+ *
+ * ── Why one number was wrong ──
+ * 10 steps was chosen against an abstract background and it is right for one:
+ * a soft colour field is most of the way there after a few steps, and the rest
+ * is detail nobody looks at. A flat illustration is the opposite — its whole
+ * content is clean edges and closed shapes, and at 10 steps those are still
+ * forming. 「太模糊和生成蠻不完整」 is what an under-stepped drawing looks like.
+ *
+ * The cost is real and worth stating: 22 steps is roughly 45 seconds against
+ * 20 for a background. That is the price of a drawing that is finished.
+ */
+export function stepsFor(style: string, quality?: boolean, mode?: string): number {
+  if (quality === true) return 28;
+  if (SUBJECT_STYLES.has(String(style || '').toLowerCase())) return 22;
+  // A photograph in a panel is looked at closely too — 10 steps is soft there
+  // in a way it never is behind a scrim.
+  return String(mode || '').toLowerCase() === 'hero' ? 10 : 16;
 }
 
 export const PALETTE_NAMES = Object.keys(PALETTE);
