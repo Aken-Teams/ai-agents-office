@@ -252,19 +252,28 @@ export const PPT_TOOLS: PptToolSpec[] = [
       + '每次都是一趟來回，而且每次的座標都是你自己編的——'
       + '結果就是兩張投影片的標題差了 4 點，看起來很不專業但沒人說得出哪裡怪。'
       + '這個工具用同一套格線，所以每張投影片都對得起來。'
-      + '\n\n【七種版型】'
+      + '\n\n【版型】'
       + '\n· **title**：封面。滿版主色底、置中大標。整份只用一次。'
-      + '\n· **section**：章節分隔頁，**整頁滿版**。用來把長簡報切成段落。'
-      + '一律給 eyebrow（段落編號 01/02/03）、title（段落名稱）、body（一句話說這段要講什麼）。'
-      + '**要嘛每一段都有，要嘛一張都不要放**——有些有有些沒有，觀眾會以為自己漏看了一頁。'
       + '\n· **bullets**：標題＋條列。最常用的內容頁。'
       + '\n· **two_column**：雙欄並排。左右各一組條列，適合「現況／建議」。'
       + '\n· **compare**：雙欄對照，兩邊各有底色方框。適合方案 A／方案 B。'
-      + '\n· **statement**：一個大數字，超大字置中。用在關鍵結論。'
-      + '\n　**數字不能單獨出現**——只有「逾 80%」的一頁是問答題，不是論點。'
-      + '必須三件到齊：eyebrow（在講哪一段）＋ title（數字）＋ body（一句話說它代表什麼），'
-      + '出處寫在 footer。缺一個就會變成使用者說的「不明所以的大數字」。'
-      + '\n· **quote**：引言，帶引號裝飾和署名。'
+      + '\n· **timeline**：時程主視覺。一條貫穿的軸線，停靠點上下交錯，'
+      + '每一站有時間、事件、一句說明。**時程、里程碑、導入階段用這個，不要做成條列**——'
+      + '條列會把時程唯一的資訊（順序和疏密）丟掉。'
+      + '用 `items: [{ at, label, note, highlight }]`，最多 6 站。'
+      + '\n· **quadrant**：兩軸四格矩陣。'
+      + '「這兩個維度交叉之後有四種情況」用這個——優先順序、風險、自製或外購。'
+      + '用 `items: [{ title, text }]`（四個，左上、右上、左下、右下）'
+      + '加上 `x_axis` / `y_axis`。**軸名一定要給**，沒有軸名就只是四個方塊，不是矩陣。'
+      + '\n· **zigzag**：圖文交錯。三到四段，色塊左右交錯排。'
+      + '步驟、要點、三件事用這個比 bullets 有節奏。用 `items: [{ title, text, number }]`。'      + '\n· **quote**：引言，帶引號裝飾和署名。'
+      + '\n\n【沒有章節分隔頁，也沒有單一大數字頁——這是刻意拿掉的】'
+      + '看報告的人是一路往下讀的。中間插一頁滿版深色的「01 資本與成本」、'
+      + '或一頁只有一個巨大的數字，除非那一頁強到值得被打斷，否則只是突兀。'
+      + '\n**章節寫進每一頁的 `eyebrow`。** 內容頁左上角那行「01 資本與成本」'
+      + '就是章節標記，而且它每一頁都在，比一頁分隔頁有用得多。'
+      + '\n**關鍵數字放進 `kpi`**，跟旁邊的內容擺在一起——'
+      + '這樣它有上下文，而不是一個沒頭沒尾的大字。'
       + '\n\n【預設會新增一張投影片】不想新增、要在現有的那張上面做，就給 slide 或 append=false。'
       + '\n\n【條列寫法】body 給陣列，一項一句，**一項不要超過兩行**。'
       + '投影片不是文件，整段文字貼上去沒有人會讀。',
@@ -273,10 +282,22 @@ export const PPT_TOOLS: PptToolSpec[] = [
       properties: {
         kind: {
           type: 'string',
-          enum: ['title', 'section', 'bullets', 'two_column', 'compare', 'statement', 'quote'],
+          enum: ['title', 'bullets', 'two_column', 'compare',
+            'quote', 'timeline', 'quadrant', 'zigzag'],
           description: '版型，預設 bullets。',
         },
-        title: { type: 'string', description: '主標題。statement 版型的話這裡放那個大數字或那句話。' },
+        title: { type: 'string', description: '主標題。' },
+        items: {
+          type: 'array',
+          description:
+            'timeline / quadrant / zigzag 用這個。'
+            + '\ntimeline：`[{ at: "2024 Q1", label: "試點", note: "兩條產線" }]`'
+            + '\nquadrant：`[{ title, text }]` 四個，順序是左上、右上、左下、右下'
+            + '\nzigzag：`[{ title, text }]` 三到四個',
+          items: { type: 'object', additionalProperties: true },
+        },
+        x_axis: { type: 'string', description: 'quadrant 的橫軸名稱，例如「規則明確度 →」。' },
+        y_axis: { type: 'string', description: 'quadrant 的縱軸名稱，例如「↑ 發生頻率」。' },
         body: {
           type: 'array',
           items: { type: 'string' },
@@ -322,6 +343,24 @@ export const PPT_TOOLS: PptToolSpec[] = [
             + '\n這一頁的數字講「發生了什麼」，這句講「所以呢」。**只寫一句**，'
             + '變成條列就等於把內容換個顏色再講一次。'
             + '\n同樣**寫在這裡，不要另外呼叫 ppt_add_callout**——理由跟 kpi 一樣。',
+        },
+        motif: {
+          type: 'string',
+          enum: ['waves', 'diamonds', 'arcs', 'grid', 'topo', 'ribbon', 'corner', 'none'],
+          description:
+            '整份簡報共用的背景幾何——就是市售 PPT 模板每一頁都有的那層東西。'
+            + '\n白底加上很淡的波浪／菱形／弧線，**不會蓋過內容**，'
+            + '但整份看起來就像套過模板，而且它是形狀不是圖片，'
+            + '使用者右鍵「轉換為圖形」之後每一筆都能編輯。'
+            + '\n\n**整份只挑一次，每一頁都帶同一個值。** 一致才有模板感；'
+            + '每頁換一個就不是模板，是拼貼。'
+            + '\n不指定的話用版式預設的那一個。不想要就給 `none`。'
+            + '\n\nwaves 波浪（溫和，泛用）／diamonds 菱形（活潑）／arcs 弧線（柔和）／'
+            + 'grid 格線（資料、技術）／topo 等高線（安靜、有層次）／'
+            + 'ribbon 斜帶（有力）／corner 角落三角（幾乎沒有存在感）。'
+            + '\n\n**這個是背景的正解，不要為了做背景去生圖。**'
+            + '生一張圖要十幾秒、每頁都不一樣、而且可能跟主題無關；'
+            + '母題是零成本、每頁一致、永遠不會離題。',
         },
         cover: {
           type: 'string',
@@ -402,7 +441,17 @@ export const PPT_TOOLS: PptToolSpec[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        shape: { type: 'string', description: '圖形類型，預設 Rectangle。' },
+        shape: {
+          type: 'string',
+          enum: ['Rectangle', 'RoundRectangle', 'Ellipse', 'Chevron', 'RightArrow',
+            'Triangle', 'Diamond', 'Donut', 'Frame', 'Plus', 'Star5', 'Hexagon',
+            'Pentagon', 'Trapezoid', 'HomePlate', 'Wave', 'Arc', 'Pie', 'Teardrop',
+            'Cloud', 'Heart', 'Moon'],
+          description:
+            '圖形類型，預設 Rectangle。**只有列舉裡的名字有效。**'
+            + '圓形是 `Ellipse`（不是 Oval）、箭頭是 `RightArrow` 或 `Chevron`、'
+            + '梯形方向鍵是 `HomePlate`。名字打錯的話會退回矩形。',
+        },
         text: { type: 'string', description: '圖形裡的文字。' },
         ...GEOMETRY,
         ...TYPOGRAPHY,
@@ -790,6 +839,20 @@ export const PPT_TOOLS: PptToolSpec[] = [
         subject: {
           type: 'string',
           description: '這張圖畫什麼，英文一句話。不用寫顏色和構圖。',
+        },
+        style: {
+          type: 'string',
+          enum: ['abstract', 'flat', 'handdrawn', 'isometric', 'photo', 'gradient', 'texture'],
+          description:
+            '畫法。**預設 abstract，不是照片。**'
+            + '\n- abstract 疊層色塊，最安全，當背景幾乎不會出錯'
+            + '\n- flat 扁平向量插畫（人物、場景），跟內建插畫庫同一個調性'
+            + '\n- handdrawn 手繪線稿＋淡彩'
+            + '\n- isometric 等角立體方塊，適合系統、架構'
+            + '\n- photo 寫實照片。**只在題目真的有實體畫面的時候用**'
+            + '（現場、產品、城市）；抽象題目配照片就會變成一張無關的美圖'
+            + '\n- gradient / texture 純色場、材質，適合當很安靜的底'
+            + '\n\n**同一份簡報固定用一種畫法**，混用非常明顯。',
         },
         mode: {
           type: 'string',

@@ -60,6 +60,13 @@ const PALETTE: Record<string, string> = {
   linen: 'warm paper cream, muted sage green and soft terracotta, gentle daylight',
   muted: 'desaturated Morandi tones, dusty blue-grey and warm taupe, soft light',
   mono: 'soft greys and off-white, gentle daylight, uncluttered',
+  // These three arrived with the add-in's palettes and were missing here, so a
+  // deck in 黃橘 was quietly getting corporate-blue artwork. A lookup that falls
+  // back silently is the kind of bug nobody reports; they just think the tool
+  // ignores them.
+  teal: 'soft teal and pale aqua with a warm sand accent, bright and even',
+  sky: 'light sky blue and pale cornflower, airy and clean',
+  amber: 'warm amber, soft ochre and cream, sunlit',
 };
 
 /**
@@ -84,6 +91,41 @@ const REGISTER: Record<string, string> = {
   eink: 'matte paper texture, ink wash, monochrome and quiet',
   bold: 'bold graphic shapes, strong forms, poster-like, brightly lit',
 };
+
+/**
+ * How the picture is MADE, as opposed to what it is of.
+ *
+ * ── The gap this closes ──
+ * Everything generated so far came back as a photograph, because the register
+ * strings said things like 「editorial photography, natural light」 and nothing
+ * offered an alternative. So a deck that wanted a flat illustration on a content
+ * slide got a stock photo of an office, every time, and 「產圖都是寫實風」 was the
+ * accurate description of a choice nobody had made deliberately.
+ *
+ * These are media, not moods. They compose with the look's register and the
+ * palette rather than replacing them: `flat` in 亞麻 and `flat` in 企業藍 are the
+ * same drawing technique in two colour families.
+ *
+ * ── Why the default is not `photo` ──
+ * A photograph has to be ABOUT something to earn its place, and most slides do
+ * not have a photographable subject. An abstract composition never makes that
+ * claim, so it is the safe default — and it is what the tool produced on the one
+ * occasion the output was unambiguously good.
+ */
+const STYLE: Record<string, string> = {
+  abstract: 'abstract composition, layered paper shapes, soft studio light, minimal',
+  flat: 'flat vector illustration, simple geometric shapes, bold clean outlines, '
+    + 'no gradients, no photographic detail',
+  handdrawn: 'hand-drawn illustration, loose ink linework, light watercolour wash, '
+    + 'visible paper texture',
+  isometric: 'isometric illustration, clean geometric blocks, soft long shadows, '
+    + 'technical but friendly',
+  photo: 'photographic, natural light, shallow depth of field, editorial',
+  gradient: 'smooth colour field, soft gradient, extremely minimal, no objects',
+  texture: 'close-up material texture, matte surface, subtle grain, no objects',
+};
+
+export const STYLE_NAMES = Object.keys(STYLE);
 
 /**
  * The floor every image sits on.
@@ -148,6 +190,7 @@ export const NEGATIVE = 'text, words, letters, numbers, captions, watermark, log
 export interface ImageRequest {
   subject: string;
   mode?: string;
+  style?: string;
   look?: string;
   theme?: string;
   mood?: string;
@@ -184,9 +227,18 @@ export function composeImagePrompt(req: ImageRequest): ComposedPrompt {
   const mode = COMPOSITION[String(req.mode || '').toLowerCase()] ? String(req.mode).toLowerCase() : 'hero';
   const subject = String(req.subject || '').trim().slice(0, 300);
 
+  // The medium is named before the look's register, because when the two
+  // disagree — 「flat vector」 against 「editorial photography」 — the model follows
+  // whichever came first, and the caller asking for a flat illustration meant it.
+  const style = STYLE[String(req.style || '').toLowerCase()] || STYLE.abstract;
+  const register = REGISTER[String(req.look || '').toLowerCase()] || REGISTER.business;
   const parts = [
     subject,
-    REGISTER[String(req.look || '').toLowerCase()] || REGISTER.business,
+    style,
+    // The register carries the look's mood, but not its medium: saying
+    // 「editorial photography」 after 「flat vector illustration」 puts the two in a
+    // fight the caller did not ask for.
+    register.replace(/(editorial )?photograph(y|ic),?\s*/gi, ''),
     PALETTE[String(req.theme || '').toLowerCase()] || PALETTE.corporate,
     COMPOSITION[mode],
   ];
@@ -198,7 +250,13 @@ export function composeImagePrompt(req: ImageRequest): ComposedPrompt {
 
   const prompt = parts.filter(Boolean).join(', ');
   const size = IMAGE_SIZE[mode];
-  return { prompt, negative: NEGATIVE, size, seed: seedFor(`${prompt}|${size}`) };
+  // A flat illustration must not drift back into a photograph, and a photograph
+  // must not come back as a drawing. The exclusion is per-style rather than
+  // global for exactly that reason.
+  const negative = String(req.style || '').toLowerCase() === 'photo'
+    ? NEGATIVE
+    : `${NEGATIVE}, photograph, photorealistic, 3d render, depth of field`;
+  return { prompt, negative, size, seed: seedFor(`${prompt}|${size}`) };
 }
 
 export const PALETTE_NAMES = Object.keys(PALETTE);

@@ -260,6 +260,7 @@ export function callWorkbookTool(
     const spec = composeImagePrompt({
       subject: String(args.subject ?? ''),
       mode: String(args.mode ?? 'hero'),
+      style: String(args.style ?? ''),
       look: String(args.look ?? ''),
       theme: String(args.theme ?? ''),
       mood: String(args.mood ?? ''),
