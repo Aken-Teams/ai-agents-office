@@ -33,6 +33,7 @@ import type { SSEEvent } from '../types.js';
 import * as excelSpec from './excelToolSpec.js';
 import * as wordSpec from './wordToolSpec.js';
 import * as pptSpec from './pptToolSpec.js';
+import { imageStyleRefusal } from './pptToolSpec.js';
 
 /**
  * Which host's rules apply to this call.
@@ -144,6 +145,18 @@ interface ExcelRun {
    * pictures never arrive.
    */
   origin: string;
+  /**
+   * Whether this run may generate photo-realistic pictures.
+   *
+   * ── Why this is checked here as well as in the tool schema ──
+   * The schema is what stops the model ASKING; this is what stops the request
+   * being SERVED. They are not the same guard. The MCP subprocess builds its
+   * schema from env at spawn time, so a run whose settings changed, a pane
+   * pinned to an older build, or anything reaching the bridge by another path
+   * would all sail past a schema-only check. A capability governed by a switch
+   * has to be refused where it is actually performed.
+   */
+  allowPhoto: boolean;
 }
 
 const runs = new Map<string, ExcelRun>();
@@ -163,10 +176,14 @@ export function registerRun(
   files: string[] = [],
   documentName = '',
   origin = '',
+  allowPhoto = false,
 ): string {
   const token = crypto.randomBytes(32).toString('hex');
   runs.set(runId, {
     runId, userId, write, pending: new Map(), closed: false, files, documentName, origin,
+    // Default false, so a caller that has not been taught about this setting
+    // gets the conservative answer rather than the permissive one.
+    allowPhoto,
   });
   tokenToRun.set(token, runId);
   return token;
@@ -257,6 +274,11 @@ export function callWorkbookTool(
    * photo — so the layout half needed no changes at all.
    */
   if (tool === 'ppt_generate_image') {
+    // 寫實照片 is the user's switch, and this is where it bites. Refused with the
+    // reason and the alternative: an error that only says 「不行」 gets retried,
+    // one that names the other two styles gets a background instead.
+    const refused = imageStyleRefusal(args.style, run.allowPhoto);
+    if (refused) return Promise.resolve({ ok: false, error: refused });
     const spec = composeImagePrompt({
       subject: String(args.subject ?? ''),
       mode: String(args.mode ?? 'hero'),

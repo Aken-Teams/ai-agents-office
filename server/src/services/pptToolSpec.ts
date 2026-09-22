@@ -1119,6 +1119,80 @@ export const PPT_TOOLS: PptToolSpec[] = [
   },
 ];
 
+/** The style enum minus 「photo」, with its bullet removed from the prose. */
+function withoutPhoto(tool: PptToolSpec): PptToolSpec {
+  const props = (tool.inputSchema.properties || {}) as Record<string, unknown>;
+  const style = props.style as { enum?: string[]; description?: string } | undefined;
+  if (!style?.enum?.includes('photo')) return tool;
+  return {
+    ...tool,
+    description: tool.description
+      + '\n\n【這份部署關閉了寫實照片】這個模型現在只生背景和插畫。'
+      + '需要實拍畫面的話，請使用者自己放照片，不要用別的畫法去模仿照片。',
+    inputSchema: {
+      ...tool.inputSchema,
+      properties: {
+        ...props,
+        style: {
+          ...style,
+          enum: style.enum.filter(v => v !== 'photo'),
+          // The bullet AND its continuation line: the description is assembled
+          // from concatenated strings, so 「photo」's explanation spills onto the
+          // line after it. Leaving half of it behind would describe an option
+          // the enum no longer offers, which is how a model ends up arguing for
+          // a value it cannot pass.
+          description: String(style.description || '').split('\n')
+            .filter(line => !line.startsWith('- photo ')
+              && !line.startsWith('（現場、產品、城市）'))
+            .join('\n'),
+        },
+      },
+    },
+  };
+}
+
+/**
+ * The tool list this run may actually use.
+ *
+ * ── Why the switch cuts the schema rather than the wording ──
+ * Three rounds of increasingly firm paragraphs failed to stop the model using
+ * 章節頁; removing the value from the enum stopped it immediately. The lesson
+ * generalises: a description is advice the model weighs against everything else
+ * in the turn, an enum is a wall.
+ *
+ * Only photography is behind the switch. A background claims nothing and an
+ * illustration is visibly drawn — a photograph claims that what it shows exists,
+ * and that is the only generated picture someone can mistake for a record.
+ */
+export function pptToolsFor(opts: { allowPhoto?: boolean } = {}): PptToolSpec[] {
+  return opts.allowPhoto === false ? PPT_TOOLS.map(withoutPhoto) : PPT_TOOLS;
+}
+
+/**
+ * Why this run may not draw that, in words the model can act on.
+ *
+ * ── Why it lives beside the schema rather than in the bridge ──
+ * The schema is what stops the model ASKING; the bridge is what stops the
+ * request being SERVED. Both are this switch, and they must not drift — a
+ * refusal naming a style the enum no longer offers would send the model in a
+ * circle. One function, so the wall and the reason are written once.
+ *
+ * Returns null when there is nothing to refuse.
+ */
+export function imageStyleRefusal(
+  style: unknown,
+  allowPhoto: boolean,
+): string | null {
+  if (allowPhoto) return null;
+  if (String(style ?? '').toLowerCase() !== 'photo') return null;
+  // 「不行」 gets retried; naming the alternatives does not. The 「開啟」 half
+  // matters too: the model relays it, and the switch is two clicks away in a
+  // menu the user may not have opened.
+  return '這份部署關閉了寫實照片生成（使用者可以在 ＋ 選單裡開啟）。'
+    + '改用 abstract 或 gradient 當背景，或用 flat／handdrawn 畫插畫；'
+    + '真的需要實拍畫面的話，請使用者自己放照片。';
+}
+
 export const PPT_TOOL_NAMES = PPT_TOOLS.map(t => t.name);
 
 /**

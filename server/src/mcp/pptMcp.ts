@@ -28,7 +28,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { PPT_TOOLS, PPT_TOOL_NAMES } from '../services/pptToolSpec.js';
+import { PPT_TOOLS, PPT_TOOL_NAMES, pptToolsFor } from '../services/pptToolSpec.js';
 
 const RUN_TOKEN = process.env.MCP_PPT_RUN_TOKEN || '';
 const BRIDGE_URL = (process.env.MCP_PPT_BRIDGE_URL || '').replace(/\/+$/, '');
@@ -45,9 +45,27 @@ const BRIDGE_URL = (process.env.MCP_PPT_BRIDGE_URL || '').replace(/\/+$/, '');
 // and ppt_add_diagram out of the list entirely.
 const CLIENT_TOOLS = (process.env.MCP_PPT_CLIENT_TOOLS || '')
   .split(',').map(s => s.trim()).filter(Boolean);
+/**
+ * Whether the picture model may be asked for a photograph this run.
+ *
+ * ── Why the switch cuts the schema rather than the wording ──
+ * Three rounds of increasingly firm paragraphs failed to stop the model using
+ * 章節頁, and removing the value from the enum stopped it immediately. The
+ * lesson generalises: a description is advice the model weighs against the rest
+ * of the turn, an enum is a wall. So when photography is off, 「photo」 is not
+ * discouraged — it does not exist, and the bullet describing it goes too, or
+ * the model reads about an option it cannot pick and tries anyway.
+ *
+ * Backgrounds and illustrations are untouched. They claim nothing; only a
+ * photograph can be mistaken for a record of something real, and that is the
+ * whole reason there is a switch.
+ */
+const ALLOW_PHOTO = process.env.MCP_PPT_ALLOW_PHOTO === '1';
+
+const AVAILABLE = pptToolsFor({ allowPhoto: ALLOW_PHOTO });
 const OFFERED = CLIENT_TOOLS.length
-  ? PPT_TOOLS.filter(t => CLIENT_TOOLS.includes(t.name))
-  : PPT_TOOLS;
+  ? AVAILABLE.filter(t => CLIENT_TOOLS.includes(t.name))
+  : AVAILABLE;
 
 // Debug log (append-only). The CLI swallows MCP stderr, so without this we are
 // blind to what the relay actually did. Silent no-op when the env isn't set.

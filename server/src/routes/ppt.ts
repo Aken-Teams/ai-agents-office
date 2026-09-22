@@ -266,7 +266,7 @@ router.post('/chat', async (req: Request, res: Response) => {
     // pane sends — SharedRuntime pins its JavaScript until PowerPoint is quit, so a
     // stale pane is the normal case for a while after every update, not an edge.
     documentName, documentContext, documentKey, attachments, fileIds,
-    workbookName, workbookContext, workbookKey,
+    workbookName, workbookContext, workbookKey, allowPhoto,
   } = req.body as {
     message?: string; runId?: string; sessionId?: string;
     documentName?: string; documentContext?: string; documentKey?: string;
@@ -274,6 +274,7 @@ router.post('/chat', async (req: Request, res: Response) => {
     selection?: string; clientTools?: string[];
     model?: string; locale?: string; newConversation?: boolean;
     dataSources?: string[]; attachments?: number; fileIds?: string[];
+    allowPhoto?: boolean;
   };
 
   const docName = documentName || workbookName || '';
@@ -318,8 +319,25 @@ router.post('/chat', async (req: Request, res: Response) => {
   // back as a URL that resolves from where the request came from rather than
   // from a guess in configuration.
   const origin = `${req.protocol}://${req.get('host')}`;
+  /**
+   * Whether this turn may generate photo-realistic pictures.
+   *
+   * ── Why the deployment gets the first word ──
+   * Backgrounds and illustrations claim nothing; a photograph claims that what
+   * it shows exists. Whether a company is comfortable putting generated
+   * photography on its own slides is a company's answer, not a per-user one, so
+   * PPT_ALLOW_PHOTO sets the ceiling and the pane's switch can only stay under
+   * it. A user can turn photography off for themselves; they cannot turn it on
+   * where the deployment said no.
+   *
+   * Absent config means allowed, because that is what every existing install
+   * already does and a silent capability change on upgrade is its own bug. The
+   * pane defaults to OFF, so the safe answer is still what you get without
+   * touching anything.
+   */
+  const photoAllowed = process.env.PPT_ALLOW_PHOTO !== '0' && allowPhoto === true;
   const bridgeToken = registerRun(
-    runId, userId, write, uploaded.map((f) => f.id), documentName, origin);
+    runId, userId, write, uploaded.map((f) => f.id), documentName, origin, photoAllowed);
 
   // Version skew guard. The manifest uses SharedRuntime with lifetime="long", so
   // reopening the task pane does NOT reload its JavaScript — only quitting PowerPoint
@@ -500,6 +518,10 @@ ${skill.systemPrompt}
     model: chosenModel,
     mcpPptRunToken: bridgeToken,
     mcpPptTools: supported,
+    // Narrows the tool SCHEMA, not just the wording: 「photo」 disappears from the
+    // style enum entirely. A paragraph asking the model not to do something is
+    // advisory; an enum that lacks the value is not.
+    pptAllowPhoto: photoAllowed,
     ...(mcpEmailToken ? { mcpEmailToken } : {}),
     ...(mcpKmOnBehalf ? { mcpKmOnBehalf } : {}),
   });

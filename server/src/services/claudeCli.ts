@@ -201,6 +201,15 @@ export interface ClaudeCliOptions {
   // PowerPoint. Same registry, same loopback, different tool spec.
   mcpPptRunToken?: string;
   mcpPptTools?: string[];
+  /**
+   * Whether ppt_generate_image may produce photo-realistic pictures this turn.
+   *
+   * Reaches the MCP as env because that is where the tool SCHEMA is built: when
+   * this is false the 「photo」 value is gone from the style enum, so the model
+   * cannot ask for one. A sentence telling it not to would be advisory; a
+   * missing enum value is not.
+   */
+  pptAllowPhoto?: boolean;
 }
 
 interface ClaudeResult {
@@ -520,6 +529,10 @@ export function spawnClaude(
           // (Office 2021), so on an older build the pane leaves the diagram and
           // image tools out and the model never promises a chart it cannot draw.
           MCP_PPT_CLIENT_TOOLS: (options.mcpPptTools || []).join(','),
+          // '0' rather than absent-means-no: this spawns a fresh subprocess per
+          // run, and a variable that only appears in the permissive case is one
+          // rename away from silently defaulting open.
+          MCP_PPT_ALLOW_PHOTO: options.pptAllowPhoto ? '1' : '0',
           ...debugEnv('ppt-mcp-debug.log'),
         },
       };
