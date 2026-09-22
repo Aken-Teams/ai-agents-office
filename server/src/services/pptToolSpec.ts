@@ -704,6 +704,54 @@ export const PPT_TOOLS: PptToolSpec[] = [
   },
   // ── Pictures ───────────────────────────────────────────────────────────────
   {
+    name: 'ppt_generate_image',
+    description:
+      '用公司內部的地端影像模型生一張圖，**只給背景和封面用**。'
+      + '\n\n【什麼時候用這個】'
+      + '\n封面、章節頁、內容頁側欄——也就是**這張圖沒有要傳達什麼特定資訊，'
+      + '只是要讓這一頁好看**的時候。'
+      + '\n\n【什麼時候絕對不要用】'
+      + '\n- 資訊圖表、趨勢圖、任何有數字的東西 → `ppt_add_chart`'
+      + '\n- 流程、架構、步驟 → `ppt_add_diagram`'
+      + '\n- 概念說明、要看得懂在畫什麼的插畫 → `ppt_find_art`（內建 417 張扁平插畫）'
+      + '\n這個模型的中文字畫不好，而且**圖裡的字改不了**。'
+      + '任何需要文字、數字、標籤的東西一律不要交給它。'
+      + '\n\n【怎麼下 subject】只寫「畫什麼」，**英文**，一句話。'
+      + '配色、風格、構圖、留白位置都會依這份簡報的版式自動補上——'
+      + '你寫得越花，反而越容易蓋掉那些設定。'
+      + '\n好：`a modern automated warehouse interior`'
+      + '\n不好：`一張很美的倉庫照片，藍色調，左邊留白給標題`（那些都會自動加）'
+      + '\n\n【要有耐心】一張 10～20 秒，精細模式 50 秒以上。'
+      + '這是單機 GPU，**一次只能算一張，不要連續呼叫**。'
+      + '一份簡報最多兩到三張，再多就從簡報變成畫冊了。'
+      + '\n\n回來的是一個 30 分鐘內有效的網址，接著用 `ppt_add_photo` 放上去。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        subject: {
+          type: 'string',
+          description: '這張圖畫什麼，英文一句話。不用寫顏色和構圖。',
+        },
+        mode: {
+          type: 'string',
+          enum: ['hero', 'side', 'block'],
+          description:
+            'hero 滿版背景（1024×576，左邊會留空給標題）／side 側欄直式（768×1024）／'
+            + 'block 內文區。預設 hero。放上去的時候 ppt_add_photo 要用同一個。',
+        },
+        look: { type: 'string', description: '這份簡報的版式，用來決定畫面的調性。' },
+        theme: { type: 'string', description: '這份簡報的配色，用來決定圖的顏色。' },
+        mood: { type: 'string', description: '額外的氣氛補充，英文，可省略。' },
+        quality: {
+          type: 'boolean',
+          description: '設 true 用 24 步（約 50 秒以上）。預設 10 步就夠背景用了。',
+        },
+      },
+      required: ['subject'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'ppt_find_art',
     description:
       '在內建的插畫庫裡找圖（417 張扁平風格向量插畫，46 個主題分類）。'
@@ -959,6 +1007,7 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
     return `放上 ${n} 個數據卡`;
   }
   if (name === 'ppt_add_callout') return '放上一句結論';
+  if (name === 'ppt_generate_image') return `正在生圖：${String(args.subject || '')}`;
   if (name === 'ppt_find_art') return `找插畫：${String(args.query || '')}`;
   if (name === 'ppt_add_photo') {
     const m = String(args.mode || 'block');

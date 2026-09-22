@@ -27,6 +27,8 @@ import crypto from 'crypto';
 import { readAttachmentPart } from './excelAttachments.js';
 import { createHandoff } from '../routes/handoffs.js';
 import { describeArtSearch } from './artLibrary.js';
+import { composeImagePrompt } from './imagePrompt.js';
+import { generateImage } from './modelGateway.js';
 import type { SSEEvent } from '../types.js';
 import * as excelSpec from './excelToolSpec.js';
 import * as wordSpec from './wordToolSpec.js';
@@ -131,6 +133,17 @@ interface ExcelRun {
   files: string[];
   /** The open document's name, so a handoff can say where it came from. */
   documentName: string;
+  /**
+   * The origin the add-in reached us on.
+   *
+   * Needed because a generated picture goes back to the pane as a URL it has to
+   * fetch, and this process cannot know from configuration whether it is being
+   * reached as localhost, an internal name or a reverse proxy. The request that
+   * opened the run does know, so it says so once and the whole run reuses it —
+   * which beats an env var that is silently wrong until somebody notices the
+   * pictures never arrive.
+   */
+  origin: string;
 }
 
 const runs = new Map<string, ExcelRun>();
@@ -149,10 +162,11 @@ export function registerRun(
   write: (event: SSEEvent) => void,
   files: string[] = [],
   documentName = '',
+  origin = '',
 ): string {
   const token = crypto.randomBytes(32).toString('hex');
   runs.set(runId, {
-    runId, userId, write, pending: new Map(), closed: false, files, documentName,
+    runId, userId, write, pending: new Map(), closed: false, files, documentName, origin,
   });
   tokenToRun.set(token, runId);
   return token;
@@ -230,6 +244,51 @@ export function callWorkbookTool(
     return Promise.resolve(describeArtSearch(
       String(args.query ?? ''),
       Math.max(1, Math.min(24, Number(args.limit ?? 12) || 12))));
+  }
+
+  /**
+   * Generating a picture is answered here too — it has to be.
+   *
+   * The on-prem endpoint and its key live on this side and are not something the
+   * task pane should ever learn; a generation also takes fifteen to sixty
+   * seconds and has to be queued against a single GPU, neither of which a pane
+   * running on somebody's laptop can arrange. What goes back is a URL on this
+   * server, which the pane then feeds to ppt_add_photo exactly like a stock
+   * photo — so the layout half needed no changes at all.
+   */
+  if (tool === 'ppt_generate_image') {
+    const spec = composeImagePrompt({
+      subject: String(args.subject ?? ''),
+      mode: String(args.mode ?? 'hero'),
+      look: String(args.look ?? ''),
+      theme: String(args.theme ?? ''),
+      mood: String(args.mood ?? ''),
+    });
+    if (!spec.prompt.trim() || !String(args.subject ?? '').trim()) {
+      return Promise.resolve({ ok: false, error: 'subject 是必要的（這張圖要畫什麼，英文）。' });
+    }
+    // 8–12 steps is the working range: 1024×576 at 8 steps measured 15 seconds
+    // and looks finished. 24 steps takes nearly four times as long for detail a
+    // background does not need.
+    const steps = args.quality === true ? 24 : 10;
+    return generateImage({
+      userId: run.userId,
+      prompt: spec.prompt,
+      negative: spec.negative,
+      size: spec.size,
+      steps,
+      seed: spec.seed,
+    }).then((r) => (r.ok
+      ? {
+        ok: true,
+        content: `已產生一張 ${r.width}×${r.height} 的圖（${r.seconds} 秒，地端模型）。
+`
+          + `網址：${run.origin}/api/ppt/image/${r.id}.png
+`
+          + '接著用 ppt_add_photo 把這個網址放上去，mode 用同一個。'
+          + '這張圖 30 分鐘後就會失效，要用就現在用。',
+      }
+      : { ok: false, error: r.error || '產生圖片失敗。' }));
   }
 
   /**

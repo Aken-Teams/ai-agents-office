@@ -41,8 +41,32 @@ import {
   addAttachment, getAttachment, describeAttachments, type StoredAttachment,
 } from '../services/excelAttachments.js';
 import type { SSEEvent } from '../types.js';
+import { takeImage } from '../services/modelGateway.js';
 
 const router = Router();
+
+/**
+ * GET /api/ppt/image/:id.png — a picture the gateway just generated.
+ *
+ * ── Why this one sits ABOVE authMiddleware ──
+ * The task pane fetches it the same way it fetches a stock photo: a plain
+ * cross-origin request from `hosts/powerpoint.js`, which does not hold the
+ * session token and should not start to. The id is 128 random bits, the entry
+ * expires in thirty minutes, and what is behind it is a decorative background
+ * that this same conversation invented moments ago — not anybody's document.
+ *
+ * Stated here rather than left implicit, because 「這條路沒有 auth」 is exactly
+ * the kind of thing that should be argued for in writing or not done.
+ */
+router.get('/image/:id.png', (req: Request, res: Response) => {
+  const buf = takeImage(String(req.params.id || '').replace(/\.png$/, ''));
+  if (!buf) { res.status(404).json({ error: '這張圖已經過期或不存在。' }); return; }
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Cache-Control', 'private, max-age=1800');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.send(buf);
+});
+
 router.use(authMiddleware);
 
 /** Threads are filed under this, so deck history never mixes with the other two. */
@@ -290,7 +314,12 @@ router.post('/chat', async (req: Request, res: Response) => {
     .map((id) => getAttachment(userId, String(id)))
     .filter((f): f is StoredAttachment => !!f);
 
-  const bridgeToken = registerRun(runId, userId, write, uploaded.map((f) => f.id), documentName);
+  // The origin the pane actually used, so a generated picture can be handed
+  // back as a URL that resolves from where the request came from rather than
+  // from a guess in configuration.
+  const origin = `${req.protocol}://${req.get('host')}`;
+  const bridgeToken = registerRun(
+    runId, userId, write, uploaded.map((f) => f.id), documentName, origin);
 
   // Version skew guard. The manifest uses SharedRuntime with lifetime="long", so
   // reopening the task pane does NOT reload its JavaScript — only quitting PowerPoint
