@@ -142,10 +142,15 @@ const LOOK_ARG = {
 const THEME_ARG = {
   theme: {
     type: 'string',
-    enum: ['corporate', 'slate', 'fresh', 'warm', 'night', 'linen', 'muted', 'mono'],
+    enum: ['corporate', 'slate', 'fresh', 'warm', 'night', 'linen', 'muted', 'mono',
+      'teal', 'sky', 'amber'],
     description:
       '配色：corporate 企業藍、slate 沉穩灰、fresh 清新綠、warm 暖橘、night 深色、'
-      + 'linen 亞麻暖紙、muted 莫蘭迪、mono 墨黑。'
+      + 'linen 亞麻暖紙、muted 莫蘭迪、mono 墨黑、'
+      + 'teal 藍綠、sky 淡藍、amber 黃橘。'
+      + '\n**不要每次都 corporate。** 企業簡報不等於深藍配大紅——'
+      + 'teal、sky、amber 一樣正式，而且一整份看下來不會那麼沉。'
+      + '連續做給同一個單位的簡報，換個配色比換版式安全得多。'
       + '\n**整份簡報要用同一個**，不要每張換一個。'
       + '\n**不確定就不要給這個參數**——每個 look 都自帶設計好的配色，'
       + '硬指定反而會把風格拆掉一半。',
@@ -699,11 +704,47 @@ export const PPT_TOOLS: PptToolSpec[] = [
         ...SLIDE_ARG,
         type: {
           type: 'string',
-          enum: ['column', 'bar', 'line', 'area', 'pie', 'donut'],
+          enum: ['column', 'bar', 'line', 'area', 'pie', 'donut',
+            'waterfall', 'funnel', 'radar', 'timeline'],
           description:
             'column 直條（比大小，最常用）、bar 橫條（分類名稱長的時候用）、'
             + 'line 折線（看趨勢）、area 區域、pie 圓餅（看佔比，最多 5 項）、'
-            + 'donut 甜甜圈（可在中間放一個關鍵數字）。預設 column。',
+            + 'donut 甜甜圈（可在中間放一個關鍵數字）。預設 column。'
+            + '\n\n【這四種是長條圖畫不出來的問題，遇到就用，不要硬塞直條圖】'
+            + '\n- **waterfall 瀑布**：一個數字怎麼從 A 變成 B。'
+            + '「營收從 100 到 128，中間發生了什麼」用這個。'
+            + '每一根從上一根結束的地方接上去，所以整條路徑是看得到的形狀，'
+            + '不是要讀者自己心算。合計那幾根用 `total: [0, 4]` 標出來（索引），'
+            + '或在分類名稱前面加 `=`。'
+            + '\n- **funnel 漏斗**：每一關剩下多少。轉換率和流失率會自動算在段與段之間，'
+            + '那才是重點——形狀變窄是讀者本來就知道的事。'
+            + '\n- **radar 雷達**：一個對象在好幾個面向上的強弱，或兩個對象比較。'
+            + '至少三個面向，最多畫三個系列。'
+            + '注意：雷達圖上不同軸之間的面積是不能互相比較的，只拿來看輪廓。'
+            + '\n- **timeline 時間軸**：事件照時間排。用 `events` 而不是 categories/values：'
+            + '`[{ at: 2024, label: "試點", note: "兩條產線", highlight: true }]`。'
+            + '`at` 給數字就照實際間隔放（三月兩件、十一月一件的疏密才是重點），'
+            + '給文字就平均排開。',
+        },
+        events: {
+          type: 'array',
+          description: 'timeline 專用。至少一筆。',
+          items: {
+            type: 'object',
+            properties: {
+              at: { type: 'string', description: '時間點。給數字（2024、2024.75）會照實際間隔擺。' },
+              label: { type: 'string', description: '這個時間點發生什麼。' },
+              note: { type: 'string', description: '補充一句，可省略。' },
+              highlight: { type: 'boolean', description: '設 true 會用強調色放大，一條軸最多標一個。' },
+            },
+            required: ['at', 'label'],
+            additionalProperties: false,
+          },
+        },
+        total: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'waterfall 專用：哪幾根是合計而不是增減（索引，0 起算）。',
         },
         title: { type: 'string', description: '圖表標題。' },
         categories: { type: 'array', items: { type: 'string' }, description: 'X 軸分類，例如 ["Q1","Q2","Q3"]。' },
@@ -716,7 +757,7 @@ export const PPT_TOOLS: PptToolSpec[] = [
         ...GEOMETRY_BLOCK,
         ...THEME_ARG,
       },
-      required: ['values'],
+      // timeline 用 events，其他用 values——所以這裡不能硬性要求 values。
       additionalProperties: false,
     },
   },
@@ -1076,7 +1117,9 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
     return `在${where(args)}排 ${n} 張卡片`;
   }
   if (name === 'ppt_add_chart') {
-    const kind = { column: '直條', bar: '橫條', line: '折線', area: '區域', pie: '圓餅', donut: '甜甜圈' }[String(args.type || 'column')] || '';
+    const kind = { column: '直條', bar: '橫條', line: '折線', area: '區域', pie: '圓餅',
+      donut: '甜甜圈', waterfall: '瀑布', funnel: '漏斗', radar: '雷達', timeline: '時間軸',
+    }[String(args.type || 'column')] || '';
     return `插入${kind}圖` + (args.title ? `：${args.title}` : '');
   }
   if (name === 'ppt_add_image') return '插入圖片';
