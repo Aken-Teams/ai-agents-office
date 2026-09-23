@@ -132,7 +132,18 @@ async function getOrCreatePptConversation(
   // Falls back to the name when the pane could not mint an id (a read-only file,
   // or a host below PowerPointApi 1.3) — worse, because a rename then splits the
   // history, but still one thread per file.
-  const key = (documentKey || documentName || '').slice(0, 255) || '(unnamed)';
+  /**
+   * Which deck this conversation belongs to.
+   *
+   * `documentKey` is an id stored inside the file, so it survives a rename and
+   * is never shared with a different deck. The name fallback is neither — two
+   * files called 報價簡報.pptx are one key — so it is labelled rather than mixed
+   * in with the real ones. A `name:` prefix in `workbook_key` is a visible
+   * admission in the audit data that this row was keyed on a guess.
+   */
+  const key = documentKey
+    ? String(documentKey).slice(0, 255)
+    : `name:${(documentName || '(unnamed)').slice(0, 250)}`;
   const title = (documentName || key).slice(0, 255);
 
   if (fresh) {
