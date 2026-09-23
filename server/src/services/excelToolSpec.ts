@@ -61,7 +61,11 @@ export const EXCEL_TOOLS: ExcelToolSpec[] = [
     description:
       '讀取一個矩形範圍的內容，回傳 CSV。mode=values 讀計算後的值、mode=formulas 讀公式、'
       + 'mode=both 兩者都要（要看懂模型怎麼算的就用 both）。'
-      + '一次讀一整塊，不要逐格呼叫。超過上限會自動截斷並告訴你實際大小。',
+      + '一次讀一整塊，不要逐格呼叫。'
+      + '\n【太大就不會讀給你】超過 20,000 格會直接擋下來，**不會截斷後給你一部分**。'
+      + '因為用一部分資料算出來的結論看起來跟完整的一模一樣，你跟使用者都分辨不出來。'
+      + '\n要統計、比較、排名、找極值 → 用 `excel_run_script`（在 Excel 裡跑，沒有格數限制）。'
+      + '只是要看欄位長相 → 指定明確範圍，例如 range: "A1:H200"。',
     inputSchema: {
       type: 'object',
       properties: {
