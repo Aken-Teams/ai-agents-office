@@ -322,7 +322,27 @@ export function resolveLocale(wanted: unknown, accountLocale: string | null | un
 
 export function LOCALE_PROMPT(locale: string): string {
   const name = LOCALE_NAMES[locale] || LOCALE_NAMES[locale.split('-')[0]];
-  if (!name || locale.startsWith('zh-TW')) return '';
+  /**
+   * zh-TW used to return '' here, and that was the bug.
+   *
+   * ── The report ──
+   * 「WORD 的 AI 明明選擇繁體中文，但有時候會跑出英文的回答」, with a screenshot
+   * where the document content was Chinese throughout and the status lines
+   * between tool calls had quietly turned English: 「Now chapter 1, the product
+   * overview.」, 「Next I'll add the goals table…」.
+   *
+   * ── Why it only happened to those lines ──
+   * The reasoning was that zh-TW is the host prompt's own language, so saying it
+   * again would be noise. That holds for the document — it is written in
+   * Chinese because the request was. It does not hold for the narration, which
+   * is the model talking about its own work rather than answering in kind, and
+   * which drifts to English over a long run with nothing pinning it.
+   *
+   * So every locale gets the instruction, zh-TW included. The cost is a short
+   * paragraph; what it buys is that the one language with no rule attached stops
+   * being the one that drifts.
+   */
+  if (!name) return '';
   return `
 
 ## 回覆語言（覆蓋前面的指示）
@@ -332,7 +352,12 @@ export function LOCALE_PROMPT(locale: string): string {
 
 **第一句話就要是 ${name}，不是做到一半才換。** 開工前那句「我先去查一下資料」
 最容易寫成英文，因為那時候你還在規劃、還沒開始寫中文內容——但使用者看到的
-第一行就是它。工具呼叫之間的每一句進度說明也一樣。
+第一行就是它。
+
+**工具呼叫之間的每一句進度說明，每一句都要是 ${name}。** 這是最容易漏掉的地方，
+而且漏的方式很特別：前面幾句是對的，做到一半開始變英文，因為那時候你是在對自己
+交代進度，不是在回答使用者。使用者看到的是同一欄對話，語言換掉就是換掉了。
+一份長文件會產生十幾句這種說明，**每一句都要檢查**。
 
 唯一的例外是**丟給工具的參數**：搜尋關鍵字之類的，那不是講給使用者聽的。
 

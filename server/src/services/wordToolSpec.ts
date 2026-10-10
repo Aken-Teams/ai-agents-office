@@ -590,11 +590,23 @@ export const WORD_TOOLS: WordToolSpec[] = [
       + '\n\n【限制，要老實跟使用者說】Word 的增益集 API 沒有原生圖表物件，所以這是一張**圖片**：'
       + '插進去之後不能在 Word 裡點開改數字，數字變了要重新產生一張。'
       + '需要會跟資料連動的圖表，那是 Excel 的工作。'
-      + '\n\n配一個 caption，圖才有編號可以在內文引用。',
+      + '\n\n配一個 caption，圖才有編號可以在內文引用。'
+      + '\n【不是只有長條和圓餅】這支現在跟簡報用的是同一個繪圖器，'
+      + '所以瀑布、漏斗、雷達、時間軸、地圖、散佈、堆疊、箱型都畫得出來。'
+      + '\n選型別看你要講什麼：比大小用 column／bar；看趨勢用 line／area；'
+      + '拆解一個總數怎麼來的用 waterfall；轉換率一層層掉用 funnel；'
+      + '兩個對象在同幾個面向上的強弱用 radar；組成比例隨時間變化用 stacked100。'
+      + '\n**報告裡的圖比投影片更該少用顏色**——它用的是文件的灰階配色，'
+      + '一頁黑字裡最亮的東西不該是圖表。',
     inputSchema: {
       type: 'object',
       properties: {
-        type: { type: 'string', enum: ['column', 'bar', 'line', 'pie'], description: '預設 column。' },
+        type: {
+          type: 'string',
+          enum: ['column', 'bar', 'line', 'area', 'pie', 'donut', 'waterfall', 'funnel',
+            'radar', 'timeline', 'map', 'scatter', 'stacked', 'stacked100', 'box'],
+          description: '預設 column。甘特圖請改用 word_insert_gantt。',
+        },
         title: { type: 'string', description: '圖表標題。' },
         categories: { type: 'array', items: { type: 'string' }, description: 'X 軸（或圓餅的分類）名稱。' },
         series: {
