@@ -503,6 +503,52 @@ export const WORD_TOOLS: WordToolSpec[] = [
     },
   },
   {
+    name: 'word_insert_gantt',
+    description:
+      '畫一張甘特圖（時程表），插入成圖片。'
+      + '\n【做時程一定要用這個，不要用 word_insert_diagram 的 mermaid gantt】'
+      + 'mermaid 的甘特圖把任務名寫在長條上，只要排程有兩件事時間重疊，字就會疊在一起；'
+      + '日期也是有幾天印幾天，最後整排擠成一團看不出是什麼。'
+      + '這支是自己畫的：任務名在左邊欄位、日期標籤的數量依寬度決定，不會互相壓。'
+      + '\n【資料怎麼給】`tasks`，每一項要有 name 和 start；'
+      + 'end 和 days 擇一（days 是「做幾天」）。日期一律 YYYY-MM-DD。'
+      + '\n`group` 會變成背景色帶，用來分階段——「MVP」「V1.1」「V1.2」這種。'
+      + '同一個 group 的工作要排在一起，色帶是照連續段落畫的。'
+      + '\n`today` 給今天的日期會畫一條線；不在時程範圍內會自動略過。'
+      + '`progress` 給 0～1 會在長條上畫出完成比例。'
+      + '\n【它是圖片】Word 沒有甘特圖物件，所以插進去的是圖片，在 Word 裡改不了。'
+      + '要改內容就重新產生一張。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tasks: {
+          type: 'array',
+          description: '工作清單，依時間順序排。',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: '工作名稱' },
+              start: { type: 'string', description: '開始日，YYYY-MM-DD' },
+              end: { type: 'string', description: '結束日，YYYY-MM-DD。與 days 擇一。' },
+              days: { type: 'number', description: '工期幾天。與 end 擇一。' },
+              group: { type: 'string', description: '階段名稱，例如 MVP (P0)' },
+              progress: { type: 'number', description: '完成比例 0～1' },
+            },
+            required: ['name', 'start'],
+          },
+        },
+        title: { type: 'string', description: '圖表標題' },
+        today: { type: 'string', description: '今天的日期，YYYY-MM-DD。會畫一條線。' },
+        caption: { type: 'string', description: '圖說，例如「圖 2　版本時程」' },
+        width: { type: 'number', description: '寬度（點）。不給就是內文寬度 450 點。' },
+        paragraph: { type: 'number', description: '插在第幾段旁邊，省略就接在文件最後。' },
+        at: { type: 'string', enum: ['before', 'after'], description: '預設 after' },
+      },
+      required: ['tasks'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'word_insert_diagram',
     description:
       '用 mermaid 語法畫圖並插進文件：流程圖、循序圖、甘特圖、狀態圖、類別圖、圓餅圖、心智圖等。'
@@ -516,7 +562,9 @@ export const WORD_TOOLS: WordToolSpec[] = [
       + '\n`sequenceDiagram` / `使用者->>系統: 送出申請` / `系統-->>使用者: 回覆結果`'
       + '\n\n【限制，要老實說】插進去的是**圖片**，使用者不能在 Word 裡拖動節點；'
       + '要改內容就改語法重新產生一張。'
-      + '\n\n配一個 caption，圖才有編號可以在內文引用。',
+      + '\n\n配一個 caption，圖才有編號可以在內文引用。'
+      + '\n【時程表不要用這支】甘特圖請用 `word_insert_gantt`——'
+      + 'mermaid 的 gantt 會把任務名疊在一起、日期擠成一團。',
     inputSchema: {
       type: 'object',
       properties: {

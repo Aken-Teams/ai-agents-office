@@ -773,7 +773,13 @@ export const PPT_TOOLS: PptToolSpec[] = [
       + '\n左邊 `left: 38, width: 430`、右邊 `left: 492, width: 430`，高度都給 300。'
       + '「現況 vs 目標」「量 vs 金額」本來就是要並排看的，拆成兩頁反而對照不起來。'
       + '\n\n【別忘了 radar】兩個對象在同幾個面向上的強弱，用雷達圖一眼就看得出輪廓，'
-      + '做成兩組長條圖要讀者自己在腦中疊起來。能力盤點、成熟度評估、競品比較都適合。',
+      + '做成兩組長條圖要讀者自己在腦中疊起來。能力盤點、成熟度評估、競品比較都適合。'
+      + '\n【甘特圖】type: "gantt"，資料走 `tasks`，不是 categories/values：'
+      + '\n`[{ name: "需求確認", group: "MVP", start: "2026-10-13", end: "2026-10-24" }]`。'
+      + '日期一律 YYYY-MM-DD，`end` 可以換成 `days`。`group` 會變成背景色帶，用來分階段；'
+      + '`today` 給今天的日期就會畫一條線，不在範圍內會自動略過。'
+      + '\n**不要用 mermaid 的 gantt 語法畫時程**——它把任務名畫在長條上，'
+      + '真實的排程一定會互相重疊，日期也會全部擠在一起。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -781,7 +787,7 @@ export const PPT_TOOLS: PptToolSpec[] = [
         type: {
           type: 'string',
           enum: ['column', 'bar', 'line', 'area', 'pie', 'donut',
-            'waterfall', 'funnel', 'radar', 'timeline', 'map',
+            'waterfall', 'funnel', 'radar', 'timeline', 'gantt', 'map',
             'scatter', 'stacked', 'stacked100', 'box'],
           description:
             'column 直條（比大小，最常用）、bar 橫條（分類名稱長的時候用）、'
