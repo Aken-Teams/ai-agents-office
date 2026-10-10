@@ -659,6 +659,109 @@ export const EXCEL_TOOLS: ExcelToolSpec[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'excel_data_validation',
+    description:
+      '限制某個範圍能輸入什麼——最常用的是**做成下拉選單**。'
+      + '\n\n【什麼時候用】使用者說「這欄只能選 A/B/C」「做成下拉式」「限制只能填數字」'
+      + '「不要讓人亂打」，或你在做報價單、申請表、任何要給別人填的表單。'
+      + '\n**做表單一定要用這個。**一欄自由輸入的「縣市」最後會變成台北／臺北／台北市／TPE，'
+      + '之後沒有任何公式救得回來。'
+      + '\n\n【選項怎麼給，兩種差很多】'
+      + '\n· `options: ["現金", "月結30天", "月結60天"]` — 直接寫死。簡單，但'
+      + '**Excel 限制整串選項合計 255 字**，而且之後要加一個選項得重設。'
+      + '\n· `source: "設定!$A$1:$A$9"` — 指向某張工作表的一欄。'
+      + '**選項會變的一律用這個**：改那一欄，所有下拉選單一起變。'
+      + '\n兩個都給的時候以 source 為準。'
+      + '\n\n【其他規則】wholeNumber／decimal／date／textLength 配 operator 和 min／max；'
+      + 'custom 給一條回傳 TRUE/FALSE 的公式。rule 設成 clear 就是拿掉驗證。'
+      + '\n\n【記得寫 error_message】Excel 預設的錯誤訊息是「這個值不符合儲存格定義的資料驗證限制」，'
+      + '那句話沒告訴使用者到底能填什麼。寫一句人話，例如「請從下拉選單選付款條件」。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sheet: { type: 'string', description: '工作表名稱' },
+        range: { type: 'string', description: "要套用的範圍，例如 'D2:D200'" },
+        rule: {
+          type: 'string',
+          enum: ['list', 'wholeNumber', 'decimal', 'date', 'textLength', 'custom', 'clear'],
+          description: '預設 list（下拉選單）',
+        },
+        options: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'list 用：選項陣列。合計不能超過 255 字，會變動的改用 source。',
+        },
+        source: {
+          type: 'string',
+          description: "list 用：選項來源範圍，例如 '設定!$A$1:$A$9'。有給就優先用這個。",
+        },
+        dropdown: {
+          type: 'boolean',
+          description: '預設 true（顯示下拉箭頭）。設 false 就只擋輸入、不顯示選單。',
+        },
+        operator: {
+          type: 'string',
+          enum: ['Between', 'NotBetween', 'EqualTo', 'NotEqualTo', 'GreaterThan',
+            'LessThan', 'GreaterThanOrEqualTo', 'LessThanOrEqualTo'],
+          description: '數值／日期／長度規則用，預設 Between',
+        },
+        min: { description: '下界（Between 以外的運算子就是那個比較值）' },
+        max: { description: '上界，Between／NotBetween 需要' },
+        formula1: { type: 'string', description: 'custom 用：一條回傳 TRUE/FALSE 的公式' },
+        error_message: { type: 'string', description: '擋下來的時候要說什麼。強烈建議填。' },
+        error_title: { type: 'string', description: '錯誤視窗標題' },
+        error_style: {
+          type: 'string',
+          enum: ['Stop', 'Warning', 'Information'],
+          description: 'Stop 不准輸入／Warning 可以硬填／Information 只提醒。預設 Stop。',
+        },
+        prompt_message: { type: 'string', description: '點到儲存格時顯示的提示' },
+        prompt_title: { type: 'string', description: '提示標題' },
+      },
+      required: ['sheet', 'range'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'excel_define_name',
+    description:
+      '幫一個範圍取名字，公式裡就能用名字代替位址。'
+      + '\n\n【為什麼值得做】`=SUM(單價表)` 在有人插入一欄之後還是對的，'
+      + '`=SUM(C2:C40)` 不是。做模板、做會被別人改的檔案時特別有用。'
+      + '\n\n【用法】op=add 新增（名字已存在會直接更新）、op=delete 刪除、op=list 列出全部。'
+      + '\n名字不能有空格，不能長得像儲存格位址（A1、XFD1 這種）。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        op: { type: 'string', enum: ['add', 'delete', 'list'], description: '預設 add' },
+        name: { type: 'string', description: '名稱，例如 單價表' },
+        sheet: { type: 'string', description: 'add 用：範圍在哪張工作表' },
+        range: { type: 'string', description: "add 用：範圍，例如 'C2:C40'" },
+        comment: { type: 'string', description: '這個名稱是做什麼的，選填' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'excel_cell_comment',
+    description:
+      '在某一格上留註解（校閱註解，不是舊的黃色便條）。'
+      + '\n\n【什麼時候用】某一格是手動改的、某個數字有例外、某個欄位要提醒填表的人注意——'
+      + '**理由寫在格子旁邊，六個月後還找得到**，寫在對話紀錄裡就不見了。'
+      + '\n\n【用法】op=add 加註解（那一格已經有註解就會變成回覆）、op=delete 刪除。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        op: { type: 'string', enum: ['add', 'delete'], description: '預設 add' },
+        sheet: { type: 'string', description: '工作表名稱' },
+        cell: { type: 'string', description: "單一儲存格，例如 'F12'" },
+        text: { type: 'string', description: 'add 用：註解內容' },
+      },
+      required: ['sheet', 'cell'],
+      additionalProperties: false,
+    },
+  },
 ];
 
 export const EXCEL_TOOL_NAMES = EXCEL_TOOLS.map(t => t.name);
@@ -734,6 +837,11 @@ export function isDestructiveTool(name: string, args: Record<string, unknown> = 
   const op = String(args.op || '');
   if (name === 'excel_manage_sheet') return op === 'delete' || op === 'rename';
   if (name === 'excel_table_ops') return op === 'sort';
+  // Setting a rule takes nothing away; clearing one removes a guard somebody put
+  // there on purpose, and deleting a name silently breaks every formula using it.
+  if (name === 'excel_data_validation') return String(args.rule || '') === 'clear' || args.clear === true;
+  if (name === 'excel_define_name') return op === 'delete';
+  if (name === 'excel_cell_comment') return op === 'delete';
   // Writing the report to a NEW sheet destroys nothing, so it runs straight
   // through — that is the whole point of the confirmation being rare. Naming an
   // existing sheet means overwriting whatever is on it, which is a write like

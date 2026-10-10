@@ -59,11 +59,26 @@ const CATEGORY = 'word-addin';
  * a chapter is the same shape of task — many small tool calls, each one a round
  * trip to the user's machine.
  */
-const WORD_MODEL = 'claude-opus-5';
+const WORD_MODEL = 'claude-opus-5-5';
 
+/**
+ * What the model picker offers.
+ *
+ * ── Names only, on purpose ──
+ * An earlier version carried a one-line note and a price per row. It read as a
+ * comparison table in a 250px menu: four rows of prose to scan past before
+ * reaching the one you were going to pick anyway. Somebody opening this menu has
+ * already decided to change model; what they need is the list, not a briefing.
+ *
+ * The `note` field stays in the shape because the pane still renders one when it
+ * is there — it is the right place for a caveat that only applies to one entry,
+ * not a slot every entry has to fill.
+ */
 const WORD_MODELS: { id: string; label: string; note: string; default?: boolean }[] = [
-  { id: 'claude-opus-5', label: 'Opus 5', note: '最會寫，改寫長文件、抓體例問題用這個', default: true },
-  { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6', note: '省 token；問答和短段落潤飾夠用' },
+  { id: 'claude-opus-5-5', label: 'Opus 5.5', note: '', default: true },
+  { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5', note: '' },
+  { id: 'claude-haiku-5-5', label: 'Haiku 5.5', note: '' },
+  { id: 'claude-opus-5', label: 'Opus 5', note: '' },
 ];
 
 /** Never trust a model id from the client — it is a string that reaches a spawn. */

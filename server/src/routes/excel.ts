@@ -56,7 +56,7 @@ router.use(authMiddleware);
 // not the prompt, and not the account's quota, both of which were investigated
 // first and cleared. Claude for Excel runs the same class of task on Opus 5.
 // Re-measure with tools/repro before assuming this is still the right choice.
-const EXCEL_MODEL = 'claude-opus-5';
+const EXCEL_MODEL = 'claude-opus-5-5';
 
 /**
  * What the pane offers in its model picker.
@@ -70,9 +70,24 @@ const EXCEL_MODEL = 'claude-opus-5';
  * choosing a model in a task pane wants to know "will this be slow" and "will
  * this cost me", not the parameter count.
  */
+/**
+ * What the model picker offers.
+ *
+ * ── Names only, on purpose ──
+ * An earlier version carried a one-line note and a price per row. It read as a
+ * comparison table in a 250px menu: four rows of prose to scan past before
+ * reaching the one you were going to pick anyway. Somebody opening this menu has
+ * already decided to change model; what they need is the list, not a briefing.
+ *
+ * The `note` field stays in the shape because the pane still renders one when it
+ * is there — it is the right place for a caveat that only applies to one entry,
+ * not a slot every entry has to fill.
+ */
 const EXCEL_MODELS: { id: string; label: string; note: string; default?: boolean }[] = [
-  { id: 'claude-opus-5', label: 'Opus 5', note: '最聰明，做整份報表／版面設計用這個', default: true },
-  { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6', note: '省 token；簡單問答夠用，複雜任務會明顯變慢' },
+  { id: 'claude-opus-5-5', label: 'Opus 5.5', note: '', default: true },
+  { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5', note: '' },
+  { id: 'claude-haiku-5-5', label: 'Haiku 5.5', note: '' },
+  { id: 'claude-opus-5', label: 'Opus 5', note: '' },
 ];
 
 /** Never trust a model id from the client — it is a string that reaches a spawn. */
