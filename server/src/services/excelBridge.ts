@@ -34,6 +34,7 @@ import * as excelSpec from './excelToolSpec.js';
 import * as wordSpec from './wordToolSpec.js';
 import * as pptSpec from './pptToolSpec.js';
 import { imageStyleRefusal } from './pptToolSpec.js';
+import { logAddinAction, targetOf, hostOf, type ActionDecision } from './addinActionLog.js';
 
 /**
  * Which host's rules apply to this call.
@@ -110,6 +111,12 @@ export interface ToolCallResult {
    * a model rather than for a screen.
    */
   image?: { mimeType: string; data: string };
+  /**
+   * How this call got past the confirmation gate, when it came back from the
+   * pane. Stripped in callWorkbookTool before the result reaches the model —
+   * it is audit bookkeeping, not part of the tool's answer.
+   */
+  decision?: import('./addinActionLog.js').ActionDecision;
 }
 
 interface PendingCall {
@@ -157,6 +164,8 @@ interface ExcelRun {
    * has to be refused where it is actually performed.
    */
   allowPhoto: boolean;
+  /** Which conversation this run belongs to, so an audited action can be found. */
+  conversationId: string;
 }
 
 const runs = new Map<string, ExcelRun>();
@@ -177,6 +186,7 @@ export function registerRun(
   documentName = '',
   origin = '',
   allowPhoto = false,
+  conversationId = '',
 ): string {
   const token = crypto.randomBytes(32).toString('hex');
   runs.set(runId, {
@@ -184,6 +194,7 @@ export function registerRun(
     // Default false, so a caller that has not been taught about this setting
     // gets the conservative answer rather than the permissive one.
     allowPhoto,
+    conversationId,
   });
   tokenToRun.set(token, runId);
   return token;
@@ -221,7 +232,57 @@ export function closeRun(runId: string): void {
  * timeout, closed pane): the model should see "使用者拒絕了這次寫入" as a normal
  * tool result it can react to, not as a crash.
  */
+/**
+ * Every tool call, logged once, wherever it was answered.
+ *
+ * The audit row is written HERE rather than in each branch below because this is
+ * the single point every call passes through — pane-executed ones, the ones this
+ * server answers itself, and the ones that fail before either. A per-branch log
+ * would miss whichever branch somebody adds next.
+ */
 export function callWorkbookTool(
+  token: string,
+  tool: string,
+  args: Record<string, unknown>,
+): Promise<ToolCallResult> {
+  const runId = tokenToRun.get(token);
+  const run = runs.get(runId || '');
+  return dispatchTool(token, tool, args).then((result) => {
+    if (run) {
+      logAddinAction({
+        userId: run.userId,
+        conversationId: run.conversationId,
+        host: hostOf(tool),
+        tool,
+        target: targetOf(tool, args),
+        destructive: isDestructiveFor(tool, args),
+        // Set by the pane when it sends the result back. Absent means nothing
+        // asked — a read, or a write that needed no gate.
+        decision: (result.decision as ActionDecision) || 'none',
+        ok: result.ok !== false,
+        summary: describeFor(tool, args),
+      });
+    }
+    // The decision is bookkeeping between the pane and this log. It must not
+    // travel on to the model, which has no use for it and would read it as part
+    // of the tool's answer.
+    const { decision, ...rest } = result as ToolCallResult & { decision?: string };
+    void decision;
+    return rest as ToolCallResult;
+  });
+}
+
+// specFor is already defined above — the bridge has always needed to know which
+// spec a tool belongs to, for the confirmation card.
+const describeFor = (tool: string, args: Record<string, unknown>): string => {
+  try { return specFor(tool).describeToolCall(tool, args); } catch { return ''; }
+};
+
+const isDestructiveFor = (tool: string, args: Record<string, unknown>): boolean => {
+  try { return specFor(tool).isDestructiveTool(tool, args); } catch { return false; }
+};
+
+function dispatchTool(
   token: string,
   tool: string,
   args: Record<string, unknown>,
@@ -376,7 +437,7 @@ export function callWorkbookTool(
 export function resolveToolCall(
   runId: string,
   callId: string,
-  result: ToolCallResult,
+  result: ToolCallResult & { decision?: ActionDecision },
 ): boolean {
   const run = runs.get(runId);
   const pending = run?.pending.get(callId);

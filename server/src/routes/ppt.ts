@@ -348,7 +348,8 @@ router.post('/chat', async (req: Request, res: Response) => {
    */
   const photoAllowed = process.env.PPT_ALLOW_PHOTO !== '0' && allowPhoto === true;
   const bridgeToken = registerRun(
-    runId, userId, write, uploaded.map((f) => f.id), documentName, origin, photoAllowed);
+    runId, userId, write, uploaded.map((f) => f.id), documentName, origin, photoAllowed,
+    conversationId);
 
   // Version skew guard. The manifest uses SharedRuntime with lifetime="long", so
   // reopening the task pane does NOT reload its JavaScript — only quitting PowerPoint
@@ -631,9 +632,13 @@ router.get('/conversations/:id/messages', async (req: Request, res: Response) =>
 
 // ─── The add-in reporting back what Office.js did ───
 router.post('/tool-result', (req: Request, res: Response) => {
-  const { runId, callId, ok, content, error, image } = req.body as {
+  const { runId, callId, ok, content, error, image, decision } = req.body as {
     runId?: string; callId?: string; ok?: boolean; content?: string; error?: string;
     image?: { mimeType?: string; data?: string };
+    // How it got past the confirmation gate. Only the pane knows, because
+    // only the pane showed the card — so only the pane can say whether a
+    // human actually looked at it.
+    decision?: 'none' | 'auto' | 'allowed' | 'rejected';
   };
   if (!runId || !callId) { res.status(400).json({ error: 'runId and callId are required' }); return; }
   if (!runBelongsTo(runId, req.user!.userId)) { res.status(403).json({ error: 'Not your run' }); return; }
@@ -645,7 +650,13 @@ router.post('/tool-result', (req: Request, res: Response) => {
     && /^image\/(png|jpeg|gif|webp)$/.test(image.mimeType)
     ? { mimeType: image.mimeType, data: image.data }
     : undefined;
-  const delivered = resolveToolCall(runId, callId, { ok: ok !== false, content, error, image: pic });
+  const delivered = resolveToolCall(runId, callId, {
+    ok: ok !== false, content, error, image: pic,
+    // Validated rather than trusted: this becomes an audit fact, and an
+    // unrecognised value must read as 「沒有人確認」 rather than be stored.
+    decision: ['none', 'auto', 'allowed', 'rejected'].includes(String(decision))
+      ? decision : 'none',
+  });
   // Not an error: a result arriving after its own timeout fired is the normal
   // shape of a slow document. Say so plainly so the pane can drop it quietly.
   res.json({ delivered });
