@@ -76,6 +76,29 @@ function humanizeClaudeError(text: string): string | null {
     return 'AI 服務認證失敗，請聯繫管理員檢查設定。';
   }
 
+  /**
+   * The CLI is older than the model it was asked to run.
+   *
+   * ── Why this one needs its own sentence ──
+   * It arrives as 「Claude Code 2.1.231 does not support this model; version
+   * 2.1.280 or newer is required. Run 'claude update'…」 — accurate, and
+   * addressed to whoever administers the server. The person who sees it picked a
+   * model from a menu and has no shell on that machine. Worse, the advice is
+   * actively wrong for them: running `claude update` on their own laptop fixes
+   * nothing.
+   *
+   * So: name the real cause, give them the one thing they CAN do right now
+   * (switch model), and name the one thing IT has to do. Versions are quoted
+   * back because that line is what gets forwarded.
+   */
+  const skew = t.match(/claude code ([\d.]+) does not support this model;?\s*version ([\d.]+)/i);
+  if (skew) {
+    return `伺服器上的 AI 程式版本太舊（目前 ${skew[1]}，這個模型需要 ${skew[2]} 以上），`
+      + '所以跑不起來這個模型。'
+      + '你現在可以先在右下角換一個模型繼續用；'
+      + `要用這個模型的話，請通知 IT 在伺服器上更新到 ${skew[2]} 以上。`;
+  }
+
   return null;
 }
 
