@@ -20,7 +20,10 @@ interface TopicCategory { name: string; count: number; pct: number; examples: st
 interface TopicAnalysis { summary: string; categories: TopicCategory[]; }
 
 // ── Label maps ────────────────────────────────────────────────────────────
-const CAT_LABELS: Record<string, string> = { document: '文件生成', assistant: 'AI 助手' };
+const CAT_LABELS: Record<string, string> = {
+  document: '文件生成', assistant: 'AI 助手', 'email-agent': '信件助手', 'km-agent': 'KM 助手',
+  'excel-addin': 'Excel 增益集', 'word-addin': 'Word 增益集', 'ppt-addin': 'PPT 增益集',
+};
 const MODE_LABELS: Record<string, string> = { orchestrated: '多智能體', direct: '直接執行' };
 const SKILL_LABELS: Record<string, string> = {
   'pptx-gen': 'PPT 簡報生成', 'docx-gen': 'Word 文件生成', 'xlsx-gen': 'Excel 試算表生成',

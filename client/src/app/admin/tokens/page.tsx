@@ -217,8 +217,14 @@ export default function AdminTokens() {
 
       // ECharts-inspired palette: distinct but harmonious
       const PALETTE = ['#5470c6','#91cc75','#fac858','#ee6666','#73c0de','#3ba272','#fc8452','#9a60b4','#ea7ccc','#48b8d0'];
-      const CATEGORY_COLORS: Record<string, string> = { document: '#0D9488', assistant: '#9a60b4', '': '#b8bcc8' };
-      const CATEGORY_LABELS: Record<string, string> = { document: '文件生成', assistant: '智慧助手', '': '未分類' };
+      const CATEGORY_COLORS: Record<string, string> = {
+        document: '#0D9488', assistant: '#9a60b4', 'email-agent': '#5470c6', 'km-agent': '#fac858',
+        'excel-addin': '#91cc75', 'word-addin': '#6B9BD2', 'ppt-addin': '#fc8452', '': '#b8bcc8',
+      };
+      const CATEGORY_LABELS: Record<string, string> = {
+        document: '文件生成', assistant: '智慧助手', 'email-agent': '信件助手', 'km-agent': 'KM 助手',
+        'excel-addin': 'Excel 增益集', 'word-addin': 'Word 增益集', 'ppt-addin': 'PPT 增益集', '': '未分類',
+      };
       const MODE_COLORS: Record<string, string> = { direct: '#0D9488', orchestrated: '#fac858', '': '#b8bcc8' };
       const MODE_LABELS: Record<string, string> = { direct: '直接模式', orchestrated: '多代理', '': '未知' };
       const FTYPE_COLORS: Record<string, string> = {

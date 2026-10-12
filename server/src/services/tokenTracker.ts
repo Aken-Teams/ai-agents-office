@@ -161,7 +161,36 @@ export async function getUserUsageSummary(
   return await dbAll(query, ...params);
 }
 
-export type UsageCategory = 'document' | 'team' | 'email' | 'km';
+export type UsageCategory = 'document' | 'team' | 'email' | 'km' | 'addin';
+
+export const EMPTY_CATEGORY_COUNTS: Record<UsageCategory, number> = {
+  document: 0, team: 0, email: 0, km: 0, addin: 0,
+};
+
+/**
+ * Which product surface a token_usage row belongs to. Defined once — it was
+ * copy-pasted into three queries, and a breakdown whose three views disagree
+ * about what a row is tells the user nothing.
+ *
+ *   - addin    → the Office add-ins (Excel/Word/PowerPoint), by conversation category
+ *   - email    → the 信件助手
+ *   - km       → the KM 助手
+ *   - team     → AI 團隊 runs/reports (model 'team-run' / 'team-report')
+ *   - document → everything else (this app is fundamentally a document generator)
+ *
+ * Category is matched BEFORE title: the title is whatever the user's first
+ * message was, so an add-in turn looked exactly like a document generation and
+ * its tokens were silently billed to 文件產生. The title tests stay as a
+ * fallback for rows whose conversation has since been deleted (the LEFT JOIN
+ * yields NULL), which is how they behaved before and must keep behaving.
+ */
+const CATEGORY_EXPR = `CASE
+  WHEN c.category IN ('excel-addin', 'word-addin', 'ppt-addin') THEN 'addin'
+  WHEN c.category = 'email-agent' OR c.title = '信件助手' THEN 'email'
+  WHEN c.category = 'km-agent' OR c.title = 'KM 助手' THEN 'km'
+  WHEN tu.model LIKE 'team%' THEN 'team'
+  ELSE 'document' END`;
+
 export interface DailyUsage {
   date: string;
   total_input: number;
@@ -171,11 +200,7 @@ export interface DailyUsage {
 }
 
 /**
- * Same daily breakdown as getUserUsageSummary but split into the three product
- * surfaces the user actually uses:
- *   - email    → the 信件助手 conversation (title '信件助手')
- *   - team     → AI 團隊 runs/reports (model 'team-run' / 'team-report')
- *   - document → everything else (this app is fundamentally a document generator)
+ * Same daily breakdown as getUserUsageSummary but split per product surface.
  */
 export async function getUserUsageSummaryByCategory(
   userId: string,
@@ -184,7 +209,6 @@ export async function getUserUsageSummaryByCategory(
 ): Promise<Record<UsageCategory, DailyUsage[]>> {
   // Category is derived from a CASE; under sql_mode=only_full_group_by we must
   // GROUP BY the full expressions (not the aliases), so define it once.
-  const CATEGORY_EXPR = `CASE WHEN c.title = '信件助手' THEN 'email' WHEN c.title = 'KM 助手' THEN 'km' WHEN tu.model LIKE 'team%' THEN 'team' ELSE 'document' END`;
   let query = `
     SELECT
       DATE_FORMAT(tu.created_at, '%Y-%m-%d') as date,
@@ -203,7 +227,7 @@ export async function getUserUsageSummaryByCategory(
   query += ` GROUP BY DATE_FORMAT(tu.created_at, '%Y-%m-%d'), ${CATEGORY_EXPR} ORDER BY date DESC`;
 
   const rows = await dbAll<DailyUsage & { category: UsageCategory }>(query, ...params);
-  const out: Record<UsageCategory, DailyUsage[]> = { document: [], team: [], email: [], km: [] };
+  const out: Record<UsageCategory, DailyUsage[]> = { document: [], team: [], email: [], km: [], addin: [] };
   for (const r of rows) {
     const { category, ...daily } = r;
     (out[category] ?? out.document).push(daily);
@@ -221,7 +245,6 @@ export async function getUserUsageRecords(
   from?: string,
   to?: string,
 ): Promise<Array<{ id: string; created_at: string; category: UsageCategory; input_tokens: number; output_tokens: number; cost: number }>> {
-  const CATEGORY_EXPR = `CASE WHEN c.title = '信件助手' THEN 'email' WHEN c.title = 'KM 助手' THEN 'km' WHEN tu.model LIKE 'team%' THEN 'team' ELSE 'document' END`;
   // Format created_at in SQL to a plain string (DB stores Taipei local time) so
   // mysql2's Date parsing + JSON serialization can't shift the displayed time.
   let query = `
@@ -247,7 +270,6 @@ export async function getUserCategoryCounts(
   userId: string,
   monthlyOnly = false,
 ): Promise<Record<UsageCategory, number>> {
-  const CATEGORY_EXPR = `CASE WHEN c.title = '信件助手' THEN 'email' WHEN c.title = 'KM 助手' THEN 'km' WHEN tu.model LIKE 'team%' THEN 'team' ELSE 'document' END`;
   let query = `
     SELECT ${CATEGORY_EXPR} as category, COUNT(*) as n
     FROM token_usage tu
@@ -262,7 +284,7 @@ export async function getUserCategoryCounts(
   }
   query += ` GROUP BY ${CATEGORY_EXPR}`;
   const rows = await dbAll<{ category: UsageCategory; n: number }>(query, ...params);
-  const out: Record<UsageCategory, number> = { document: 0, team: 0, email: 0, km: 0 };
+  const out: Record<UsageCategory, number> = { ...EMPTY_CATEGORY_COUNTS };
   for (const r of rows) out[r.category] = Number(r.n);
   return out;
 }

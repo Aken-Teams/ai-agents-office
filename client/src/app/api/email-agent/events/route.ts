@@ -18,20 +18,34 @@ export const revalidate = 0;
 const BACKEND = 'http://127.0.0.1:12054';
 
 export async function GET(req: NextRequest) {
-  const backendRes = await fetch(`${BACKEND}/api/email-agent/events`, {
-    method: 'GET',
-    headers: {
-      Authorization: req.headers.get('Authorization') || '',
-    },
-    cache: 'no-store',
-    // Hand the browser's disconnect through to the backend. Without it, closing
-    // the tab or switching conversations abandons this upstream connection with
-    // nobody reading it: undici then waits out its 300s body timeout and throws
-    // UND_ERR_BODY_TIMEOUT, which is why the failures showed up as "10 minutes"
-    // rather than any round number, and why the backend only noticed the client
-    // had gone long after it actually left.
-    signal: req.signal,
-  });
+  let backendRes: Response;
+  try {
+    backendRes = await fetch(`${BACKEND}/api/email-agent/events`, {
+      method: 'GET',
+      headers: {
+        Authorization: req.headers.get('Authorization') || '',
+      },
+      cache: 'no-store',
+      // Hand the browser's disconnect through to the backend. Without it, closing
+      // the tab or switching conversations abandons this upstream connection with
+      // nobody reading it: undici then waits out its 300s body timeout and throws
+      // UND_ERR_BODY_TIMEOUT, which is why the failures showed up as "10 minutes"
+      // rather than any round number, and why the backend only noticed the client
+      // had gone long after it actually left.
+      signal: req.signal,
+    });
+  } catch (err) {
+    // The flip side of passing req.signal through: when the browser leaves, this
+    // fetch rejects with ResponseAborted/AbortError, and an unhandled rejection
+    // from a route handler prints a stack trace. Nothing went wrong — the reader
+    // closed the stream it asked for, which is the normal way an SSE stream ends.
+    // In dev every HMR recompile remounts the widget and prints one, which is
+    // exactly the noise `fetchCache` above was added to stop.
+    if (req.signal.aborted || (err as Error)?.name === 'AbortError' || (err as Error)?.name === 'ResponseAborted') {
+      return new Response(null, { status: 499 }); // client closed request
+    }
+    throw err;
+  }
 
   if (!backendRes.ok || !backendRes.body) {
     const text = await backendRes.text();
