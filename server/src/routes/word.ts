@@ -31,10 +31,11 @@ import { checkUserUsageLimit } from '../services/usageLimit.js';
 import {
   WORD_ASSISTANT_SYSTEM_PROMPT, DATA_SOURCE_PROMPT, LOCALE_PROMPT, resolveLocale,
 } from '../services/wordContext.js';
+import { runLocalAgent, isLocalModel, LOCAL_MODELS } from '../services/localAgent.js';
 import {
   registerRun, closeRun, callWorkbookTool, resolveToolCall, runBelongsTo,
 } from '../services/excelBridge.js';
-import { WORD_TOOL_NAMES, WORD_SERVER_TOOLS } from '../services/wordToolSpec.js';
+import { WORD_TOOL_NAMES, WORD_SERVER_TOOLS, WORD_TOOLS } from '../services/wordToolSpec.js';
 import { getMailToken, getMailboxStatus } from '../services/outlookApi.js';
 import { kmEnabledFor, getKmOnBehalf } from '../services/kmApi.js';
 import { config } from '../config.js';
@@ -74,11 +75,19 @@ const WORD_MODEL = 'claude-opus-5-5';
  * is there — it is the right place for a caveat that only applies to one entry,
  * not a slot every entry has to fill.
  */
+/**
+ * 選單上的模型。
+ *
+ * 地端那兩個是量過才放上來的：它們把真的工具規格跑完四題單輪和三個多輪情境，
+ * 沒有發明參數、也沒有不讀就寫。沒過的那幾個刻意不列——**選單上的每一個選項都是
+ * 一個承諾**，列一個後端跑不動的東西比不列更糟。
+ */
 const WORD_MODELS: { id: string; label: string; note: string; default?: boolean }[] = [
   { id: 'claude-opus-5-5', label: 'Opus 5.5', note: '', default: true },
   { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5', note: '' },
   { id: 'claude-haiku-5-5', label: 'Haiku 5.5', note: '' },
   { id: 'claude-opus-5', label: 'Opus 5', note: '' },
+  ...LOCAL_MODELS.map((m) => ({ id: m.id, label: m.label, note: '' })),
 ];
 
 /** Never trust a model id from the client — it is a string that reaches a spawn. */
@@ -473,7 +482,34 @@ router.post('/chat', async (req: Request, res: Response) => {
 ## 這一輪指定的專業技能：${skill.name}
 ${skill.systemPrompt}
 ` : '');
-  const { emitter, abort } = spawnClaude(prompt, systemPrompt, {
+  /**
+   * 兩條執行路徑，同一組事件。
+   *
+   * 地端模型不走 Claude CLI——那支只認得 Anthropic 的模型名稱，把
+   * `gpt-oss:120b` 丟給它只會換來一個離使用者三層遠的錯誤。改走 localAgent：
+   * 它自己跑工具迴圈，但工具仍然經過同一個 bridge，所以確認閘門、復原快照和
+   * 稽核紀錄的行為完全一樣。
+   *
+   * 地端這條沒有 resume：Claude CLI 把工作階段存在磁碟上，這裡的歷史只活一輪。
+   */
+  const { emitter, abort } = isLocalModel(chosenModel)
+    ? runLocalAgent({
+      model: chosenModel,
+      prompt,
+      systemPrompt,
+      /**
+       * 名稱換成真的規格。
+       *
+       * `supported` 是工具**名稱**的陣列——Claude CLI 那條路只需要名字，因為規格
+       * 是 MCP 伺服器那邊給的。地端這條要自己把規格送進請求裡，所以得在這裡查回
+       * 來。原本我用型別轉換把這個差異壓掉，那會讓模型收到一串
+       * `{ name: undefined }`，而且 tsc 不會吭聲。
+       */
+      tools: WORD_TOOLS.filter((t) => supported.includes(t.name)),
+      bridgeToken,
+      maxTurns: WORD_MAX_TURNS,
+    })
+    : spawnClaude(prompt, systemPrompt, {
     userId, conversationId,
     sandboxSubdir: '_agents/word-addin',
     sessionId: effectiveSessionId, isResume: resuming,
