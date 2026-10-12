@@ -371,6 +371,52 @@ export const WORD_TOOLS: WordToolSpec[] = [
     },
   },
   {
+    name: 'word_insert_sidebar',
+    description:
+      '**側欄版面**：左邊（或右邊）一條深色欄放聯絡方式、技能、語言，右邊放正文。'
+      + '設計感的履歷、個人簡介、單頁企劃都是這個版型。'
+      + '\n\n【為什麼是這支而不是 word_insert_layout】那支是把幾個區塊並排，'
+      + '這支是**整頁的版型**：色塊欄會填滿整個欄位、欄內有自己的標題樣式和分隔線、'
+      + '技能程度會畫成長條。'
+      + '\n\n【怎麼給】sidebar 和 main 各是一串區塊，照上到下的順序：'
+      + '\n- `{ title: "王小明", subtitle: "資深製程工程師" }`——姓名與職稱'
+      + '\n- `{ heading: "聯絡方式" }`——小標，底下會有一條分隔線'
+      + '\n- `{ lines: ["0912-345-678", "name@example.com", "高雄市…"] }`——一行一條'
+      + '\n- `{ bars: [{ label: "Python", value: 0.9 }] }`——技能長條，value 可以給 0–1 或 0–100'
+      + '\n- `{ entries: [{ title: "製程工程師", meta: "強茂　2019–2024", detail: "負責…" }] }`'
+      + '——工作經歷、學歷這種「標題＋時間＋說明」的三段式'
+      + '\n\n【看得到的限制，先講清楚】'
+      + '\n畫得出來的是**版面**：欄、色塊、分隔線、長條。'
+      + '\n畫不出來的是**美術素材**：圓形大頭照、水彩花邊、書法標題、斜切漸層底圖。'
+      + '那些要用現成的範本檔，再把文字填進去，不要硬用這支湊。'
+      + '\n\n整頁是一個框線關掉的表格，所以**每個字都還是 Word 的字、可以直接編輯**，不是一張圖。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sidebar: {
+          type: 'array',
+          description: '色塊欄的內容，由上到下。',
+          items: { type: 'object', additionalProperties: true },
+        },
+        main: {
+          type: 'array',
+          description: '正文欄的內容，由上到下。',
+          items: { type: 'object', additionalProperties: true },
+        },
+        side: { type: 'string', enum: ['left', 'right'], description: '色塊欄在哪一邊。預設 left。' },
+        width: { type: 'number', description: '色塊欄寬度（點），預設 150，範圍 90–240。' },
+        fill: { type: 'string', description: '色塊欄底色，預設 #1F3864 深藍。' },
+        text_color: { type: 'string', description: '色塊欄上的字色，預設白色。' },
+        accent: { type: 'string', description: '分隔線與技能長條的顏色，預設跟字色一樣。' },
+        paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
+        at: { type: 'string', enum: ['after', 'before'], description: '預設 after。' },
+        ...TRACK_NEW,
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'word_insert_toc',
     description:
       '插入目錄。項目插入當下就看得到（它會帶著已經算好的結果進去），'
@@ -662,6 +708,10 @@ export const WORD_TOOLS: WordToolSpec[] = [
       + '\n跨好幾個數量級就開 `log_y`（或 `log_x`），不然會變成一條平線加一根尖刺。'
       + '記得給 `x_axis` 和 `y_axis`：數值軸不會自己說明自己。'
       + '`dashed: true` 畫虛線，`dots: true` 標出實際量到的點。'
+      + '\n\n【配色】`palette` 一次換掉整組顏色：classic（預設）、cool、warm、mono、earth、mono_grey。'
+      + '文件的表格和標題是刻意壓成黑白灰的，**但圖表不是**——'
+      + '一張圖的顏色就是它的資料，第二個數列用灰色會讓人以為那個數列比較不重要。'
+      + '只有確定要黑白列印或影印時才用 mono_grey。'
       + '\n\n【學術文件的圖】Word 常拿來寫論文、報告、驗證計畫，下面這幾種是那種文件在用的，'
       + '商業圖表硬湊湊不出來：'
       + '\n- **histogram 直方圖**：一個變數怎麼分布。`values` 要給**原始數值**（不是數好的次數），'
@@ -841,6 +891,16 @@ export const WORD_TOOLS: WordToolSpec[] = [
           description: 'scatter：畫最小平方迴歸線，並標出方程式與 R²。',
         },
         fit_band: { type: 'boolean', description: 'scatter：迴歸線加 95% 信賴帶。' },
+        palette: {
+          type: 'string',
+          enum: ['classic', 'cool', 'warm', 'mono', 'earth', 'mono_grey'],
+          description:
+            '整組配色，預設 classic。'
+            + 'classic 一般商務報告／cool 冷色，技術文件與規格書／warm 暖色，行銷與對客戶的文件／'
+            + 'mono 同一色相由深到淺，適合有順序的分類／earth 大地色，ESG 與永續／'
+            + 'mono_grey 純灰階，只在確定會黑白列印或影印時用。'
+            + '要精確指定每個數列的顏色就用 colors，它會蓋過 palette。',
+        },
         caption: { type: 'string', description: '圖說，例如「圖 1　各季營收」。會套用內建的標號樣式。' },
         paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
         at: { type: 'string', enum: ['after', 'before'], description: '預設 after。' },
