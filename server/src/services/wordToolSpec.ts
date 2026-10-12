@@ -608,14 +608,40 @@ export const WORD_TOOLS: WordToolSpec[] = [
       + 'N² 跟 N log N 畫在平均刻度上，那張圖唯一要講的「差距越拉越開」正好被藏起來。'
       + '\n跨好幾個數量級就開 `log_y`（或 `log_x`），不然會變成一條平線加一根尖刺。'
       + '記得給 `x_axis` 和 `y_axis`：數值軸不會自己說明自己。'
-      + '`dashed: true` 畫虛線，`dots: true` 標出實際量到的點。',
+      + '`dashed: true` 畫虛線，`dots: true` 標出實際量到的點。'
+      + '\n\n【學術文件的圖】Word 常拿來寫論文、報告、驗證計畫，下面這幾種是那種文件在用的，'
+      + '商業圖表硬湊湊不出來：'
+      + '\n- **histogram 直方圖**：一個變數怎麼分布。`values` 要給**原始數值**（不是數好的次數），'
+      + '組數自己算（Freedman–Diaconis），要疊常態曲線就開 `normal: true`。'
+      + '圖上會自動標 n、平均、標準差。'
+      + '\n- **heatmap 熱力圖**：相關矩陣、混淆矩陣、任何「這些對那些」的表。'
+      + '`matrix` 二維陣列 + `rows`/`cols`。資料跨越零就自動用雙向配色（相關係數就是這種）。'
+      + '\n- **violin 小提琴圖**：分布的**形狀**。兩組可以有一模一樣的箱型圖卻完全不同的形狀——'
+      + '一個單峰、一個分兩群，而箱型圖會把這件事藏起來。`groups: [{ label, values: [原始數值] }]`，'
+      + '內建的箱型要關掉就 `box: false`。'
+      + '\n- **forest 森林圖**：好幾個效果量和它們的信賴區間排在一起（統合分析、分組比較）。'
+      + '`rows: [{ label, value, lo, hi, weight }]`，合計放 `summary`。'
+      + '比值型的效果量（OR、RR、HR）一定要開 `log_x`，不然 2 倍和 ½ 倍會畫成不一樣長。'
+      + '\n- **survival 存活曲線**：隨時間遞減的比例，畫成階梯（事件之間什麼都沒發生，'
+      + '直線會謊稱有穩定下降）。`curves: [{ name, points: [[時間, 比例]], censored: [時間] }]`。'
+      + '\n- **venn 范氏圖**：兩三個集合重疊多少。`sets: ["AOI","X-Ray"]` + '
+      + '`overlaps: { A: 142, B: 88, AB: 37 }`。'
+      + '\n\n【誤差棒：有量測就要有】`error` 跟 `values` 等長（多個數列就給二維），'
+      + '畫在 column／bar／line 上。再用 `error_label` 講清楚那是什麼——'
+      + '「± 1 SD」和「95% CI」是兩件完全不同的事，沒寫的誤差棒等於沒畫。'
+      + '\n【迴歸線】散佈圖加 `fit: "linear"` 會畫最小平方線並標出方程式和 R²，'
+      + '`fit_band: true` 再加上平均反應的 95% 信賴帶。'
+      + '一張沒有斜率和 R² 的散佈圖，讀者只能用眼睛猜有沒有趨勢。'
+      + '\n【氣泡圖】散佈圖的點加 `size` 就會按**面積**放大，用來放第三個變數。',
     inputSchema: {
       type: 'object',
       properties: {
         type: {
           type: 'string',
+          // 最後六個是學術文件那組，只開在 Word——簡報用不到這些。
           enum: ['column', 'bar', 'line', 'area', 'pie', 'donut', 'waterfall', 'funnel',
-            'radar', 'timeline', 'map', 'scatter', 'stacked', 'stacked100', 'box', 'plot'],
+            'radar', 'timeline', 'map', 'scatter', 'stacked', 'stacked100', 'box', 'plot',
+            'histogram', 'heatmap', 'violin', 'forest', 'survival', 'venn'],
           description: '預設 column。甘特圖請改用 word_insert_gantt。',
         },
         title: { type: 'string', description: '圖表標題。' },
@@ -695,6 +721,73 @@ export const WORD_TOOLS: WordToolSpec[] = [
         y_axis: { type: 'string', description: 'plot／scatter 的 Y 軸名稱。' },
         log_x: { type: 'boolean', description: 'X 軸改對數刻度。所有 x 都要大於 0。' },
         log_y: { type: 'boolean', description: 'Y 軸改對數刻度。跨好幾個數量級就要開。' },
+        bins: { type: 'number', description: 'histogram：組數。不給就自動算。' },
+        normal: { type: 'boolean', description: 'histogram：疊一條常態曲線上去。' },
+        matrix: {
+          type: 'array',
+          description: 'heatmap 專用：二維陣列，每一列一樣長。',
+          items: { type: 'array', items: { type: 'number' } },
+        },
+        rows: {
+          type: 'array',
+          description: 'heatmap 的列名（字串）；forest 的每一列（物件 '
+            + '`{ label, value, lo, hi, weight }`）。',
+          items: {},
+        },
+        cols: { type: 'array', items: { type: 'string' }, description: 'heatmap 的欄名。' },
+        scale: {
+          type: 'string',
+          enum: ['sequential', 'diverging'],
+          description: 'heatmap 的配色。跨越零就自動用 diverging，可以指定蓋過。',
+        },
+        show_values: { type: 'boolean', description: 'heatmap 格子裡標數字／forest 右欄標數值。' },
+        groups: {
+          type: 'array',
+          description: 'violin 專用：[{ label: "對照組", values: [原始數值…] }]。',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string' },
+              values: { type: 'array', items: { type: 'number' } },
+            },
+            required: ['values'],
+            additionalProperties: false,
+          },
+        },
+        box: { type: 'boolean', description: 'violin：內建的箱型圖，預設開。' },
+        baseline: { type: 'number', description: 'forest 的無效果線。預設比值型是 1、差值型是 0。' },
+        summary: {
+          type: 'object',
+          description: 'forest 的合計，會畫成菱形。',
+          properties: {
+            label: { type: 'string' },
+            value: { type: 'number' },
+            lo: { type: 'number' },
+            hi: { type: 'number' },
+          },
+          required: ['value'],
+          additionalProperties: false,
+        },
+        sets: { type: 'array', items: { type: 'string' }, description: 'venn：兩到三個集合名稱。' },
+        overlaps: {
+          type: 'object',
+          description: 'venn 各區的數量：A、B、C 是只屬於該集合的，AB、AC、BC、ABC 是重疊的。',
+          additionalProperties: { type: 'number' },
+        },
+        error: {
+          type: 'array',
+          description: '誤差棒的大小（半長），跟 values 等長。多個數列就給二維陣列。',
+        },
+        error_label: {
+          type: 'string',
+          description: '誤差棒代表什麼，例如「± 1 SD」或「95% CI」。會標在圖上。',
+        },
+        fit: {
+          type: 'string',
+          enum: ['linear'],
+          description: 'scatter：畫最小平方迴歸線，並標出方程式與 R²。',
+        },
+        fit_band: { type: 'boolean', description: 'scatter：迴歸線加 95% 信賴帶。' },
         caption: { type: 'string', description: '圖說，例如「圖 1　各季營收」。會套用內建的標號樣式。' },
         paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
         at: { type: 'string', enum: ['after', 'before'], description: '預設 after。' },
