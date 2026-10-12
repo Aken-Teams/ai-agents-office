@@ -645,7 +645,20 @@ PowerPoint 沒有追蹤修訂，也沒有整份快照的 API。側邊欄的復�
 
 export function LOCALE_PROMPT(locale: string): string {
   const name = LOCALE_NAMES[locale] || LOCALE_NAMES[locale.split('-')[0]];
-  if (!name || locale.startsWith('zh-TW')) return '';
+  /**
+   * 繁體中文沒有例外。
+   *
+   * 這一行原本寫成「zh-TW 就不用給語言指示」，理由是模型預設就會講中文。它大部分
+   * 時候會，但工具呼叫之間那幾句規劃用的話不會——使用者看到的是
+   *
+   *   「Tool loaded — I'll put down the sidebar layout with sample content…」
+   *
+   * 夾在兩段中文中間。那句話正好是整段指示裡特別點名的那一種：開工前、還在規劃、
+   * 還沒開始寫中文內容的時候講的。把指示拿掉，等於把唯一擋得住它的東西拿掉。
+   *
+   * （excelContext 的同一行先前已經修掉了，這兩支漏網。）
+   */
+  if (!name) return '';
   return `
 
 ## 回覆語言（覆蓋前面的指示）

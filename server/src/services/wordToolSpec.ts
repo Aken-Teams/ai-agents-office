@@ -417,6 +417,50 @@ export const WORD_TOOLS: WordToolSpec[] = [
     },
   },
   {
+    name: 'word_insert_calendar',
+    description:
+      '月曆：一整年排在一頁，或單獨一個月留空格給人寫。'
+      + '\n\n【兩種是不同的東西】'
+      + '\n- 不給 `month` → **年曆**，12 個月排成 3×4，是拿來看的。'
+      + '它是一張圖：十二個格子要對齊，交給 Word 的表格引擎排，任何人動一次邊界就跑掉。'
+      + '\n- 給 `month` → **單月月曆**，7 欄的真表格，每格下面留空行，可以直接在格子裡打字。'
+      + '行事曆、值班表、工作排程用這個。'
+      + '\n\n【國定假日要你給】這支**不內建任何假日**。'
+      + '各國不一樣、每年都在動，而一份把上班日標成放假的月曆比完全不標更糟。'
+      + '`holidays` 給 `["2026-01-01"]` 或 `[{ date: "2026-01-01", label: "元旦" }]`，'
+      + '標紅；單月版還會把名稱印在日期底下。'
+      + '\n使用者沒給假日就不要自己編——直接做出來，然後告訴他假日要另外給。'
+      + '\n\n【預設】週從星期日起（台灣的習慣，要改用 `week_start: "monday"`）、'
+      + '星期六和星期日都標紅（週休二日；單休的公司用 `saturday_off: false`）。'
+      + '年份省略就是今年。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        year: { type: 'number', description: '西元年。省略就是今年。' },
+        month: { type: 'number', description: '1–12。給了就做單月可填寫版，不給就做整年。' },
+        holidays: {
+          type: 'array',
+          description: '要標紅的日期。字串 "2026-01-01"，或 { date, label }。',
+          items: {},
+        },
+        week_start: {
+          type: 'string',
+          enum: ['sunday', 'monday'],
+          description: '一週從哪天開始。預設 sunday。',
+        },
+        saturday_off: { type: 'boolean', description: '星期六算不算假日，預設 true。' },
+        lines: { type: 'number', description: '單月版每格留幾行可以寫字，預設 2，最多 8。' },
+        accent: { type: 'string', description: '年份與月份標題的顏色，預設 #1F3864。' },
+        width: { type: 'number', description: '年曆的寬度（點）。預設跟內文欄一樣寬。' },
+        paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
+        at: { type: 'string', enum: ['after', 'before'], description: '預設 after。' },
+        ...TRACK_NEW,
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'word_insert_toc',
     description:
       '插入目錄。項目插入當下就看得到（它會帶著已經算好的結果進去），'
