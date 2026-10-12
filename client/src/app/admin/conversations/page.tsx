@@ -604,7 +604,7 @@ function ConversationDetailPanel({
                   {rejected > 0 && <span className="px-2 py-1 rounded-lg bg-error/10 text-error font-medium">已拒絕 {rejected}</span>}
                   {risky > 0 && (
                     <span className="px-2 py-1 rounded-lg bg-warning/10 text-warning font-medium" title="破壞性操作在自動允許下執行，沒有人看過確認卡">
-                      無人確認的破壞性操作 {risky}
+                      高風險 {risky}
                     </span>
                   )}
                 </div>
@@ -664,7 +664,7 @@ function AddinAuditLog({ token, onOpenConversation }: { token: string; onOpenCon
           <Stat label="人工允許" value={s.allowed} tone="success" />
           <Stat label="自動允許" value={s.auto} tone="warning" />
           <Stat
-            label="無人確認的破壞性操作"
+            label="高風險操作"
             value={s.risky}
             tone={s.risky > 0 ? 'error' : undefined}
             hint="破壞性操作在「自動允許」下執行，沒有人看過確認卡"
@@ -692,7 +692,7 @@ function AddinAuditLog({ token, onOpenConversation }: { token: string; onOpenCon
           }`}
           title="破壞性 + 自動允許"
         >
-          無人確認的破壞性操作
+          高風險
         </button>
       </div>
 
@@ -911,11 +911,6 @@ export default function AdminConversationsPage() {
                 {label}
               </button>
             ))}
-            {addinView === 'audit' && (
-              <p className="ml-3 text-xs text-on-surface-variant hidden md:block">
-                增益集直接改使用者開著的檔案，沒有產出檔可事後檢查 — 這裡是唯一的紀錄
-              </p>
-            )}
           </div>
         )}
 

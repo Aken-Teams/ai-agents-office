@@ -2012,23 +2012,80 @@ router.get('/analytics/overview', async (req: Request, res: Response) => {
     trendDays = Math.min(Math.max(Math.floor((Date.now() - first.getTime()) / 86400000) + 1, 1), 400);
   }
 
-  // Conversation trend by day
-  const convTrend = await dbAll<{ date: string; count: number }>(`
-    SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date, COUNT(*) as count
-    FROM conversations
-    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
-    GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
-    ORDER BY date ASC
-  `);
-
-  // File generation trend by day
-  const fileTrend = await dbAll<{ date: string; count: number }>(`
-    SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date, COUNT(*) as count
-    FROM generated_files
-    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
-    GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
-    ORDER BY date ASC
-  `);
+  // Every query below is independent and hits a REMOTE MySQL, so running them in
+  // sequence paid eleven round trips of latency before the page could render —
+  // the single biggest cost on this endpoint, dwarfing the queries themselves.
+  // One Promise.all collapses that to one. Same reasoning (and the same measured
+  // win) as routes/usage.ts.
+  const [
+    convTrend, fileTrend, byCategory, byMode, byFileType, bySkill,
+    convSummary, totalFileRow, newUsersRow,
+  ] = await Promise.all([
+    // Conversation trend by day
+    dbAll<{ date: string; count: number }>(`
+      SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date, COUNT(*) as count
+      FROM conversations
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+      GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
+      ORDER BY date ASC
+    `),
+    // File generation trend by day
+    dbAll<{ date: string; count: number }>(`
+      SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date, COUNT(*) as count
+      FROM generated_files
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+      GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d')
+      ORDER BY date ASC
+    `),
+    // Conversation breakdown by category
+    dbAll<{ category: string | null; count: number }>(`
+      SELECT category, COUNT(*) as count
+      FROM conversations
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+      GROUP BY category
+      ORDER BY count DESC
+    `),
+    // Conversation breakdown by mode
+    dbAll<{ mode: string | null; count: number }>(`
+      SELECT mode, COUNT(*) as count
+      FROM conversations
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+      GROUP BY mode
+      ORDER BY count DESC
+    `),
+    // File breakdown by type
+    dbAll<{ file_type: string | null; count: number }>(`
+      SELECT file_type, COUNT(*) as count
+      FROM generated_files
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+      GROUP BY file_type
+      ORDER BY count DESC
+    `),
+    // Skill usage from task_executions
+    dbAll<{ skill_id: string | null; count: number }>(`
+      SELECT skill_id, COUNT(*) as count
+      FROM task_executions
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+      GROUP BY skill_id
+      ORDER BY count DESC
+      LIMIT 15
+    `),
+    // Total + active users share one scan of the same rows — no reason to pay
+    // for that scan twice.
+    dbGet<{ total: number; active: number }>(`
+      SELECT COUNT(*) as total, COUNT(DISTINCT user_id) as active
+      FROM conversations
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    `),
+    dbGet<{ count: number }>(`
+      SELECT COUNT(*) as count FROM generated_files
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    `),
+    dbGet<{ count: number }>(`
+      SELECT COUNT(*) as count FROM users
+      WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
+    `),
+  ]);
 
   // Fill missing dates
   const convMap = new Map(convTrend.map(r => [r.date, r.count]));
@@ -2042,68 +2099,13 @@ router.get('/analytics/overview', async (req: Request, res: Response) => {
     trend.push({ date: dateStr, conversations: convMap.get(dateStr) ?? 0, files: fileMap.get(dateStr) ?? 0 });
   }
 
-  // Conversation breakdown by category
-  const byCategory = await dbAll<{ category: string | null; count: number }>(`
-    SELECT category, COUNT(*) as count
-    FROM conversations
-    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
-    GROUP BY category
-    ORDER BY count DESC
-  `);
-
-  // Conversation breakdown by mode
-  const byMode = await dbAll<{ mode: string | null; count: number }>(`
-    SELECT mode, COUNT(*) as count
-    FROM conversations
-    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
-    GROUP BY mode
-    ORDER BY count DESC
-  `);
-
-  // File breakdown by type
-  const byFileType = await dbAll<{ file_type: string | null; count: number }>(`
-    SELECT file_type, COUNT(*) as count
-    FROM generated_files
-    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
-    GROUP BY file_type
-    ORDER BY count DESC
-  `);
-
-  // Skill usage from task_executions
-  const bySkill = await dbAll<{ skill_id: string | null; count: number }>(`
-    SELECT skill_id, COUNT(*) as count
-    FROM task_executions
-    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
-    GROUP BY skill_id
-    ORDER BY count DESC
-    LIMIT 15
-  `);
-
-  // Summary counts
-  const totalConvRow = await dbGet<{ count: number }>(`
-    SELECT COUNT(*) as count FROM conversations
-    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
-  `);
-  const totalFileRow = await dbGet<{ count: number }>(`
-    SELECT COUNT(*) as count FROM generated_files
-    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
-  `);
-  const newUsersRow = await dbGet<{ count: number }>(`
-    SELECT COUNT(*) as count FROM users
-    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
-  `);
-  const activeUsersRow = await dbGet<{ count: number }>(`
-    SELECT COUNT(DISTINCT user_id) as count FROM conversations
-    WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
-  `);
-
   res.json({
     period,
     summary: {
-      totalConversations: totalConvRow?.count ?? 0,
+      totalConversations: convSummary?.total ?? 0,
       totalFiles: totalFileRow?.count ?? 0,
       newUsers: newUsersRow?.count ?? 0,
-      activeUsers: activeUsersRow?.count ?? 0,
+      activeUsers: convSummary?.active ?? 0,
     },
     trend,
     byCategory,
@@ -2236,17 +2238,21 @@ router.get('/analytics/topic-analysis', async (req: Request, res: Response) => {
     return;
   }
 
-  // Fetch top 40 conversation titles for analysis
-  const rows = await dbAll<{ title: string | null; category: string | null; total_tokens: number }>(`
-    SELECT c.title, c.category,
-      COALESCE(SUM(tu.input_tokens + tu.output_tokens), 0) as total_tokens
+  // 60 most RECENT titles, not the 40 most token-expensive.
+  //
+  // The old sample answered a different question than the card asks. Ordering by
+  // token spend surfaces the conversations that cost the most, which is a handful
+  // of heavy users — but the card's headline is 「使用者最常做什麼任務」, and that
+  // is a question about frequency. The keyword cloud needs breadth for the same
+  // reason: vocabulary drawn from 40 expensive conversations is the vocabulary of
+  // whoever ran them.
+  const rows = await dbAll<{ title: string | null; category: string | null }>(`
+    SELECT c.title, c.category
     FROM conversations c
-    LEFT JOIN token_usage tu ON tu.conversation_id = c.id
     WHERE c.created_at >= DATE_SUB(NOW(), INTERVAL ${days} DAY)
       AND c.title IS NOT NULL AND c.title != ''
-    GROUP BY c.id, c.title, c.category
-    ORDER BY total_tokens DESC
-    LIMIT 40
+    ORDER BY c.created_at DESC
+    LIMIT 60
   `);
 
   if (rows.length === 0) {
@@ -2264,24 +2270,35 @@ ${titleList}
 {
   "summary": "一句話摘要使用者最常做什麼任務",
   "categories": [
-    { "name": "類型名稱（繁體中文，3-8字）", "count": 數量, "pct": 百分比整數, "examples": ["範例標題1", "範例標題2"] }
+    { "name": "類型名稱（繁體中文，3-8字）", "count": 數量, "pct": 百分比整數, "examples": ["範例標題1"] }
   ]
 }
 
 要求：
-- categories 最多 6 個，按數量降序排列
+- categories 最多 5 個，按數量降序排列
 - 類型名稱使用繁體中文，清楚描述任務類型（如「財務報表分析」「簡報製作」「資料整理與計算」「競爭分析報告」等）
-- **每個類型的 examples 最多 2 筆**，不要列出更多
+- **每個類型的 examples 只要 1 筆**，不要列出更多
 - 只回傳 JSON，不加任何說明文字`;
 
   // This is optional garnish on the analytics page — never let a provider outage
   // surface as a server error. auxLlm bounds each attempt and walks the chain
   // (on-prem → DeepSeek) itself; a null means everything was unreachable.
-  // 3000, not 1500: with 40 titles the model writes a long answer, and running out
-  // of output tokens mid-JSON is what put "Failed to parse" on this card. The
-  // prompt now caps examples at 2 as well — belt and braces, since parseJsonLoose
-  // can only recover a truncated tail, not invent the part that never arrived.
-  const aux = await auxChat(prompt, { temperature: 0.3, maxTokens: 3000, timeoutMs: 45_000, jsonMode: true, feature: 'topic-analysis', billTo: { userId: req.user!.userId } });
+  //
+  // These two numbers are load-bearing, and the reason is the on-prem gateway's
+  // Cloudflare front: it returns 524 (an HTML error page, not JSON) at ~100s, so
+  // any request that runs past that comes back unparseable no matter how good
+  // the answer was going to be.
+  //
+  // Wall time here is set by OUTPUT length, not input — measured on this gateway,
+  // the model holds ~40 tok/s, so 2,000 tokens is ~120s and dies, while the 800
+  // tokens this prompt actually needs is ~20s. maxTokens is therefore a deadline
+  // in disguise: 1200 caps the worst case near 30s. (auxLlm floors on-prem at
+  // 1500, so that is the real ceiling — still inside the 42s share below.)
+  //
+  // 70s, not 45s: at 45s the FIRST_ATTEMPT_SHARE split gave on-prem only 27s,
+  // less than the time its own token ceiling permits it to spend. 70s gives
+  // on-prem 42s and still leaves DeepSeek 28s, with the whole chain under 100s.
+  const aux = await auxChat(prompt, { temperature: 0.3, maxTokens: 1200, timeoutMs: 70_000, jsonMode: true, feature: 'topic-analysis', billTo: { userId: req.user!.userId } });
   if (!aux) {
     res.status(502).json({ error: 'Topic analysis unavailable (no aux LLM answered)' });
     return;

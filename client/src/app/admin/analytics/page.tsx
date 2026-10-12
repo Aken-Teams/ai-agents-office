@@ -290,10 +290,24 @@ function TopicAnalysisCard({ period, token }: { period: string; token: string })
         method: 'GET',
         headers: { Authorization: `Bearer ${token}` },
       });
-      const j = await res.json();
-      if (!res.ok) setError(j.error || 'Error');
-      else setData(j);
-    } catch (e) { setError(String(e)); }
+      // Not every failure on this path is JSON. When the on-prem gateway runs
+      // past its Cloudflare limit the proxy hands back an HTML error page, and
+      // res.json() then throws a parser error — which is how a model timeout
+      // surfaced to the user as `Unexpected token 'I', "Internal S"...`. Read the
+      // body as text first so the message describes what actually went wrong.
+      const raw = await res.text();
+      let j: { error?: string } | null = null;
+      try { j = JSON.parse(raw); } catch { /* not JSON — handled below */ }
+      if (!j) {
+        setError(res.ok
+          ? '分析服務回傳了無法解析的內容，請稍後再試'
+          : `分析服務暫時無法使用（HTTP ${res.status}），請稍後再試`);
+      } else if (!res.ok) {
+        setError(j.error || `Error ${res.status}`);
+      } else {
+        setData(j as unknown as TopicAnalysis);
+      }
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setLoading(false); }
   }, [period, token]);
 
