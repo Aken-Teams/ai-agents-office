@@ -31,7 +31,7 @@ import { checkUserUsageLimit } from '../services/usageLimit.js';
 import {
   WORD_ASSISTANT_SYSTEM_PROMPT, DATA_SOURCE_PROMPT, LOCALE_PROMPT, resolveLocale,
 } from '../services/wordContext.js';
-import { runLocalAgent, isLocalModel, LOCAL_MODELS } from '../services/localAgent.js';
+import { runLocalAgent, isLocalModel, LOCAL_MODEL_CHOICES } from '../services/localAgent.js';
 import {
   registerRun, closeRun, callWorkbookTool, resolveToolCall, runBelongsTo,
 } from '../services/excelBridge.js';
@@ -87,7 +87,11 @@ const WORD_MODELS: { id: string; label: string; note: string; default?: boolean 
   { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5', note: '' },
   { id: 'claude-haiku-5-5', label: 'Haiku 5.5', note: '' },
   { id: 'claude-opus-5', label: 'Opus 5', note: '' },
-  ...LOCAL_MODELS.map((m) => ({ id: m.id, label: m.label, note: '' })),
+  /**
+   * 地端模型預設不列。整條執行路徑還在，開關在 LOCAL_MODELS_ENABLED——
+   * 選單上沒有的 id 會被 resolveModel 擋下來退回預設，所以關掉就是真的關掉。
+   */
+  ...LOCAL_MODEL_CHOICES().map((m) => ({ id: m.id, label: m.label, note: '' })),
 ];
 
 /** Never trust a model id from the client — it is a string that reaches a spawn. */

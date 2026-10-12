@@ -46,6 +46,24 @@ export const LOCAL_MODELS: LocalModel[] = [
   { id: 'local-qwen3-27b', remote: 'mlx-community/Qwen3.8-27B-4bit', label: 'Qwen3.8 27B（地端）' },
 ];
 
+/**
+ * 要不要把地端模型放進選單。
+ *
+ * ── 為什麼預設是關的 ──
+ * 「我建議先把地端這 2 個選項隱藏，因為品質真的差太多了」——實測的結論，而且跟
+ * 量出來的數字一致：gpt-oss 快，但傾向把判斷丟回給使用者；Qwen3.8-27B 判斷好，
+ * 但它會先產生一長串思考內容才動手，在一個邊想邊做的介面裡慢到不實用。
+ *
+ * 關掉的是**選單**，不是這條路。整個執行路徑、工具迴圈、確認閘門都留著，
+ * 換一個更合適的模型進來就是改這裡的一個環境變數。把程式碼刪掉的話，下次要再
+ * 評估就得從頭寫一次。
+ */
+export const LOCAL_MODELS_ENABLED = String(process.env.LOCAL_MODELS_ENABLED || '')
+  .toLowerCase() === 'true';
+
+/** 選單上要列出來的地端模型——關掉的時候是空的。 */
+export const LOCAL_MODEL_CHOICES = (): LocalModel[] => (LOCAL_MODELS_ENABLED ? LOCAL_MODELS : []);
+
 export const isLocalModel = (id: string): boolean => LOCAL_MODELS.some((m) => m.id === id);
 const remoteOf = (id: string): string =>
   (LOCAL_MODELS.find((m) => m.id === id)?.remote) || id;
@@ -135,10 +153,28 @@ export function runLocalAgent(opts: LocalRunOptions): { emitter: EventEmitter; a
       if (!base) throw new Error('伺服器沒有設定 LLM_BASE_URL，無法使用地端模型。');
 
       const tools = opts.tools.map(toOpenAI);
+      /**
+       * 地端模型要多一段「做完它」。
+       *
+       * ── 看到的行為 ──
+       * 「都是做一點點就結束要使用者幫忙看」。這不是忘記前文（那是 resume 的事，
+       * 發生在下一句話），是**同一輪裡**走兩步就把球丟回來。
+       *
+       * Claude CLI 自己有一套「還沒做完就繼續」的迴圈；這裡沒有，所以模型一回了
+       * 沒有工具呼叫的訊息就結束了。這段話是補給模型的那一半。
+       */
+      const DRIVE = '\n\n## 這一輪要做完\n\n'
+        + '使用者要的是**做好的東西**，不是一份計畫。一次把整件事做完，'
+        + '不要做一兩步就停下來請他確認——他要確認的時候會自己說。\n'
+        + '只有在**真的缺少你無法自行決定的資訊**時才停下來問（例如對象是誰、'
+        + '金額多少）。版面、圖表類型、章節順序這些是你的工作，不要反問。\n'
+        + '做完之後用一兩句話說你做了什麼就好。';
       const messages: Msg[] = [
-        { role: 'system', content: opts.systemPrompt },
+        { role: 'system', content: opts.systemPrompt + DRIVE },
         { role: 'user', content: opts.prompt },
       ];
+      /** 只推一次——推不動就是它真的覺得做完了，再推就是硬逼它亂做。 */
+      let nudged = false;
 
       for (let turn = 0; turn < maxTurns; turn += 1) {
         if (Date.now() > deadline) throw new Error('這一輪超過時間上限了。');
@@ -174,7 +210,26 @@ export function runLocalAgent(opts: LocalRunOptions): { emitter: EventEmitter; a
         if (msg.content) emitter.emit('event', { type: 'text', data: msg.content } satisfies SSEEvent);
 
         const calls = msg.tool_calls || [];
-        if (!calls.length) break;
+        if (!calls.length) {
+          /**
+           * 停下來了，但它真的做完了嗎？
+           *
+           * 一個字都沒動過文件就停，多半是把需求當成問答題回答了。推一次——而且
+           * 只推一次：推不動代表它確實認為做完了，再推就是逼它亂做。
+           *
+           * 明確在問問題的時候不推。那是我們要的行為，前面才剛寫進提示裡。
+           */
+          const asked = /[？?]\s*$/.test(String(msg.content || '').trim());
+          const touched = messages.some((m) => m.role === 'tool');
+          if (nudged || asked || !touched) break;
+          nudged = true;
+          messages.push({
+            role: 'user',
+            content: '如果這件事還沒做完，請直接繼續做完，不用先問我。'
+              + '已經做完了就回「完成」兩個字。',
+          });
+          continue;
+        }
 
         for (const call of calls) {
           const name = call.function?.name || '';
