@@ -272,7 +272,10 @@ export const WORD_TOOLS: WordToolSpec[] = [
   {
     name: 'word_insert_table',
     description:
-      '插入表格。values 是二維陣列，第一列通常是表頭。'
+      '【要做的是履歷表、申請單、簽核單這類**表單**的話，用 `word_insert_form`，不要用這支】'
+      + '這支是報表：有表頭、一列一筆資料。表單是左邊欄位名稱、右邊留白給人填，整張一個表格——'
+      + '用這支做會變成一節一張黑色表頭的表、列高是填寫空間的兩倍、一列湊不滿就留下空格子。'
+      + '\n\n插入表格。values 是二維陣列，第一列通常是表頭。'
       + '要把一段敘述整理成對照表、把條款差異列成比較表都用這個。',
     inputSchema: {
       type: 'object',
@@ -314,6 +317,56 @@ export const WORD_TOOLS: WordToolSpec[] = [
         ...TRACK_NEW,
       },
       required: ['values'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'word_insert_form',
+    description:
+      '做一張**表單**：履歷表、申請單、簽核單、檢查表、點檢表。'
+      + '\n\n【跟 word_insert_table 的差別，這很重要】'
+      + 'word_insert_table 做的是**報表**——有表頭、有資料列、一列一筆紀錄，像是各季營收。'
+      + '這支做的是**表單**——左邊欄位名稱、右邊留白給人填，整張是**一個**表格。'
+      + '\n傳統企業的履歷表、請購單、出差申請單都是後者，而且用報表的做法做會很難看：'
+      + '每一節一張黑色表頭的表、列高是填寫空間的兩倍、一列湊不滿就留下沒有標題的空格子。'
+      + '\n\n【怎麼給 fields】照表單從上到下的順序，一個陣列給完，不要分成好幾張表：'
+      + '\n- `{ label: "中文姓名" }`——標籤加一格空白'
+      + '\n- `{ label: "出生日期", value: "　　年　　月　　日" }`——預先寫好格式的，用全形空白排版'
+      + '\n- `{ label: "戶籍地址", span: true }`——這一欄佔滿整列'
+      + '\n- `{ label: "自傳", lines: 10 }`——留十行的填寫空間，自動佔滿整列'
+      + '\n- `{ section: "基本資料" }`——整列的區段帶，取代「一個標題加一張表」'
+      + '\n\n【版面】`columns` 是一列放幾組「標籤＋填寫」，預設 2，最多 3。'
+      + '標籤欄的寬度會照最長的標籤算，填寫欄吃掉剩下的寬度。'
+      + '`row_height` 是列高（點），預設 24——表單的列高要一致，而且要剛好夠寫字。'
+      + '\n\n【留白就是留白】不要在填寫欄塞「（請填寫）」「N/A」之類的提示，'
+      + '那是給人寫的地方。說明寫在 `note`，它會印在表單下方的小字。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fields: {
+          type: 'array',
+          description: '照表單順序排好的欄位。',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string', description: '欄位名稱，例如「中文姓名」。' },
+              value: { type: 'string', description: '預先填好的內容或格式，留空就是給人填。' },
+              span: { type: 'boolean', description: '這一欄佔滿整列。地址、備註這種長欄位要開。' },
+              lines: { type: 'number', description: '填寫空間要幾行。大於 1 會自動佔滿整列。' },
+              section: { type: 'string', description: '區段帶，例如「基本資料」。給了這個就不要給 label。' },
+            },
+            additionalProperties: false,
+          },
+        },
+        title: { type: 'string', description: '表單標題，會以置中標題印在表單上方。' },
+        note: { type: 'string', description: '表單下方的小字說明，例如填寫規則或個資聲明。' },
+        columns: { type: 'number', description: '一列幾組「標籤＋填寫」。預設 2，最多 3。' },
+        row_height: { type: 'number', description: '列高（點），預設 24。' },
+        paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
+        at: { type: 'string', enum: ['after', 'before'], description: '預設 after。' },
+        ...TRACK_NEW,
+      },
+      required: ['fields'],
       additionalProperties: false,
     },
   },
