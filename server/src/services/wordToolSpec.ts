@@ -563,8 +563,10 @@ export const WORD_TOOLS: WordToolSpec[] = [
       + '\n\n【限制，要老實說】插進去的是**圖片**，使用者不能在 Word 裡拖動節點；'
       + '要改內容就改語法重新產生一張。'
       + '\n\n配一個 caption，圖才有編號可以在內文引用。'
-      + '\n【時程表不要用這支】甘特圖請用 `word_insert_gantt`——'
-      + 'mermaid 的 gantt 會把任務名疊在一起、日期擠成一團。',
+      + '\n【時程、沿革、里程碑都不要用這支】'
+      + '\n- 有起訖日期的工作排程 → `word_insert_gantt`'
+      + '\n- 一條軸上的事件（沿革、里程碑、發展史）→ `word_insert_chart` 的 `type: "timeline"`，資料走 `events`'
+      + '\nmermaid 的 `gantt` 會把任務名疊在長條上、日期擠成一團；它的 `timeline` 則是把事件平均排開，而時間軸真正要講的就是「哪裡密、哪裡疏」——平均排開正好把它抹掉。原生的那兩支會量字寬、會閃避相鄰的標籤，排不下才斷行。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -597,14 +599,23 @@ export const WORD_TOOLS: WordToolSpec[] = [
       + '拆解一個總數怎麼來的用 waterfall；轉換率一層層掉用 funnel；'
       + '兩個對象在同幾個面向上的強弱用 radar；組成比例隨時間變化用 stacked100。'
       + '\n**報告裡的圖比投影片更該少用顏色**——它用的是文件的灰階配色，'
-      + '一頁黑字裡最亮的東西不該是圖表。',
+      + '一頁黑字裡最亮的東西不該是圖表。'
+      + '\n【數學的圖用 plot】type: "plot"，資料走 `curves`：'
+      + '`[{ name: "N log N", points: [[256, 2048], [1024, 10240]] }]`，'
+      + '每條線至少兩個點，points 是 [x, y]。'
+      + '\n**跟其他圖的差別是 X 軸是真的數值軸，不是分類軸。**'
+      + '函數曲線、量測數據、複雜度比較、頻率響應都要用這個——'
+      + 'N² 跟 N log N 畫在平均刻度上，那張圖唯一要講的「差距越拉越開」正好被藏起來。'
+      + '\n跨好幾個數量級就開 `log_y`（或 `log_x`），不然會變成一條平線加一根尖刺。'
+      + '記得給 `x_axis` 和 `y_axis`：數值軸不會自己說明自己。'
+      + '`dashed: true` 畫虛線，`dots: true` 標出實際量到的點。',
     inputSchema: {
       type: 'object',
       properties: {
         type: {
           type: 'string',
           enum: ['column', 'bar', 'line', 'area', 'pie', 'donut', 'waterfall', 'funnel',
-            'radar', 'timeline', 'map', 'scatter', 'stacked', 'stacked100', 'box'],
+            'radar', 'timeline', 'map', 'scatter', 'stacked', 'stacked100', 'box', 'plot'],
           description: '預設 column。甘特圖請改用 word_insert_gantt。',
         },
         title: { type: 'string', description: '圖表標題。' },
@@ -622,12 +633,76 @@ export const WORD_TOOLS: WordToolSpec[] = [
           },
         },
         values: { type: 'array', items: { type: 'number' }, description: '只有一個數列時的簡寫。' },
+        events: {
+          type: 'array',
+          description: 'timeline 專用。至少一筆。',
+          items: {
+            type: 'object',
+            properties: {
+              at: { type: 'string', description: '時間點。給數字（2024、2024.75）會照實際間隔擺。' },
+              label: { type: 'string', description: '這個時間點發生什麼。' },
+              note: { type: 'string', description: '補充一句，可省略。' },
+              highlight: { type: 'boolean', description: '設 true 會用強調色放大，一條軸最多標一個。' },
+            },
+            required: ['at', 'label'],
+            additionalProperties: false,
+          },
+        },
+        points: {
+          type: 'array',
+          description: 'scatter 專用：`[{ x, y, label, group }]`。',
+          items: { type: 'object', additionalProperties: true },
+        },
+        boxes: {
+          type: 'array',
+          description: 'box 專用，分布已經算好的時候用：'
+            + '`[{ label, min, q1, median, q3, max, outliers }]`。有原始數值就直接給 values。',
+          items: { type: 'object', additionalProperties: true },
+        },
+        map: {
+          type: 'string',
+          enum: ['world', 'china', 'taiwan'],
+          description: 'map 專用：要哪一份地圖。預設 world。',
+        },
+        total: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'waterfall 專用：哪幾根是合計而不是增減（索引，0 起算）。',
+        },
+        colors: { type: 'array', items: { type: 'string' }, description: '每個數列的顏色。不給就用文件的灰階配色。' },
+        data_labels: { type: 'boolean', description: '長條上是否標數字。' },
+        labels: { type: 'boolean', description: 'scatter 專用：設 false 不標點的名稱。超過 12 點本來就不標。' },
+        area: { type: 'boolean', description: 'line 專用：線下方填色。' },
+        center: { type: 'string', description: 'donut 中間的大字，例如「70%」。' },
+        center_label: { type: 'string', description: 'donut 中間大字底下的說明。' },
+        curves: {
+          type: 'array',
+          description: 'plot 專用：每條線 `{ name, points: [[x, y], ...], dashed, dots }`，'
+            + '至少兩個點。',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              points: { type: 'array', description: '[[x, y], ...]，也可以給 [{ x, y }]。' },
+              dashed: { type: 'boolean', description: '畫虛線。' },
+              dots: { type: 'boolean', description: '標出實際量到的點。' },
+            },
+            required: ['points'],
+            additionalProperties: false,
+          },
+        },
+        x_axis: { type: 'string', description: 'plot／scatter 的 X 軸名稱。數值軸不會自己說明自己。' },
+        y_axis: { type: 'string', description: 'plot／scatter 的 Y 軸名稱。' },
+        log_x: { type: 'boolean', description: 'X 軸改對數刻度。所有 x 都要大於 0。' },
+        log_y: { type: 'boolean', description: 'Y 軸改對數刻度。跨好幾個數量級就要開。' },
         caption: { type: 'string', description: '圖說，例如「圖 1　各季營收」。會套用內建的標號樣式。' },
         paragraph: { type: 'number', description: '基準段落編號。省略就插在文件最後。' },
         at: { type: 'string', enum: ['after', 'before'], description: '預設 after。' },
         ...TRACK_NEW,
       },
-      required: ['categories'],
+      // timeline 用 events、plot 用 curves、map 用 values＋地區名，
+      // 所以 categories 不能是硬性要求——以前是，於是那幾種圖在列舉裡存在、
+      // 在說明裡有範例，卻連送出的機會都沒有。缺什麼由 word.js 擋，訊息比這裡清楚。
       additionalProperties: false,
     },
   },

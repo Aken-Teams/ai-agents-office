@@ -779,7 +779,16 @@ export const PPT_TOOLS: PptToolSpec[] = [
       + '日期一律 YYYY-MM-DD，`end` 可以換成 `days`。`group` 會變成背景色帶，用來分階段；'
       + '`today` 給今天的日期就會畫一條線，不在範圍內會自動略過。'
       + '\n**不要用 mermaid 的 gantt 語法畫時程**——它把任務名畫在長條上，'
-      + '真實的排程一定會互相重疊，日期也會全部擠在一起。',
+      + '真實的排程一定會互相重疊，日期也會全部擠在一起。'
+      + '\n【數學的圖用 plot】type: "plot"，資料走 `curves`：'
+      + '`[{ name: "N log N", points: [[256, 2048], [1024, 10240]] }]`，'
+      + '每條線至少兩個點，points 是 [x, y]。'
+      + '\n**跟其他圖的差別是 X 軸是真的數值軸，不是分類軸。**'
+      + '函數曲線、量測數據、複雜度比較、頻率響應都要用這個——'
+      + 'N² 跟 N log N 畫在平均刻度上，那張圖唯一要講的「差距越拉越開」正好被藏起來。'
+      + '\n跨好幾個數量級就開 `log_y`（或 `log_x`），不然會變成一條平線加一根尖刺。'
+      + '記得給 `x_axis` 和 `y_axis`：數值軸不會自己說明自己。'
+      + '`dashed: true` 畫虛線，`dots: true` 標出實際量到的點。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -787,7 +796,7 @@ export const PPT_TOOLS: PptToolSpec[] = [
         type: {
           type: 'string',
           enum: ['column', 'bar', 'line', 'area', 'pie', 'donut',
-            'waterfall', 'funnel', 'radar', 'timeline', 'gantt', 'map',
+            'waterfall', 'funnel', 'radar', 'timeline', 'gantt', 'plot', 'map',
             'scatter', 'stacked', 'stacked100', 'box'],
           description:
             'column 直條（比大小，最常用）、bar 橫條（分類名稱長的時候用）、'
@@ -869,12 +878,53 @@ export const PPT_TOOLS: PptToolSpec[] = [
           items: { type: 'number' },
           description: 'waterfall 專用：哪幾根是合計而不是增減（索引，0 起算）。',
         },
+        curves: {
+          type: 'array',
+          description: 'plot 專用：每條線 `{ name, points: [[x, y], ...], dashed, dots }`，'
+            + '至少兩個點。',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              points: { type: 'array', description: '[[x, y], ...]，也可以給 [{ x, y }]。' },
+              dashed: { type: 'boolean', description: '畫虛線。' },
+              dots: { type: 'boolean', description: '標出實際量到的點。' },
+            },
+            required: ['points'],
+            additionalProperties: false,
+          },
+        },
+        x_axis: { type: 'string', description: 'plot／scatter 的 X 軸名稱。數值軸不會自己說明自己。' },
+        y_axis: { type: 'string', description: 'plot／scatter 的 Y 軸名稱。' },
+        log_x: { type: 'boolean', description: 'X 軸改對數刻度。所有 x 都要大於 0。' },
+        log_y: { type: 'boolean', description: 'Y 軸改對數刻度。跨好幾個數量級就要開。' },
         title: { type: 'string', description: '圖表標題。' },
         categories: { type: 'array', items: { type: 'string' }, description: 'X 軸分類，例如 ["Q1","Q2","Q3"]。' },
         values: { type: 'array', description: '數值。單系列給 [10,20,30]，多系列給 [[10,20],[30,40]]。' },
         series: { type: 'array', items: { type: 'string' }, description: '多系列時每個系列的名稱，會做成圖例。' },
         colors: { type: 'array', items: { type: 'string' }, description: '每個系列的顏色。不給就用配色。' },
         data_labels: { type: 'boolean', description: '長條上是否標數字，預設 true。' },
+        labels: { type: 'boolean', description: 'scatter 專用：設 false 不標點的名稱。超過 12 點本來就不標。' },
+        area: { type: 'boolean', description: 'line 專用：線下方填色。' },
+        tasks: {
+          type: 'array',
+          description: 'gantt 專用：每一列 `{ name, start, end, group, done, milestone }`，'
+            + '日期用 YYYY-MM-DD。',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: '工作名稱。' },
+              start: { type: 'string', description: '開始日，YYYY-MM-DD。' },
+              end: { type: 'string', description: '結束日，YYYY-MM-DD。' },
+              group: { type: 'string', description: '階段名稱，相鄰的同名會併成一段。' },
+              done: { type: 'number', description: '完成比例 0～1，畫成長條裡的深色段。' },
+              milestone: { type: 'boolean', description: '設 true 畫成菱形里程碑，不用 end。' },
+            },
+            required: ['name', 'start'],
+            additionalProperties: false,
+          },
+        },
+        today: { type: 'string', description: 'gantt 專用：畫一條「今天」的線，YYYY-MM-DD。' },
         center: { type: 'string', description: 'donut 中間的大字，例如「70%」。' },
         center_label: { type: 'string', description: 'donut 中間大字底下的說明。' },
         ...GEOMETRY_BLOCK,
@@ -1036,6 +1086,10 @@ export const PPT_TOOLS: PptToolSpec[] = [
       + '\n\n語法範例：'
       + '\n`flowchart LR` / `A[需求訪談] --> B[系統設計]` / `B --> C{可行?}` / `C -->|是| D[開發]`'
       + '\n`sequenceDiagram` / `使用者->>系統: 送出申請` / `系統-->>使用者: 回覆結果`'
+      + '\n【時程、沿革、里程碑都不要用這支】'
+      + '\n- 有起訖日期的工作排程 → `ppt_add_chart` 的 `type: "gantt"`'
+      + '\n- 一條軸上的事件（沿革、里程碑、發展史）→ `ppt_add_chart` 的 `type: "timeline"`，資料走 `events`'
+      + '\nmermaid 的 `gantt` 會把任務名疊在長條上、日期擠成一團；它的 `timeline` 則是把事件平均排開，而時間軸真正要講的就是「哪裡密、哪裡疏」——平均排開正好把它抹掉。原生的那兩支會量字寬、會閃避相鄰的標籤，排不下才斷行。'
       + '\n\n【用 slide 指定放在哪一張】省略的話放在**最後一張**，也就是你剛做好的那張。',
     inputSchema: {
       type: 'object',
