@@ -397,6 +397,7 @@ export default function AdminEmailAgentPage() {
           <Link href="/admin/conversations" className={TAB_IDLE}>對話管理</Link>
           <Link href="/admin/teams" className={TAB_IDLE}>團隊協作</Link>
           <span className={TAB_ACTIVE}>信件助手</span>
+          <Link href="/admin/conversations?tab=addin" className={TAB_IDLE}>增益集</Link>
         </div>
 
         {/* Search */}

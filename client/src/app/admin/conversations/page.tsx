@@ -823,6 +823,16 @@ export default function AdminConversationsPage() {
 
   useEffect(() => { fetchConversations(); }, [fetchConversations]);
 
+  // 團隊協作 / 信件助手 are their own pages, so their tab strips can only come
+  // back here by URL. Read the tab once on mount rather than from a lazy state
+  // initialiser — the server renders no query string, and a lazy read would
+  // disagree with it during hydration.
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (tab === 'addin') setCategory('addin');
+    else if (tab === 'km') setCategory('km-agent');
+  }, []);
+
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     setPage(1);
@@ -901,11 +911,11 @@ export default function AdminConversationsPage() {
                 {label}
               </button>
             ))}
-            <p className="ml-3 text-xs text-on-surface-variant hidden md:block">
-              {addinView === 'audit'
-                ? '增益集直接改使用者開著的檔案，沒有產出檔可事後檢查 — 這裡是唯一的紀錄'
-                : 'Excel / Word / PowerPoint 增益集內的對話，與網頁端分開列出'}
-            </p>
+            {addinView === 'audit' && (
+              <p className="ml-3 text-xs text-on-surface-variant hidden md:block">
+                增益集直接改使用者開著的檔案，沒有產出檔可事後檢查 — 這裡是唯一的紀錄
+              </p>
+            )}
           </div>
         )}
 
