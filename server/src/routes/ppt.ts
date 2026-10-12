@@ -364,7 +364,7 @@ router.post('/chat', async (req: Request, res: Response) => {
   const photoAllowed = process.env.PPT_ALLOW_PHOTO !== '0' && allowPhoto === true;
   const bridgeToken = registerRun(
     runId, userId, write, uploaded.map((f) => f.id), documentName, origin, photoAllowed,
-    conversationId);
+    conversationId, resolveModel(wantedModel));
 
   // Version skew guard. The manifest uses SharedRuntime with lifetime="long", so
   // reopening the task pane does NOT reload its JavaScript — only quitting PowerPoint

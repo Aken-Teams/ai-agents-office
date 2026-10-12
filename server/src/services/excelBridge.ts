@@ -164,6 +164,8 @@ interface ExcelRun {
    * has to be refused where it is actually performed.
    */
   allowPhoto: boolean;
+  /** 這一輪實際用的模型，寫進稽核紀錄。 */
+  model: string;
   /** Which conversation this run belongs to, so an audited action can be found. */
   conversationId: string;
 }
@@ -187,6 +189,7 @@ export function registerRun(
   origin = '',
   allowPhoto = false,
   conversationId = '',
+  model = '',
 ): string {
   const token = crypto.randomBytes(32).toString('hex');
   runs.set(runId, {
@@ -195,6 +198,7 @@ export function registerRun(
     // gets the conservative answer rather than the permissive one.
     allowPhoto,
     conversationId,
+    model,
   });
   tokenToRun.set(token, runId);
   return token;
@@ -252,6 +256,7 @@ export function callWorkbookTool(
       logAddinAction({
         userId: run.userId,
         conversationId: run.conversationId,
+        model: run.model,
         host: hostOf(tool),
         tool,
         target: targetOf(tool, args),

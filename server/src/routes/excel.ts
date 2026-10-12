@@ -285,7 +285,7 @@ router.post('/chat', async (req: Request, res: Response) => {
   // origin and allowPhoto are PowerPoint's concerns; conversationId is not —
   // every audited action needs to say which conversation it belongs to.
   const bridgeToken = registerRun(runId, userId, write, uploaded.map(f => f.id),
-    documentName, '', false, conversationId);
+    documentName, '', false, conversationId, resolveModel(wantedModel));
 
   // Version skew guard. The add-in's manifest uses SharedRuntime with
   // lifetime="long", so reopening the task pane does NOT reload its JavaScript —

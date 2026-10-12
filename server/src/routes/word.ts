@@ -310,7 +310,8 @@ router.post('/chat', async (req: Request, res: Response) => {
   // origin and allowPhoto are PowerPoint's concerns; conversationId is not —
   // every audited action needs to say which conversation it belongs to.
   const bridgeToken = registerRun(runId, userId, write, uploaded.map((f) => f.id),
-    documentName, '', false, conversationId);
+    // 模型在這裡就決定好，稽核紀錄才知道這一輪的每一個動作是誰做的。
+    documentName, '', false, conversationId, resolveModel(wantedModel));
 
   // Version skew guard. The manifest uses SharedRuntime with lifetime="long", so
   // reopening the task pane does NOT reload its JavaScript — only quitting Word

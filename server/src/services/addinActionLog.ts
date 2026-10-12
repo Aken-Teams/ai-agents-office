@@ -46,6 +46,8 @@ export interface AddinAction {
   conversationId?: string;
   /** 'excel' | 'word' | 'ppt' — taken from the tool name, so it cannot disagree. */
   host: string;
+  /** 哪個模型做的。地端和雲端的判斷品質不一樣，事後追查需要這一欄。 */
+  model?: string | null;
   tool: string;
   /** Where it landed: 「損益表!C4:F40」, 「投影片 5–7」, a filename. */
   target?: string;
@@ -66,6 +68,15 @@ async function ensureTable(dbRun: (sql: string, ...p: unknown[]) => Promise<unkn
       user_id         VARCHAR(36),
       conversation_id VARCHAR(36),
       host            VARCHAR(12) NOT NULL,
+      /**
+       * 哪一個模型做的。
+       *
+       * 「現在用哪一個模型有進稽核紀錄嗎？」——原本沒有。而這正是這張表最需要
+       * 回答的問題之一：客戶為了省錢會改用地端模型，地端模型的判斷品質跟雲端不
+       * 一樣，所以「這份文件是誰做的」在事後追查時跟「做了什麼」一樣重要。一份
+       * 內容可疑的報價單，第一個要問的就是它是哪個模型寫的。
+       */
+      model           VARCHAR(100),
       tool            VARCHAR(64) NOT NULL,
       target          VARCHAR(255),
       destructive     TINYINT(1) NOT NULL DEFAULT 0,
@@ -77,9 +88,24 @@ async function ensureTable(dbRun: (sql: string, ...p: unknown[]) => Promise<unkn
       INDEX idx_addin_conv (conversation_id),
       -- 「哪些動作是沒有人看過就執行的」 is the question this table exists to
       -- answer quickly, so it gets its own index rather than a table scan.
-      INDEX idx_addin_decision (decision)
+      INDEX idx_addin_decision (decision),
+      -- 「這個模型做過哪些事」要能一次撈出來，不然換模型之後沒辦法回頭比對。
+      INDEX idx_addin_model (model)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+  /**
+   * 既有的資料表要補上欄位。
+   *
+   * CREATE TABLE IF NOT EXISTS 對已經存在的表什麼都不做，所以升級的環境不會長出
+   * model 欄位——然後每一次寫入都會因為欄位不存在而失敗，而這支是 fire-and-forget
+   * 的，失敗完全不會叫。重複執行是安全的：欄位已經在就讓它報錯然後忽略。
+   */
+  try {
+    await dbRun('ALTER TABLE addin_actions ADD COLUMN model VARCHAR(100) NULL AFTER host');
+  } catch { /* 已經有了 */ }
+  try {
+    await dbRun('ALTER TABLE addin_actions ADD INDEX idx_addin_model (model)');
+  } catch { /* 已經有了 */ }
   ensured = true;
 }
 
@@ -102,12 +128,13 @@ export function logAddinAction(rec: AddinAction): void {
       await ensureTable(dbRun);
       await dbRun(
         `INSERT INTO addin_actions
-          (id, user_id, conversation_id, host, tool, target, destructive, decision, ok, summary)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (id, user_id, conversation_id, host, model, tool, target, destructive, decision, ok, summary)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         randomUUID(),
         rec.userId || null,
         rec.conversationId || null,
         rec.host,
+        cut(rec.model, 100),
         cut(rec.tool, 64),
         cut(rec.target, 255),
         rec.destructive ? 1 : 0,
