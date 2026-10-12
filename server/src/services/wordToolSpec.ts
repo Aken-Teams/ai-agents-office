@@ -461,6 +461,69 @@ export const WORD_TOOLS: WordToolSpec[] = [
     },
   },
   {
+    name: 'word_read_table',
+    description:
+      '把文件裡**既有的**某一張表格整張讀出來，含列號、欄號和每一格現有的文字。'
+      + '\n\n【什麼時候一定要先用這支】使用者拿一份現成的範本（報價單、工單、'
+      + '請購單、合約附表）要你填——動手之前先讀一次。'
+      + '概覽只會告訴你有幾張表、幾列幾欄、第一欄寫了什麼；'
+      + '哪一格是空的、欄位名稱到底在左邊還是上面，要讀過才知道。'
+      + '\n猜著填會把東西填到錯的格子，而那種錯在畫面上看起來跟填對一模一樣。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table: { type: 'number', description: '第幾張表格，從 1 起算。預設 1。概覽裡有編號。' },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'word_fill_table',
+    description:
+      '把內容填進文件裡**既有的**表格。這是「拿現成範本來填」的那支工具。'
+      + '\n\n【兩種指定方式】'
+      + '\n- `fields: { "客戶名稱": "強茂" }`——找到寫著「客戶名稱」那一格，'
+      + '填進它**右邊**那一格；右邊有東西就試它**下面**那一格。'
+      + '這是填範本該用的方式，因為你讀文件讀到的是欄位名稱，不是座標。'
+      + '\n- `cells: [{ row: 2, col: 2, text: "強茂" }]`——直接指定列和欄，從 1 起算。'
+      + '欄位名稱比對不到、或是要覆寫已經有內容的格子時用。'
+      + '\n\n【它不會蓋掉已經有內容的格子】`fields` 只寫空白的格子，'
+      + '右邊和下面都有內容就跳過並回報。那是刻意的——'
+      + '填表單和覆寫是兩件事，把人家已經填好的資料無聲洗掉是最糟的失敗方式。'
+      + '真的要覆寫就改用 `cells`。'
+      + '\n\n【動手前先 word_read_table】欄位名稱比對會忽略空白、冒號和星號，'
+      + '但「客戶名稱」和「客戶名稱(必填)」還是不同的字串。讀一次就不用猜。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        table: { type: 'number', description: '第幾張表格，從 1 起算。預設 1。' },
+        fields: {
+          type: 'object',
+          description: '欄位名稱 → 要填的內容。會找到那一格，填進它右邊（或下面）的空格。',
+          additionalProperties: { type: 'string' },
+        },
+        cells: {
+          type: 'array',
+          description: '直接指定格子：[{ row, col, text }]，列和欄都從 1 起算。',
+          items: {
+            type: 'object',
+            properties: {
+              row: { type: 'number' },
+              col: { type: 'number' },
+              text: { type: 'string' },
+            },
+            required: ['row', 'col', 'text'],
+            additionalProperties: false,
+          },
+        },
+        ...TRACK_NEW,
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'word_insert_toc',
     description:
       '插入目錄。項目插入當下就看得到（它會帶著已經算好的結果進去），'

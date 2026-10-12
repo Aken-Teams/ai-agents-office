@@ -273,7 +273,7 @@ router.post('/attachments', (req: Request, res: Response) => {
       const filename = /[^\u0000-\u00ff]/.test(raw) ? raw : Buffer.from(raw, 'latin1').toString('utf8');
       const r = await addAttachment(req.user!.userId, filename, f.buffer);
       if (r.ok) {
-        accepted.push({ id: r.file.id, filename, chars: r.file.text.length, blocked: r.file.blocked });
+        accepted.push({ id: r.file.id, filename, chars: r.file.text?.length ?? 0, blocked: r.file.blocked });
       } else {
         rejected.push({ filename, reason: r.reason });
       }

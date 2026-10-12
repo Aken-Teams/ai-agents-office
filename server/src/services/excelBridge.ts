@@ -305,9 +305,11 @@ function dispatchTool(
   // answer does cut off a half-read PDF. Worth revisiting if that shows up in
   // practice — it would mean keeping the file list alive past the SSE drop.
   if (tool === 'excel_read_file' || tool === 'word_read_file' || tool === 'ppt_read_file') {
-    const r = readAttachmentPart(
+    // Now async: the file is parsed on first read rather than at upload, so this
+    // is where a big attachment actually costs something — once, and only if
+    // somebody asked for it.
+    return readAttachmentPart(
       run.userId, run.files, Number(args.index ?? 1), Number(args.part ?? 1));
-    return Promise.resolve(r);
   }
 
   /**

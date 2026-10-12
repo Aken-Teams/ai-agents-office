@@ -669,7 +669,7 @@ router.post('/attachments', (req: Request, res: Response) => {
       const r = await addAttachment(req.user!.userId, filename, f.buffer);
       if (r.ok) {
         accepted.push({
-          id: r.file.id, filename, chars: r.file.text.length, blocked: r.file.blocked,
+          id: r.file.id, filename, chars: r.file.text?.length ?? 0, blocked: r.file.blocked,
         });
       } else {
         rejected.push({ filename, reason: r.reason });
