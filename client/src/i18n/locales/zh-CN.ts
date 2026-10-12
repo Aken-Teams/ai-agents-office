@@ -1355,6 +1355,7 @@ const zhCN = {
   'admin.quotaRequests.denyModal.title': '拒绝额度申请',
   'admin.quotaRequests.denyModal.reason': '拒绝原因',
   'admin.quotaRequests.reviewed': '已审核',
+  'admin.quotaRequests.reviewedBy': '审核人',
 
   // Email Agent Widget
   'emailAgent.title': '邮件助手',

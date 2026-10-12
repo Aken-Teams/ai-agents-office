@@ -1333,6 +1333,7 @@ const en = {
   'admin.quotaRequests.denyModal.title': 'Deny Quota Request',
   'admin.quotaRequests.denyModal.reason': 'Reason for Denial',
   'admin.quotaRequests.reviewed': 'Reviewed',
+  'admin.quotaRequests.reviewedBy': 'Reviewed by',
 
   // Email Agent Widget
   'emailAgent.title': 'Email Agent',

@@ -20,6 +20,9 @@ interface QuotaRequest {
   admin_notes: string | null;
   created_at: string;
   reviewed_at: string | null;
+  reviewed_by: string | null;
+  reviewer_name: string | null;
+  reviewer_email: string | null;
   user_deleted?: boolean;
   user_unlimited?: boolean;
   current_limit_effective?: number | null;
@@ -229,6 +232,15 @@ function QuotaRequestsContent() {
                       )}
                       {req.reviewed_at && (
                         <span>{t('admin.quotaRequests.reviewed' as any)}: {formatDate(req.reviewed_at)}</span>
+                      )}
+                      {req.reviewed_by && (
+                        <span>
+                          {t('admin.quotaRequests.reviewedBy' as any)}:{' '}
+                          {req.reviewer_name || req.reviewer_email || '（已刪除帳號）'}
+                          {req.reviewer_name && req.reviewer_email && (
+                            <span className="opacity-70"> ({req.reviewer_email})</span>
+                          )}
+                        </span>
                       )}
                     </div>
                   )}

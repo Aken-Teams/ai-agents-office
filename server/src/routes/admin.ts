@@ -2217,9 +2217,11 @@ router.get('/quota-requests', async (req: Request, res: Response) => {
   const rows = await dbAll<any>(`
     SELECT qr.*, u.email, u.display_name, u.role AS user_role,
            u.quota_override AS cur_override, qg.limit_usd AS cur_group_limit,
-           (u.id IS NULL) AS user_deleted
+           (u.id IS NULL) AS user_deleted,
+           rv.display_name AS reviewer_name, rv.email AS reviewer_email
     FROM quota_requests qr
     LEFT JOIN users u ON u.id = qr.user_id
+    LEFT JOIN users rv ON rv.id = qr.reviewed_by
     LEFT JOIN quota_groups qg ON qg.id = u.quota_group_id
     ${where}
     ORDER BY CASE qr.status WHEN 'pending' THEN 0 ELSE 1 END, qr.created_at DESC

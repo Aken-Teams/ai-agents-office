@@ -1365,6 +1365,7 @@ const zhTW = {
   'admin.quotaRequests.denyModal.title': '拒絕額度申請',
   'admin.quotaRequests.denyModal.reason': '拒絕原因',
   'admin.quotaRequests.reviewed': '已審核',
+  'admin.quotaRequests.reviewedBy': '審核人',
 
   // Email Agent Widget
   'emailAgent.title': '信件助手',
