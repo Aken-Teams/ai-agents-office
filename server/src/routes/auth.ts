@@ -8,7 +8,7 @@ import { dbGet, dbRun, dbAll } from '../db.js';
 import { config } from '../config.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { checkUserUsageLimit, getUserUsageLimitUsd, getStorageQuotaGb, getUploadQuotaMb } from '../services/usageLimit.js';
-import { getRolePermissions } from '../services/rolePermissions.js';
+import { getRolePermissions, ADMIN_UNRESTRICTABLE_PAGES } from '../services/rolePermissions.js';
 import { isEmailEnabled, sendVerificationCode, sendPasswordResetEmail } from '../services/email.js';
 import type { User } from '../types.js';
 // Type only — outlookApi itself is loaded lazily below, as it was before.
@@ -573,13 +573,23 @@ router.get('/permissions', authMiddleware, async (req: Request, res: Response) =
   const user = await dbGet<{ role: string }>('SELECT role FROM users WHERE id = ?', req.user!.userId);
   const role = user?.role || 'user';
 
-  // Admin gets full access
+  const perms = await getRolePermissions();
+
+  // Admin gets full access, minus any page explicitly restricted for admins.
+  // '*' still means "everything not listed" so new pages stay accessible.
   if (role === 'admin') {
-    res.json({ adminSidebar: ['*'], adminSidebarOperate: ['*'], frontendNav: ['*'], features: ['*'] });
+    const hidden = (perms.adminSidebar.adminHidden || []).filter(k => !ADMIN_UNRESTRICTABLE_PAGES.includes(k));
+    const viewOnly = (perms.adminSidebar.adminViewOnly || []).filter(k => !ADMIN_UNRESTRICTABLE_PAGES.includes(k));
+    res.json({
+      adminSidebar: ['*'],
+      adminSidebarOperate: ['*'],
+      adminHidden: hidden,
+      adminViewOnly: viewOnly,
+      frontendNav: ['*'],
+      features: ['*'],
+    });
     return;
   }
-
-  const perms = await getRolePermissions();
 
   if (role === 'readonly') {
     res.json({

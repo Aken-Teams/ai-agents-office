@@ -89,7 +89,7 @@ function RoleBadge({ role }: { role: string }) {
 
 export default function AdminUsers() {
   const { token, isReadonly, canOperate } = useAdminAuth();
-  const canEdit = !isReadonly || canOperate('users');
+  const canEdit = canOperate('users');
   const { t } = useTranslation();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [total, setTotal] = useState(0);

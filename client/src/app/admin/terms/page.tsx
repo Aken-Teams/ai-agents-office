@@ -164,7 +164,7 @@ export default function AdminTermsPage() {
 
 function AdminTermsContent() {
   const { token, isReadonly, canOperate } = useAdminAuth();
-  const editable = !isReadonly || canOperate('terms');
+  const editable = canOperate('terms');
   const { t } = useTranslation();
   const [content, setContent] = useState('');
   const [version, setVersion] = useState('1');

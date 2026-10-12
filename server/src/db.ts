@@ -493,6 +493,35 @@ export async function initializeDatabase(): Promise<void> {
       await conn.query("ALTER TABLE user_memories ADD COLUMN memory_type VARCHAR(20) NOT NULL DEFAULT 'preference'");
     } catch { /* column already exists */ }
 
+    /**
+     * Office add-in audit trail. `addinActionLog` also creates this lazily on its
+     * first write, but the admin console JOINs it on every conversation listing —
+     * and a table that only exists after somebody has used the add-in would make
+     * that listing fail on a fresh install. So it is part of the schema.
+     * Column comments live in services/addinActionLog.ts.
+     */
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS addin_actions (
+        id              CHAR(36) PRIMARY KEY,
+        created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        user_id         VARCHAR(36),
+        conversation_id VARCHAR(36),
+        host            VARCHAR(12) NOT NULL,
+        model           VARCHAR(100),
+        tool            VARCHAR(64) NOT NULL,
+        target          VARCHAR(255),
+        destructive     TINYINT(1) NOT NULL DEFAULT 0,
+        decision        VARCHAR(12) NOT NULL,
+        ok              TINYINT(1) NOT NULL DEFAULT 0,
+        summary         VARCHAR(500),
+        INDEX idx_addin_created (created_at),
+        INDEX idx_addin_user (user_id),
+        INDEX idx_addin_conv (conversation_id),
+        INDEX idx_addin_decision (decision),
+        INDEX idx_addin_model (model)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS quota_requests (
         id            VARCHAR(36) PRIMARY KEY,

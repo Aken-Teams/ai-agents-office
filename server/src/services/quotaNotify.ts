@@ -83,6 +83,98 @@ export function buildQuotaRequestEmail(params: QuotaRequestEmailParams): { subje
   return { subject, body };
 }
 
+export interface QuotaResultEmailParams {
+  requesterName: string;
+  requesterEmail: string;
+  reason: string;
+  approved: boolean;
+  /** Only meaningful when approved. */
+  newLimit?: number | null;
+  previousLimit?: number | null;
+  /** Which group the user was put in, when the approval went through a group. */
+  groupName?: string | null;
+  reviewerName?: string | null;
+  adminNotes?: string | null;
+  appUrl?: string;
+  isTest?: boolean;
+}
+
+/**
+ * Build the「審核結果」email.
+ *
+ * Sent to the requester with the reviewers in cc. One mail rather than two,
+ * because the two audiences need exactly the same four facts — what was asked,
+ * what was decided, by whom, what the limit is now — and splitting it is how
+ * the two copies drift apart.
+ *
+ * A denial is a result too. The requester is blocked either way, and a request
+ * that silently never comes back is worse than a no.
+ */
+export function buildQuotaResultEmail(params: QuotaResultEmailParams): { subject: string; body: string } {
+  const test = params.isTest ? '【測試】' : '';
+  const subject = params.approved
+    ? `${test}【額度已調整】${params.requesterName} 的額度申請已核准`
+    : `${test}【額度申請結果】${params.requesterName} 的額度申請未通過`;
+  const link = params.appUrl ? params.appUrl.replace(/\/$/, '') : '';
+
+  const row = (label: string, value: string, strong = false) =>
+    `<tr><td style="padding:4px 12px 4px 0;color:#666;vertical-align:top;white-space:nowrap;">${label}</td>` +
+    `<td style="padding:4px 0;${strong ? 'font-weight:bold;' : ''}white-space:pre-wrap;">${value}</td></tr>`;
+
+  const headline = params.approved
+    ? '<span style="color:#0b6;">額度已調整完成</span>'
+    : '<span style="color:#c33;">額度申請未通過</span>';
+
+  const rows = [
+    row('申請人', `${esc(params.requesterName)}（${esc(params.requesterEmail)}）`),
+    row('申請理由', esc(params.reason)),
+  ];
+  if (params.approved) {
+    const before = params.previousLimit != null ? `$${params.previousLimit.toFixed(2)} → ` : '';
+    if (params.newLimit != null) rows.push(row('調整後額度', `${before}$${params.newLimit.toFixed(2)}`, true));
+    if (params.groupName) rows.push(row('額度群組', esc(params.groupName)));
+  }
+  if (params.reviewerName) rows.push(row('審核人', esc(params.reviewerName)));
+  if (params.adminNotes) rows.push(row('審核備註', esc(params.adminNotes)));
+
+  const body = `
+    <div style="font-family:'Microsoft JhengHei',Arial,sans-serif;font-size:14px;color:#222;line-height:1.7;max-width:520px;">
+      ${params.isTest ? '<div style="background:#fff7e6;border:1px solid #ffd591;color:#ad6800;font-size:12px;border-radius:6px;padding:8px 12px;margin-bottom:14px;">這是一封測試信，內容為範例資料。</div>' : ''}
+      <h2 style="margin:0 0 12px;font-size:18px;">${headline}</h2>
+      <table style="border-collapse:collapse;margin:8px 0 16px;">${rows.join('')}</table>
+      ${params.approved
+        ? `<p style="margin:0 0 14px;">新的額度已即時生效，可直接繼續使用。</p>`
+        : `<p style="margin:0 0 14px;">若仍有需求，請補充說明後重新提出申請。</p>`}
+      ${link ? `<p><a href="${link}" style="display:inline-block;background:#0b6;color:#fff;text-decoration:none;padding:8px 18px;border-radius:6px;font-weight:bold;">開啟 AI Agents Office</a></p>` : ''}
+      <p style="color:#999;font-size:12px;margin-top:18px;">此信由 AI Agents Office 系統自動發送，請勿直接回覆。</p>
+    </div>`;
+  return { subject, body };
+}
+
+/**
+ * Tell the requester (and cc the bound reviewers) how their request was decided.
+ * Best-effort, same contract as notifyQuotaRequest: never throws.
+ */
+export async function notifyQuotaResult(params: QuotaResultEmailParams): Promise<{ sent: boolean; recipients: number; detail?: string }> {
+  if (config.deployMode !== 'pro-panjit') return { sent: false, recipients: 0, detail: 'not pro-panjit' };
+
+  const to = String(params.requesterEmail || '').trim().toLowerCase();
+  if (!to.includes('@')) return { sent: false, recipients: 0, detail: 'requester has no email' };
+
+  // 強茂管理者 = the same bound list that was told about the request. Minus the
+  // requester, so somebody who requests for themselves is not cc'd their own mail.
+  const cc = (await getQuotaNotifyRecipients())
+    .map(r => r.email)
+    .filter(e => e !== to);
+
+  const { subject, body } = buildQuotaResultEmail(params);
+  const result = await sendGatewayMail({ to: [to], cc, subject, body, bodyType: 'html' });
+  if (!result.ok) {
+    console.warn(`[quotaNotify] result mail failed (status ${result.status}): ${result.detail}`);
+  }
+  return { sent: result.ok, recipients: 1 + cc.length, detail: result.detail };
+}
+
 /**
  * Email the bound recipients about a new quota request. Best-effort: returns the
  * gateway result but never throws, so a mail failure can't break the request.

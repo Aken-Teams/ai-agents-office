@@ -122,7 +122,7 @@ export default function AdminQuotaGroups() {
 
 function QuotaGroupsContent() {
   const { token, isReadonly, canOperate } = useAdminAuth();
-  const canEdit = !isReadonly || canOperate('quota-groups');
+  const canEdit = canOperate('quota-groups');
   const { t } = useTranslation();
   const [groups, setGroups] = useState<QuotaGroup[]>([]);
   const [loading, setLoading] = useState(true);

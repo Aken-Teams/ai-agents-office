@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
 import type { AuthPayload } from '../types.js';
-import { getRolePermissions } from '../services/rolePermissions.js';
+import { getRolePermissions, adminRestriction } from '../services/rolePermissions.js';
 import { dbGet } from '../db.js';
 
 // Map admin API route prefixes to permission page keys
@@ -10,6 +10,7 @@ const ROUTE_TO_PAGE_KEY: Record<string, string> = {
   '/overview': 'overview',
   '/users': 'users',
   '/conversations': 'conversations',
+  '/addin-actions': 'conversations', // 增益集 audit lives on the conversations page
   '/quota-groups': 'quota-groups',
   '/quota-requests': 'quota-requests',
   '/quota-notify': 'quota-requests', // notify settings live on the quota-requests page
@@ -62,6 +63,30 @@ export function adminMiddleware(req: Request, res: Response, next: NextFunction)
 
         // Update payload with current role from DB
         payload.role = currentRole;
+
+        // 管理員 may be restricted per page too (see rolePermissions). Both lists
+        // are empty by default, so this is a no-op until somebody sets one.
+        if (currentRole === 'admin') {
+          const pageKey = getPageKeyFromPath(req.path);
+          if (!pageKey) { req.user = payload; next(); return; }
+          getRolePermissions().then(perms => {
+            const level = adminRestriction(perms, pageKey);
+            if (level === 'hidden') {
+              res.status(403).json({ error: '此頁面已對管理員停用' });
+            } else if (level === 'view' && req.method !== 'GET') {
+              res.status(403).json({ error: '此頁面對管理員為僅檢視，無法執行操作' });
+            } else {
+              req.user = payload;
+              next();
+            }
+          }).catch(() => {
+            // Permissions unreadable → fall back to the historical behaviour
+            // (admins can do everything) rather than locking the console out.
+            req.user = payload;
+            next();
+          });
+          return;
+        }
 
         if (currentRole === 'readonly' && req.method !== 'GET') {
           // TEMPORARY exception: the mail-gateway self-test is a safe, non-mutating

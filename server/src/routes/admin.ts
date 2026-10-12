@@ -18,7 +18,7 @@ import { getRolePermissions, setRolePermissions, type RolePermissions } from '..
 import { getLineSettings, setLineSetting, type LineSettings } from '../services/lineSettings.js';
 import { getMessageQuotaStatus } from '../services/line/client.js';
 import { setLineUserDisabled } from '../services/line/userMapping.js';
-import { getQuotaNotifyRecipients, setQuotaNotifyRecipients, buildQuotaRequestEmail, type QuotaNotifyRecipient } from '../services/quotaNotify.js';
+import { getQuotaNotifyRecipients, setQuotaNotifyRecipients, buildQuotaRequestEmail, buildQuotaResultEmail, notifyQuotaResult, type QuotaNotifyRecipient } from '../services/quotaNotify.js';
 import { sendGatewayMail, resolveAdEmail, isGatewayMailConfigured } from '../services/gatewayMail.js';
 import { auxChat, auxLlmAvailable, parseJsonLoose } from '../services/auxLlm.js';
 import { costUsdSql, ratesForModel } from '../services/tokenTracker.js';
@@ -26,6 +26,16 @@ import { auxLlmBreakerState } from '../services/auxLlm.js';
 
 const router = Router();
 router.use(adminMiddleware);
+
+/**
+ * Conversations that came from an Office add-in rather than the web UI.
+ *
+ * These live in the same `conversations` table but describe something else:
+ * the assistant edited a document the user already had open, so there is no
+ * generated file to inspect afterwards — only the `addin_actions` audit rows.
+ * The admin console therefore lists them on their own tab.
+ */
+const ADDIN_CATEGORIES = ['excel-addin', 'word-addin', 'ppt-addin'] as const;
 
 // ==================== Sidebar badge counts ====================
 // Lightweight pending-work counts for the admin sidebar red-dots.
@@ -1243,11 +1253,30 @@ router.get('/conversations', async (req: Request, res: Response) => {
   const userId = req.query.userId as string || '';
   const category = req.query.category as string || '';
 
-  // Hide team-member sub-conversations (0-message noise) AND the email-assistant
-  // conversations — both are surfaced via their own dedicated endpoints
-  // (/teams and /email-agent) so this list stays clean.
-  let whereClause = "WHERE c.team_id IS NULL AND (c.category IS NULL OR c.category <> 'email-agent')";
+  // Hide team-member sub-conversations (0-message noise), the email-assistant
+  // conversations, and the Office add-in conversations — each is surfaced via
+  // its own tab (/teams, /email-agent, category=addin) so this list stays clean.
+  //
+  // The add-ins are split off rather than merged because they are a different
+  // kind of record: a web conversation produces a file you can open, an add-in
+  // turn edits somebody's live document and leaves only `addin_actions` behind.
+  // Mixing them hides 60-odd in-place edits among 4000 file generations.
+  let whereClause = 'WHERE c.team_id IS NULL';
   const params: any[] = [];
+
+  if (category === 'addin') {
+    // The add-in tab: all three hosts at once.
+    whereClause += ` AND c.category IN (${ADDIN_CATEGORIES.map(() => '?').join(', ')})`;
+    params.push(...ADDIN_CATEGORIES);
+  } else if (category) {
+    // Explicit single category (e.g. the KM 助手 tab → category=km-agent, or one
+    // add-in host → category=excel-addin).
+    whereClause += ' AND c.category = ?';
+    params.push(category);
+  } else {
+    whereClause += ` AND (c.category IS NULL OR c.category NOT IN ('email-agent', ${ADDIN_CATEGORIES.map(() => '?').join(', ')}))`;
+    params.push(...ADDIN_CATEGORIES);
+  }
 
   if (search) {
     whereClause += ' AND (c.title LIKE ? OR u.email LIKE ? OR u.display_name LIKE ?)';
@@ -1258,11 +1287,6 @@ router.get('/conversations', async (req: Request, res: Response) => {
     whereClause += ' AND c.user_id = ?';
     params.push(userId);
   }
-  // Optional category filter (e.g. the KM 助手 tab → category=km-agent).
-  if (category) {
-    whereClause += ' AND c.category = ?';
-    params.push(category);
-  }
 
   const countRow = await dbGet<{ total: number }>(
     `SELECT COUNT(*) as total FROM conversations c LEFT JOIN users u ON u.id = c.user_id ${whereClause}`,
@@ -1271,8 +1295,11 @@ router.get('/conversations', async (req: Request, res: Response) => {
 
   const rows = await dbAll(`
     SELECT
-      c.id, c.user_id, c.title, c.skill_id, c.mode, c.status, c.created_at,
+      c.id, c.user_id, c.title, c.skill_id, c.mode, c.status, c.created_at, c.category,
       u.email as user_email, u.display_name as user_display_name,
+      COALESCE(act.action_count, 0) as action_count,
+      COALESCE(act.auto_count, 0) as auto_count,
+      COALESCE(act.destructive_count, 0) as destructive_count,
       COALESCE(t.total_input, 0) as total_input_tokens,
       COALESCE(t.total_output, 0) as total_output_tokens,
       COALESCE(t.cost, 0) as cost,
@@ -1294,6 +1321,12 @@ router.get('/conversations', async (req: Request, res: Response) => {
       SELECT conversation_id, COUNT(*) as message_count, MAX(created_at) as last_message_at
       FROM messages GROUP BY conversation_id
     ) msg ON msg.conversation_id = c.id
+    LEFT JOIN (
+      SELECT conversation_id, COUNT(*) as action_count,
+        SUM(decision = 'auto') as auto_count,
+        SUM(destructive = 1) as destructive_count
+      FROM addin_actions GROUP BY conversation_id
+    ) act ON act.conversation_id = c.id
     ${whereClause}
     ORDER BY COALESCE(msg.last_message_at, c.created_at) DESC
     LIMIT ? OFFSET ?
@@ -1305,6 +1338,102 @@ router.get('/conversations', async (req: Request, res: Response) => {
     page,
     limit,
     totalPages: Math.ceil((countRow?.total ?? 0) / limit),
+  });
+});
+
+// GET /api/admin/addin-actions — the Office add-in audit trail.
+//
+// Every tool call the assistant made against somebody's open document: which
+// host, which model, where it landed, whether a human saw the confirmation card
+// or 自動允許 ran it unattended, and whether it succeeded. See
+// services/addinActionLog.ts for why this table exists at all.
+router.get('/addin-actions', async (req: Request, res: Response) => {
+  const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+  const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+  const offset = (page - 1) * limit;
+  const host = (req.query.host as string || '').trim();
+  const decision = (req.query.decision as string || '').trim();
+  const model = (req.query.model as string || '').trim();
+  const userId = (req.query.userId as string || '').trim();
+  const conversationId = (req.query.conversationId as string || '').trim();
+  const search = (req.query.search as string || '').trim();
+  // 「哪些動作是沒有人看過就執行的，而且會蓋掉東西」— the one question the table
+  // exists to answer, so it gets a flag of its own rather than two filters.
+  const riskyOnly = req.query.risky === '1' || req.query.risky === 'true';
+
+  let where = 'WHERE 1 = 1';
+  const params: any[] = [];
+  if (['excel', 'word', 'ppt', 'other'].includes(host)) { where += ' AND a.host = ?'; params.push(host); }
+  if (['none', 'auto', 'allowed', 'rejected'].includes(decision)) { where += ' AND a.decision = ?'; params.push(decision); }
+  if (model) {
+    // 'local' groups every on-prem model — the distinction customers care about
+    // is cloud vs. local, not which local build it happened to be.
+    if (model === 'local') where += " AND a.model LIKE 'local-%'";
+    else if (model === 'cloud') where += " AND a.model IS NOT NULL AND a.model NOT LIKE 'local-%'";
+    else { where += ' AND a.model = ?'; params.push(model); }
+  }
+  if (userId) { where += ' AND a.user_id = ?'; params.push(userId); }
+  if (conversationId) { where += ' AND a.conversation_id = ?'; params.push(conversationId); }
+  if (riskyOnly) where += " AND a.destructive = 1 AND a.decision = 'auto'";
+  if (search) {
+    where += ' AND (a.tool LIKE ? OR a.target LIKE ? OR a.summary LIKE ? OR u.email LIKE ? OR u.display_name LIKE ?)';
+    const p = `%${search}%`;
+    params.push(p, p, p, p, p);
+  }
+
+  const summary = await dbGet<any>(`
+    SELECT COUNT(*) AS total,
+           SUM(a.decision = 'auto') AS auto_count,
+           SUM(a.decision = 'allowed') AS allowed_count,
+           SUM(a.decision = 'rejected') AS rejected_count,
+           SUM(a.destructive = 1) AS destructive_count,
+           SUM(a.destructive = 1 AND a.decision = 'auto') AS risky_count,
+           SUM(a.ok = 0) AS failed_count,
+           COUNT(DISTINCT a.user_id) AS user_count,
+           COUNT(DISTINCT a.conversation_id) AS conversation_count
+    FROM addin_actions a
+    LEFT JOIN users u ON u.id = a.user_id
+    ${where}
+  `, ...params);
+
+  const rows = await dbAll(`
+    SELECT a.id, a.created_at, a.user_id, a.conversation_id, a.host, a.model,
+           a.tool, a.target, a.destructive, a.decision, a.ok, a.summary,
+           u.email AS user_email, u.display_name AS user_display_name,
+           c.title AS conversation_title
+    FROM addin_actions a
+    LEFT JOIN users u ON u.id = a.user_id
+    LEFT JOIN conversations c ON c.id = a.conversation_id
+    ${where}
+    ORDER BY a.created_at DESC
+    LIMIT ? OFFSET ?
+  `, ...params, limit, offset);
+
+  // Unfiltered facets — the dropdowns must keep offering values the current
+  // filter excludes, otherwise you can filter yourself into a corner.
+  const models = await dbAll<{ model: string | null; n: number }>(
+    'SELECT model, COUNT(*) AS n FROM addin_actions GROUP BY model ORDER BY n DESC'
+  );
+
+  const total = Number(summary?.total ?? 0);
+  res.json({
+    actions: rows,
+    summary: {
+      total,
+      auto: Number(summary?.auto_count ?? 0),
+      allowed: Number(summary?.allowed_count ?? 0),
+      rejected: Number(summary?.rejected_count ?? 0),
+      destructive: Number(summary?.destructive_count ?? 0),
+      risky: Number(summary?.risky_count ?? 0),
+      failed: Number(summary?.failed_count ?? 0),
+      users: Number(summary?.user_count ?? 0),
+      conversations: Number(summary?.conversation_count ?? 0),
+    },
+    models: models.map(m => ({ model: m.model, count: Number(m.n) })),
+    page,
+    limit,
+    total,
+    totalPages: Math.ceil(total / limit),
   });
 });
 
@@ -1578,6 +1707,14 @@ router.get('/conversations/:id', async (req: Request, res: Response) => {
     ORDER BY created_at DESC
   `, convId);
 
+  // For an add-in conversation this is the substance of the record: the
+  // transcript only says 「已更新完成」, these rows say what was actually changed.
+  const addinActions = await dbAll(`
+    SELECT id, created_at, host, model, tool, target, destructive, decision, ok, summary
+    FROM addin_actions WHERE conversation_id = ?
+    ORDER BY created_at ASC
+  `, convId);
+
   res.json({
     ...conv,
     messages,
@@ -1585,6 +1722,7 @@ router.get('/conversations/:id', async (req: Request, res: Response) => {
     uploads,
     tokenUsage,
     tasks,
+    addinActions,
   });
 });
 
@@ -2205,14 +2343,37 @@ router.get('/tokens/monthly-summary', async (req: Request, res: Response) => {
 // ==================== Quota Requests ====================
 
 // GET /api/admin/quota-requests — List quota increase requests
+//
+// Paginated. The old form returned a bare array capped at 100; callers that
+// still expect that shape would break, so the response is an object now and the
+// client reads `.requests` — there is only one caller and it ships together.
 router.get('/quota-requests', async (req: Request, res: Response) => {
   const status = req.query.status as string | undefined;
+  const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 10, 1), 100);
+  const offset = (page - 1) * limit;
+  const search = (req.query.search as string || '').trim();
+
   let where = '';
   const params: any[] = [];
   if (status && ['pending', 'approved', 'denied'].includes(status)) {
     where = 'WHERE qr.status = ?';
     params.push(status);
   }
+  if (search) {
+    where += where ? ' AND ' : 'WHERE ';
+    where += '(u.email LIKE ? OR u.display_name LIKE ? OR qr.reason LIKE ?)';
+    const p = `%${search}%`;
+    params.push(p, p, p);
+  }
+
+  const countRow = await dbGet<{ total: number }>(`
+    SELECT COUNT(*) AS total
+    FROM quota_requests qr
+    LEFT JOIN users u ON u.id = qr.user_id
+    ${where}
+  `, ...params);
+  const total = countRow?.total ?? 0;
 
   const rows = await dbAll<any>(`
     SELECT qr.*, u.email, u.display_name, u.role AS user_role,
@@ -2225,8 +2386,8 @@ router.get('/quota-requests', async (req: Request, res: Response) => {
     LEFT JOIN quota_groups qg ON qg.id = u.quota_group_id
     ${where}
     ORDER BY CASE qr.status WHEN 'pending' THEN 0 ELSE 1 END, qr.created_at DESC
-    LIMIT 100
-  `, ...params);
+    LIMIT ? OFFSET ?
+  `, ...params, limit, offset);
 
   // Annotate each row with the requester's CURRENT effective limit so the UI can
   // flag approvals that no longer match (history vs current state), and mark
@@ -2242,7 +2403,18 @@ router.get('/quota-requests', async (req: Request, res: Response) => {
     return { ...rest, user_deleted: userDeleted, user_unlimited: userUnlimited, current_limit_effective: currentLimit };
   });
 
-  res.json(annotated);
+  // Pending count regardless of the current tab/page, so the 待審核 tab can carry
+  // a badge without a second round-trip.
+  const pendingRow = await dbGet<{ n: number }>("SELECT COUNT(*) AS n FROM quota_requests WHERE status = 'pending'");
+
+  res.json({
+    requests: annotated,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+    pendingTotal: pendingRow?.n ?? 0,
+  });
 });
 
 // PATCH /api/admin/quota-requests/:id — Approve or deny a quota request
@@ -2265,13 +2437,18 @@ router.patch('/quota-requests/:id', async (req: Request, res: Response) => {
     return;
   }
 
+  // Carried out of the branches below so the result mail can state what the
+  // limit actually became, whichever path the approval took.
+  let approvedLimit: number | null = null;
+  let approvedGroupName: string | null = null;
+
   if (action === 'approve') {
     // Preferred path: approve by assigning the user to a quota GROUP. This keeps
     // approvals manageable by reviewers (who operate on groups) and clears any
     // personal override so the group actually takes effect. A raw `new_limit`
     // (personal override) is still accepted as an admin-only exception.
     const group = group_id
-      ? await dbGet<{ id: string; limit_usd: number }>('SELECT id, limit_usd FROM quota_groups WHERE id = ?', group_id)
+      ? await dbGet<{ id: string; limit_usd: number; name: string }>('SELECT id, limit_usd, name FROM quota_groups WHERE id = ?', group_id)
       : null;
     if (group_id && !group) { res.status(400).json({ error: '找不到指定的額度群組' }); return; }
 
@@ -2291,6 +2468,8 @@ router.patch('/quota-requests/:id', async (req: Request, res: Response) => {
         uuidv4(), req.user!.userId, 'approve_quota_request', 'quota_request', id,
         JSON.stringify({ user_id: request.user_id, group_id: group.id, new_limit: group.limit_usd })
       );
+      approvedLimit = Number(group.limit_usd);
+      approvedGroupName = group.name;
     } else {
       // Admin exception: personal override.
       if (new_limit == null || isNaN(parseFloat(new_limit)) || parseFloat(new_limit) <= 0) {
@@ -2311,6 +2490,7 @@ router.patch('/quota-requests/:id', async (req: Request, res: Response) => {
         uuidv4(), req.user!.userId, 'approve_quota_request', 'quota_request', id,
         JSON.stringify({ user_id: request.user_id, new_limit: limitVal })
       );
+      approvedLimit = limitVal;
     }
   } else {
     // Deny
@@ -2326,6 +2506,36 @@ router.patch('/quota-requests/:id', async (req: Request, res: Response) => {
       JSON.stringify({ user_id: request.user_id, admin_notes })
     );
   }
+
+  // Close the loop: tell the requester the decision, cc the bound reviewers.
+  // Detached and best-effort — the limit is already written, and a mail gateway
+  // hiccup must not turn a successful approval into a 500 the reviewer retries.
+  const approved = action === 'approve';
+  void (async () => {
+    try {
+      const requester = await dbGet<{ display_name: string | null; email: string }>(
+        'SELECT display_name, email FROM users WHERE id = ?', request.user_id
+      );
+      if (!requester?.email) return;
+      const reviewer = await dbGet<{ display_name: string | null; email: string }>(
+        'SELECT display_name, email FROM users WHERE id = ?', req.user!.userId
+      );
+      await notifyQuotaResult({
+        requesterName: requester.display_name || requester.email,
+        requesterEmail: requester.email,
+        reason: request.reason,
+        approved,
+        newLimit: approvedLimit,
+        previousLimit: request.current_limit != null ? Number(request.current_limit) : null,
+        groupName: approvedGroupName,
+        reviewerName: reviewer?.display_name || reviewer?.email || null,
+        adminNotes: admin_notes || null,
+        appUrl: config.publicWebUrl,
+      });
+    } catch (e) {
+      console.warn('[quota-request] result notify failed:', e);
+    }
+  })();
 
   res.json({ success: true });
 });
@@ -2446,10 +2656,12 @@ router.put('/quota-notify', async (req: Request, res: Response) => {
   res.json({ ok: true, recipients: await getQuotaNotifyRecipients() });
 });
 
-// POST /api/admin/quota-notify/test { email? } → send a test mail (surfaces gateway errors)
+// POST /api/admin/quota-notify/test { email?, kind? } → send a test mail (surfaces gateway errors)
+// kind: 'request' (default) = 申請通知給審核者；'result' = 審核完成通知給申請者。
 router.post('/quota-notify/test', async (req: Request, res: Response) => {
   if (config.deployMode !== 'pro-panjit') return res.status(403).json({ error: 'Not available in this deployment mode' });
   const explicit = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+  const kind = req.body?.kind === 'result' ? 'result' : 'request';
   let to: string[];
   if (explicit && explicit.includes('@')) {
     to = [explicit.toLowerCase()];
@@ -2459,15 +2671,28 @@ router.post('/quota-notify/test', async (req: Request, res: Response) => {
   if (!to.length) return res.status(400).json({ error: '尚未設定收件者，且未提供測試信箱' });
   // Send the REAL notification template (with sample data) so the test looks
   // exactly like an actual quota-request notification.
-  const { subject, body } = buildQuotaRequestEmail({
+  const sample = {
     requesterName: '王小明',
     requesterEmail: 'sample.user@panjit.com.tw',
     reason: '近期需製作多份季度簡報與報告，目前額度即將用罄，懇請調高額度。',
-    currentLimit: 50,
-    currentCost: 47.32,
-    adminUrl: config.publicWebUrl,
     isTest: true,
-  });
+  };
+  const { subject, body } = kind === 'result'
+    ? buildQuotaResultEmail({
+        ...sample,
+        approved: true,
+        previousLimit: 50,
+        newLimit: 75,
+        groupName: '進階用戶',
+        reviewerName: '（測試）審核人',
+        appUrl: config.publicWebUrl,
+      })
+    : buildQuotaRequestEmail({
+        ...sample,
+        currentLimit: 50,
+        currentCost: 47.32,
+        adminUrl: config.publicWebUrl,
+      });
   const result = await sendGatewayMail({ to, subject, body, bodyType: 'html' });
   if (!result.ok) {
     return res.status(502).json({ ok: false, status: result.status, detail: result.detail, sentTo: to });

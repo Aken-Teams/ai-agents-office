@@ -19,7 +19,7 @@ export default function AdminInviteCodes() {
 
 function InviteCodesContent() {
   const { token, isReadonly, canOperate } = useAdminAuth();
-  const canEdit = !isReadonly || canOperate('invite-codes');
+  const canEdit = canOperate('invite-codes');
   const { t } = useTranslation();
   const [codes, setCodes] = useState<InviteCode[]>([]);
   const [loading, setLoading] = useState(true);

@@ -129,6 +129,101 @@ function formatSize(bytes: number) {
 const PAGE_SIZE = 15;
 
 /* ============================================================
+   Office add-in audit (addin_actions)
+   ============================================================ */
+
+const ADDIN_HOSTS: Record<string, { label: string; icon: string; color: string }> = {
+  excel: { label: 'Excel', icon: 'table_chart', color: '#4CAF50' },
+  word: { label: 'Word', icon: 'description', color: '#2196F3' },
+  ppt: { label: 'PowerPoint', icon: 'present_to_all', color: '#FF8A65' },
+  other: { label: '其他', icon: 'extension', color: '#8f9097' },
+};
+
+function addinHost(host: string) {
+  return ADDIN_HOSTS[host] || ADDIN_HOSTS.other;
+}
+
+/**
+ * Page numbers to draw: always first and last, plus a window around the current
+ * one. `null` is an ellipsis. 793 audit rows at 10 a page is 80 pages, so a
+ * plain 1..N strip is not an option.
+ */
+function pageWindow(current: number, totalPages: number): (number | null)[] {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+  const pages = new Set([1, totalPages, current, current - 1, current + 1]);
+  const sorted = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+  const out: (number | null)[] = [];
+  let prev = 0;
+  for (const p of sorted) {
+    if (prev && p - prev > 1) out.push(null);
+    out.push(p);
+    prev = p;
+  }
+  return out;
+}
+
+/** 'word-addin' → 'word'. The conversation category carries the host too. */
+function hostFromCategory(category: string | null): string | null {
+  if (!category || !category.endsWith('-addin')) return null;
+  return category.replace('-addin', '');
+}
+
+/**
+ * How the confirmation gate resolved. 自動允許 and 「人看了才按」 are deliberately
+ * different states: an audit that cannot tell them apart cannot answer the one
+ * question it exists for — which edits ran with nobody watching.
+ */
+const DECISION_META: Record<string, { label: string; cls: string; icon: string }> = {
+  none: { label: '無需確認', cls: 'text-on-surface-variant bg-surface-container-high', icon: 'remove' },
+  auto: { label: '自動允許', cls: 'text-warning bg-warning/10', icon: 'bolt' },
+  allowed: { label: '人工允許', cls: 'text-success bg-success/10', icon: 'how_to_reg' },
+  rejected: { label: '已拒絕', cls: 'text-error bg-error/10', icon: 'block' },
+};
+
+function decisionMeta(d: string) {
+  return DECISION_META[d] || DECISION_META.none;
+}
+
+/** 地端模型 vs 雲端模型 — the distinction worth seeing at a glance. */
+function modelBadge(model: string | null): { label: string; cls: string } | null {
+  if (!model) return null;
+  if (model.startsWith('local-')) return { label: model.replace(/^local-/, '') + ' · 地端', cls: 'text-tertiary bg-tertiary/10' };
+  return { label: model, cls: 'text-primary bg-primary/10' };
+}
+
+/** One audit row, used by both the detail panel and the standalone log. */
+function AddinActionRow({ a, showTime = true }: { a: any; showTime?: boolean }) {
+  const host = addinHost(a.host);
+  const dec = decisionMeta(a.decision);
+  const badge = modelBadge(a.model);
+  return (
+    <div className="flex items-start gap-3 px-3 md:px-4 py-2.5 rounded-xl border border-outline-variant/20 bg-surface-container/30">
+      <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5" style={{ background: `${host.color}1a` }}>
+        <span className="material-symbols-outlined" style={{ fontSize: 14, color: host.color }}>{host.icon}</span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-on-surface">{a.summary || a.tool}</span>
+          {!a.ok && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold text-error bg-error/10">失敗</span>
+          )}
+          {a.destructive === 1 || a.destructive === true ? (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold text-error bg-error/10">破壞性</span>
+          ) : null}
+          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${dec.cls}`}>{dec.label}</span>
+        </div>
+        <div className="flex items-center gap-2 mt-1 flex-wrap text-[11px] text-on-surface-variant font-mono">
+          <span>{a.tool}</span>
+          {a.target && <span className="text-outline">· {a.target}</span>}
+          {badge && <span className={`px-1.5 py-0.5 rounded ${badge.cls} font-sans font-medium`}>{badge.label}</span>}
+          {showTime && <span className="ml-auto">{formatDate(a.created_at)}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
    Detail Panel (shared between desktop sidebar & mobile overlay)
    ============================================================ */
 function ConversationDetailPanel({
@@ -141,7 +236,7 @@ function ConversationDetailPanel({
 }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'messages' | 'files' | 'uploads' | 'tasks'>('messages');
+  const [activeTab, setActiveTab] = useState<'messages' | 'files' | 'uploads' | 'tasks' | 'actions'>('messages');
   const [toast, setToast] = useState<string | null>(null);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
@@ -205,6 +300,12 @@ function ConversationDetailPanel({
     { key: 'uploads' as const, label: t('admin.conversations.detail.uploads'), count: data.uploads?.length ?? 0, icon: 'upload_file' },
     { key: 'tasks' as const, label: t('admin.conversations.detail.tasks'), count: data.tasks?.length ?? 0, icon: 'task_alt' },
   ];
+
+  // Only an add-in conversation has these, and for one it is the main tab —
+  // the transcript says 「已更新完成」, this says what was actually changed.
+  if (data.addinActions?.length) {
+    tabs.push({ key: 'actions' as any, label: '文件操作', count: data.addinActions.length, icon: 'fact_check' } as any);
+  }
 
   return (
     <>
@@ -488,8 +589,197 @@ function ConversationDetailPanel({
             })}
           </div>
         )}
+
+        {activeTab === 'actions' && (
+          <div className="p-3 md:p-6 space-y-2">
+            {(() => {
+              const acts: any[] = data.addinActions || [];
+              const risky = acts.filter(a => (a.destructive === 1 || a.destructive === true) && a.decision === 'auto').length;
+              const confirmed = acts.filter(a => a.decision === 'allowed').length;
+              const rejected = acts.filter(a => a.decision === 'rejected').length;
+              return (
+                <div className="flex items-center gap-2 flex-wrap mb-3 text-xs">
+                  <span className="px-2 py-1 rounded-lg bg-surface-container-high text-on-surface-variant">共 {acts.length} 次操作</span>
+                  {confirmed > 0 && <span className="px-2 py-1 rounded-lg bg-success/10 text-success font-medium">人工允許 {confirmed}</span>}
+                  {rejected > 0 && <span className="px-2 py-1 rounded-lg bg-error/10 text-error font-medium">已拒絕 {rejected}</span>}
+                  {risky > 0 && (
+                    <span className="px-2 py-1 rounded-lg bg-warning/10 text-warning font-medium" title="破壞性操作在自動允許下執行，沒有人看過確認卡">
+                      無人確認的破壞性操作 {risky}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+            {data.addinActions?.map((a: any) => <AddinActionRow key={a.id} a={a} />)}
+          </div>
+        )}
       </div>
     </>
+  );
+}
+
+/* ============================================================
+   Add-in audit log (standalone view inside the 增益集 tab)
+   ============================================================ */
+function AddinAuditLog({ token, onOpenConversation }: { token: string; onOpenConversation: (id: string) => void }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [host, setHost] = useState('');
+  const [decision, setDecision] = useState('');
+  const [risky, setRisky] = useState(false);
+  const [search, setSearch] = useState('');
+  const LOG_PAGE_SIZE = 10;
+
+  useEffect(() => {
+    setLoading(true);
+    const params = new URLSearchParams({ page: String(page), limit: String(LOG_PAGE_SIZE) });
+    if (host) params.set('host', host);
+    if (decision) params.set('decision', decision);
+    if (risky) params.set('risky', '1');
+    if (search) params.set('search', search);
+    fetch(`/api/admin/addin-actions?${params}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [token, page, host, decision, risky, search]);
+
+  // Any filter change restarts paging.
+  useEffect(() => { setPage(1); }, [host, decision, risky, search]);
+
+  const s = data?.summary;
+  const actions: any[] = data?.actions || [];
+
+  const chip = (active: boolean) =>
+    `px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+      active ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'
+    }`;
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Summary — the questions the table exists to answer, up front */}
+      {s && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-4 shrink-0">
+          <Stat label="總操作數" value={s.total} />
+          <Stat label="人工允許" value={s.allowed} tone="success" />
+          <Stat label="自動允許" value={s.auto} tone="warning" />
+          <Stat
+            label="無人確認的破壞性操作"
+            value={s.risky}
+            tone={s.risky > 0 ? 'error' : undefined}
+            hint="破壞性操作在「自動允許」下執行，沒有人看過確認卡"
+          />
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="flex items-center gap-1 flex-wrap mb-3 shrink-0">
+        <button onClick={() => setHost('')} className={chip(host === '')}>全部程式</button>
+        {['excel', 'word', 'ppt'].map(h => (
+          <button key={h} onClick={() => setHost(h)} className={chip(host === h)}>{addinHost(h).label}</button>
+        ))}
+        <span className="w-px h-5 bg-outline-variant/30 mx-1.5" />
+        <button onClick={() => { setDecision(''); setRisky(false); }} className={chip(decision === '' && !risky)}>全部動作</button>
+        {(['allowed', 'auto', 'rejected'] as const).map(d => (
+          <button key={d} onClick={() => { setDecision(d); setRisky(false); }} className={chip(decision === d && !risky)}>
+            {decisionMeta(d).label}
+          </button>
+        ))}
+        <button
+          onClick={() => { setRisky(r => !r); setDecision(''); }}
+          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+            risky ? 'bg-error text-on-primary' : 'text-error hover:bg-error/10'
+          }`}
+          title="破壞性 + 自動允許"
+        >
+          無人確認的破壞性操作
+        </button>
+      </div>
+
+      <div className="relative mb-4 shrink-0">
+        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm">search</span>
+        <input
+          className="w-full bg-surface-container-highest border-none focus:ring-1 focus:ring-primary/40 rounded py-2.5 pl-10 pr-4 text-sm text-on-surface placeholder:text-outline font-body"
+          placeholder="搜尋工具、位置、說明或使用者…"
+          defaultValue={search}
+          onKeyDown={e => { if (e.key === 'Enter') setSearch((e.target as HTMLInputElement).value.trim()); }}
+        />
+      </div>
+
+      {/* Rows */}
+      <div className="flex-1 overflow-y-auto space-y-2">
+        {loading && <p className="text-center py-10 text-on-surface-variant text-sm">載入中…</p>}
+        {!loading && actions.length === 0 && (
+          <p className="text-center py-10 text-on-surface-variant text-sm">沒有符合條件的操作紀錄</p>
+        )}
+        {!loading && actions.map(a => (
+          <div key={a.id} className="space-y-1">
+            <div className="flex items-center gap-2 px-1 text-[11px] text-on-surface-variant">
+              <span className="font-medium text-on-surface">{a.user_display_name || a.user_email || '（未知使用者）'}</span>
+              {a.conversation_id && (
+                <button
+                  onClick={() => onOpenConversation(a.conversation_id)}
+                  className="text-primary hover:underline cursor-pointer bg-transparent border-none p-0 text-[11px] truncate max-w-[280px]"
+                >
+                  {a.conversation_title || '開啟對話'}
+                </button>
+              )}
+            </div>
+            <AddinActionRow a={a} />
+          </div>
+        ))}
+      </div>
+
+      {/* Pagination */}
+      {!loading && (data?.totalPages ?? 1) > 1 && (
+        <div className="flex items-center justify-between gap-4 pt-3 mt-3 border-t border-outline-variant/20 shrink-0">
+          <span className="text-xs text-on-surface-variant font-mono">
+            {(page - 1) * LOG_PAGE_SIZE + 1}–{Math.min(page * LOG_PAGE_SIZE, data.total)} / {data.total}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            >
+              <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+            </button>
+            {pageWindow(page, data.totalPages).map((p, i) => (
+              p === null ? (
+                <span key={`gap-${i}`} className="px-1 text-on-surface-variant">…</span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  className={`min-w-8 h-8 px-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                    p === page ? 'bg-primary/10 text-primary' : 'text-on-surface-variant hover:bg-surface-container'
+                  }`}
+                >
+                  {p}
+                </button>
+              )
+            ))}
+            <button
+              onClick={() => setPage(p => Math.min(data.totalPages, p + 1))}
+              disabled={page >= data.totalPages}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            >
+              <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value, tone, hint }: { label: string; value: number; tone?: 'success' | 'warning' | 'error'; hint?: string }) {
+  const color = tone === 'success' ? 'text-success' : tone === 'warning' ? 'text-warning' : tone === 'error' ? 'text-error' : 'text-on-surface';
+  return (
+    <div className="bg-surface-container rounded-xl px-3 md:px-4 py-2.5 border border-outline-variant/10" title={hint}>
+      <p className={`text-lg md:text-xl font-black font-mono ${color}`}>{value ?? 0}</p>
+      <p className="text-[11px] text-on-surface-variant mt-0.5 leading-tight">{label}</p>
+    </div>
   );
 }
 
@@ -504,10 +794,12 @@ export default function AdminConversationsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
-  const [category, setCategory] = useState(''); // '' = 對話管理(全部); 'km-agent' = KM 助手
+  const [category, setCategory] = useState(''); // '' = 對話管理(全部); 'km-agent' = KM 助手; 'addin' = 增益集
   const kmAvailable = useKmAvailable(); // hide KM 助手 tab when server has no KM_API_KEY
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Within the 增益集 tab: the conversations, or the raw audit trail behind them.
+  const [addinView, setAddinView] = useState<'conversations' | 'audit'>('conversations');
   const limit = PAGE_SIZE;
 
   const fetchConversations = useCallback(() => {
@@ -536,6 +828,10 @@ export default function AdminConversationsPage() {
     setPage(1);
     fetchConversations();
   }
+
+  // The audit log replaces the conversation table rather than sitting under it —
+  // it is a different unit of record, not extra detail about the same rows.
+  const showConversationList = !(category === 'addin' && addinView === 'audit');
 
   /* ---- Detail full-page view ---- */
   if (selectedId && token) {
@@ -582,11 +878,42 @@ export default function AdminConversationsPage() {
             className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${category === '' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}>對話管理</button>
           <Link href="/admin/teams" className="px-3.5 py-1.5 rounded-full text-sm text-on-surface-variant hover:bg-surface-container transition-colors no-underline">團隊協作</Link>
           <Link href="/admin/email-agent" className="px-3.5 py-1.5 rounded-full text-sm text-on-surface-variant hover:bg-surface-container transition-colors no-underline">信件助手</Link>
+          <button onClick={() => { setCategory('addin'); setPage(1); }}
+            className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${category === 'addin' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}>增益集</button>
           {kmAvailable && (
             <button onClick={() => { setCategory('km-agent'); setPage(1); }}
               className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-colors ${category === 'km-agent' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:bg-surface-container'}`}>KM 助手</button>
           )}
         </div>
+
+        {/* 增益集 sub-view: the conversations, or the audit trail behind them */}
+        {category === 'addin' && (
+          <div className="flex items-center gap-1 mb-4 shrink-0">
+            {([['conversations', '對話', 'forum'], ['audit', '操作稽核', 'fact_check']] as const).map(([key, label, icon]) => (
+              <button
+                key={key}
+                onClick={() => setAddinView(key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                  addinView === key ? 'bg-primary/10 text-primary' : 'text-on-surface-variant hover:bg-surface-container'
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">{icon}</span>
+                {label}
+              </button>
+            ))}
+            <p className="ml-3 text-xs text-on-surface-variant hidden md:block">
+              {addinView === 'audit'
+                ? '增益集直接改使用者開著的檔案，沒有產出檔可事後檢查 — 這裡是唯一的紀錄'
+                : 'Excel / Word / PowerPoint 增益集內的對話，與網頁端分開列出'}
+            </p>
+          </div>
+        )}
+
+        {category === 'addin' && addinView === 'audit' && token && (
+          <AddinAuditLog token={token} onOpenConversation={setSelectedId} />
+        )}
+
+        {showConversationList && <>
         {/* Search */}
         <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4 mb-4 md:mb-6">
           <form onSubmit={handleSearch} className="flex-1 relative">
@@ -637,7 +964,21 @@ export default function AdminConversationsPage() {
                     </td>
                     <td className="py-3 px-4 text-sm text-on-surface truncate max-w-[300px]">{conv.title}</td>
                     <td className="py-3 px-4">
-                      <span className="text-xs font-bold uppercase tracking-wider" style={{ color: config.color }}>{config.label}</span>
+                      {(() => {
+                        // An add-in row's useful type is which Office app it ran in,
+                        // not the skill (there isn't one) — so it replaces the badge.
+                        const h = hostFromCategory(conv.category);
+                        if (h) {
+                          const meta = addinHost(h);
+                          return (
+                            <span className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider" style={{ color: meta.color }}>
+                              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>{meta.icon}</span>
+                              {meta.label}
+                            </span>
+                          );
+                        }
+                        return <span className="text-xs font-bold uppercase tracking-wider" style={{ color: config.color }}>{config.label}</span>;
+                      })()}
                     </td>
                     <td className="py-3 px-4 text-center text-sm text-on-surface-variant">{conv.message_count || 0}</td>
                     <td className="py-3 px-4 text-right text-sm font-mono">
@@ -646,7 +987,15 @@ export default function AdminConversationsPage() {
                         <span className="text-xs text-success ml-1">({formatCost((conv.cost ?? 0))})</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-right text-sm text-on-surface-variant">{conv.file_count || 0}</td>
+                    <td className="py-3 px-4 text-right text-sm text-on-surface-variant">
+                      {hostFromCategory(conv.category) ? (
+                        // An add-in produces no file — the edit count is the real figure.
+                        <span title="文件操作次數（稽核）" className={conv.destructive_count > 0 ? 'text-warning font-bold' : ''}>
+                          {conv.action_count || 0}
+                          {conv.destructive_count > 0 && <span className="text-xs"> ⚠</span>}
+                        </span>
+                      ) : (conv.file_count || 0)}
+                    </td>
                     <td className="py-3 px-4 text-sm text-on-surface-variant font-mono">
                       {toUTC(conv.last_activity || conv.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                     </td>
@@ -765,6 +1114,7 @@ export default function AdminConversationsPage() {
             </div>
           </div>
         )}
+        </>}
       </div>
     </>
   );

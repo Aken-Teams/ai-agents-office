@@ -34,17 +34,41 @@ interface QuotaGroup {
   limit_usd: number;
 }
 
+/**
+ * Page numbers to draw: always first and last, plus a window around the current
+ * one. `null` is an ellipsis. Keeps the control one line wide at any history
+ * length — there are already 19 requests and the list only grows.
+ */
+function pageWindow(current: number, totalPages: number): (number | null)[] {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+  const pages = new Set([1, totalPages, current, current - 1, current + 1]);
+  const sorted = [...pages].filter(p => p >= 1 && p <= totalPages).sort((a, b) => a - b);
+  const out: (number | null)[] = [];
+  let prev = 0;
+  for (const p of sorted) {
+    if (prev && p - prev > 1) out.push(null);
+    out.push(p);
+    prev = p;
+  }
+  return out;
+}
+
 export default function AdminQuotaRequests() {
   return <QuotaRequestsContent />;
 }
 
 function QuotaRequestsContent() {
   const { token, isReadonly, canOperate } = useAdminAuth();
-  const canEdit = !isReadonly || canOperate('quota-requests');
+  const canEdit = canOperate('quota-requests');
   const { t } = useTranslation();
   const [requests, setRequests] = useState<QuotaRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'pending' | 'all'>('pending');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pendingTotal, setPendingTotal] = useState(0);
+  const PAGE_SIZE = 10;
 
   // Approve modal — approve by assigning the user to a quota group
   const [approveTarget, setApproveTarget] = useState<QuotaRequest | null>(null);
@@ -68,17 +92,32 @@ function QuotaRequestsContent() {
     if (!token) return;
     setLoading(true);
     try {
-      const statusParam = tab === 'pending' ? '?status=pending' : '';
-      const res = await fetch(`/api/admin/quota-requests${statusParam}`, {
+      const qs = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
+      if (tab === 'pending') qs.set('status', 'pending');
+      const res = await fetch(`/api/admin/quota-requests?${qs}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) setRequests(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setRequests(data.requests || []);
+        setTotal(data.total || 0);
+        setTotalPages(data.totalPages || 1);
+        setPendingTotal(data.pendingTotal || 0);
+        // Approving the last item on the last page empties it — step back rather
+        // than leaving the reviewer staring at 「目前沒有額度申請」 on page 4 of 3.
+        if (page > 1 && (data.requests || []).length === 0 && (data.totalPages || 1) < page) {
+          setPage(Math.max(1, data.totalPages || 1));
+        }
+      }
     } finally {
       setLoading(false);
     }
-  }, [token, tab]);
+  }, [token, tab, page]);
 
   useEffect(() => { fetchRequests(); }, [fetchRequests]);
+
+  // Switching tabs restarts paging — page 3 of 待審核 is not page 3 of 全部記錄.
+  useEffect(() => { setPage(1); }, [tab]);
 
   // Load quota groups for the approve selector
   useEffect(() => {
@@ -100,6 +139,10 @@ function QuotaRequestsContent() {
   }, [groupOpen]);
 
   async function handleApprove() {
+    // 僅檢視 hides the buttons, but the handler guards too: the modal state could
+    // survive a permission change mid-session, and the one thing this mode must
+    // guarantee is that an admin cannot approve.
+    if (!canEdit) return;
     if (!token || !approveTarget || submitting || !approveGroupId) return;
     setSubmitting(true);
     try {
@@ -120,6 +163,7 @@ function QuotaRequestsContent() {
   }
 
   async function handleDeny() {
+    if (!canEdit) return;
     if (!token || !denyTarget || submitting) return;
     setSubmitting(true);
     try {
@@ -170,6 +214,15 @@ function QuotaRequestsContent() {
               <span className="hidden md:inline">通知設定</span>
             </button>
           )}
+          {!canEdit && (
+            <span
+              title="此頁面目前設定為僅檢視，審核操作由強茂管理者執行"
+              className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-surface-container text-on-surface-variant"
+            >
+              <span className="material-symbols-outlined text-base">visibility</span>
+              僅檢視
+            </span>
+          )}
           {(['pending', 'all'] as const).map(tabKey => (
             <button
               key={tabKey}
@@ -181,6 +234,9 @@ function QuotaRequestsContent() {
               }`}
             >
               {t(`admin.quotaRequests.tab.${tabKey}` as any)}
+              {tabKey === 'pending' && pendingTotal > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-warning/15 text-warning">{pendingTotal}</span>
+              )}
             </button>
           ))}
         </div>
@@ -267,8 +323,48 @@ function QuotaRequestsContent() {
         </div>
       )}
 
+      {/* Pagination */}
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-between gap-4 pt-1">
+          <span className="text-xs text-on-surface-variant font-mono">
+            {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} / {total}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            >
+              <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+            </button>
+            {pageWindow(page, totalPages).map((p, i) => (
+              p === null ? (
+                <span key={`gap-${i}`} className="px-1 text-on-surface-variant">…</span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  className={`min-w-8 h-8 px-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                    p === page ? 'bg-primary/10 text-primary' : 'text-on-surface-variant hover:bg-surface-container'
+                  }`}
+                >
+                  {p}
+                </button>
+              )
+            ))}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            >
+              <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Approve Modal */}
-      {approveTarget && (
+      {approveTarget && canEdit && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setApproveTarget(null)}>
           <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-headline font-bold text-on-surface mb-1">{t('admin.quotaRequests.approveModal.title' as any)}</h3>
@@ -369,7 +465,7 @@ function QuotaRequestsContent() {
       )}
 
       {/* Deny Modal */}
-      {denyTarget && (
+      {denyTarget && canEdit && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setDenyTarget(null)}>
           <div className="bg-surface-container-lowest rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-headline font-bold text-on-surface mb-1">{t('admin.quotaRequests.denyModal.title' as any)}</h3>

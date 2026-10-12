@@ -24,7 +24,7 @@ export default function AdminSettings() {
 
 function AdminSettingsContent() {
   const { token, isReadonly, canOperate } = useAdminAuth();
-  const canEditSettings = !isReadonly || canOperate('settings');
+  const canEditSettings = canOperate('settings');
   const { locale, theme, setLocale, setTheme, t } = useTranslation();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [form, setForm] = useState({ usageLimitUsd: '', storageQuotaGb: '', uploadQuotaMb: '' });

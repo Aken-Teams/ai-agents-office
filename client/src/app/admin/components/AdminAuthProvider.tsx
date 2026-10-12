@@ -17,6 +17,9 @@ interface Permissions {
   adminSidebarOperate: string[];
   frontendNav: string[];
   features: string[];
+  /** 管理員-only exception lists — pages an admin may not see / may not modify. */
+  adminHidden?: string[];
+  adminViewOnly?: string[];
 }
 
 interface AdminAuthContextType {
@@ -55,12 +58,19 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
 
   const hasPermission = useCallback((category: keyof Permissions, key: string): boolean => {
     if (!permissions) return false;
+    // An admin page can be hidden from admins too (e.g. 額度審核, when the
+    // customer wants approvals to be theirs alone), so the '*' below is not the
+    // whole story — the exception list is checked first.
+    if (category === 'adminSidebar' && permissions.adminHidden?.includes(key)) return false;
     const list = permissions[category];
-    return list.includes('*') || list.includes(key);
+    return Array.isArray(list) ? (list.includes('*') || list.includes(key)) : false;
   }, [permissions]);
 
   const canOperate = useCallback((pageKey: string): boolean => {
     if (!permissions) return false;
+    // 僅檢視 for admins beats the blanket '*' — this is the whole point of it.
+    if (permissions.adminViewOnly?.includes(pageKey)) return false;
+    if (permissions.adminHidden?.includes(pageKey)) return false;
     // Admin can always operate
     if (permissions.adminSidebarOperate?.includes('*')) return true;
     return permissions.adminSidebarOperate?.includes(pageKey) ?? false;

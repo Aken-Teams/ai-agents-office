@@ -59,7 +59,7 @@ export default function AdminAnnouncements() {
 
 function AnnouncementsContent() {
   const { token, isReadonly, canOperate } = useAdminAuth();
-  const canEdit = !isReadonly || canOperate('announcements');
+  const canEdit = canOperate('announcements');
   const { t } = useTranslation();
   const [items, setItems] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);

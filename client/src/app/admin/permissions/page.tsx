@@ -5,12 +5,25 @@ import { useAdminAuth } from '../components/AdminAuthProvider';
 import { useTranslation } from '../../../i18n';
 
 interface RolePermissions {
-  adminSidebar: { readonly: string[]; readonlyOperate?: string[] };
+  adminSidebar: {
+    readonly: string[];
+    readonlyOperate?: string[];
+    /** 管理員 exceptions — empty means "admins can do everything", the default. */
+    adminHidden?: string[];
+    adminViewOnly?: string[];
+  };
   frontendNav: { user: string[]; readonly: string[] };
   features: { user: string[]; readonly: string[] };
 }
 
 type ReadonlyState = 'hidden' | 'view' | 'operate';
+
+/**
+ * 權限管理 can never be restricted for 管理員 — it is the only screen that can
+ * undo a restriction, so freezing it would lock every admin out permanently.
+ * Mirrors ADMIN_UNRESTRICTABLE_PAGES on the server, which enforces it for real.
+ */
+const ADMIN_LOCKED_PAGES = ['permissions'];
 
 // Admin sidebar items grouped by section
 const ADMIN_SIDEBAR_GROUPS = [
@@ -112,6 +125,31 @@ export default function AdminPermissions() {
     if (perms.adminSidebar.readonlyOperate?.includes(key)) return 'operate';
     if (perms.adminSidebar.readonly.includes(key)) return 'view';
     return 'hidden';
+  }
+
+  // 管理員 is stored inverted (exceptions, not an allow-list) so that pages added
+  // later default to full access instead of silently vanishing from the console.
+  function getAdminState(key: string): ReadonlyState {
+    if (!perms || ADMIN_LOCKED_PAGES.includes(key)) return 'operate';
+    if (perms.adminSidebar.adminHidden?.includes(key)) return 'hidden';
+    if (perms.adminSidebar.adminViewOnly?.includes(key)) return 'view';
+    return 'operate';
+  }
+
+  function setAdminState(key: string, state: ReadonlyState) {
+    if (ADMIN_LOCKED_PAGES.includes(key)) return;
+    setPerms(prev => {
+      if (!prev) return prev;
+      const updated = JSON.parse(JSON.stringify(prev)) as RolePermissions;
+      const hidden = (updated.adminSidebar.adminHidden || []).filter(k => k !== key);
+      const viewOnly = (updated.adminSidebar.adminViewOnly || []).filter(k => k !== key);
+      if (state === 'hidden') hidden.push(key);
+      if (state === 'view') viewOnly.push(key);
+      updated.adminSidebar.adminHidden = hidden;
+      updated.adminSidebar.adminViewOnly = viewOnly;
+      return updated;
+    });
+    setSaved(false);
   }
 
   function setReadonlyState(key: string, state: ReadonlyState) {
@@ -354,7 +392,7 @@ export default function AdminPermissions() {
             <thead>
               <tr className="border-b border-outline-variant/10">
                 <th className="text-left px-6 py-3 font-headline font-bold text-on-surface-variant">{t('admin.permissions.item' as any)}</th>
-                <th className="text-center px-4 py-3 font-headline font-bold text-on-surface-variant w-32">{t('admin.permissions.admin' as any)}</th>
+                <th className="text-center px-4 py-3 font-headline font-bold text-on-surface-variant">{t('admin.permissions.admin' as any)}</th>
                 <th className="text-center px-4 py-3 font-headline font-bold text-on-surface-variant">{t('admin.permissions.readonly' as any)}</th>
               </tr>
             </thead>
@@ -376,7 +414,14 @@ export default function AdminPermissions() {
                       </td>
                       <td className="text-center px-4 py-3">
                         <div className="flex justify-center">
-                          <span className="material-symbols-outlined text-primary text-lg">check_circle</span>
+                          {ADMIN_LOCKED_PAGES.includes(item.key) ? (
+                            <span className="material-symbols-outlined text-primary text-lg" title="此頁面無法對管理員限制">check_circle</span>
+                          ) : (
+                            <StateSelector
+                              state={getAdminState(item.key)}
+                              onChange={(s) => setAdminState(item.key, s)}
+                            />
+                          )}
                         </div>
                       </td>
                       <td className="text-center px-4 py-3">
@@ -409,6 +454,15 @@ export default function AdminPermissions() {
                 {group.items.map(item => (
                   <div key={item.key} className="px-4 py-3 space-y-2">
                     <ItemInfo item={item} />
+                    {!ADMIN_LOCKED_PAGES.includes(item.key) && (
+                      <div className="flex flex-col gap-1.5">
+                        <span className="text-[10px] text-on-surface-variant font-medium">{t('admin.permissions.admin' as any)}</span>
+                        <StateSelector
+                          state={getAdminState(item.key)}
+                          onChange={(s) => setAdminState(item.key, s)}
+                        />
+                      </div>
+                    )}
                     <div className="flex flex-col gap-1.5">
                       <span className="text-[10px] text-on-surface-variant font-medium">{t('admin.permissions.readonly' as any)}</span>
                       <StateSelector
