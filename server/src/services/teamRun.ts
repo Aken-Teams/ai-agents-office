@@ -24,7 +24,7 @@ import { getUserPersonaContext } from './personalization.js';
 import { buildRetrieverSystemPrompt } from './emailContext.js';
 import { config } from '../config.js';
 import { extractFileText } from './dataFidelityGuard.js';
-import { analyzeFileContent, logSecurityEvent } from './inputGuard.js';
+import { analyzeFileContentChunked, logSecurityEvent } from './inputGuard.js';
 import type { SSEEvent } from '../types.js';
 
 export interface TeamRunEvent { type: string; data?: unknown }
@@ -102,7 +102,10 @@ async function buildTeamFileContext(userId: string, uploadIds: string[]): Promis
     let text = (await extractFileText(abs)).trim();
     if (!text) continue;
     text = text.slice(0, PER_FILE_LIMIT);
-    const scan = analyzeFileContent(text, u.original_name);
+    // Chunked: see uploadScanner — the un-chunked form blocks on length alone,
+    // and PER_FILE_LIMIT is well above maxMessageLength, so every long upload
+    // was reported to the user as a suspected injection.
+    const scan = analyzeFileContentChunked(text, u.original_name);
     if (scan.blocked) {
       logSecurityEvent(userId, 'file_scan', scan.score >= 80 ? 'high' : 'medium',
         `Team upload "${u.original_name}" blocked: score=${scan.score} flags=${scan.flags.join(',')}`, text);

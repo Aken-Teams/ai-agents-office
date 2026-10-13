@@ -15,7 +15,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { analyzeFileContent, logSecurityEvent } from './inputGuard.js';
+import { analyzeFileContentChunked, logSecurityEvent } from './inputGuard.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -484,8 +484,16 @@ function checkTextContent(filePath: string, ext: string): { flag: string; detail
       }
     }
 
-    // Prompt injection in text content
-    const guard = analyzeFileContent(content, path.basename(filePath));
+    // Prompt injection in text content.
+    //
+    // Chunked, not analyzeFileContent: the un-chunked form hard-blocks anything
+    // over config.maxMessageLength as "message_too_long" BEFORE any detector
+    // runs, so a 10k+ character meeting note or spec — exactly the documents
+    // worth handing to the AI — came back as a score-100 security block with no
+    // injection anywhere in it. Chunking scans the whole file in
+    // maxMessageLength-sized pieces, so a real injection is still caught and
+    // length alone no longer blocks.
+    const guard = analyzeFileContentChunked(content, path.basename(filePath));
     if (guard.blocked) {
       return { flag: 'prompt_injection_in_file', detail: `Flags: ${guard.flags.join(', ')} (score: ${guard.score})` };
     }
