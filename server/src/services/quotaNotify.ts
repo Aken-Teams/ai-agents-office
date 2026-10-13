@@ -102,10 +102,10 @@ export interface QuotaResultEmailParams {
 /**
  * Build the「審核結果」email.
  *
- * Sent to the requester with the reviewers in cc. One mail rather than two,
- * because the two audiences need exactly the same four facts — what was asked,
- * what was decided, by whom, what the limit is now — and splitting it is how
- * the two copies drift apart.
+ * Sent to the requester and the bound reviewers together. One mail rather than
+ * two, because the two audiences need exactly the same four facts — what was
+ * asked, what was decided, by whom, what the limit is now — and splitting it is
+ * how the two copies drift apart.
  *
  * A denial is a result too. The requester is blocked either way, and a request
  * that silently never comes back is worse than a no.
@@ -152,27 +152,33 @@ export function buildQuotaResultEmail(params: QuotaResultEmailParams): { subject
 }
 
 /**
- * Tell the requester (and cc the bound reviewers) how their request was decided.
+ * Tell the requester and the bound reviewers how the request was decided.
  * Best-effort, same contract as notifyQuotaRequest: never throws.
  */
 export async function notifyQuotaResult(params: QuotaResultEmailParams): Promise<{ sent: boolean; recipients: number; detail?: string }> {
   if (config.deployMode !== 'pro-panjit') return { sent: false, recipients: 0, detail: 'not pro-panjit' };
 
-  const to = String(params.requesterEmail || '').trim().toLowerCase();
-  if (!to.includes('@')) return { sent: false, recipients: 0, detail: 'requester has no email' };
+  const requester = String(params.requesterEmail || '').trim().toLowerCase();
+  if (!requester.includes('@')) return { sent: false, recipients: 0, detail: 'requester has no email' };
 
-  // 強茂管理者 = the same bound list that was told about the request. Minus the
-  // requester, so somebody who requests for themselves is not cc'd their own mail.
-  const cc = (await getQuotaNotifyRecipients())
-    .map(r => r.email)
-    .filter(e => e !== to);
+  // Everyone goes in `to` — the reviewers are not a courtesy copy here, they are
+  // half the audience, and the request notification already addresses them that
+  // way. This was written with the managers in `cc` and they never received it:
+  // the PANJIT gateway returned 200 for the `to` delivery while silently
+  // dropping the cc field, which no other caller in this codebase exercises. A
+  // header the upstream ignores is indistinguishable from success, so the safe
+  // form is the one every other mail here already uses.
+  //
+  // Deduped: an approver who is also the requester must not be listed twice.
+  const reviewers = (await getQuotaNotifyRecipients()).map(r => r.email);
+  const to = [...new Set([requester, ...reviewers])];
 
   const { subject, body } = buildQuotaResultEmail(params);
-  const result = await sendGatewayMail({ to: [to], cc, subject, body, bodyType: 'html' });
+  const result = await sendGatewayMail({ to, subject, body, bodyType: 'html' });
   if (!result.ok) {
     console.warn(`[quotaNotify] result mail failed (status ${result.status}): ${result.detail}`);
   }
-  return { sent: result.ok, recipients: 1 + cc.length, detail: result.detail };
+  return { sent: result.ok, recipients: to.length, detail: result.detail };
 }
 
 /**
