@@ -123,8 +123,27 @@ export default function AdminTokens() {
         cost: number; conversations: number; sessions: number;
       }> = await res.json();
 
-      const EXCLUDE_NAMES = ['System Admin', 'test', '李忠軒'];
-      const rows = allRows.filter(r => !EXCLUDE_NAMES.includes(r.display_name));
+      // Internal accounts must never reach a customer invoice.
+      //
+      // The old rule matched display_name EXACTLY, so 'test3 測試帳號三' sailed
+      // past a list containing 'test' and was billed to the customer — NT$3,621
+      // of a NT$27,869 September invoice. Display names are free text that
+      // people edit; the mailbox is the stable identity, so match on that, and
+      // keep a name pattern only for the internal account on a public domain.
+      //
+      // Applied from 2026-10 onward only: earlier months have already been
+      // invoiced, and silently reprinting an issued invoice at a lower figure
+      // is worse than the original error.
+      const EXCLUDE_TEST_FROM = '2026-10';
+      const OWNER_NAME     = /System Admin|李忠軒/;
+      const INTERNAL_EMAIL = /(@zhaoi\.ai$)|(^test\d*@)|(@demo\.local$)/i;
+      const INTERNAL_NAME  = /測試|测试/;
+      const dropTestAccounts = quoteMonth >= EXCLUDE_TEST_FROM;
+      const rows = allRows.filter(r => {
+        if (OWNER_NAME.test(r.display_name || '')) return false;
+        if (!dropTestAccounts) return true;
+        return !INTERNAL_EMAIL.test(r.email || '') && !INTERNAL_NAME.test(r.display_name || '');
+      });
 
       const totalInput = rows.reduce((sum, r) => sum + r.input_tokens, 0);
       const totalOutput = rows.reduce((sum, r) => sum + r.output_tokens, 0);
@@ -145,21 +164,35 @@ export default function AdminTokens() {
       const rate  = parseFloat(quoteRate) || 32;
       const fx    = isTWD ? rate : 1;
       const sym   = isTWD ? 'NT$' : '$';
-      const inputCost  = inputCostUSD  * fx;
-      const outputCost = outputCostUSD * fx;
-      const totalCost  = totalCostUSD  * fx;
-      // 先把每一列四捨五入成整數，再用「整數列」推導稅額與合計，
-      // 讓 服務小計 + 服務費 + 稅額 = 合計 完全對得起來（不會有 rounding drift）。
-      const TAX_RATE       = 0.05;
-      const inCostDisp     = Math.ceil(inputCost);                     // 輸入 line item
-      const outCostDisp    = Math.ceil(outputCost);                    // 輸出 line item
-      const subtotalDisp   = inCostDisp + outCostDisp;                 // 服務小計 = 兩個 line item 整數和
-      const serviceFeeDisp = Math.ceil(subtotalDisp * 0.2);           // 服務費 (20%)
-      const preTaxDisp     = subtotalDisp + serviceFeeDisp;           // 稅前
-      const taxAmount      = Math.ceil(preTaxDisp * TAX_RATE);         // 稅額 (5%)
-      const grandTotal     = preTaxDisp + taxAmount;                   // 合計 = 稅前 + 稅額
-      const inputUnitPrice  = isTWD ? `NT$${(INPUT_RATE  * rate).toFixed(0)}/MTok` : `$${INPUT_RATE.toFixed(1)}/MTok`;
-      const outputUnitPrice = isTWD ? `NT$${(OUTPUT_RATE * rate).toFixed(0)}/MTok` : `$${OUTPUT_RATE.toFixed(1)}/MTok`;
+      // 每一個印出來的數字，都要能用它上面那幾個印出來的數字重算出來。
+      //
+      // 先前小計是用未取整的 blended rate 算的，單價只是另外四捨五入給人看——
+      // 兩者沒有因果關係，所以會計拿單價乘用量永遠對不上。而把小計進位到「元」
+      // 同樣不行：4.859369 × 479 = 2,327.64，單上卻印 2,328。
+      //
+      // 規格（會計方確認）：單價四捨五入到小數第二位、金額同樣到分、
+      // 服務費與稅額四捨五入到整數。用量以 MTok 表示——4,859,369 tok 與
+      // 4.859369 MTok 是同一串數字，逗號的位置正好是小數點的位置，寫成 MTok
+      // 之後「單價 × 用量 = 小計」在紙面上就直接讀得出來。
+      const TAX_RATE = 0.05;
+      const r2 = (n: number) => Math.round(n * 100) / 100;        // 到分
+      const inUnit   = r2(INPUT_RATE  * fx);                      // 單價（2 位小數）
+      const outUnit  = r2(OUTPUT_RATE * fx);
+      const inQty    = totalInput  / 1_000_000;                   // 用量（MTok）
+      const outQty   = totalOutput / 1_000_000;
+      const inCostDisp     = r2(inQty  * inUnit);                 // 單價 × 用量
+      const outCostDisp    = r2(outQty * outUnit);                // 單價 × 用量
+      const subtotalDisp   = r2(inCostDisp + outCostDisp);        // 服務小計 = 兩列相加
+      const serviceFeeDisp = Math.round(subtotalDisp * 0.2);      // 服務費 (20%) → 整數
+      const preTaxDisp     = r2(subtotalDisp + serviceFeeDisp);   // 稅前
+      const taxAmount      = Math.round(preTaxDisp * TAX_RATE);   // 稅額 (5%) → 整數
+      const grandTotal     = r2(preTaxDisp + taxAmount);          // 合計 = 稅前 + 稅額
+      // 金額一律兩位小數；整數欄位（服務費、稅額）不帶小數。
+      const money = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const whole = (n: number) => n.toLocaleString('en-US');
+      const qty   = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 6, maximumFractionDigits: 6 });
+      const inputUnitPrice  = `${sym}${money(inUnit)}/MTok`;
+      const outputUnitPrice = `${sym}${money(outUnit)}/MTok`;
       const [year, month] = quoteMonth.split('-');
       const quoteNo = `Q-${year}${month}-001`;
       const generatedAt = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
@@ -170,14 +203,15 @@ export default function AdminTokens() {
 
       // Detail table rows (per user cost)
       const detailRowsHtml = rows.map((r, i) => {
-        const uCost = (r.cost || 0) * fx;   // boundary-exact per-user cost from server
+        // 用跟主表同一組單價推導，明細才跟上面是同一套算法（而不是另一條來源）。
+        const uCost = r2(r.input_tokens / 1_000_000 * inUnit) + r2(r.output_tokens / 1_000_000 * outUnit);
         return `<tr>
           <td style="color:#bbb;font-size:12px;width:32px">${i + 1}</td>
           <td style="color:#333"><strong>${r.display_name || r.email.split('@')[0]}</strong></td>
           <td style="color:#888;font-size:12px">${r.email}</td>
           <td style="text-align:right;font-family:'Courier New',monospace;font-size:13px;color:#666">${r.input_tokens.toLocaleString()}</td>
           <td style="text-align:right;font-family:'Courier New',monospace;font-size:13px;color:#666">${r.output_tokens.toLocaleString()}</td>
-          <td style="text-align:right;font-family:'Courier New',monospace;font-weight:700;color:#111">${sym}${Math.ceil(uCost).toLocaleString()}</td>
+          <td style="text-align:right;font-family:'Courier New',monospace;font-weight:700;color:#111">${sym}${money(uCost)}</td>
         </tr>`;
       }).join('');
 
@@ -398,25 +432,25 @@ export default function AdminTokens() {
       <tr>
         <td style="color:#bbb;font-size:12px">1</td>
         <td class="desc"><strong>輸入 Token 使用費</strong><br><span style="font-size:12px;color:#888">Prompt / Input tokens</span></td>
-        <td class="qty">${totalInput.toLocaleString()} tok</td>
+        <td class="qty">${qty(inQty)} MTok<br><span style="font-size:11px;color:#aaa">${totalInput.toLocaleString()} tok</span></td>
         <td class="price">${inputUnitPrice}</td>
-        <td class="amount">${sym}${inCostDisp.toLocaleString()}</td>
+        <td class="amount">${sym}${money(inCostDisp)}</td>
       </tr>
       <tr>
         <td style="color:#bbb;font-size:12px">2</td>
         <td class="desc"><strong>輸出 Token 使用費</strong><br><span style="font-size:12px;color:#888">Completion / Output tokens</span></td>
-        <td class="qty">${totalOutput.toLocaleString()} tok</td>
+        <td class="qty">${qty(outQty)} MTok<br><span style="font-size:11px;color:#aaa">${totalOutput.toLocaleString()} tok</span></td>
         <td class="price">${outputUnitPrice}</td>
-        <td class="amount">${sym}${outCostDisp.toLocaleString()}</td>
+        <td class="amount">${sym}${money(outCostDisp)}</td>
       </tr>
     </tbody>
   </table>
   <div class="subtotal-block">
     <table class="subtotal-table">
-      <tr><td class="s-label">服務小計</td><td class="s-value">${sym}${subtotalDisp.toLocaleString()}</td></tr>
-      <tr><td class="s-label">服務費 (20%)</td><td class="s-value">${sym}${serviceFeeDisp.toLocaleString()}</td></tr>
-      <tr><td class="s-label">稅額 (5%)</td><td class="s-value">${sym}${taxAmount.toLocaleString()}</td></tr>
-      <tr class="total-row-final"><td class="s-label">合計 (${quoteCurrency})</td><td class="s-value">${sym}${grandTotal.toLocaleString()}</td></tr>
+      <tr><td class="s-label">服務小計</td><td class="s-value">${sym}${money(subtotalDisp)}</td></tr>
+      <tr><td class="s-label">服務費 (20%)</td><td class="s-value">${sym}${whole(serviceFeeDisp)}</td></tr>
+      <tr><td class="s-label">稅額 (5%)</td><td class="s-value">${sym}${whole(taxAmount)}</td></tr>
+      <tr class="total-row-final"><td class="s-label">合計 (${quoteCurrency})</td><td class="s-value">${sym}${money(grandTotal)}</td></tr>
     </table>
   </div>` : ''}
 
@@ -437,10 +471,10 @@ export default function AdminTokens() {
     ${!quoteSections.summary ? `
     <div class="subtotal-block">
       <table class="subtotal-table">
-        <tr><td class="s-label">服務小計</td><td class="s-value">${sym}${subtotalDisp.toLocaleString()}</td></tr>
-        <tr><td class="s-label">服務費 (20%)</td><td class="s-value">${sym}${serviceFeeDisp.toLocaleString()}</td></tr>
-        <tr><td class="s-label">稅額 (5%)</td><td class="s-value">${sym}${taxAmount.toLocaleString()}</td></tr>
-        <tr class="total-row-final"><td class="s-label">合計 (${quoteCurrency})</td><td class="s-value">${sym}${grandTotal.toLocaleString()}</td></tr>
+        <tr><td class="s-label">服務小計</td><td class="s-value">${sym}${money(subtotalDisp)}</td></tr>
+        <tr><td class="s-label">服務費 (20%)</td><td class="s-value">${sym}${whole(serviceFeeDisp)}</td></tr>
+        <tr><td class="s-label">稅額 (5%)</td><td class="s-value">${sym}${whole(taxAmount)}</td></tr>
+        <tr class="total-row-final"><td class="s-label">合計 (${quoteCurrency})</td><td class="s-value">${sym}${money(grandTotal)}</td></tr>
       </table>
     </div>` : ''}
   </div>` : ''}
@@ -450,23 +484,23 @@ export default function AdminTokens() {
     <div style="font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#0D9488;margin-bottom:14px">費用彙總</div>
     <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f0f0f0">
       <span style="font-size:13px;color:#555">輸入 Token（${inputUnitPrice}）</span>
-      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${inCostDisp.toLocaleString()}</span>
+      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${money(inCostDisp)}</span>
     </div>
     <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f0f0f0">
       <span style="font-size:13px;color:#555">輸出 Token（${outputUnitPrice}）</span>
-      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${outCostDisp.toLocaleString()}</span>
+      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${money(outCostDisp)}</span>
     </div>
     <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f0f0f0">
       <span style="font-size:13px;color:#555">服務費（20%）</span>
-      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${serviceFeeDisp.toLocaleString()}</span>
+      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${whole(serviceFeeDisp)}</span>
     </div>
     <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f0f0f0">
       <span style="font-size:13px;color:#555">稅額（5%）</span>
-      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${taxAmount.toLocaleString()}</span>
+      <span style="font-size:13px;font-family:'Courier New',monospace;color:#333">${sym}${whole(taxAmount)}</span>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:baseline;padding:14px 0 0;border-top:2px solid #0D9488;margin-top:6px">
       <span style="font-size:15px;font-weight:800;color:#111">合計（${quoteCurrency}）</span>
-      <span style="font-size:22px;font-weight:900;color:#0D9488;font-family:'Courier New',monospace">${sym}${grandTotal.toLocaleString()}</span>
+      <span style="font-size:22px;font-weight:900;color:#0D9488;font-family:'Courier New',monospace">${sym}${money(grandTotal)}</span>
     </div>
   </div>` : ''}
 
