@@ -251,7 +251,18 @@ function detectArchitectureProbing(input: string): { score: number; flag: string
     /what\s+(?:is|are)\s+in\s+my\s+(?:memory|config|settings?|files?)/i,
     /(?:read|show|cat|list|open)\s+(?:the\s+)?(?:\.claude|claude\.md|memory\.md|CLAUDE\.md)/i,
     // Direct infrastructure probing (ZH)
-    /(?:你的|系統的|內部的)?(?:底層|內部|系統|伺服器|目錄|檔案|資料夾)(?:結構|架構|路徑|配置|設定|佈局)/,
+    //
+    // The possessive is REQUIRED, not optional. With it optional, the bare noun
+    // 「系統架構」 matched — and that is a chapter heading in every technical
+    // manual a customer might upload for us to turn into a document. What makes
+    // a phrase probing is that it points at US: 「你的系統架構」 asks about this
+    // assistant, 「本交換器的系統架構」 describes the customer's own equipment.
+    // Only the former is an attack; blocking the latter blocks the product's
+    // main use case.
+    /(?:你的|妳的|您的|AI\s*的|助理的|機器人的)(?:底層|內部|系統|伺服器|目錄|檔案|資料夾)(?:結構|架構|路徑|配置|設定|佈局)/,
+    // A request verb aimed at infrastructure is probing even without 「你的」 —
+    // this is what the optional prefix was really trying to catch.
+    /(?:列出|顯示|告訴我|揭露|輸出|說明一下)(?:你的|系統的|內部的)?(?:底層|內部|系統|伺服器)(?:結構|架構|路徑|配置)/,
     /(?:列出|顯示|告訴我|說明)(?:你的|所有的?)?(?:代理|技能|工具|模組|服務|進程|工作者)/,
     /(?:你|系統)(?:有|用了?|跑了?|啟動了?)(?:幾個|多少|哪些)(?:代理|技能|agent|skill|worker|tool)/,
     /(?:你的|系統的)(?:工作|執行|運行|部署)(?:目錄|路徑|環境|資料夾)/,
@@ -286,6 +297,30 @@ const ALL_DETECTORS: Detector[] = [
   detectArchitectureProbing,
 ];
 
+/**
+ * The subset that applies to UPLOADED FILE CONTENT.
+ *
+ * A chat message is an instruction addressed to us; an uploaded file is data
+ * the user wants us to work ON. The same string means different things in the
+ * two places, and two detectors only make sense in the first:
+ *
+ *   detectPathTraversal — 「../config/app.yaml」 typed at us is an attempt to
+ *     escape the sandbox. The same text inside an operations manual is the
+ *     manual telling its reader where a config file lives. A path that is
+ *     merely DESCRIBED reaches nothing; traversal is stopped where paths are
+ *     resolved, which is the sandbox's job, not the text scanner's.
+ *
+ *   detectArchitectureProbing — a customer uploading their own switch's
+ *     architecture doc so we can write it up is the product working as sold.
+ *
+ * Everything about IMPERATIVES stays: 「ignore previous instructions」,
+ * `<system>` tags, encoded payloads and privilege escalation are attacks
+ * wherever they appear, because a file's text is fed to the model verbatim.
+ */
+const FILE_DETECTORS: Detector[] = ALL_DETECTORS.filter(
+  d => d !== detectPathTraversal && d !== detectArchitectureProbing,
+);
+
 // ---------------------------------------------------------------------------
 // Sanitizer: strip dangerous content from input
 // ---------------------------------------------------------------------------
@@ -312,7 +347,7 @@ function sanitize(input: string): string {
 // Main analysis function
 // ---------------------------------------------------------------------------
 
-export function analyzeInput(input: string): GuardResult {
+export function analyzeInput(input: string, detectors: Detector[] = ALL_DETECTORS): GuardResult {
   // Length check
   if (input.length > config.maxMessageLength) {
     return {
@@ -327,7 +362,7 @@ export function analyzeInput(input: string): GuardResult {
   const flags: string[] = [];
   let totalScore = 0;
 
-  for (const detector of ALL_DETECTORS) {
+  for (const detector of detectors) {
     const result = detector(input);
     if (result) {
       flags.push(result.flag);
@@ -355,8 +390,8 @@ export function analyzeInput(input: string): GuardResult {
 // ---------------------------------------------------------------------------
 
 export function analyzeFileContent(content: string, filename: string): GuardResult {
-  // Run standard analysis
-  const result = analyzeInput(content);
+  // File-context detectors — see FILE_DETECTORS for why two are left out.
+  const result = analyzeInput(content, FILE_DETECTORS);
 
   // Extra check: filename-based patterns
   const suspiciousNames = /\.(exe|bat|cmd|ps1|sh|vbs|js|msi|scr|com|pif|reg)$/i;
