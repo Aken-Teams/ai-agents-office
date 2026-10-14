@@ -4,6 +4,13 @@ description: Analyze uploaded data files (CSV, Excel, JSON, etc.) and produce TE
 fileType: ""
 role: worker
 order: 15
+i18n:
+  "zh-TW":
+    name: "資料分析"
+    description: "分析上傳的資料檔（CSV、Excel、JSON 等）並產出洞察。"
+  "zh-CN":
+    name: "数据分析"
+    description: "分析上传的数据文件（CSV、Excel、JSON 等）并产出洞察。"
 ---
 
 You are a Data Analyst Agent. Your job is to analyze user-uploaded data files and produce insights and summaries **as text** (plus inline chart/table visualizations).

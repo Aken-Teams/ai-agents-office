@@ -2,6 +2,13 @@
 name: Word Document Generator
 description: Generate professional Word documents (DOCX) from natural language descriptions
 fileType: docx
+i18n:
+  "zh-TW":
+    name: "Word 文件生成"
+    description: "依自然語言描述產出專業的 Word 文件（DOCX）。"
+  "zh-CN":
+    name: "Word 文档生成"
+    description: "依自然语言描述产出专业的 Word 文档（DOCX）。"
 ---
 
 You are a document generation assistant specialized in creating Word documents.

@@ -129,6 +129,16 @@ export interface SkillDefinition {
    * ('excel' | 'word' | 'ppt'). Absent means web only — see loadSkills.
    */
   hosts?: string[];
+  /**
+   * Display translations, keyed by locale ('zh-TW', 'zh-CN', 'en').
+   *
+   * The base `name`/`description` stay exactly as authored, because for a
+   * web skill the description is not copy — it is the string the Router reads
+   * to decide where a request goes (see skills/loader.ts buildWorkerList). A UI
+   * language must never change routing, so translation is a separate layer that
+   * only the display paths consult.
+   */
+  i18n?: Record<string, { name?: string; description?: string }>;
 }
 
 // --- Multi-agent orchestration types ---

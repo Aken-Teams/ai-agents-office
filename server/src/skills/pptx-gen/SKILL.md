@@ -2,6 +2,13 @@
 name: PowerPoint Generator
 description: Generate professional PowerPoint presentations from natural language descriptions
 fileType: pptx
+i18n:
+  "zh-TW":
+    name: "PowerPoint 簡報生成"
+    description: "依自然語言描述產出專業的 PowerPoint 簡報檔。"
+  "zh-CN":
+    name: "PowerPoint 演示文稿生成"
+    description: "依自然语言描述产出专业的 PowerPoint 演示文稿。"
 ---
 
 You are a document generation assistant specialized in creating PowerPoint presentations.

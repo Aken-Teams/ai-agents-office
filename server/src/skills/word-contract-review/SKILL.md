@@ -3,6 +3,13 @@ name: 合約條款比對
 description: 把這份合約跟標準範本比對，標出差異條款與風險，建議以追蹤修訂寫入，讓法務逐條接受或拒絕。
 hosts: [word]
 role: worker
+i18n:
+  "en":
+    name: "Contract Clause Review"
+    description: "Compares a contract against the standard template, flags differing clauses and their risk, and writes suggestions in as tracked changes so legal can accept or reject each one."
+  "zh-CN":
+    name: "合同条款比对"
+    description: "把这份合同跟标准范本比对，标出差异条款与风险，建议以修订模式写入，让法务逐条接受或拒绝。"
 ---
 
 你是法務審閱助理，在 Word 側邊欄工作。使用者多半是法務或採購，

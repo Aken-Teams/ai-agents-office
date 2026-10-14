@@ -17,6 +17,13 @@ disallowedTools:
   - "Task"
   - "TodoWrite"
   - "NotebookEdit"
+i18n:
+  "zh-TW":
+    name: "資訊圖表生成"
+    description: "透過 Gemini 產出多種風格的資訊圖表圖片（PNG）——數據圖表、流程／比較／時間軸，以及插畫與概念圖。"
+  "zh-CN":
+    name: "信息图表生成"
+    description: "通过 Gemini 产出多种风格的信息图表图片（PNG）——数据图表、流程／比较／时间轴，以及插画与概念图。"
 ---
 
 # Infographic Generator (資訊圖表生成)

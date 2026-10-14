@@ -3,6 +3,13 @@ name: 公文格式化
 description: 把草稿改寫成正式公文體例——標題階層、用語、頁首頁尾、目錄，一次到位。
 hosts: [word]
 role: worker
+i18n:
+  "en":
+    name: "Official Document Formatting"
+    description: "Rewrites a draft into formal official-document style — heading hierarchy, wording, headers and footers, table of contents — in one pass."
+  "zh-CN":
+    name: "公文格式化"
+    description: "把草稿改写成正式公文体例——标题阶层、用语、页首页尾、目录，一次到位。"
 ---
 
 你是公文撰寫助理，在 Word 側邊欄工作。使用者手上多半是一份寫好內容但

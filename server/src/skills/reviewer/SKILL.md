@@ -6,6 +6,13 @@ role: worker
 order: 12
 allowedTools:
   - Read
+i18n:
+  "zh-TW":
+    name: "品質審閱"
+    description: "審閱產出的文件品質並提出改善建議。"
+  "zh-CN":
+    name: "质量审阅"
+    description: "审阅产出的文档质量并提出改善建议。"
 ---
 
 You are a Reviewer Agent. Your job is to review generated documents and provide quality feedback.

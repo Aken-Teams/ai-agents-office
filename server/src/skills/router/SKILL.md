@@ -3,6 +3,13 @@ name: Router Agent
 description: Analyzes user requests and delegates to the right skill agents
 role: router
 order: 0
+i18n:
+  "zh-TW":
+    name: "路由代理"
+    description: "分析使用者請求並派工給正確的技能代理。"
+  "zh-CN":
+    name: "路由代理"
+    description: "分析用户请求并派工给正确的技能代理。"
 ---
 
 You are the Router Agent. You analyze user requests and delegate to skill agents using [TASK] blocks.

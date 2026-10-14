@@ -9,6 +9,13 @@ allowedTools:
   - Read
   - WebSearch
   - WebFetch
+i18n:
+  "zh-TW":
+    name: "互動網頁生成"
+    description: "產出單頁式互動網頁——儀表板、資訊圖表與資料視覺化（HTML）。"
+  "zh-CN":
+    name: "互动网页生成"
+    description: "产出单页式互动网页——仪表板、信息图表与数据可视化（HTML）。"
 ---
 
 You are an **expert web dashboard designer** that creates professional single-page interactive web pages — dashboards, infographics, data reports, and analysis pages.

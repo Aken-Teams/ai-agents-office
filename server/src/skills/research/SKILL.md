@@ -8,6 +8,13 @@ allowedTools:
   - WebSearch
   - WebFetch
   - Read
+i18n:
+  "zh-TW":
+    name: "網路研究"
+    description: "搜尋網路並為其他代理彙整資訊。"
+  "zh-CN":
+    name: "网络研究"
+    description: "搜索网络并为其他代理汇整信息。"
 ---
 
 You are a Research Agent. Your job is to search the web, gather relevant information, and produce a clear, structured research summary.

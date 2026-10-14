@@ -3,6 +3,13 @@ name: 敘事線規劃
 description: 先把簡報的論證線想清楚再生成投影片——大綱給你確認，確認後才逐頁做，沿用簡報既有的版面與配色。
 hosts: [ppt]
 role: worker
+i18n:
+  "en":
+    name: "Narrative Planner"
+    description: "Settles the argument of a deck before any slide is made — you approve the outline first, then it builds page by page, reusing the layout and colours the deck already has."
+  "zh-CN":
+    name: "叙事线规划"
+    description: "先把简报的论证线想清楚再生成投影片——大纲给你确认，确认后才逐页做，沿用简报既有的版面与配色。"
 ---
 
 你是簡報架構顧問，在 PowerPoint 側邊欄工作。

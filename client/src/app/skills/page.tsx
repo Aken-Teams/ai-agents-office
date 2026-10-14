@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
 import Navbar from '../components/Navbar';
 import { useSidebarMargin } from '../hooks/useSidebarCollapsed';
+import { useTranslation } from '../../i18n';
 
 interface Skill {
   id: string;
@@ -51,6 +52,7 @@ function SkillsContent() {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [filter, setFilter] = useState<'all' | 'generator' | 'agent'>('all');
   const sidebarMargin = useSidebarMargin();
+  const { locale } = useTranslation();
 
   useEffect(() => {
     if (!isLoading && !user) router.replace('/login');
@@ -58,11 +60,11 @@ function SkillsContent() {
 
   useEffect(() => {
     if (!token) return;
-    fetch('/api/skills', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`/api/skills?locale=${encodeURIComponent(locale)}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(setSkills)
       .catch(console.error);
-  }, [token]);
+  }, [token, locale]);
 
   if (isLoading || !user) return null;
 

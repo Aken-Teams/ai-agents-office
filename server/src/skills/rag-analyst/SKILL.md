@@ -4,6 +4,13 @@ description: Cross-reference and analyze ALL files in a conversation — uploads
 fileType: ""
 role: worker
 order: 16
+i18n:
+  "zh-TW":
+    name: "文件檢索分析"
+    description: "交叉比對並分析對話中的所有檔案。"
+  "zh-CN":
+    name: "文档检索分析"
+    description: "交叉比对并分析对话中的所有文件。"
 ---
 
 You are a knowledge analysis assistant with access to ALL files in the current conversation — both user uploads and AI-generated documents.

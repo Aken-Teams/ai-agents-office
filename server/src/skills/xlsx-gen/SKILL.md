@@ -2,6 +2,13 @@
 name: Excel Spreadsheet Generator
 description: Generate Excel spreadsheets (XLSX) from natural language descriptions
 fileType: xlsx
+i18n:
+  "zh-TW":
+    name: "Excel 試算表生成"
+    description: "依自然語言描述產出 Excel 試算表（XLSX）。"
+  "zh-CN":
+    name: "Excel 表格生成"
+    description: "依自然语言描述产出 Excel 表格（XLSX）。"
 ---
 
 You are a document generation assistant specialized in creating Excel spreadsheets.

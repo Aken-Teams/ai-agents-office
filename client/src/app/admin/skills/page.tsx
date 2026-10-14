@@ -22,7 +22,7 @@ interface Skill {
 interface McpSource {
   id: string;
   kind: 'data-source' | 'live-workbook';
-  surfaces: ('web' | 'excel')[];
+  surfaces: ('web' | 'excel' | 'word' | 'ppt')[];
   toolCount: number;
   activation: 'user-selected' | 'always-on';
 }
@@ -41,6 +41,27 @@ const MCP_CARDS: Record<string, { icon: string; color: string; bg: string; nameK
     icon: 'table_chart', color: 'text-success', bg: 'bg-success/10',
     nameKey: 'admin.skills.mcp.excel.name', descKey: 'admin.skills.mcp.excel.description',
   },
+  'word-mcp': {
+    icon: 'description', color: 'text-primary', bg: 'bg-primary/10',
+    nameKey: 'admin.skills.mcp.word.name', descKey: 'admin.skills.mcp.word.description',
+  },
+  'ppt-mcp': {
+    icon: 'present_to_all', color: 'text-warning', bg: 'bg-warning/10',
+    nameKey: 'admin.skills.mcp.ppt.name', descKey: 'admin.skills.mcp.ppt.description',
+  },
+};
+
+/**
+ * Surface → label key. A lookup rather than the nested ternary this replaced:
+ * that form read `web ? web : excel`, so every surface that was not 'web' was
+ * labelled "Excel add-in" — which is how adding Word and PowerPoint would have
+ * silently mislabelled both of them.
+ */
+const SURFACE_KEYS: Record<string, TranslationKey> = {
+  web:   'admin.skills.mcp.surface.web',
+  excel: 'admin.skills.mcp.surface.excel',
+  word:  'admin.skills.mcp.surface.word',
+  ppt:   'admin.skills.mcp.surface.ppt',
 };
 
 const FILE_TYPE_LABELS: Record<string, string> = {
@@ -53,7 +74,7 @@ const FILE_TYPE_LABELS: Record<string, string> = {
 
 export default function AdminSkillsPage() {
   const { token } = useAdminAuth();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const [skills, setSkills] = useState<Skill[]>([]);
   const [mcpSources, setMcpSources] = useState<McpSource[]>([]);
   const [filter, setFilter] = useState<'all' | 'generator' | 'agent' | 'mcp'>('all');
@@ -82,7 +103,7 @@ export default function AdminSkillsPage() {
 
   useEffect(() => {
     if (!token) return;
-    fetch('/api/skills', { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`/api/skills?locale=${encodeURIComponent(locale)}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(setSkills)
       .catch(console.error);
@@ -91,7 +112,7 @@ export default function AdminSkillsPage() {
       .then(r => r.json())
       .then(d => setMcpSources(Array.isArray(d) ? d : []))
       .catch(console.error);
-  }, [token]);
+  }, [token, locale]);
 
   const generators = skills.filter(s => s.fileType && s.role !== 'router');
   const agents = skills.filter(s => !s.fileType || s.role === 'router');
@@ -236,7 +257,7 @@ export default function AdminSkillsPage() {
                   <div className="flex flex-wrap gap-1.5 mb-4 md:mb-6">
                     {mcp.surfaces.map(s => (
                       <span key={s} className="px-2 py-0.5 rounded-full bg-surface-container-highest text-[11px] md:text-xs text-on-surface-variant">
-                        {t(s === 'web' ? 'admin.skills.mcp.surface.web' : 'admin.skills.mcp.surface.excel')}
+                        {t(SURFACE_KEYS[s] ?? 'admin.skills.mcp.surface.web')}
                       </span>
                     ))}
                   </div>

@@ -15,9 +15,11 @@
 import { config } from '../config.js';
 import { kmEnabledFor } from './kmApi.js';
 import { EXCEL_TOOL_NAMES } from './excelToolSpec.js';
+import { WORD_TOOL_NAMES } from './wordToolSpec.js';
+import { PPT_TOOL_NAMES } from './pptToolSpec.js';
 
 /** Where an MCP can be switched on. */
-export type McpSurface = 'web' | 'excel';
+export type McpSurface = 'web' | 'excel' | 'word' | 'ppt';
 
 /**
  * Tool names as the CLI sees them (`mcp__<server>__<tool>`). They live here
@@ -38,7 +40,7 @@ export const KM_MCP_TOOL_NAMES = [
 ];
 
 export interface McpSourceInfo {
-  id: 'email-mcp' | 'km-mcp' | 'excel-mcp';
+  id: 'email-mcp' | 'km-mcp' | 'excel-mcp' | 'word-mcp' | 'ppt-mcp';
   /** Read-only data an agent can pull in, vs. tools that act on the user's app. */
   kind: 'data-source' | 'live-workbook';
   /** Empty when the deployment cannot offer it at all. */
@@ -81,16 +83,22 @@ export function listMcpSources(): McpSourceInfo[] {
     });
   }
 
-  // Excel: not a data source at all — these tools drive the workbook the user
-  // has open, through the add-in. Always on there, because it IS the add-in;
-  // there is nothing to consent to beyond having opened the pane.
-  sources.push({
-    id: 'excel-mcp',
-    kind: 'live-workbook',
-    surfaces: ['excel'],
-    toolCount: EXCEL_TOOL_NAMES.length,
-    activation: 'always-on',
-  });
+  // The three add-in MCPs: not data sources at all — these tools drive the
+  // document the user has open, through the add-in. Always on there, because
+  // they ARE the add-in; there is nothing to consent to beyond opening the pane.
+  //
+  // Word and PowerPoint shipped after Excel and were missed here, which is the
+  // same omission this file's header describes for Excel itself. Listing them
+  // from one array is the fix that stops it happening a fourth time: a new
+  // host is a row, not a new code path.
+  const ADDIN_MCPS: Array<[McpSourceInfo['id'], McpSurface, number]> = [
+    ['excel-mcp', 'excel', EXCEL_TOOL_NAMES.length],
+    ['word-mcp',  'word',  WORD_TOOL_NAMES.length],
+    ['ppt-mcp',   'ppt',   PPT_TOOL_NAMES.length],
+  ];
+  for (const [id, surface, toolCount] of ADDIN_MCPS) {
+    sources.push({ id, kind: 'live-workbook', surfaces: [surface], toolCount, activation: 'always-on' });
+  }
 
   return sources;
 }

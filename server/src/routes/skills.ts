@@ -25,10 +25,22 @@ router.get('/', (req: Request, res: Response) => {
   const host = String(req.query.host || '').toLowerCase();
   const skills = host ? skillsForHost(host) : loadSkills();
 
+  // `?locale=zh-TW` picks a skill's translated name/description when it has one.
+  //
+  // Resolved here rather than in each client because there are two of them —
+  // the admin console and the Office add-in panel — and a translation that
+  // lives in the skill folder is the one both can read. Falls back per field,
+  // so a skill translated only in part still shows its base text for the rest
+  // instead of a blank.
+  const locale = String(req.query.locale || '').trim();
+  const pick = (s: typeof skills[number]) => {
+    const t = locale ? s.i18n?.[locale] : undefined;
+    return { name: t?.name || s.name, description: t?.description || s.description };
+  };
+
   const publicSkills = skills.map(s => ({
     id: s.id,
-    name: s.name,
-    description: s.description,
+    ...pick(s),
     fileType: s.fileType || null,
     role: s.role || 'worker',
   }));

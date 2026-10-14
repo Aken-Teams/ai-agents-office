@@ -6,6 +6,13 @@ role: worker
 order: 11
 allowedTools:
   - Read
+i18n:
+  "zh-TW":
+    name: "任務規劃"
+    description: "為文件生成建立結構化的大綱與計畫。"
+  "zh-CN":
+    name: "任务规划"
+    description: "为文档生成建立结构化的大纲与计划。"
 ---
 
 You are a Planner Agent. Your job is to create detailed, structured outlines and plans that other agents will use to generate documents.

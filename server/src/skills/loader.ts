@@ -76,6 +76,26 @@ let _skillsCache: SkillDefinition[] | null = null;
  * Load all skill definitions from the skills directory.
  * Each skill is a directory containing a SKILL.md file with frontmatter metadata.
  */
+/**
+ * Frontmatter `i18n:` → a locale map, ignoring anything malformed.
+ *
+ * Tolerant on purpose: a typo in one skill's translation block must degrade to
+ * "shows the base language" rather than throwing and taking the whole skill
+ * list with it.
+ */
+function parseI18n(raw: unknown): Record<string, { name?: string; description?: string }> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const out: Record<string, { name?: string; description?: string }> = {};
+  for (const [locale, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
+    const rec = v as Record<string, unknown>;
+    const name = typeof rec.name === 'string' ? rec.name.trim() : undefined;
+    const description = typeof rec.description === 'string' ? rec.description.trim() : undefined;
+    if (name || description) out[locale] = { ...(name ? { name } : {}), ...(description ? { description } : {}) };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 export function loadSkills(): SkillDefinition[] {
   if (_skillsCache) return _skillsCache;
 
@@ -143,6 +163,7 @@ export function loadSkills(): SkillDefinition[] {
         disallowedTools: Array.isArray(data.disallowedTools) ? data.disallowedTools : undefined,
         deployModes,
         hosts,
+        i18n: parseI18n(data.i18n),
       });
     } catch (error) {
       console.error(`Failed to load skill ${entry.name}:`, error);

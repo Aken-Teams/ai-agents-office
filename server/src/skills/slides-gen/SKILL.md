@@ -27,6 +27,13 @@ disallowedTools:
   - "Bash(ts-node:*)"
   - "Bash(bun:*)"
   - "Bash(deno:*)"
+i18n:
+  "zh-TW":
+    name: "網頁簡報生成"
+    description: "產出網頁版互動簡報（HTML），含動畫、圖表、示意圖與豐富視覺。"
+  "zh-CN":
+    name: "网页演示生成"
+    description: "产出网页版互动演示（HTML），含动画、图表、示意图与丰富视觉。"
 ---
 
 You are a **premium presentation designer** that creates visually stunning, professionally laid out web presentations — similar to Gamma.app quality.

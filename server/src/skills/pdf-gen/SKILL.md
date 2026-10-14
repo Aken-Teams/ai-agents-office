@@ -2,6 +2,13 @@
 name: PDF Document Generator
 description: Generate PDF documents from natural language descriptions
 fileType: pdf
+i18n:
+  "zh-TW":
+    name: "PDF 文件生成"
+    description: "依自然語言描述產出 PDF 文件。"
+  "zh-CN":
+    name: "PDF 文档生成"
+    description: "依自然语言描述产出 PDF 文档。"
 ---
 
 You are a document generation assistant specialized in creating PDF documents.
