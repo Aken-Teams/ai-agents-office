@@ -1228,7 +1228,7 @@ export const WORD_TOOLS: WordToolSpec[] = [
       + 'compact（緊湊，字小、間距密，適合表格多的文件）、'
       + 'spec（規格書，Word 原生藍色標題階層，寫 PRD 和技術文件用）、'
       + 'business（商務表單，深藍標題配小字內文，報價單、彙整表、對外文件用）、'
-      + 'report（報告書，單一色相的綠配色、表格用淡底細線而不是黑底灰紋，'
+      + 'report（**預設**，報告書：單一色相的綠配色、表格用淡底細線而不是黑底灰紋、章節標題帶一條色線，'
       + '規劃書、提案、對客戶的正式文件用——想要「有設計過」的那種就選這個）。'
       + '\n\n【每份文件的最後一定要跑這個】'
       + '你一段一段寫的時候看不到整份長什麼樣，所以這個標題挑 16pt、下一個挑 14pt，'
@@ -1241,7 +1241,7 @@ export const WORD_TOOLS: WordToolSpec[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        theme: { type: 'string', enum: ['formal', 'modern', 'academic', 'compact', 'spec', 'business', 'report'], description: '預設 modern。' },
+        theme: { type: 'string', enum: ['formal', 'modern', 'academic', 'compact', 'spec', 'business', 'report'], description: '預設 report——不指定就是設計過的那一套。公文和論文要黑白的才選 formal / academic。' },
         font: { type: 'string', description: '覆寫字型。不給就用該樣式的預設中文字型。' },
         body_align: { type: 'string', enum: ['left', 'center', 'right', 'justify'], description: '覆寫內文對齊。' },
         first_line_indent: { type: 'number', description: '覆寫首行縮排（點）。中文公文是 24。' },
