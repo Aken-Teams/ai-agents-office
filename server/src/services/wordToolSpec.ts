@@ -687,6 +687,12 @@ export const WORD_TOOLS: WordToolSpec[] = [
       + '\n\n三種版面，選跟文件性質相符的：'
       + '\n· **report**（預設）：大標題 + 副標 + 一張「文件資訊」表。'
       + '寫 PRD、規格書、分析報告用這個。meta 放文件版本、建立日期、文件狀態、負責人這類欄位。'
+      + '
+
+**report 版面給了 eyebrow 或 promise 就會改走設計過的靠左節奏**：眉標（小字主色）→ 主標（大字）→ 副標（主色，下面一條色線）→ 一句話承諾（灰字）→ 文件資訊表。'
+      + '規劃書、提案、對客戶的正式文件用這個，配 word_apply_theme 的 report 主題最整齊。'
+      + '承諾那句要寫「為了誰、要達成什麼」，不是把標題換句話說——'
+      + '它是封面上唯一一句完整的話，少了它封面只是一張標籤。'
       + '\n· **form**：標題、副標、列印時間，全部置中而且字都小。'
       + '彙整表、點檢表、申請書用這個。'
       + '\n· **letterhead**：公司抬頭 + 置中的文件名 + 客戶／案件資訊。'
@@ -698,7 +704,9 @@ export const WORD_TOOLS: WordToolSpec[] = [
       properties: {
         layout: { type: 'string', enum: ['report', 'form', 'letterhead'], description: '預設 report。' },
         title: { type: 'string', description: '文件名稱。letterhead 版面下若在 6 個字以內會自動加寬字距。' },
-        subtitle: { type: 'string', description: '副標題或英文名稱。' },
+        subtitle: { type: 'string', description: '副標題或英文名稱。report 的設計版面裡它會是主色並帶一條底線。' },
+        eyebrow: { type: 'string', description: 'report 專用。標題上方的小字，寫「機構 · 定位」，例如「久億藥局 · 在地健康守護」。給了就改走設計過的靠左版面。' },
+        promise: { type: 'string', description: 'report 專用。一句話說明這份文件為了誰、要達成什麼，放在副標下方。' },
         note: { type: 'string', description: 'form 版面的小字，例如「列印時間：民國 115 年 7 月 31 日」。' },
         company: { type: 'string', description: 'letterhead 版面的公司名稱。' },
         company_en: { type: 'string', description: 'letterhead 版面的公司英文名。' },
@@ -1215,13 +1223,15 @@ export const WORD_TOOLS: WordToolSpec[] = [
   {
     name: 'word_apply_theme',
     description:
-      '把整份文件套成同一套字型、字級、顏色和間距。四種：'
+      '把整份文件套成同一套字型、字級、顏色和間距。七種：'
       + 'formal（公文體，標楷體、置中標題、首行縮排兩字）、'
       + 'modern（商務簡潔，微軟正黑體、靠左、藍色章節標題）、'
       + 'academic（學術論文，新細明體、雙倍行距、兩端對齊）、'
       + 'compact（緊湊，字小、間距密，適合表格多的文件）、'
       + 'spec（規格書，Word 原生藍色標題階層，寫 PRD 和技術文件用）、'
-      + 'business（商務表單，深藍標題配小字內文，報價單、彙整表、對外文件用）。'
+      + 'business（商務表單，深藍標題配小字內文，報價單、彙整表、對外文件用）、'
+      + 'report（報告書，單一色相的綠配色、表格用淡底細線而不是黑底灰紋，'
+      + '規劃書、提案、對客戶的正式文件用——想要「有設計過」的那種就選這個）。'
       + '\n\n【每份文件的最後一定要跑這個】'
       + '你一段一段寫的時候看不到整份長什麼樣，所以這個標題挑 16pt、下一個挑 14pt，'
       + '每個決定分開看都合理，合起來就是忽大忽小。'
@@ -1233,7 +1243,7 @@ export const WORD_TOOLS: WordToolSpec[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        theme: { type: 'string', enum: ['formal', 'modern', 'academic', 'compact', 'spec', 'business'], description: '預設 modern。' },
+        theme: { type: 'string', enum: ['formal', 'modern', 'academic', 'compact', 'spec', 'business', 'report'], description: '預設 modern。' },
         font: { type: 'string', description: '覆寫字型。不給就用該樣式的預設中文字型。' },
         body_align: { type: 'string', enum: ['left', 'center', 'right', 'justify'], description: '覆寫內文對齊。' },
         first_line_indent: { type: 'number', description: '覆寫首行縮排（點）。中文公文是 24。' },
