@@ -34,7 +34,16 @@ const SKILL_TIMEOUT: Record<string, number> = {
                         // budget is for the agent's research + content writing
                         // (5 min was the shortest of all generators → frequent timeouts)
   'slides-gen': 480_000,  // 8 min — generate HTML slides
-  'webapp-gen': 480_000,  // 8 min — generate HTML dashboard page
+  'webapp-gen': 720_000,  // 12 min — generate an interactive HTML page.
+                        // Raised from 8 min on the measured distribution: of 568
+                        // completed runs, 100 (17.6%) finished in the LAST 30s of
+                        // the old budget and the longest success was 482s — i.e.
+                        // the cap, which is what a censored distribution looks
+                        // like. The 23 failures averaged 470s and were still
+                        // working when they were killed. This skill is also the
+                        // open-ended one: a dashboard is a page, but so is a 3D
+                        // animated production line with 20 stations, and both
+                        // arrive through the same door.
   'data-analyst': 600_000, // 10 min — data analysis + charts/visualizations
   'rag-analyst': 600_000, // 10 min — cross-file analysis + charts/visualizations
 };
@@ -675,6 +684,9 @@ export class Orchestrator {
       // restart with the real per-skill limit. So a long queue never triggers the agent
       // timeout / "逾時重分配" — the user waits, but the task still runs and completes.
       let timeout: ReturnType<typeof setTimeout>;
+      // Reset at spawn_started so "elapsed" means run time, matching the limit
+      // the timer is actually enforcing.
+      let startedAt = Date.now();
       const fireTimeout = (queued: boolean) => {
         if (settled) return;
         settled = true;
@@ -686,7 +698,17 @@ export class Orchestrator {
           console.log(`[Orchestrator] Agent ${opts.skillId} timed out but has partial output (${text.length} chars), using it`);
           resolve({ text: text + '\n\n(Note: agent timed out, output may be incomplete)', inputTokens, outputTokens, model });
         } else {
-          reject(new Error(`Agent ${opts.skillId} timed out after ${timeoutMs / 1000} seconds with no output`));
+          // Report the time that actually elapsed and which clock ran out, not
+          // the per-skill constant: when the QUEUE cap fires instead, printing
+          // `timeoutMs` describes a limit that was never reached, and the Router
+          // then tells the user to split a task that was simply waiting for a
+          // free slot.
+          const elapsed = Math.round((Date.now() - startedAt) / 1000);
+          reject(new Error(
+            queued
+              ? `Agent ${opts.skillId} never got a concurrency slot (waited ${elapsed}s)`
+              : `Agent ${opts.skillId} timed out after ${elapsed}s (limit ${timeoutMs / 1000}s) with no output`
+          ));
         }
       };
       // Queue phase: generous cap (a queued request should wait, not fail on a busy box).
@@ -701,6 +723,7 @@ export class Orchestrator {
         // fires this again, so each attempt gets a fresh full timeout.
         if (event.type === 'spawn_started') {
           clearTimeout(timeout);
+          startedAt = Date.now();
           timeout = setTimeout(() => fireTimeout(false), timeoutMs);
           return;
         }
