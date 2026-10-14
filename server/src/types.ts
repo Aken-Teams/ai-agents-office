@@ -130,6 +130,15 @@ export interface SkillDefinition {
    */
   hosts?: string[];
   /**
+   * MCP servers this skill needs mounted, by registry id without the suffix
+   * ('geo'). For capabilities that belong to the WORK rather than to the user:
+   * a skill that draws maps always needs geocoding, so asking the user to tick
+   * a box for it would be a question with one sensible answer. Credential-bound
+   * sources (email, km) are NOT listed here — those stay user-selected, because
+   * there the question is about access to someone's data, not about capability.
+   */
+  mcp?: string[];
+  /**
    * Display translations, keyed by locale ('zh-TW', 'zh-CN', 'en').
    *
    * The base `name`/`description` stay exactly as authored, because for a

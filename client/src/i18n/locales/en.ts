@@ -494,6 +494,7 @@ const en = {
   'map.status.loadingRoute': 'Loading route...',
   'map.error.map': 'Map error',
   'map.disclaimer': 'Coordinates are AI-generated and may be inaccurate. Click markers to verify on Google Maps.',
+  'map.disclaimer.some': 'These places could not be located and are shown at an approximate nearby position: {places}. All other coordinates are verified.',
   'map.action.openGoogleMaps': 'Open in Google Maps',
   'map.action.openRouteGoogleMaps': 'View route in Google Maps',
   'map.route.label': 'Route',
@@ -1093,8 +1094,10 @@ const en = {
   'admin.skills.tag.dataSource': 'Data Source',
   'admin.skills.mcp.kind.dataSource': 'Data Source',
   'admin.skills.mcp.kind.liveWorkbook': 'Live Workbook',
+  'admin.skills.mcp.kind.lookup': 'Lookup',
   'admin.skills.mcp.activation.userSelected': 'User-selected',
   'admin.skills.mcp.activation.alwaysOn': 'Built into the add-in',
+  'admin.skills.mcp.activation.skillDeclared': 'Auto-mounted by skill',
   'admin.skills.mcp.tools': '{count} tools',
   'admin.skills.mcp.surface.web': 'Web app',
   'admin.skills.mcp.surface.excel': 'Excel add-in',
@@ -1110,6 +1113,8 @@ const en = {
   'admin.skills.mcp.word.description': 'Drives the document the user has open — paragraphs, styles, headers and footers, tables, tracked changes. Asks before changing anything.',
   'admin.skills.mcp.ppt.name': 'PowerPoint Live Deck',
   'admin.skills.mcp.ppt.description': 'Drives the deck the user has open — slides, shapes, text, images, layouts. Asks before changing anything.',
+  'admin.skills.mcp.geo.name': 'Geocoding',
+  'admin.skills.mcp.geo.description': 'Resolves place names to real coordinates via OpenStreetMap, so map pins stop being guesses. A place it cannot find is reported as not found.',
 
   // Admin Conversations
   'admin.conversations.title': 'User Conversations',

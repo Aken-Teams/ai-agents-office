@@ -33,6 +33,11 @@ export const EMAIL_MCP_TOOL_NAMES = [
   'mcp__email__email_get_attachments',
 ];
 
+export const GEO_MCP_TOOL_NAMES = [
+  'mcp__geo__geo_geocode',
+  'mcp__geo__geo_reverse',
+];
+
 export const KM_MCP_TOOL_NAMES = [
   'mcp__km__km_search',
   'mcp__km__km_get_document',
@@ -40,14 +45,21 @@ export const KM_MCP_TOOL_NAMES = [
 ];
 
 export interface McpSourceInfo {
-  id: 'email-mcp' | 'km-mcp' | 'excel-mcp' | 'word-mcp' | 'ppt-mcp';
-  /** Read-only data an agent can pull in, vs. tools that act on the user's app. */
-  kind: 'data-source' | 'live-workbook';
+  id: 'email-mcp' | 'km-mcp' | 'geo-mcp' | 'excel-mcp' | 'word-mcp' | 'ppt-mcp';
+  /**
+   * Read-only data an agent can pull in, tools that act on the user's app, or
+   * a public lookup that belongs to no user at all.
+   */
+  kind: 'data-source' | 'live-workbook' | 'lookup';
   /** Empty when the deployment cannot offer it at all. */
   surfaces: McpSurface[];
   toolCount: number;
-  /** 'user-selected' = off until the human picks it; 'always-on' = inherent to the surface. */
-  activation: 'user-selected' | 'always-on';
+  /**
+   * 'user-selected' = off until the human picks it; 'always-on' = inherent to
+   * the surface; 'skill-declared' = mounted automatically for the skills whose
+   * frontmatter asks for it, invisible everywhere else.
+   */
+  activation: 'user-selected' | 'always-on' | 'skill-declared';
 }
 
 /**
@@ -82,6 +94,18 @@ export function listMcpSources(): McpSourceInfo[] {
       activation: 'user-selected',
     });
   }
+
+  // Geocoding: a public gazetteer, so there is no key to check and no identity
+  // to carry — if the box has outbound internet it works. Listed as a lookup
+  // rather than a data source because the user never picks it: the skills that
+  // draw maps declare it, and everyone else never sees the tools.
+  sources.push({
+    id: 'geo-mcp',
+    kind: 'lookup',
+    surfaces: ['web'],
+    toolCount: GEO_MCP_TOOL_NAMES.length,
+    activation: 'skill-declared',
+  });
 
   // The three add-in MCPs: not data sources at all — these tools drive the
   // document the user has open, through the add-in. Always on there, because

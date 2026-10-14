@@ -116,6 +116,14 @@ export default function ChatMap({ rawJson }: ChatMapProps) {
     if (!parsed.data) return;
     const mapData = parsed.data;
     const json = JSON.stringify(mapData);
+    // Same rule as the in-app banner: warn about the pins that are actually
+    // unconfirmed, and say nothing on a map where every pin was geocoded.
+    const unconfirmed = mapData.markers.filter(m => !m.verified).map(m => m.label);
+    const banner = !unconfirmed.length
+      ? ''
+      : unconfirmed.length === mapData.markers.length
+        ? '<div class="disclaimer">⚠ AI-generated coordinates — verify on Google Maps</div>'
+        : `<div class="disclaimer">⚠ Approximate position: ${unconfirmed.join('、').replace(/</g, '&lt;')}</div>`;
     const html = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>${(mapData.title || 'Map').replace(/</g, '&lt;')}</title>
@@ -125,7 +133,7 @@ export default function ChatMap({ rawJson }: ChatMapProps) {
 background:rgba(255,235,59,0.9);color:#333;padding:6px 16px;border-radius:20px;font-size:12px;
 box-shadow:0 2px 6px rgba(0,0,0,0.2)}</style>
 </head><body>
-<div class="disclaimer">⚠ AI-generated coordinates — verify on Google Maps</div>
+${banner}
 <div id="map"></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
 <script>
@@ -196,6 +204,25 @@ fetch('https://router.project-osrm.org/route/v1/driving/'+d.route.from[1]+','+d.
   }
 
   const mapData = parsed.data;
+
+  // Which pins, if any, the producer could not confirm. The banner used to sit
+  // over every map saying all coordinates were AI-generated — true before
+  // geocoding existed, misleading after it, and in both cases silent about
+  // WHICH pin was the doubtful one. Now it appears only when there is
+  // something to doubt, and it names it.
+  const unverified = mapData.markers.filter(m => !m.verified).map(m => m.label);
+  const allUnverified = unverified.length === mapData.markers.length;
+  const disclaimer = !unverified.length ? null : (
+    <>
+      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>info</span>
+      <span>
+        {allUnverified
+          ? t('map.disclaimer' as any)
+          : t('map.disclaimer.some' as any, { places: unverified.join('、') })}
+      </span>
+    </>
+  );
+
   const { MapContainer, TileLayer, Marker, Popup, Polyline } = rlRef.current;
   const isDark = document.documentElement.classList.contains('dark');
   const tileUrl = isDark
@@ -243,11 +270,7 @@ fetch('https://router.project-osrm.org/route/v1/driving/'+d.route.from[1]+','+d.
       <div className="chat-chart-container group">
         {mapData.title && <div className="chat-chart-title">{mapData.title}</div>}
 
-        {/* AI Disclaimer Banner */}
-        <div className="chat-map-disclaimer">
-          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>info</span>
-          <span>{t('map.disclaimer' as any)}</span>
-        </div>
+        {disclaimer && <div className="chat-map-disclaimer">{disclaimer}</div>}
 
         <div className="chat-map-body">
           {renderMap(320, 'inline')}
@@ -314,10 +337,7 @@ fetch('https://router.project-osrm.org/route/v1/driving/'+d.route.from[1]+','+d.
               <span className="material-symbols-outlined text-sm">close</span>
             </button>
             {mapData.title && <div className="text-base md:text-lg font-bold text-on-surface mb-3 md:mb-4 pr-10">{mapData.title}</div>}
-            <div className="chat-map-disclaimer" style={{ borderRadius: 8, marginBottom: 8 }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>info</span>
-              <span>{t('map.disclaimer' as any)}</span>
-            </div>
+            {disclaimer && <div className="chat-map-disclaimer" style={{ borderRadius: 8, marginBottom: 8 }}>{disclaimer}</div>}
             {renderMap(typeof window !== 'undefined' && window.innerWidth < 768 ? 350 : 500, 'fullscreen')}
             <div className="flex items-center flex-wrap gap-2 mt-3 md:mt-4 pt-3 border-t border-outline-variant/20">
               <button onClick={handleDownloadHtml} className="px-3 py-1.5 text-xs font-bold bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1">

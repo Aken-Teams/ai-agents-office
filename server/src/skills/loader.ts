@@ -163,6 +163,7 @@ export function loadSkills(): SkillDefinition[] {
         disallowedTools: Array.isArray(data.disallowedTools) ? data.disallowedTools : undefined,
         deployModes,
         hosts,
+        mcp: Array.isArray(data.mcp) ? data.mcp.map((m: unknown) => String(m).toLowerCase()) : undefined,
         i18n: parseI18n(data.i18n),
       });
     } catch (error) {

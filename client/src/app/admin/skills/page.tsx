@@ -21,10 +21,10 @@ interface Skill {
  */
 interface McpSource {
   id: string;
-  kind: 'data-source' | 'live-workbook';
+  kind: 'data-source' | 'live-workbook' | 'lookup';
   surfaces: ('web' | 'excel' | 'word' | 'ppt')[];
   toolCount: number;
-  activation: 'user-selected' | 'always-on';
+  activation: 'user-selected' | 'always-on' | 'skill-declared';
 }
 
 /** Presentation per MCP: a glyph, and which i18n strings describe it. */
@@ -49,6 +49,29 @@ const MCP_CARDS: Record<string, { icon: string; color: string; bg: string; nameK
     icon: 'present_to_all', color: 'text-warning', bg: 'bg-warning/10',
     nameKey: 'admin.skills.mcp.ppt.name', descKey: 'admin.skills.mcp.ppt.description',
   },
+  'geo-mcp': {
+    icon: 'location_on', color: 'text-error', bg: 'bg-error/10',
+    nameKey: 'admin.skills.mcp.geo.name', descKey: 'admin.skills.mcp.geo.description',
+  },
+};
+
+/**
+ * Kind and activation → label key. Both were binary ternaries, which is the
+ * same shape the SURFACE_KEYS comment below describes: anything that was not
+ * the first value silently rendered as the second, so geo-mcp (a public lookup,
+ * mounted from a skill's frontmatter) would have been labelled a user-selected
+ * data source — the opposite of true on both counts.
+ */
+const KIND_KEYS: Record<string, TranslationKey> = {
+  'data-source':   'admin.skills.mcp.kind.dataSource',
+  'live-workbook': 'admin.skills.mcp.kind.liveWorkbook',
+  'lookup':        'admin.skills.mcp.kind.lookup',
+};
+
+const ACTIVATION_KEYS: Record<string, TranslationKey> = {
+  'user-selected':  'admin.skills.mcp.activation.userSelected',
+  'always-on':      'admin.skills.mcp.activation.alwaysOn',
+  'skill-declared': 'admin.skills.mcp.activation.skillDeclared',
 };
 
 /**
@@ -238,7 +261,7 @@ export default function AdminSkillsPage() {
                       <span className={`material-symbols-outlined text-2xl md:text-3xl ${glyph.color}`}>{glyph.icon}</span>
                     </div>
                     <span className={`px-2 py-0.5 bg-surface-container-highest text-xs md:text-sm font-bold tracking-widest uppercase ${glyph.color}`}>
-                      {t(mcp.kind === 'live-workbook' ? 'admin.skills.mcp.kind.liveWorkbook' : 'admin.skills.mcp.kind.dataSource')}
+                      {t(KIND_KEYS[mcp.kind] ?? 'admin.skills.mcp.kind.dataSource')}
                     </span>
                   </div>
                   <h3 className="text-base md:text-xl font-headline font-semibold text-on-surface mb-1">
@@ -269,7 +292,7 @@ export default function AdminSkillsPage() {
                   </span>
                   <span className="flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-xs md:text-sm">check_circle</span>
-                    {t(mcp.activation === 'always-on' ? 'admin.skills.mcp.activation.alwaysOn' : 'admin.skills.mcp.activation.userSelected')}
+                    {t(ACTIVATION_KEYS[mcp.activation] ?? 'admin.skills.mcp.activation.userSelected')}
                   </span>
                 </div>
               </div>

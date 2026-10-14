@@ -9,6 +9,8 @@ allowedTools:
   - Read
   - WebSearch
   - WebFetch
+mcp:
+  - geo
 i18n:
   "zh-TW":
     name: "互動網頁生成"
@@ -134,6 +136,20 @@ Supported chart types: bar, line, pie, donut, radar, scatter, funnel, gauge, tre
 ```
 
 Initialize each chart in a `<script>` block at the bottom. Use `echarts.init()` with responsive resize handling.
+
+### Maps: every coordinate is looked up, never recalled
+
+Pages with a Leaflet or MapLibre map are allowed, and the OSM raster tiles need no key. One hard rule governs them:
+
+**Call `geo_geocode` for every place before writing any coordinate into the page.** Put all the places in one batched call with `country` set (`"tw"` for Taiwan), then paste the returned `lat`/`lng` into your JS verbatim.
+
+A page that labels half its pins「概略估算位置」is a failed page, not an honest one — the tool exists so that caveat is never needed. Handle the three outcomes:
+
+- `verified: true` → real location. Use it with no caveat.
+- `verified: false` → the gazetteer matched a DIFFERENT nearby place (`note` names it). Retry with the official full name; if it still misses, leave the pin out rather than placing it and apologising in the label.
+- `found: false` → the place is not in the gazetteer. Leave it out and say so in the page text.
+
+Set the initial view from a geocoded point or a `bbox` you were given, never from a remembered centre. Use the returned `address` in popups instead of writing one from memory.
 
 ### Rule 4: KPI Cards with Visual Indicators
 

@@ -13,7 +13,8 @@ import { logAiCall } from './aiCallLog.js';
 import { EXCEL_MCP_TOOL_NAMES } from './excelToolSpec.js';
 import { WORD_MCP_TOOL_NAMES } from './wordToolSpec.js';
 import { PPT_MCP_TOOL_NAMES } from './pptToolSpec.js';
-import { EMAIL_MCP_TOOL_NAMES, KM_MCP_TOOL_NAMES } from './mcpRegistry.js';
+import { EMAIL_MCP_TOOL_NAMES, KM_MCP_TOOL_NAMES, GEO_MCP_TOOL_NAMES } from './mcpRegistry.js';
+import { getSkill } from '../skills/loader.js';
 import type { SSEEvent } from '../types.js';
 
 // Max time to hold the auth gate for one spawn if it never produces output (the
@@ -429,11 +430,19 @@ export function spawnClaude(
   // token, so the agent can only ever reach the run owner's mailbox. The tool
   // names are added to the allow-list so the model may call them.
   const mcpToolNames: string[] = [];
+
+  // Geocoding is mounted from the SKILL's own declaration (`mcp: [geo]`), not
+  // from a per-run option threaded down from the route. Every other MCP here
+  // answers "may this user reach that data", which only the request knows; this
+  // one answers "does this job involve places", which only the skill knows. Put
+  // another way: there is no version of pptx-gen that wants geocoding tools in
+  // its context, and no version of a map-drawing skill that doesn't.
+  const wantsGeo = !!options.skillId && !!getSkill(options.skillId)?.mcp?.includes('geo');
   // Data-source MCPs: mount email-mcp and/or km-mcp, each carrying THIS run owner's
   // own credentials (mail JWT / 員編) so an agent can only ever reach the owner's
   // data — no cross-user access. Both can mount together.
   if (options.mcpEmailToken || options.mcpKmOnBehalf || options.mcpExcelRunToken
-    || options.mcpWordRunToken || options.mcpPptRunToken) {
+    || options.mcpWordRunToken || options.mcpPptRunToken || wantsGeo) {
     const mcpConfigPath = path.join(sandboxPath, '.mcp-servers.json');
     // Portable dev↔prod: prefer the COMPILED .js (production `tsc` build) run with
     // plain node — no tsx, no source .ts needed. Fall back to the TS source via the
@@ -476,6 +485,25 @@ export function spawnClaude(
         },
       };
       mcpToolNames.push(...EMAIL_MCP_TOOL_NAMES);
+    }
+    if (wantsGeo) {
+      mcpServers.geo = {
+        command: process.execPath,
+        args: mcpSpawnArgs('geoMcp'),
+        env: {
+          NODE_PATH: nodePath,
+          // Shared across every run on this box: the coordinates of 高雄車站
+          // do not differ per user, and the public gazetteer this talks to
+          // allows one request a second, so a cold cache per run would be the
+          // whole latency budget.
+          GEOCODE_CACHE_FILE: path.join(config.workspaceRoot, '.cache', 'geocode.jsonl'),
+          ...(process.env.GOOGLE_MAPS_API_KEY ? { GOOGLE_MAPS_API_KEY: process.env.GOOGLE_MAPS_API_KEY } : {}),
+          ...(process.env.NOMINATIM_BASE_URL ? { NOMINATIM_BASE_URL: process.env.NOMINATIM_BASE_URL } : {}),
+          ...(process.env.GEOCODE_USER_AGENT ? { GEOCODE_USER_AGENT: process.env.GEOCODE_USER_AGENT } : {}),
+          ...debugEnv('geo-mcp-debug.log'),
+        },
+      };
+      mcpToolNames.push(...GEO_MCP_TOOL_NAMES);
     }
     if (options.mcpKmOnBehalf) {
       mcpServers.km = {

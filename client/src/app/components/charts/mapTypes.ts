@@ -3,6 +3,17 @@ export interface MapMarker {
   lng: number;
   label: string;
   description?: string;
+  /**
+   * Set by the generating skill when the coordinates came back from the
+   * geocoding tool as a confirmed match, rather than from the model.
+   *
+   * Absent means unverified, deliberately: the old behaviour was a blanket
+   * "coordinates are AI-generated" banner over every map, which was both
+   * useless on a fully geocoded map and unable to point at the one pin that
+   * actually was a guess. Defaulting to unverified keeps an un-updated
+   * producer honest — it can only lose the warning by claiming verification.
+   */
+  verified?: boolean;
 }
 
 export interface MapRoute {
