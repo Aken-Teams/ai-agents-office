@@ -140,28 +140,35 @@ These agents can render: interactive Recharts (bar/line/pie/radar/scatter), Merm
 - 絕對不要自己宣稱「系統預抓了最近 N 封」——已經沒有這種自動預抓了。
 
 ### → Route to file generators (`pptx-gen`, `xlsx-gen`, `docx-gen`, `pdf-gen`, `slides-gen`, `webapp-gen`):
-- Explicit file format: "做一個 PPT" / "生成 Excel" / "create a Word doc" / "做 PDF 報告"
-- Keywords: "簡報" → `pptx-gen`, "試算表" → `xlsx-gen`, "文件/報告" → `docx-gen` or `pdf-gen`
-- "做投影片" / "slides" / "互動簡報" → `slides-gen`
-- "互動網頁" / "儀表板" / "dashboard" / "一頁式網頁" / "infographic" → `webapp-gen`
-- "下載" / "download" + data → file generator
 
-### → Interactive HTML choice (slides-gen vs webapp-gen):
-When the user asks for "互動" / "interactive" content without specifying format, offer a choice:
+**一個詞只能指向一個 skill。這是唯一的對照表。**
+
+| 使用者說的 | 派給 |
+|---|---|
+| 簡報 / PPT / 投影片 / slides / deck | `pptx-gen` |
+| **網頁**簡報 / HTML 簡報 / web slides | `slides-gen` |
+| 試算表 / Excel / 表格 | `xlsx-gen` |
+| 文件 / 報告 / Word | `docx-gen`（講到 PDF 才 `pdf-gen`）|
+| 儀表板 / dashboard / 一頁式網頁 / 互動網頁 / infographic | `webapp-gen` |
+| 「可以自己調參數」/ 模擬 / 試算 / 「如果…會怎樣」 | `webapp-gen` |
+| 「下載」+ 資料 | 對應的 file generator |
+
+「互動」不是 HTML 的訊號——要 HTML 會講到網頁。沒講網頁的「互動簡報」還是 `pptx-gen`。
+
+### → 看不出要什麼才問
+
+句子裡有上表任何一個詞就直接派工，不要問。只有說了「互動」卻完全沒提產出物時才問：
 
 ```
-你想要哪種互動格式？
+你想要哪種形式？
 
 [CHOICES]
-- 互動簡報（多頁翻頁，適合報告展示）
+- 網頁簡報（多頁翻頁，適合上台報告）
 - 互動網頁（單頁儀表板，適合數據總覽）
 [/CHOICES]
 ```
 
-- User picks "互動簡報" → route to `slides-gen`
-- User picks "互動網頁" → route to `webapp-gen`
-- If the user explicitly says "簡報" or "slides" → `slides-gen` directly, no choice needed
-- If the user explicitly says "網頁" / "儀表板" / "dashboard" → `webapp-gen` directly, no choice needed
+選「網頁簡報」→ `slides-gen`；選「互動網頁」→ `webapp-gen`。
 
 ### Examples:
 | User says | Route to | Why |
@@ -177,8 +184,9 @@ When the user asks for "互動" / "interactive" content without specifying forma
 | "比較 React vs Vue" | `research` | Radar chart + mindmap |
 | "做一個互動網頁" | `webapp-gen` | Explicitly says "互動網頁" |
 | "做一個儀表板" | `webapp-gen` | Dashboard = webapp-gen |
-| "幫我做互動簡報" | `slides-gen` | Explicitly says "互動簡報" |
-| "做一個互動的" | offer choice | Ambiguous "互動" → ask slides vs webapp |
+| "幫我做互動簡報" | `pptx-gen` | 有「簡報」沒「網頁」→ 還是 .pptx |
+| "做一份網頁簡報" | `slides-gen` | 明說「網頁」 |
+| "做一個互動的" | offer choice | 只有「互動」，沒講產出物 |
 | "幫我看最近的信"（已掛信箱資料源） | `rag-analyst` | 有信箱工具才去撈，別自己臆測 |
 | "信箱有什麼新信"（未掛資料源） | 不派工·引導 | 引導使用者勾選「我的信件」資料源 |
 | "把收件匣的報告整理成 PPT"（已掛資料源） | `PIPELINE` | 先 `rag-analyst` 檢索、再 `pptx-gen` |
