@@ -239,6 +239,19 @@ router.get('/ping', async (req: Request, res: Response) => {
     email: req.user!.email,
     dataSources: await availableDataSources(req.user!.userId),
     models: PPT_MODELS,
+    /**
+     * 帳號設定的語言，窗格要拿它來顯示「跟著帳號設定」實際上是哪一個。
+     *
+     * ── 為什麼非給不可 ──
+     * 窗格的語言選單停在「跟著帳號設定」時，它送出的 locale 是空的，伺服器就改用帳號的
+     * 設定。但窗格介面在沒有指定語言時會退回預設字典（中文）——於是使用者看到的是
+     * 中文介面配英文回覆，而且**沒有任何一個設定看起來是錯的**。
+     *
+     * 他不可能自己查出來，因為那個值只存在伺服器。所以把它送回去，讓選單寫清楚
+     * 「跟著帳號設定（目前：English）」。
+     */
+    locale: (await dbGet<{ locale: string }>(
+      'SELECT locale FROM users WHERE id = ?', req.user!.userId).catch(() => null))?.locale || '',
   });
 });
 

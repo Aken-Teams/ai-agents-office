@@ -25,8 +25,24 @@ const AUTH_WARMUP_TIMEOUT_MS = Math.max(1000, parseInt(process.env.AUTH_WARMUP_T
 /**
  * Translate known Claude CLI error messages to user-friendly Chinese.
  * Returns translated string if matched, null otherwise.
+ *
+ * `source` says which stream the text came from, and it is not a detail:
+ *
+ *  • 'process' — stderr or a spawn error. Everything here is machine output, so
+ *    infrastructure words ("overloaded", "429") mean what they say.
+ *  • 'stream'  — text the MODEL wrote, on its way to the user. A match here
+ *    DELETES that text and replaces it with an error banner, so a false
+ *    positive costs the user a sentence of their answer and shows a failure
+ *    where none happened.
+ *
+ * That is not hypothetical: a quotation document ("報價單") was narrated as
+ * 「下面一行小字 QUOTATION」, the substring `quota` matched, and the user got a
+ * red「AI 服務忙碌中」banner on a run that had completed successfully — with the
+ * word QUOTATION silently missing from the saved answer. The length guard that
+ * was supposed to keep this honest (`t.length < 1500`) does nothing on this
+ * path, because a streaming delta is a handful of characters by construction.
  */
-function humanizeClaudeError(text: string): string | null {
+function humanizeClaudeError(text: string, source: 'process' | 'stream' = 'process'): string | null {
   const t = text.trim();
 
   // FRONTEND PRIVACY: any Claude usage / session / rate / capacity limit becomes a
@@ -35,11 +51,27 @@ function humanizeClaudeError(text: string): string | null {
   // provider AND a subscription-style reset time (which is volatile and unhelpful).
   // Returned as a translated string → emitted as an 'error' event (not shown as chat
   // content), so it never leaks into the visible response.
+  //
+  // These three are whole English phrases with a shape prose does not accidentally
+  // take, so they are trusted from either source — the CLI does sometimes print the
+  // limit notice AS the assistant's answer, which is why the stream is scanned at all.
   if (
     /you[''’]ve (?:hit|reached) your \S* ?limit/i.test(t) ||
-    /(session|usage|weekly|monthly|5[\s-]?hour|hourly|daily)[\s-]?limit/i.test(t) ||
-    /resets?\s+\d{1,2}(?::\d{2})?\s*[ap]m/i.test(t) ||
-    (/(rate.?limit|too many requests|429|overloaded|over.?capacity|503|quota)/i.test(t) && t.length < 1500)
+    /\b(session|usage|weekly|monthly|5[\s-]?hour|hourly|daily)[\s-]?limit\b/i.test(t) ||
+    /resets?\s+\d{1,2}(?::\d{2})?\s*[ap]m/i.test(t)
+  ) {
+    return 'AI 服務忙碌中，請稍後再試。';
+  }
+
+  // Bare infrastructure signals: single words and three-digit numbers that occur
+  // perfectly naturally in ordinary writing — an invoice line can be 429, a report
+  // can discuss an overloaded production line. Only trusted from the process
+  // streams, where there is no prose to confuse them with. Word boundaries keep
+  // `quota` from matching "quotation" and `503` from matching "1503" even there.
+  if (
+    source === 'process' &&
+    t.length < 1500 &&
+    /(rate.?limit|too many requests|\b429\b|\boverloaded\b|over.?capacity|\b503\b|\bquota\b)/i.test(t)
   ) {
     return 'AI 服務忙碌中，請稍後再試。';
   }
@@ -57,13 +89,22 @@ function humanizeClaudeError(text: string): string | null {
     return 'AI 服務使用額度已達上限，請稍後再試。';
   }
 
+  // ── Everything below reads MACHINE output only ──
+  // The remaining rules key on bare words and three-digit numbers: `billing`,
+  // `401`, `429`, `503`. Those are ordinary vocabulary for this product's users,
+  // who generate invoices, quotations and payment terms for a living — a Word
+  // document about billing terms would otherwise be replaced, mid-sentence, by
+  // 「AI 服務帳戶額度不足，請聯繫管理員」. Model text already had its chance
+  // above, against whole phrases rather than fragments.
+  if (source === 'stream') return null;
+
   // "rate limit" / "too many requests" / 429
-  if (/rate.?limit|too many requests|429/i.test(t) && t.length < 500) {
+  if (/rate.?limit|too many requests|\b429\b/i.test(t) && t.length < 500) {
     return '請求過於頻繁，請稍候幾秒再試。';
   }
 
   // "overloaded" / "capacity"
-  if (/overloaded|over.?capacity|503/i.test(t) && t.length < 500) {
+  if (/overloaded|over.?capacity|503/i.test(t) && t.length < 500) {
     return 'AI 服務目前繁忙，請稍後再試。';
   }
 
@@ -73,7 +114,7 @@ function humanizeClaudeError(text: string): string | null {
   }
 
   // "invalid api key" / "unauthorized" / 401
-  if (/invalid.?api.?key|unauthorized|401/i.test(t) && t.length < 500) {
+  if (/invalid.?api.?key|unauthorized|401/i.test(t) && t.length < 500) {
     return 'AI 服務認證失敗，請聯繫管理員檢查設定。';
   }
 
@@ -120,7 +161,12 @@ function isQuotaLimitError(text: string): boolean {
   if (/\blimit\b/.test(t) && /reset|resets?\s+\d/.test(t)) return true;          // "limit \u2026 resets 3:10pm"
   if (/resets?\s+\d{1,2}(:\d{2})?\s*[ap]m/.test(t)) return true;                 // "resets 3:10pm / 4pm"
   // Rate limiting / capacity / explicit "limit reached" \u2014 paid API has its own window.
-  if (/(rate.?limit|too many requests|429|overloaded|over.?capacity|503|quota|limit reached|limit exceeded)/.test(t) && t.length < 1500) return true;
+  // Word boundaries, because this decision SPENDS MONEY: a true result here
+  // overflows the run onto the paid API key. `stdoutTail` carries the tail of the
+  // model's own output, so an unbounded /quota/ also fires on "quotation" — and a
+  // failed run that happened to be writing a 報價單 would be rebilled as a usage
+  // limit. Bare 429/503 get the same treatment for the same reason.
+  if (/(rate.?limit|too many requests|\b429\b|\boverloaded\b|over.?capacity|\b503\b|\bquota\b|limit reached|limit exceeded)/.test(t) && t.length < 1500) return true;
   return false;
 }
 
@@ -1101,7 +1147,7 @@ function processStreamEvent(
     const delta = parsed.delta as Record<string, unknown> | undefined;
     if (delta?.type === 'text_delta' && delta.text) {
       const rawDelta = delta.text as string;
-      const translated = humanizeClaudeError(rawDelta);
+      const translated = humanizeClaudeError(rawDelta, 'stream');
       const safeText = sanitizeOutput(translated || rawDelta);
       tokens.hasStreamedText = true; // Mark that we received streaming text
       emitter.emit('event', {
@@ -1150,7 +1196,7 @@ function processStreamEvent(
         if (block.type === 'text' && block.text && !tokens.hasStreamedText) {
           // Only emit if text wasn't already streamed via content_block_delta
           const rawText = block.text as string;
-          const translated = humanizeClaudeError(rawText);
+          const translated = humanizeClaudeError(rawText, 'stream');
           const safeText = sanitizeOutput(translated || rawText);
           emitter.emit('event', {
             type: translated ? 'error' : 'text',
