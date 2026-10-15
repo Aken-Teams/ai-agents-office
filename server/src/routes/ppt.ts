@@ -660,13 +660,21 @@ router.get('/conversations/:id/messages', async (req: Request, res: Response) =>
 
 // ─── The add-in reporting back what Office.js did ───
 router.post('/tool-result', (req: Request, res: Response) => {
-  const { runId, callId, ok, content, error, image, decision } = req.body as {
+  const { runId, callId, ok, content, error, image, decision, note } = req.body as {
     runId?: string; callId?: string; ok?: boolean; content?: string; error?: string;
     image?: { mimeType?: string; data?: string };
     // How it got past the confirmation gate. Only the pane knows, because
     // only the pane showed the card — so only the pane can say whether a
     // human actually looked at it.
     decision?: 'none' | 'auto' | 'allowed' | 'rejected';
+    /**
+     * 使用者在這一輪執行中補的話。
+     *
+     * 窗格把它搭在工具結果的回程上送過來——那是一個每隔幾秒就出現、而且模型一定會讀的
+     * 通道（它正在等這個結果）。這樣使用者不用按停止就能補充：手上這件事做完，接著就
+     * 照補的做。打斷的語意是「不要做了」，跟「照這個繼續」是兩回事。
+     */
+    note?: string;
   };
   if (!runId || !callId) { res.status(400).json({ error: 'runId and callId are required' }); return; }
   if (!runBelongsTo(runId, req.user!.userId)) { res.status(403).json({ error: 'Not your run' }); return; }
@@ -679,7 +687,12 @@ router.post('/tool-result', (req: Request, res: Response) => {
     ? { mimeType: image.mimeType, data: image.data }
     : undefined;
   const delivered = resolveToolCall(runId, callId, {
-    ok: ok !== false, content, error, image: pic,
+    ok: ok !== false,
+    // 補充接在工具結果後面，標清楚是誰說的——模型要分得出哪些是工具回報、哪些是人說的。
+    content: note ? `${content || ''}
+
+【使用者補充】${String(note).slice(0, 2000)}` : content,
+    error, image: pic,
     // Validated rather than trusted: this becomes an audit fact, and an
     // unrecognised value must read as 「沒有人確認」 rather than be stored.
     decision: ['none', 'auto', 'allowed', 'rejected'].includes(String(decision))
