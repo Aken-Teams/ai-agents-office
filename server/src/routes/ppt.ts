@@ -689,9 +689,29 @@ router.post('/tool-result', (req: Request, res: Response) => {
   const delivered = resolveToolCall(runId, callId, {
     ok: ok !== false,
     // 補充接在工具結果後面，標清楚是誰說的——模型要分得出哪些是工具回報、哪些是人說的。
-    content: note ? `${content || ''}
+    /**
+     * 補充要寫得像使用者在說話，不像工具的輸出。
+     *
+     * 只寫「【使用者補充】…」的話，它夾在一段工具回報裡，模型很容易把它讀成結果的一部分
+     * ——那是系統在描述狀態，不是人在下指令。於是它點頭稱是，然後繼續照原本的計畫做完。
+     *
+     * 所以講清楚三件事：這是人說的、它是對整份文件的要求、而且它可以推翻原本的計畫。
+     * 窗格會在這一輪剩下的每一次工具結果都帶上同一段話，所以它不會往下做幾步就漂走。
+     */
+    content: note
+      ? `${content || ''}
 
-【使用者補充】${String(note).slice(0, 2000)}` : content,
+────────
+`
+        + `**使用者在你執行到一半時補充了需求**（不是工具的輸出，是他剛剛打字說的）：
+
+`
+        + `${String(note).slice(0, 2000)}
+
+`
+        + `這是對**整份產出**的要求，不只是這一步。如果它跟你原本的計畫衝突，`
+        + `以他這句為準，並且在下一句話讓他知道你收到了。`
+      : content,
     error, image: pic,
     // Validated rather than trusted: this becomes an audit fact, and an
     // unrecognised value must read as 「沒有人確認」 rather than be stored.
