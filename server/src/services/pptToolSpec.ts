@@ -524,7 +524,32 @@ export const PPT_TOOLS: PptToolSpec[] = [
       additionalProperties: false,
     },
   },
-    {
+      {
+    name: 'ppt_review_layout',
+    description:
+      '做完整份之後看一次，只修「壞掉」的：物件跑到版面外、兩個物件疊在一起、字太小。'
+      + '
+
+【它刻意不碰設計】不會去對齊、等距、統一大小——那些是你剛剛為這一頁做的決定，'
+      + '檢查沒有資格覆蓋。它只抓「不管什麼設計都不該發生」的事。'
+      + '
+
+跑到版面外的會自動夾回來（位置算得出來）；疊在一起的**只報告**，'
+      + '因為該讓誰讓開是設計問題——它會告訴你是哪兩個，你決定怎麼調。'
+      + '
+
+【每做完一份就跑一次】尤其是用 ppt_draw 畫的頁——'
+      + '座標是你自己算的，算錯一個數字就會有東西掉到版面外，而那在縮圖上看不出來。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slide: { type: 'number', description: '只檢查某一頁。不給就整份。' },
+        fix: { type: 'boolean', description: '預設 true（會把跑出去的夾回來）。false 就只報告。' },
+      },
+      additionalProperties: false,
+    },
+  },
+{
     name: 'ppt_draw',
     description:
       '一次畫一整批物件：矩形、文字、線條，各自帶座標和顏色。'
