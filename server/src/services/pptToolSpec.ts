@@ -239,7 +239,80 @@ export const PPT_TOOLS: PptToolSpec[] = [
   },
 
   // ── The tool that should do most of the work ───────────────────────────────
+    {
+    name: 'ppt_plan_deck',
+    description:
+      '規劃整份簡報的走向：每頁一行，講這一頁要證明什麼、用什麼形式。'
+      + '\n\n【做簡報的第一步，不是可選的】'
+      + '一頁的簡報也要跑——「只做一頁」正是最需要規劃的情況，因為所有東西要擠進同一張紙，'
+      + '位置是先決的，不是做到哪算哪。'
+      + '\n\n清單要先給使用者看：走向錯了，每一頁做得再好都是白做，'
+      + '而他看一眼就知道順序對不對——那比看完五頁成品再說「不是這個方向」便宜太多。'
+      + '\n\n列完檢查三件事：相鄰的頁形式有沒有重複太多（連三頁條列就是沒在規劃）、'
+      + '有沒有哪一頁只是上一頁換句話說（有就合併）、密度要不要一致'
+      + '（開場結論可以輕、中間論證該重，但不要隨機）。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        headline: { type: 'string', description: '整份要讓人記得的那一句話。' },
+        audience: { type: 'string', description: '給誰看的，影響密度和用詞。' },
+        slides: {
+          type: 'array',
+          description: '每頁一個物件，照順序。',
+          items: {
+            type: 'object',
+            properties: {
+              purpose: { type: 'string', description: '這一頁要證明什麼，例如「問題：採用高但成效低」。' },
+              form: { type: 'string', description: '用什麼形式，例如「左圖右表」「三欄階段卡」。' },
+            },
+            required: ['purpose', 'form'],
+          },
+        },
+      },
+      required: ['slides'],
+      additionalProperties: false,
+    },
+  },
   {
+    name: 'ppt_plan_slide',
+    description:
+      '規劃一頁的版面：分成幾塊、各佔哪裡、每塊用什麼媒材以及為什麼。'
+      + '\n\n【ppt_build_slide 會檢查這個跑過沒有】沒規劃過的頁做不了，這不是提醒是一道門。'
+      + '因為先想內容再找地方放，做出來的頁面是把區塊依序堆下去的結果——'
+      + '每一塊都對，但整頁沒有人規劃過。'
+      + '\n\n**headline 要寫成一句主張**（「採用衝很快，成效跟不上」），'
+      + '不是題目名稱（「AI 趨勢分析」）。那句話決定這一頁其餘所有東西怎麼排。'
+      + '\n\n每一塊都要說得出 why——說不出「為什麼這塊用圖不用條列」，'
+      + '通常代表那塊其實不需要存在，或者它該換一種形式。'
+      + '\n\n**給座標等於給了設計稿。** 每一塊帶 left/top/width/height 的話，'
+      + '後面每個工具照著放，排不歪也不重疊——這是做出真正看板式一頁的唯一方法。'
+      + '投影片是 960×540 點，內容區大約從 y=104 開始、左右各留 30~38。'
+      + '\n\n媒材怎麼挑：兩組數字要比較→長條圖；多個項目的多個欄位→表格；'
+      + '階段流程→並排的階段卡；單一關鍵數字→數字卡；真的只能用講的→條列，一頁最多一到兩塊。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slide: { type: 'number', description: '第幾頁，從 1 開始。預設 1。' },
+        headline: { type: 'string', description: '這一頁要讓人記得的那句主張。' },
+        blocks: {
+          type: 'array',
+          description: '這一頁分成哪幾塊。一頁最多三到四塊，再多就是擠。',
+          items: {
+            type: 'object',
+            properties: {
+              area: { type: 'string', description: '佔哪裡，例如「左上」「下半橫排」。' },
+              media: { type: 'string', description: '用什麼，例如「長條圖」「表格」「階段卡」「數字卡」。' },
+              why: { type: 'string', description: '為什麼是這個媒材。' },
+            },
+            required: ['area', 'media'],
+          },
+        },
+      },
+      required: ['headline', 'blocks'],
+      additionalProperties: false,
+    },
+  },
+{
     name: 'ppt_build_slide',
     description:
       '**一次做好一整張排版完成的投影片。這應該是你最常用的工具。**'
@@ -633,7 +706,53 @@ export const PPT_TOOLS: PptToolSpec[] = [
     },
   },
 
-  {
+    {
+    name: 'ppt_add_table',
+    description:
+      '在投影片上排一張表格。用方塊拼成的——PowerPointApi 沒有建立表格的方法。'
+      + '\n\n【這是讓一頁變豐富最有效的工具，不要忘了它】'
+      + '多個項目的多個欄位（面向／採用／成效／落差）用表格，條列講不出欄與欄的對應關係。'
+      + '一頁如果全是卡片和圖，加一張表就會從「堆了幾個區塊」變成「有人規劃過」。'
+      + '\n\n**每一格的底色和字色都能單獨控制**，所以做得出真正好讀的表：'
+      + '表頭深底白字、斑馬紋淡到幾乎看不見、負數自動標紅、最後一列是平均就再深一階。'
+      + '負數（-30、−35.7、(12)、▼）會自動用警示色，不用自己標。'
+      + '\n\n上限是 8 欄 12 列。超過的話那是文件不是投影片——挑重點或拆兩頁。'
+      + '\n\n使用者不能用表格工具改它，要直接點進某一格改字。這件事工具回報時會講，'
+      + '你不用再提醒一次。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slide: { type: 'number', description: '第幾頁，從 1 開始。預設目前這一頁。' },
+        rows: {
+          type: 'array',
+          description: '二維陣列，第一列通常是欄名。',
+          items: { type: 'array', items: { type: 'string' } },
+        },
+        header: { type: 'boolean', description: '第一列是不是欄名，預設 true。' },
+        total_row: { type: 'boolean', description: '最後一列是合計或平均，底色再深一階。' },
+        numeric_columns: {
+          type: 'array',
+          description: '哪幾欄是數字（從 1 開始），會靠右對齊。數字不靠右就對不齊。',
+          items: { type: 'number' },
+        },
+        widths: {
+          type: 'array',
+          description: '各欄寬度的比例或點數。不給就第一欄寬一點、其餘平分。',
+          items: { type: 'number' },
+        },
+        left: { type: 'number' }, top: { type: 'number' }, width: { type: 'number' },
+        row_height: { type: 'number', description: '列高，預設 26。' },
+        size: { type: 'number', description: '字級，預設 11。' },
+        header_fill: { type: 'string' }, header_text: { type: 'string' },
+        band_fill: { type: 'string' }, total_fill: { type: 'string' },
+        text_color: { type: 'string' }, warn_color: { type: 'string' },
+        look: { type: 'string', description: '配色風格，跟其他工具同一套。' },
+      },
+      required: ['rows'],
+      additionalProperties: false,
+    },
+  },
+{
     name: 'ppt_add_cards',
     description:
       '在投影片上排一列（或多列）卡片。**這是把投影片做得像樣的主力工具。**'
