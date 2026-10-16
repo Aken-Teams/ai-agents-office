@@ -588,7 +588,16 @@ export const PPT_TOOLS: PptToolSpec[] = [
         look: { type: 'string' }, theme: { type: 'string' },
       },
       required: ['kind', 'items'],
-      additionalProperties: false,
+      /**
+       * 這裡刻意不設 additionalProperties: false。
+       *
+       * 設了之後，模型只要多帶一個我沒想到的欄位（每層的金額、節點的說明、整張圖的
+       * 標題），整個呼叫就在派送之前被擋掉——而錯誤訊息只說「失敗」，看不出是哪個欄位。
+       *
+       * 實測是 SWOT 和箭頭步驟成功、金字塔和環形流程和文氏圖失敗，差別正是**後三種的
+       * 需求比較豐富，所以模型想多帶東西**。一個為了嚴謹而加的限制，把最需要這個工具
+       * 的那幾種擋在門外。多餘的欄位忽略就好——那比整個呼叫失敗好得多。
+       */
     },
   },
 {
