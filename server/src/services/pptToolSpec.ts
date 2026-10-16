@@ -524,7 +524,63 @@ export const PPT_TOOLS: PptToolSpec[] = [
       additionalProperties: false,
     },
   },
-  {
+    {
+    name: 'ppt_draw',
+    description:
+      '一次畫一整批物件：矩形、文字、線條，各自帶座標和顏色。'
+      + '\n\n【這是讓版面真正自由的工具】'
+      + '其他工具都是**模組**——ppt_add_kpi 給資料排成數字卡、ppt_add_table 排成表，'
+      + '格式是固定的。好用，但也是天花板：能做的事只剩「挑模組、填資料」。'
+      + '\n\n真正好的看板不是這樣做的，它們是一塊一塊畫出來的——'
+      + '表格是一格一格的矩形、卡片是底板加色條加三層字、區塊之間還有箭頭和小結論。'
+      + '所以能做到四個區塊再各自拆細，因為沒有模組在限制粒度。'
+      + '\n\n**模組是捷徑，不是上限。** 合適就用 ppt_add_table；'
+      + '不合適（要特殊欄寬、某幾格要獨立配色、要在表格中間插一條分隔）就自己畫。'
+      + '\n\n投影片是 960×540 點。一次最多 120 個物件——'
+      + '六十幾個物件的看板很正常，那正是這個工具存在的理由。'
+      + '\n\n每個物件：'
+      + '\n· `rect`：底板、卡片、表格的每一格、色條。給 text 的話字就在框裡。'
+      + '\n· `text`：純文字，沒有底色（給了 fill 就有）。'
+      + '\n· `line`：分隔線、底線。'
+      + '\n· 其他形狀用 `shape` 指定（Ellipse、RightArrow、Chevron）。'
+      + '\n\n先用 ppt_plan_slide 把每塊的座標定下來，再照著畫——'
+      + '規劃有座標、畫的時候照著放，才排不歪也不重疊。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slide: { type: 'number', description: '第幾頁，從 1 開始。預設目前這一頁。' },
+        theme: { type: 'string', description: '沒給顏色的物件用哪一套配色。' },
+        font: { type: 'string', description: '整批的預設字型。' },
+        shapes: {
+          type: 'array',
+          description: '要畫的物件，照順序疊上去（後面的蓋前面的）。',
+          items: {
+            type: 'object',
+            properties: {
+              type: { type: 'string', enum: ['rect', 'text', 'line'], description: '預設 rect。' },
+              shape: { type: 'string', description: '非矩形時指定，例如 Ellipse、RightArrow、Chevron。' },
+              left: { type: 'number' }, top: { type: 'number' },
+              width: { type: 'number' }, height: { type: 'number' },
+              fill: { type: 'string', description: '底色。給 null 或空字串就透明。' },
+              line_color: { type: 'string' }, line_width: { type: 'number' },
+              weight: { type: 'number', description: 'line 的粗細。' },
+              text: { type: 'string' },
+              size: { type: 'number', description: '字級，預設 11。' },
+              bold: { type: 'boolean' },
+              color: { type: 'string', description: '字色（line 的話是線色）。' },
+              align: { type: 'string', enum: ['left', 'center', 'right'] },
+              valign: { type: 'string', enum: ['top', 'middle', 'bottom'] },
+              font: { type: 'string' },
+              wrap: { type: 'boolean', description: '預設會換行。false 的話字超出就裁掉。' },
+            },
+          },
+        },
+      },
+      required: ['shapes'],
+      additionalProperties: false,
+    },
+  },
+{
     name: 'ppt_add_shape',
     description:
       '加一個幾何圖形，可以帶文字。'
@@ -709,6 +765,7 @@ export const PPT_TOOLS: PptToolSpec[] = [
     {
     name: 'ppt_add_table',
     description:
+      '【預設請改用 ppt_draw 自己畫】這個模組的格式是固定的，用了它這一頁就會長得跟上一頁一樣——而「每份簡報都長一樣」正是使用者最不滿的地方。' + '表格自己畫才做得出該有的細節（色條、三層字級、某幾格獨立配色）。只有在格式剛好合適、而且這一頁其他部分已經夠有設計感的時候才用它。' +
       '在投影片上排一張表格。用方塊拼成的——PowerPointApi 沒有建立表格的方法。'
       + '\n\n【這是讓一頁變豐富最有效的工具，不要忘了它】'
       + '多個項目的多個欄位（面向／採用／成效／落差）用表格，條列講不出欄與欄的對應關係。'
@@ -755,6 +812,7 @@ export const PPT_TOOLS: PptToolSpec[] = [
 {
     name: 'ppt_add_cards',
     description:
+      '【預設請改用 ppt_draw 自己畫】這個模組的格式是固定的，用了它這一頁就會長得跟上一頁一樣——而「每份簡報都長一樣」正是使用者最不滿的地方。' + '卡片自己畫才做得出該有的細節（色條、三層字級、某幾格獨立配色）。只有在格式剛好合適、而且這一頁其他部分已經夠有設計感的時候才用它。' +
       '在投影片上排一列（或多列）卡片。**這是把投影片做得像樣的主力工具。**'
       + '\n\n【為什麼重要】拆解一份手工做的精美簡報，每張投影片有 17 到 47 個圖形；'
       + '只放標題加條列的話大概 5 個。差距就在這裡——內容做成卡片，不是做成一段文字。'
@@ -808,6 +866,7 @@ export const PPT_TOOLS: PptToolSpec[] = [
   {
     name: 'ppt_add_kpi',
     description:
+      '【預設請改用 ppt_draw 自己畫】這個模組的格式是固定的，用了它這一頁就會長得跟上一頁一樣——而「每份簡報都長一樣」正是使用者最不滿的地方。' + '數字卡自己畫才做得出該有的細節（色條、三層字級、某幾格獨立配色）。只有在格式剛好合適、而且這一頁其他部分已經夠有設計感的時候才用它。' +
       '一排數據卡：大數字 + 標籤 + 小註，每張卡頂一條自己的色條。'
       + '\n\n【這是讓版面「有東西」最快的方法】一頁只有圖表和文字，下半部就會空。'
       + '把三到四個關鍵數字排成一列放在圖表上方或下方，版面立刻有上下層次，'
