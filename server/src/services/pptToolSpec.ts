@@ -543,6 +543,54 @@ export const PPT_TOOLS: PptToolSpec[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'ppt_add_infographic',
+    description:
+      '畫一張常見的資訊圖：SWOT、金字塔、環形流程、箭頭步驟、文氏圖。座標都算好了。'
+      + '\n\n【這是少數該用模組的地方】'
+      + '版面要自己畫（見 ppt_draw），但這五種是**圖表類型**，跟長條圖同一類——'
+      + '結構本來就該一致，而且座標算一次就不用每次重算。'
+      + '把這部分交給工具，你的心力就能花在這一頁其餘的部分。'
+      + '\n\n· `swot` —— 四個六角形聚成一簇。items 給四個，每個有 key（S/W/O/T）和 label。'
+      + '\n· `pyramid` —— 梯形層層疊，右邊自動接引線和說明。由下而上給，最底層放第一個。'
+      + '\n· `cycle` —— 圓形節點繞一圈，可以給 hub 當軸心。三到七個。'
+      + '\n· `steps` —— Chevron 橫排，後一個壓前一個。'
+      + '\n· `venn` —— 三個圓相交，交集會另外補混色塊（fill 設不了半透明）。'
+      + '\n\n顏色不給就從 accent 推一組同色相的深淺階；個別要指定就在 items 裡給 color。'
+      + '\n\n**圖只負責結構，說明文字自己用 ppt_draw 補**——'
+      + '那些說明該放哪裡、多寬、幾行，是這一頁的版面問題，不是這張圖的事。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        slide: { type: 'number' },
+        kind: { type: 'string', enum: ['swot', 'pyramid', 'cycle', 'steps', 'venn'] },
+        items: {
+          type: 'array',
+          description: 'swot 四個、venn 三個、cycle 三到七個、其餘不限（上限 6）。',
+          items: {
+            type: 'object',
+            properties: {
+              label: { type: 'string', description: '區塊上的字。' },
+              key: { type: 'string', description: 'swot 專用：六角形裡的字母。' },
+              value: { type: 'string', description: 'pyramid 專用：梯形裡的數字或百分比。' },
+              color: { type: 'string', description: '這一塊的顏色。不給就自動推。' },
+            },
+          },
+        },
+        hub: { type: 'string', description: 'cycle 專用：中心軸的字。' },
+        center: { type: 'string', description: 'venn 專用：三圓交集的字。' },
+        accent: { type: 'string', description: '推導深淺階用的主色。' },
+        left: { type: 'number' }, top: { type: 'number' },
+        width: { type: 'number' }, height: { type: 'number' },
+        node: { type: 'number', description: 'cycle/venn 的圓徑。' },
+        radius: { type: 'number', description: 'cycle 的排列半徑。' },
+        text_color: { type: 'string' }, block_text: { type: 'string' },
+        look: { type: 'string' }, theme: { type: 'string' },
+      },
+      required: ['kind', 'items'],
+      additionalProperties: false,
+    },
+  },
 {
     name: 'ppt_draw',
     description:
