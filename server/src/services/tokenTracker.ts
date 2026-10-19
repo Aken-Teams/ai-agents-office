@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { dbGet, dbAll, dbRun } from '../db.js';
-import { pricingMarkupSql } from '../config.js';
+import { pricingMarkupSql, pricingMarkupForDate } from '../config.js';
 
 interface TokenUsageRecord {
   userId: string;
@@ -9,6 +9,13 @@ interface TokenUsageRecord {
   outputTokens: number;
   model?: string;
   durationMs?: number;
+  /**
+   * Which product this call came from, for billing. The Office add-in bills at
+   * a lower multiple than the web app; passing it here rather than deriving it
+   * from the conversation's category keeps the write free of an extra lookup,
+   * and the three add-in routes are the only callers that know it.
+   */
+  surface?: 'addin' | 'web';
 }
 
 /**
@@ -106,9 +113,13 @@ export function costUsdSql(tableAlias = ''): string {
 export async function recordTokenUsage(record: TokenUsageRecord): Promise<string> {
   const id = uuidv4();
   const rates = ratesForModel(record.model);
+  // Stamped now, for the same reason the rates are: today's commercial terms
+  // are a property of this call, not something to re-derive later from whatever
+  // the price list happens to say then.
+  const markup = pricingMarkupForDate(new Date(), record.surface);
   await dbRun(
-    `INSERT INTO token_usage (id, user_id, conversation_id, input_tokens, output_tokens, model, duration_ms, input_rate, output_rate)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO token_usage (id, user_id, conversation_id, input_tokens, output_tokens, model, duration_ms, input_rate, output_rate, markup)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id,
     record.userId,
     record.conversationId,
@@ -118,6 +129,7 @@ export async function recordTokenUsage(record: TokenUsageRecord): Promise<string
     record.durationMs || null,
     rates.inputPerMTok,
     rates.outputPerMTok,
+    markup,
   );
   return id;
 }

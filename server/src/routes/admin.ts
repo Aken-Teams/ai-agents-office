@@ -744,7 +744,12 @@ router.get('/tokens/ledger', async (req: Request, res: Response) => {
          AND created_at <= tu.created_at
        ORDER BY created_at DESC
        LIMIT 1) as user_prompt,
-      tu.input_tokens, tu.output_tokens, tu.model, tu.duration_ms, tu.created_at
+      tu.input_tokens, tu.output_tokens, tu.model, tu.duration_ms, tu.created_at,
+      -- Priced here rather than in the browser. The client used to multiply
+      -- raw tokens by a date-derived markup, which cannot see that a row is
+      -- add-in usage billed at ×3 — the stamp lives on the row, and only this
+      -- query reads it.
+      ${costUsdSql('tu')} * ${pricingMarkupSql('tu.created_at')} AS cost
     FROM token_usage tu
     LEFT JOIN users u ON u.id = tu.user_id
     LEFT JOIN conversations c ON c.id = tu.conversation_id

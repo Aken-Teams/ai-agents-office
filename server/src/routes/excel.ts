@@ -477,7 +477,7 @@ ${skill.systemPrompt}
         uuidv4(), conversationId, 'assistant', text).catch(() => {});
     }
     if (inTok || outTok) {
-      await recordTokenUsage({ userId, conversationId, inputTokens: inTok, outputTokens: outTok, model: model || chosenModel }).catch(() => {});
+      await recordTokenUsage({ userId, conversationId, inputTokens: inTok, outputTokens: outTok, model: model || chosenModel, surface: 'addin' }).catch(() => {});
     }
     // A run that was cut short has to SAY so. Sending a bare `done` made a
     // 10-minute timeout indistinguishable from a finished answer — that is exactly

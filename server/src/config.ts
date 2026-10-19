@@ -197,13 +197,28 @@ export const PRICING_X5_START_SQL   = '2026-07-07 16:00:00';
 export const PRICING_FREE_START_MS = Date.parse('2026-07-01T00:00:00+08:00');
 export const PRICING_X5_START_MS   = Date.parse('2026-07-07T16:00:00+08:00');
 
-/** Markup for a single usage record's timestamp (per-record billing). */
-export function pricingMarkupForDate(ts: string | Date): number {
+/**
+ * The Office add-in bills at ×3 rather than the ×5 the web app carries.
+ *
+ * It is a different kind of use: the add-in answers inside a document the user
+ * already has open, in short turns, and the value per call is smaller than a
+ * generated deck or report. Charging the same multiple made the cheap, frequent
+ * case feel expensive.
+ */
+export const PRICING_ADDIN_MARKUP = 3;
+
+/** Usage that bills at the add-in rate rather than the web rate. */
+export const ADDIN_CATEGORIES = ['excel-addin', 'word-addin', 'ppt-addin'] as const;
+
+/** Markup for a single usage record (per-record billing). */
+export function pricingMarkupForDate(ts: string | Date, surface?: 'addin' | 'web'): number {
   if ((process.env.DEPLOY_MODE || 'pro-panjit') === 'pro-out') return 2;
   const ms = ts instanceof Date ? ts.getTime() : Date.parse(ts);
+  // The grace period was a promise about a date, not about a surface — it stays
+  // free for everything, add-in included.
   if (ms < PRICING_FREE_START_MS) return 10;
   if (ms < PRICING_X5_START_MS) return 0;
-  return 5;
+  return surface === 'addin' ? PRICING_ADDIN_MARKUP : 5;
 }
 
 /**
@@ -213,7 +228,15 @@ export function pricingMarkupForDate(ts: string | Date): number {
  */
 export function pricingMarkupSql(col: string): string {
   if ((process.env.DEPLOY_MODE || 'pro-panjit') === 'pro-out') return '2';
-  return `CASE WHEN ${col} < '${PRICING_FREE_START_SQL}' THEN 10 WHEN ${col} < '${PRICING_X5_START_SQL}' THEN 0 ELSE 5 END`;
+  // Prefer the markup stamped on the row; fall back to the date rule for rows
+  // written before stamping existed. Doing it here means all fourteen callers
+  // became add-in-aware without any of them changing — and, more importantly,
+  // without needing a join to conversations that most of those queries do not
+  // have.
+  const dot = col.lastIndexOf('.');
+  const markupCol = dot >= 0 ? `${col.slice(0, dot)}.markup` : 'markup';
+  return `COALESCE(${markupCol}, CASE WHEN ${col} < '${PRICING_FREE_START_SQL}' THEN 10`
+    + ` WHEN ${col} < '${PRICING_X5_START_SQL}' THEN 0 ELSE 5 END)`;
 }
 
 const DEFAULT_JWT_SECRET = 'dev-secret-change-in-production';

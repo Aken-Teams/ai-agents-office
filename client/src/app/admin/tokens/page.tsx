@@ -49,6 +49,8 @@ interface LedgerEntry {
   model: string | null;
   duration_ms: number | null;
   created_at: string;
+  /** Server-priced cost in USD. Absent only on responses from an older build. */
+  cost?: number | string | null;
 }
 
 function formatTokens(n: number): string {
@@ -1034,7 +1036,12 @@ export default function AdminTokens() {
             </thead>
             <tbody className="divide-y divide-outline-variant/10">
               {ledger.map(entry => {
-                const cost = ((entry.input_tokens / 1_000_000) * 3 + (entry.output_tokens / 1_000_000) * 15) * markupForDate(entry.created_at);
+                // Server-priced: it reads the markup stamped on the row, which is the
+                // only place that knows add-in usage bills at ×3. The date-derived
+                // fallback covers rows served by an older build.
+                const cost = entry.cost != null
+                  ? Number(entry.cost)
+                  : ((entry.input_tokens / 1_000_000) * 3 + (entry.output_tokens / 1_000_000) * 15) * markupForDate(entry.created_at);
                 return (
                   <tr key={entry.id} className="hover:bg-surface-container-high/50 transition-colors">
                     <td className="py-3 px-6 text-sm text-primary font-mono">{entry.id.slice(0, 8)}</td>
@@ -1066,7 +1073,12 @@ export default function AdminTokens() {
           {/* Mobile Card List */}
           <div className="md:hidden divide-y divide-outline-variant/10">
             {ledger.map(entry => {
-              const cost = ((entry.input_tokens / 1_000_000) * 3 + (entry.output_tokens / 1_000_000) * 15) * markupForDate(entry.created_at);
+              // Server-priced: it reads the markup stamped on the row, which is the
+              // only place that knows add-in usage bills at ×3. The date-derived
+              // fallback covers rows served by an older build.
+              const cost = entry.cost != null
+                ? Number(entry.cost)
+                : ((entry.input_tokens / 1_000_000) * 3 + (entry.output_tokens / 1_000_000) * 15) * markupForDate(entry.created_at);
               return (
                 <div key={entry.id} className="px-4 py-3">
                   <div className="flex items-center justify-between mb-1">

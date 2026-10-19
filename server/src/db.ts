@@ -155,6 +155,12 @@ export async function initializeDatabase(): Promise<void> {
         -- See ratesForModel() / costUsdSql() in services/tokenTracker.ts.
         input_rate      DECIMAL(10,4),
         output_rate     DECIMAL(10,4),
+        -- Billing multiplier applied on top of the raw rates, stamped at write
+        -- time for the same reason the rates are: the markup is a commercial
+        -- decision that changes, and a settled invoice must not move when it
+        -- does. NULL = not stamped, priced by the historical date rule in
+        -- config.pricingMarkupSql().
+        markup          DECIMAL(5,2),
         created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_usage_user (user_id),
         INDEX idx_usage_created (created_at),
@@ -162,6 +168,27 @@ export async function initializeDatabase(): Promise<void> {
         FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    // Existing databases: add the markup column, then price the add-in back to
+    // the start of this month.
+    //
+    // The backfill is what "增益集從 10/01 起整月 ×3" means in practice — rows
+    // written before the switch carry no stamp, so without this they would fall
+    // through to the ×5 date rule and October would be billed at two different
+    // rates. Scoped to add-in conversations from 2026-10-01 only, and keyed on
+    // `markup IS NULL`, so it is idempotent: a restart cannot double-apply it,
+    // and a row already stamped at write time is never touched.
+    try {
+      await conn.query('ALTER TABLE token_usage ADD COLUMN markup DECIMAL(5,2) DEFAULT NULL AFTER output_rate');
+    } catch { /* column already exists */ }
+    await conn.query(
+      `UPDATE token_usage tu
+         JOIN conversations c ON c.id = tu.conversation_id
+          SET tu.markup = 3
+        WHERE tu.markup IS NULL
+          AND tu.created_at >= '2026-10-01 00:00:00'
+          AND c.category IN ('excel-addin', 'word-addin', 'ppt-addin')`);
+
 
     await conn.query(`
       CREATE TABLE IF NOT EXISTS task_executions (
