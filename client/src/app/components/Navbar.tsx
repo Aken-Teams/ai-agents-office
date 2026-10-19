@@ -827,8 +827,8 @@ export default function Navbar() {
                             disabled={installerBusy}
                             className="flex items-center gap-2.5 w-full px-3 py-2 bg-transparent text-sm text-on-surface hover:bg-surface-container transition-colors cursor-pointer disabled:opacity-50 text-left"
                           >
-                            <span className="material-symbols-outlined text-[18px]">download_for_offline</span>
-                            <span>{t('nav.addinInstaller' as any)}</span>
+                            <span className="material-symbols-outlined text-[18px] shrink-0">download_for_offline</span>
+                            <span className="whitespace-nowrap">{t('nav.addinInstaller' as any)}</span>
                           </button>
                         )}
                       </div>
@@ -881,10 +881,12 @@ export default function Navbar() {
                             title={addinInstaller.note || undefined}
                             className="flex items-center gap-2.5 w-full py-2 px-3 bg-transparent rounded-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container/40 transition-all duration-150 cursor-pointer disabled:opacity-50 text-left"
                           >
-                            <span className="material-symbols-outlined text-[18px]">download_for_offline</span>
-                            <span className="text-[13px] flex-1">{t('nav.addinInstaller' as any)}</span>
+                            <span className="material-symbols-outlined text-[18px] shrink-0">download_for_offline</span>
+                            {/* nowrap + truncate: the sidebar is narrow and a
+                                two-line item breaks the rhythm of the list. */}
+                            <span className="text-[13px] flex-1 min-w-0 truncate whitespace-nowrap">{t('nav.addinInstaller' as any)}</span>
                             {addinInstaller.version && (
-                              <span className="text-[11px] text-on-surface-variant/60">{addinInstaller.version}</span>
+                              <span className="text-[11px] text-on-surface-variant/60 shrink-0 tabular-nums">{addinInstaller.version}</span>
                             )}
                           </button>
                         )}

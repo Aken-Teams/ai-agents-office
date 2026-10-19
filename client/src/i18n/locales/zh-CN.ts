@@ -22,7 +22,7 @@ const zhCN = {
   'nav.assistant': 'AI 助手',
   'nav.memories': 'AI 记忆',
   'nav.guide': '使用说明',
-  'nav.addinInstaller': '下载 Office 加载项',
+  'nav.addinInstaller': 'Office 加载项',
   'nav.group.main': '主要',
   'nav.group.manage': '管理',
   'nav.group.system': '系统',

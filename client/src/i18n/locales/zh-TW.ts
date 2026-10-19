@@ -22,7 +22,7 @@ const zhTW = {
   'nav.assistant': 'AI 助手',
   'nav.memories': 'AI 記憶',
   'nav.guide': '使用說明',
-  'nav.addinInstaller': '下載 Office 增益集',
+  'nav.addinInstaller': 'Office 增益集',
   'nav.group.main': '主要',
   'nav.group.manage': '管理',
   'nav.group.system': '系統',
