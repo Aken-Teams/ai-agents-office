@@ -246,6 +246,8 @@ const en = {
   'greeting.newFeatures': 'New features: ',
   'dashboard.templateWizard': 'Template Wizard',
   'dashboard.templateWizard.desc': 'Pick a document type & style template for quick generation',
+  'dashboard.addin.title': 'Download the Office add-in',
+  'dashboard.addin.desc': 'Use the AI assistant inside Word, Excel and PowerPoint',
   'dashboard.mobile.typePicker': 'Choose document type',
   'dashboard.mobile.typePickerHint': 'Or just type — AI auto-detects',
   'dashboard.recentFiles.title': 'Recent Files',

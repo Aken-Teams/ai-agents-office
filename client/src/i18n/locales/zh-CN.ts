@@ -251,6 +251,8 @@ const zhCN = {
   'greeting.newFeatures': '最近有新功能上线：',
   'dashboard.templateWizard': '模板精灵',
   'dashboard.templateWizard.desc': '选择文件类型与风格模板，快速生成',
+  'dashboard.addin.title': '下载 Office 加载项',
+  'dashboard.addin.desc': '在 Word、Excel、PowerPoint 里直接使用 AI 助理',
   'dashboard.mobile.typePicker': '选择文件类型',
   'dashboard.mobile.typePickerHint': '或直接输入，AI 自动判断',
   'dashboard.recentFiles.title': '最近文件',

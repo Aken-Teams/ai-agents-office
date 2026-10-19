@@ -8,6 +8,7 @@ import { adminMiddleware } from '../middleware/adminAuth.js';
 import { loadSkills } from '../skills/loader.js';
 import { config, pricingMarkupSql } from '../config.js';
 import { applyWatermark, getWatermarkSettings, setWatermarkSettings } from '../services/watermark.js';
+import { getAddinInstaller, setAddinInstaller } from '../services/addinInstaller.js';
 import { getMailToken, fetchMessageDetail, resolveCidImages } from '../services/outlookApi.js';
 import { mailGatewayStats, gatewayFetch } from '../services/mailGatewayLimit.js';
 import { getSystemPressure } from '../services/systemPressure.js';
@@ -1120,6 +1121,7 @@ router.get('/settings', async (_req: Request, res: Response) => {
     storageQuotaGb: await getStorageQuotaGb(),
     uploadQuotaMb: await getUploadQuotaMb(),
     watermark: await getWatermarkSettings(),
+    addinInstaller: await getAddinInstaller(),
   });
 });
 
@@ -1151,6 +1153,25 @@ router.patch('/settings', async (req: Request, res: Response) => {
     changes.push(`watermark: enabled=${enabled}, text="${text}"`);
   }
 
+  // Add-in installer download. Saved as one object because the four fields are
+  // only meaningful together — a URL with no toggle, or a toggle with no URL,
+  // is a button that does nothing.
+  const { addinInstaller } = req.body as { addinInstaller?: Record<string, unknown> };
+  if (addinInstaller && typeof addinInstaller === 'object') {
+    const requested = String(addinInstaller.url ?? '').trim();
+    const saved = await setAddinInstaller({
+      enabled: !!addinInstaller.enabled,
+      url: requested,
+      version: String(addinInstaller.version ?? ''),
+      note: String(addinInstaller.note ?? ''),
+    });
+    // Log what was STORED, not what was sent: a rejected URL comes back empty
+    // and the toggle comes back off, and an audit line saying otherwise would
+    // hide that from whoever reads the log later.
+    changes.push(`addinInstaller: enabled=${saved.enabled}, url="${saved.url}"`);
+    if (requested && !saved.url) changes.push('addinInstaller: 網址被拒絕（必須是 http/https 的完整網址）');
+  }
+
   if (changes.length === 0) {
     res.status(400).json({ error: 'No valid settings to update' });
     return;
@@ -1169,6 +1190,7 @@ router.patch('/settings', async (req: Request, res: Response) => {
     storageQuotaGb: await getStorageQuotaGb(),
     uploadQuotaMb: await getUploadQuotaMb(),
     watermark: await getWatermarkSettings(),
+    addinInstaller: await getAddinInstaller(),
   });
 });
 

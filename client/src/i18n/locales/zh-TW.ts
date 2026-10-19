@@ -251,6 +251,8 @@ const zhTW = {
   'greeting.newFeatures': '最近有新功能上線：',
   'dashboard.templateWizard': '範本精靈',
   'dashboard.templateWizard.desc': '選擇文件類型與風格範本，快速生成',
+  'dashboard.addin.title': '下載 Office 增益集',
+  'dashboard.addin.desc': '在 Word、Excel、PowerPoint 裡直接使用 AI 助理',
   'dashboard.mobile.typePicker': '選擇文件類型',
   'dashboard.mobile.typePickerHint': '或直接輸入，AI 自動判斷',
   'dashboard.recentFiles.title': '最近文件',

@@ -10,6 +10,14 @@ interface Settings {
   storageQuotaGb: number;
   uploadQuotaMb: number;
   watermark?: { enabled: boolean; text: string };
+  addinInstaller?: AddinInstaller;
+}
+
+interface AddinInstaller {
+  enabled: boolean;
+  url: string;
+  version: string;
+  note: string;
 }
 
 const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
@@ -35,6 +43,10 @@ function AdminSettingsContent() {
   const [wmForm, setWmForm] = useState<{ enabled: boolean; text: string }>({ enabled: false, text: '' });
   const [wmSaving, setWmSaving] = useState(false);
   const [wmSaved, setWmSaved] = useState(false);
+  const [addinForm, setAddinForm] = useState<AddinInstaller>({ enabled: false, url: '', version: '', note: '' });
+  const [addinSaving, setAddinSaving] = useState(false);
+  const [addinSaved, setAddinSaved] = useState(false);
+  const [addinError, setAddinError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -48,6 +60,7 @@ function AdminSettingsContent() {
           uploadQuotaMb: String(data.uploadQuotaMb),
         });
         if (data.watermark) setWmForm(data.watermark);
+        if (data.addinInstaller) setAddinForm(data.addinInstaller);
       })
       .catch(console.error);
   }, [token]);
@@ -69,6 +82,33 @@ function AdminSettingsContent() {
       }
     } catch { /* ignore */ }
     setWmSaving(false);
+  }
+
+  async function saveAddin(next: AddinInstaller) {
+    if (!token || addinSaving) return;
+    setAddinSaving(true);
+    setAddinError(null);
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addinInstaller: next }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.addinInstaller) setAddinForm(data.addinInstaller);
+        // The server drops a URL it will not serve and switches the toggle off
+        // with it. Saying "saved" to that would leave the admin believing the
+        // download is live, so the mismatch is reported instead.
+        if (next.url.trim() && !data.addinInstaller?.url) {
+          setAddinError('網址格式不對，必須是 http:// 或 https:// 開頭的完整網址。');
+        } else {
+          setAddinSaved(true);
+          setTimeout(() => setAddinSaved(false), 2000);
+        }
+      }
+    } catch { /* ignore */ }
+    setAddinSaving(false);
   }
 
   async function saveSetting(key: 'usageLimitUsd' | 'storageQuotaGb' | 'uploadQuotaMb') {
@@ -389,6 +429,105 @@ function AdminSettingsContent() {
                   )}
                 </div>
                 <p className="text-[11px] text-on-surface-variant/60 mt-2">註：PDF 因內建字型限制只會顯示英數字部分；Word / PPT / Excel / HTML 可正常顯示中文。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Office add-in installer */}
+        <div className="bg-surface-container rounded-lg overflow-hidden">
+          <div className="p-4 md:p-6">
+            <div className="flex items-start gap-3 md:gap-4">
+              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-xl md:text-2xl text-primary">download_for_offline</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="text-sm md:text-base font-headline font-bold text-on-surface">Office 增益集安裝檔</h3>
+                  {addinSaved && (
+                    <span className="flex items-center gap-1 text-xs md:text-sm text-success font-bold">
+                      <span className="material-symbols-outlined text-xs md:text-sm">check_circle</span>
+                      {t('admin.settings.saved')}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs md:text-sm text-on-surface-variant leading-relaxed mb-3 md:mb-4">
+                  開啟後，使用者的儀表板會出現下載入口。安裝檔放在你自己的檔案伺服器上，這裡只存網址——簽章與防毒信任由出檔的人負責，系統不另存一份。
+                </p>
+
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={!canEditSettings}
+                      onClick={() => setAddinForm(prev => ({ ...prev, enabled: !prev.enabled }))}
+                      className={`relative w-11 h-6 rounded-full transition-colors shrink-0 cursor-pointer disabled:opacity-50 ${addinForm.enabled ? 'bg-primary' : 'bg-outline-variant/40'}`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${addinForm.enabled ? 'translate-x-5' : ''}`} />
+                    </button>
+                    <span className="text-sm text-on-surface-variant">{addinForm.enabled ? '前台顯示' : '前台隱藏'}</span>
+                  </div>
+
+                  <label className="block">
+                    <span className="block text-xs font-bold text-on-surface-variant mb-1">下載網址</span>
+                    <input
+                      type="url"
+                      value={addinForm.url}
+                      disabled={!canEditSettings}
+                      maxLength={2048}
+                      onChange={e => { setAddinForm(prev => ({ ...prev, url: e.target.value })); setAddinError(null); }}
+                      placeholder="https://files.example.com/addin/JVision-Setup.exe"
+                      className="w-full px-3 md:px-4 py-2 md:py-2.5 bg-surface-container-highest text-on-surface text-sm md:text-base rounded border border-outline-variant/20 focus:border-primary focus:outline-none disabled:opacity-50"
+                    />
+                  </label>
+
+                  <div className="flex flex-col gap-3 md:flex-row">
+                    <label className="block md:w-40 shrink-0">
+                      <span className="block text-xs font-bold text-on-surface-variant mb-1">版本（選填）</span>
+                      <input
+                        type="text"
+                        value={addinForm.version}
+                        disabled={!canEditSettings}
+                        maxLength={40}
+                        onChange={e => setAddinForm(prev => ({ ...prev, version: e.target.value }))}
+                        placeholder="v1.4.2"
+                        className="w-full px-3 md:px-4 py-2 md:py-2.5 bg-surface-container-highest text-on-surface text-sm md:text-base rounded border border-outline-variant/20 focus:border-primary focus:outline-none disabled:opacity-50"
+                      />
+                    </label>
+                    <label className="block flex-1 min-w-0">
+                      <span className="block text-xs font-bold text-on-surface-variant mb-1">說明（選填）</span>
+                      <input
+                        type="text"
+                        value={addinForm.note}
+                        disabled={!canEditSettings}
+                        maxLength={200}
+                        onChange={e => setAddinForm(prev => ({ ...prev, note: e.target.value }))}
+                        placeholder="支援 Word / Excel / PowerPoint，安裝前請先關閉 Office"
+                        className="w-full px-3 md:px-4 py-2 md:py-2.5 bg-surface-container-highest text-on-surface text-sm md:text-base rounded border border-outline-variant/20 focus:border-primary focus:outline-none disabled:opacity-50"
+                      />
+                    </label>
+                  </div>
+
+                  {addinError && (
+                    <p className="flex items-center gap-1.5 text-xs md:text-sm text-error">
+                      <span className="material-symbols-outlined text-sm">error</span>
+                      {addinError}
+                    </p>
+                  )}
+
+                  {canEditSettings && (
+                    <div className="flex items-center justify-end gap-3">
+                      {addinForm.url && (
+                        <a href={addinForm.url} target="_blank" rel="noopener noreferrer" className="text-xs md:text-sm text-primary hover:underline">
+                          測試這個連結 ↗
+                        </a>
+                      )}
+                      <button onClick={() => saveAddin(addinForm)} disabled={addinSaving} className="px-3 md:px-4 py-2 md:py-2.5 bg-primary text-on-primary text-xs md:text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50 shrink-0">
+                        {addinSaving ? t('admin.settings.saving') : t('admin.settings.save')}
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

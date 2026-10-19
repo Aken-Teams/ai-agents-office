@@ -11,6 +11,7 @@ import conversationRoutes from './routes/conversations.js';
 import generateRoutes from './routes/generate.js';
 import fileRoutes from './routes/files.js';
 import usageRoutes from './routes/usage.js';
+import appConfigRoutes from './routes/appConfig.js';
 import skillRoutes from './routes/skills.js';
 import promptTemplateRoutes from './routes/promptTemplates.js';
 import handoffRoutes from './routes/handoffs.js';
@@ -140,6 +141,7 @@ async function main() {
   app.use('/api/generate', generateRoutes);
   app.use('/api/files', fileRoutes);
   app.use('/api/usage', usageRoutes);
+  app.use('/api/app-config', appConfigRoutes);
   app.use('/api/skills', skillRoutes);
   app.use('/api/prompt-templates', promptTemplateRoutes);
   app.use('/api/handoffs', handoffRoutes);
