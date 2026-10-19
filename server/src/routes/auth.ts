@@ -58,20 +58,22 @@ router.get('/mode', (_req: Request, res: Response) => {
     // add-in shows it as the secondary tab rather than the default.
     emailLogin: true,
     /**
-     * Google 登入只給對外版。
+     * 有設定就給，兩種部署都一樣。
      *
-     * ── 為什麼綁 deployMode ──
-     * 強茂那邊是 AD 帳號為主、電子信箱為輔，兩個分頁已經夠了——多一顆 Google 按鈕
-     * 等於在企業內網的登入畫面上放一條指向外部身分供應商的路，而那是資安會問的事。
+     * ── 我一開始綁了 deployMode，那是錯的 ──
+     * 理由是「企業內網不該放外部身分供應商的入口」。但這條路本來就有守門員：
+     * pro-panjit 模式下 POST /google 會檢查白名單，不在名單上的 Google 帳號會被
+     * 擋在 403（GOOGLE_NOT_WHITELISTED）。**授權是在那裡做的，不是靠藏按鈕。**
      *
-     * 對外版沒有 AD，Google 是最省事的入口，所以那邊要。
+     * 藏起來的代價是強茂那邊的人只能用密碼，而他們多半有公司 Google 帳號——
+     * 少一個入口，多一組要記的密碼。
      *
-     * ── 為什麼同時檢查 clientId ──
-     * 沒設定 GOOGLE_CLIENT_ID 的話 /api/auth/google 會回 501。顯示一顆按下去必定失敗
-     * 的按鈕，比沒有按鈕糟——使用者會以為是自己的帳號有問題。
+     * ── 仍然檢查 clientId ──
+     * 沒設定的話 /google 會回 501。顯示一顆按下去必定失敗的按鈕，比沒有按鈕糟——
+     * 使用者會以為是自己的帳號有問題。
      */
-    googleLogin: config.deployMode === 'pro-out' && !!config.googleClientId,
-    googleClientId: config.deployMode === 'pro-out' ? config.googleClientId : '',
+    googleLogin: !!config.googleClientId,
+    googleClientId: config.googleClientId,
     webUrl: config.publicWebUrl,
   });
 });
