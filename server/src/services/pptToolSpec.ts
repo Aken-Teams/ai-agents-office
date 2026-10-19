@@ -601,6 +601,65 @@ export const PPT_TOOLS: PptToolSpec[] = [
     },
   },
 {
+    name: 'ppt_run_script',
+    description:
+      '在使用者的 PowerPoint 裡直接執行一段 JavaScript（Office.js），只把 return 的結果帶回來。'
+      + '\n\n【什麼時候一定要用這個】**版面上有任何重複結構的時候。**'
+      + '一個 5×8 的表格是 40 個矩形、一條時間軸是 6 個圓點加 6 段線、一面指標牆是 12 張卡 ×3 層文字。'
+      + '把這些逐個寫成座標 JSON 要三千個 token；寫成一支迴圈是三十個——而且改間距只要改一個數字，'
+      + '不必重寫四十組座標。'
+      + '\n\n**一頁六十幾個物件正是該用這支工具的訊號，不是該逐個列舉的理由。**'
+      + '\n\n【可以用的東西】context（PowerPoint.RequestContext）、presentation（= context.presentation）、'
+      + 'PowerPoint（列舉常數用，例如 PowerPoint.GeometricShapeType.rectangle）、'
+      + 'log(...)（訊息會跟結果一起回傳，除錯用）、store（**跨呼叫保留的暫存物件**）。'
+      + '整段程式碼是一個 async function 的內容，可以直接 await，用 return 交出結果。'
+      + '\n\n【座標】投影片是 960×540 點，左上角是 (0,0)。'
+      + '\n\n【Office.js 的規矩】先 .load("欄位") 再 await context.sync() 才讀得到值；'
+      + '**不要在迴圈裡 sync**——建立物件時連續呼叫 addGeometricShape，最後統一 sync 一次就好。'
+      + '範例（一排等距的卡片）：'
+      + '\nconst slide = presentation.slides.getItemAt(0);'
+      + '\nconst W = 200, GAP = 24, TOP = 180;'
+      + '\nfor (let i = 0; i < 4; i++) {'
+      + '\n  const card = slide.shapes.addGeometricShape('
+      + 'PowerPoint.GeometricShapeType.roundRectangle,'
+      + ' { left: 60 + i * (W + GAP), top: TOP, width: W, height: 150 });'
+      + '\n  card.fill.setSolidColor("F4F6F8");'
+      + '\n  card.textFrame.textRange.text = titles[i];'
+      + '\n}'
+      + '\nreturn "已建立 4 張卡片";'
+      + '\n\n【store：多支 script 之間傳資料的正確方式】'
+      + 'store 在同一個對話裡會一直存在，而且**完全不經過你的上下文**。'
+      + '先算好的版面參數（每一欄的 x、每一列的 y、配色表）放進 store，下一支 script 直接讀，'
+      + '不要 return 給自己再貼回去——那一趟來回正是這個工具要消滅的成本。'
+      + '\n\n【回傳什麼】回傳「結論」（「已建立 40 格，表頭 5 欄」），不要回傳整份物件清單。'
+      + '**把回傳控制在 2 KB 以內。**'
+      + '\n\n【什麼時候不要用】單一個物件、或兩三個沒有規律的物件——那用 ppt_draw 更直接。'
+      + '圖表一律用 ppt_add_chart，不要自己畫長條。'
+      + '\n\n【mode】只讀就填 read；會動到簡報（新增／修改／刪除物件）就填 write，'
+      + 'write 會先跳確認視窗給使用者按。誠實填——伺服器會另外掃描程式碼，'
+      + '填了 read 卻含寫入動作，一樣會跳確認視窗。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        code: {
+          type: 'string',
+          description: 'JavaScript 程式碼（一個 async function 的內容，用 return 交出結果）',
+        },
+        mode: {
+          type: 'string',
+          enum: ['read', 'write'],
+          description: 'read=只讀不改；write=會改動簡報，需要使用者確認',
+        },
+        explain: {
+          type: 'string',
+          description: '一句話說明這段程式要做什麼，會直接顯示給使用者（確認視窗上就是這句），請寫人話。',
+        },
+      },
+      required: ['code', 'mode', 'explain'],
+      additionalProperties: false,
+    },
+  },
+{
     name: 'ppt_draw',
     description:
       '一次畫一整批物件：矩形、文字、線條，各自帶座標和顏色。'
