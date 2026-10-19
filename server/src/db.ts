@@ -1,7 +1,7 @@
 import mysql, { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
-import { config } from './config.js';
+import { config, PRICING_ADDIN_MARKUP, ADDIN_CATEGORIES } from './config.js';
 import { DEFAULT_TOS_CONTENT } from './defaults/tos.js';
 
 // ---------------------------------------------------------------------------
@@ -169,25 +169,32 @@ export async function initializeDatabase(): Promise<void> {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
-    // Existing databases: add the markup column, then price the add-in back to
-    // the start of this month.
+    // Existing databases: add the markup column, then price October's add-in
+    // usage at the current add-in rate.
     //
-    // The backfill is what "增益集從 10/01 起整月 ×3" means in practice — rows
-    // written before the switch carry no stamp, so without this they would fall
-    // through to the ×5 date rule and October would be billed at two different
-    // rates. Scoped to add-in conversations from 2026-10-01 only, and keyed on
-    // `markup IS NULL`, so it is idempotent: a restart cannot double-apply it,
-    // and a row already stamped at write time is never touched.
+    // October was agreed as a single rate for the whole month, so the rows
+    // written before the rate existed have to be re-stamped — otherwise one
+    // invoice would carry two different prices. Bounded to October ALONE,
+    // deliberately: from November the stamp is applied at write time and a
+    // later rate change must not reach back into a month already billed. That
+    // is the whole reason the markup lives on the row.
+    //
+    // Idempotent, and self-correcting if the rate is edited again before the
+    // month closes: it writes the current constant wherever the row disagrees,
+    // so a restart converges rather than accumulating.
     try {
       await conn.query('ALTER TABLE token_usage ADD COLUMN markup DECIMAL(5,2) DEFAULT NULL AFTER output_rate');
     } catch { /* column already exists */ }
+    const addinList = ADDIN_CATEGORIES.map(c => `'${c}'`).join(', ');
     await conn.query(
       `UPDATE token_usage tu
          JOIN conversations c ON c.id = tu.conversation_id
-          SET tu.markup = 3
-        WHERE tu.markup IS NULL
-          AND tu.created_at >= '2026-10-01 00:00:00'
-          AND c.category IN ('excel-addin', 'word-addin', 'ppt-addin')`);
+          SET tu.markup = ?
+        WHERE tu.created_at >= '2026-10-01 00:00:00'
+          AND tu.created_at <  '2026-11-01 00:00:00'
+          AND c.category IN (${addinList})
+          AND (tu.markup IS NULL OR tu.markup <> ?)`,
+      [PRICING_ADDIN_MARKUP, PRICING_ADDIN_MARKUP]);
 
 
     await conn.query(`

@@ -204,8 +204,17 @@ export const PRICING_X5_START_MS   = Date.parse('2026-07-07T16:00:00+08:00');
  * already has open, in short turns, and the value per call is smaller than a
  * generated deck or report. Charging the same multiple made the cheap, frequent
  * case feel expensive.
+ *
+ * ── What ×2 actually is ──
+ * Not ×2 on cost. Billing is computed from Claude Sonnet's $3/$15, while the
+ * add-in runs Opus 5.5 at $4/$20 — so the basis sits 25% under what the calls
+ * really cost, and ×2 billed is ×1.5 on true spend. Cache reads narrow it
+ * further: the add-in re-reads roughly 34k tokens of system prompt and tool
+ * definitions every turn, and cache_read_input_tokens is not counted at all
+ * today. Anyone lowering this number again should fix the basis first, because
+ * below about ×1.5 billed the feature stops paying for itself.
  */
-export const PRICING_ADDIN_MARKUP = 3;
+export const PRICING_ADDIN_MARKUP = 2;
 
 /** Usage that bills at the add-in rate rather than the web rate. */
 export const ADDIN_CATEGORIES = ['excel-addin', 'word-addin', 'ppt-addin'] as const;
