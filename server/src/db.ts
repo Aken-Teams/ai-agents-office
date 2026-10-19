@@ -522,6 +522,39 @@ export async function initializeDatabase(): Promise<void> {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
+    // The Office add-in installer's paper trail: who published which build, and
+    // who took a copy. Uploads and downloads share one table because the
+    // question people actually ask is chronological — "which build was live when
+    // this person installed it" — and two tables would need joining by time to
+    // answer it.
+    await dbRun(`
+      CREATE TABLE IF NOT EXISTS addin_installer_events (
+        id          CHAR(36) PRIMARY KEY,
+        -- Millisecond precision, because an upload and the first download of it
+        -- land in the same second often enough that a seconds-only audit trail
+        -- cannot say which came first.
+        created_at  DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        event_type  VARCHAR(16) NOT NULL,
+        user_id     VARCHAR(36),
+        source      VARCHAR(8),
+        version     VARCHAR(40),
+        file_name   VARCHAR(255),
+        file_size   BIGINT,
+        ip          VARCHAR(64),
+        user_agent  VARCHAR(255),
+        INDEX idx_inst_created (created_at),
+        INDEX idx_inst_type (event_type),
+        INDEX idx_inst_user (user_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Upgrade a table created before the precision was raised. Harmless to
+    // re-run: MySQL accepts a MODIFY that changes nothing.
+    try {
+      await conn.query(
+        'ALTER TABLE addin_installer_events MODIFY created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)');
+    } catch { /* already at this precision, or the table is brand new */ }
+
     await conn.execute(`
       CREATE TABLE IF NOT EXISTS quota_requests (
         id            VARCHAR(36) PRIMARY KEY,

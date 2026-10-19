@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
+import multer from 'multer';
 import path from 'path';
 import { dbGet, dbAll, dbRun } from '../db.js';
 import { opsGet } from '../opsDb.js';
@@ -8,7 +9,11 @@ import { adminMiddleware } from '../middleware/adminAuth.js';
 import { loadSkills } from '../skills/loader.js';
 import { config, pricingMarkupSql } from '../config.js';
 import { applyWatermark, getWatermarkSettings, setWatermarkSettings } from '../services/watermark.js';
-import { getAddinInstaller, setAddinInstaller } from '../services/addinInstaller.js';
+import {
+  getAddinInstaller, setAddinInstaller, recordUploadedInstaller, deleteUploadedInstaller,
+  INSTALLER_DIR, INSTALLER_PATH, MAX_INSTALLER_BYTES, ALLOWED_INSTALLER_EXT,
+  logInstallerEvent,
+} from '../services/addinInstaller.js';
 import { getMailToken, fetchMessageDetail, resolveCidImages } from '../services/outlookApi.js';
 import { mailGatewayStats, gatewayFetch } from '../services/mailGatewayLimit.js';
 import { getSystemPressure } from '../services/systemPressure.js';
@@ -1159,8 +1164,12 @@ router.patch('/settings', async (req: Request, res: Response) => {
   const { addinInstaller } = req.body as { addinInstaller?: Record<string, unknown> };
   if (addinInstaller && typeof addinInstaller === 'object') {
     const requested = String(addinInstaller.url ?? '').trim();
+    // Read the previous record BEFORE writing — the publish check below compares
+    // against it, and reading afterwards would compare the new state to itself.
+    const before = await getAddinInstaller();
     const saved = await setAddinInstaller({
       enabled: !!addinInstaller.enabled,
+      mode: addinInstaller.mode === 'file' ? 'file' : 'url',
       url: requested,
       version: String(addinInstaller.version ?? ''),
       note: String(addinInstaller.note ?? ''),
@@ -1169,6 +1178,16 @@ router.patch('/settings', async (req: Request, res: Response) => {
     // and the toggle comes back off, and an audit line saying otherwise would
     // hide that from whoever reads the log later.
     changes.push(`addinInstaller: enabled=${saved.enabled}, url="${saved.url}"`);
+    // Record a publish only when the URL or the version actually moved —
+    // flipping the visibility toggle is not a new build, and a trail full of
+    // those would bury the rows that matter.
+    if (saved.mode === 'url' && saved.url && (saved.url !== before.url || saved.version !== before.version)) {
+      await logInstallerEvent({
+        type: 'url_set', userId: req.user!.userId, source: 'url',
+        version: saved.version, fileName: saved.url,
+        ip: req.ip, userAgent: req.get('user-agent'),
+      });
+    }
     if (requested && !saved.url) changes.push('addinInstaller: 網址被拒絕（必須是 http/https 的完整網址）');
   }
 
@@ -3067,6 +3086,191 @@ router.get('/api-tracking/stats', async (req: Request, res: Response) => {
     console.error('[api-tracking] query failed:', msg);
     res.status(500).json({ error: 'query failed' });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Office add-in installer upload
+// ---------------------------------------------------------------------------
+// Separate from /api/uploads on purpose. That path is for user documents: it
+// caps files at 20MB and runs a prompt-injection scan over the text, neither of
+// which fits a 150MB signed binary. This one is admin-only, holds exactly one
+// file, and checks the things that matter for an executable — extension and
+// size — rather than pretending to inspect its contents.
+const installerUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      fs.mkdirSync(INSTALLER_DIR, { recursive: true });
+      cb(null, INSTALLER_DIR);
+    },
+    // Fixed name: the uploaded filename is metadata, never a path. It is kept
+    // for the download, but it does not get to choose where this lands.
+    filename: (_req, _file, cb) => cb(null, path.basename(INSTALLER_PATH)),
+  }),
+  limits: { fileSize: MAX_INSTALLER_BYTES, files: 1 },
+});
+
+// POST /api/admin/settings/addin-installer — upload the installer binary
+router.post('/settings/addin-installer', installerUpload.single('file'), async (req: Request, res: Response) => {
+  const file = req.file;
+  if (!file) { res.status(400).json({ error: '沒有收到檔案' }); return; }
+
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (!ALLOWED_INSTALLER_EXT.includes(ext)) {
+    // Remove what multer already wrote: a rejected upload must not leave the
+    // previous installer overwritten by a file nobody will serve.
+    try { fs.rmSync(INSTALLER_PATH, { force: true }); } catch { /* ignore */ }
+    res.status(400).json({ error: `只接受 ${ALLOWED_INSTALLER_EXT.join(' / ')} 檔案` });
+    return;
+  }
+
+  const saved = await recordUploadedInstaller(file.originalname, file.size);
+  await logInstallerEvent({
+    type: 'upload', userId: req.user!.userId, source: 'file',
+    version: saved.version, fileName: file.originalname, fileSize: file.size,
+    ip: req.ip, userAgent: req.get('user-agent'),
+  });
+  await dbRun(
+    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+    uuidv4(), req.user!.userId, 'upload_addin_installer', 'system', 'addin_installer',
+    JSON.stringify({ name: file.originalname, size: file.size })
+  );
+  res.json({ success: true, addinInstaller: saved });
+});
+
+// GET /api/admin/audit-log — every administrative action, finally readable
+//
+// This table has been written to since the beginning and never displayed: the
+// only code that touched it counted rows for an overview tile. So a record of
+// who suspended whom, who approved which quota, who changed the system limits
+// existed and could not be consulted — which is the same as not having it when
+// somebody asks what happened.
+router.get('/audit-log', async (req: Request, res: Response) => {
+  const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '10'), 10) || 10));
+  const action = String(req.query.action || '').trim();
+  const search = String(req.query.search || '').trim();
+
+  const where: string[] = [];
+  const params: unknown[] = [];
+  if (action) { where.push('a.action = ?'); params.push(action); }
+  if (search) {
+    where.push('(u.display_name LIKE ? OR u.email LIKE ? OR a.target_id LIKE ? OR a.details LIKE ?)');
+    const like = `%${search}%`;
+    params.push(like, like, like, like);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const totalRow = await dbGet<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM admin_audit_log a LEFT JOIN users u ON u.id = a.admin_id ${whereSql}`,
+    ...params);
+  const total = totalRow?.n || 0;
+
+  const entries = await dbAll<any>(
+    `SELECT a.*, u.display_name AS admin_name, u.email AS admin_email
+       FROM admin_audit_log a
+       LEFT JOIN users u ON u.id = a.admin_id
+       ${whereSql}
+      ORDER BY a.created_at DESC, a.id DESC
+      LIMIT ? OFFSET ?`,
+    ...params, limit, (page - 1) * limit);
+
+  // The distinct actions actually present, so the filter offers what exists
+  // rather than a hard-coded list that drifts as new actions are logged.
+  const actions = await dbAll<{ action: string; n: number }>(
+    'SELECT action, COUNT(*) AS n FROM admin_audit_log GROUP BY action ORDER BY n DESC');
+
+  // Resolve every id the page is about to print into a name.
+  //
+  // The details blob stores raw UUIDs ("user_id":"e377773e-…"), which is right
+  // for a log and useless for a reader: a row saying who approved what is not
+  // an answer if the "what" is a 36-character string. Resolved here in two
+  // batched queries rather than per row, and returned as a lookup so the client
+  // stays a renderer.
+  const ids = new Set<string>();
+  const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+  for (const e of entries) {
+    if (e.target_id) ids.add(String(e.target_id));
+    for (const m of String(e.details || '').matchAll(UUID)) ids.add(m[0]);
+  }
+
+  const names: Record<string, string> = {};
+  if (ids.size) {
+    const list = [...ids];
+    const slots = list.map(() => '?').join(',');
+    for (const u of await dbAll<any>(
+      `SELECT id, display_name, email FROM users WHERE id IN (${slots})`, ...list)) {
+      names[u.id] = u.display_name || u.email || u.id;
+    }
+    for (const g of await dbAll<any>(
+      `SELECT id, name FROM quota_groups WHERE id IN (${slots})`, ...list)) {
+      names[g.id] = g.name;
+    }
+  }
+
+  res.json({ entries, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)), actions, names });
+});
+
+// GET /api/admin/addin-installer/events — the installer's paper trail
+//
+// One paged timeline, filterable by type, because the two audiences read it
+// differently: "which build is live and when did it change" wants the publish
+// rows, "who has installed it" wants the downloads, and "what happened around
+// this date" wants both interleaved.
+router.get('/addin-installer/events', async (req: Request, res: Response) => {
+  const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '10'), 10) || 10));
+  const type = String(req.query.type || '').trim();
+
+  const where: string[] = [];
+  const params: unknown[] = [];
+  // 'publish' groups the three admin actions — an admin thinking about builds
+  // does not care whether one arrived as an upload or as a URL.
+  if (type === 'download') { where.push('e.event_type = ?'); params.push('download'); }
+  else if (type === 'publish') { where.push("e.event_type IN ('upload', 'url_set', 'delete')"); }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const totalRow = await dbGet<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM addin_installer_events e ${whereSql}`, ...params);
+  const total = totalRow?.n || 0;
+
+  const events = await dbAll<any>(
+    `SELECT e.*, u.display_name AS user_name, u.email AS user_email
+       FROM addin_installer_events e
+       LEFT JOIN users u ON u.id = e.user_id
+       ${whereSql}
+      ORDER BY e.created_at DESC, e.id DESC
+      LIMIT ? OFFSET ?`,
+    ...params, limit, (page - 1) * limit);
+
+  // Distinct users, not raw rows: one person downloading three times is one
+  // install, and the raw count would quietly overstate adoption.
+  const summary = await dbGet<{ downloads: number; people: number }>(
+    `SELECT COUNT(*) AS downloads, COUNT(DISTINCT user_id) AS people
+       FROM addin_installer_events WHERE event_type = 'download'`);
+
+  res.json({
+    events,
+    total,
+    page,
+    limit,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+    downloadTotal: summary?.downloads || 0,
+    downloadPeople: summary?.people || 0,
+  });
+});
+
+// DELETE /api/admin/settings/addin-installer — remove the stored installer
+router.delete('/settings/addin-installer', async (req: Request, res: Response) => {
+  const saved = await deleteUploadedInstaller();
+  await logInstallerEvent({
+    type: 'delete', userId: req.user!.userId, source: 'file',
+    version: saved.version, ip: req.ip, userAgent: req.get('user-agent'),
+  });
+  await dbRun(
+    'INSERT INTO admin_audit_log (id, admin_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?, ?)',
+    uuidv4(), req.user!.userId, 'delete_addin_installer', 'system', 'addin_installer', JSON.stringify({})
+  );
+  res.json({ success: true, addinInstaller: saved });
 });
 
 export default router;

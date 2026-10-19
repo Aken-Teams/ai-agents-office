@@ -15,9 +15,17 @@ interface Settings {
 
 interface AddinInstaller {
   enabled: boolean;
+  mode: 'url' | 'file';
   url: string;
+  file: { name: string; size: number; uploadedAt: string } | null;
   version: string;
   note: string;
+}
+
+function formatBytes(n: number): string {
+  if (n >= 1024 * 1024 * 1024) return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  if (n >= 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(n / 1024))} KB`;
 }
 
 const LOCALE_OPTIONS: { value: Locale; label: string }[] = [
@@ -43,7 +51,8 @@ function AdminSettingsContent() {
   const [wmForm, setWmForm] = useState<{ enabled: boolean; text: string }>({ enabled: false, text: '' });
   const [wmSaving, setWmSaving] = useState(false);
   const [wmSaved, setWmSaved] = useState(false);
-  const [addinForm, setAddinForm] = useState<AddinInstaller>({ enabled: false, url: '', version: '', note: '' });
+  const [addinForm, setAddinForm] = useState<AddinInstaller>({ enabled: false, mode: 'url', url: '', file: null, version: '', note: '' });
+  const [addinUploading, setAddinUploading] = useState(false);
   const [addinSaving, setAddinSaving] = useState(false);
   const [addinSaved, setAddinSaved] = useState(false);
   const [addinError, setAddinError] = useState<string | null>(null);
@@ -109,6 +118,54 @@ function AdminSettingsContent() {
       }
     } catch { /* ignore */ }
     setAddinSaving(false);
+  }
+
+  async function uploadInstaller(file: File) {
+    if (!token || addinUploading) return;
+    setAddinUploading(true);
+    setAddinError(null);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const res = await fetch('/api/admin/settings/addin-installer', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body,
+      });
+      // Read as text first: a rejected upload can come back as an HTML error
+      // page from the body-size layer, and res.json() on that throws something
+      // that says nothing about what actually happened.
+      const raw = await res.text();
+      let data: any = null;
+      try { data = JSON.parse(raw); } catch { /* not json */ }
+      if (res.ok && data?.addinInstaller) {
+        setAddinForm(data.addinInstaller);
+        setAddinSaved(true);
+        setTimeout(() => setAddinSaved(false), 2000);
+      } else {
+        setAddinError(data?.error || `上傳失敗（${res.status}）。檔案可能太大，或被伺服器前面的代理擋下。`);
+      }
+    } catch {
+      setAddinError('上傳失敗，請確認檔案大小與網路連線。');
+    }
+    setAddinUploading(false);
+  }
+
+  async function removeInstaller() {
+    if (!token || addinUploading) return;
+    setAddinUploading(true);
+    setAddinError(null);
+    try {
+      const res = await fetch('/api/admin/settings/addin-installer', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.addinInstaller) setAddinForm(data.addinInstaller);
+      }
+    } catch { /* ignore */ }
+    setAddinUploading(false);
   }
 
   async function saveSetting(key: 'usageLimitUsd' | 'storageQuotaGb' | 'uploadQuotaMb') {
@@ -468,18 +525,92 @@ function AdminSettingsContent() {
                     <span className="text-sm text-on-surface-variant">{addinForm.enabled ? '前台顯示' : '前台隱藏'}</span>
                   </div>
 
-                  <label className="block">
-                    <span className="block text-xs font-bold text-on-surface-variant mb-1">下載網址</span>
-                    <input
-                      type="url"
-                      value={addinForm.url}
-                      disabled={!canEditSettings}
-                      maxLength={2048}
-                      onChange={e => { setAddinForm(prev => ({ ...prev, url: e.target.value })); setAddinError(null); }}
-                      placeholder="https://files.example.com/addin/JVision-Setup.exe"
-                      className="w-full px-3 md:px-4 py-2 md:py-2.5 bg-surface-container-highest text-on-surface text-sm md:text-base rounded border border-outline-variant/20 focus:border-primary focus:outline-none disabled:opacity-50"
-                    />
-                  </label>
+                  {/* Source: someone else's file server, or this one. */}
+                  <div className="flex gap-2">
+                    {([
+                      { key: 'url' as const, icon: 'link', label: '用網址', hint: 'IT 已經有地方放檔案' },
+                      { key: 'file' as const, icon: 'upload_file', label: '上傳檔案', hint: '沒有檔案伺服器時用這個' },
+                    ]).map(opt => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        disabled={!canEditSettings}
+                        onClick={() => { setAddinForm(prev => ({ ...prev, mode: opt.key })); setAddinError(null); }}
+                        className={`flex-1 flex items-start gap-2 px-3 py-2.5 rounded border text-left transition-colors cursor-pointer disabled:opacity-50 ${
+                          addinForm.mode === opt.key
+                            ? 'border-primary bg-primary/5'
+                            : 'border-outline-variant/20 bg-surface-container-highest hover:border-outline-variant/40'
+                        }`}
+                      >
+                        <span className={`material-symbols-outlined text-lg shrink-0 ${addinForm.mode === opt.key ? 'text-primary' : 'text-on-surface-variant'}`}>{opt.icon}</span>
+                        <span className="min-w-0">
+                          <span className={`block text-sm font-bold ${addinForm.mode === opt.key ? 'text-primary' : 'text-on-surface'}`}>{opt.label}</span>
+                          <span className="block text-[11px] text-on-surface-variant mt-0.5">{opt.hint}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {addinForm.mode === 'url' ? (
+                    <label className="block">
+                      <span className="block text-xs font-bold text-on-surface-variant mb-1">下載網址</span>
+                      <input
+                        type="url"
+                        value={addinForm.url}
+                        disabled={!canEditSettings}
+                        maxLength={2048}
+                        onChange={e => { setAddinForm(prev => ({ ...prev, url: e.target.value })); setAddinError(null); }}
+                        placeholder="https://files.example.com/addin/JVision-Setup.exe"
+                        className="w-full px-3 md:px-4 py-2 md:py-2.5 bg-surface-container-highest text-on-surface text-sm md:text-base rounded border border-outline-variant/20 focus:border-primary focus:outline-none disabled:opacity-50"
+                      />
+                    </label>
+                  ) : (
+                    <div>
+                      <span className="block text-xs font-bold text-on-surface-variant mb-1">安裝檔</span>
+                      {addinForm.file ? (
+                        <div className="flex items-center gap-3 px-3 py-2.5 bg-surface-container-highest rounded border border-outline-variant/20">
+                          <span className="material-symbols-outlined text-xl text-primary shrink-0">deployed_code</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm text-on-surface font-bold truncate">{addinForm.file.name}</p>
+                            <p className="text-[11px] text-on-surface-variant mt-0.5">
+                              {formatBytes(addinForm.file.size)}
+                              {addinForm.file.uploadedAt && ` · 上傳於 ${new Date(addinForm.file.uploadedAt).toLocaleString('zh-TW')}`}
+                            </p>
+                          </div>
+                          {canEditSettings && (
+                            <button
+                              onClick={removeInstaller}
+                              disabled={addinUploading}
+                              className="text-xs text-error hover:underline cursor-pointer disabled:opacity-50 shrink-0"
+                            >
+                              移除
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <label className={`flex items-center justify-center gap-2 px-3 py-5 rounded border border-dashed border-outline-variant/40 text-sm text-on-surface-variant ${canEditSettings && !addinUploading ? 'cursor-pointer hover:border-primary hover:text-primary' : 'opacity-50'}`}>
+                          <span className="material-symbols-outlined text-xl">{addinUploading ? 'hourglass_top' : 'upload'}</span>
+                          {addinUploading ? '上傳中，大檔案需要一點時間…' : '選擇安裝檔（.exe / .msi / .zip）'}
+                          <input
+                            type="file"
+                            accept=".exe,.msi,.zip"
+                            disabled={!canEditSettings || addinUploading}
+                            className="hidden"
+                            onChange={e => {
+                              const f = e.target.files?.[0];
+                              // Reset the input so picking the same file twice
+                              // still fires a change event after a failure.
+                              e.target.value = '';
+                              if (f) uploadInstaller(f);
+                            }}
+                          />
+                        </label>
+                      )}
+                      <p className="text-[11px] text-on-surface-variant/60 mt-1.5">
+                        檔案存在這台伺服器上，使用者要登入才下載得到。上限 200MB。換版時重新上傳即可，不用改網址。
+                      </p>
+                    </div>
+                  )}
 
                   <div className="flex flex-col gap-3 md:flex-row">
                     <label className="block md:w-40 shrink-0">
@@ -517,7 +648,7 @@ function AdminSettingsContent() {
 
                   {canEditSettings && (
                     <div className="flex items-center justify-end gap-3">
-                      {addinForm.url && (
+                      {addinForm.mode === 'url' && addinForm.url && (
                         <a href={addinForm.url} target="_blank" rel="noopener noreferrer" className="text-xs md:text-sm text-primary hover:underline">
                           測試這個連結 ↗
                         </a>

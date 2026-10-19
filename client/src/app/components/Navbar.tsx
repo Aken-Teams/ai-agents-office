@@ -175,6 +175,45 @@ export default function Navbar() {
   const [hoveredTemplate, setHoveredTemplate] = useState<string | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  // The Office add-in installer, when this deployment publishes one. Lives in
+  // the sidebar rather than on the dashboard because installing the add-in is
+  // something people go looking for later — usually from whatever page they
+  // happen to be on — not a suggestion to act on while starting a document.
+  const [addinInstaller, setAddinInstaller] = useState<{ url: string; version: string; note: string; fileName?: string } | null>(null);
+  const [installerBusy, setInstallerBusy] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/app-config', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setAddinInstaller(d.addinInstaller ?? null))
+      .catch(() => { /* a missing download entry is not worth an error */ });
+  }, [token]);
+
+  /**
+   * Always ask the server where to go, for both hosting modes: the round trip
+   * is what records who took a copy, and an external installer never touches
+   * this server again after the click.
+   */
+  async function downloadInstaller() {
+    if (!token || installerBusy) return;
+    setInstallerBusy(true);
+    try {
+      const res = await fetch('/api/app-config/installer-click', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const { url } = await res.json();
+        // A hosted file is served as an attachment, so navigating starts the
+        // download without leaving the page; an external URL opens in a tab.
+        if (addinInstaller?.fileName) window.location.href = url;
+        else window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch { /* ignore */ }
+    setInstallerBusy(false);
+  }
+
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem(SIDEBAR_KEY) === '1';
     return false;
@@ -782,6 +821,16 @@ export default function Navbar() {
                             </Link>
                           );
                         })}
+                        {group.labelKey === 'nav.group.system' && addinInstaller && (
+                          <button
+                            onClick={downloadInstaller}
+                            disabled={installerBusy}
+                            className="flex items-center gap-2.5 w-full px-3 py-2 bg-transparent text-sm text-on-surface hover:bg-surface-container transition-colors cursor-pointer disabled:opacity-50 text-left"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">download_for_offline</span>
+                            <span>{t('nav.addinInstaller' as any)}</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -825,6 +874,20 @@ export default function Navbar() {
                             </Link>
                           );
                         })}
+                        {group.labelKey === 'nav.group.system' && addinInstaller && (
+                          <button
+                            onClick={downloadInstaller}
+                            disabled={installerBusy}
+                            title={addinInstaller.note || undefined}
+                            className="flex items-center gap-2.5 w-full py-2 px-3 bg-transparent rounded-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container/40 transition-all duration-150 cursor-pointer disabled:opacity-50 text-left"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">download_for_offline</span>
+                            <span className="text-[13px] flex-1">{t('nav.addinInstaller' as any)}</span>
+                            {addinInstaller.version && (
+                              <span className="text-[11px] text-on-surface-variant/60">{addinInstaller.version}</span>
+                            )}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </>

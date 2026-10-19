@@ -21,6 +21,8 @@ const ROUTE_TO_PAGE_KEY: Record<string, string> = {
   '/skills': 'skills',
   '/tokens': 'tokens',
   '/analytics': 'analytics',
+  '/audit-log': 'audit',
+  '/addin-installer': 'audit', // installer trail lives on the 使用軌跡 page
   '/security': 'security',
   '/settings': 'settings',
   '/org': 'org',

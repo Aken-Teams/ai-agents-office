@@ -25,6 +25,14 @@ type ReadonlyState = 'hidden' | 'view' | 'operate';
  */
 const ADMIN_LOCKED_PAGES = ['permissions'];
 
+/**
+ * Pages the sidebar refuses to 唯讀管理員 outright (`adminOnly` there), whatever
+ * this screen says. Listing them keeps the 唯讀 column honest: a three-way
+ * selector on one of these would store a setting that AdminSidebar overrules on
+ * the next render, which looks like the toggle is broken.
+ */
+const READONLY_IMPOSSIBLE_PAGES = ['api-tracking', 'permissions'];
+
 // Admin sidebar items grouped by section
 const ADMIN_SIDEBAR_GROUPS = [
   {
@@ -58,6 +66,7 @@ const ADMIN_SIDEBAR_GROUPS = [
       { key: 'skills', labelKey: 'admin.sidebar.skills', descKey: 'admin.permissions.desc.skills', icon: 'hub' },
       { key: 'tokens', labelKey: 'admin.sidebar.tokens', descKey: 'admin.permissions.desc.tokens', icon: 'payments' },
       { key: 'analytics', labelKey: 'admin.sidebar.analytics', descKey: 'admin.permissions.desc.analytics', icon: 'bar_chart' },
+      { key: 'line', labelKey: 'admin.sidebar.line', descKey: 'admin.permissions.desc.line', icon: 'chat', deployMode: 'out' as const },
       { key: 'reports', labelKey: 'admin.sidebar.reports', descKey: 'admin.permissions.desc.reports', icon: 'feedback' },
     ],
   },
@@ -67,6 +76,8 @@ const ADMIN_SIDEBAR_GROUPS = [
     icon: 'settings',
     items: [
       { key: 'security', labelKey: 'admin.sidebar.security', descKey: 'admin.permissions.desc.security', icon: 'shield_with_heart' },
+      { key: 'audit', labelKey: 'admin.sidebar.audit', descKey: 'admin.permissions.desc.audit', icon: 'history' },
+      { key: 'api-tracking', labelKey: 'admin.sidebar.apiTracking', descKey: 'admin.permissions.desc.apiTracking', icon: 'query_stats', adminOnly: true },
       { key: 'settings', labelKey: 'admin.sidebar.settings', descKey: 'admin.permissions.desc.settings', icon: 'settings' },
     ],
   },
@@ -426,10 +437,16 @@ export default function AdminPermissions() {
                       </td>
                       <td className="text-center px-4 py-3">
                         <div className="flex justify-center">
-                          <StateSelector
-                            state={getReadonlyState(item.key)}
-                            onChange={(s) => setReadonlyState(item.key, s)}
-                          />
+                          {READONLY_IMPOSSIBLE_PAGES.includes(item.key) ? (
+                            <span className="text-xs text-on-surface-variant/50" title="此頁面僅限管理者，唯讀管理員一律看不到">
+                              不適用
+                            </span>
+                          ) : (
+                            <StateSelector
+                              state={getReadonlyState(item.key)}
+                              onChange={(s) => setReadonlyState(item.key, s)}
+                            />
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -465,10 +482,14 @@ export default function AdminPermissions() {
                     )}
                     <div className="flex flex-col gap-1.5">
                       <span className="text-[10px] text-on-surface-variant font-medium">{t('admin.permissions.readonly' as any)}</span>
-                      <StateSelector
-                        state={getReadonlyState(item.key)}
-                        onChange={(s) => setReadonlyState(item.key, s)}
-                      />
+                      {READONLY_IMPOSSIBLE_PAGES.includes(item.key) ? (
+                        <span className="text-xs text-on-surface-variant/50">不適用（此頁面僅限管理者）</span>
+                      ) : (
+                        <StateSelector
+                          state={getReadonlyState(item.key)}
+                          onChange={(s) => setReadonlyState(item.key, s)}
+                        />
+                      )}
                     </div>
                   </div>
                 ))}

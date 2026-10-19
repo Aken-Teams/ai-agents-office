@@ -55,7 +55,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
     readonly: [
       'overview', 'org', 'users', 'quota-groups', 'quota-requests',
       'invite-codes', 'skills', 'tokens', 'analytics', 'terms',
-      'security', 'settings',
+      'security', 'audit', 'settings',
       // 'conversations' and 'announcements' excluded by default (was readonlyHidden)
       // 'permissions' excluded — admin only
     ],

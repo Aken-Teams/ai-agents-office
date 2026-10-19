@@ -91,9 +91,7 @@ function DashboardContent() {
   const [isBeta, setIsBeta] = useState(true);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [smartInput, setSmartInput] = useState('');
-  // Null until fetched, and null again when the deployment has not configured
-  // an installer — a download entry only appears when there is a file behind it.
-  const [addinInstaller, setAddinInstaller] = useState<{ url: string; version: string; note: string } | null>(null);
+
   const [selectedDataSources, setSelectedDataSources] = useState<string[]>([]);
   const toggleDataSource = (id: string) => setSelectedDataSources(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   const [creating, setCreating] = useState(false);
@@ -220,12 +218,6 @@ function DashboardContent() {
       .then(setFiles)
       .catch(console.error);
 
-    fetch('/api/app-config', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.json())
-      .then(data => setAddinInstaller(data.addinInstaller ?? null))
-      .catch(console.error);
 
     fetch('/api/quota-request', {
       headers: { Authorization: `Bearer ${token}` },
@@ -634,29 +626,6 @@ function DashboardContent() {
             <span className="material-symbols-outlined text-on-surface-variant ml-auto">chevron_right</span>
           </button>
 
-          {/* Office add-in installer — only when the deployment has configured one */}
-          {addinInstaller && (
-            <a
-              href={addinInstaller.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-3 w-full px-4 py-3.5 bg-surface-container rounded-2xl active:bg-surface-container-high transition-colors cursor-pointer"
-            >
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-primary text-xl">download_for_offline</span>
-              </div>
-              <div className="text-left min-w-0">
-                <span className="text-sm font-headline font-bold text-on-surface">
-                  {t('dashboard.addin.title' as any)}
-                  {addinInstaller.version && <span className="ml-1.5 font-normal text-on-surface-variant">{addinInstaller.version}</span>}
-                </span>
-                <p className="text-xs text-on-surface-variant mt-0.5 truncate">
-                  {addinInstaller.note || t('dashboard.addin.desc' as any)}
-                </p>
-              </div>
-              <span className="material-symbols-outlined text-on-surface-variant ml-auto">download</span>
-            </a>
-          )}
 
           {/* Sample Prompt Cards — 2 per row, fills input on tap */}
           <div className="grid grid-cols-2 gap-3">
@@ -836,29 +805,6 @@ function DashboardContent() {
               <span className="material-symbols-outlined text-on-surface-variant ml-auto group-hover:text-primary transition-colors">chevron_right</span>
             </button>
 
-            {/* Office add-in installer — only when the deployment has configured one */}
-            {addinInstaller && (
-              <a
-                href={addinInstaller.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 px-4 py-3 bg-surface-container rounded-xl hover:bg-surface-container-high border border-transparent hover:border-primary/20 transition-all cursor-pointer group max-w-4xl w-full"
-              >
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                  <span className="material-symbols-outlined text-primary text-xl">download_for_offline</span>
-                </div>
-                <div className="text-left min-w-0">
-                  <span className="text-sm font-headline font-bold text-on-surface group-hover:text-primary transition-colors">
-                    {t('dashboard.addin.title' as any)}
-                    {addinInstaller.version && <span className="ml-1.5 font-normal text-on-surface-variant">{addinInstaller.version}</span>}
-                  </span>
-                  <p className="text-xs text-on-surface-variant mt-0.5 truncate">
-                    {addinInstaller.note || t('dashboard.addin.desc' as any)}
-                  </p>
-                </div>
-                <span className="material-symbols-outlined text-on-surface-variant ml-auto group-hover:text-primary transition-colors">download</span>
-              </a>
-            )}
 
             {/* 4x2 Template cards */}
             <div className="grid grid-cols-4 gap-3 w-full max-w-4xl">
