@@ -405,6 +405,172 @@ html.locale-zh-CN {
   animation: shimmer 2s infinite ease-in-out;
 }
 
+/* === 指令範本閱讀樣式 (theme-aware) === */
+/*
+ * A saved prompt is an operating spec, not a chat message: section headings,
+ * a three-deep hierarchy of rules, and — the part that matters most to
+ * somebody reading a colleague's template — the {placeholders} and `literals`
+ * that mark which bits are parameterised. chat-markdown is tuned for short
+ * bubbles and sets all of that at one weight, which is how a page of it turns
+ * into a wall. Here the headings get a spine, the nesting gets a rail, and the
+ * placeholders get the one piece of colour in the whole panel.
+ */
+.tmpl-md {
+  overflow-wrap: break-word;
+  word-break: break-word;
+  color: var(--md-text);
+  font-size: 13.5px;
+  line-height: 1.85;
+  /* Templates are full of dimensions — 960×540, left 72, 8pt. Lining figures
+     keep those from jittering against the surrounding text. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* Section markers. Small and spaced rather than large and bold: there are six
+   or more per template, and headline-sized ones would out-shout the rules
+   they introduce. The rule above does the separating. */
+.tmpl-md h1,
+.tmpl-md h2,
+.tmpl-md h3,
+.tmpl-md h4 {
+  margin: 26px 0 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--md-hr);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  color: var(--color-primary);
+  text-wrap: balance;
+}
+
+.tmpl-md > :first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Not every template has sections. Plenty are written as continuous prose,
+   where the paragraph break is the author's only structural signal — so it has
+   to be wide enough to actually read as one. Promoting their first sentences
+   to headings would invent an outline the author never wrote. */
+.tmpl-md p { margin: 16px 0; }
+
+/* A paragraph that opens with bold is a run-in lead: the author's own topic
+   sentence for what follows. Set it as one — a hair of tracking and a block
+   of its own colour — while bold mid-sentence stays plain emphasis. */
+.tmpl-md p > strong:first-child {
+  letter-spacing: 0.01em;
+  color: var(--color-primary);
+}
+
+/* Inline emphasis stays emphasis — it must not read as another heading. */
+.tmpl-md strong {
+  font-weight: 700;
+  color: var(--md-heading);
+}
+
+.tmpl-md em { font-style: italic; }
+
+.tmpl-md ul,
+.tmpl-md ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+.tmpl-md ul { list-style-type: disc; }
+.tmpl-md ol { list-style-type: decimal; }
+.tmpl-md li {
+  margin: 5px 0;
+  padding-left: 2px;
+}
+.tmpl-md li::marker {
+  color: var(--color-primary);
+  font-size: 0.85em;
+}
+.tmpl-md li > p { margin: 0; }
+
+/* Nested levels indent and change marker, and that is all. A rail was tried
+   here: at this indent it lands right beside the child markers and reads as a
+   stray stroke rather than as structure. */
+.tmpl-md li > ul,
+.tmpl-md li > ol {
+  margin: 5px 0;
+  padding-left: 18px;
+}
+.tmpl-md ul ul { list-style-type: circle; }
+
+/* The accent spend: {主題}, `{廠區}_FCST`, 3A32. Scanning somebody else's
+   template is mostly asking "what do I have to fill in?", and these answer it
+   at a glance. */
+.tmpl-md code {
+  background: var(--md-code-bg);
+  color: var(--md-code-text);
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 0.9em;
+  font-family: 'Consolas', 'Monaco', monospace;
+  white-space: nowrap;
+}
+
+.tmpl-md pre {
+  background: var(--md-pre-bg);
+  color: var(--md-pre-text);
+  border: 1px solid var(--md-pre-border);
+  padding: 12px 14px;
+  border-radius: 10px;
+  overflow-x: auto;
+  margin: 10px 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.tmpl-md pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  white-space: pre;
+}
+
+.tmpl-md blockquote {
+  border-left: 2px solid var(--color-primary);
+  background: var(--md-blockquote-bg);
+  padding: 6px 12px;
+  margin: 10px 0;
+  border-radius: 0 6px 6px 0;
+}
+
+.tmpl-md hr {
+  border: 0;
+  border-top: 1px solid var(--md-hr);
+  margin: 18px 0;
+}
+
+/* Wide tables scroll inside their own box rather than pushing the panel. */
+.tmpl-md table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 12.5px;
+  display: block;
+  overflow-x: auto;
+}
+.tmpl-md th,
+.tmpl-md td {
+  border: 1px solid var(--md-table-border);
+  padding: 5px 9px;
+  text-align: left;
+}
+.tmpl-md th {
+  background: var(--md-th-bg);
+  color: var(--md-heading);
+  font-weight: 700;
+}
+
+.tmpl-md a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* === Chat Markdown (theme-aware) === */
 .chat-markdown {
   overflow-wrap: break-word;

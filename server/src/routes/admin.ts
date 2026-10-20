@@ -14,6 +14,7 @@ import {
   INSTALLER_DIR, INSTALLER_PATH, MAX_INSTALLER_BYTES, ALLOWED_INSTALLER_EXT,
   logInstallerEvent,
 } from '../services/addinInstaller.js';
+import { adOrgMap } from '../services/adOrg.js';
 import { getMailToken, fetchMessageDetail, resolveCidImages } from '../services/outlookApi.js';
 import { mailGatewayStats, gatewayFetch } from '../services/mailGatewayLimit.js';
 import { getSystemPressure } from '../services/systemPressure.js';
@@ -3140,6 +3141,100 @@ router.post('/settings/addin-installer', installerUpload.single('file'), async (
     JSON.stringify({ name: file.originalname, size: file.size })
   );
   res.json({ success: true, addinInstaller: saved });
+});
+
+// GET /api/admin/prompt-templates — what people have saved in the add-ins
+//
+// Read-only on purpose. The ask was to see what commands colleagues are
+// keeping, not to curate them: a template is the author's own shorthand for a
+// job they repeat, and an admin deleting one breaks that person's workflow
+// without them finding out until it is missing.
+router.get('/prompt-templates', async (req: Request, res: Response) => {
+  const page = Math.max(1, parseInt(String(req.query.page || '1'), 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '10'), 10) || 10));
+  const host = String(req.query.host || '').trim();
+  const author = String(req.query.author || '').trim();
+  const search = String(req.query.search || '').trim();
+
+  const where: string[] = [];
+  const params: unknown[] = [];
+  if (host) { where.push('p.host = ?'); params.push(host); }
+  if (author) { where.push('p.user_id = ?'); params.push(author); }
+  if (search) {
+    where.push('(p.name LIKE ? OR p.content LIKE ? OR u.display_name LIKE ? OR u.email LIKE ?)');
+    const like = `%${search}%`;
+    params.push(like, like, like, like);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+  const totalRow = await dbGet<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM prompt_templates p JOIN users u ON u.id = p.user_id ${whereSql}`,
+    ...params);
+  const total = totalRow?.n || 0;
+
+  const rows = await dbAll<any>(
+    `SELECT p.id, p.name, p.content, p.host, p.created_at, p.updated_at,
+            u.id AS user_id, u.display_name, u.email, u.ad_username, u.ad_domain,
+            ic.label AS invite_label
+       FROM prompt_templates p
+       JOIN users u ON u.id = p.user_id
+       LEFT JOIN invite_codes ic ON ic.id = u.invite_code_id
+       ${whereSql}
+      ORDER BY p.updated_at DESC, p.id DESC
+      LIMIT ? OFFSET ?`,
+    ...params, limit, (page - 1) * limit);
+
+  // Department comes from AD, which knows it; company comes from the invite
+  // code the external user signed up with, which is the only place we record
+  // who they belong to.
+  const ad = await adOrgMap();
+  const entries = rows.map(r => {
+    const key = String(r.ad_username || '').toLowerCase();
+    const person = key ? ad.get(key) : undefined;
+    return {
+      id: r.id,
+      name: r.name,
+      content: r.content,
+      host: r.host || 'all',
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+      author: person?.displayName || r.display_name || r.email,
+      email: r.email,
+      // 'ad' | 'external' — the UI labels the group column differently for each.
+      kind: r.ad_username ? 'ad' : 'external',
+      org: r.ad_username ? (person?.org || '其他') : (r.invite_label || '其他'),
+      orgPath: r.ad_username ? (person?.orgPath || '') : '',
+      domain: r.ad_domain || null,
+    };
+  });
+
+  // Facets, so the filters offer what exists rather than a hard-coded list.
+  const hosts = await dbAll<{ host: string; n: number }>(
+    "SELECT COALESCE(host,'all') AS host, COUNT(*) AS n FROM prompt_templates GROUP BY host ORDER BY n DESC");
+  const authorRows = await dbAll<any>(
+    `SELECT p.user_id, COUNT(*) AS n, u.display_name, u.email, u.ad_username
+       FROM prompt_templates p
+       JOIN users u ON u.id = p.user_id
+      GROUP BY p.user_id, u.display_name, u.email, u.ad_username
+      ORDER BY n DESC, u.display_name ASC`);
+  // Same name resolution as the rows themselves, so the picker and the list
+  // never disagree about what someone is called.
+  const authors = authorRows.map(a => {
+    const person = a.ad_username ? ad.get(String(a.ad_username).toLowerCase()) : undefined;
+    return {
+      id: a.user_id,
+      name: person?.displayName || a.display_name || a.email,
+      org: a.ad_username ? (person?.org || '') : '',
+      n: a.n,
+    };
+  });
+
+  res.json({
+    entries, total, page, limit,
+    totalPages: Math.max(1, Math.ceil(total / limit)),
+    hosts, authors, authorCount: authors.length,
+    adResolved: ad.size > 0,
+  });
 });
 
 // GET /api/admin/audit-log — every administrative action, finally readable

@@ -71,6 +71,14 @@ const ADMIN_SIDEBAR_GROUPS = [
     ],
   },
   {
+    id: 'templates',
+    labelKey: 'admin.sidebar.group.templates',
+    icon: 'bookmarks',
+    items: [
+      { key: 'templates', labelKey: 'admin.sidebar.templates', descKey: 'admin.permissions.desc.templates', icon: 'integration_instructions' },
+    ],
+  },
+  {
     id: 'system',
     labelKey: 'admin.sidebar.group.system',
     icon: 'settings',

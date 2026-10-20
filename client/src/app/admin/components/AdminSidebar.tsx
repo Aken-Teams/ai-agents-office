@@ -43,6 +43,14 @@ const NAV_GROUPS = [
     ],
   },
   {
+    id: 'templates',
+    labelKey: 'admin.sidebar.group.templates' as const,
+    icon: 'bookmarks',
+    items: [
+      { href: '/admin/templates', permKey: 'templates', labelKey: 'admin.sidebar.templates' as const, icon: 'integration_instructions' },
+    ],
+  },
+  {
     id: 'system',
     labelKey: 'admin.sidebar.group.system' as const,
     icon: 'settings',
