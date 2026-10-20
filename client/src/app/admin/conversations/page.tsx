@@ -216,7 +216,7 @@ function AddinActionRow({ a, showTime = true }: { a: any; showTime?: boolean }) 
           <span>{a.tool}</span>
           {a.target && <span className="text-outline">· {a.target}</span>}
           {badge && <span className={`px-1.5 py-0.5 rounded ${badge.cls} font-sans font-medium`}>{badge.label}</span>}
-          {showTime && <span className="ml-auto">{formatDate(a.created_at)}</span>}
+          {showTime && <span className="sm:ml-auto">{formatDate(a.created_at)}</span>}
         </div>
       </div>
     </div>
@@ -673,27 +673,33 @@ function AddinAuditLog({ token, onOpenConversation }: { token: string; onOpenCon
       )}
 
       {/* Filters */}
-      <div className="flex items-center gap-1 flex-wrap mb-3 shrink-0">
-        <button onClick={() => setHost('')} className={chip(host === '')}>全部程式</button>
-        {['excel', 'word', 'ppt'].map(h => (
-          <button key={h} onClick={() => setHost(h)} className={chip(host === h)}>{addinHost(h).label}</button>
-        ))}
-        <span className="w-px h-5 bg-outline-variant/30 mx-1.5" />
-        <button onClick={() => { setDecision(''); setRisky(false); }} className={chip(decision === '' && !risky)}>全部動作</button>
-        {(['allowed', 'auto', 'rejected'] as const).map(d => (
-          <button key={d} onClick={() => { setDecision(d); setRisky(false); }} className={chip(decision === d && !risky)}>
-            {decisionMeta(d).label}
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-1 sm:flex-wrap mb-3 shrink-0">
+        <div className="flex items-center gap-1 flex-wrap">
+          <button onClick={() => setHost('')} className={chip(host === '')}>全部程式</button>
+          {['excel', 'word', 'ppt'].map(h => (
+            <button key={h} onClick={() => setHost(h)} className={chip(host === h)}>{addinHost(h).label}</button>
+          ))}
+        </div>
+        {/* Hidden on phones: once the row wraps, a divider lands at a line
+            end and reads as a stray tick rather than a separator. */}
+        <span className="hidden sm:block w-px h-5 bg-outline-variant/30 mx-1.5" />
+        <div className="flex items-center gap-1 flex-wrap">
+          <button onClick={() => { setDecision(''); setRisky(false); }} className={chip(decision === '' && !risky)}>全部動作</button>
+          {(['allowed', 'auto', 'rejected'] as const).map(d => (
+            <button key={d} onClick={() => { setDecision(d); setRisky(false); }} className={chip(decision === d && !risky)}>
+              {decisionMeta(d).label}
+            </button>
+          ))}
+          <button
+            onClick={() => { setRisky(r => !r); setDecision(''); }}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+              risky ? 'bg-error text-on-primary' : 'text-error hover:bg-error/10'
+            }`}
+            title="破壞性 + 自動允許"
+          >
+            高風險
           </button>
-        ))}
-        <button
-          onClick={() => { setRisky(r => !r); setDecision(''); }}
-          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
-            risky ? 'bg-error text-on-primary' : 'text-error hover:bg-error/10'
-          }`}
-          title="破壞性 + 自動允許"
-        >
-          高風險
-        </button>
+        </div>
       </div>
 
       <div className="relative mb-4 shrink-0">
@@ -714,12 +720,12 @@ function AddinAuditLog({ token, onOpenConversation }: { token: string; onOpenCon
         )}
         {!loading && actions.map(a => (
           <div key={a.id} className="space-y-1">
-            <div className="flex items-center gap-2 px-1 text-[11px] text-on-surface-variant">
-              <span className="font-medium text-on-surface">{a.user_display_name || a.user_email || '（未知使用者）'}</span>
+            <div className="flex items-center gap-2 px-1 text-[11px] text-on-surface-variant min-w-0">
+              <span className="font-medium text-on-surface shrink-0 truncate max-w-[45%] sm:max-w-none">{a.user_display_name || a.user_email || '（未知使用者）'}</span>
               {a.conversation_id && (
                 <button
                   onClick={() => onOpenConversation(a.conversation_id)}
-                  className="text-primary hover:underline cursor-pointer bg-transparent border-none p-0 text-[11px] truncate max-w-[280px]"
+                  className="text-primary hover:underline cursor-pointer bg-transparent border-none p-0 text-[11px] truncate min-w-0 flex-1 text-left sm:flex-none sm:max-w-[280px]"
                 >
                   {a.conversation_title || '開啟對話'}
                 </button>
@@ -732,7 +738,7 @@ function AddinAuditLog({ token, onOpenConversation }: { token: string; onOpenCon
 
       {/* Pagination */}
       {!loading && (data?.totalPages ?? 1) > 1 && (
-        <div className="flex items-center justify-between gap-4 pt-3 mt-3 border-t border-outline-variant/20 shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 pt-3 mt-3 border-t border-outline-variant/20 shrink-0">
           <span className="text-xs text-on-surface-variant font-mono">
             {(page - 1) * LOG_PAGE_SIZE + 1}–{Math.min(page * LOG_PAGE_SIZE, data.total)} / {data.total}
           </span>

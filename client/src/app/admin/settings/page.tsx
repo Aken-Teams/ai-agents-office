@@ -364,8 +364,8 @@ function AdminSettingsContent() {
                           <input type="number" value={form[cfg.key]} onChange={e => setForm(prev => ({ ...prev, [cfg.key]: e.target.value }))} className="w-28 md:w-40 px-3 md:px-4 py-2 md:py-2.5 bg-surface-container-highest text-on-surface text-sm md:text-base rounded border border-outline-variant/20 focus:border-primary focus:outline-none font-mono" min={cfg.min} max={cfg.max} step={cfg.step} />
                           <span className="text-xs md:text-sm text-on-surface-variant">{cfg.unit}</span>
                         </div>
-                        <div className="flex items-center gap-2 justify-end md:justify-start">
-                          <button onClick={() => saveSetting(cfg.key)} disabled={saving} className="px-3 md:px-4 py-2 md:py-2.5 bg-primary text-on-primary text-xs md:text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50">{saving ? t('admin.settings.saving') : t('admin.settings.save')}</button>
+                        <div className="flex items-center gap-2 md:justify-start">
+                          <button onClick={() => saveSetting(cfg.key)} disabled={saving} className="w-full md:w-auto px-3 md:px-4 py-2.5 md:py-2.5 bg-primary text-on-primary text-xs md:text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50">{saving ? t('admin.settings.saving') : t('admin.settings.save')}</button>
                           <button onClick={() => { setEditing(null); if (settings) setForm(prev => ({ ...prev, [cfg.key]: String(settings[cfg.key]) })); }} className="px-3 md:px-4 py-2 md:py-2.5 bg-surface-container-high text-on-surface-variant text-xs md:text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer">{t('admin.settings.cancel')}</button>
                         </div>
                       </div>
@@ -417,8 +417,8 @@ function AdminSettingsContent() {
                             <input type="number" value={form[cfg.key]} onChange={e => setForm(prev => ({ ...prev, [cfg.key]: e.target.value }))} className="w-24 md:w-32 px-3 md:px-4 py-2 md:py-2.5 bg-surface-container-highest text-on-surface text-sm md:text-base rounded border border-outline-variant/20 focus:border-primary focus:outline-none font-mono" min={cfg.min} max={cfg.max} step={cfg.step} />
                             <span className="text-xs md:text-sm text-on-surface-variant">{cfg.unit}</span>
                           </div>
-                          <div className="flex items-center gap-2 justify-end md:justify-start">
-                            <button onClick={() => saveSetting(cfg.key)} disabled={saving} className="px-3 md:px-4 py-2 md:py-2.5 bg-primary text-on-primary text-xs md:text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50">{saving ? t('admin.settings.saving') : t('admin.settings.save')}</button>
+                          <div className="flex items-center gap-2 md:justify-start">
+                            <button onClick={() => saveSetting(cfg.key)} disabled={saving} className="w-full md:w-auto px-3 md:px-4 py-2.5 md:py-2.5 bg-primary text-on-primary text-xs md:text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50">{saving ? t('admin.settings.saving') : t('admin.settings.save')}</button>
                             <button onClick={() => { setEditing(null); if (settings) setForm(prev => ({ ...prev, [cfg.key]: String(settings[cfg.key]) })); }} className="px-3 md:px-4 py-2 md:py-2.5 bg-surface-container-high text-on-surface-variant text-xs md:text-sm rounded hover:bg-surface-variant transition-colors cursor-pointer">{t('admin.settings.cancel')}</button>
                           </div>
                         </div>
@@ -461,15 +461,19 @@ function AdminSettingsContent() {
                   開啟後，使用者下載或預覽生成的檔案（PDF / Word / PPT / Excel / HTML）時，會疊上斜向平鋪的浮水印文字。原始檔案不受影響，僅在輸出時加上。
                 </p>
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
-                  <button
-                    type="button"
-                    disabled={!canEditSettings}
-                    onClick={() => setWmForm(prev => ({ ...prev, enabled: !prev.enabled }))}
-                    className={`relative w-11 h-6 rounded-full transition-colors shrink-0 cursor-pointer disabled:opacity-50 ${wmForm.enabled ? 'bg-primary' : 'bg-outline-variant/40'}`}
-                  >
-                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${wmForm.enabled ? 'translate-x-5' : ''}`} />
-                  </button>
-                  <span className="text-sm text-on-surface-variant w-10 shrink-0">{wmForm.enabled ? '啟用' : '停用'}</span>
+                  {/* Switch and its label are one control — stacking the row
+                      on a phone must not put them on separate lines. */}
+                  <div className="flex items-center gap-3 md:contents">
+                    <button
+                      type="button"
+                      disabled={!canEditSettings}
+                      onClick={() => setWmForm(prev => ({ ...prev, enabled: !prev.enabled }))}
+                      className={`relative w-11 h-6 rounded-full transition-colors shrink-0 cursor-pointer disabled:opacity-50 ${wmForm.enabled ? 'bg-primary' : 'bg-outline-variant/40'}`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${wmForm.enabled ? 'translate-x-5' : ''}`} />
+                    </button>
+                    <span className="text-sm text-on-surface-variant md:w-10 shrink-0">{wmForm.enabled ? '啟用' : '停用'}</span>
+                  </div>
                   <input
                     type="text"
                     value={wmForm.text}
@@ -480,7 +484,7 @@ function AdminSettingsContent() {
                     className="flex-1 min-w-0 px-3 md:px-4 py-2 md:py-2.5 bg-surface-container-highest text-on-surface text-sm md:text-base rounded border border-outline-variant/20 focus:border-primary focus:outline-none disabled:opacity-50"
                   />
                   {canEditSettings && (
-                    <button onClick={() => saveWatermark(wmForm)} disabled={wmSaving} className="px-3 md:px-4 py-2 md:py-2.5 bg-primary text-on-primary text-xs md:text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50 shrink-0">
+                    <button onClick={() => saveWatermark(wmForm)} disabled={wmSaving} className="w-full md:w-auto px-3 md:px-4 py-2.5 bg-primary text-on-primary text-xs md:text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50 shrink-0">
                       {wmSaving ? t('admin.settings.saving') : t('admin.settings.save')}
                     </button>
                   )}
@@ -525,8 +529,10 @@ function AdminSettingsContent() {
                     <span className="text-sm text-on-surface-variant">{addinForm.enabled ? '前台顯示' : '前台隱藏'}</span>
                   </div>
 
-                  {/* Source: someone else's file server, or this one. */}
-                  <div className="flex gap-2">
+                  {/* Source: someone else's file server, or this one.
+                      Stacked on phones — side by side each card gets about
+                      155px and both hints wrap. */}
+                  <div className="flex flex-col sm:flex-row gap-2">
                     {([
                       { key: 'url' as const, icon: 'link', label: '用網址', hint: 'IT 已經有地方放檔案' },
                       { key: 'file' as const, icon: 'upload_file', label: '上傳檔案', hint: '沒有檔案伺服器時用這個' },
@@ -647,13 +653,13 @@ function AdminSettingsContent() {
                   )}
 
                   {canEditSettings && (
-                    <div className="flex items-center justify-end gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
                       {addinForm.mode === 'url' && addinForm.url && (
                         <a href={addinForm.url} target="_blank" rel="noopener noreferrer" className="text-xs md:text-sm text-primary hover:underline">
                           測試這個連結 ↗
                         </a>
                       )}
-                      <button onClick={() => saveAddin(addinForm)} disabled={addinSaving} className="px-3 md:px-4 py-2 md:py-2.5 bg-primary text-on-primary text-xs md:text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50 shrink-0">
+                      <button onClick={() => saveAddin(addinForm)} disabled={addinSaving} className="w-full sm:w-auto px-3 md:px-4 py-2.5 bg-primary text-on-primary text-xs md:text-sm font-bold rounded hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50 shrink-0">
                         {addinSaving ? t('admin.settings.saving') : t('admin.settings.save')}
                       </button>
                     </div>
